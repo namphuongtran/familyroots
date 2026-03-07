@@ -1,8 +1,9 @@
 """Declarative base and shared mixins for SQLAlchemy models."""
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -16,10 +17,10 @@ class Base(DeclarativeBase):
 class TimestampMixin:
     """Adds created_at and updated_at to any model."""
 
-    created_at: Mapped[datetime] = mapped_column(  # noqa: F821
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[datetime] = mapped_column(  # noqa: F821
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),

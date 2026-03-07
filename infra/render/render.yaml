@@ -25,6 +25,6 @@ databases:
   - name: familyroots-db
     plan: starter
     region: singapore
-    postgresMajorVersion: "16"
+    postgresMajorVersion: "18"
     databaseName: familyroots
     user: familyroots

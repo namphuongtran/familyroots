@@ -1,6 +1,7 @@
 """Me API routes — current user's clan memberships and clan switcher."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
@@ -14,9 +15,9 @@ router = APIRouter()
 
 @router.get("/clans")
 async def list_my_clans(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> dict[str, Any]:
     """List all clans the authenticated user belongs to.
 
     Used by the clan switcher UI (similar to Slack's workspace switcher).
@@ -56,9 +57,9 @@ async def list_my_clans(
 @router.post("/clans/{clan_id}/select")
 async def select_clan(
     clan_id: uuid.UUID,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> dict[str, Any]:
     """Select a clan as the active context.
 
     Validates that the user has an approved membership in the target clan.
@@ -92,5 +93,8 @@ async def select_clan(
         "clan_name": row.clan_name,
         "clan_slug": row.clan_slug,
         "role": row.role,
-        "message": "Clan selected. Set X-Current-Clan-Id header to this clan_id on subsequent requests.",
+        "message": (
+            "Clan selected. Set X-Current-Clan-Id header"
+            " to this clan_id on subsequent requests."
+        ),
     }

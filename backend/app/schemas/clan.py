@@ -33,9 +33,28 @@ class ClanSwitchResponse(BaseModel):
     message: str
 
 
-# TODO: implement in Prompt 2
-#
-# Expected schemas:
-# - ClanCreateRequest
-# - ClanResponse
-# - ClanListResponse
+class ClanResponse(BaseModel):
+    """Full clan detail response."""
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    description: str | None = None
+    origin_place: str | None = None
+    founded_year: int | None = None
+    avatar_url: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ClanUpdateRequest(BaseModel):
+    """Request body for updating clan info."""
+
+    name: str | None = None
+    description: str | None = None
+    origin_place: str | None = None
+    founded_year: int | None = None
+    avatar_url: str | None = None

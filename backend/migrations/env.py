@@ -11,10 +11,16 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.models.base import Base  # noqa: F401 — ensure all models are imported
-
-# TODO: implement in Prompt 2 — import all model modules here so Alembic
-# can detect them for autogenerate:
-# from app.models import clan, member, relationship, document, event  # noqa: F401
+from app.models import (  # noqa: F401 — import all models for autogenerate
+    Clan,
+    Member,
+    Relationship,
+    Document,
+    Event,
+    UserClanRole,
+    AuditLog,
+    NotificationLog,
+)
 
 config = context.config
 config.set_main_option(

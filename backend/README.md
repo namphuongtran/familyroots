@@ -4,7 +4,7 @@ FastAPI-based REST API service for the FamilyRoots genealogy platform.
 
 ## Tech Stack
 
-- **Framework**: FastAPI (Python 3.12+)
+- **Framework**: FastAPI (Python 3.14+)
 - **Database**: PostgreSQL via Supabase (async SQLAlchemy + asyncpg)
 - **Auth**: Supabase Auth (JWT validation)
 - **Storage**: Supabase Storage

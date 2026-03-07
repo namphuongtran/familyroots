@@ -7,8 +7,8 @@ help: ## Show this help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # ─── Docker ────────────────────────────────────────────────────────────
-docker-up: ## Start local infrastructure (db + pgadmin)
-	docker compose up -d db pgadmin
+docker-up: ## Start local infrastructure (pgdb + pgadmin)
+	docker compose up -d pgdb pgadmin
 
 docker-down: ## Stop all containers
 	docker compose down

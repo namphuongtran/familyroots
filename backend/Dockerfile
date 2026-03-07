@@ -1,4 +1,7 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
+
+# Install build dependencies for native extensions (pyroaring, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ libc6-dev && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv

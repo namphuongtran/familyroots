@@ -61,7 +61,7 @@ See [Data Isolation Design](tenant-design.md) for details.
 | Backend API   | FastAPI (Python 3.12+)      |
 | Mobile        | Flutter (Dart)              |
 | Web           | Flutter Web (Dart)          |
-| Database      | PostgreSQL 16 (Supabase)    |
+| Database      | PostgreSQL 18 (Docker/Render) / PostgreSQL 17 (Supabase) |
 | Auth          | JWT (python-jose)           |
 | Push Notifs   | Firebase Cloud Messaging    |
 | Error Track   | Sentry                      |

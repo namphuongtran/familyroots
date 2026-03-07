@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: str = ""
 
+    # CORS
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
+
     # Scheduler
     NOTIFICATION_CRON_HOUR: int = 7
     NOTIFICATION_DAYS_BEFORE: int = 7

@@ -4,7 +4,7 @@
 
 ## Overview
 
-FamilyRoots uses PostgreSQL 16 with a single `public` schema. Data isolation between clans is enforced by a `clan_id` column on every clan-scoped table, combined with Supabase Row Level Security (RLS) policies.
+FamilyRoots uses PostgreSQL 18 with a single `public` schema. Data isolation between clans is enforced by a `clan_id` column on every clan-scoped table, combined with Supabase Row Level Security (RLS) policies.
 
 ## Public Schema
 
