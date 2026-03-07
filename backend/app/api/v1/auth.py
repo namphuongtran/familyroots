@@ -65,9 +65,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) ->
         db.add(clan)
         await db.flush()
 
-        role = UserClanRole(
-            clan_id=clan.id, user_id=user_id, role="admin", is_approved=True
-        )
+        role = UserClanRole(clan_id=clan.id, user_id=user_id, role="admin", is_approved=True)
         db.add(role)
         await db.commit()
 
@@ -86,9 +84,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) ->
             raise NotFoundError("clan_not_found")
         clan = clan_or_none
 
-        role = UserClanRole(
-            clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False
-        )
+        role = UserClanRole(clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False)
         db.add(role)
         await db.commit()
 
@@ -107,9 +103,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)) -> Login
     """Authenticate a user via Supabase Auth and return tokens + profile."""
     sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
     try:
-        auth_resp = sb.auth.sign_in_with_password(
-            {"email": body.email, "password": body.password}
-        )
+        auth_resp = sb.auth.sign_in_with_password({"email": body.email, "password": body.password})
     except Exception as exc:
         raise HTTPException(status_code=401, detail=t("auth.invalid_credentials")) from exc
 
@@ -257,10 +251,7 @@ async def remove_fcm_token(
     """Remove an FCM token (e.g. on logout)."""
     user_id = current_user["sub"]
     await db.execute(
-        text(
-            "DELETE FROM public.user_fcm_tokens "
-            "WHERE user_id = :user_id AND token = :token"
-        ),
+        text("DELETE FROM public.user_fcm_tokens WHERE user_id = :user_id AND token = :token"),
         {"user_id": user_id, "token": body.token},
     )
     await db.commit()

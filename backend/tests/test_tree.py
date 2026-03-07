@@ -6,6 +6,7 @@ These tests mock the AsyncSession to validate the pure assembly logic
 
 import uuid
 from datetime import date
+from typing import Any
 
 import pytest
 
@@ -27,11 +28,13 @@ CLAN_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 @pytest.mark.asyncio
 async def test_single_member():
     root_id = uuid.uuid4()
-    rows = [make_member_row(member_id=root_id, full_name="Nguyễn Văn A", is_clan_founder=True, depth=0)]
-    spouse_rows: list[dict] = []
+    rows = [
+        make_member_row(member_id=root_id, full_name="Nguyễn Văn A", is_clan_founder=True, depth=0)
+    ]
+    spouse_rows: list[dict[str, Any]] = []
 
     db = make_mock_db(
-        MockMappingResult(rows),      # get_family_tree_flat result
+        MockMappingResult(rows),  # get_family_tree_flat result
         MockMappingResult(spouse_rows),  # spouse query result
     )
 
@@ -180,7 +183,7 @@ async def test_three_generation_tree():
 async def test_empty_result():
     """When SQL returns no rows (e.g., invalid root_id), return empty dict."""
     db = make_mock_db(
-        MockMappingResult([]),   # no descendants found
+        MockMappingResult([]),  # no descendants found
     )
 
     result = await build_descendants_tree(db, uuid.uuid4(), CLAN_ID)

@@ -73,14 +73,16 @@ async def create_relationship(
         created_by=actor_id,
     )
     db.add(rel)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="editor",
-        action="relationship.create",
-        resource_type="relationship",
-        resource_id=rel.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="editor",
+            action="relationship.create",
+            resource_type="relationship",
+            resource_id=rel.id,
+        )
+    )
     await db.commit()
     await db.refresh(rel)
 
@@ -120,14 +122,16 @@ async def update_relationship(
         if val is not None:
             setattr(rel, field, val)
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="editor",
-        action="relationship.update",
-        resource_type="relationship",
-        resource_id=rel.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="editor",
+            action="relationship.update",
+            resource_type="relationship",
+            resource_id=rel.id,
+        )
+    )
     await db.commit()
     await db.refresh(rel)
     return {"data": RelationshipResponse.model_validate(rel).model_dump()}
@@ -145,25 +149,23 @@ async def delete_relationship(
     rel = await _get_rel_or_404(relationship_id, clan_id, db)
 
     await db.delete(rel)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="admin",
-        action="relationship.delete",
-        resource_type="relationship",
-        resource_id=relationship_id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="admin",
+            action="relationship.delete",
+            resource_type="relationship",
+            resource_id=relationship_id,
+        )
+    )
     await db.commit()
     return {"data": {"message": "Relationship deleted", "id": str(relationship_id)}}
 
 
-async def _get_rel_or_404(
-    rel_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession
-) -> Relationship:
+async def _get_rel_or_404(rel_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession) -> Relationship:
     result = await db.execute(
-        select(Relationship).where(
-            Relationship.id == rel_id, Relationship.clan_id == clan_id
-        )
+        select(Relationship).where(Relationship.id == rel_id, Relationship.clan_id == clan_id)
     )
     rel = result.scalar_one_or_none()
     if not rel:

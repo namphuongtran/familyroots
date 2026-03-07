@@ -24,8 +24,8 @@ class Relationship(ClanScopedMixin, Base):
         ForeignKey("members.id", ondelete="CASCADE"),
     )
 
-    relation_type: Mapped[str] = mapped_column(String(20))       # 'parent', 'child', 'spouse'
-    relation_subtype: Mapped[str] = mapped_column(String(20))    # 'biological', 'adoptive', etc.
+    relation_type: Mapped[str] = mapped_column(String(20))  # 'parent', 'child', 'spouse'
+    relation_subtype: Mapped[str] = mapped_column(String(20))  # 'biological', 'adoptive', etc.
 
     # For spouse relationships: marriage timeline
     start_date: Mapped[date | None] = mapped_column(Date, default=None)

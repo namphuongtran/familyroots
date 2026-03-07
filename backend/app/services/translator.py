@@ -29,7 +29,5 @@ def t(key: str, **kwargs: object) -> str:
         body = t("notification.death_anniversary", name="Nguyễn Văn A", days=3)
     """
     locale = current_locale.get()
-    text = _translations.get(locale, {}).get(key) or _translations.get("vi", {}).get(
-        key, key
-    )
+    text = _translations.get(locale, {}).get(key) or _translations.get("vi", {}).get(key, key)
     return text.format(**kwargs) if kwargs else text

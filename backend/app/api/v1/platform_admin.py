@@ -62,14 +62,12 @@ async def get_clan_detail(
 
     # Gather stats
     member_count = await db.execute(
-        select(func.count()).select_from(Member).where(
-            Member.clan_id == clan_id, Member.is_deleted.is_(False)
-        )
+        select(func.count())
+        .select_from(Member)
+        .where(Member.clan_id == clan_id, Member.is_deleted.is_(False))
     )
     user_count = await db.execute(
-        select(func.count()).select_from(UserClanRole).where(
-            UserClanRole.clan_id == clan_id
-        )
+        select(func.count()).select_from(UserClanRole).where(UserClanRole.clan_id == clan_id)
     )
 
     return {
@@ -101,14 +99,16 @@ async def suspend_clan(
         raise NotFoundError("clan_not_found")
 
     clan.is_active = False
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
-        actor_role="super_admin",
-        action="clan.suspend",
-        resource_type="clan",
-        resource_id=clan_id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+            actor_role="super_admin",
+            action="clan.suspend",
+            resource_type="clan",
+            resource_id=clan_id,
+        )
+    )
     await db.commit()
     return {"data": {"is_active": False, "clan_id": str(clan_id)}}
 
@@ -125,14 +125,16 @@ async def reactivate_clan(
         raise NotFoundError("clan_not_found")
 
     clan.is_active = True
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
-        actor_role="super_admin",
-        action="clan.reactivate",
-        resource_type="clan",
-        resource_id=clan_id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+            actor_role="super_admin",
+            action="clan.reactivate",
+            resource_type="clan",
+            resource_id=clan_id,
+        )
+    )
     await db.commit()
     return {"data": {"is_active": True, "clan_id": str(clan_id)}}
 
@@ -142,22 +144,16 @@ async def platform_metrics(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Platform-wide usage metrics."""
-    total_clans = (
-        await db.execute(select(func.count()).select_from(Clan))
-    ).scalar() or 0
+    total_clans = (await db.execute(select(func.count()).select_from(Clan))).scalar() or 0
     active_clans = (
-        await db.execute(
-            select(func.count()).select_from(Clan).where(Clan.is_active.is_(True))
-        )
+        await db.execute(select(func.count()).select_from(Clan).where(Clan.is_active.is_(True)))
     ).scalar() or 0
     total_members = (
         await db.execute(
             select(func.count()).select_from(Member).where(Member.is_deleted.is_(False))
         )
     ).scalar() or 0
-    total_users = (
-        await db.execute(select(func.count()).select_from(UserClanRole))
-    ).scalar() or 0
+    total_users = (await db.execute(select(func.count()).select_from(UserClanRole))).scalar() or 0
 
     return {
         "data": {

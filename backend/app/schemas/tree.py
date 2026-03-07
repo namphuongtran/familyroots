@@ -14,7 +14,7 @@ class SpouseNode(BaseModel):
     birth_date: date | None = None
     death_date: date | None = None
     avatar_url: str | None = None
-    relation_subtype: str   # 'married','divorced','widowed','partner'
+    relation_subtype: str  # 'married','divorced','widowed','partner'
     start_date: date | None = None
     end_date: date | None = None
     is_primary: bool

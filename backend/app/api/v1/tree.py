@@ -180,7 +180,7 @@ async def find_path(
             select(Member).where(
                 Member.id == mid,
                 Member.clan_id == clan_id,
-Member.is_deleted.is_(False),
+                Member.is_deleted.is_(False),
             )
         )
         if not result.scalar_one_or_none():
@@ -188,10 +188,7 @@ Member.is_deleted.is_(False),
 
     # Use find_relationship_path SQL function
     path_result = await db.execute(
-        text(
-            "SELECT * FROM public.find_relationship_path("
-            ":from_id, :to_id, :clan_id)"
-        ),
+        text("SELECT * FROM public.find_relationship_path(:from_id, :to_id, :clan_id)"),
         {"from_id": from_id, "to_id": to_id, "clan_id": clan_id},
     )
     rows = path_result.mappings().all()

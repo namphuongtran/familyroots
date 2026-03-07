@@ -59,9 +59,7 @@ async def test_too_many_bio_parents(validator, clan_id):
     db.execute = AsyncMock(return_value=count_result)
 
     with pytest.raises(ConflictError, match="too_many_biological_parents"):
-        await validator.validate_parent_child(
-            parent.id, child.id, "biological", db, clan_id
-        )
+        await validator.validate_parent_child(parent.id, child.id, "biological", db, clan_id)
 
 
 @pytest.mark.asyncio
@@ -79,9 +77,7 @@ async def test_parent_too_young(validator, clan_id):
     db.execute = AsyncMock(return_value=count_result)
 
     with pytest.raises(ValidationError, match="parent_too_young"):
-        await validator.validate_parent_child(
-            parent.id, child.id, "biological", db, clan_id
-        )
+        await validator.validate_parent_child(parent.id, child.id, "biological", db, clan_id)
 
 
 @pytest.mark.asyncio
@@ -113,9 +109,7 @@ async def test_cycle_detection(validator, clan_id):
     db.execute = AsyncMock(side_effect=mock_execute)
 
     with pytest.raises(ValidationError, match="creates_cycle"):
-        await validator.validate_parent_child(
-            parent.id, child.id, "biological", db, clan_id
-        )
+        await validator.validate_parent_child(parent.id, child.id, "biological", db, clan_id)
 
 
 @pytest.mark.asyncio

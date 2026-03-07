@@ -19,13 +19,9 @@ api_v1_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_v1_router.include_router(clans_router, prefix="/clans", tags=["clans"])
 api_v1_router.include_router(me_router, prefix="/me", tags=["me"])
 api_v1_router.include_router(members_router, prefix="/members", tags=["members"])
-api_v1_router.include_router(
-    relationships_router, prefix="/relationships", tags=["relationships"]
-)
+api_v1_router.include_router(relationships_router, prefix="/relationships", tags=["relationships"])
 api_v1_router.include_router(documents_router, prefix="/documents", tags=["documents"])
 api_v1_router.include_router(events_router, prefix="/events", tags=["events"])
 api_v1_router.include_router(tree_router, prefix="/tree", tags=["tree"])
-api_v1_router.include_router(
-    notifications_router, prefix="/notifications", tags=["notifications"]
-)
+api_v1_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 api_v1_router.include_router(platform_admin_router)

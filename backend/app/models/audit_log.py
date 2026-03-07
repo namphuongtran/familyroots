@@ -31,6 +31,4 @@ class AuditLog(Base):
     ip_address: Mapped[str | None] = mapped_column(INET, default=None)
     user_agent: Mapped[str | None] = mapped_column(String(500), default=None)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

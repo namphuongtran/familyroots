@@ -2,9 +2,7 @@
 
 import uuid
 
-import pytest
-
-from app.services.relationship_descriptor import describe_relationship, KINSHIP_MAP
+from app.services.relationship_descriptor import KINSHIP_MAP, describe_relationship
 
 
 def _path_step(member_id, full_name="Test", gender="male", edge_type=None):
@@ -69,9 +67,9 @@ def test_distant_relative():
     """Long path falls back to distant relative description."""
     ids = [uuid.uuid4() for _ in range(8)]
     edges = ["parent", "parent", "parent", "parent", "child", "child", "child"]
-    path = [_path_step(ids[0], f"Person0")]
+    path = [_path_step(ids[0], "Person0")]
     for i, edge in enumerate(edges):
-        path.append(_path_step(ids[i + 1], f"Person{i+1}", edge_type=edge))
+        path.append(_path_step(ids[i + 1], f"Person{i + 1}", edge_type=edge))
 
     result = describe_relationship(path, "male", "male")
     # Sequence not in KINSHIP_MAP → distant relative

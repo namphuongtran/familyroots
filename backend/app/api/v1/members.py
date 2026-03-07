@@ -41,9 +41,7 @@ async def list_members(
     is_alive: bool | None = None,
 ) -> dict[str, Any]:
     """List clan members with cursor pagination and optional filters."""
-    query = select(Member).where(
-        Member.clan_id == clan_id, Member.is_deleted.is_(False)
-    )
+    query = select(Member).where(Member.clan_id == clan_id, Member.is_deleted.is_(False))
     if generation is not None:
         query = query.where(Member.generation == generation)
     if gender is not None:
@@ -134,14 +132,16 @@ async def create_member(
         created_by=actor_id,
     )
     db.add(member)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="editor",
-        action="member.create",
-        resource_type="member",
-        resource_id=member.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="editor",
+            action="member.create",
+            resource_type="member",
+            resource_id=member.id,
+        )
+    )
     await db.commit()
     await db.refresh(member)
     return {"data": MemberResponse.model_validate(member).model_dump()}
@@ -178,15 +178,17 @@ async def update_member(
         setattr(member, field, value)
     member.updated_by = actor_id
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="editor",
-        action="member.update",
-        resource_type="member",
-        resource_id=member.id,
-        new_value=update_data,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="editor",
+            action="member.update",
+            resource_type="member",
+            resource_id=member.id,
+            new_value=update_data,
+        )
+    )
     await db.commit()
     await db.refresh(member)
     return {"data": MemberResponse.model_validate(member).model_dump()}
@@ -208,14 +210,16 @@ async def delete_member(
     member.deleted_at = datetime.now(UTC)
     member.deleted_by = actor_id
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="admin",
-        action="member.delete",
-        resource_type="member",
-        resource_id=member.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="admin",
+            action="member.delete",
+            resource_type="member",
+            resource_id=member.id,
+        )
+    )
     await db.commit()
     return {"data": {"message": t("member.deleted"), "id": str(member_id)}}
 
@@ -244,14 +248,16 @@ async def restore_member(
     member.deleted_at = None
     member.deleted_by = None
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="admin",
-        action="member.restore",
-        resource_type="member",
-        resource_id=member.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="admin",
+            action="member.restore",
+            resource_type="member",
+            resource_id=member.id,
+        )
+    )
     await db.commit()
     return {"data": {"message": t("member.restored"), "id": str(member_id)}}
 
@@ -295,9 +301,7 @@ async def member_documents(
     """Get all documents for a member."""
     await _get_member_or_404(member_id, clan_id, db)
     result = await db.execute(
-        select(Document).where(
-            Document.clan_id == clan_id, Document.member_id == member_id
-        )
+        select(Document).where(Document.clan_id == clan_id, Document.member_id == member_id)
     )
     docs = result.scalars().all()
     from app.schemas.document import DocumentSummary
@@ -316,9 +320,7 @@ async def member_events(
     """Get all events for a member."""
     await _get_member_or_404(member_id, clan_id, db)
     result = await db.execute(
-        select(Event).where(
-            Event.clan_id == clan_id, Event.member_id == member_id
-        )
+        select(Event).where(Event.clan_id == clan_id, Event.member_id == member_id)
     )
     events = result.scalars().all()
     from app.schemas.event import EventResponse
@@ -340,21 +342,25 @@ async def member_timeline(
 
     # Birth
     if member.birth_date:
-        timeline.append(TimelineEvent(
-            date=member.birth_date,
-            date_approx=member.birth_date_approx,
-            event_type="birth",
-            title=t("timeline.birth"),
-        ).model_dump())
+        timeline.append(
+            TimelineEvent(
+                date=member.birth_date,
+                date_approx=member.birth_date_approx,
+                event_type="birth",
+                title=t("timeline.birth"),
+            ).model_dump()
+        )
 
     # Death
     if member.death_date:
-        timeline.append(TimelineEvent(
-            date=member.death_date,
-            date_approx=member.death_date_approx,
-            event_type="death",
-            title=t("timeline.death"),
-        ).model_dump())
+        timeline.append(
+            TimelineEvent(
+                date=member.death_date,
+                date_approx=member.death_date_approx,
+                event_type="death",
+                title=t("timeline.death"),
+            ).model_dump()
+        )
 
     # Marriages
     spouse_result = await db.execute(
@@ -373,27 +379,31 @@ async def member_timeline(
         {"mid": member_id, "clan_id": clan_id},
     )
     for row in spouse_result.mappings().all():
-        timeline.append(TimelineEvent(
-            date=row["start_date"],
-            date_approx=False,
-            event_type="marriage",
-            title=t("timeline.marriage"),
-            related_member_id=row["spouse_id"],
-            related_member_name=row["spouse_name"],
-        ).model_dump())
+        timeline.append(
+            TimelineEvent(
+                date=row["start_date"],
+                date_approx=False,
+                event_type="marriage",
+                title=t("timeline.marriage"),
+                related_member_id=row["spouse_id"],
+                related_member_name=row["spouse_name"],
+            ).model_dump()
+        )
 
     # Custom events
     events_result = await db.execute(
         select(Event).where(Event.clan_id == clan_id, Event.member_id == member_id)
     )
     for ev in events_result.scalars().all():
-        timeline.append(TimelineEvent(
-            date=ev.event_date,
-            date_approx=False,
-            event_type=ev.event_type,
-            title=ev.title,
-            description=ev.description,
-        ).model_dump())
+        timeline.append(
+            TimelineEvent(
+                date=ev.event_date,
+                date_approx=False,
+                event_type=ev.event_type,
+                title=ev.title,
+                description=ev.description,
+            ).model_dump()
+        )
 
     # Sort chronologically (None dates last)
     timeline.sort(key=lambda e: e.get("date") or "9999-12-31")
@@ -404,9 +414,7 @@ async def member_timeline(
 # ── Helpers ───────────────────────────────────────────────────
 
 
-async def _get_member_or_404(
-    member_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession
-) -> Member:
+async def _get_member_or_404(member_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession) -> Member:
     result = await db.execute(
         select(Member).where(
             Member.id == member_id,

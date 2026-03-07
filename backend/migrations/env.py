@@ -10,22 +10,20 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
-from app.models.base import Base  # noqa: F401 — ensure all models are imported
 from app.models import (  # noqa: F401 — import all models for autogenerate
+    AuditLog,
     Clan,
-    Member,
-    Relationship,
     Document,
     Event,
-    UserClanRole,
-    AuditLog,
+    Member,
     NotificationLog,
+    Relationship,
+    UserClanRole,
 )
+from app.models.base import Base
 
 config = context.config
-config.set_main_option(
-    "sqlalchemy.url", settings.DATABASE_URL.replace("+asyncpg", "")
-)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("+asyncpg", ""))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

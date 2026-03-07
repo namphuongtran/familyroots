@@ -53,17 +53,11 @@ class RelationshipValidator:
                     {"min_age_gap": 12, "actual": round(age_gap, 1)},
                 )
             if age_gap > 80:
-                return {
-                    "warning": t(
-                        "relationship.unusual_age_gap", years=round(age_gap, 1)
-                    )
-                }
+                return {"warning": t("relationship.unusual_age_gap", years=round(age_gap, 1))}
 
         # Rule 3: cycle detection — child cannot be an ancestor of parent
         ancestors = await db.execute(
-            text(
-                "SELECT member_id FROM public.get_ancestors_flat(:id, :clan_id, 20)"
-            ),
+            text("SELECT member_id FROM public.get_ancestors_flat(:id, :clan_id, 20)"),
             {"id": parent_id, "clan_id": clan_id},
         )
         ancestor_ids = {row[0] for row in ancestors}

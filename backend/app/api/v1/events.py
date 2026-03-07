@@ -57,14 +57,16 @@ async def create_event(
         created_by=actor_id,
     )
     db.add(event)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="editor",
-        action="event.create",
-        resource_type="event",
-        resource_id=event.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="editor",
+            action="event.create",
+            resource_type="event",
+            resource_id=event.id,
+        )
+    )
     await db.commit()
     await db.refresh(event)
     return {"data": EventResponse.model_validate(event).model_dump()}
@@ -165,18 +167,20 @@ async def get_upcoming_events(
     upcoming = []
     for row in rows:
         next_occ = row["next_occurrence"]
-        upcoming.append({
-            "id": str(row["id"]),
-            "member_id": str(row["member_id"]) if row["member_id"] else None,
-            "member_name": row["member_name"],
-            "member_avatar_url": row["member_avatar_url"],
-            "event_type": row["event_type"],
-            "title": row["title"],
-            "event_date": row["event_date"].isoformat(),
-            "next_occurrence": next_occ.isoformat() if next_occ else None,
-            "days_until": (next_occ - today).days if next_occ else None,
-            "is_lunar_calendar": row["is_lunar_calendar"],
-        })
+        upcoming.append(
+            {
+                "id": str(row["id"]),
+                "member_id": str(row["member_id"]) if row["member_id"] else None,
+                "member_name": row["member_name"],
+                "member_avatar_url": row["member_avatar_url"],
+                "event_type": row["event_type"],
+                "title": row["title"],
+                "event_date": row["event_date"].isoformat(),
+                "next_occurrence": next_occ.isoformat() if next_occ else None,
+                "days_until": (next_occ - today).days if next_occ else None,
+                "is_lunar_calendar": row["is_lunar_calendar"],
+            }
+        )
     return {"data": upcoming}
 
 
@@ -207,14 +211,16 @@ async def update_event(
     for field, value in update_data.items():
         setattr(event, field, value)
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="editor",
-        action="event.update",
-        resource_type="event",
-        resource_id=event.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="editor",
+            action="event.update",
+            resource_type="event",
+            resource_id=event.id,
+        )
+    )
     await db.commit()
     await db.refresh(event)
     return {"data": EventResponse.model_validate(event).model_dump()}
@@ -231,24 +237,22 @@ async def delete_event(
     event = await _get_event_or_404(event_id, clan_id, db)
 
     await db.delete(event)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="editor",
-        action="event.delete",
-        resource_type="event",
-        resource_id=event_id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="editor",
+            action="event.delete",
+            resource_type="event",
+            resource_id=event_id,
+        )
+    )
     await db.commit()
     return {"data": {"message": "Event deleted", "id": str(event_id)}}
 
 
-async def _get_event_or_404(
-    event_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession
-) -> Event:
-    result = await db.execute(
-        select(Event).where(Event.id == event_id, Event.clan_id == clan_id)
-    )
+async def _get_event_or_404(event_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession) -> Event:
+    result = await db.execute(select(Event).where(Event.id == event_id, Event.clan_id == clan_id))
     event = result.scalar_one_or_none()
     if not event:
         raise NotFoundError("event_not_found")

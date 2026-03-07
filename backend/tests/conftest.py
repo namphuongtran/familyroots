@@ -3,14 +3,14 @@
 import uuid
 from datetime import date
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build mock DB rows (MappingResult-style dicts)
 # ---------------------------------------------------------------------------
+
 
 def make_member_row(
     *,
@@ -84,16 +84,16 @@ def make_spouse_row(
 class MockMappingResult:
     """Mimics SQLAlchemy result.mappings().all()."""
 
-    def __init__(self, rows: list[dict]):
+    def __init__(self, rows: list[dict[str, Any]]):
         self._rows = rows
 
-    def mappings(self) -> "MockMappingResult":
+    def mappings(self) -> MockMappingResult:
         return self
 
-    def all(self) -> list[dict]:
+    def all(self) -> list[dict[str, Any]]:
         return self._rows
 
-    def first(self) -> dict | None:
+    def first(self) -> dict[str, Any] | None:
         return self._rows[0] if self._rows else None
 
 
@@ -103,7 +103,7 @@ class MockScalarResult:
     def __init__(self, value: Any = None):
         self._value = value
 
-    def first(self) -> tuple | None:
+    def first(self) -> tuple[Any, ...] | None:
         if self._value is not None:
             return (self._value,)
         return None

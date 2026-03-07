@@ -28,9 +28,7 @@ async def get_supabase_jwks() -> dict[str, Any]:
         return _jwks_cache
 
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-        )
+        resp = await client.get(f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json")
         resp.raise_for_status()
         _jwks_cache = resp.json()
         _jwks_cache_time = now
@@ -117,10 +115,7 @@ async def get_current_clan_id(
 
     # Fetch all approved clan memberships for this user
     result = await db.execute(
-        text(
-            "SELECT clan_id FROM user_clan_roles "
-            "WHERE user_id = :user_id AND is_approved = true"
-        ),
+        text("SELECT clan_id FROM user_clan_roles WHERE user_id = :user_id AND is_approved = true"),
         {"user_id": user_id},
     )
     approved_clan_ids: list[uuid.UUID] = [uuid.UUID(str(row[0])) for row in result.fetchall()]

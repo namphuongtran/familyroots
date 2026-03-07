@@ -53,15 +53,17 @@ async def update_own_clan(
     for field, value in update_data.items():
         setattr(clan, field, value)
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="admin",
-        action="clan.update",
-        resource_type="clan",
-        resource_id=clan_id,
-        new_value=update_data,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="admin",
+            action="clan.update",
+            resource_type="clan",
+            resource_id=clan_id,
+            new_value=update_data,
+        )
+    )
     await db.commit()
     return {"data": ClanResponse.model_validate(clan).model_dump()}
 
@@ -135,9 +137,7 @@ async def approve_user(
 ) -> dict[str, Any]:
     """Approve a pending user (admin only)."""
     result = await db.execute(
-        select(UserClanRole).where(
-            UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id
-        )
+        select(UserClanRole).where(UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id)
     )
     ucr = result.scalar_one_or_none()
     if not ucr:
@@ -148,16 +148,19 @@ async def approve_user(
     ucr.is_approved = True
     ucr.approved_by = uuid.UUID(current_user["sub"])
     from datetime import datetime
+
     ucr.approved_at = datetime.now(UTC)
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="admin",
-        action="user.approve",
-        resource_type="user_clan_role",
-        resource_id=ucr.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="admin",
+            action="user.approve",
+            resource_type="user_clan_role",
+            resource_id=ucr.id,
+        )
+    )
     await db.commit()
     return {"data": {"message": t("user.approved"), "user_id": str(user_id)}}
 
@@ -183,14 +186,16 @@ async def reject_user(
         raise NotFoundError("user_not_found")
 
     await db.delete(ucr)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="admin",
-        action="user.reject",
-        resource_type="user_clan_role",
-        resource_id=ucr.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="admin",
+            action="user.reject",
+            resource_type="user_clan_role",
+            resource_id=ucr.id,
+        )
+    )
     await db.commit()
     return {"data": {"message": t("user.rejected"), "user_id": str(user_id)}}
 
@@ -214,9 +219,7 @@ async def change_user_role(
     actor_id = uuid.UUID(current_user["sub"])
 
     result = await db.execute(
-        select(UserClanRole).where(
-            UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id
-        )
+        select(UserClanRole).where(UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id)
     )
     ucr = result.scalar_one_or_none()
     if not ucr:
@@ -237,16 +240,18 @@ async def change_user_role(
     old_role = ucr.role
     ucr.role = role
 
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="admin",
-        action="user.change_role",
-        resource_type="user_clan_role",
-        resource_id=ucr.id,
-        old_value={"role": old_role},
-        new_value={"role": role},
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="admin",
+            action="user.change_role",
+            resource_type="user_clan_role",
+            resource_id=ucr.id,
+            old_value={"role": old_role},
+            new_value={"role": role},
+        )
+    )
     await db.commit()
     return {"data": {"message": t("user.role_changed"), "user_id": str(user_id), "role": role}}
 
@@ -266,22 +271,22 @@ async def remove_user(
         raise ForbiddenError("clan.cannot_remove_self")
 
     result = await db.execute(
-        select(UserClanRole).where(
-            UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id
-        )
+        select(UserClanRole).where(UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id)
     )
     ucr = result.scalar_one_or_none()
     if not ucr:
         raise NotFoundError("user_not_found")
 
     await db.delete(ucr)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="admin",
-        action="user.remove",
-        resource_type="user_clan_role",
-        resource_id=ucr.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="admin",
+            action="user.remove",
+            resource_type="user_clan_role",
+            resource_id=ucr.id,
+        )
+    )
     await db.commit()
     return {"data": {"message": t("user.removed"), "user_id": str(user_id)}}

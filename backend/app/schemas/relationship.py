@@ -31,10 +31,9 @@ class RelationshipCreateRequest(BaseModel):
                     f"for relation_type '{self.relation_type}'"
                 )
         elif self.relation_type == "spouse" and self.relation_subtype not in SPOUSE_SUBTYPES:
-                raise ValueError(
-                    f"relation_subtype must be one of {SPOUSE_SUBTYPES} "
-                    f"for relation_type 'spouse'"
-                )
+            raise ValueError(
+                f"relation_subtype must be one of {SPOUSE_SUBTYPES} for relation_type 'spouse'"
+            )
         if str(self.member_id) == str(self.related_id):
             raise ValueError("member_id and related_id must be different")
         if self.start_date and self.end_date and self.end_date < self.start_date:

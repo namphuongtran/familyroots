@@ -2,7 +2,7 @@
 
 import asyncio
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -69,13 +69,16 @@ async def test_anniversary_dedup_skips_already_sent():
 
     mock_db.execute = AsyncMock(side_effect=mock_execute)
 
-    with patch(
-        "app.core.database.AsyncSessionLocal",
-        return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_db),
-            __aexit__=AsyncMock(return_value=False),
+    with (
+        patch(
+            "app.core.database.AsyncSessionLocal",
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_db),
+                __aexit__=AsyncMock(return_value=False),
+            ),
         ),
-    ), patch("app.services.notification.send_to_clan") as mock_send:
+        patch("app.services.notification.send_to_clan") as mock_send,
+    ):
         await send_anniversary_notifications()
         # send_to_clan should NOT be called because dedup found existing entry
         mock_send.assert_not_called()

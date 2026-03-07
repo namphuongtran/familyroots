@@ -22,12 +22,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=7.0.0",
-    "httpx>=0.28.1",
-]
 
 [build-system]
 requires = ["hatchling>=1.29.0"]
@@ -56,6 +50,12 @@ python_version = "3.14"
 strict = true
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_decorators = false
+disallow_untyped_calls = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -68,7 +68,12 @@ markers = [
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
+    "mypy>=1.19.1",
     "psycopg2-binary>=2.9.11",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
     "ruff>=0.15.5",
     "types-python-jose>=3.3.0",
 ]

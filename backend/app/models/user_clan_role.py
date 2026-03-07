@@ -12,9 +12,7 @@ from app.models.base import Base, TimestampMixin
 
 class UserClanRole(TimestampMixin, Base):
     __tablename__ = "user_clan_roles"
-    __table_args__ = (
-        UniqueConstraint("user_id", "clan_id", name="uq_user_clan"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "clan_id", name="uq_user_clan"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     clan_id: Mapped[uuid.UUID] = mapped_column(

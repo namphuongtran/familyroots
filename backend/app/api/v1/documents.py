@@ -92,14 +92,16 @@ async def upload_document(
         created_by=actor_id,
     )
     db.add(doc)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=actor_id,
-        actor_role="editor",
-        action="document.upload",
-        resource_type="document",
-        resource_id=doc.id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=actor_id,
+            actor_role="editor",
+            action="document.upload",
+            resource_type="document",
+            resource_id=doc.id,
+        )
+    )
     await db.commit()
     await db.refresh(doc)
 
@@ -169,22 +171,22 @@ async def delete_document(
 
     # If this was an avatar, clear the member's avatar_url
     if doc.is_avatar and doc.member_id:
-        result = await db.execute(
-            select(Member).where(Member.id == doc.member_id)
-        )
+        result = await db.execute(select(Member).where(Member.id == doc.member_id))
         member = result.scalar_one_or_none()
         if member:
             member.avatar_url = None
 
     await db.delete(doc)
-    db.add(AuditLog(
-        clan_id=clan_id,
-        actor_id=uuid.UUID(current_user["sub"]),
-        actor_role="admin",
-        action="document.delete",
-        resource_type="document",
-        resource_id=document_id,
-    ))
+    db.add(
+        AuditLog(
+            clan_id=clan_id,
+            actor_id=uuid.UUID(current_user["sub"]),
+            actor_role="admin",
+            action="document.delete",
+            resource_type="document",
+            resource_id=document_id,
+        )
+    )
     await db.commit()
     return {"data": {"message": "Document deleted", "id": str(document_id)}}
 
@@ -221,9 +223,7 @@ async def set_document_as_avatar(
 
     # Update the member's avatar_url
     presigned = await get_presigned_url(doc.storage_path, expires_in=86400 * 30)
-    result = await db.execute(
-        select(Member).where(Member.id == doc.member_id)
-    )
+    result = await db.execute(select(Member).where(Member.id == doc.member_id))
     member = result.scalar_one_or_none()
     if member:
         member.avatar_url = presigned
@@ -232,13 +232,9 @@ async def set_document_as_avatar(
     return {"data": {"message": "Avatar set", "document_id": str(document_id)}}
 
 
-async def _get_doc_or_404(
-    doc_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession
-) -> Document:
+async def _get_doc_or_404(doc_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession) -> Document:
     result = await db.execute(
-        select(Document).where(
-            Document.id == doc_id, Document.clan_id == clan_id
-        )
+        select(Document).where(Document.id == doc_id, Document.clan_id == clan_id)
     )
     doc = result.scalar_one_or_none()
     if not doc:

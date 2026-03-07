@@ -44,7 +44,7 @@ jobs:
         run: uv python install
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --dev
 
       - name: Lint (ruff check)
         run: uvx ruff check .
@@ -53,7 +53,7 @@ jobs:
         run: uvx ruff format --check .
 
       - name: Type check (mypy)
-        run: uvx mypy app/
+        run: uv run mypy app/ tests/
 
       - name: Run tests
         env:

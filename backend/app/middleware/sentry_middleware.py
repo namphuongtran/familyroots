@@ -9,9 +9,7 @@ from starlette.responses import Response
 class SentryMiddleware(BaseHTTPMiddleware):
     """Attach request context to Sentry scope for richer error reports."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("path", request.url.path)
             scope.set_tag("method", request.method)

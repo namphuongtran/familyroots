@@ -80,10 +80,7 @@ async def build_descendants_tree(
     """
     # Step 1: Get all descendants as flat list
     flat_result = await db.execute(
-        text(
-            "SELECT * FROM public.get_family_tree_flat("
-            ":root_id, :clan_id, :max_generations)"
-        ),
+        text("SELECT * FROM public.get_family_tree_flat(:root_id, :clan_id, :max_generations)"),
         {"root_id": root_id, "clan_id": clan_id, "max_generations": max_generations},
     )
     rows = flat_result.mappings().all()
@@ -148,20 +145,12 @@ async def build_descendants_tree(
                     "id": str(row["spouse_id"]),
                     "full_name": row["full_name"],
                     "gender": row["gender"],
-                    "birth_date": (
-                        row["birth_date"].isoformat() if row["birth_date"] else None
-                    ),
-                    "death_date": (
-                        row["death_date"].isoformat() if row["death_date"] else None
-                    ),
+                    "birth_date": (row["birth_date"].isoformat() if row["birth_date"] else None),
+                    "death_date": (row["death_date"].isoformat() if row["death_date"] else None),
                     "avatar_url": row["avatar_url"],
                     "relation_subtype": row["relation_subtype"],
-                    "start_date": (
-                        row["start_date"].isoformat() if row["start_date"] else None
-                    ),
-                    "end_date": (
-                        row["end_date"].isoformat() if row["end_date"] else None
-                    ),
+                    "start_date": (row["start_date"].isoformat() if row["start_date"] else None),
+                    "end_date": (row["end_date"].isoformat() if row["end_date"] else None),
                     "is_primary": row["is_primary"],
                 }
             )
