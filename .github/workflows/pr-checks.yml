@@ -1,0 +1,58 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  conventional-commits:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Conventional Commits
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            infra
+            test
+            refactor
+            style
+            perf
+            ci
+          requireScope: false
+
+  secret-scanning:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  no-env-files:
+    name: Check no .env files committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for .env files
+        run: |
+          # Find .env files that are NOT .env.example
+          ENV_FILES=$(find . -name '.env' -o -name '.env.local' -o -name '.env.*.local' | grep -v '.env.example' || true)
+          if [ -n "$ENV_FILES" ]; then
+            echo "::error::Found .env files that should not be committed:"
+            echo "$ENV_FILES"
+            exit 1
+          fi
+          echo "No .env files found — OK"

@@ -1,0 +1,30 @@
+# Render.com config-as-code
+# See: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: familyroots-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    region: singapore  # closest to Vietnam
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: familyroots-db
+          property: connectionString
+      - key: APP_SECRET_KEY
+        generateValue: true
+    healthCheckPath: /health
+    # TODO: implement in Prompt 2 — add remaining env vars from .env.example
+
+databases:
+  - name: familyroots-db
+    plan: starter
+    region: singapore
+    postgresMajorVersion: "16"
+    databaseName: familyroots
+    user: familyroots

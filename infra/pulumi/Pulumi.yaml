@@ -1,0 +1,6 @@
+name: familyroots-infra
+runtime:
+  name: python
+  options:
+    virtualenv: .venv
+description: FamilyRoots platform infrastructure

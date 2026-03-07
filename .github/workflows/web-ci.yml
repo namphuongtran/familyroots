@@ -1,0 +1,76 @@
+name: Web CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "web/**"
+      - "packages/**"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "web/**"
+      - "packages/**"
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies (shared package)
+        working-directory: packages/family_roots_core
+        run: dart pub get
+
+      - name: Get dependencies (web)
+        working-directory: web
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: web
+        run: flutter analyze
+
+      - name: Run tests
+        working-directory: web
+        run: flutter test
+
+      - name: Build web (release)
+        working-directory: web
+        run: flutter build web --release
+
+  deploy:
+    needs: analyze-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies (shared package)
+        working-directory: packages/family_roots_core
+        run: dart pub get
+
+      - name: Get dependencies (web)
+        working-directory: web
+        run: flutter pub get
+
+      - name: Build web (release)
+        working-directory: web
+        run: flutter build web --release
+
+      - name: Deploy to Vercel
+        working-directory: web
+        run: |
+          npm i -g vercel
+          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} build/web/

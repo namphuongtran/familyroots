@@ -1,0 +1,16 @@
+[project]
+name = "familyroots-infra"
+version = "0.1.0"
+description = "FamilyRoots platform infrastructure as code"
+requires-python = ">=3.12"
+
+[tool.uv]
+dev-dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.dependencies]
+pulumi = ">=3.0.0"
+pulumi-github = ">=6.0.0"

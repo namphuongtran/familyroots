@@ -1,0 +1,76 @@
+name: family_roots_mobile
+description: FamilyRoots mobile app — Android, iOS, and Tablet.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Shared package
+  family_roots_core:
+    path: ../packages/family_roots_core
+
+  # State management
+  flutter_bloc: ^8.1.0
+  equatable: ^2.0.0
+
+  # Dependency injection
+  get_it: ^7.6.0
+  injectable: ^2.3.0
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # Networking
+  dio: ^5.4.0
+  retrofit: ">=4.0.0 <5.0.0"
+
+  # Local storage (mobile only)
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # UI
+  cupertino_icons: ^1.0.6
+  cached_network_image: ^3.3.0
+
+  # Utilities
+  intl: ^0.19.0
+  json_annotation: ^4.8.0
+
+  # Supabase
+  supabase_flutter: ^2.0.0
+
+  # Firebase
+  firebase_core: ^3.0.0
+  firebase_messaging: ^15.0.0
+
+  # Sentry
+  sentry_flutter: ^8.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.0
+  injectable_generator: ^2.4.0
+  json_serializable: ^6.7.0
+  retrofit_generator: ">=8.0.0 <9.0.0"
+  hive_generator: ^2.0.1
+  bloc_test: ^9.1.0
+  mocktail: ^1.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  # fonts:
+  #   - family: CustomFont
+  #     fonts:
+  #       - asset: assets/fonts/CustomFont-Regular.ttf

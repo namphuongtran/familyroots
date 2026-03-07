@@ -1,0 +1,5 @@
+config:
+  familyroots-infra:environment: staging
+  familyroots-infra:supabase-project-ref: ""
+  familyroots-infra:vercel-team-id: ""
+  familyroots-infra:firebase-project-id: ""

@@ -1,0 +1,45 @@
+name: Mobile CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "mobile/**"
+      - "packages/**"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "mobile/**"
+      - "packages/**"
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies (shared package)
+        working-directory: packages/family_roots_core
+        run: dart pub get
+
+      - name: Get dependencies (mobile)
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Run tests
+        working-directory: mobile
+        run: flutter test
+
+      - name: Build APK (debug — validate build)
+        working-directory: mobile
+        run: flutter build apk --debug
