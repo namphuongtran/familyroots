@@ -17,13 +17,13 @@ FastAPI-based REST API service for the FamilyRoots genealogy platform.
 backend/
 ├── app/
 │   ├── api/v1/          # API route handlers (versioned)
-│   ├── core/            # Config, database, security, tenant resolver
+│   ├── core/            # Config, database, security
 │   ├── models/          # SQLAlchemy ORM models
 │   ├── schemas/         # Pydantic v2 request/response schemas
 │   ├── services/        # Business logic layer
-│   ├── middleware/       # Custom middleware (tenant, sentry)
+│   ├── middleware/       # Custom middleware (language, sentry)
 │   └── main.py          # App factory, lifespan, middleware setup
-├── migrations/          # Alembic migrations (multi-schema aware)
+├── migrations/          # Alembic migrations (single schema)
 ├── tests/               # pytest test suite
 ├── pyproject.toml       # Dependencies (uv-managed)
 ├── Dockerfile           # Production container (uses uv)

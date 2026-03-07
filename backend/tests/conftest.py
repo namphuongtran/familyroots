@@ -5,6 +5,6 @@
 # This module will provide:
 # - async test database setup/teardown (aiosqlite or test PostgreSQL)
 # - FastAPI TestClient fixture using httpx.AsyncClient
-# - Test tenant schema fixtures
+# - Test clan + user_clan_roles fixtures
 # - Mock Supabase client fixture
 # - Mock Firebase client fixture

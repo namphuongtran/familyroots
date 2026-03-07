@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 
@@ -15,6 +16,15 @@ class FamilyRootsApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: const [
+        Locale('vi'),
+        Locale('en'),
+        Locale('zh'),
+        Locale('fr'),
+      ],
+      // TODO: implement in Prompt 2 — persist user language preference
+      // locale: ref.watch(localeProvider),
     );
   }
 }

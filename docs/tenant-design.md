@@ -1,58 +1,74 @@
-# Multi-Tenant Design
+# Data Isolation Design
 
-## Overview
+## Approach: Single Schema + clan_id + Row Level Security
 
-FamilyRoots uses **schema-per-tenant** isolation in PostgreSQL. Each family clan gets its own schema (`clan_{slug}`) containing all clan-specific tables.
+FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation,
+enforced by Supabase Row Level Security (RLS).
 
-## Schema Layout
+## Why not separate schemas?
 
-```
-PostgreSQL Database: familyroots
-├── public                  # Shared tables (clans registry, users, etc.)
-│   ├── clans
-│   ├── users
-│   └── ...
-├── clan_nguyen_phuc        # Clan: Nguyễn Phúc
-│   ├── members
-│   ├── relationships
-│   ├── documents
-│   └── events
-├── clan_tran_van           # Clan: Trần Văn
-│   ├── members
-│   ├── relationships
-│   ├── documents
-│   └── events
-└── ...
-```
+Separate-schema multi-tenancy was considered and rejected:
 
-## Tenant Resolution Flow
+- **Over-engineered** for a genealogy platform — clans don't need infrastructure-level isolation from each other. They just need their own data to be private.
+- **Breaks Supabase connection pooling** — PgBouncer and Supabase's built-in pooler don't work well with `SET search_path` switching per request.
+- **Alembic becomes painful** — Running migrations across N schemas requires custom `env.py` logic, per-schema migration tracking, and slow sequential execution.
+- **Infra complexity** — Tenant provisioner, per-tenant storage buckets, schema creation scripts — all unnecessary.
+- **Supabase RLS is purpose-built for this** — Row Level Security policies enforce data isolation at the database engine level, which is as secure as separate schemas for this use case.
+
+## Schema layout
 
 ```
-Request → JWT Token → Extract clan_id claim
-  → TenantMiddleware → SET search_path TO clan_{slug}, public
-    → All DB queries scoped to tenant schema
+PostgreSQL instance
+└── public schema (all tables, data separated by clan_id column)
+    ├── clans              (one row per clan)
+    ├── members            (all clans' members, filtered by clan_id via RLS)
+    ├── relationships      (filtered by clan_id via RLS)
+    ├── documents          (filtered by clan_id via RLS)
+    ├── events             (filtered by clan_id via RLS)
+    ├── user_clan_roles    (which user belongs to which clan, with what role)
+    └── platform_users     (super admin only — unchanged)
 ```
 
-## Tenant Provisioning
+## How isolation works
 
-When a new clan is registered:
+1. Every clan-scoped table has `clan_id UUID NOT NULL` (via `ClanScopedMixin`).
+2. RLS policies enforce `clan_id = auth.user_clan_id()` on every query.
+3. Application layer also filters by `clan_id` explicitly (defense in depth) via the `get_current_clan_id()` FastAPI dependency.
+4. Supabase Storage uses path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
+5. Backend always uses `get_current_clan_id()` dependency on protected routes.
 
-1. Insert row into `public.clans`
-2. Create schema `clan_{slug}`
-3. Run migrations on the new schema
-4. Seed with default data (if any)
+## Multi-clan membership (clan switcher)
 
-See `backend/app/services/tenant_provisioner.py`.
+Users can belong to multiple clans (e.g., a genealogist managing several family trees). The clan switcher works like Slack's workspace switcher:
 
-## Key Considerations
+### Flow
 
-- **Isolation**: Full data isolation at the database level
-- **Migrations**: Alembic must support multi-schema migrations
-- **Connection pooling**: `search_path` is set per-request, not per-connection
-- **Supabase RLS**: Additional row-level security as defense in depth
+1. **Login** — `GET /api/v1/me/clans` returns all clans the user belongs to.
+2. **Single clan** — if only one membership, auto-selected (no UI needed).
+3. **Multiple clans** — client shows a clan selector UI.
+4. **Selection** — `POST /api/v1/me/clans/{clan_id}/select` validates membership and returns clan details.
+5. **Persistence** — client stores selected `clan_id` in local storage.
+6. **Subsequent requests** — client sends `X-Current-Clan-Id: <uuid>` header on all clan-scoped API calls.
 
-## TODO
+### Backend implementation
 
-- Implement in Prompt 2: Full tenant provisioning flow
-- Implement in Prompt 2: Alembic multi-schema migration support
-- Implement in Prompt 2: Supabase RLS policies per tenant
+- `get_current_clan_id()` FastAPI dependency reads the `X-Current-Clan-Id` header.
+- If 1 clan + no header → auto-selects (zero-friction for single-clan users).
+- If multiple clans + no header → returns `400` with instructions.
+- If header is sent but user isn't a member → returns `403`.
+- Stateless design — no server-side session required.
+
+## Onboarding a new clan
+
+Creating a new clan is simply:
+1. `INSERT` into `public.clans` (via super admin or self-registration flow)
+2. `INSERT` into `public.user_clan_roles` for the founding admin
+3. No schema creation. No migrations. No storage bucket setup.
+
+Done in under 100ms.
+
+## Related
+
+- [RBAC](rbac.md) — role hierarchy within clans
+- [Database Schema](database-schema.md) — table definitions
+- [Architecture](architecture.md) — system overview

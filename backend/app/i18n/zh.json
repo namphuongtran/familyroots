@@ -1,0 +1,5 @@
+{
+  "error.member_not_found": "未找到成员",
+  "error.unauthorized": "您没有权限执行此操作",
+  "error.clan_not_found": "未找到宗族"
+}

@@ -2,6 +2,12 @@ import 'package:go_router/go_router.dart';
 
 // TODO: implement in Prompt 2 — import page widgets
 
+// Platform admin pages (super admin only)
+// import 'package:family_roots_web/features/admin/platform/pages/platform_dashboard_page.dart';
+// import 'package:family_roots_web/features/admin/platform/pages/clan_management_page.dart';
+// import 'package:family_roots_web/features/admin/platform/pages/platform_metrics_page.dart';
+// import 'package:family_roots_web/features/admin/platform/pages/platform_audit_page.dart';
+
 /// Web app router configuration using GoRouter.
 /// Includes both public routes and admin panel routes.
 final GoRouter webRouter = GoRouter(
@@ -28,6 +34,12 @@ final GoRouter webRouter = GoRouter(
     //     GoRoute(path: '/admin/audit', builder: (context, state) => const AuditLogPage()),
     //   ],
     // ),
+
+    // Platform super admin routes (protected by SuperAdminGuard)
+    // GoRoute(path: '/platform', builder: (context, state) => const PlatformDashboardPage()),
+    // GoRoute(path: '/platform/clans', builder: (context, state) => const ClanManagementPage()),
+    // GoRoute(path: '/platform/metrics', builder: (context, state) => const PlatformMetricsPage()),
+    // GoRoute(path: '/platform/audit', builder: (context, state) => const PlatformAuditPage()),
   ],
   // redirect: routeGuard,
 );

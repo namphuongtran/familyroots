@@ -1,0 +1,7 @@
+{
+  "error.member_not_found": "Member not found",
+  "error.unauthorized": "You do not have permission to perform this action",
+  "error.clan_not_found": "Clan not found",
+  "notification.death_anniversary": "{name}'s death anniversary is in {days} days",
+  "notification.birthday": "Today is {name}'s birthday"
+}

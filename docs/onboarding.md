@@ -143,9 +143,49 @@ familyroots/
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, etc.)
 - **Branches**: `main` (production), `develop` (integration), `feat/*`, `fix/*`
 
+## 8. SSO Configuration (Google + Apple)
+
+### Google OAuth Setup
+
+1. Go to **Supabase Dashboard → Authentication → Providers → Google**
+2. Enable the Google provider
+3. Create **OAuth 2.0 credentials** in [Google Cloud Console](https://console.cloud.google.com/)
+   - Application type: Web application (for web) + iOS/Android (for mobile)
+4. Set **Authorized redirect URI**: `https://<your-project>.supabase.co/auth/v1/callback`
+5. Paste **Client ID** and **Client Secret** into Supabase
+6. Add `GOOGLE_CLIENT_ID` and `GOOGLE_SERVER_CLIENT_ID` to `mobile/.env` and `web/.env`
+
+### Apple Sign In Setup
+
+> **Apple App Store Policy:** If an iOS/macOS app offers any third-party social login
+> (including Google), it **must** also offer Apple Sign In.
+
+1. Go to **Supabase Dashboard → Authentication → Providers → Apple**
+2. Enable the Apple provider
+3. In [Apple Developer Portal](https://developer.apple.com/):
+   - Create an **App ID** with "Sign In with Apple" capability
+   - Create a **Service ID** (for web OAuth redirect)
+   - Generate a **private key** (`.p8` file)
+4. Paste **Team ID**, **Key ID**, **Service ID**, and **private key content** into Supabase
+5. For iOS: Add "Sign In with Apple" capability in Xcode project settings
+6. For web: Configure the return URL in Apple Developer Portal
+
+### Platform Super Admin Bootstrap
+
+The super admin account is created **once** via CLI script (never via API):
+
+```bash
+cd backend
+export SUPABASE_URL=https://xxxx.supabase.co
+export SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+uv run python ../scripts/bootstrap_super_admin.py
+```
+
+> ⚠️ This script can only be run once. Store the credentials securely.
+
 ## Getting Help
 
 - Check the [Architecture docs](architecture.md) for system overview
 - Review [API Design](api-design.md) for endpoint specs
-- See [Tenant Design](tenant-design.md) for multi-tenancy details
+- See [Data Isolation Design](tenant-design.md) for clan_id + RLS approach
 - Read [RBAC](rbac.md) for permissions model

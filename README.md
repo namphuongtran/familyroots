@@ -1,6 +1,6 @@
 # FamilyRoots 🌳
 
-A cross-platform genealogy app for Vietnamese family clans. Each clan is an isolated tenant. Members can view/edit their family tree, manage member profiles, upload photos/documents, and receive notifications for death anniversaries and birthdays.
+A cross-platform genealogy app for Vietnamese family clans. Members can view/edit their family tree, manage member profiles, upload photos/documents, and receive notifications for death anniversaries and birthdays. Users can belong to multiple clans and switch between them (like Slack workspaces).
 
 ## Tech Stack
 
@@ -30,15 +30,15 @@ family-roots/
 ├── packages/         # Shared Dart packages (used by mobile + web)
 ├── infra/            # Infrastructure as Code (Pulumi, Render, Supabase, Firebase)
 ├── docs/             # Architecture docs, guides, ADRs
-├── scripts/          # Utility scripts (tenant provisioning, seeding, export)
+├── scripts/          # Utility scripts (seeding, export, super admin bootstrap)
 ├── docker-compose.yml
 ├── Makefile          # Common dev commands
 └── .pre-commit-config.yaml
 ```
 
-## Multi-Tenancy Model
+## Data Isolation Model
 
-**Shared Database, Separate Schema** — one PostgreSQL instance (Supabase), each clan gets its own schema (`clan_{slug}`). A shared `public` schema holds cross-tenant tables (clans registry, platform admins).
+**Single Schema + clan_id + Row Level Security** — one PostgreSQL instance (Supabase), all tables in a single `public` schema. Every clan-scoped table has a `clan_id UUID NOT NULL` column. Supabase RLS policies enforce data isolation at the database engine level. Users who belong to multiple clans switch context via the `X-Current-Clan-Id` header.
 
 ## Quick Start
 
@@ -84,7 +84,7 @@ See [docs/onboarding.md](docs/onboarding.md) for the full developer setup guide.
 ## Documentation
 
 - [Architecture Overview](docs/architecture.md)
-- [Multi-Tenant Design](docs/tenant-design.md)
+- [Data Isolation Design](docs/tenant-design.md)
 - [Infrastructure as Code Guide](docs/iac-guide.md)
 - [Developer Onboarding](docs/onboarding.md)
 - [API Design](docs/api-design.md) *(Prompt 2)*

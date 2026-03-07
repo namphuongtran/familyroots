@@ -1,23 +1,30 @@
-"""Alembic environment configuration — multi-schema aware."""
+"""Alembic environment configuration — single schema.
+
+No multi-schema complexity. Alembic manages the public schema only.
+Clan data isolation is handled by clan_id column + Supabase RLS.
+"""
 
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-# Alembic Config object
-config = context.config
+from app.core.config import settings
+from app.models.base import Base  # noqa: F401 — ensure all models are imported
 
-# Interpret the config file for Python logging
+# TODO: implement in Prompt 2 — import all model modules here so Alembic
+# can detect them for autogenerate:
+# from app.models import clan, member, relationship, document, event  # noqa: F401
+
+config = context.config
+config.set_main_option(
+    "sqlalchemy.url", settings.DATABASE_URL.replace("+asyncpg", "")
+)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# TODO: implement in Prompt 2
-# - Import all models so Alembic can detect them
-# - Set target_metadata from Base.metadata
-# - Implement multi-schema migration support
-#   (run migrations against each tenant schema)
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

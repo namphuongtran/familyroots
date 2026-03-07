@@ -1,9 +1,31 @@
-"""Async SQLAlchemy engine and session management."""
+"""Async SQLAlchemy engine and session management.
 
-# TODO: implement in Prompt 2
-#
-# This module will provide:
-# - Async SQLAlchemy engine (create_async_engine)
-# - Async session factory (async_sessionmaker)
-# - get_async_session dependency for FastAPI
-# - Tenant-aware session that sets search_path per request
+Single schema — no search_path switching. clan_id isolation is handled
+by Supabase RLS at the database level and explicit filtering at the
+application level.
+"""
+
+from collections.abc import AsyncIterator
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.core.config import settings
+
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    pool_size=10,
+    max_overflow=20,
+    echo=settings.APP_DEBUG,
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
+async def get_db() -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency — yield an async database session."""
+    async with AsyncSessionLocal() as session:
+        yield session

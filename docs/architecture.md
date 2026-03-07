@@ -2,7 +2,7 @@
 
 ## System Architecture
 
-FamilyRoots is a multi-tenant Vietnamese family genealogy platform with a monorepo structure.
+FamilyRoots is a Vietnamese family genealogy platform with a monorepo structure.
 
 ```
 ┌─────────────────┐     ┌─────────────────┐
@@ -27,15 +27,11 @@ FamilyRoots is a multi-tenant Vietnamese family genealogy platform with a monore
    └───────────┘ └──────┘ └─────────┘
 ```
 
-## Multi-Tenant Design
+## Data Isolation
 
-Each family clan gets an isolated PostgreSQL schema (`clan_{slug}`). Tenant resolution happens via:
+FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation, enforced by Supabase Row Level Security (RLS). Users can belong to multiple clans and switch between them via the `X-Current-Clan-Id` header (similar to Slack's workspace switcher).
 
-1. JWT token → `clan_id` claim
-2. Middleware sets `search_path` to tenant schema
-3. All queries are scoped to the active tenant
-
-See [tenant-design.md](tenant-design.md) for details.
+See [Data Isolation Design](tenant-design.md) for details.
 
 ## Clean Architecture Layers
 
@@ -47,7 +43,7 @@ See [tenant-design.md](tenant-design.md) for details.
 | Services        | `app/services/`| Business logic, orchestration            |
 | Models          | `app/models/`  | SQLAlchemy ORM models                    |
 | Schemas         | `app/schemas/` | Pydantic validation schemas              |
-| Middleware      | `app/middleware/` | Tenant resolution, Sentry integration |
+| Middleware      | `app/middleware/` | Language detection, Sentry integration |
 | Core            | `app/core/`    | Config, security, database, logging      |
 
 ### Flutter (Dart / Mobile + Web)
@@ -86,7 +82,7 @@ The `packages/family_roots_core/` Dart package contains shared entities, API cli
 
 ## Related Docs
 
-- [Tenant Design](tenant-design.md)
+- [Data Isolation Design](tenant-design.md)
 - [API Design](api-design.md)
 - [Database Schema](database-schema.md)
 - [RBAC](rbac.md)

@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
+from app.middleware.language_middleware import LanguageMiddleware
+from app.services.translator import load_translations
 
 
 @asynccontextmanager
@@ -22,6 +24,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             environment=settings.APP_ENV,
             traces_sample_rate=0.1 if settings.APP_ENV == "production" else 1.0,
         )
+
+    # Load i18n translation files
+    load_translations()
 
     # TODO: implement in Prompt 2 — initialize database engine
     # TODO: implement in Prompt 2 — start APScheduler
@@ -52,7 +57,13 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # TODO: implement in Prompt 2 — add tenant middleware
+    # Language middleware — extract Accept-Language and set locale context
+    application.add_middleware(LanguageMiddleware)
+
+    # NOTE: No tenant middleware — clan_id isolation is handled by
+    # Supabase RLS at the DB level + get_current_clan_id() dependency.
+    # Users select their active clan via X-Current-Clan-Id header.
+
     # TODO: implement in Prompt 2 — add Sentry middleware
 
     # Include API v1 routes

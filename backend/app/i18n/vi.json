@@ -1,0 +1,7 @@
+{
+  "error.member_not_found": "Không tìm thấy thành viên",
+  "error.unauthorized": "Bạn không có quyền thực hiện thao tác này",
+  "error.clan_not_found": "Không tìm thấy dòng họ",
+  "notification.death_anniversary": "Ngày giỗ của {name} còn {days} ngày nữa",
+  "notification.birthday": "Hôm nay là sinh nhật của {name}"
+}

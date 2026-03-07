@@ -1,0 +1,8 @@
+{
+  "@@locale": "vi",
+  "appName": "Gia Phả",
+  "loginTitle": "Đăng nhập",
+  "memberCount": "{count, plural, =0{Chưa có thành viên} =1{1 thành viên} other{{count} thành viên}}",
+  "generationLabel": "Đời thứ {number}",
+  "deathAnniversaryNotification": "Ngày giỗ của {name} còn {days} ngày nữa"
+}
