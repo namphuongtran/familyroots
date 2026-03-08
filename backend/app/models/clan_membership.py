@@ -38,6 +38,14 @@ class ClanMembership(TimestampMixin, Base):
     generation: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     is_founder: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Branch within this clan (chi/phái)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("branches.id", ondelete="SET NULL"),
+        default=None,
+        index=True,
+    )
+
     joined_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
@@ -45,3 +53,4 @@ class ClanMembership(TimestampMixin, Base):
     # ── ORM Relationships ─────────────────────────────────────
     person = relationship("Person", back_populates="clan_memberships")
     clan = relationship("Clan", back_populates="clan_memberships")
+    branch = relationship("Branch", back_populates="members")

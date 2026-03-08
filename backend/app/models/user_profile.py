@@ -7,7 +7,7 @@ The primary key ``id`` is the Supabase ``auth.users.id`` UUID (JWT ``sub`` claim
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +34,15 @@ class UserProfile(TimestampMixin, Base):
         DateTime(timezone=True), default=None
     )
 
+    # Canonical link to this user's person record (1:1, nullable)
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("persons.id", ondelete="SET NULL"),
+        unique=True,
+        default=None,
+    )
+
     # ── ORM Relationships ─────────────────────────────────────
+    person = relationship("Person", back_populates="user_profile", uselist=False)
     user_roles = relationship("UserClanRole", back_populates="user_profile", lazy="selectin")
     devices = relationship("UserDevice", back_populates="user_profile", lazy="selectin")

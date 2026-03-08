@@ -150,6 +150,29 @@ CREATE INDEX idx_persons_fullname_trgm
     USING gin (public.f_unaccent(full_name) gin_trgm_ops);
 
 -- ============================================================
+-- TABLE: branches
+-- Chi / Phái / Nhánh — sub-lineage within a clan.
+-- A branch belongs to exactly one clan and may form a hierarchy.
+-- ============================================================
+CREATE TABLE public.branches (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clan_id             UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
+    name                VARCHAR(255) NOT NULL,
+    description         TEXT,
+    founder_person_id   UUID REFERENCES public.persons (id) ON DELETE SET NULL,
+    parent_branch_id    UUID REFERENCES public.branches (id) ON DELETE SET NULL,
+    branch_order        SMALLINT,             -- display order among siblings
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT branches_order_positive CHECK (branch_order IS NULL OR branch_order > 0)
+);
+
+CREATE INDEX idx_branches_clan ON public.branches (clan_id);
+CREATE INDEX idx_branches_parent ON public.branches (parent_branch_id) WHERE parent_branch_id IS NOT NULL;
+
+-- ============================================================
 -- TABLE: clan_memberships
 -- M:N join table: which persons belong to which clans.
 -- generation and is_founder are per-clan context, not global.
@@ -158,6 +181,8 @@ CREATE TABLE public.clan_memberships (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     person_id       UUID NOT NULL REFERENCES public.persons (id) ON DELETE CASCADE,
     clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
+    branch_id       UUID REFERENCES public.branches (id) ON DELETE SET NULL,
+    -- branch_id: which chi/phái this member belongs to within this clan
 
     role            VARCHAR(20) NOT NULL DEFAULT 'blood',
     -- role values: 'blood' (huyết thống), 'spouse' (dâu/rể), 'adopted' (con nuôi)
@@ -180,6 +205,8 @@ CREATE INDEX idx_clan_memberships_person ON public.clan_memberships (person_id);
 CREATE INDEX idx_clan_memberships_clan_generation ON public.clan_memberships (clan_id, generation);
 CREATE INDEX idx_clan_memberships_founder
     ON public.clan_memberships (clan_id) WHERE is_founder = true;
+CREATE INDEX idx_clan_memberships_branch
+    ON public.clan_memberships (branch_id) WHERE branch_id IS NOT NULL;
 
 -- ============================================================
 -- TABLE: marriages
@@ -201,7 +228,14 @@ CREATE TABLE public.marriages (
     spouse_order      SMALLINT,               -- thứ tự (vợ cả = 1, vợ hai = 2, etc.)
     notes             TEXT,
 
+    -- Soft delete
+    is_deleted        BOOLEAN NOT NULL DEFAULT false,
+    deleted_at        TIMESTAMPTZ,
+    deleted_by        UUID,
+
+    -- Audit
     created_by        UUID NOT NULL,           -- user_id
+    updated_by        UUID,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -217,10 +251,11 @@ CREATE TABLE public.marriages (
 CREATE INDEX idx_marriages_person1 ON public.marriages (person1_id);
 CREATE INDEX idx_marriages_person2 ON public.marriages (person2_id);
 CREATE INDEX idx_marriages_clan ON public.marriages (created_by_clan_id);
+CREATE INDEX idx_marriages_is_deleted ON public.marriages (is_deleted) WHERE is_deleted = false;
 -- Prevent duplicate active marriages between the same pair
 CREATE UNIQUE INDEX idx_marriages_unique_pair
     ON public.marriages (LEAST(person1_id, person2_id), GREATEST(person1_id, person2_id), status)
-    WHERE status = 'married';
+    WHERE status = 'married' AND is_deleted = false;
 
 -- ============================================================
 -- TABLE: parent_child
@@ -236,9 +271,17 @@ CREATE TABLE public.parent_child (
 
     relationship_type   VARCHAR(20) NOT NULL DEFAULT 'biological',
     -- values: 'biological', 'adopted', 'step', 'foster'
+    birth_order         SMALLINT,              -- thứ tự sinh (con thứ mấy)
     notes               TEXT,
 
+    -- Soft delete
+    is_deleted          BOOLEAN NOT NULL DEFAULT false,
+    deleted_at          TIMESTAMPTZ,
+    deleted_by          UUID,
+
+    -- Audit
     created_by          UUID NOT NULL,         -- user_id
+    updated_by          UUID,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -247,13 +290,15 @@ CREATE TABLE public.parent_child (
         CHECK (relationship_type IN ('biological', 'adopted', 'step', 'foster'))
 );
 
--- Prevent exact duplicate parent-child edges
+-- Prevent exact duplicate parent-child edges (only among active records)
 CREATE UNIQUE INDEX idx_parent_child_unique_edge
-    ON public.parent_child (parent_id, child_id, relationship_type);
+    ON public.parent_child (parent_id, child_id, relationship_type)
+    WHERE is_deleted = false;
 
 CREATE INDEX idx_parent_child_parent ON public.parent_child (parent_id);
 CREATE INDEX idx_parent_child_child ON public.parent_child (child_id);
 CREATE INDEX idx_parent_child_clan ON public.parent_child (created_by_clan_id);
+CREATE INDEX idx_parent_child_is_deleted ON public.parent_child (is_deleted) WHERE is_deleted = false;
 
 -- ============================================================
 -- TABLE: documents
@@ -345,6 +390,8 @@ CREATE TABLE public.user_profiles (
     timezone        VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
     is_active       BOOLEAN NOT NULL DEFAULT true,
     platform_role   VARCHAR(50) NOT NULL DEFAULT 'user',  -- 'user' or 'super_admin'
+    person_id       UUID UNIQUE REFERENCES public.persons (id) ON DELETE SET NULL,
+    -- person_id: canonical link from user account → person node in the tree (nullable)
     last_login_at   TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -578,4 +625,8 @@ CREATE TRIGGER trg_user_clan_roles_updated_at
 
 CREATE TRIGGER trg_change_requests_updated_at
     BEFORE UPDATE ON public.change_requests
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_branches_updated_at
+    BEFORE UPDATE ON public.branches
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

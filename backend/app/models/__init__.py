@@ -2,6 +2,7 @@
 
 from app.models.audit_log import AuditLog
 from app.models.base import Base, ClanScopedMixin, TimestampMixin
+from app.models.branch import Branch
 from app.models.change_request import ChangeRequest
 from app.models.clan import Clan
 from app.models.clan_invitation import ClanInvitation
@@ -20,6 +21,7 @@ from app.models.user_profile import UserProfile
 __all__ = [
     "AuditLog",
     "Base",
+    "Branch",
     "ChangeRequest",
     "Clan",
     "ClanInvitation",

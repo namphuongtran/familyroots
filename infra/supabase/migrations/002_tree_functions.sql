@@ -33,6 +33,7 @@ RETURNS TABLE (
         m.notes
     FROM public.marriages m
     WHERE (m.person1_id = p_person_id OR m.person2_id = p_person_id)
+      AND m.is_deleted = false
     ORDER BY m.spouse_order ASC NULLS LAST, m.marriage_date ASC NULLS LAST;
 $$ LANGUAGE sql STABLE;
 
@@ -58,10 +59,12 @@ RETURNS TABLE (
             FROM public.parent_child pc2
             WHERE pc2.child_id = pc.child_id
               AND pc2.parent_id != p_person_id
+              AND pc2.is_deleted = false
             LIMIT 1
         ) AS other_parent_id
     FROM public.parent_child pc
-    WHERE pc.parent_id = p_person_id;
+    WHERE pc.parent_id = p_person_id
+      AND pc.is_deleted = false;
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
@@ -80,7 +83,8 @@ RETURNS TABLE (
         pc.parent_id,
         pc.relationship_type
     FROM public.parent_child pc
-    WHERE pc.child_id = p_person_id;
+    WHERE pc.child_id = p_person_id
+      AND pc.is_deleted = false;
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
@@ -165,6 +169,7 @@ WITH RECURSIVE descendants AS (
     FROM descendants d
     JOIN public.parent_child pc
         ON pc.parent_id = d.person_id
+        AND pc.is_deleted = false
     JOIN public.persons p
         ON p.id = pc.child_id
         AND p.is_deleted = false
@@ -234,6 +239,7 @@ WITH RECURSIVE ancestors AS (
     FROM ancestors a
     JOIN public.parent_child pc
         ON pc.child_id = a.person_id
+        AND pc.is_deleted = false
     JOIN public.persons p
         ON p.id = pc.parent_id
         AND p.is_deleted = false

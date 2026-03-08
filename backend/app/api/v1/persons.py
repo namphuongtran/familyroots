@@ -298,6 +298,7 @@ async def person_marriages(
                 Marriage.person1_id == person_id,
                 Marriage.person2_id == person_id,
             ),
+            Marriage.is_deleted.is_(False),
         )
     )
     marriages = result.scalars().all()
@@ -322,6 +323,7 @@ async def person_parent_child(
                 ParentChild.parent_id == person_id,
                 ParentChild.child_id == person_id,
             ),
+            ParentChild.is_deleted.is_(False),
         )
     )
     links = result.scalars().all()
@@ -412,6 +414,7 @@ async def person_timeline(
               ON p.id = CASE WHEN m.person1_id = :pid
                              THEN m.person2_id ELSE m.person1_id END
             WHERE (m.person1_id = :pid OR m.person2_id = :pid)
+              AND m.is_deleted = false
         """),
         {"pid": person_id},
     )

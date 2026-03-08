@@ -93,6 +93,7 @@ class RelationshipValidator:
                     OR (person1_id = :p2 AND person2_id = :p1)
                 )
                 AND status NOT IN ('divorced')
+                AND is_deleted = false
                 LIMIT 1
             """),
             {"p1": person1_id, "p2": person2_id},
@@ -112,6 +113,7 @@ class RelationshipValidator:
                 SELECT 1 FROM public.parent_child
                 WHERE parent_id = :parent_id
                   AND child_id = :child_id
+                  AND is_deleted = false
                 LIMIT 1
             """),
             {"parent_id": parent_id, "child_id": child_id},
@@ -128,6 +130,7 @@ class RelationshipValidator:
                 SELECT COUNT(*) FROM public.parent_child
                 WHERE child_id = :child_id
                   AND relationship_type = 'biological'
+                  AND is_deleted = false
             """),
             {"child_id": child_id},
         )

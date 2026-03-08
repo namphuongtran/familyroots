@@ -47,6 +47,7 @@ WITH RECURSIVE bfs AS (
         SELECT pc.parent_id AS neighbor_id, 'parent'::VARCHAR AS edge_type
         FROM public.parent_child pc
         WHERE pc.child_id = bfs.current_id
+          AND pc.is_deleted = false
 
         UNION ALL
 
@@ -54,6 +55,7 @@ WITH RECURSIVE bfs AS (
         SELECT pc.child_id AS neighbor_id, 'child'::VARCHAR AS edge_type
         FROM public.parent_child pc
         WHERE pc.parent_id = bfs.current_id
+          AND pc.is_deleted = false
 
         UNION ALL
 
@@ -64,6 +66,7 @@ WITH RECURSIVE bfs AS (
             'spouse'::VARCHAR AS edge_type
         FROM public.marriages m
         WHERE (m.person1_id = bfs.current_id OR m.person2_id = bfs.current_id)
+          AND m.is_deleted = false
     ) edges
     JOIN public.persons next_p
         ON next_p.id = edges.neighbor_id

@@ -102,6 +102,9 @@ class Person(TimestampMixin, Base):
 
     # ── ORM Relationships ─────────────────────────────────────
     origin_clan = relationship("Clan", back_populates="origin_persons")
+    user_profile = relationship(
+        "UserProfile", back_populates="person", uselist=False
+    )
     clan_memberships = relationship(
         "ClanMembership", back_populates="person", lazy="selectin"
     )

@@ -16,6 +16,7 @@ class ParentChildCreateRequest(BaseModel):
     relationship_type: str = Field(
         "biological", pattern="^(biological|adopted|step|foster)$"
     )
+    birth_order: int | None = Field(None, gt=0)
     notes: str | None = None
 
     @model_validator(mode="after")
@@ -31,6 +32,7 @@ class ParentChildUpdateRequest(BaseModel):
     relationship_type: str | None = Field(
         None, pattern="^(biological|adopted|step|foster)$"
     )
+    birth_order: int | None = Field(None, gt=0)
     notes: str | None = None
 
 
@@ -42,8 +44,13 @@ class ParentChildResponse(BaseModel):
     child_id: uuid.UUID
     created_by_clan_id: uuid.UUID
     relationship_type: str
+    birth_order: int | None = None
     notes: str | None = None
     created_by: uuid.UUID
+    updated_by: uuid.UUID | None = None
+    is_deleted: bool = False
+    deleted_at: datetime | None = None
+    deleted_by: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 

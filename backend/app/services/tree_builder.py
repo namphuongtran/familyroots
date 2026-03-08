@@ -140,6 +140,7 @@ async def build_descendants_tree(
             "LEFT JOIN public.clan_memberships cm "
             "    ON cm.person_id = p.id AND cm.clan_id = :clan_id "
             "WHERE (m.person1_id = ANY(:ids) OR m.person2_id = ANY(:ids))"
+            "  AND m.is_deleted = false"
         ),
         {"ids": person_ids, "clan_id": clan_id},
     )

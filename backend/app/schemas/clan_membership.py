@@ -14,6 +14,7 @@ class ClanMembershipCreateRequest(BaseModel):
     role: str = Field("blood", pattern="^(blood|spouse|adopted)$")
     generation: int | None = Field(None, gt=0)
     is_founder: bool = False
+    branch_id: uuid.UUID | None = None
 
 
 class ClanMembershipUpdateRequest(BaseModel):
@@ -22,6 +23,7 @@ class ClanMembershipUpdateRequest(BaseModel):
     role: str | None = Field(None, pattern="^(blood|spouse|adopted)$")
     generation: int | None = Field(None, gt=0)
     is_founder: bool | None = None
+    branch_id: uuid.UUID | None = None
 
 
 class ClanMembershipResponse(BaseModel):
@@ -33,6 +35,7 @@ class ClanMembershipResponse(BaseModel):
     role: str
     generation: int | None = None
     is_founder: bool
+    branch_id: uuid.UUID | None = None
     joined_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

@@ -155,6 +155,53 @@ def upgrade() -> None:
         "USING gin (public.f_unaccent(full_name) gin_trgm_ops)"
     )
 
+    # -- Table: branches (chi/phái/nhánh within a clan) --
+    op.create_table(
+        "branches",
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
+        sa.Column(
+            "clan_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("clans.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("description", sa.Text, nullable=True),
+        sa.Column(
+            "founder_person_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("persons.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "parent_branch_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("branches.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("branch_order", sa.SmallInteger, nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.CheckConstraint(
+            "branch_order IS NULL OR branch_order > 0",
+            name="branches_order_positive",
+        ),
+    )
+    op.create_index("idx_branches_clan", "branches", ["clan_id"])
+    op.create_index("idx_branches_parent", "branches", ["parent_branch_id"])
+
     # -- Table: clan_memberships (M:N person ↔ clan) --
     op.create_table(
         "clan_memberships",
@@ -181,6 +228,12 @@ def upgrade() -> None:
         ),
         sa.Column("generation", sa.SmallInteger, nullable=True),
         sa.Column("is_founder", sa.Boolean, nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "branch_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("branches.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("joined_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
@@ -209,6 +262,7 @@ def upgrade() -> None:
     op.create_index(
         "idx_clan_memberships_clan_generation", "clan_memberships", ["clan_id", "generation"]
     )
+    op.create_index("idx_clan_memberships_branch", "clan_memberships", ["branch_id"])
     op.execute(
         "CREATE INDEX idx_clan_memberships_founder ON clan_memberships "
         "(clan_id) WHERE is_founder = true"
@@ -250,6 +304,11 @@ def upgrade() -> None:
         sa.Column("spouse_order", sa.SmallInteger, nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("created_by", UUID(as_uuid=True), nullable=False),
+        sa.Column("updated_by", UUID(as_uuid=True), nullable=True),
+        # Soft delete
+        sa.Column("is_deleted", sa.Boolean, nullable=False, server_default=sa.text("false")),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("deleted_by", UUID(as_uuid=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -284,6 +343,10 @@ def upgrade() -> None:
         "ON marriages (LEAST(person1_id, person2_id), GREATEST(person1_id, person2_id), status) "
         "WHERE status = 'married'"
     )
+    op.execute(
+        "CREATE INDEX idx_marriages_is_deleted ON marriages "
+        "(is_deleted) WHERE is_deleted = false"
+    )
 
     # -- Table: parent_child (global edge: parent → child) --
     op.create_table(
@@ -315,8 +378,14 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'biological'"),
         ),
+        sa.Column("birth_order", sa.SmallInteger, nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("created_by", UUID(as_uuid=True), nullable=False),
+        sa.Column("updated_by", UUID(as_uuid=True), nullable=True),
+        # Soft delete
+        sa.Column("is_deleted", sa.Boolean, nullable=False, server_default=sa.text("false")),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("deleted_by", UUID(as_uuid=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -334,6 +403,10 @@ def upgrade() -> None:
             "relationship_type IN ('biological', 'adopted', 'step', 'foster')",
             name="parent_child_type_check",
         ),
+        sa.CheckConstraint(
+            "birth_order IS NULL OR birth_order > 0",
+            name="parent_child_birth_order_positive",
+        ),
     )
     op.execute(
         "CREATE UNIQUE INDEX idx_parent_child_unique_edge "
@@ -342,8 +415,12 @@ def upgrade() -> None:
     op.create_index("idx_parent_child_parent", "parent_child", ["parent_id"])
     op.create_index("idx_parent_child_child", "parent_child", ["child_id"])
     op.create_index("idx_parent_child_clan", "parent_child", ["created_by_clan_id"])
+    op.execute(
+        "CREATE INDEX idx_parent_child_is_deleted ON parent_child "
+        "(is_deleted) WHERE is_deleted = false"
+    )
 
-    # -- Table: documents --
+    # -- Documents --
     op.create_table(
         "documents",
         sa.Column(
@@ -483,6 +560,13 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
         sa.Column("platform_role", sa.String(50), nullable=False, server_default=sa.text("'user'")),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "person_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("persons.id", ondelete="SET NULL"),
+            nullable=True,
+            unique=True,
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -790,7 +874,7 @@ def upgrade() -> None:
 
     for table in (
         "clans", "persons", "clan_memberships", "marriages", "parent_child",
-        "documents", "events", "user_profiles", "clan_settings",
+        "branches", "documents", "events", "user_profiles", "clan_settings",
         "user_clan_roles", "change_requests",
     ):
         op.execute(
@@ -804,7 +888,7 @@ def downgrade() -> None:
     # Drop triggers
     for table in (
         "change_requests", "clan_settings", "user_clan_roles", "events", "documents",
-        "parent_child", "marriages", "clan_memberships", "user_profiles", "persons", "clans",
+        "parent_child", "marriages", "branches", "clan_memberships", "user_profiles", "persons", "clans",
     ):
         op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_updated_at ON {table}")
     op.execute("DROP FUNCTION IF EXISTS update_updated_at_column()")
@@ -821,6 +905,7 @@ def downgrade() -> None:
     op.drop_table("parent_child")
     op.drop_table("marriages")
     op.drop_table("clan_memberships")
+    op.drop_table("branches")
     op.drop_table("user_devices")
     op.drop_table("user_profiles")
     op.drop_table("persons")

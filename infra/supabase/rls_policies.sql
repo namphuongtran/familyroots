@@ -80,6 +80,18 @@ CREATE POLICY "clan_memberships_write_editor_above" ON public.clan_memberships
     AND auth.user_clan_role() IN ('admin', 'editor')
   );
 
+-- ── BRANCHES ─────────────────────────────────────────────────
+ALTER TABLE public.branches ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "branches_select_own_clan" ON public.branches
+  FOR SELECT USING (auth.user_belongs_to_clan(clan_id));
+
+CREATE POLICY "branches_write_editor_above" ON public.branches
+  FOR ALL USING (
+    auth.user_belongs_to_clan(clan_id)
+    AND auth.user_clan_role() IN ('admin', 'editor')
+  );
+
 -- ── MARRIAGES (global edges — write-gated by created_by_clan_id) ──
 ALTER TABLE public.marriages ENABLE ROW LEVEL SECURITY;
 

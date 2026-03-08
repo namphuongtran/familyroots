@@ -98,6 +98,7 @@ erDiagram
         varchar timezone "default Asia/Ho_Chi_Minh"
         boolean is_active
         varchar platform_role "user | super_admin"
+        uuid person_id FK "nullable UK - canonical link to person"
         timestamptz last_login_at
         timestamptz created_at
         timestamptz updated_at
@@ -121,6 +122,7 @@ erDiagram
         varchar role "blood | spouse | adopted"
         smallint generation "relative to clan"
         boolean is_founder
+        uuid branch_id FK "nullable - chi/phái"
         timestamptz joined_at
         timestamptz created_at
         timestamptz updated_at
@@ -135,9 +137,13 @@ erDiagram
         date divorce_date
         varchar marriage_place
         varchar status "married | divorced | widowed | separated"
-        smallint spouse_order "1st wife, 2nd wife..."
+        smallint spouse_order "1st wife, 2nd wife... (from person1 perspective)"
         text notes
         uuid created_by
+        uuid updated_by
+        boolean is_deleted
+        timestamptz deleted_at
+        uuid deleted_by
         timestamptz created_at
         timestamptz updated_at
     }
@@ -148,8 +154,13 @@ erDiagram
         uuid child_id FK
         uuid created_by_clan_id FK "managing clan - write RLS"
         varchar relationship_type "biological | adopted | step | foster"
+        smallint birth_order "con cả=1, con thứ=2..."
         text notes
         uuid created_by
+        uuid updated_by
+        boolean is_deleted
+        timestamptz deleted_at
+        uuid deleted_by
         timestamptz created_at
         timestamptz updated_at
     }
@@ -273,6 +284,18 @@ erDiagram
         timestamptz created_at
     }
 
+    branches {
+        uuid id PK
+        uuid clan_id FK
+        varchar name "Chi Hai, Phái Bắc..."
+        text description
+        uuid founder_person_id FK "nullable - ông tổ chi"
+        uuid parent_branch_id FK "nullable - self-ref"
+        smallint branch_order "thứ tự hiển thị"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     %% ── Relationships ──
     user_profiles ||--o{ user_clan_roles : "has clan roles"
     user_profiles ||--o{ user_devices : "has devices"
@@ -287,6 +310,7 @@ erDiagram
     clans ||--o{ marriages : "created_by_clan"
     clans ||--o{ parent_child : "created_by_clan"
     clans ||--o{ audit_logs : "has logs"
+    clans ||--o{ branches : "has branches"
     persons ||--o{ clan_memberships : "belongs to clans"
     persons ||--o{ marriages : "person1"
     persons ||--o{ marriages : "person2"
@@ -295,8 +319,11 @@ erDiagram
     persons ||--o{ events : "about"
     persons ||--o{ documents : "attached"
     persons |o--o| user_clan_roles : "linked account"
+    persons |o--o| user_profiles : "canonical user link"
     persons }o--o| clans : "origin_clan"
     events ||--o{ notification_log : "triggers"
+    branches ||--o{ clan_memberships : "has members"
+    branches |o--o| persons : "founder"
 ```
 
 ---
@@ -340,11 +367,14 @@ Local cache of Supabase Auth user data. Created lazily on first login via `ensur
 | `timezone` | VARCHAR(50) | DEFAULT 'Asia/Ho_Chi_Minh' | User timezone |
 | `is_active` | BOOLEAN | DEFAULT true | App-level suspension |
 | `platform_role` | VARCHAR(50) | DEFAULT 'user' | `user` or `super_admin` |
+| `person_id` | UUID | FK → persons.id (SET NULL), UNIQUE, nullable | Canonical link to this user's person record |
 | `last_login_at` | TIMESTAMPTZ | | Updated on login (throttled to every 5 min) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 **Sync strategy:** On-first-login (lazy creation). When `get_current_user()` validates the JWT, `ensure_user_profile()` checks if a `user_profiles` row exists. If not, it creates one from JWT claims. No Supabase webhooks or triggers needed.
+
+**`person_id` — canonical user↔person link:** A user is one real person. This 1:1 link (UNIQUE constraint) is the canonical binding. `user_clan_roles.person_id` remains as a denormalized convenience reference per-clan.
 
 ### `user_devices`
 
@@ -421,6 +451,7 @@ M:N link between persons and clans. Determines which persons appear in which cla
 | `role` | VARCHAR(20) | DEFAULT 'blood' | blood, spouse, adopted |
 | `generation` | SMALLINT | | Đời thứ mấy — relative to this clan |
 | `is_founder` | BOOLEAN | DEFAULT false | Thuỷ tổ |
+| `branch_id` | UUID | FK → branches.id (SET NULL), nullable | Chi/phái within the clan |
 | `joined_at` | TIMESTAMPTZ | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
@@ -443,11 +474,19 @@ Global edge linking two persons. Supports polygamy, divorce, remarriage.
 | `divorce_date` | DATE | | Ngày ly hôn |
 | `marriage_place` | VARCHAR(255) | | Nơi kết hôn |
 | `status` | VARCHAR(20) | DEFAULT 'married' | married, divorced, widowed, separated |
-| `spouse_order` | SMALLINT | | Vợ cả=1, vợ hai=2, vợ ba=3... |
+| `spouse_order` | SMALLINT | | Vợ cả=1, vợ hai=2, vợ ba=3... (from person1's perspective) |
 | `notes` | TEXT | | |
 | `created_by` | UUID | NOT NULL | User who created |
+| `updated_by` | UUID | | User who last updated |
+| `is_deleted` | BOOLEAN | DEFAULT false | Soft delete |
+| `deleted_at` | TIMESTAMPTZ | | |
+| `deleted_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+**Constraints:**
+- `CHECK(person1_id != person2_id)` — cannot marry self
+- `UNIQUE INDEX(LEAST(p1,p2), GREATEST(p1,p2), status) WHERE status = 'married'` — prevents duplicate active marriages
 
 **`created_by_clan_id` — not `clan_id`:** The marriage is a global fact. The clan only manages write access. RLS policy: `allow write if created_by_clan_id = current_clan`. Both clans can read.
 
@@ -472,10 +511,20 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 | `child_id` | UUID | FK → persons.id (CASCADE), NOT NULL | |
 | `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan that manages this record |
 | `relationship_type` | VARCHAR(20) | DEFAULT 'biological' | biological, adopted, step, foster |
+| `birth_order` | SMALLINT | | Thứ tự con: con cả=1, con thứ=2... |
 | `notes` | TEXT | | |
 | `created_by` | UUID | NOT NULL | |
+| `updated_by` | UUID | | User who last updated |
+| `is_deleted` | BOOLEAN | DEFAULT false | Soft delete |
+| `deleted_at` | TIMESTAMPTZ | | |
+| `deleted_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+**Constraints:**
+- `UNIQUE(parent_id, child_id, relationship_type)` — prevents duplicate edges
+- `CHECK(parent_id != child_id)` — cannot be own parent
+- `CHECK(birth_order IS NULL OR birth_order > 0)` — positive birth order
 
 **Every child has up to 2 ParentChild rows** (one per parent). This naturally handles:
 
@@ -528,6 +577,27 @@ Configurable cross-approval workflow. When `clan_settings.approval_config` requi
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 **Workflow:** Editor creates change_request → Different admin reviews (cross-approval to prevent errors) → System applies the change on approval.
+
+### `branches`
+
+Chi/phái/nhánh within a clan. Vietnamese genealogy divides large clans into branches (chi). Supports nested hierarchy via self-referential `parent_branch_id`.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | |
+| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
+| `name` | VARCHAR(255) | NOT NULL | "Chi Hai", "Phái Bắc" |
+| `description` | TEXT | | |
+| `founder_person_id` | UUID | FK → persons.id (SET NULL), nullable | Ông tổ chi này |
+| `parent_branch_id` | UUID | FK → branches.id (SET NULL), nullable | Nhánh cha (tree structure) |
+| `branch_order` | SMALLINT | | Thứ tự hiển thị among siblings |
+| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+**Design notes:**
+- Self-referential tree: `parent_branch_id` → `branches.id` allows arbitrary depth.
+- `clan_memberships.branch_id` links persons to their branch within the clan.
+- A clan can have zero branches (optional feature for smaller clans).
 
 ### `clan_settings`
 
@@ -681,16 +751,23 @@ Tracks push notification delivery. FCM tokens are now stored in `user_devices` (
 -- Person lookups within a clan (the most common query)
 CREATE INDEX idx_clan_memberships_clan_id ON clan_memberships(clan_id);
 CREATE INDEX idx_clan_memberships_person_id ON clan_memberships(person_id);
+CREATE INDEX idx_clan_memberships_branch ON clan_memberships(branch_id);
 
 -- Tree traversal: find all children of a parent
 CREATE INDEX idx_parent_child_parent_id ON parent_child(parent_id);
 CREATE INDEX idx_parent_child_child_id ON parent_child(child_id);
 CREATE INDEX idx_parent_child_clan ON parent_child(created_by_clan_id);
+CREATE INDEX idx_parent_child_is_deleted ON parent_child(is_deleted) WHERE is_deleted = false;
 
 -- Marriage lookups
 CREATE INDEX idx_marriages_person1 ON marriages(person1_id);
 CREATE INDEX idx_marriages_person2 ON marriages(person2_id);
 CREATE INDEX idx_marriages_clan ON marriages(created_by_clan_id);
+CREATE INDEX idx_marriages_is_deleted ON marriages(is_deleted) WHERE is_deleted = false;
+
+-- Branches
+CREATE INDEX idx_branches_clan ON branches(clan_id);
+CREATE INDEX idx_branches_parent ON branches(parent_branch_id);
 
 -- Person origin clan
 CREATE INDEX idx_persons_origin_clan ON persons(origin_clan_id);

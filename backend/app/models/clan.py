@@ -43,3 +43,6 @@ class Clan(TimestampMixin, Base):
     settings = relationship(
         "ClanSettings", back_populates="clan", uselist=False, lazy="selectin"
     )
+    branches = relationship(
+        "Branch", back_populates="clan", lazy="selectin"
+    )

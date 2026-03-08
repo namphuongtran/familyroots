@@ -1,6 +1,7 @@
 """Relationships API routes — marriages and parent-child CRUD with validation."""
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -110,6 +111,7 @@ async def update_marriage(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(marriage, field, value)
+    marriage.updated_by = uuid.UUID(current_user["sub"])
 
     db.add(
         AuditLog(
@@ -134,16 +136,20 @@ async def delete_marriage(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
-    """Delete a marriage (admin of managing clan only)."""
+    """Soft-delete a marriage (admin of managing clan only)."""
     marriage = await _get_marriage_or_404(marriage_id, db)
     if marriage.created_by_clan_id != clan_id:
         raise NotFoundError("marriage_not_found")
 
-    await db.delete(marriage)
+    actor_id = uuid.UUID(current_user["sub"])
+    marriage.is_deleted = True
+    marriage.deleted_at = datetime.now(UTC)
+    marriage.deleted_by = actor_id
+
     db.add(
         AuditLog(
             clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
+            actor_id=actor_id,
             actor_role="admin",
             action="marriage.delete",
             resource_type="marriage",
@@ -186,6 +192,7 @@ async def create_parent_child(
         child_id=body.child_id,
         created_by_clan_id=clan_id,
         relationship_type=body.relationship_type,
+        birth_order=body.birth_order,
         notes=body.notes,
         created_by=actor_id,
     )
@@ -239,6 +246,7 @@ async def update_parent_child(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(link, field, value)
+    link.updated_by = uuid.UUID(current_user["sub"])
 
     db.add(
         AuditLog(
@@ -263,16 +271,20 @@ async def delete_parent_child(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
-    """Delete a parent-child relationship (admin of managing clan only)."""
+    """Soft-delete a parent-child relationship (admin of managing clan only)."""
     link = await _get_parent_child_or_404(link_id, db)
     if link.created_by_clan_id != clan_id:
         raise NotFoundError("parent_child_not_found")
 
-    await db.delete(link)
+    actor_id = uuid.UUID(current_user["sub"])
+    link.is_deleted = True
+    link.deleted_at = datetime.now(UTC)
+    link.deleted_by = actor_id
+
     db.add(
         AuditLog(
             clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
+            actor_id=actor_id,
             actor_role="admin",
             action="parent_child.delete",
             resource_type="parent_child",
@@ -287,7 +299,9 @@ async def delete_parent_child(
 
 
 async def _get_marriage_or_404(marriage_id: uuid.UUID, db: AsyncSession) -> Marriage:
-    result = await db.execute(select(Marriage).where(Marriage.id == marriage_id))
+    result = await db.execute(
+        select(Marriage).where(Marriage.id == marriage_id, Marriage.is_deleted.is_(False))
+    )
     marriage = result.scalar_one_or_none()
     if not marriage:
         raise NotFoundError("marriage_not_found")
@@ -295,7 +309,9 @@ async def _get_marriage_or_404(marriage_id: uuid.UUID, db: AsyncSession) -> Marr
 
 
 async def _get_parent_child_or_404(link_id: uuid.UUID, db: AsyncSession) -> ParentChild:
-    result = await db.execute(select(ParentChild).where(ParentChild.id == link_id))
+    result = await db.execute(
+        select(ParentChild).where(ParentChild.id == link_id, ParentChild.is_deleted.is_(False))
+    )
     link = result.scalar_one_or_none()
     if not link:
         raise NotFoundError("parent_child_not_found")

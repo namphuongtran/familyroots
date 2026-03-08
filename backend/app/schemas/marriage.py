@@ -54,6 +54,10 @@ class MarriageResponse(BaseModel):
     spouse_order: int | None = None
     notes: str | None = None
     created_by: uuid.UUID
+    updated_by: uuid.UUID | None = None
+    is_deleted: bool = False
+    deleted_at: datetime | None = None
+    deleted_by: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
