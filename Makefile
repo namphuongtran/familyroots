@@ -1,5 +1,5 @@
 .PHONY: help docker-up docker-down backend-dev backend-test backend-lint \
-       mobile-run mobile-test web-run web-test web-build \
+       mobile-run mobile-test web-dev web-build web-lint web-type-check \
        infra-preview infra-up migrate seed
 
 help: ## Show this help
@@ -39,18 +39,18 @@ mobile-test: ## Run mobile tests
 mobile-analyze: ## Analyze mobile code
 	cd mobile && flutter analyze
 
-# ─── Web ───────────────────────────────────────────────────────────────
-web-run: ## Run web app in Chrome
-	cd web && flutter run -d chrome
-
-web-test: ## Run web tests
-	cd web && flutter test
+# ─── Web (Next.js) ─────────────────────────────────────────────────────────
+web-dev: ## Run Next.js web app in dev mode
+	cd web && pnpm dev
 
 web-build: ## Build web for production
-	cd web && flutter build web --release
+	cd web && pnpm build
 
-web-analyze: ## Analyze web code
-	cd web && flutter analyze
+web-lint: ## Lint web code
+	cd web && pnpm lint
+
+web-type-check: ## Type-check web code
+	cd web && pnpm type-check
 
 # ─── Infrastructure ───────────────────────────────────────────────────
 infra-preview: ## Preview infrastructure changes
@@ -67,10 +67,10 @@ seed: ## Seed development data
 	cd backend && uv run python ../scripts/seed_dev_data.py
 
 # ─── Packages ─────────────────────────────────────────────────────────
-packages-get: ## Get dependencies for all Flutter projects
+packages-get: ## Get dependencies for all projects
 	cd packages/family_roots_core && dart pub get
 	cd mobile && flutter pub get
-	cd web && flutter pub get
+	cd web && pnpm install
 
 # ─── Pre-commit ───────────────────────────────────────────────────────
 pre-commit-install: ## Install pre-commit hooks
