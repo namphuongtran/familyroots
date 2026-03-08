@@ -2,16 +2,19 @@
 
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.models.user_profile import UserProfile
 
 security = HTTPBearer()
 
@@ -57,35 +60,60 @@ async def get_current_user(
     return await verify_supabase_token(credentials.credentials)
 
 
-async def get_super_admin(
+# Throttle last_login_at updates: skip if last update was less than 5 min ago.
+_LOGIN_UPDATE_INTERVAL = 300  # seconds
+
+
+async def ensure_user_profile(
     current_user: dict[str, Any] = Depends(get_current_user),
-    # TODO: implement in Prompt 2 — inject AsyncSession via get_db dependency
-    # db: AsyncSession = Depends(get_db),
-) -> dict[str, Any]:
+    db: AsyncSession = Depends(get_db),
+) -> UserProfile:
+    """Lazy-create or refresh the local UserProfile on every authenticated request.
+
+    On first login the row is created from JWT claims.  On subsequent
+    requests ``last_login_at`` is refreshed (throttled to once per 5 min).
+    """
+    user_id = uuid.UUID(current_user["sub"])
+
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    profile = result.scalar_one_or_none()
+
+    if profile is None:
+        email: str = current_user.get("email", "")
+        user_metadata: dict = current_user.get("user_metadata", {})
+        display_name = user_metadata.get("full_name") or email.split("@")[0]
+
+        profile = UserProfile(
+            id=user_id,
+            email=email,
+            display_name=display_name,
+            last_login_at=datetime.now(timezone.utc),
+        )
+        db.add(profile)
+        await db.flush()
+    else:
+        # Throttle: only update last_login_at if stale
+        now = datetime.now(timezone.utc)
+        if (
+            profile.last_login_at is None
+            or (now - profile.last_login_at).total_seconds() > _LOGIN_UPDATE_INTERVAL
+        ):
+            profile.last_login_at = now
+            await db.flush()
+
+    return profile
+
+
+async def get_super_admin(
+    profile: UserProfile = Depends(ensure_user_profile),
+) -> UserProfile:
     """Dependency that allows access only to the platform super admin.
 
-    Checks ``public.platform_users`` table for an active super_admin row
-    matching the current user's JWT ``sub`` claim.
+    Queries ``user_profiles.platform_role`` for an active super_admin.
     """
-    # TODO: implement in Prompt 2 — query PlatformUser model from DB
-    # user_id = current_user["sub"]
-    # result = await db.execute(
-    #     select(PlatformUser).where(
-    #         PlatformUser.id == user_id,
-    #         PlatformUser.role == "super_admin",
-    #         PlatformUser.is_active == True,
-    #     )
-    # )
-    # platform_user = result.scalar_one_or_none()
-    # if not platform_user:
-    #     raise HTTPException(status_code=403, detail="Super admin access required")
-
-    # Temporary: check JWT metadata until DB model is wired in Prompt 2
-    user_metadata = current_user.get("user_metadata", {})
-    if user_metadata.get("platform_role") != "super_admin":
+    if profile.platform_role != "super_admin" or not profile.is_active:
         raise HTTPException(status_code=403, detail="Super admin access required")
-
-    return current_user
+    return profile
 
 
 async def get_current_clan_id(
@@ -105,20 +133,18 @@ async def get_current_clan_id(
 
     Used as a FastAPI dependency on all clan-scoped endpoints.
     """
-    # TODO: implement in Prompt 2 — replace with real UserClanRole model import
-    # from app.models.user_clan_role import UserClanRole
-    #
-    # For now, use raw SQL text query as the model is not yet defined:
-    from sqlalchemy import text
+    from app.models.user_clan_role import UserClanRole
 
-    user_id = current_user["sub"]
+    user_id = uuid.UUID(current_user["sub"])
 
     # Fetch all approved clan memberships for this user
     result = await db.execute(
-        text("SELECT clan_id FROM user_clan_roles WHERE user_id = :user_id AND is_approved = true"),
-        {"user_id": user_id},
+        select(UserClanRole.clan_id).where(
+            UserClanRole.user_id == user_id,
+            UserClanRole.is_approved.is_(True),
+        )
     )
-    approved_clan_ids: list[uuid.UUID] = [uuid.UUID(str(row[0])) for row in result.fetchall()]
+    approved_clan_ids: list[uuid.UUID] = list(result.scalars().all())
 
     if not approved_clan_ids:
         raise HTTPException(status_code=403, detail="No approved clan membership")

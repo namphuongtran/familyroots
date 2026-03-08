@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -47,7 +46,6 @@ class ClanResponse(BaseModel):
     motto: str | None = None
     ancestral_hall_location: str | None = None
     clan_rules: str | None = None
-    approval_config: dict[str, Any] | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -66,4 +64,3 @@ class ClanUpdateRequest(BaseModel):
     motto: str | None = None
     ancestral_hall_location: str | None = None
     clan_rules: str | None = None
-    approval_config: dict[str, Any] | None = None

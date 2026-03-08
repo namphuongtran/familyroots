@@ -29,7 +29,6 @@ class NotificationLog(Base):
     notification_type: Mapped[str] = mapped_column(String(50))
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text)
-    fcm_token: Mapped[str | None] = mapped_column(String(500), default=None)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     error_message: Mapped[str | None] = mapped_column(Text, default=None)

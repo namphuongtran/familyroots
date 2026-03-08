@@ -1,10 +1,9 @@
 """Clan ORM model (public schema) — uses TimestampMixin only, NOT ClanScopedMixin."""
 
 import uuid
-from typing import Any
 
 from sqlalchemy import Boolean, SmallInteger, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -31,11 +30,6 @@ class Clan(TimestampMixin, Base):
         Text, default=None
     )  # gia huấn
 
-    # Configurable approval workflow per clan
-    approval_config: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, default=None
-    )
-
     # ── ORM Relationships ─────────────────────────────────────
     origin_persons = relationship(
         "Person", back_populates="origin_clan", lazy="selectin"
@@ -45,4 +39,7 @@ class Clan(TimestampMixin, Base):
     )
     user_roles = relationship(
         "UserClanRole", back_populates="clan", lazy="selectin"
+    )
+    settings = relationship(
+        "ClanSettings", back_populates="clan", uselist=False, lazy="selectin"
     )

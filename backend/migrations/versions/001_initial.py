@@ -40,7 +40,6 @@ def upgrade() -> None:
         sa.Column("motto", sa.Text, nullable=True),
         sa.Column("ancestral_hall_location", sa.String(500), nullable=True),
         sa.Column("clan_rules", sa.Text, nullable=True),
-        sa.Column("approval_config", JSONB, nullable=True),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
         sa.Column(
             "created_at",
@@ -472,6 +471,120 @@ def upgrade() -> None:
         "(clan_id, event_date) WHERE is_recurring = true"
     )
 
+    # -- Table: user_profiles --
+    op.create_table(
+        "user_profiles",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("email", sa.String(255), nullable=False, unique=True),
+        sa.Column("display_name", sa.String(255), nullable=True),
+        sa.Column("avatar_url", sa.String(500), nullable=True),
+        sa.Column("language", sa.String(10), nullable=False, server_default=sa.text("'vi'")),
+        sa.Column("timezone", sa.String(50), nullable=False, server_default=sa.text("'Asia/Ho_Chi_Minh'")),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
+        sa.Column("platform_role", sa.String(50), nullable=False, server_default=sa.text("'user'")),
+        sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+    )
+
+    # -- Table: user_devices --
+    op.create_table(
+        "user_devices",
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
+        sa.Column(
+            "user_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("user_profiles.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("fcm_token", sa.String(500), nullable=False, unique=True),
+        sa.Column("device_name", sa.String(255), nullable=True),
+        sa.Column("platform", sa.String(20), nullable=False),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
+        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+    )
+    op.create_index("ix_user_devices_user_id", "user_devices", ["user_id"])
+
+    # -- Table: clan_settings --
+    op.create_table(
+        "clan_settings",
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
+        sa.Column(
+            "clan_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("clans.id", ondelete="CASCADE"),
+            nullable=False,
+            unique=True,
+        ),
+        sa.Column("approval_config", JSONB, nullable=True),
+        sa.Column("default_language", sa.String(10), nullable=False, server_default=sa.text("'vi'")),
+        sa.Column("tree_display_mode", sa.String(20), nullable=False, server_default=sa.text("'vertical'")),
+        sa.Column("allow_public_tree", sa.Boolean, nullable=False, server_default=sa.text("false")),
+        sa.Column("notification_defaults", JSONB, nullable=True),
+        sa.Column("privacy_level", sa.String(20), nullable=False, server_default=sa.text("'clan_members'")),
+        sa.Column("max_upload_size_mb", sa.SmallInteger, nullable=False, server_default=sa.text("10")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+    )
+
+    # -- Table: clan_invitations --
+    op.create_table(
+        "clan_invitations",
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
+        sa.Column(
+            "clan_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("clans.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("email", sa.String(255), nullable=False),
+        sa.Column("role", sa.String(20), nullable=False, server_default=sa.text("'viewer'")),
+        sa.Column("invited_by", UUID(as_uuid=True), nullable=False),
+        sa.Column("token", sa.String(255), nullable=False, unique=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+    )
+    op.create_index("ix_clan_invitations_clan_id", "clan_invitations", ["clan_id"])
+    op.create_index("ix_clan_invitations_clan_email", "clan_invitations", ["clan_id", "email"])
+
     # -- Table: user_clan_roles --
     op.create_table(
         "user_clan_roles",
@@ -484,7 +597,12 @@ def upgrade() -> None:
             sa.ForeignKey("clans.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "user_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("user_profiles.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column(
             "person_id",
             UUID(as_uuid=True),
@@ -579,24 +697,6 @@ def upgrade() -> None:
         "(clan_id, status) WHERE status = 'pending'"
     )
 
-    # -- Table: platform_users --
-    op.create_table(
-        "platform_users",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("email", sa.String(255), nullable=False, unique=True),
-        sa.Column("role", sa.String(50), nullable=False, server_default=sa.text("'super_admin'")),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
-        sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("NOW()"),
-        ),
-        sa.CheckConstraint("role = 'super_admin'", name="platform_users_only_super_admin"),
-    )
-    op.execute("CREATE UNIQUE INDEX idx_platform_users_single_super_admin ON platform_users (role)")
-
     # -- Table: audit_logs --
     op.create_table(
         "audit_logs",
@@ -651,7 +751,6 @@ def upgrade() -> None:
         sa.Column("notification_type", sa.String(50), nullable=False),
         sa.Column("title", sa.String(255), nullable=False),
         sa.Column("body", sa.Text, nullable=False),
-        sa.Column("fcm_token", sa.String(500), nullable=True),
         sa.Column(
             "status",
             sa.Enum("pending", "sent", "failed", name="notification_status", create_type=True),
@@ -691,7 +790,8 @@ def upgrade() -> None:
 
     for table in (
         "clans", "persons", "clan_memberships", "marriages", "parent_child",
-        "documents", "events", "user_clan_roles", "change_requests",
+        "documents", "events", "user_profiles", "clan_settings",
+        "user_clan_roles", "change_requests",
     ):
         op.execute(
             f"CREATE TRIGGER trg_{table}_updated_at "
@@ -703,8 +803,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop triggers
     for table in (
-        "change_requests", "user_clan_roles", "events", "documents",
-        "parent_child", "marriages", "clan_memberships", "persons", "clans",
+        "change_requests", "clan_settings", "user_clan_roles", "events", "documents",
+        "parent_child", "marriages", "clan_memberships", "user_profiles", "persons", "clans",
     ):
         op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_updated_at ON {table}")
     op.execute("DROP FUNCTION IF EXISTS update_updated_at_column()")
@@ -712,14 +812,17 @@ def downgrade() -> None:
     # Drop tables in reverse dependency order
     op.drop_table("notification_log")
     op.drop_table("audit_logs")
-    op.drop_table("platform_users")
     op.drop_table("change_requests")
+    op.drop_table("clan_invitations")
+    op.drop_table("clan_settings")
     op.drop_table("user_clan_roles")
     op.drop_table("events")
     op.drop_table("documents")
     op.drop_table("parent_child")
     op.drop_table("marriages")
     op.drop_table("clan_memberships")
+    op.drop_table("user_devices")
+    op.drop_table("user_profiles")
     op.drop_table("persons")
     op.drop_table("clans")
 

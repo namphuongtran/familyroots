@@ -28,16 +28,17 @@ super_admin                             admin
 
 ### Platform Level — `super_admin`
 
-- Stored in `public.platform_users` table (not in any clan schema)
-- Exactly **one** super admin exists, enforced by a unique database index
-- Created via `scripts/bootstrap_super_admin.py` — **never via API**
+- Stored in `public.user_profiles` table with `platform_role = 'super_admin'`
+- Exactly **one** super admin exists, created via `scripts/bootstrap_super_admin.py` — **never via API**
 - Cannot be deleted via API — only via Supabase Dashboard directly
 - All actions are audit-logged with `actor_id`, `action`, `target`, `timestamp`
-- JWT contains `platform_role: super_admin` in user metadata
+- Checked via `user_profiles.platform_role` column (not JWT metadata)
 
 ### Clan Level — `admin`, `editor`, `viewer`
 
-Stored in `public.user_clan_roles` table. A user can belong to at most one clan (enforced by unique index on `user_id`).
+Stored in `public.user_clan_roles` table. A user may belong to **multiple clans** simultaneously — each with an independent role. The constraint `UNIQUE(user_id, clan_id)` ensures one role per user per clan.
+
+The **active clan** is selected at runtime via the `X-Current-Clan-Id` request header (Slack-style workspace switcher). If a user belongs to exactly one clan and omits the header, that clan is auto-selected for zero-friction UX.
 
 ## Full Permission Matrix
 
@@ -82,6 +83,13 @@ Stored in `public.user_clan_roles` table. A user can belong to at most one clan 
 | **AUDIT LOGS**                 |             |       |        |        |
 | View clan audit log            | ✅           | ✅     | ❌      | ❌      |
 | View platform audit log        | ✅           | ❌     | ❌      | ❌      |
+| **INVITATIONS**                |             |       |        |        |
+| Create clan invitation         | ✅           | ✅     | ❌      | ❌      |
+| Revoke clan invitation         | ✅           | ✅     | ❌      | ❌      |
+| View pending invitations       | ✅           | ✅     | ❌      | ❌      |
+| **CLAN SETTINGS**              |             |       |        |        |
+| View clan settings             | ✅           | ✅     | ✅      | ✅      |
+| Edit clan settings             | ✅           | ✅     | ❌      | ❌      |
 | **NOTIFICATIONS**              |             |       |        |        |
 | Receive push notifications     | ✅           | ✅     | ✅      | ✅      |
 | Configure notification settings| ✅           | ✅     | ✅      | ✅      |
@@ -109,7 +117,7 @@ The `require_role()` dependency:
 3. Compares against the role hierarchy: `viewer < editor < admin`
 4. Returns 403 if the user's role is insufficient
 
-Super admin access is handled separately via `get_super_admin()` in `backend/app/core/security.py`, which checks `public.platform_users`.
+Super admin access is handled separately via `get_super_admin()` in `backend/app/core/security.py`, which queries `user_profiles.platform_role`.
 
 ### Frontend
 
@@ -119,11 +127,13 @@ Super admin access is handled separately via `get_super_admin()` in `backend/app
 
 ## User Approval Flow
 
-1. New user registers with a clan invitation link
-2. User account created with `is_approved = false`
-3. Clan admin reviews and approves/rejects via Admin Panel
-4. Upon approval, user receives `viewer` role by default
-5. Admin can upgrade to `editor` role as needed
+1. Clan admin creates an invitation via `clan_invitations` (email + role + expiry token)
+2. User receives invitation link, signs up via Supabase Auth
+3. On first login, `ensure_user_profile()` lazily creates a `user_profiles` row from JWT claims
+4. User accepts invitation → `user_clan_roles` row created with `is_approved = false`
+5. Clan admin reviews and approves/rejects via Admin Panel
+6. Upon approval, user can access clan data with the assigned role
+7. Admin can upgrade role (viewer → editor) or remove user from clan
 
 ## Super Admin API Endpoints
 
@@ -141,4 +151,5 @@ Super admin access is handled separately via `get_super_admin()` in `backend/app
 - No API endpoint to create super admin — bootstrap script only
 - No API endpoint to promote to super admin — this role cannot be granted via app
 - Super admin cannot be deleted via API — only via Supabase Dashboard
-- Database constraint ensures only one `super_admin` row
+- Super admin status stored in `user_profiles.platform_role` (queried from DB, not JWT metadata)
+- User profiles created lazily on first login via `ensure_user_profile()` (no Supabase webhook needed)

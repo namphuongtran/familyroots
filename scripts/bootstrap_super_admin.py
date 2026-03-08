@@ -33,9 +33,9 @@ async def bootstrap() -> None:
 
     # Check if super_admin already exists
     existing = (
-        supabase.table("platform_users")
+        supabase.table("user_profiles")
         .select("id")
-        .eq("role", "super_admin")
+        .eq("platform_role", "super_admin")
         .execute()
     )
     if existing.data:
@@ -62,12 +62,13 @@ async def bootstrap() -> None:
         }
     )
 
-    # Register in public.platform_users
-    supabase.table("platform_users").insert(
+    # Register in public.user_profiles
+    supabase.table("user_profiles").insert(
         {
             "id": auth_response.user.id,
             "email": email,
-            "role": "super_admin",
+            "display_name": "Super Admin",
+            "platform_role": "super_admin",
         }
     ).execute()
 

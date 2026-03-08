@@ -45,7 +45,6 @@ erDiagram
         text motto
         varchar ancestral_hall_location
         text clan_rules
-        jsonb approval_config
         boolean is_active
         timestamptz created_at
         timestamptz updated_at
@@ -88,6 +87,31 @@ erDiagram
         uuid updated_by
         timestamptz created_at
         timestamptz updated_at
+    }
+
+    user_profiles {
+        uuid id PK "Supabase auth.users.id"
+        varchar email UK
+        varchar display_name
+        varchar avatar_url
+        varchar language "default vi"
+        varchar timezone "default Asia/Ho_Chi_Minh"
+        boolean is_active
+        varchar platform_role "user | super_admin"
+        timestamptz last_login_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    user_devices {
+        uuid id PK
+        uuid user_id FK
+        varchar fcm_token UK
+        varchar device_name
+        varchar platform "ios | android | web"
+        boolean is_active
+        timestamptz last_used_at
+        timestamptz created_at
     }
 
     clan_memberships {
@@ -133,7 +157,7 @@ erDiagram
     user_clan_roles {
         uuid id PK
         uuid clan_id FK
-        uuid user_id "Supabase auth.users"
+        uuid user_id FK "FK to user_profiles"
         uuid person_id FK "nullable - linked person record"
         varchar role "admin | editor | viewer"
         boolean is_approved
@@ -142,6 +166,32 @@ erDiagram
         uuid invited_by
         timestamptz created_at
         timestamptz updated_at
+    }
+
+    clan_settings {
+        uuid id PK
+        uuid clan_id FK UK "one per clan"
+        jsonb approval_config
+        varchar default_language "default vi"
+        varchar tree_display_mode "vertical | horizontal"
+        boolean allow_public_tree
+        jsonb notification_defaults
+        varchar privacy_level "private | clan_members | public"
+        smallint max_upload_size_mb "default 10"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    clan_invitations {
+        uuid id PK
+        uuid clan_id FK
+        varchar email
+        varchar role "default viewer"
+        uuid invited_by
+        varchar token UK
+        timestamptz expires_at
+        timestamptz accepted_at "nullable"
+        timestamptz created_at
     }
 
     events {
@@ -217,19 +267,26 @@ erDiagram
         varchar notification_type
         varchar title
         text body
-        varchar fcm_token
         varchar status
         timestamptz sent_at
         text error_message
         timestamptz created_at
     }
 
+    %% ── Relationships ──
+    user_profiles ||--o{ user_clan_roles : "has clan roles"
+    user_profiles ||--o{ user_devices : "has devices"
     clans ||--o{ clan_memberships : "has members"
     clans ||--o{ user_clan_roles : "has roles"
+    clans ||--|| clan_settings : "has settings"
+    clans ||--o{ clan_invitations : "has invitations"
     clans ||--o{ events : "has"
     clans ||--o{ documents : "has"
     clans ||--o{ change_requests : "has"
     clans ||--o{ notification_log : "has"
+    clans ||--o{ marriages : "created_by_clan"
+    clans ||--o{ parent_child : "created_by_clan"
+    clans ||--o{ audit_logs : "has logs"
     persons ||--o{ clan_memberships : "belongs to clans"
     persons ||--o{ marriages : "person1"
     persons ||--o{ marriages : "person2"
@@ -240,8 +297,6 @@ erDiagram
     persons |o--o| user_clan_roles : "linked account"
     persons }o--o| clans : "origin_clan"
     events ||--o{ notification_log : "triggers"
-    clans ||--o{ marriages : "created_by_clan"
-    clans ||--o{ parent_child : "created_by_clan"
 ```
 
 ---
@@ -264,27 +319,47 @@ Central registry of family clans (dòng họ). Each clan is a tenant.
 | `motto` | TEXT | | Phương châm gia tộc |
 | `ancestral_hall_location` | VARCHAR(500) | | Địa chỉ nhà thờ tổ |
 | `clan_rules` | TEXT | | Gia huấn |
-| `approval_config` | JSONB | | Configurable approval workflow |
 | `is_active` | BOOLEAN | DEFAULT true | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**`approval_config` JSONB structure:**
+**Design notes:**
+- `approval_config` lives in `clan_settings` table (never on `clans`).
 
-```json
-{
-  "require_approval": {
-    "person_create": true,
-    "person_update": false,
-    "person_delete": true,
-    "marriage_create": true,
-    "marriage_delete": true,
-    "parent_child_create": true,
-    "parent_child_delete": true
-  },
-  "auto_approve_roles": ["admin"]
-}
-```
+### `user_profiles`
+
+Local cache of Supabase Auth user data. Created lazily on first login via `ensure_user_profile()`. The primary key is the Supabase `auth.users.id` UUID.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | Supabase `auth.users.id` (not auto-generated) |
+| `email` | VARCHAR(255) | UNIQUE, NOT NULL | Synced from JWT on first login |
+| `display_name` | VARCHAR(255) | | From JWT `user_metadata.full_name` or email prefix |
+| `avatar_url` | VARCHAR(500) | | Profile avatar |
+| `language` | VARCHAR(10) | DEFAULT 'vi' | UI language preference |
+| `timezone` | VARCHAR(50) | DEFAULT 'Asia/Ho_Chi_Minh' | User timezone |
+| `is_active` | BOOLEAN | DEFAULT true | App-level suspension |
+| `platform_role` | VARCHAR(50) | DEFAULT 'user' | `user` or `super_admin` |
+| `last_login_at` | TIMESTAMPTZ | | Updated on login (throttled to every 5 min) |
+| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+**Sync strategy:** On-first-login (lazy creation). When `get_current_user()` validates the JWT, `ensure_user_profile()` checks if a `user_profiles` row exists. If not, it creates one from JWT claims. No Supabase webhooks or triggers needed.
+
+### `user_devices`
+
+Tracks FCM tokens per user device for push notifications. Replaces the old `fcm_token` column on `notification_log`.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | |
+| `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL | |
+| `fcm_token` | VARCHAR(500) | UNIQUE, NOT NULL | Firebase Cloud Messaging token |
+| `device_name` | VARCHAR(255) | | e.g. "iPhone 15 Pro" |
+| `platform` | VARCHAR(20) | NOT NULL | `ios`, `android`, `web` |
+| `is_active` | BOOLEAN | DEFAULT true | Deactivated when token expires |
+| `last_used_at` | TIMESTAMPTZ | | |
+| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `persons`
 
@@ -413,13 +488,13 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 
 ### `user_clan_roles`
 
-Maps Supabase Auth users to clans with RBAC roles. Supports multi-clan membership.
+Maps users to clans with RBAC roles. A user may belong to **multiple clans** — each with an independent role. The active clan is selected at runtime via the `X-Current-Clan-Id` header.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `user_id` | UUID | NOT NULL, indexed | FK → Supabase auth.users |
+| `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL, indexed | |
 | `person_id` | UUID | FK → persons.id (SET NULL) | Links user account to their person record |
 | `role` | VARCHAR(20) | DEFAULT 'viewer' | admin, editor, viewer |
 | `is_approved` | BOOLEAN | DEFAULT false | Pending approval by admin |
@@ -431,11 +506,11 @@ Maps Supabase Auth users to clans with RBAC roles. Supports multi-clan membershi
 
 **Constraints:** `UNIQUE(user_id, clan_id)` — one role per user per clan.
 
-**Role hierarchy:** `viewer` < `editor` < `admin`. Super admin is checked via JWT `user_metadata.platform_role`.
+**Role hierarchy:** `viewer` < `editor` < `admin`. Super admin is checked via `user_profiles.platform_role`.
 
 ### `change_requests`
 
-Configurable cross-approval workflow. When `approval_config` requires approval for an action, changes go through this queue instead of being applied directly.
+Configurable cross-approval workflow. When `clan_settings.approval_config` requires approval for an action, changes go through this queue instead of being applied directly.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -453,6 +528,68 @@ Configurable cross-approval workflow. When `approval_config` requires approval f
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 **Workflow:** Editor creates change_request → Different admin reviews (cross-approval to prevent errors) → System applies the change on approval.
+
+### `clan_settings`
+
+Per-clan configuration. One row per clan (enforced by `UNIQUE(clan_id)`). Created automatically when a new clan is provisioned.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | |
+| `clan_id` | UUID | FK → clans.id (CASCADE), UNIQUE, NOT NULL | One settings row per clan |
+| `approval_config` | JSONB | | Configurable approval workflow |
+| `default_language` | VARCHAR(10) | DEFAULT 'vi' | Default UI language for clan members |
+| `tree_display_mode` | VARCHAR(20) | DEFAULT 'vertical' | `vertical` or `horizontal` tree rendering |
+| `allow_public_tree` | BOOLEAN | DEFAULT false | Whether the family tree is publicly viewable |
+| `notification_defaults` | JSONB | | Default notification settings for new members |
+| `privacy_level` | VARCHAR(20) | DEFAULT 'clan_members' | `private`, `clan_members`, or `public` |
+| `max_upload_size_mb` | SMALLINT | DEFAULT 10 | Max file upload size in MB |
+| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+**`approval_config` JSONB structure:**
+
+```json
+{
+  "require_approval": {
+    "person_create": true,
+    "person_update": false,
+    "person_delete": true,
+    "marriage_create": true,
+    "marriage_delete": true,
+    "parent_child_create": true,
+    "parent_child_delete": true
+  },
+  "auto_approve_roles": ["admin"]
+}
+```
+
+**`notification_defaults` JSONB structure:**
+
+```json
+{
+  "notify_days_before": 7,
+  "event_types": ["death_anniversary", "birthday", "clan_ceremony"]
+}
+```
+
+### `clan_invitations`
+
+Tracks pending invitations to join a clan. Supports secure invite links with expiration.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | |
+| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
+| `email` | VARCHAR(255) | NOT NULL | Invited email address |
+| `role` | VARCHAR(20) | DEFAULT 'viewer' | Role assigned upon acceptance |
+| `invited_by` | UUID | NOT NULL | Admin who created the invite |
+| `token` | VARCHAR(255) | UNIQUE, NOT NULL | Secure invite token for the link |
+| `expires_at` | TIMESTAMPTZ | NOT NULL | Invitation expiry |
+| `accepted_at` | TIMESTAMPTZ | | NULL = still pending |
+| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+**Index:** `(clan_id, email)` for fast lookup of pending invitations per clan.
 
 ### `events`
 
@@ -518,7 +655,7 @@ Immutable log of all write actions. Not clan-scoped (uses own timestamps).
 
 ### `notification_log`
 
-Tracks FCM push notification delivery.
+Tracks push notification delivery. FCM tokens are now stored in `user_devices` (not per-notification).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -529,7 +666,6 @@ Tracks FCM push notification delivery.
 | `notification_type` | VARCHAR(50) | NOT NULL | |
 | `title` | VARCHAR(255) | NOT NULL | |
 | `body` | TEXT | NOT NULL | |
-| `fcm_token` | VARCHAR(500) | | |
 | `status` | VARCHAR(20) | DEFAULT 'pending' | |
 | `sent_at` | TIMESTAMPTZ | | |
 | `error_message` | TEXT | | |
@@ -583,6 +719,13 @@ CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
 -- Notifications
 CREATE INDEX idx_notification_log_clan ON notification_log(clan_id);
 CREATE INDEX idx_notification_log_event ON notification_log(event_id);
+
+-- User devices
+CREATE INDEX ix_user_devices_user_id ON user_devices(user_id);
+
+-- Clan invitations
+CREATE INDEX ix_clan_invitations_clan_id ON clan_invitations(clan_id);
+CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 ```
 
 ---

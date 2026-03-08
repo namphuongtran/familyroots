@@ -18,7 +18,7 @@ CREATE EXTENSION IF NOT EXISTS "unaccent";     -- accent-insensitive search (Vie
 CREATE TYPE gender_type AS ENUM ('male', 'female', 'unknown');
 
 CREATE TYPE clan_role AS ENUM ('admin', 'editor', 'viewer');
--- Note: 'super_admin' lives only in platform_users, not here
+-- Note: 'super_admin' lives in user_profiles.platform_role
 
 CREATE TYPE event_type AS ENUM (
     'death_anniversary',   -- ngày giỗ
@@ -54,7 +54,6 @@ CREATE TABLE public.clans (
     motto                   TEXT,                          -- gia huấn / châm ngôn
     ancestral_hall_location VARCHAR(500),                  -- nhà thờ tổ
     clan_rules              TEXT,                          -- gia quy
-    approval_config         JSONB,                        -- {"require_approval": true, ...}
     is_active               BOOLEAN NOT NULL DEFAULT true,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -334,13 +333,85 @@ CREATE INDEX idx_events_recurring_date
     WHERE is_recurring = true;
 
 -- ============================================================
+-- TABLE: user_profiles
+-- Local cache of Supabase Auth users, synced on first login.
+-- ============================================================
+CREATE TABLE public.user_profiles (
+    id              UUID PRIMARY KEY,          -- Must match Supabase Auth user id
+    email           VARCHAR(255) NOT NULL UNIQUE,
+    display_name    VARCHAR(255),
+    avatar_url      VARCHAR(500),
+    language        VARCHAR(10) NOT NULL DEFAULT 'vi',
+    timezone        VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    platform_role   VARCHAR(50) NOT NULL DEFAULT 'user',  -- 'user' or 'super_admin'
+    last_login_at   TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- TABLE: user_devices
+-- FCM tokens per user device for push notifications.
+-- ============================================================
+CREATE TABLE public.user_devices (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES public.user_profiles (id) ON DELETE CASCADE,
+    fcm_token       VARCHAR(500) NOT NULL UNIQUE,
+    device_name     VARCHAR(255),
+    platform        VARCHAR(20) NOT NULL,      -- 'ios', 'android', 'web'
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    last_used_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX ix_user_devices_user_id ON public.user_devices (user_id);
+
+-- ============================================================
+-- TABLE: clan_settings
+-- Per-clan configuration (one row per clan).
+-- ============================================================
+CREATE TABLE public.clan_settings (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clan_id         UUID NOT NULL UNIQUE REFERENCES public.clans (id) ON DELETE CASCADE,
+    approval_config JSONB,                     -- {"require_approval": true, ...}
+    default_language VARCHAR(10) NOT NULL DEFAULT 'vi',
+    tree_display_mode VARCHAR(20) NOT NULL DEFAULT 'vertical',
+    allow_public_tree BOOLEAN NOT NULL DEFAULT false,
+    notification_defaults JSONB,
+    privacy_level   VARCHAR(20) NOT NULL DEFAULT 'clan_members',
+    max_upload_size_mb SMALLINT NOT NULL DEFAULT 10,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- TABLE: clan_invitations
+-- Secure invite links with expiration for joining a clan.
+-- ============================================================
+CREATE TABLE public.clan_invitations (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
+    email           VARCHAR(255) NOT NULL,
+    role            VARCHAR(20) NOT NULL DEFAULT 'viewer',
+    invited_by      UUID NOT NULL,
+    token           VARCHAR(255) NOT NULL UNIQUE,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    accepted_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX ix_clan_invitations_clan_id ON public.clan_invitations (clan_id);
+CREATE INDEX ix_clan_invitations_clan_email ON public.clan_invitations (clan_id, email);
+
+-- ============================================================
 -- TABLE: user_clan_roles
 -- Which Supabase Auth user belongs to which clan, with what role.
 -- ============================================================
 CREATE TABLE public.user_clan_roles (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
-    user_id         UUID NOT NULL,             -- Supabase Auth user id
+    user_id         UUID NOT NULL REFERENCES public.user_profiles (id) ON DELETE CASCADE,
     person_id       UUID REFERENCES public.persons (id) ON DELETE SET NULL,
     -- person_id: links this user account to their person profile in the tree
     -- nullable: admin account may not be a person in the tree
@@ -402,24 +473,6 @@ CREATE INDEX idx_change_requests_pending
     WHERE status = 'pending';
 
 -- ============================================================
--- TABLE: platform_users
--- Super admin only. Created via bootstrap script.
--- ============================================================
-CREATE TABLE public.platform_users (
-    id              UUID PRIMARY KEY,          -- Must match Supabase Auth user id
-    email           VARCHAR(255) NOT NULL UNIQUE,
-    role            VARCHAR(50) NOT NULL DEFAULT 'super_admin',
-    is_active       BOOLEAN NOT NULL DEFAULT true,
-    last_login_at   TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT platform_users_only_super_admin CHECK (role = 'super_admin')
-);
-
-CREATE UNIQUE INDEX idx_platform_users_single_super_admin
-    ON public.platform_users (role);
-
--- ============================================================
 -- TABLE: audit_logs
 -- Immutable log of all write actions across the system.
 -- ============================================================
@@ -461,7 +514,6 @@ CREATE TABLE public.notification_log (
     notification_type VARCHAR(50) NOT NULL,
     title           VARCHAR(255) NOT NULL,
     body            TEXT NOT NULL,
-    fcm_token       VARCHAR(500),
     status          notification_status NOT NULL DEFAULT 'pending',
     sent_at         TIMESTAMPTZ,
     error_message   TEXT,
@@ -510,6 +562,14 @@ CREATE TRIGGER trg_documents_updated_at
 
 CREATE TRIGGER trg_events_updated_at
     BEFORE UPDATE ON public.events
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_user_profiles_updated_at
+    BEFORE UPDATE ON public.user_profiles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_clan_settings_updated_at
+    BEFORE UPDATE ON public.clan_settings
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_user_clan_roles_updated_at
