@@ -1,0 +1,45 @@
+# ── Version control ──────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Python artifacts ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments (always rebuild inside the image) ───────────────────
+.venv/
+venv/
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+
+# ── Test suite (not needed in the production image) ─────────────────────────
+tests/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── Static analysis caches ───────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+
+# ── Editor / OS artefacts ────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ── Docs ─────────────────────────────────────────────────────────────────────
+README.md
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
