@@ -5,14 +5,14 @@ import { useTranslations } from 'next-intl'
 import { Search, X } from 'lucide-react'
 import { MemberCard } from './MemberCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useMemberSearch } from '@/lib/hooks/useMembers'
+import { usePersonSearch } from '@/lib/hooks/useMembers'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 
 export function MemberSearch() {
   const t = useTranslations('members')
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebounce(query, 300)
-  const { data, isLoading } = useMemberSearch(debouncedQuery)
+  const { data, isLoading } = usePersonSearch(debouncedQuery)
 
   const isSearching = debouncedQuery.length >= 2
   const results = data ?? []

@@ -6,16 +6,16 @@ import { useTranslations } from 'next-intl'
 import { MemberAvatar } from '@/components/members/MemberAvatar'
 import { formatLifespan } from '@/lib/utils/date'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useMember } from '@/lib/hooks/useMembers'
+import { usePerson } from '@/lib/hooks/useMembers'
 
 interface MemberSidebarProps {
-  memberId: string
+  personId: string
   onClose: () => void
 }
 
-export function MemberSidebar({ memberId, onClose }: MemberSidebarProps) {
-  const t = useTranslations('member')
-  const { data: member, isLoading } = useMember(memberId)
+export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
+  const t = useTranslations('tree')
+  const { data: member, isLoading } = usePerson(personId)
 
   return (
     <div className="absolute top-4 left-4 z-20 bg-white rounded-xl shadow-lg border border-gray-200 w-64 overflow-hidden">
@@ -77,14 +77,14 @@ export function MemberSidebar({ memberId, onClose }: MemberSidebarProps) {
 
           <div className="flex gap-2 pt-1">
             <Link
-              href={`/members/${member.id}`}
+              href={`/persons/${member.id}`}
               className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-md bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors"
             >
               <Users className="h-3 w-3" />
               {t('view_profile')}
             </Link>
             <Link
-              href={`/members/${member.id}/edit`}
+              href={`/persons/${member.id}/edit`}
               className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <Edit className="h-3 w-3" />

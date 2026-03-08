@@ -12,8 +12,8 @@ const MOCK_TREE: TreeNode = {
   death_date: '1920-03-15',
   death_date_approx: false,
   generation: 1,
-  is_clan_member: true,
-  is_clan_founder: true,
+  membership_role: 'blood',
+  is_founder: true,
   depth: 0,
   spouses: [
     {
@@ -22,8 +22,9 @@ const MOCK_TREE: TreeNode = {
       gender: 'female',
       birth_date: '1855-05-10',
       death_date: '1925-07-20',
-      relation_subtype: 'married',
-      is_primary: true,
+      status: 'married',
+      spouse_order: 1,
+      membership_role: 'spouse',
     },
   ],
   children: [
@@ -36,8 +37,8 @@ const MOCK_TREE: TreeNode = {
       death_date: '1960-03-01',
       death_date_approx: false,
       generation: 2,
-      is_clan_member: true,
-      is_clan_founder: false,
+      membership_role: 'blood',
+      is_founder: false,
       depth: 1,
       spouses: [],
       children: [
@@ -49,8 +50,8 @@ const MOCK_TREE: TreeNode = {
           birth_date_approx: false,
           death_date_approx: false,
           generation: 3,
-          is_clan_member: true,
-          is_clan_founder: false,
+          membership_role: 'blood',
+          is_founder: false,
           depth: 2,
           spouses: [],
           children: [],
@@ -64,11 +65,11 @@ const isMock = !process.env.NEXT_PUBLIC_API_URL
 
 export const treeApi = {
   getFullTree: async (params?: {
-    root_member_id?: string
+    root_person_id?: string
     max_generations?: number
   }): Promise<TreeApiResponse> => {
     if (isMock) {
-      return { tree: MOCK_TREE, total_members: 3, total_generations: 3 }
+      return { tree: MOCK_TREE, total_persons: 3, total_generations: 3 }
     }
     const { data } = await api.get<TreeApiResponse>('/tree', { params })
     return data
@@ -79,9 +80,8 @@ export const treeApi = {
     maxGenerations = 5,
   ): Promise<TreeApiResponse> => {
     if (isMock) {
-      return { tree: MOCK_TREE, total_members: 3, total_generations: 3 }
+      return { tree: MOCK_TREE, total_persons: 3, total_generations: 3 }
     }
-    // Backend uses path param: /tree/subtree/{member_id}
     const { data } = await api.get<TreeApiResponse>(`/tree/subtree/${rootId}`, {
       params: { max_generations: maxGenerations },
     })
@@ -89,10 +89,10 @@ export const treeApi = {
   },
 
   getAncestors: async (
-    memberId: string,
+    personId: string,
     maxGenerations = 10,
   ): Promise<TreeApiResponse> => {
-    const { data } = await api.get<TreeApiResponse>(`/tree/ancestors/${memberId}`, {
+    const { data } = await api.get<TreeApiResponse>(`/tree/ancestors/${personId}`, {
       params: { max_generations: maxGenerations },
     })
     return data

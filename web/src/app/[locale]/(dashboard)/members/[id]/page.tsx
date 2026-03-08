@@ -14,7 +14,7 @@ export default async function MemberDetailPage({
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div className="flex items-center gap-2">
-        <Link href="../members" className="text-gray-400 hover:text-gray-600">
+        <Link href="../persons" className="text-gray-400 hover:text-gray-600">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <h1 className="font-serif text-2xl text-gray-800">{t('profile_title')}</h1>
@@ -27,7 +27,7 @@ export default async function MemberDetailPage({
         </Link>
       </div>
 
-      <MemberDetailClient memberId={id} />
+      <MemberDetailClient personId={id} />
     </div>
   )
 }

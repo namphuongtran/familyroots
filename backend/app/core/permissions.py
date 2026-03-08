@@ -33,7 +33,7 @@ def require_role(minimum_role: ClanRole) -> Callable[..., Any]:
 
     Usage::
 
-        @router.post("/members", dependencies=[Depends(require_role(ClanRole.EDITOR))])
+        @router.post("/persons", dependencies=[Depends(require_role(ClanRole.EDITOR))])
     """
 
     async def _check(
@@ -74,5 +74,5 @@ RequireEditor = Depends(require_role(ClanRole.EDITOR))
 RequireAdmin = Depends(require_role(ClanRole.ADMIN))
 
 # Usage in routes:
-# @router.post("/members", dependencies=[RequireEditor])
-# @router.delete("/members/{id}", dependencies=[RequireAdmin])
+# @router.post("/persons", dependencies=[RequireEditor])
+# @router.delete("/persons/{id}", dependencies=[RequireAdmin])

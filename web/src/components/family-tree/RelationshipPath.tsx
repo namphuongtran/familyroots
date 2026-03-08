@@ -1,7 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { getRelationLabel } from '@/lib/utils/kinship'
+import { getMarriageStatusLabel, getParentChildTypeLabel } from '@/lib/utils/kinship'
 import type { PathStep } from '@/lib/types'
 
 interface RelationshipPathProps {
@@ -33,7 +33,7 @@ export function RelationshipPath({ steps, fromName, toName }: RelationshipPathPr
             </span>
             <span>
               {step.full_name}
-              <span className="text-gray-400 ml-1">({getRelationLabel(step.edge_type, step.edge_subtype)})</span>
+              <span className="text-gray-400 ml-1">({step.edge_type === 'spouse' ? getMarriageStatusLabel(step.edge_subtype) : getParentChildTypeLabel(step.edge_subtype)})</span>
             </span>
           </li>
         ))}

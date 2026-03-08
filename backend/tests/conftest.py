@@ -12,11 +12,12 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def make_member_row(
+def make_person_row(
     *,
-    member_id: uuid.UUID | None = None,
-    full_name: str = "Test Member",
+    person_id: uuid.UUID | None = None,
+    full_name: str = "Test Person",
     birth_name: str | None = None,
+    posthumous_name: str | None = None,
     gender: str = "male",
     birth_date: date | None = None,
     birth_date_approx: bool = False,
@@ -25,16 +26,17 @@ def make_member_row(
     birth_place: str | None = None,
     generation: int | None = 1,
     avatar_url: str | None = None,
-    is_clan_member: bool = True,
-    is_clan_founder: bool = False,
+    membership_role: str | None = "blood",
+    is_founder: bool = False,
     parent_id: uuid.UUID | None = None,
     depth: int = 0,
 ) -> dict[str, Any]:
     """Create a dict mimicking a row from get_family_tree_flat()."""
     return {
-        "member_id": member_id or uuid.uuid4(),
+        "person_id": person_id or uuid.uuid4(),
         "full_name": full_name,
         "birth_name": birth_name,
+        "posthumous_name": posthumous_name,
         "gender": gender,
         "birth_date": birth_date,
         "birth_date_approx": birth_date_approx,
@@ -43,41 +45,45 @@ def make_member_row(
         "birth_place": birth_place,
         "generation": generation,
         "avatar_url": avatar_url,
-        "is_clan_member": is_clan_member,
-        "is_clan_founder": is_clan_founder,
+        "membership_role": membership_role,
+        "is_founder": is_founder,
         "parent_id": parent_id,
         "depth": depth,
-        "path": [member_id or uuid.uuid4()],
+        "path": [person_id or uuid.uuid4()],
     }
 
 
 def make_spouse_row(
     *,
-    for_member_id: uuid.UUID,
+    for_person_id: uuid.UUID,
     spouse_id: uuid.UUID | None = None,
     full_name: str = "Spouse",
     gender: str = "female",
     birth_date: date | None = None,
     death_date: date | None = None,
     avatar_url: str | None = None,
-    relation_subtype: str = "married",
-    start_date: date | None = None,
-    end_date: date | None = None,
-    is_primary: bool = True,
+    posthumous_name: str | None = None,
+    status: str = "married",
+    marriage_date: date | None = None,
+    divorce_date: date | None = None,
+    spouse_order: int = 1,
+    membership_role: str | None = None,
 ) -> dict[str, Any]:
     """Create a dict mimicking a spouse join row."""
     return {
-        "for_member_id": for_member_id,
+        "for_person_id": for_person_id,
         "spouse_id": spouse_id or uuid.uuid4(),
         "full_name": full_name,
         "gender": gender,
         "birth_date": birth_date,
         "death_date": death_date,
         "avatar_url": avatar_url,
-        "relation_subtype": relation_subtype,
-        "start_date": start_date,
-        "end_date": end_date,
-        "is_primary": is_primary,
+        "posthumous_name": posthumous_name,
+        "status": status,
+        "marriage_date": marriage_date,
+        "divorce_date": divorce_date,
+        "spouse_order": spouse_order,
+        "membership_role": membership_role,
     }
 
 

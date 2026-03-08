@@ -25,7 +25,7 @@ export interface ApiError {
 /** Tree endpoint response — GET /tree | /tree/subtree | /tree/ancestors */
 export interface TreeApiResponse {
   tree: import('./tree').TreeNode
-  total_members: number
+  total_persons: number
   total_generations: number
 }
 
@@ -47,6 +47,6 @@ export interface UserProfile {
   clan_name?: string
   role?: 'viewer' | 'editor' | 'admin' | 'super_admin'
   is_approved: boolean
-  member_id?: string
+  person_id?: string
   preferred_locale: 'vi' | 'en' | 'zh' | 'fr'
 }

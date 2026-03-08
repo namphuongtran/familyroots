@@ -15,7 +15,7 @@ from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireV
 from app.core.security import get_current_clan_id, get_current_user
 from app.models.audit_log import AuditLog
 from app.models.document import Document
-from app.models.member import Member
+from app.models.person import Person
 from app.schemas.document import (
     ALLOWED_MIME_TYPES,
     MAX_FILE_SIZE_BYTES,
@@ -32,7 +32,7 @@ async def upload_document(
     file: UploadFile = File(...),
     title: str = Form(...),
     document_type: str = Form(...),
-    member_id: uuid.UUID | None = Form(None),
+    person_id: uuid.UUID | None = Form(None),
     description: str | None = Form(None),
     taken_date: date | None = Form(None),
     taken_place: str | None = Form(None),
@@ -58,17 +58,16 @@ async def upload_document(
     if len(content) > MAX_FILE_SIZE_BYTES:
         raise ValidationError("file_too_large", {"max_bytes": MAX_FILE_SIZE_BYTES})
 
-    # Verify member belongs to clan if provided
-    if member_id:
+    # Verify person exists if provided
+    if person_id:
         result = await db.execute(
-            select(Member).where(
-                Member.id == member_id,
-                Member.clan_id == clan_id,
-                Member.is_deleted.is_(False),
+            select(Person).where(
+                Person.id == person_id,
+                Person.is_deleted.is_(False),
             )
         )
         if not result.scalar_one_or_none():
-            raise NotFoundError("member_not_found")
+            raise NotFoundError("person_not_found")
 
     # Build storage path
     file_ext = (file.filename or "file").rsplit(".", 1)[-1] if file.filename else "bin"
@@ -79,7 +78,7 @@ async def upload_document(
 
     doc = Document(
         clan_id=clan_id,
-        member_id=member_id,
+        person_id=person_id,
         title=title,
         description=description,
         document_type=document_type,
@@ -114,7 +113,7 @@ async def upload_document(
 
 @router.get("")
 async def list_documents(
-    member_id: uuid.UUID | None = Query(None),
+    person_id: uuid.UUID | None = Query(None),
     document_type: str | None = Query(None),
     cursor: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
@@ -125,8 +124,8 @@ async def list_documents(
 ) -> dict[str, Any]:
     """List documents with optional filters, paginated."""
     query = select(Document).where(Document.clan_id == clan_id)
-    if member_id:
-        query = query.where(Document.member_id == member_id)
+    if person_id:
+        query = query.where(Document.person_id == person_id)
     if document_type:
         query = query.where(Document.document_type == document_type)
 
@@ -169,12 +168,12 @@ async def delete_document(
     # Remove from storage
     await delete_file(doc.storage_path)
 
-    # If this was an avatar, clear the member's avatar_url
-    if doc.is_avatar and doc.member_id:
-        result = await db.execute(select(Member).where(Member.id == doc.member_id))
-        member = result.scalar_one_or_none()
-        if member:
-            member.avatar_url = None
+    # If this was an avatar, clear the person's avatar_url
+    if doc.is_avatar and doc.person_id:
+        result = await db.execute(select(Person).where(Person.id == doc.person_id))
+        person = result.scalar_one_or_none()
+        if person:
+            person.avatar_url = None
 
     await db.delete(doc)
     db.add(
@@ -199,19 +198,19 @@ async def set_document_as_avatar(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
-    """Set a photo document as the member's avatar."""
+    """Set a photo document as the person's avatar."""
     doc = await _get_doc_or_404(document_id, clan_id, db)
 
-    if not doc.member_id:
-        raise ValidationError("document_not_linked_to_member")
+    if not doc.person_id:
+        raise ValidationError("document_not_linked_to_person")
     if doc.document_type != "photo":
         raise ValidationError("only_photo_can_be_avatar")
 
-    # Unset existing avatar for this member
+    # Unset existing avatar for this person
     existing = await db.execute(
         select(Document).where(
             Document.clan_id == clan_id,
-            Document.member_id == doc.member_id,
+            Document.person_id == doc.person_id,
             Document.is_avatar.is_(True),
             Document.id != doc.id,
         )
@@ -221,12 +220,12 @@ async def set_document_as_avatar(
 
     doc.is_avatar = True
 
-    # Update the member's avatar_url
+    # Update the person's avatar_url
     presigned = await get_presigned_url(doc.storage_path, expires_in=86400 * 30)
-    result = await db.execute(select(Member).where(Member.id == doc.member_id))
-    member = result.scalar_one_or_none()
-    if member:
-        member.avatar_url = presigned
+    result = await db.execute(select(Person).where(Person.id == doc.person_id))
+    person = result.scalar_one_or_none()
+    if person:
+        person.avatar_url = presigned
 
     await db.commit()
     return {"data": {"message": "Avatar set", "document_id": str(document_id)}}

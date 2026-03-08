@@ -90,7 +90,7 @@ async def list_clan_users(
             "id": str(u.id),
             "user_id": str(u.user_id),
             "role": u.role,
-            "member_id": str(u.member_id) if u.member_id else None,
+            "person_id": str(u.person_id) if u.person_id else None,
             "created_at": u.created_at.isoformat(),
         }
         for u in page["data"]

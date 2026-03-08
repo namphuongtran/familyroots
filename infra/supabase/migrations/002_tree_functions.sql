@@ -1,94 +1,86 @@
 -- ============================================================
 -- 002_tree_functions.sql
--- SQL functions for family tree traversal
--- Bidirectional spouse lookup, children, parents, and
--- recursive tree/ancestor queries.
+-- SQL functions for family tree traversal (graph model)
+-- Persons are global; edges are marriages + parent_child.
+-- Clan context filters via clan_memberships.
 -- ============================================================
 
 -- ============================================================
--- FUNCTION: get_spouses(p_member_id, p_clan_id)
--- Returns all spouse records for a member (checks both directions)
+-- FUNCTION: get_spouses(p_person_id, p_clan_id)
+-- Returns all spouse records for a person (checks both directions)
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_spouses(
-    p_member_id UUID,
+    p_person_id UUID,
     p_clan_id   UUID
 )
 RETURNS TABLE (
-    spouse_id        UUID,
-    relation_subtype relation_subtype,
-    start_date       DATE,
-    end_date         DATE,
-    is_primary       BOOLEAN,
-    notes            TEXT
+    spouse_id       UUID,
+    status          VARCHAR,
+    marriage_date   DATE,
+    divorce_date    DATE,
+    spouse_order    SMALLINT,
+    notes           TEXT
 ) AS $$
     SELECT
         CASE
-            WHEN r.member_id = p_member_id THEN r.related_id
-            ELSE r.member_id
+            WHEN m.person1_id = p_person_id THEN m.person2_id
+            ELSE m.person1_id
         END AS spouse_id,
-        r.relation_subtype,
-        r.start_date,
-        r.end_date,
-        r.is_primary,
-        r.notes
-    FROM public.relationships r
-    WHERE r.clan_id = p_clan_id
-      AND r.relation_type = 'spouse'
-      AND (r.member_id = p_member_id OR r.related_id = p_member_id)
-    ORDER BY r.is_primary DESC, r.start_date ASC NULLS LAST;
+        m.status,
+        m.marriage_date,
+        m.divorce_date,
+        m.spouse_order,
+        m.notes
+    FROM public.marriages m
+    WHERE (m.person1_id = p_person_id OR m.person2_id = p_person_id)
+    ORDER BY m.spouse_order ASC NULLS LAST, m.marriage_date ASC NULLS LAST;
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
--- FUNCTION: get_children(p_member_id, p_clan_id)
--- Returns all children of a member
+-- FUNCTION: get_children(p_person_id, p_clan_id)
+-- Returns all children of a person
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_children(
-    p_member_id UUID,
+    p_person_id UUID,
     p_clan_id   UUID
 )
 RETURNS TABLE (
-    child_id         UUID,
-    relation_subtype relation_subtype,
-    other_parent_id  UUID
+    child_id          UUID,
+    relationship_type VARCHAR,
+    other_parent_id   UUID
 ) AS $$
     SELECT
-        r.related_id AS child_id,
-        r.relation_subtype,
+        pc.child_id,
+        pc.relationship_type,
         -- Find the other parent of this child (if any)
         (
-            SELECT r2.member_id
-            FROM public.relationships r2
-            WHERE r2.related_id = r.related_id
-              AND r2.relation_type = 'parent'
-              AND r2.clan_id = p_clan_id
-              AND r2.member_id != p_member_id
+            SELECT pc2.parent_id
+            FROM public.parent_child pc2
+            WHERE pc2.child_id = pc.child_id
+              AND pc2.parent_id != p_person_id
             LIMIT 1
         ) AS other_parent_id
-    FROM public.relationships r
-    WHERE r.clan_id = p_clan_id
-      AND r.relation_type = 'parent'
-      AND r.member_id = p_member_id;
+    FROM public.parent_child pc
+    WHERE pc.parent_id = p_person_id;
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
--- FUNCTION: get_parents(p_member_id, p_clan_id)
--- Returns all parents of a member
+-- FUNCTION: get_parents(p_person_id, p_clan_id)
+-- Returns all parents of a person
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_parents(
-    p_member_id UUID,
+    p_person_id UUID,
     p_clan_id   UUID
 )
 RETURNS TABLE (
-    parent_id        UUID,
-    relation_subtype relation_subtype
+    parent_id         UUID,
+    relationship_type VARCHAR
 ) AS $$
     SELECT
-        r.member_id AS parent_id,
-        r.relation_subtype
-    FROM public.relationships r
-    WHERE r.clan_id = p_clan_id
-      AND r.relation_type = 'parent'
-      AND r.related_id = p_member_id;
+        pc.parent_id,
+        pc.relationship_type
+    FROM public.parent_child pc
+    WHERE pc.child_id = p_person_id;
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
@@ -96,7 +88,7 @@ $$ LANGUAGE sql STABLE;
 -- Returns ALL descendants of root as a flat table.
 -- FastAPI then assembles this into a nested JSON tree.
 -- Uses WITH RECURSIVE to traverse parent→child edges.
--- Returns members + their relationship context for tree rendering.
+-- Clan context provides membership_role and is_founder via clan_memberships.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_family_tree_flat(
     p_root_id         UUID,
@@ -104,10 +96,11 @@ CREATE OR REPLACE FUNCTION public.get_family_tree_flat(
     p_max_generations INT DEFAULT 10
 )
 RETURNS TABLE (
-    member_id         UUID,
+    person_id         UUID,
     full_name         VARCHAR,
     birth_name        VARCHAR,
-    gender            gender_type,
+    posthumous_name   VARCHAR,
+    gender            VARCHAR,
     birth_date        DATE,
     birth_date_approx BOOLEAN,
     death_date        DATE,
@@ -115,87 +108,89 @@ RETURNS TABLE (
     birth_place       VARCHAR,
     generation        SMALLINT,
     avatar_url        VARCHAR,
-    is_clan_member    BOOLEAN,
-    is_clan_founder   BOOLEAN,
+    membership_role   VARCHAR,
+    is_founder        BOOLEAN,
     -- Tree position context
     parent_id         UUID,           -- direct parent in traversal (for tree structure)
     depth             INT,            -- depth from root (0 = root)
     path              UUID[]          -- full path from root (for cycle detection)
 ) AS $$
 WITH RECURSIVE descendants AS (
-    -- Base case: root member
+    -- Base case: root person
     SELECT
-        m.id            AS member_id,
-        m.full_name,
-        m.birth_name,
-        m.gender,
-        m.birth_date,
-        m.birth_date_approx,
-        m.death_date,
-        m.death_date_approx,
-        m.birth_place,
-        m.generation,
-        m.avatar_url,
-        m.is_clan_member,
-        m.is_clan_founder,
+        p.id            AS person_id,
+        p.full_name,
+        p.birth_name,
+        p.posthumous_name,
+        p.gender::VARCHAR,
+        p.birth_date,
+        p.birth_date_approx,
+        p.death_date,
+        p.death_date_approx,
+        p.birth_place,
+        cm.generation,
+        p.avatar_url,
+        cm.role::VARCHAR AS membership_role,
+        COALESCE(cm.is_founder, false) AS is_founder,
         NULL::UUID      AS parent_id,
         0               AS depth,
-        ARRAY[m.id]     AS path
-    FROM public.members m
-    WHERE m.id = p_root_id
-      AND m.clan_id = p_clan_id
-      AND m.is_deleted = false
+        ARRAY[p.id]     AS path
+    FROM public.persons p
+    LEFT JOIN public.clan_memberships cm
+        ON cm.person_id = p.id AND cm.clan_id = p_clan_id
+    WHERE p.id = p_root_id
+      AND p.is_deleted = false
 
     UNION ALL
 
     -- Recursive case: children of current level
     SELECT
-        m.id,
-        m.full_name,
-        m.birth_name,
-        m.gender,
-        m.birth_date,
-        m.birth_date_approx,
-        m.death_date,
-        m.death_date_approx,
-        m.birth_place,
-        m.generation,
-        m.avatar_url,
-        m.is_clan_member,
-        m.is_clan_founder,
-        d.member_id     AS parent_id,
+        p.id,
+        p.full_name,
+        p.birth_name,
+        p.posthumous_name,
+        p.gender::VARCHAR,
+        p.birth_date,
+        p.birth_date_approx,
+        p.death_date,
+        p.death_date_approx,
+        p.birth_place,
+        cm.generation,
+        p.avatar_url,
+        cm.role::VARCHAR AS membership_role,
+        COALESCE(cm.is_founder, false) AS is_founder,
+        d.person_id     AS parent_id,
         d.depth + 1     AS depth,
-        d.path || m.id  AS path
+        d.path || p.id  AS path
     FROM descendants d
-    JOIN public.relationships r
-        ON r.member_id = d.member_id
-        AND r.relation_type = 'parent'
-        AND r.clan_id = p_clan_id
-    JOIN public.members m
-        ON m.id = r.related_id
-        AND m.clan_id = p_clan_id
-        AND m.is_deleted = false
+    JOIN public.parent_child pc
+        ON pc.parent_id = d.person_id
+    JOIN public.persons p
+        ON p.id = pc.child_id
+        AND p.is_deleted = false
+    LEFT JOIN public.clan_memberships cm
+        ON cm.person_id = p.id AND cm.clan_id = p_clan_id
     WHERE d.depth < p_max_generations
-      AND NOT (m.id = ANY(d.path))  -- cycle detection: skip if already visited
+      AND NOT (p.id = ANY(d.path))  -- cycle detection: skip if already visited
 )
 SELECT * FROM descendants
 ORDER BY depth, generation NULLS LAST, full_name;
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
--- FUNCTION: get_ancestors_flat(p_member_id, p_clan_id, p_max_generations)
--- Returns ALL ancestors of a member (going UP the tree).
+-- FUNCTION: get_ancestors_flat(p_person_id, p_clan_id, p_max_generations)
+-- Returns ALL ancestors of a person (going UP the tree).
 -- Useful for "find my lineage back to the founder" view.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_ancestors_flat(
-    p_member_id       UUID,
+    p_person_id       UUID,
     p_clan_id         UUID,
     p_max_generations INT DEFAULT 10
 )
 RETURNS TABLE (
-    member_id   UUID,
+    person_id   UUID,
     full_name   VARCHAR,
-    gender      gender_type,
+    gender      VARCHAR,
     birth_date  DATE,
     death_date  DATE,
     generation  SMALLINT,
@@ -205,47 +200,47 @@ RETURNS TABLE (
     path        UUID[]
 ) AS $$
 WITH RECURSIVE ancestors AS (
-    -- Base case: the member themselves
+    -- Base case: the person themselves
     SELECT
-        m.id        AS member_id,
-        m.full_name,
-        m.gender,
-        m.birth_date,
-        m.death_date,
-        m.generation,
-        m.avatar_url,
+        p.id        AS person_id,
+        p.full_name,
+        p.gender::VARCHAR,
+        p.birth_date,
+        p.death_date,
+        cm.generation,
+        p.avatar_url,
         NULL::UUID  AS child_id,
         0           AS depth,
-        ARRAY[m.id] AS path
-    FROM public.members m
-    WHERE m.id = p_member_id
-      AND m.clan_id = p_clan_id
-      AND m.is_deleted = false
+        ARRAY[p.id] AS path
+    FROM public.persons p
+    LEFT JOIN public.clan_memberships cm
+        ON cm.person_id = p.id AND cm.clan_id = p_clan_id
+    WHERE p.id = p_person_id
+      AND p.is_deleted = false
 
     UNION ALL
 
     SELECT
-        m.id,
-        m.full_name,
-        m.gender,
-        m.birth_date,
-        m.death_date,
-        m.generation,
-        m.avatar_url,
-        a.member_id AS child_id,
+        p.id,
+        p.full_name,
+        p.gender::VARCHAR,
+        p.birth_date,
+        p.death_date,
+        cm.generation,
+        p.avatar_url,
+        a.person_id AS child_id,
         a.depth + 1,
-        a.path || m.id
+        a.path || p.id
     FROM ancestors a
-    JOIN public.relationships r
-        ON r.related_id = a.member_id
-        AND r.relation_type = 'parent'
-        AND r.clan_id = p_clan_id
-    JOIN public.members m
-        ON m.id = r.member_id
-        AND m.clan_id = p_clan_id
-        AND m.is_deleted = false
+    JOIN public.parent_child pc
+        ON pc.child_id = a.person_id
+    JOIN public.persons p
+        ON p.id = pc.parent_id
+        AND p.is_deleted = false
+    LEFT JOIN public.clan_memberships cm
+        ON cm.person_id = p.id AND cm.clan_id = p_clan_id
     WHERE a.depth < p_max_generations
-      AND NOT (m.id = ANY(a.path))
+      AND NOT (p.id = ANY(a.path))
 )
 SELECT * FROM ancestors
 ORDER BY depth, full_name;

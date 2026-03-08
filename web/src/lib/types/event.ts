@@ -10,7 +10,7 @@ export type EventType =
 export interface ClanEvent {
   id: string
   clan_id: string
-  member_id?: string
+  person_id?: string
   event_type: EventType
   title: string
   description?: string
@@ -27,14 +27,14 @@ export interface ClanEvent {
 
 /** Upcoming event response from GET /events/upcoming */
 export interface UpcomingEvent extends ClanEvent {
-  member_name?: string
-  member_avatar_url?: string
+  person_name?: string
+  person_avatar_url?: string
   next_occurrence: string     // ISO date of next occurrence
   days_until: number          // how many days until next occurrence
 }
 
 export interface EventCreateInput {
-  member_id?: string
+  person_id?: string
   event_type: EventType
   title: string
   description?: string

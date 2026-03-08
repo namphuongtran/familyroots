@@ -5,10 +5,10 @@ import uuid
 from app.services.relationship_descriptor import KINSHIP_MAP, describe_relationship
 
 
-def _path_step(member_id, full_name="Test", gender="male", edge_type=None):
+def _path_step(person_id, full_name="Test", gender="male", edge_type=None):
     """Build a path step dict."""
     return {
-        "member_id": str(member_id),
+        "person_id": str(person_id),
         "full_name": full_name,
         "gender": gender,
         "edge_type": edge_type,

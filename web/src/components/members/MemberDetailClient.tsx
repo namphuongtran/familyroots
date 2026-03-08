@@ -4,13 +4,14 @@ import { useTranslations } from 'next-intl'
 import { MemberAvatar } from './MemberAvatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatLifespan, formatDate } from '@/lib/utils/date'
-import { useMember, useMemberRelationships } from '@/lib/hooks/useMembers'
-import { getRelationLabel } from '@/lib/utils/kinship'
+import { usePerson, usePersonMarriages, usePersonParentChild } from '@/lib/hooks/useMembers'
+import { getMarriageStatusLabel, getParentChildTypeLabel } from '@/lib/utils/kinship'
 
-export function MemberDetailClient({ memberId }: { memberId: string }) {
+export function MemberDetailClient({ personId }: { personId: string }) {
   const t = useTranslations('member')
-  const { data: member, isLoading } = useMember(memberId)
-  const { data: rels } = useMemberRelationships(memberId)
+  const { data: member, isLoading } = usePerson(personId)
+  const { data: marriages } = usePersonMarriages(personId)
+  const { data: parentChildRels } = usePersonParentChild(personId)
 
   if (isLoading) {
     return (
@@ -70,15 +71,36 @@ export function MemberDetailClient({ memberId }: { memberId: string }) {
         )}
       </div>
 
-      {/* Relationships */}
-      {rels && rels.length > 0 && (
+      {/* Marriages */}
+      {marriages && marriages.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-3">
+          <h3 className="text-sm font-semibold text-gray-600">{t('marriages')}</h3>
+          <ul className="space-y-2">
+            {marriages.map(m => (
+              <li key={m.id} className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">{getMarriageStatusLabel(m.status)}</span>
+                <span className="font-medium text-gray-700">
+                  {m.person1_id === personId ? m.person2_id : m.person1_id}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Parent-Child */}
+      {parentChildRels && parentChildRels.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-3">
           <h3 className="text-sm font-semibold text-gray-600">{t('relationships')}</h3>
           <ul className="space-y-2">
-            {rels.map(rel => (
+            {parentChildRels.map(rel => (
               <li key={rel.id} className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">{getRelationLabel(rel.relation_type, rel.relation_subtype)}</span>
-                <span className="font-medium text-gray-700">{rel.related_id}</span>
+                <span className="text-gray-500">
+                  {rel.parent_id === personId ? t('child') : t('parent')} ({getParentChildTypeLabel(rel.relationship_type)})
+                </span>
+                <span className="font-medium text-gray-700">
+                  {rel.parent_id === personId ? rel.child_id : rel.parent_id}
+                </span>
               </li>
             ))}
           </ul>

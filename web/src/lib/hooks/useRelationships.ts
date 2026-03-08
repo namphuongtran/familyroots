@@ -1,35 +1,63 @@
 'use client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { relationshipsApi } from '@/lib/api/relationships'
-import type { RelationshipCreateInput, RelationshipUpdateInput } from '@/lib/types'
-import { memberKeys } from './useMembers'
+import { marriagesApi, parentChildApi } from '@/lib/api/relationships'
+import type { MarriageCreateInput, MarriageUpdateInput, ParentChildCreateInput, ParentChildUpdateInput } from '@/lib/types'
+import { personKeys } from './useMembers'
 
-export function useRelationshipMutations(memberId?: string) {
+export function useMarriageMutations(personId?: string) {
   const qc = useQueryClient()
 
-  const invalidateMember = () => {
-    if (memberId) {
-      qc.invalidateQueries({ queryKey: memberKeys.relationships(memberId) })
+  const invalidatePerson = () => {
+    if (personId) {
+      qc.invalidateQueries({ queryKey: personKeys.marriages(personId) })
     }
-    // Also invalidate tree since relationships affect it
     qc.invalidateQueries({ queryKey: ['tree'] })
   }
 
   const create = useMutation({
-    mutationFn: (input: RelationshipCreateInput) => relationshipsApi.create(input),
-    onSuccess: invalidateMember,
+    mutationFn: (input: MarriageCreateInput) => marriagesApi.create(input),
+    onSuccess: invalidatePerson,
   })
 
   const update = useMutation({
-    mutationFn: ({ id, ...input }: RelationshipUpdateInput & { id: string }) =>
-      relationshipsApi.update(id, input),
-    onSuccess: invalidateMember,
+    mutationFn: ({ id, ...input }: MarriageUpdateInput & { id: string }) =>
+      marriagesApi.update(id, input),
+    onSuccess: invalidatePerson,
   })
 
   const remove = useMutation({
-    mutationFn: (id: string) => relationshipsApi.delete(id),
-    onSuccess: invalidateMember,
+    mutationFn: (id: string) => marriagesApi.delete(id),
+    onSuccess: invalidatePerson,
+  })
+
+  return { create, update, remove }
+}
+
+export function useParentChildMutations(personId?: string) {
+  const qc = useQueryClient()
+
+  const invalidatePerson = () => {
+    if (personId) {
+      qc.invalidateQueries({ queryKey: personKeys.parentChild(personId) })
+    }
+    qc.invalidateQueries({ queryKey: ['tree'] })
+  }
+
+  const create = useMutation({
+    mutationFn: (input: ParentChildCreateInput) => parentChildApi.create(input),
+    onSuccess: invalidatePerson,
+  })
+
+  const update = useMutation({
+    mutationFn: ({ id, ...input }: ParentChildUpdateInput & { id: string }) =>
+      parentChildApi.update(id, input),
+    onSuccess: invalidatePerson,
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: string) => parentChildApi.delete(id),
+    onSuccess: invalidatePerson,
   })
 
   return { create, update, remove }

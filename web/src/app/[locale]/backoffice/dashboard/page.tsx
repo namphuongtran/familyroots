@@ -99,7 +99,7 @@ export default async function BackofficeDashboardPage({
         <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quick_actions')}</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <QuickAction
-            href={`/${locale}/backoffice/members`}
+            href={`/${locale}/backoffice/persons`}
             title={t('action_add_member')}
             description={t('action_add_member_desc')}
           />

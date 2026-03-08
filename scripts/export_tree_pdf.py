@@ -8,7 +8,7 @@ Usage:
 # Steps:
 # 1. Parse CLI arguments (clan-slug, output path)
 # 2. Connect to database
-# 3. Fetch all members and relationships for the clan
+# 3. Fetch all persons and relationships for the clan
 # 4. Build tree data structure
 # 5. Render tree as PDF (using reportlab or similar)
 # 6. Save to output path

@@ -4,7 +4,7 @@ import type { DocumentResponse, DocumentSummary, DocumentUploadMeta, ApiResponse
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 
 export const documentsApi = {
-  list: async (params?: { cursor?: string; limit?: number; member_id?: string }): Promise<CursorPage<DocumentSummary>> => {
+  list: async (params?: { cursor?: string; limit?: number; person_id?: string }): Promise<CursorPage<DocumentSummary>> => {
     const { data } = await api.get<CursorPage<DocumentSummary>>('/documents', { params })
     return data
   },
@@ -23,7 +23,7 @@ export const documentsApi = {
     formData.append('file', file)
     formData.append('title', meta.title)
     formData.append('document_type', meta.document_type)
-    if (meta.member_id) formData.append('member_id', meta.member_id)
+    if (meta.person_id) formData.append('person_id', meta.person_id)
     if (meta.description) formData.append('description', meta.description)
     if (meta.taken_date) formData.append('taken_date', meta.taken_date)
     if (meta.taken_place) formData.append('taken_place', meta.taken_place)

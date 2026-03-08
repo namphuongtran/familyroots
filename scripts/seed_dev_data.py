@@ -9,8 +9,8 @@ Usage:
 # 1. Connect to database
 # 2. Create a test clan (e.g., "Nguyễn Phúc") in public.clans
 # 3. Create user_clan_roles entries for test users
-# 4. Insert sample members with clan_id (3 generations)
-# 5. Insert sample relationships with clan_id (parent, spouse, sibling)
+# 4. Insert sample persons with origin_clan_id (3 generations)
+# 5. Insert sample marriages and parent_child links with created_by_clan_id
 # 6. Insert sample documents with clan_id
 # 7. Insert sample events with clan_id
 # 8. Create test user accounts (admin, editor, viewer)

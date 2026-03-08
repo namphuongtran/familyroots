@@ -21,9 +21,9 @@ class UserClanRole(TimestampMixin, Base):
         index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
-    member_id: Mapped[uuid.UUID | None] = mapped_column(
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("members.id", ondelete="SET NULL"),
+        ForeignKey("persons.id", ondelete="SET NULL"),
         default=None,
     )
 
@@ -36,4 +36,4 @@ class UserClanRole(TimestampMixin, Base):
 
     # ORM relationships
     clan = relationship("Clan", back_populates="user_roles")
-    member = relationship("Member", back_populates="user_account")
+    person = relationship("Person", back_populates="user_account")

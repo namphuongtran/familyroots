@@ -1,7 +1,8 @@
 -- ============================================================
 -- 003_path_finder.sql
--- BFS-based relationship path finder between two members.
--- Returns the shortest path as a sequence of (member_id, edge_type) steps.
+-- BFS-based relationship path finder between two persons.
+-- Returns the shortest path as a sequence of (person_id, edge_type) steps.
+-- Traverses parent_child edges (both directions) and marriage edges.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.find_relationship_path(
@@ -12,7 +13,7 @@ CREATE OR REPLACE FUNCTION public.find_relationship_path(
 )
 RETURNS TABLE (
     step        INT,
-    member_id   UUID,
+    person_id   UUID,
     full_name   VARCHAR,
     gender      VARCHAR,
     edge_type   VARCHAR    -- NULL for the start node, 'parent','child','spouse' for edges
@@ -20,74 +21,66 @@ RETURNS TABLE (
 WITH RECURSIVE bfs AS (
     -- Base case: start from p_from_id
     SELECT
-        m.id           AS current_id,
-        m.full_name,
-        m.gender::VARCHAR,
-        ARRAY[m.id]    AS path_ids,
+        p.id           AS current_id,
+        p.full_name,
+        p.gender::VARCHAR,
+        ARRAY[p.id]    AS path_ids,
         ARRAY[NULL::VARCHAR] AS path_edges,
         0              AS depth
-    FROM public.members m
-    WHERE m.id = p_from_id
-      AND m.clan_id = p_clan_id
-      AND m.is_deleted = false
+    FROM public.persons p
+    WHERE p.id = p_from_id
+      AND p.is_deleted = false
 
     UNION ALL
 
     -- Recursive: expand parent, child, and spouse edges
     SELECT
-        next_m.id,
-        next_m.full_name,
-        next_m.gender::VARCHAR,
-        bfs.path_ids || next_m.id,
+        next_p.id,
+        next_p.full_name,
+        next_p.gender::VARCHAR,
+        bfs.path_ids || next_p.id,
         bfs.path_edges || edges.edge_type,
         bfs.depth + 1
     FROM bfs
     CROSS JOIN LATERAL (
-        -- Parent edges: current member → their parent
-        SELECT r.member_id AS neighbor_id, 'parent'::VARCHAR AS edge_type
-        FROM public.relationships r
-        WHERE r.related_id = bfs.current_id
-          AND r.relation_type = 'parent'
-          AND r.clan_id = p_clan_id
+        -- Parent edges: current person → their parent
+        SELECT pc.parent_id AS neighbor_id, 'parent'::VARCHAR AS edge_type
+        FROM public.parent_child pc
+        WHERE pc.child_id = bfs.current_id
 
         UNION ALL
 
-        -- Child edges: current member → their child
-        SELECT r.related_id AS neighbor_id, 'child'::VARCHAR AS edge_type
-        FROM public.relationships r
-        WHERE r.member_id = bfs.current_id
-          AND r.relation_type = 'parent'
-          AND r.clan_id = p_clan_id
+        -- Child edges: current person → their child
+        SELECT pc.child_id AS neighbor_id, 'child'::VARCHAR AS edge_type
+        FROM public.parent_child pc
+        WHERE pc.parent_id = bfs.current_id
 
         UNION ALL
 
-        -- Spouse edges (bidirectional)
+        -- Spouse edges (bidirectional via marriages)
         SELECT
-            CASE WHEN r.member_id = bfs.current_id THEN r.related_id
-                 ELSE r.member_id END AS neighbor_id,
+            CASE WHEN m.person1_id = bfs.current_id THEN m.person2_id
+                 ELSE m.person1_id END AS neighbor_id,
             'spouse'::VARCHAR AS edge_type
-        FROM public.relationships r
-        WHERE r.relation_type = 'spouse'
-          AND r.clan_id = p_clan_id
-          AND (r.member_id = bfs.current_id OR r.related_id = bfs.current_id)
+        FROM public.marriages m
+        WHERE (m.person1_id = bfs.current_id OR m.person2_id = bfs.current_id)
     ) edges
-    JOIN public.members next_m
-        ON next_m.id = edges.neighbor_id
-        AND next_m.clan_id = p_clan_id
-        AND next_m.is_deleted = false
+    JOIN public.persons next_p
+        ON next_p.id = edges.neighbor_id
+        AND next_p.is_deleted = false
     WHERE bfs.depth < p_max_depth
-      AND NOT (next_m.id = ANY(bfs.path_ids))  -- cycle prevention
+      AND NOT (next_p.id = ANY(bfs.path_ids))  -- cycle prevention
 )
 -- Find the path that reaches p_to_id
 SELECT
     gs.step,
-    bfs.path_ids[gs.step + 1]   AS member_id,
-    m.full_name,
-    m.gender::VARCHAR,
+    bfs.path_ids[gs.step + 1]   AS person_id,
+    p.full_name,
+    p.gender::VARCHAR,
     bfs.path_edges[gs.step + 1] AS edge_type
 FROM bfs
 CROSS JOIN LATERAL generate_series(0, array_length(bfs.path_ids, 1) - 1) AS gs(step)
-JOIN public.members m ON m.id = bfs.path_ids[gs.step + 1]
+JOIN public.persons p ON p.id = bfs.path_ids[gs.step + 1]
 WHERE bfs.current_id = p_to_id
 ORDER BY array_length(bfs.path_ids, 1), gs.step
 LIMIT (

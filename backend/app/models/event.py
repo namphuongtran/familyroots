@@ -15,9 +15,9 @@ class Event(ClanScopedMixin, Base):
     __tablename__ = "events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    member_id: Mapped[uuid.UUID | None] = mapped_column(
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("members.id", ondelete="CASCADE"),
+        ForeignKey("persons.id", ondelete="CASCADE"),
         default=None,
     )
 
@@ -34,4 +34,4 @@ class Event(ClanScopedMixin, Base):
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
 
     # ORM relationships
-    member = relationship("Member", back_populates="events")
+    person = relationship("Person", back_populates="events")

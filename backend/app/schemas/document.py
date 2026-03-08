@@ -23,7 +23,7 @@ MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 class DocumentUploadMeta(BaseModel):
     """Metadata fields sent alongside the file upload (form fields)."""
 
-    member_id: uuid.UUID | None = None
+    person_id: uuid.UUID | None = None
     title: str = Field(..., min_length=1, max_length=255)
     document_type: str = Field(..., pattern="^(photo|id_document|certificate|audio|video|other)$")
     description: str | None = None
@@ -34,7 +34,7 @@ class DocumentUploadMeta(BaseModel):
 class DocumentResponse(BaseModel):
     id: uuid.UUID
     clan_id: uuid.UUID
-    member_id: uuid.UUID | None = None
+    person_id: uuid.UUID | None = None
     title: str
     document_type: str
     description: str | None = None

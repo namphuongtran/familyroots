@@ -5,14 +5,14 @@ import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { MemberForm } from '@/components/members/MemberForm'
-import { useMember } from '@/lib/hooks/useMembers'
+import { usePerson } from '@/lib/hooks/useMembers'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function EditMemberPage() {
   const t = useTranslations('member')
   const router = useRouter()
   const { id, locale } = useParams<{ id: string; locale: string }>()
-  const { data: member, isLoading } = useMember(id)
+  const { data: member, isLoading } = usePerson(id)
 
   return (
     <div className="max-w-xl mx-auto space-y-4">
@@ -31,7 +31,7 @@ export default function EditMemberPage() {
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
           <MemberForm
             member={member}
-            onSuccess={() => router.push(`/${locale}/members/${id}`)}
+            onSuccess={() => router.push(`/${locale}/persons/${id}`)}
             onCancel={() => router.back()}
           />
         </div>

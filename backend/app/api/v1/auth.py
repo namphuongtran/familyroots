@@ -128,7 +128,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)) -> Login
     clan_name = row.Clan.name if row else None
     role = row.UserClanRole.role if row and row.UserClanRole.is_approved else None
     is_approved = row.UserClanRole.is_approved if row else False
-    member_id = row.UserClanRole.member_id if row else None
+    person_id = row.UserClanRole.person_id if row else None
 
     return LoginResponse(
         access_token=session.access_token,
@@ -142,7 +142,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)) -> Login
             clan_name=clan_name,
             role=role,
             is_approved=is_approved,
-            member_id=member_id,
+            person_id=person_id,
         ),
     )
 
@@ -197,7 +197,7 @@ async def get_me(
             clan_name=row.Clan.name if row else None,
             role=row.UserClanRole.role if row else None,
             is_approved=bool(row),
-            member_id=row.UserClanRole.member_id if row else None,
+            person_id=row.UserClanRole.person_id if row else None,
         ).model_dump()
     }
 

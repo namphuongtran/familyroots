@@ -84,20 +84,21 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 
 ---
 
-## Members (`/api/v1/members/`)
+## Persons (`/api/v1/persons/`)
 
 | Method | Path                          | Auth | Role   | Description                     |
 |--------|-------------------------------|------|--------|---------------------------------|
-| GET    | `/`                           | Yes  | viewer | List members (paginated, filters) |
+| GET    | `/`                           | Yes  | viewer | List persons (paginated, filters) |
 | GET    | `/search?q=...`               | Yes  | viewer | Trigram+unaccent full-text search |
-| POST   | `/`                           | Yes  | editor | Create a member                 |
-| GET    | `/{id}`                       | Yes  | viewer | Get member detail               |
-| PATCH  | `/{id}`                       | Yes  | editor | Update member                   |
-| DELETE | `/{id}`                       | Yes  | admin  | Soft-delete member              |
-| POST   | `/{id}/restore`               | Yes  | admin  | Restore soft-deleted member     |
-| GET    | `/{id}/relationships`         | Yes  | viewer | List member's relationships     |
-| GET    | `/{id}/documents`             | Yes  | viewer | List member's documents         |
-| GET    | `/{id}/events`                | Yes  | viewer | List member's events            |
+| POST   | `/`                           | Yes  | editor | Create a person                 |
+| GET    | `/{id}`                       | Yes  | viewer | Get person detail               |
+| PATCH  | `/{id}`                       | Yes  | editor | Update person                   |
+| DELETE | `/{id}`                       | Yes  | admin  | Soft-delete person              |
+| POST   | `/{id}/restore`               | Yes  | admin  | Restore soft-deleted person     |
+| GET    | `/{id}/marriages`             | Yes  | viewer | List person's marriages         |
+| GET    | `/{id}/parent-child`          | Yes  | viewer | List person's parent/child links|
+| GET    | `/{id}/documents`             | Yes  | viewer | List person's documents         |
+| GET    | `/{id}/events`                | Yes  | viewer | List person's events            |
 | GET    | `/{id}/timeline`              | Yes  | viewer | Chronological life timeline     |
 
 ### Query Parameters (GET `/`)
@@ -113,32 +114,54 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 
 ## Relationships (`/api/v1/relationships/`)
 
-| Method | Path             | Auth | Role   | Description                   |
-|--------|------------------|------|--------|-------------------------------|
-| POST   | `/`              | Yes  | editor | Create relationship (validated) |
-| GET    | `/{id}`          | Yes  | viewer | Get relationship              |
-| PATCH  | `/{id}`          | Yes  | editor | Update relationship metadata  |
-| DELETE | `/{id}`          | Yes  | admin  | Delete relationship           |
+### Marriages
+
+| Method | Path                    | Auth | Role   | Description                   |
+|--------|-------------------------|------|--------|-------------------------------|
+| POST   | `/marriages`            | Yes  | editor | Create marriage (validated)    |
+| GET    | `/marriages/{id}`       | Yes  | viewer | Get marriage                  |
+| PATCH  | `/marriages/{id}`       | Yes  | editor | Update marriage metadata      |
+| DELETE | `/marriages/{id}`       | Yes  | admin  | Delete marriage               |
+
+### Parent-Child
+
+| Method | Path                    | Auth | Role   | Description                   |
+|--------|-------------------------|------|--------|-------------------------------|
+| POST   | `/parent-child`         | Yes  | editor | Create parent-child link (validated) |
+| GET    | `/parent-child/{id}`    | Yes  | viewer | Get parent-child link         |
+| PATCH  | `/parent-child/{id}`    | Yes  | editor | Update parent-child metadata  |
+| DELETE | `/parent-child/{id}`    | Yes  | admin  | Delete parent-child link      |
 
 ### Business Rules (enforced on POST)
 
 - **Max 2 biological parents** per child
 - **Parent age gap ≥ 12 years** (hard error if violated)
 - **Cycle detection** — child cannot be ancestor of parent
-- **No duplicate active spouse** — a person with `end_date IS NULL` spouse cannot remarry
-- **Self-loop prevention** — `member_id ≠ related_id` (schema-level)
+- **Duplicate marriage prevention** — active marriage between same persons blocked
+- **Self-loop prevention** — `parent_id ≠ child_id`, `person1_id ≠ person2_id` (schema-level)
 
-### Request Body
+### Marriage Request Body
 
 ```json
 {
-  "member_id": "uuid",
-  "related_id": "uuid",
-  "relation_type": "parent | child | spouse",
-  "relation_subtype": "biological | adoptive | step | foster | married | divorced | widowed | partner",
-  "start_date": "2020-01-15",
-  "end_date": null,
-  "is_primary": true,
+  "person1_id": "uuid",
+  "person2_id": "uuid",
+  "status": "married | divorced | widowed | separated",
+  "marriage_date": "1945-02-10",
+  "divorce_date": null,
+  "marriage_place": "Huế",
+  "spouse_order": 1,
+  "notes": "Optional note"
+}
+```
+
+### Parent-Child Request Body
+
+```json
+{
+  "parent_id": "uuid",
+  "child_id": "uuid",
+  "relationship_type": "biological | adopted | step | foster",
   "notes": "Optional note"
 }
 ```
@@ -150,16 +173,16 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 | Method | Path                        | Auth | Role   | Description                    |
 |--------|-----------------------------|------|--------|--------------------------------|
 | GET    | `/`                         | Yes  | viewer | Full tree from founder/root    |
-| GET    | `/subtree/{member_id}`      | Yes  | viewer | Subtree rooted at member       |
-| GET    | `/ancestors/{member_id}`    | Yes  | viewer | Ancestor chain up to root      |
+| GET    | `/subtree/{person_id}`      | Yes  | viewer | Subtree rooted at person       |
+| GET    | `/ancestors/{person_id}`    | Yes  | viewer | Ancestor chain up to root      |
 | GET    | `/path?from_id=&to_id=`     | Yes  | viewer | Find relationship path + description |
 
 ### Query Parameters (GET `/`)
 
 | Param           | Type | Description                          |
 |-----------------|------|--------------------------------------|
-| root_member_id  | uuid | Root member (default: clan founder)  |
-| max_generations | int  | Max depth 1–10 (default: 10)         |
+| root_person_id  | uuid | Root person (default: clan founder)  |
+| max_generations | int  | Max depth 1–50 (default: 10)         |
 
 ### GET `/path` Response
 
@@ -167,8 +190,8 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 {
   "data": {
     "path": [
-      {"member_id": "uuid", "full_name": "...", "gender": "male", "edge_type": null},
-      {"member_id": "uuid", "full_name": "...", "gender": "female", "edge_type": "parent"}
+      {"person_id": "uuid", "full_name": "...", "gender": "male", "edge_type": null},
+      {"person_id": "uuid", "full_name": "...", "gender": "female", "edge_type": "parent"}
     ],
     "description": "Cha/Mẹ",
     "found": true
@@ -186,7 +209,7 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 | GET    | `/`                        | Yes  | viewer | List documents (paginated)     |
 | GET    | `/{id}`                    | Yes  | viewer | Get document with presigned URL |
 | DELETE | `/{id}`                    | Yes  | admin  | Delete from storage + DB       |
-| PATCH  | `/{id}/set-avatar`         | Yes  | editor | Set photo as member avatar     |
+| PATCH  | `/{id}/set-avatar`         | Yes  | editor | Set photo as person avatar     |
 
 ### Allowed MIME Types
 
@@ -203,7 +226,7 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 | file           | file   | Yes      | The file to upload       |
 | title          | string | Yes      | Document title           |
 | document_type  | string | Yes      | photo/id_document/certificate/audio/video/other |
-| member_id      | uuid   | No       | Link to a member         |
+| person_id      | uuid   | No       | Link to a person         |
 | description    | string | No       | Description              |
 | taken_date     | date   | No       | When photo was taken     |
 | taken_place    | string | No       | Where photo was taken    |
@@ -249,7 +272,7 @@ Cursor-based pagination using `(created_at, id)` composite cursor.
 ### Request
 
 ```
-GET /api/v1/members/?cursor=<opaque>&limit=20
+GET /api/v1/persons/?cursor=<opaque>&limit=20
 ```
 
 ### Response Envelope
@@ -276,8 +299,8 @@ GET /api/v1/members/?cursor=<opaque>&limit=20
 ```json
 {
   "error": {
-    "code": "member_not_found",
-    "message": "Không tìm thấy thành viên",
+    "code": "person_not_found",
+    "message": "Không tìm thấy người",
     "detail": {}
   }
 }
@@ -292,7 +315,7 @@ HTTP status codes: `400` (validation), `403` (forbidden), `404` (not found), `40
 | Role   | Permissions                                        |
 |--------|----------------------------------------------------|
 | viewer | Read all data within the clan                      |
-| editor | viewer + create/update members, relationships, events, documents |
+| editor | viewer + create/update persons, marriages, parent-child, events, documents |
 | admin  | editor + manage users, delete resources, clan settings |
 
 Roles are scoped per clan — a user can be `admin` in one clan and `viewer` in another.

@@ -8,12 +8,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils/date'
 
 interface DocumentGalleryProps {
-  memberId?: string
+  personId?: string
 }
 
-export function DocumentGallery({ memberId }: DocumentGalleryProps) {
+export function DocumentGallery({ personId }: DocumentGalleryProps) {
   const t = useTranslations('documents')
-  const { data, isLoading } = useDocuments(memberId)
+  const { data, isLoading } = useDocuments(personId)
   const { deleteDocument } = useDocumentMutations()
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 

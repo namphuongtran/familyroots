@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class EventCreateRequest(BaseModel):
-    member_id: uuid.UUID | None = None
+    person_id: uuid.UUID | None = None
     event_type: str = Field(
         ...,
         pattern="^(death_anniversary|birthday|wedding_anniversary|clan_ceremony|custom)$",
@@ -36,7 +36,7 @@ class EventUpdateRequest(BaseModel):
 class EventResponse(BaseModel):
     id: uuid.UUID
     clan_id: uuid.UUID
-    member_id: uuid.UUID | None = None
+    person_id: uuid.UUID | None = None
     event_type: str
     title: str
     description: str | None = None
@@ -53,9 +53,9 @@ class EventResponse(BaseModel):
 
 class UpcomingEvent(BaseModel):
     id: uuid.UUID
-    member_id: uuid.UUID | None = None
-    member_name: str | None = None
-    member_avatar_url: str | None = None
+    person_id: uuid.UUID | None = None
+    person_name: str | None = None
+    person_avatar_url: str | None = None
     event_type: str
     title: str
     event_date: date
@@ -70,5 +70,5 @@ class TimelineEvent(BaseModel):
     event_type: str
     title: str
     description: str | None = None
-    related_member_id: uuid.UUID | None = None
-    related_member_name: str | None = None
+    related_person_id: uuid.UUID | None = None
+    related_person_name: str | None = None

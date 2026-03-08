@@ -4,11 +4,11 @@ import { useRef, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { MemberCard } from './MemberCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useMembers } from '@/lib/hooks/useMembers'
+import { usePersons } from '@/lib/hooks/useMembers'
 
 export function MemberList() {
   const t = useTranslations('members')
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useMembers()
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = usePersons()
 
   const observer = useRef<IntersectionObserver | null>(null)
   const sentinelRef = useCallback(
@@ -26,7 +26,7 @@ export function MemberList() {
     [isFetchingNextPage, hasNextPage, fetchNextPage],
   )
 
-  const members = data?.pages.flatMap(p => p.data) ?? []
+  const persons = data?.pages.flatMap(p => p.data) ?? []
 
   if (isLoading) {
     return (
@@ -44,7 +44,7 @@ export function MemberList() {
     )
   }
 
-  if (members.length === 0) {
+  if (persons.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400">
         <p className="text-sm">{t('no_members')}</p>
@@ -54,8 +54,8 @@ export function MemberList() {
 
   return (
     <div className="space-y-2">
-      {members.map(member => (
-        <MemberCard key={member.id} member={member} />
+      {persons.map(person => (
+        <MemberCard key={person.id} member={person} />
       ))}
 
       {/* infinite scroll sentinel */}

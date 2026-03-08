@@ -14,7 +14,7 @@ from app.services.tree_builder import build_descendants_tree, find_clan_founder
 from tests.conftest import (
     MockMappingResult,
     MockScalarResult,
-    make_member_row,
+    make_person_row,
     make_mock_db,
     make_spouse_row,
 )
@@ -22,14 +22,14 @@ from tests.conftest import (
 CLAN_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
-# ── Test 1: Single member (root only, no children, no spouse) ──
+# ── Test 1: Single person (root only, no children, no spouse) ──
 
 
 @pytest.mark.asyncio
-async def test_single_member():
+async def test_single_person():
     root_id = uuid.uuid4()
     rows = [
-        make_member_row(member_id=root_id, full_name="Nguyễn Văn A", is_clan_founder=True, depth=0)
+        make_person_row(person_id=root_id, full_name="Nguyễn Văn A", is_founder=True, depth=0)
     ]
     spouse_rows: list[dict[str, Any]] = []
 
@@ -42,29 +42,29 @@ async def test_single_member():
 
     assert result["id"] == str(root_id)
     assert result["full_name"] == "Nguyễn Văn A"
-    assert result["is_clan_founder"] is True
+    assert result["is_founder"] is True
     assert result["spouses"] == []
     assert result["children"] == []
     assert result["depth"] == 0
 
 
-# ── Test 2: Member with spouse ──
+# ── Test 2: Person with spouse ──
 
 
 @pytest.mark.asyncio
-async def test_member_with_spouse():
+async def test_person_with_spouse():
     root_id = uuid.uuid4()
     spouse_id = uuid.uuid4()
 
-    rows = [make_member_row(member_id=root_id, full_name="Nguyễn Văn A", depth=0)]
+    rows = [make_person_row(person_id=root_id, full_name="Nguyễn Văn A", depth=0)]
     spouse_rows = [
         make_spouse_row(
-            for_member_id=root_id,
+            for_person_id=root_id,
             spouse_id=spouse_id,
             full_name="Trần Thị B",
             gender="female",
-            relation_subtype="married",
-            start_date=date(1945, 2, 10),
+            status="married",
+            marriage_date=date(1945, 2, 10),
         )
     ]
 
@@ -77,32 +77,32 @@ async def test_member_with_spouse():
 
     assert len(result["spouses"]) == 1
     assert result["spouses"][0]["full_name"] == "Trần Thị B"
-    assert result["spouses"][0]["relation_subtype"] == "married"
-    assert result["spouses"][0]["start_date"] == "1945-02-10"
+    assert result["spouses"][0]["status"] == "married"
+    assert result["spouses"][0]["marriage_date"] == "1945-02-10"
     assert result["spouses"][0]["id"] == str(spouse_id)
 
 
-# ── Test 3: Member with children ──
+# ── Test 3: Person with children ──
 
 
 @pytest.mark.asyncio
-async def test_member_with_children():
+async def test_person_with_children():
     root_id = uuid.uuid4()
     child1_id = uuid.uuid4()
     child2_id = uuid.uuid4()
 
     rows = [
-        make_member_row(member_id=root_id, full_name="Father", depth=0, generation=1),
-        make_member_row(
-            member_id=child1_id,
+        make_person_row(person_id=root_id, full_name="Father", depth=0, generation=1),
+        make_person_row(
+            person_id=child1_id,
             full_name="Child B",
             parent_id=root_id,
             depth=1,
             generation=2,
             birth_date=date(1970, 6, 15),
         ),
-        make_member_row(
-            member_id=child2_id,
+        make_person_row(
+            person_id=child2_id,
             full_name="Child A",
             parent_id=root_id,
             depth=1,
@@ -135,23 +135,23 @@ async def test_three_generation_tree():
     grandchild = uuid.uuid4()
 
     rows = [
-        make_member_row(
-            member_id=grandparent,
+        make_person_row(
+            person_id=grandparent,
             full_name="Grandparent",
             depth=0,
             generation=1,
-            is_clan_founder=True,
+            is_founder=True,
         ),
-        make_member_row(
-            member_id=parent,
+        make_person_row(
+            person_id=parent,
             full_name="Parent",
             parent_id=grandparent,
             depth=1,
             generation=2,
             birth_date=date(1950, 1, 1),
         ),
-        make_member_row(
-            member_id=grandchild,
+        make_person_row(
+            person_id=grandchild,
             full_name="Grandchild",
             parent_id=parent,
             depth=2,
@@ -168,7 +168,7 @@ async def test_three_generation_tree():
     result = await build_descendants_tree(db, grandparent, CLAN_ID)
 
     assert result["full_name"] == "Grandparent"
-    assert result["is_clan_founder"] is True
+    assert result["is_founder"] is True
     assert len(result["children"]) == 1
     assert result["children"][0]["full_name"] == "Parent"
     assert len(result["children"][0]["children"]) == 1
@@ -199,24 +199,24 @@ async def test_remarriage_multiple_spouses():
     spouse1_id = uuid.uuid4()
     spouse2_id = uuid.uuid4()
 
-    rows = [make_member_row(member_id=root_id, full_name="Remarrying Person", depth=0)]
+    rows = [make_person_row(person_id=root_id, full_name="Remarrying Person", depth=0)]
     spouse_rows = [
         make_spouse_row(
-            for_member_id=root_id,
+            for_person_id=root_id,
             spouse_id=spouse1_id,
             full_name="First Spouse",
-            relation_subtype="divorced",
-            start_date=date(1940, 1, 1),
-            end_date=date(1960, 6, 1),
-            is_primary=False,
+            status="divorced",
+            marriage_date=date(1940, 1, 1),
+            divorce_date=date(1960, 6, 1),
+            spouse_order=2,
         ),
         make_spouse_row(
-            for_member_id=root_id,
+            for_person_id=root_id,
             spouse_id=spouse2_id,
             full_name="Second Spouse",
-            relation_subtype="married",
-            start_date=date(1962, 3, 15),
-            is_primary=True,
+            status="married",
+            marriage_date=date(1962, 3, 15),
+            spouse_order=1,
         ),
     ]
 
@@ -228,23 +228,23 @@ async def test_remarriage_multiple_spouses():
     result = await build_descendants_tree(db, root_id, CLAN_ID)
 
     assert len(result["spouses"]) == 2
-    subtypes = {s["relation_subtype"] for s in result["spouses"]}
-    assert subtypes == {"divorced", "married"}
+    statuses = {s["status"] for s in result["spouses"]}
+    assert statuses == {"divorced", "married"}
     # Verify both spouse IDs are present
     spouse_ids = {s["id"] for s in result["spouses"]}
     assert str(spouse1_id) in spouse_ids
     assert str(spouse2_id) in spouse_ids
 
 
-# ── Test 7: Adopted children (different relation_subtype preserved) ──
+# ── Test 7: Adopted children (different relationship_type preserved) ──
 
 
 @pytest.mark.asyncio
 async def test_adopted_children_in_tree():
     """Adopted children appear alongside biological children in the tree.
 
-    Note: The tree builder doesn't directly encode relation_subtype in the
-    tree nodes (that comes from the relationships table). The test verifies
+    Note: The tree builder doesn't directly encode relationship_type in the
+    tree nodes (that comes from the parent_child table). The test verifies
     that adopted children are wired into the tree the same as biological ones.
     """
     root_id = uuid.uuid4()
@@ -252,24 +252,22 @@ async def test_adopted_children_in_tree():
     adopted_child = uuid.uuid4()
 
     rows = [
-        make_member_row(member_id=root_id, full_name="Parent", depth=0, generation=1),
-        make_member_row(
-            member_id=bio_child,
+        make_person_row(person_id=root_id, full_name="Parent", depth=0, generation=1),
+        make_person_row(
+            person_id=bio_child,
             full_name="Bio Child",
             parent_id=root_id,
             depth=1,
             generation=2,
             birth_date=date(1970, 1, 1),
-            is_clan_member=True,
         ),
-        make_member_row(
-            member_id=adopted_child,
+        make_person_row(
+            person_id=adopted_child,
             full_name="Adopted Child",
             parent_id=root_id,
             depth=1,
             generation=2,
             birth_date=date(1972, 6, 15),
-            is_clan_member=True,
         ),
     ]
 

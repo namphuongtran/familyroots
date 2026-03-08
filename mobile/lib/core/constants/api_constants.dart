@@ -6,8 +6,9 @@ class ApiConstants {
   static const String baseUrl = 'http://localhost:8000/api/v1';
 
   static const String auth = '/auth';
-  static const String members = '/members';
-  static const String relationships = '/relationships';
+  static const String persons = '/persons';
+  static const String marriages = '/marriages';
+  static const String parentChild = '/parent-child';
   static const String documents = '/documents';
   static const String events = '/events';
   static const String tree = '/tree';

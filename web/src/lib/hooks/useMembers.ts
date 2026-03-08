@@ -6,90 +6,100 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query'
-import { membersApi, type MembersListParams } from '@/lib/api/members'
-import type { MemberCreateInput, MemberUpdateInput } from '@/lib/types'
+import { personsApi, type PersonsListParams } from '@/lib/api/members'
+import type { PersonCreateInput, PersonUpdateInput } from '@/lib/types'
 
-export const memberKeys = {
-  all: ['members'] as const,
-  lists: () => [...memberKeys.all, 'list'] as const,
-  list: (params: MembersListParams) => [...memberKeys.lists(), params] as const,
-  search: (q: string) => [...memberKeys.all, 'search', q] as const,
-  details: () => [...memberKeys.all, 'detail'] as const,
-  detail: (id: string) => [...memberKeys.details(), id] as const,
-  relationships: (id: string) => [...memberKeys.detail(id), 'relationships'] as const,
-  timeline: (id: string) => [...memberKeys.detail(id), 'timeline'] as const,
-  documents: (id: string) => [...memberKeys.detail(id), 'documents'] as const,
+export const personKeys = {
+  all: ['persons'] as const,
+  lists: () => [...personKeys.all, 'list'] as const,
+  list: (params: PersonsListParams) => [...personKeys.lists(), params] as const,
+  search: (q: string) => [...personKeys.all, 'search', q] as const,
+  details: () => [...personKeys.all, 'detail'] as const,
+  detail: (id: string) => [...personKeys.details(), id] as const,
+  marriages: (id: string) => [...personKeys.detail(id), 'marriages'] as const,
+  parentChild: (id: string) => [...personKeys.detail(id), 'parent-child'] as const,
+  timeline: (id: string) => [...personKeys.detail(id), 'timeline'] as const,
+  documents: (id: string) => [...personKeys.detail(id), 'documents'] as const,
 }
 
-/** Infinite scroll cursor-paginated member list */
-export function useMembers(params: Omit<MembersListParams, 'cursor'> = {}) {
+/** Infinite scroll cursor-paginated person list */
+export function usePersons(params: Omit<PersonsListParams, 'cursor'> = {}) {
   return useInfiniteQuery({
-    queryKey: memberKeys.list(params),
+    queryKey: personKeys.list(params),
     queryFn: ({ pageParam }) =>
-      membersApi.list({ ...params, cursor: pageParam as string | undefined }),
+      personsApi.list({ ...params, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
 }
 
-/** Single member detail */
-export function useMember(id: string | undefined) {
+/** Single person detail */
+export function usePerson(id: string | undefined) {
   return useQuery({
-    queryKey: memberKeys.detail(id!),
-    queryFn: () => membersApi.get(id!),
+    queryKey: personKeys.detail(id!),
+    queryFn: () => personsApi.get(id!),
     enabled: !!id,
   })
 }
 
 /** Debounced trigram search */
-export function useMemberSearch(q: string) {
+export function usePersonSearch(q: string) {
   return useQuery({
-    queryKey: memberKeys.search(q),
-    queryFn: () => membersApi.search(q),
+    queryKey: personKeys.search(q),
+    queryFn: () => personsApi.search(q),
     enabled: q.length >= 2,
     staleTime: 30_000,
   })
 }
 
-/** Member's relationships */
-export function useMemberRelationships(id: string | undefined) {
+/** Person's marriages */
+export function usePersonMarriages(id: string | undefined) {
   return useQuery({
-    queryKey: memberKeys.relationships(id!),
-    queryFn: () => membersApi.getRelationships(id!),
+    queryKey: personKeys.marriages(id!),
+    queryFn: () => personsApi.getMarriages(id!),
     enabled: !!id,
   })
 }
 
-/** Member's timeline */
-export function useMemberTimeline(id: string | undefined) {
+/** Person's parent-child relationships */
+export function usePersonParentChild(id: string | undefined) {
   return useQuery({
-    queryKey: memberKeys.timeline(id!),
-    queryFn: () => membersApi.getTimeline(id!),
+    queryKey: personKeys.parentChild(id!),
+    queryFn: () => personsApi.getParentChild(id!),
     enabled: !!id,
   })
 }
 
-/** Member CRUD mutations */
-export function useMemberMutations() {
+/** Person's timeline */
+export function usePersonTimeline(id: string | undefined) {
+  return useQuery({
+    queryKey: personKeys.timeline(id!),
+    queryFn: () => personsApi.getTimeline(id!),
+    enabled: !!id,
+  })
+}
+
+/** Person CRUD mutations */
+export function usePersonMutations() {
   const qc = useQueryClient()
 
   const create = useMutation({
-    mutationFn: (input: MemberCreateInput) => membersApi.create(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: memberKeys.lists() }),
+    mutationFn: (input: PersonCreateInput) => personsApi.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: personKeys.lists() }),
   })
 
   const update = useMutation({
-    mutationFn: ({ id, ...input }: MemberUpdateInput & { id: string }) =>
-      membersApi.update(id, input),
+    mutationFn: ({ id, ...input }: PersonUpdateInput & { id: string }) =>
+      personsApi.update(id, input),
     onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: memberKeys.detail(id) })
-      qc.invalidateQueries({ queryKey: memberKeys.lists() })
+      qc.invalidateQueries({ queryKey: personKeys.detail(id) })
+      qc.invalidateQueries({ queryKey: personKeys.lists() })
     },
   })
 
   const remove = useMutation({
-    mutationFn: (id: string) => membersApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: memberKeys.lists() }),
+    mutationFn: (id: string) => personsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: personKeys.lists() }),
   })
 
   return { create, update, remove }

@@ -19,14 +19,17 @@ Separate-schema multi-tenancy was considered and rejected:
 
 ```
 PostgreSQL instance
-└── public schema (all tables, data separated by clan_id column)
+└── public schema (all tables, data separated by clan_id / created_by_clan_id)
     ├── clans              (one row per clan)
-    ├── members            (all clans' members, filtered by clan_id via RLS)
-    ├── relationships      (filtered by clan_id via RLS)
+    ├── persons            (global — origin_clan_id optional, visible via clan_memberships)
+    ├── clan_memberships   (M:N link between persons and clans, filtered by clan_id)
+    ├── marriages          (global edges, write-gated by created_by_clan_id)
+    ├── parent_child       (global edges, write-gated by created_by_clan_id)
     ├── documents          (filtered by clan_id via RLS)
     ├── events             (filtered by clan_id via RLS)
     ├── user_clan_roles    (which user belongs to which clan, with what role)
-    └── platform_users     (super admin only — unchanged)
+    ├── change_requests    (approval workflow queue, filtered by clan_id)
+    └── audit_log          (cross-clan audit trail)
 ```
 
 ## How isolation works

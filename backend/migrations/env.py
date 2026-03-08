@@ -12,12 +12,15 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.models import (  # noqa: F401 — import all models for autogenerate
     AuditLog,
+    ChangeRequest,
     Clan,
+    ClanMembership,
     Document,
     Event,
-    Member,
+    Marriage,
     NotificationLog,
-    Relationship,
+    ParentChild,
+    Person,
     UserClanRole,
 )
 from app.models.base import Base

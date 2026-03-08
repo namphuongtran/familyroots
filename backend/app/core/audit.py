@@ -2,10 +2,10 @@
 
 Usage::
 
-    @audit("member.create", "member")
-    async def create_member(self, data, *, actor_id, clan_id, db):
+    @audit("person.create", "person")
+    async def create_person(self, data, *, actor_id, clan_id, db):
         ...
-        return new_member
+        return new_person
 """
 
 import functools

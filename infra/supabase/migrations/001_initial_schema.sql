@@ -1,7 +1,8 @@
 -- ============================================================
 -- 001_initial_schema.sql
--- Full DDL for FamilyRoots — PostgreSQL 15+
--- Single public schema, clan_id isolation via RLS
+-- Full DDL for FamilyRoots — PostgreSQL 16+
+-- Graph model: Person (global nodes), Marriage/ParentChild (edges)
+-- ClanMembership (M:N view filter), created_by_clan_id on edges
 -- ============================================================
 
 -- ============================================================
@@ -15,15 +16,6 @@ CREATE EXTENSION IF NOT EXISTS "unaccent";     -- accent-insensitive search (Vie
 -- ENUMS
 -- ============================================================
 CREATE TYPE gender_type AS ENUM ('male', 'female', 'unknown');
-
-CREATE TYPE relation_type AS ENUM ('parent', 'child', 'spouse');
-
-CREATE TYPE relation_subtype AS ENUM (
-    -- for parent/child
-    'biological', 'adoptive', 'step', 'foster',
-    -- for spouse
-    'married', 'divorced', 'widowed', 'partner'
-);
 
 CREATE TYPE clan_role AS ENUM ('admin', 'editor', 'viewer');
 -- Note: 'super_admin' lives only in platform_users, not here
@@ -52,16 +44,20 @@ CREATE TYPE notification_status AS ENUM ('pending', 'sent', 'failed');
 -- One row per family clan registered on the platform.
 -- ============================================================
 CREATE TABLE public.clans (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name            VARCHAR(255) NOT NULL,
-    slug            VARCHAR(100) NOT NULL UNIQUE,  -- url-safe, e.g. "nguyen-bac-ninh"
-    description     TEXT,
-    origin_place    VARCHAR(255),                  -- quê gốc
-    founded_year    SMALLINT,
-    avatar_url      VARCHAR(500),
-    is_active       BOOLEAN NOT NULL DEFAULT true,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                    VARCHAR(255) NOT NULL,
+    slug                    VARCHAR(100) NOT NULL UNIQUE,  -- url-safe, e.g. "nguyen-bac-ninh"
+    description             TEXT,
+    origin_place            VARCHAR(255),                  -- quê gốc
+    founded_year            SMALLINT,
+    avatar_url              VARCHAR(500),
+    motto                   TEXT,                          -- gia huấn / châm ngôn
+    ancestral_hall_location VARCHAR(500),                  -- nhà thờ tổ
+    clan_rules              TEXT,                          -- gia quy
+    approval_config         JSONB,                        -- {"require_approval": true, ...}
+    is_active               BOOLEAN NOT NULL DEFAULT true,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT clans_slug_format CHECK (slug ~ '^[a-z0-9][a-z0-9\-]*[a-z0-9]$'),
     CONSTRAINT clans_founded_year_range CHECK (founded_year BETWEEN 1000 AND 2100)
@@ -71,19 +67,21 @@ CREATE INDEX idx_clans_slug ON public.clans (slug);
 CREATE INDEX idx_clans_is_active ON public.clans (is_active) WHERE is_active = true;
 
 -- ============================================================
--- TABLE: members
--- Core table. One row per person in a clan's family tree.
--- A spouse from outside the clan is still stored here as a member
--- with is_clan_member = false.
+-- TABLE: persons
+-- Global entity — one row per real person. No clan_id FK.
+-- A person can appear in multiple clans via clan_memberships.
 -- ============================================================
-CREATE TABLE public.members (
+CREATE TABLE public.persons (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
+    origin_clan_id  UUID REFERENCES public.clans (id) ON DELETE SET NULL,
+    -- origin_clan_id: the clan that first created this person record (nullable)
 
     -- Identity
     full_name       VARCHAR(255) NOT NULL,
     birth_name      VARCHAR(255),              -- tên khai sinh (nếu khác tên thường dùng)
-    courtesy_name   VARCHAR(255),              -- tên tự / tên hiệu (common in old Vietnamese genealogy)
+    courtesy_name   VARCHAR(255),              -- tên tự / tên hiệu
+    posthumous_name VARCHAR(255),              -- tên thụy / tên sau khi mất
+    alias_name      VARCHAR(255),              -- biệt danh
     gender          gender_type NOT NULL DEFAULT 'unknown',
 
     -- Dates (nullable — historical figures may have unknown dates)
@@ -91,18 +89,24 @@ CREATE TABLE public.members (
     birth_date_approx BOOLEAN NOT NULL DEFAULT false,  -- true = năm sinh ước tính
     death_date      DATE,
     death_date_approx BOOLEAN NOT NULL DEFAULT false,
+    lunar_birth_date VARCHAR(30),              -- ngày sinh âm lịch (free text e.g. "15/01 Canh Tý")
+    lunar_death_date VARCHAR(30),              -- ngày mất âm lịch
 
     -- Places
     birth_place     VARCHAR(255),
     death_place     VARCHAR(255),
+    burial_place    VARCHAR(255),              -- nơi an táng
+    tomb_location   VARCHAR(500),              -- vị trí mộ (có thể là toạ độ / mô tả)
     residence_place VARCHAR(255),              -- nơi sinh sống
 
-    -- Genealogy metadata
-    generation      SMALLINT,                 -- đời thứ mấy (tính từ tổ của clan)
-    is_clan_founder BOOLEAN NOT NULL DEFAULT false,  -- true for the root ancestor
-    is_clan_member  BOOLEAN NOT NULL DEFAULT true,
-    -- is_clan_member = false: người này là vợ/chồng từ dòng họ khác,
-    -- có trong hệ thống để hoàn thiện cây nhưng không thuộc dòng họ này
+    -- Personal info
+    religion        VARCHAR(100),              -- tôn giáo
+    nationality     VARCHAR(100) DEFAULT 'VN', -- quốc tịch
+    occupation      VARCHAR(255),              -- nghề nghiệp
+    education_level VARCHAR(255),              -- trình độ học vấn
+    title_rank      VARCHAR(255),              -- chức danh / phẩm hàm
+    phone           VARCHAR(50),               -- số điện thoại
+    email           VARCHAR(255),              -- email
 
     -- Content
     biography       TEXT,
@@ -120,18 +124,13 @@ CREATE TABLE public.members (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT members_death_after_birth
-        CHECK (death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date),
-    CONSTRAINT members_generation_positive
-        CHECK (generation IS NULL OR generation > 0)
+    CONSTRAINT persons_death_after_birth
+        CHECK (death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date)
 );
 
--- Indexes for members
-CREATE INDEX idx_members_clan_id ON public.members (clan_id);
-CREATE INDEX idx_members_clan_generation ON public.members (clan_id, generation);
-CREATE INDEX idx_members_is_deleted ON public.members (clan_id, is_deleted) WHERE is_deleted = false;
-CREATE INDEX idx_members_birth_date ON public.members (clan_id, birth_date);
-CREATE INDEX idx_members_is_founder ON public.members (clan_id) WHERE is_clan_founder = true;
+-- Indexes for persons
+CREATE INDEX idx_persons_is_deleted ON public.persons (is_deleted) WHERE is_deleted = false;
+CREATE INDEX idx_persons_origin_clan ON public.persons (origin_clan_id) WHERE origin_clan_id IS NOT NULL;
 
 -- PG 18 requires IMMUTABLE functions in index expressions.
 -- unaccent() is STABLE, so we create an IMMUTABLE wrapper.
@@ -142,79 +141,130 @@ $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
 
 -- Full-text + trigram search index for Vietnamese names
 -- f_unaccent removes diacritics: "Nguyễn" matches "Nguyen"
-CREATE INDEX idx_members_fullname_search
-    ON public.members
+CREATE INDEX idx_persons_fullname_search
+    ON public.persons
     USING gin (
         to_tsvector('simple', public.f_unaccent(full_name))
     );
-CREATE INDEX idx_members_fullname_trgm
-    ON public.members
+CREATE INDEX idx_persons_fullname_trgm
+    ON public.persons
     USING gin (public.f_unaccent(full_name) gin_trgm_ops);
 
 -- ============================================================
--- TABLE: relationships
--- Edge list for the family graph.
--- Stores directed edges: member_id --[relation_type]--> related_id
+-- TABLE: clan_memberships
+-- M:N join table: which persons belong to which clans.
+-- generation and is_founder are per-clan context, not global.
 -- ============================================================
-CREATE TABLE public.relationships (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    clan_id          UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
+CREATE TABLE public.clan_memberships (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    person_id       UUID NOT NULL REFERENCES public.persons (id) ON DELETE CASCADE,
+    clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
 
-    member_id        UUID NOT NULL REFERENCES public.members (id) ON DELETE CASCADE,
-    related_id       UUID NOT NULL REFERENCES public.members (id) ON DELETE CASCADE,
+    role            VARCHAR(20) NOT NULL DEFAULT 'blood',
+    -- role values: 'blood' (huyết thống), 'spouse' (dâu/rể), 'adopted' (con nuôi)
+    generation      SMALLINT,                 -- đời thứ mấy (tính từ tổ CỦA CLAN NÀY)
+    is_founder      BOOLEAN NOT NULL DEFAULT false,  -- true for the root ancestor of THIS clan
+    joined_at       TIMESTAMPTZ,
 
-    relation_type    relation_type NOT NULL,
-    relation_subtype relation_subtype NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    -- For spouse relationships: marriage timeline
-    start_date       DATE,       -- ngày kết hôn / ngày nhận con nuôi
-    end_date         DATE,       -- ngày ly hôn / ngày mất (null = still active)
-    is_primary       BOOLEAN NOT NULL DEFAULT true,
-    -- is_primary = false for non-primary spouses in polygamous historical marriages
-    -- is_primary = true for the main/current marriage
-
-    notes            TEXT,
-
-    created_by       UUID NOT NULL,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    -- Prevent duplicate edges
-    CONSTRAINT relationships_no_self_loop
-        CHECK (member_id != related_id),
-
-    -- Spouse edges: stored once only (member_id < related_id by convention)
-    -- Enforced by application layer + unique index below
-    CONSTRAINT relationships_subtype_matches_type CHECK (
-        (relation_type IN ('parent', 'child') AND relation_subtype IN ('biological','adoptive','step','foster'))
-        OR
-        (relation_type = 'spouse' AND relation_subtype IN ('married','divorced','widowed','partner'))
-    )
+    CONSTRAINT uq_clan_memberships_person_clan UNIQUE (person_id, clan_id),
+    CONSTRAINT clan_memberships_role_check
+        CHECK (role IN ('blood', 'spouse', 'adopted')),
+    CONSTRAINT clan_memberships_generation_positive
+        CHECK (generation IS NULL OR generation > 0)
 );
 
--- Prevent exact duplicate relationships
-CREATE UNIQUE INDEX idx_relationships_unique_edge
-    ON public.relationships (member_id, related_id, relation_type, relation_subtype)
-    WHERE relation_type != 'spouse';
+CREATE INDEX idx_clan_memberships_clan ON public.clan_memberships (clan_id);
+CREATE INDEX idx_clan_memberships_person ON public.clan_memberships (person_id);
+CREATE INDEX idx_clan_memberships_clan_generation ON public.clan_memberships (clan_id, generation);
+CREATE INDEX idx_clan_memberships_founder
+    ON public.clan_memberships (clan_id) WHERE is_founder = true;
 
--- For spouse: only one active (non-divorced/widowed) marriage at a time per person
-CREATE UNIQUE INDEX idx_relationships_one_active_spouse
-    ON public.relationships (member_id, relation_type)
-    WHERE relation_type = 'spouse' AND end_date IS NULL;
+-- ============================================================
+-- TABLE: marriages
+-- Global edge: person1 ↔ person2.
+-- created_by_clan_id tracks which clan created this record.
+-- Handles: polygamy, divorce, remarriage, widowed.
+-- ============================================================
+CREATE TABLE public.marriages (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    person1_id        UUID NOT NULL REFERENCES public.persons (id) ON DELETE CASCADE,
+    person2_id        UUID NOT NULL REFERENCES public.persons (id) ON DELETE CASCADE,
+    created_by_clan_id UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
 
--- Performance indexes for tree traversal
-CREATE INDEX idx_relationships_member ON public.relationships (clan_id, member_id, relation_type);
-CREATE INDEX idx_relationships_related ON public.relationships (clan_id, related_id, relation_type);
+    marriage_date     DATE,                    -- ngày cưới (solar)
+    divorce_date      DATE,                    -- ngày ly hôn
+    marriage_place    VARCHAR(255),            -- nơi kết hôn
+    status            VARCHAR(20) NOT NULL DEFAULT 'married',
+    -- status values: 'married', 'divorced', 'widowed', 'separated'
+    spouse_order      SMALLINT,               -- thứ tự (vợ cả = 1, vợ hai = 2, etc.)
+    notes             TEXT,
+
+    created_by        UUID NOT NULL,           -- user_id
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT marriages_no_self CHECK (person1_id != person2_id),
+    CONSTRAINT marriages_status_check
+        CHECK (status IN ('married', 'divorced', 'widowed', 'separated')),
+    CONSTRAINT marriages_divorce_after_marriage
+        CHECK (divorce_date IS NULL OR marriage_date IS NULL OR divorce_date >= marriage_date),
+    CONSTRAINT marriages_spouse_order_positive
+        CHECK (spouse_order IS NULL OR spouse_order > 0)
+);
+
+CREATE INDEX idx_marriages_person1 ON public.marriages (person1_id);
+CREATE INDEX idx_marriages_person2 ON public.marriages (person2_id);
+CREATE INDEX idx_marriages_clan ON public.marriages (created_by_clan_id);
+-- Prevent duplicate active marriages between the same pair
+CREATE UNIQUE INDEX idx_marriages_unique_pair
+    ON public.marriages (LEAST(person1_id, person2_id), GREATEST(person1_id, person2_id), status)
+    WHERE status = 'married';
+
+-- ============================================================
+-- TABLE: parent_child
+-- Global directed edge: parent → child.
+-- created_by_clan_id tracks which clan created this record.
+-- Handles: biological, adopted, step, foster.
+-- ============================================================
+CREATE TABLE public.parent_child (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    parent_id           UUID NOT NULL REFERENCES public.persons (id) ON DELETE CASCADE,
+    child_id            UUID NOT NULL REFERENCES public.persons (id) ON DELETE CASCADE,
+    created_by_clan_id  UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
+
+    relationship_type   VARCHAR(20) NOT NULL DEFAULT 'biological',
+    -- values: 'biological', 'adopted', 'step', 'foster'
+    notes               TEXT,
+
+    created_by          UUID NOT NULL,         -- user_id
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT parent_child_no_self CHECK (parent_id != child_id),
+    CONSTRAINT parent_child_type_check
+        CHECK (relationship_type IN ('biological', 'adopted', 'step', 'foster'))
+);
+
+-- Prevent exact duplicate parent-child edges
+CREATE UNIQUE INDEX idx_parent_child_unique_edge
+    ON public.parent_child (parent_id, child_id, relationship_type);
+
+CREATE INDEX idx_parent_child_parent ON public.parent_child (parent_id);
+CREATE INDEX idx_parent_child_child ON public.parent_child (child_id);
+CREATE INDEX idx_parent_child_clan ON public.parent_child (created_by_clan_id);
 
 -- ============================================================
 -- TABLE: documents
--- Photos, certificates, audio/video attached to a member.
+-- Photos, certificates, audio/video attached to a person.
 -- ============================================================
 CREATE TABLE public.documents (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
-    member_id       UUID REFERENCES public.members (id) ON DELETE SET NULL,
-    -- member_id nullable: documents can belong to clan (not a specific member)
+    person_id       UUID REFERENCES public.persons (id) ON DELETE SET NULL,
+    -- person_id nullable: documents can belong to clan (not a specific person)
 
     title           VARCHAR(255) NOT NULL,
     description     TEXT,
@@ -222,7 +272,7 @@ CREATE TABLE public.documents (
 
     -- Supabase Storage
     storage_path    VARCHAR(500) NOT NULL UNIQUE,
-    -- format: clans/{clan_id}/members/{member_id}/{uuid}.{ext}
+    -- format: clans/{clan_id}/persons/{person_id}/{uuid}.{ext}
     file_size_bytes BIGINT,
     mime_type       VARCHAR(100),
     original_filename VARCHAR(255),
@@ -232,7 +282,7 @@ CREATE TABLE public.documents (
     taken_place     VARCHAR(255),
 
     is_avatar       BOOLEAN NOT NULL DEFAULT false,
-    -- is_avatar = true means this is the member's profile photo
+    -- is_avatar = true means this is the person's profile photo
 
     created_by      UUID NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -244,9 +294,9 @@ CREATE TABLE public.documents (
 );
 
 CREATE INDEX idx_documents_clan ON public.documents (clan_id);
-CREATE INDEX idx_documents_member ON public.documents (member_id) WHERE member_id IS NOT NULL;
+CREATE INDEX idx_documents_person ON public.documents (person_id) WHERE person_id IS NOT NULL;
 CREATE INDEX idx_documents_type ON public.documents (clan_id, document_type);
-CREATE INDEX idx_documents_avatar ON public.documents (member_id) WHERE is_avatar = true;
+CREATE INDEX idx_documents_avatar ON public.documents (person_id) WHERE is_avatar = true;
 
 -- ============================================================
 -- TABLE: events
@@ -255,8 +305,8 @@ CREATE INDEX idx_documents_avatar ON public.documents (member_id) WHERE is_avata
 CREATE TABLE public.events (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clan_id             UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
-    member_id           UUID REFERENCES public.members (id) ON DELETE CASCADE,
-    -- member_id nullable for clan-level ceremonies not tied to a specific person
+    person_id           UUID REFERENCES public.persons (id) ON DELETE CASCADE,
+    -- person_id nullable for clan-level ceremonies not tied to a specific person
 
     event_type          event_type NOT NULL,
     title               VARCHAR(255) NOT NULL,
@@ -265,12 +315,8 @@ CREATE TABLE public.events (
     -- Date handling for lunar/solar calendar
     event_date          DATE NOT NULL,         -- Gregorian date
     is_lunar_calendar   BOOLEAN NOT NULL DEFAULT false,
-    -- is_lunar_calendar = true: event_date is in lunar calendar
-    -- Frontend must convert for display
 
     is_recurring        BOOLEAN NOT NULL DEFAULT true,
-    -- true: repeats annually (most death anniversaries)
-    -- false: one-time event
 
     notify_days_before  SMALLINT NOT NULL DEFAULT 7
                         CHECK (notify_days_before BETWEEN 0 AND 30),
@@ -281,9 +327,8 @@ CREATE TABLE public.events (
 );
 
 CREATE INDEX idx_events_clan ON public.events (clan_id);
-CREATE INDEX idx_events_member ON public.events (member_id) WHERE member_id IS NOT NULL;
+CREATE INDEX idx_events_person ON public.events (person_id) WHERE person_id IS NOT NULL;
 CREATE INDEX idx_events_date ON public.events (clan_id, event_date);
--- Index for scheduler: find events happening in next N days
 CREATE INDEX idx_events_recurring_date
     ON public.events (clan_id, event_date)
     WHERE is_recurring = true;
@@ -291,19 +336,17 @@ CREATE INDEX idx_events_recurring_date
 -- ============================================================
 -- TABLE: user_clan_roles
 -- Which Supabase Auth user belongs to which clan, with what role.
--- A user can belong to at most one clan (enforced by unique index).
 -- ============================================================
 CREATE TABLE public.user_clan_roles (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
     user_id         UUID NOT NULL,             -- Supabase Auth user id
-    member_id       UUID REFERENCES public.members (id) ON DELETE SET NULL,
-    -- member_id: links this user account to their member profile in the tree
-    -- nullable: admin account may not be a member in the tree
+    person_id       UUID REFERENCES public.persons (id) ON DELETE SET NULL,
+    -- person_id: links this user account to their person profile in the tree
+    -- nullable: admin account may not be a person in the tree
 
     role            clan_role NOT NULL DEFAULT 'viewer',
     is_approved     BOOLEAN NOT NULL DEFAULT false,
-    -- New users start unapproved; clan admin must approve
 
     approved_by     UUID,                     -- user_id of approving admin
     approved_at     TIMESTAMPTZ,
@@ -320,7 +363,6 @@ CREATE TABLE public.user_clan_roles (
         )
 );
 
--- One membership per user per clan (multi-clan support)
 CREATE UNIQUE INDEX idx_user_clan_roles_user_clan ON public.user_clan_roles (user_id, clan_id);
 CREATE INDEX idx_user_clan_roles_clan ON public.user_clan_roles (clan_id);
 CREATE INDEX idx_user_clan_roles_pending
@@ -328,8 +370,40 @@ CREATE INDEX idx_user_clan_roles_pending
     WHERE is_approved = false;
 
 -- ============================================================
+-- TABLE: change_requests
+-- Approval workflow for edits submitted by editors/viewers.
+-- ============================================================
+CREATE TABLE public.change_requests (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
+    requester_id    UUID NOT NULL,             -- user_id who submitted the request
+    action          VARCHAR(20) NOT NULL,      -- 'create', 'update', 'delete'
+    resource_type   VARCHAR(50) NOT NULL,      -- 'person', 'marriage', 'parent_child', 'event', 'document'
+    resource_id     UUID,                      -- id of existing resource (null for create)
+    payload         JSONB,                     -- proposed changes
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending',
+    -- status values: 'pending', 'approved', 'rejected'
+    reviewed_by     UUID,                      -- user_id of reviewer
+    reviewed_at     TIMESTAMPTZ,
+    review_notes    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT change_requests_action_check
+        CHECK (action IN ('create', 'update', 'delete')),
+    CONSTRAINT change_requests_resource_type_check
+        CHECK (resource_type IN ('person', 'marriage', 'parent_child', 'event', 'document')),
+    CONSTRAINT change_requests_status_check
+        CHECK (status IN ('pending', 'approved', 'rejected'))
+);
+
+CREATE INDEX idx_change_requests_clan ON public.change_requests (clan_id);
+CREATE INDEX idx_change_requests_pending
+    ON public.change_requests (clan_id, status)
+    WHERE status = 'pending';
+
+-- ============================================================
 -- TABLE: platform_users
--- Super admin only. Created via bootstrap script (Prompt 1.5).
+-- Super admin only. Created via bootstrap script.
 -- ============================================================
 CREATE TABLE public.platform_users (
     id              UUID PRIMARY KEY,          -- Must match Supabase Auth user id
@@ -342,31 +416,28 @@ CREATE TABLE public.platform_users (
     CONSTRAINT platform_users_only_super_admin CHECK (role = 'super_admin')
 );
 
--- Only one super_admin can ever exist
 CREATE UNIQUE INDEX idx_platform_users_single_super_admin
     ON public.platform_users (role);
 
 -- ============================================================
 -- TABLE: audit_logs
 -- Immutable log of all write actions across the system.
--- Written by FastAPI service layer, never updated or deleted.
 -- ============================================================
 CREATE TABLE public.audit_logs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clan_id         UUID REFERENCES public.clans (id) ON DELETE SET NULL,
-    -- clan_id nullable for platform-level actions (super admin)
 
-    actor_id        UUID NOT NULL,             -- user_id performing the action
-    actor_role      VARCHAR(50) NOT NULL,      -- role at time of action
+    actor_id        UUID NOT NULL,
+    actor_role      VARCHAR(50) NOT NULL,
 
     action          VARCHAR(100) NOT NULL,
-    -- Format: "{resource}.{verb}" e.g. "member.create", "relationship.delete"
+    -- Format: "{resource}.{verb}" e.g. "person.create", "marriage.delete"
 
-    resource_type   VARCHAR(50) NOT NULL,      -- "member", "relationship", "document"...
-    resource_id     UUID,                      -- id of affected row (nullable for bulk)
+    resource_type   VARCHAR(50) NOT NULL,
+    resource_id     UUID,
 
-    old_value       JSONB,                     -- snapshot before change (for updates/deletes)
-    new_value       JSONB,                     -- snapshot after change (for creates/updates)
+    old_value       JSONB,
+    new_value       JSONB,
 
     ip_address      INET,
     user_agent      VARCHAR(500),
@@ -376,12 +447,10 @@ CREATE TABLE public.audit_logs (
 CREATE INDEX idx_audit_logs_clan ON public.audit_logs (clan_id, created_at DESC);
 CREATE INDEX idx_audit_logs_actor ON public.audit_logs (actor_id, created_at DESC);
 CREATE INDEX idx_audit_logs_resource ON public.audit_logs (resource_type, resource_id);
--- Partition hint: in future, partition by created_at month if table grows large
 
 -- ============================================================
 -- TABLE: notification_log
 -- Tracks FCM push notification delivery status.
--- Prevents duplicate sends for the same event+user.
 -- ============================================================
 CREATE TABLE public.notification_log (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -389,7 +458,7 @@ CREATE TABLE public.notification_log (
     event_id        UUID REFERENCES public.events (id) ON DELETE SET NULL,
     user_id         UUID NOT NULL,
 
-    notification_type VARCHAR(50) NOT NULL,    -- "death_anniversary", "birthday", etc.
+    notification_type VARCHAR(50) NOT NULL,
     title           VARCHAR(255) NOT NULL,
     body            TEXT NOT NULL,
     fcm_token       VARCHAR(500),
@@ -401,7 +470,6 @@ CREATE TABLE public.notification_log (
 
 CREATE INDEX idx_notification_log_clan_date
     ON public.notification_log (clan_id, created_at DESC);
--- Deduplication: one notification per user per event per day
 CREATE UNIQUE INDEX idx_notification_log_dedup
     ON public.notification_log (user_id, event_id, notification_type, CAST(created_at AT TIME ZONE 'UTC' AS date));
 
@@ -420,12 +488,20 @@ CREATE TRIGGER trg_clans_updated_at
     BEFORE UPDATE ON public.clans
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_members_updated_at
-    BEFORE UPDATE ON public.members
+CREATE TRIGGER trg_persons_updated_at
+    BEFORE UPDATE ON public.persons
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_relationships_updated_at
-    BEFORE UPDATE ON public.relationships
+CREATE TRIGGER trg_clan_memberships_updated_at
+    BEFORE UPDATE ON public.clan_memberships
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_marriages_updated_at
+    BEFORE UPDATE ON public.marriages
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_parent_child_updated_at
+    BEFORE UPDATE ON public.parent_child
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_documents_updated_at
@@ -438,4 +514,8 @@ CREATE TRIGGER trg_events_updated_at
 
 CREATE TRIGGER trg_user_clan_roles_updated_at
     BEFORE UPDATE ON public.user_clan_roles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_change_requests_updated_at
+    BEFORE UPDATE ON public.change_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

@@ -38,7 +38,7 @@ class UserProfile(BaseModel):
     clan_name: str | None = None
     role: str | None = None
     is_approved: bool = False
-    member_id: uuid.UUID | None = None
+    person_id: uuid.UUID | None = None
     preferred_locale: str = "vi"
 
 

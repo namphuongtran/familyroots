@@ -15,7 +15,7 @@ from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.models.audit_log import AuditLog
 from app.models.event import Event
-from app.models.member import Member
+from app.models.person import Person
 from app.schemas.event import EventCreateRequest, EventResponse, EventUpdateRequest
 
 router = APIRouter()
@@ -32,21 +32,20 @@ async def create_event(
     """Create a new event (death anniversary, birthday, etc.)."""
     actor_id = uuid.UUID(current_user["sub"])
 
-    # Verify member belongs to clan if provided
-    if body.member_id:
+    # Verify person exists if provided
+    if body.person_id:
         result = await db.execute(
-            select(Member).where(
-                Member.id == body.member_id,
-                Member.clan_id == clan_id,
-                Member.is_deleted.is_(False),
+            select(Person).where(
+                Person.id == body.person_id,
+                Person.is_deleted.is_(False),
             )
         )
         if not result.scalar_one_or_none():
-            raise NotFoundError("member_not_found")
+            raise NotFoundError("person_not_found")
 
     event = Event(
         clan_id=clan_id,
-        member_id=body.member_id,
+        person_id=body.person_id,
         event_type=body.event_type,
         title=body.title,
         description=body.description,
@@ -74,7 +73,7 @@ async def create_event(
 
 @router.get("")
 async def list_events(
-    member_id: uuid.UUID | None = Query(None),
+    person_id: uuid.UUID | None = Query(None),
     event_type: str | None = Query(None),
     cursor: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
@@ -85,8 +84,8 @@ async def list_events(
 ) -> dict[str, Any]:
     """List events with optional filters."""
     query = select(Event).where(Event.clan_id == clan_id)
-    if member_id:
-        query = query.where(Event.member_id == member_id)
+    if person_id:
+        query = query.where(Event.person_id == person_id)
     if event_type:
         query = query.where(Event.event_type == event_type)
 
@@ -117,9 +116,9 @@ async def get_upcoming_events(
 
     result = await db.execute(
         text(
-            "SELECT e.id, e.member_id, e.event_type, e.title, e.event_date, "
+            "SELECT e.id, e.person_id, e.event_type, e.title, e.event_date, "
             "  e.is_lunar_calendar, e.is_recurring, "
-            "  m.full_name AS member_name, m.avatar_url AS member_avatar_url, "
+            "  p.full_name AS person_name, p.avatar_url AS person_avatar_url, "
             "  CASE "
             "    WHEN e.is_recurring THEN "
             "      CASE "
@@ -136,7 +135,7 @@ async def get_upcoming_events(
             "    ELSE e.event_date "
             "  END AS next_occurrence "
             "FROM public.events e "
-            "LEFT JOIN public.members m ON m.id = e.member_id "
+            "LEFT JOIN public.persons p ON p.id = e.person_id "
             "WHERE e.clan_id = :clan_id "
             "  AND ("
             "    (e.is_recurring = true) OR "
@@ -170,9 +169,9 @@ async def get_upcoming_events(
         upcoming.append(
             {
                 "id": str(row["id"]),
-                "member_id": str(row["member_id"]) if row["member_id"] else None,
-                "member_name": row["member_name"],
-                "member_avatar_url": row["member_avatar_url"],
+                "person_id": str(row["person_id"]) if row["person_id"] else None,
+                "person_name": row["person_name"],
+                "person_avatar_url": row["person_avatar_url"],
                 "event_type": row["event_type"],
                 "title": row["title"],
                 "event_date": row["event_date"].isoformat(),

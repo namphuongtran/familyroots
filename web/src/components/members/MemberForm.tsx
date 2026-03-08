@@ -4,12 +4,12 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslations } from 'next-intl'
-import { memberSchema, type MemberFormValues } from '@/lib/validations/member.schema'
-import { useMemberMutations } from '@/lib/hooks/useMembers'
-import type { Member } from '@/lib/types'
+import { personSchema, type PersonFormValues } from '@/lib/validations/member.schema'
+import { usePersonMutations } from '@/lib/hooks/useMembers'
+import type { Person } from '@/lib/types'
 
 interface MemberFormProps {
-  member?: Member
+  member?: Person
   onSuccess?: (id: string) => void
   onCancel?: () => void
 }
@@ -17,7 +17,7 @@ interface MemberFormProps {
 export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
   const t = useTranslations('member_form')
   const isEdit = !!member?.id
-  const { create, update } = useMemberMutations()
+  const { create, update } = usePersonMutations()
   const createMember = create
   const updateMember = update
 
@@ -27,8 +27,8 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
     watch,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<MemberFormValues>({
-    resolver: zodResolver(memberSchema),
+  } = useForm<PersonFormValues>({
+    resolver: zodResolver(personSchema),
     defaultValues: member
       ? {
           full_name: member.full_name,
@@ -40,7 +40,6 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
           birth_place: member.birth_place ?? '',
           death_place: member.death_place ?? '',
           notes: member.notes ?? '',
-          generation: member.generation ?? undefined,
         }
       : { birth_date_approx: false, death_date_approx: false },
   })
@@ -49,7 +48,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
     if (member) reset({ ...member })
   }, [member, reset])
 
-  const onSubmit = async (data: MemberFormValues) => {
+  const onSubmit = async (data: PersonFormValues) => {
     if (isEdit) {
       await updateMember.mutateAsync({ id: member!.id, ...data })
       onSuccess?.(member!.id)
@@ -161,19 +160,6 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
-      </div>
-
-      {/* Generation */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t('generation')}
-        </label>
-        <input
-          type="number"
-          min={1}
-          {...register('generation', { valueAsNumber: true })}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
       </div>
 
       {/* Notes */}

@@ -24,7 +24,7 @@ export function useAuth() {
           clan_name: meta?.clan_name,
           role: meta?.clan_role,
           is_approved: meta?.is_approved ?? false,
-          member_id: meta?.member_id,
+          person_id: meta?.person_id,
           preferred_locale: meta?.preferred_locale ?? 'vi',
         } satisfies UserProfile)
       } else {
@@ -45,7 +45,7 @@ export function useAuth() {
           clan_name: meta?.clan_name,
           role: meta?.clan_role,
           is_approved: meta?.is_approved ?? false,
-          member_id: meta?.member_id,
+          person_id: meta?.person_id,
           preferred_locale: meta?.preferred_locale ?? 'vi',
         })
       } else {

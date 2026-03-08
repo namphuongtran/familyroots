@@ -37,7 +37,7 @@ async def test_anniversary_dedup_skips_already_sent():
     # Build stable mock values (uuid.uuid4() must not be called per-access)
     ev_id = uuid.uuid4()
     ev_clan = uuid.uuid4()
-    ev_member = uuid.uuid4()
+    ev_person = uuid.uuid4()
 
     # Return an event row
     event_row = MagicMock()
@@ -46,8 +46,8 @@ async def test_anniversary_dedup_skips_already_sent():
         "event_type": "death_anniversary",
         "title": "Test Anniversary",
         "clan_id": ev_clan,
-        "member_id": ev_member,
-        "member_name": "Ancestor",
+        "person_id": ev_person,
+        "person_name": "Ancestor",
         "notify_days_before": notify_days,
         "next_occurrence": today + timedelta(days=notify_days),
     }[key]

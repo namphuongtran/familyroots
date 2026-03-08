@@ -11,7 +11,8 @@ from app.core.database import get_db
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.permissions import ClanRole, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.models.member import Member
+from app.models.clan_membership import ClanMembership
+from app.models.person import Person
 from app.services.relationship_descriptor import describe_relationship
 from app.services.tree_builder import build_descendants_tree, find_clan_founder
 
@@ -20,128 +21,134 @@ router = APIRouter()
 
 @router.get("")
 async def get_full_tree(
-    root_member_id: uuid.UUID | None = Query(None),
-    max_generations: int = Query(10, ge=1, le=10),
+    root_person_id: uuid.UUID | None = Query(None),
+    max_generations: int = Query(10, ge=1, le=50),
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
-    """Return the full family tree rooted at a member (or clan founder)."""
-    root_id = root_member_id
+    """Return the full family tree rooted at a person (or clan founder)."""
+    root_id = root_person_id
     if root_id is None:
         root_id = await find_clan_founder(db, clan_id)
         if root_id is None:
             raise NotFoundError("clan_founder_not_found")
     else:
-        # Validate root_member_id belongs to this clan
+        # Validate root person belongs to this clan
         result = await db.execute(
-            select(Member).where(
-                Member.id == root_id,
-                Member.clan_id == clan_id,
-                Member.is_deleted.is_(False),
+            select(Person)
+            .join(ClanMembership, ClanMembership.person_id == Person.id)
+            .where(
+                Person.id == root_id,
+                ClanMembership.clan_id == clan_id,
+                Person.is_deleted.is_(False),
             )
         )
         if not result.scalar_one_or_none():
-            raise NotFoundError("member_not_found", {"member_id": str(root_id)})
+            raise NotFoundError("person_not_found", {"person_id": str(root_id)})
 
     tree = await build_descendants_tree(db, root_id, clan_id, max_generations)
     if not tree:
         raise NotFoundError("tree_empty")
 
     # Compute totals
-    total_members = _count_nodes(tree)
+    total_persons = _count_nodes(tree)
     total_generations = _max_depth(tree) + 1
 
     return {
         "data": {
             "tree": tree,
-            "total_members": total_members,
+            "total_persons": total_persons,
             "total_generations": total_generations,
         }
     }
 
 
-@router.get("/subtree/{member_id}")
+@router.get("/subtree/{person_id}")
 async def get_subtree(
-    member_id: uuid.UUID,
-    max_generations: int = Query(5, ge=1, le=10),
+    person_id: uuid.UUID,
+    max_generations: int = Query(5, ge=1, le=50),
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
-    """Return a subtree rooted at a specific member."""
+    """Return a subtree rooted at a specific person."""
     result = await db.execute(
-        select(Member).where(
-            Member.id == member_id,
-            Member.clan_id == clan_id,
-            Member.is_deleted.is_(False),
+        select(Person)
+        .join(ClanMembership, ClanMembership.person_id == Person.id)
+        .where(
+            Person.id == person_id,
+            ClanMembership.clan_id == clan_id,
+            Person.is_deleted.is_(False),
         )
     )
     if not result.scalar_one_or_none():
-        raise NotFoundError("member_not_found")
+        raise NotFoundError("person_not_found")
 
-    tree = await build_descendants_tree(db, member_id, clan_id, max_generations)
+    tree = await build_descendants_tree(db, person_id, clan_id, max_generations)
     if not tree:
         raise NotFoundError("tree_empty")
 
     return {
         "data": {
             "tree": tree,
-            "total_members": _count_nodes(tree),
+            "total_persons": _count_nodes(tree),
             "total_generations": _max_depth(tree) + 1,
         }
     }
 
 
-@router.get("/ancestors/{member_id}")
+@router.get("/ancestors/{person_id}")
 async def get_ancestors(
-    member_id: uuid.UUID,
+    person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
-    """Return the ancestor chain from a member up to the root."""
+    """Return the ancestor chain from a person up to the root."""
     result = await db.execute(
-        select(Member).where(
-            Member.id == member_id,
-            Member.clan_id == clan_id,
-            Member.is_deleted.is_(False),
+        select(Person)
+        .join(ClanMembership, ClanMembership.person_id == Person.id)
+        .where(
+            Person.id == person_id,
+            ClanMembership.clan_id == clan_id,
+            Person.is_deleted.is_(False),
         )
     )
     if not result.scalar_one_or_none():
-        raise NotFoundError("member_not_found")
+        raise NotFoundError("person_not_found")
 
     ancestors_result = await db.execute(
         text(
             "WITH RECURSIVE ancestors AS ("
-            "  SELECT m.id, m.full_name, m.gender, m.birth_date, m.death_date, "
-            "         m.avatar_url, m.generation, r.member_id AS parent_id, 0 AS depth "
-            "  FROM public.members m "
-            "  LEFT JOIN public.relationships r "
-            "    ON r.related_id = m.id "
-            "    AND r.relation_type = 'parent' "
-            "    AND r.clan_id = :clan_id "
-            "  WHERE m.id = :member_id AND m.clan_id = :clan_id "
+            "  SELECT p.id, p.full_name, p.gender, p.birth_date, p.death_date, "
+            "         p.avatar_url, cm.generation, pc.parent_id, 0 AS depth "
+            "  FROM public.persons p "
+            "  LEFT JOIN public.clan_memberships cm "
+            "    ON cm.person_id = p.id AND cm.clan_id = :clan_id "
+            "  LEFT JOIN public.parent_child pc "
+            "    ON pc.child_id = p.id "
+            "  WHERE p.id = :person_id "
             "  UNION ALL "
-            "  SELECT m.id, m.full_name, m.gender, m.birth_date, m.death_date, "
-            "         m.avatar_url, m.generation, r.member_id AS parent_id, a.depth + 1 "
+            "  SELECT p.id, p.full_name, p.gender, p.birth_date, p.death_date, "
+            "         p.avatar_url, cm.generation, pc.parent_id, a.depth + 1 "
             "  FROM ancestors a "
-            "  JOIN public.members m ON m.id = a.parent_id "
-            "  LEFT JOIN public.relationships r "
-            "    ON r.related_id = m.id "
-            "    AND r.relation_type = 'parent' "
-            "    AND r.clan_id = :clan_id "
-            "  WHERE m.clan_id = :clan_id AND m.is_deleted = false "
+            "  JOIN public.persons p ON p.id = a.parent_id "
+            "  LEFT JOIN public.clan_memberships cm "
+            "    ON cm.person_id = p.id AND cm.clan_id = :clan_id "
+            "  LEFT JOIN public.parent_child pc "
+            "    ON pc.child_id = p.id "
+            "  WHERE p.is_deleted = false "
             "    AND a.depth < 50 "
             ") "
             "SELECT id, full_name, gender, birth_date, death_date, "
             "       avatar_url, generation, parent_id, depth "
             "FROM ancestors ORDER BY depth ASC"
         ),
-        {"member_id": member_id, "clan_id": clan_id},
+        {"person_id": person_id, "clan_id": clan_id},
     )
     rows = ancestors_result.mappings().all()
 
@@ -170,21 +177,23 @@ async def find_path(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
-    """Find the relationship path between two members and describe it."""
+    """Find the relationship path between two persons and describe it."""
     if from_id == to_id:
-        raise ValidationError("same_member_path")
+        raise ValidationError("same_person_path")
 
-    # Verify both members exist in the clan
-    for mid in [from_id, to_id]:
+    # Verify both persons exist in the clan
+    for pid in [from_id, to_id]:
         result = await db.execute(
-            select(Member).where(
-                Member.id == mid,
-                Member.clan_id == clan_id,
-                Member.is_deleted.is_(False),
+            select(Person)
+            .join(ClanMembership, ClanMembership.person_id == Person.id)
+            .where(
+                Person.id == pid,
+                ClanMembership.clan_id == clan_id,
+                Person.is_deleted.is_(False),
             )
         )
         if not result.scalar_one_or_none():
-            raise NotFoundError("member_not_found", {"member_id": str(mid)})
+            raise NotFoundError("person_not_found", {"person_id": str(pid)})
 
     # Use find_relationship_path SQL function
     path_result = await db.execute(
@@ -204,7 +213,7 @@ async def find_path(
 
     path = [
         {
-            "member_id": str(row["member_id"]),
+            "person_id": str(row["person_id"]),
             "full_name": row["full_name"],
             "gender": row.get("gender", "unknown"),
             "edge_type": row.get("edge_type"),

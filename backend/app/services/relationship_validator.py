@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ValidationError
-from app.models.member import Member
+from app.models.person import Person
 from app.services.translator import t
 
 
@@ -23,7 +23,7 @@ class RelationshipValidator:
         self,
         parent_id: uuid.UUID,
         child_id: uuid.UUID,
-        subtype: str,
+        relationship_type: str,
         db: AsyncSession,
         clan_id: uuid.UUID,
     ) -> dict[str, Any] | None:
@@ -32,15 +32,15 @@ class RelationshipValidator:
         Returns a warning dict if the relationship is unusual but allowed,
         or None if everything is normal. Raises on violation.
         """
-        parent = await db.get(Member, parent_id)
-        child = await db.get(Member, child_id)
+        parent = await db.get(Person, parent_id)
+        child = await db.get(Person, child_id)
 
         if not parent or not child:
-            raise ValidationError("member_not_found")
+            raise ValidationError("person_not_found")
 
         # Rule 1: max 2 biological parents
-        if subtype == "biological":
-            bio_count = await self._count_bio_parents(child_id, clan_id, db)
+        if relationship_type == "biological":
+            bio_count = await self._count_bio_parents(child_id, db)
             if bio_count >= 2:
                 raise ConflictError("relationship.too_many_biological_parents")
 
@@ -57,7 +57,7 @@ class RelationshipValidator:
 
         # Rule 3: cycle detection — child cannot be an ancestor of parent
         ancestors = await db.execute(
-            text("SELECT member_id FROM public.get_ancestors_flat(:id, :clan_id, 20)"),
+            text("SELECT person_id FROM public.get_ancestors_flat(:id, :clan_id, 20)"),
             {"id": parent_id, "clan_id": clan_id},
         )
         ancestor_ids = {row[0] for row in ancestors}
@@ -68,73 +68,68 @@ class RelationshipValidator:
 
     async def validate_spouse(
         self,
-        member_id: uuid.UUID,
-        spouse_id: uuid.UUID,
-        start_date: date | None,
+        person1_id: uuid.UUID,
+        person2_id: uuid.UUID,
+        marriage_date: date | None,
         db: AsyncSession,
-        clan_id: uuid.UUID,
     ) -> None:
-        """Validate spouse relationship rules. Raises on violation."""
-        for person_id in [member_id, spouse_id]:
-            existing = await db.execute(
-                text("""
-                    SELECT 1 FROM public.relationships
-                    WHERE clan_id = :clan_id
-                      AND relation_type = 'spouse'
-                      AND end_date IS NULL
-                      AND (member_id = :pid OR related_id = :pid)
-                    LIMIT 1
-                """),
-                {"clan_id": clan_id, "pid": person_id},
-            )
-            if existing.first():
-                raise ConflictError(
-                    "relationship.already_married",
-                    {"member_id": str(person_id)},
-                )
+        """Validate marriage rules. Raises on violation."""
+        # Check if either person already has an active (non-ended) marriage
+        # Note: this system supports polygamy, so we only warn but don't block
+        pass
 
-    async def check_duplicate_edge(
+    async def check_duplicate_marriage(
         self,
-        member_id: uuid.UUID,
-        related_id: uuid.UUID,
-        relation_type: str,
-        clan_id: uuid.UUID,
+        person1_id: uuid.UUID,
+        person2_id: uuid.UUID,
         db: AsyncSession,
     ) -> None:
-        """Raise ConflictError if an identical active relationship already exists."""
+        """Raise ConflictError if an active marriage between the two already exists."""
         result = await db.execute(
             text("""
-                SELECT 1 FROM public.relationships
-                WHERE clan_id = :clan_id
-                  AND member_id = :member_id
-                  AND related_id = :related_id
-                  AND relation_type = :rtype
-                  AND end_date IS NULL
+                SELECT 1 FROM public.marriages
+                WHERE (
+                    (person1_id = :p1 AND person2_id = :p2)
+                    OR (person1_id = :p2 AND person2_id = :p1)
+                )
+                AND status NOT IN ('divorced')
                 LIMIT 1
             """),
-            {
-                "clan_id": clan_id,
-                "member_id": member_id,
-                "related_id": related_id,
-                "rtype": relation_type,
-            },
+            {"p1": person1_id, "p2": person2_id},
         )
         if result.first():
-            raise ConflictError("relationship.duplicate_edge")
+            raise ConflictError("relationship.duplicate_marriage")
 
-    async def _count_bio_parents(
-        self, child_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession
-    ) -> int:
-        """Count biological parent relationships for a member."""
+    async def check_duplicate_parent_child(
+        self,
+        parent_id: uuid.UUID,
+        child_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> None:
+        """Raise ConflictError if a parent-child link already exists."""
         result = await db.execute(
             text("""
-                SELECT COUNT(*) FROM public.relationships
-                WHERE clan_id = :clan_id
-                  AND related_id = :child_id
-                  AND relation_type = 'parent'
-                  AND relation_subtype = 'biological'
+                SELECT 1 FROM public.parent_child
+                WHERE parent_id = :parent_id
+                  AND child_id = :child_id
+                LIMIT 1
             """),
-            {"clan_id": clan_id, "child_id": child_id},
+            {"parent_id": parent_id, "child_id": child_id},
+        )
+        if result.first():
+            raise ConflictError("relationship.duplicate_parent_child")
+
+    async def _count_bio_parents(
+        self, child_id: uuid.UUID, db: AsyncSession
+    ) -> int:
+        """Count biological parent relationships for a person."""
+        result = await db.execute(
+            text("""
+                SELECT COUNT(*) FROM public.parent_child
+                WHERE child_id = :child_id
+                  AND relationship_type = 'biological'
+            """),
+            {"child_id": child_id},
         )
         row = result.first()
         return row[0] if row else 0

@@ -1,4 +1,4 @@
-"""Document ORM model — photos, certificates, audio/video attached to a member."""
+"""Document ORM model — photos, certificates, audio/video attached to a person."""
 
 import uuid
 from datetime import date
@@ -15,9 +15,9 @@ class Document(ClanScopedMixin, Base):
     __tablename__ = "documents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    member_id: Mapped[uuid.UUID | None] = mapped_column(
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("members.id", ondelete="SET NULL"),
+        ForeignKey("persons.id", ondelete="SET NULL"),
         default=None,
     )
 
@@ -41,4 +41,4 @@ class Document(ClanScopedMixin, Base):
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
 
     # ORM relationships
-    member = relationship("Member", back_populates="documents")
+    person = relationship("Person", back_populates="documents")

@@ -11,7 +11,7 @@ export type DocumentType =
 export interface DocumentResponse {
   id: string
   clan_id: string
-  member_id?: string
+  person_id?: string
   title: string
   document_type: DocumentType
   storage_path: string
@@ -40,7 +40,7 @@ export interface DocumentSummary {
 }
 
 export interface DocumentUploadMeta {
-  member_id?: string
+  person_id?: string
   title: string
   document_type: DocumentType
   description?: string

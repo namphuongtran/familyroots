@@ -1,40 +1,35 @@
-import type { RelationType, RelationSubtype } from '@/lib/types/relationship'
+import type { MarriageStatus, ParentChildType } from '@/lib/types/relationship'
 
-/** Vietnamese display labels for relation types */
-export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
-  parent: 'Cha / Mẹ',
-  child: 'Con',
-  spouse: 'Vợ / Chồng',
-}
-
-/** Vietnamese display labels for relation subtypes */
-export const RELATION_SUBTYPE_LABELS: Record<RelationSubtype, string> = {
-  biological: 'Con đẻ',
-  adoptive: 'Con nuôi',
-  step: 'Con riêng',
-  foster: 'Con nuôi tạm thời',
+/** Vietnamese display labels for marriage statuses */
+export const MARRIAGE_STATUS_LABELS: Record<MarriageStatus, string> = {
   married: 'Đã kết hôn',
   divorced: 'Đã ly hôn',
   widowed: 'Đã góa',
-  partner: 'Bạn đời',
+  separated: 'Ly thân',
 }
 
-/** English display labels */
-export const RELATION_TYPE_LABELS_EN: Record<RelationType, string> = {
-  parent: 'Parent',
-  child: 'Child',
-  spouse: 'Spouse',
+/** Vietnamese display labels for parent-child relationship types */
+export const PARENT_CHILD_TYPE_LABELS: Record<ParentChildType, string> = {
+  biological: 'Con đẻ',
+  adopted: 'Con nuôi',
+  step: 'Con riêng',
+  foster: 'Con nuôi tạm thời',
 }
 
-export const RELATION_SUBTYPE_LABELS_EN: Record<RelationSubtype, string> = {
-  biological: 'Biological',
-  adoptive: 'Adopted',
-  step: 'Step',
-  foster: 'Foster',
+/** English display labels for marriage statuses */
+export const MARRIAGE_STATUS_LABELS_EN: Record<MarriageStatus, string> = {
   married: 'Married',
   divorced: 'Divorced',
   widowed: 'Widowed',
-  partner: 'Partner',
+  separated: 'Separated',
+}
+
+/** English display labels for parent-child relationship types */
+export const PARENT_CHILD_TYPE_LABELS_EN: Record<ParentChildType, string> = {
+  biological: 'Biological',
+  adopted: 'Adopted',
+  step: 'Step',
+  foster: 'Foster',
 }
 
 /**
@@ -67,16 +62,17 @@ export function guessKinshipTerm(
 }
 
 /**
- * Returns a Vietnamese label for a given relation type + optional subtype.
+ * Returns a Vietnamese label for a marriage status.
  */
-export function getRelationLabel(
-  relationType: string,
-  relationSubtype?: string | null,
-): string {
-  const typeLabel = RELATION_TYPE_LABELS[relationType as keyof typeof RELATION_TYPE_LABELS] ?? relationType
-  if (!relationSubtype) return typeLabel
-  const subtypeLabel = RELATION_SUBTYPE_LABELS[relationSubtype as keyof typeof RELATION_SUBTYPE_LABELS]
-  return subtypeLabel ? `${typeLabel} (${subtypeLabel})` : typeLabel
+export function getMarriageStatusLabel(status: string): string {
+  return MARRIAGE_STATUS_LABELS[status as MarriageStatus] ?? status
+}
+
+/**
+ * Returns a Vietnamese label for a parent-child relationship type.
+ */
+export function getParentChildTypeLabel(type: string): string {
+  return PARENT_CHILD_TYPE_LABELS[type as ParentChildType] ?? type
 }
 
 /**
@@ -92,18 +88,4 @@ export function formatRelationshipDescription(
   return `${fromName} là ${description} của ${toName}`
 }
 
-/** Subtypes available for parent/child relationships */
-export const PARENT_CHILD_SUBTYPES: RelationSubtype[] = [
-  'biological',
-  'adoptive',
-  'step',
-  'foster',
-]
 
-/** Subtypes available for spouse relationships */
-export const SPOUSE_SUBTYPES: RelationSubtype[] = [
-  'married',
-  'divorced',
-  'widowed',
-  'partner',
-]

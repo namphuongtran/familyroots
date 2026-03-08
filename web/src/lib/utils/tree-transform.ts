@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { TreeNode, SpouseNode } from '@/lib/types/tree'
 
-export interface MemberNodeData {
+export interface PersonNodeData {
   member: TreeNode
   isDeceased: boolean
   isFounder: boolean
@@ -18,15 +18,15 @@ const V_GAP = 80         // vertical gap between generations
 function spouseNodeData(
   spouse: SpouseNode,
   depth: number,
-): MemberNodeData {
+): PersonNodeData {
   return {
     member: {
       ...spouse,
       birth_name: undefined,
       birth_date_approx: false,
       death_date_approx: false,
-      is_clan_founder: false,
-      is_clan_member: false,
+      is_founder: false,
+      membership_role: spouse.membership_role ?? 'spouse',
       birth_place: undefined,
       generation: undefined,
       depth,
@@ -35,7 +35,7 @@ function spouseNodeData(
     },
     isDeceased: !!spouse.death_date,
     isFounder: false,
-    isOutsideClan: true,
+    isOutsideClan: spouse.membership_role === 'spouse',
   }
 }
 
@@ -87,9 +87,9 @@ export function treeToReactFlow(root: TreeNode): { nodes: Node[]; edges: Edge[] 
       data: {
         member: node,
         isDeceased: !!node.death_date,
-        isFounder: node.is_clan_founder,
-        isOutsideClan: !node.is_clan_member,
-      } satisfies MemberNodeData,
+        isFounder: !!node.is_founder,
+        isOutsideClan: node.membership_role === 'spouse',
+      } satisfies PersonNodeData,
     })
 
     // Parent → child edge
@@ -121,10 +121,10 @@ export function treeToReactFlow(root: TreeNode): { nodes: Node[]; edges: Edge[] 
         target: spouse.id,
         type: 'spouseEdge',
         data: {
-          subtype: spouse.relation_subtype,
-          is_primary: spouse.is_primary,
+          status: spouse.status,
+          spouse_order: spouse.spouse_order,
         },
-        style: { stroke: spouse.end_date ? '#999' : '#C41E3A' },
+        style: { stroke: spouse.divorce_date ? '#999' : '#C41E3A' },
       })
     })
 

@@ -13,22 +13,24 @@ Output format::
       "death_date": "1985-03-20",
       "generation": 1,
       "avatar_url": "https://...",
-      "is_clan_founder": true,
+      "is_founder": true,
+      "membership_role": "blood",
+      "posthumous_name": "...",
       "spouses": [
         {
           "id": "uuid",
           "full_name": "Trần Thị B",
-          "relation_subtype": "married",
-          "start_date": "1945-02-10",
-          "end_date": null,
-          "is_primary": true
+          "status": "married",
+          "marriage_date": "1945-02-10",
+          "divorce_date": null,
+          "spouse_order": 1
         }
       ],
       "children": [
         {
           "id": "uuid",
           "full_name": "Nguyễn Văn C",
-          "relation_subtype": "biological",
+          "relationship_type": "biological",
           "spouses": [...],
           "children": [...]   # recursive
         }
@@ -53,6 +55,7 @@ class TreeNode:
     id: uuid.UUID
     full_name: str
     birth_name: str | None
+    posthumous_name: str | None
     gender: str
     birth_date: str | None
     birth_date_approx: bool
@@ -61,12 +64,12 @@ class TreeNode:
     birth_place: str | None
     generation: int | None
     avatar_url: str | None
-    is_clan_member: bool
-    is_clan_founder: bool
+    membership_role: str | None
+    is_founder: bool
     parent_id: uuid.UUID | None
     depth: int
     spouses: list[dict[str, Any]] = field(default_factory=list)
-    children: list[TreeNode] = field(default_factory=list)
+    children: list["TreeNode"] = field(default_factory=list)
 
 
 async def build_descendants_tree(
@@ -94,51 +97,54 @@ async def build_descendants_tree(
             {"max_nodes": _MAX_TREE_NODES, "actual_nodes": len(rows)},
         )
 
-    # Step 2: Build node dict indexed by member_id
+    # Step 2: Build node dict indexed by person_id
     nodes: dict[uuid.UUID, TreeNode] = {}
     for row in rows:
         node = TreeNode(
-            id=row["member_id"],
+            id=row["person_id"],
             full_name=row["full_name"],
-            birth_name=row["birth_name"],
+            birth_name=row.get("birth_name"),
+            posthumous_name=row.get("posthumous_name"),
             gender=row["gender"],
             birth_date=row["birth_date"].isoformat() if row["birth_date"] else None,
-            birth_date_approx=row["birth_date_approx"],
+            birth_date_approx=row.get("birth_date_approx", False),
             death_date=row["death_date"].isoformat() if row["death_date"] else None,
-            death_date_approx=row["death_date_approx"],
-            birth_place=row["birth_place"],
-            generation=row["generation"],
-            avatar_url=row["avatar_url"],
-            is_clan_member=row["is_clan_member"],
-            is_clan_founder=row["is_clan_founder"],
-            parent_id=row["parent_id"],
+            death_date_approx=row.get("death_date_approx", False),
+            birth_place=row.get("birth_place"),
+            generation=row.get("generation"),
+            avatar_url=row.get("avatar_url"),
+            membership_role=row.get("membership_role"),
+            is_founder=row.get("is_founder", False),
+            parent_id=row.get("parent_id"),
             depth=row["depth"],
         )
         nodes[node.id] = node
 
     # Step 3: Fetch spouses for all nodes in one query (avoid N+1)
-    member_ids = list(nodes.keys())
+    person_ids = list(nodes.keys())
     spouse_result = await db.execute(
         text(
             "SELECT "
-            "CASE WHEN r.member_id = ANY(:ids) THEN r.member_id "
-            "     ELSE r.related_id END AS for_member_id, "
-            "CASE WHEN r.member_id = ANY(:ids) THEN r.related_id "
-            "     ELSE r.member_id END AS spouse_id, "
-            "m.full_name, m.gender, m.birth_date, m.death_date, m.avatar_url, "
-            "r.relation_subtype, r.start_date, r.end_date, r.is_primary "
-            "FROM public.relationships r "
-            "JOIN public.members m "
-            "    ON m.id = CASE WHEN r.member_id = ANY(:ids) "
-            "                   THEN r.related_id ELSE r.member_id END "
-            "WHERE r.clan_id = :clan_id "
-            "  AND r.relation_type = 'spouse' "
-            "  AND (r.member_id = ANY(:ids) OR r.related_id = ANY(:ids))"
+            "CASE WHEN m.person1_id = ANY(:ids) THEN m.person1_id "
+            "     ELSE m.person2_id END AS for_person_id, "
+            "CASE WHEN m.person1_id = ANY(:ids) THEN m.person2_id "
+            "     ELSE m.person1_id END AS spouse_id, "
+            "p.full_name, p.gender, p.birth_date, p.death_date, p.avatar_url, "
+            "p.posthumous_name, "
+            "m.status, m.marriage_date, m.divorce_date, m.spouse_order, "
+            "cm.role AS membership_role "
+            "FROM public.marriages m "
+            "JOIN public.persons p "
+            "    ON p.id = CASE WHEN m.person1_id = ANY(:ids) "
+            "                   THEN m.person2_id ELSE m.person1_id END "
+            "LEFT JOIN public.clan_memberships cm "
+            "    ON cm.person_id = p.id AND cm.clan_id = :clan_id "
+            "WHERE (m.person1_id = ANY(:ids) OR m.person2_id = ANY(:ids))"
         ),
-        {"ids": member_ids, "clan_id": clan_id},
+        {"ids": person_ids, "clan_id": clan_id},
     )
     for row in spouse_result.mappings().all():
-        for_id = row["for_member_id"]
+        for_id = row["for_person_id"]
         if for_id in nodes:
             nodes[for_id].spouses.append(
                 {
@@ -148,10 +154,16 @@ async def build_descendants_tree(
                     "birth_date": (row["birth_date"].isoformat() if row["birth_date"] else None),
                     "death_date": (row["death_date"].isoformat() if row["death_date"] else None),
                     "avatar_url": row["avatar_url"],
-                    "relation_subtype": row["relation_subtype"],
-                    "start_date": (row["start_date"].isoformat() if row["start_date"] else None),
-                    "end_date": (row["end_date"].isoformat() if row["end_date"] else None),
-                    "is_primary": row["is_primary"],
+                    "posthumous_name": row["posthumous_name"],
+                    "status": row["status"],
+                    "marriage_date": (
+                        row["marriage_date"].isoformat() if row["marriage_date"] else None
+                    ),
+                    "divorce_date": (
+                        row["divorce_date"].isoformat() if row["divorce_date"] else None
+                    ),
+                    "spouse_order": row["spouse_order"],
+                    "membership_role": row["membership_role"],
                 }
             )
 
@@ -180,6 +192,7 @@ async def build_descendants_tree(
             "id": str(node.id),
             "full_name": node.full_name,
             "birth_name": node.birth_name,
+            "posthumous_name": node.posthumous_name,
             "gender": node.gender,
             "birth_date": node.birth_date,
             "birth_date_approx": node.birth_date_approx,
@@ -188,8 +201,8 @@ async def build_descendants_tree(
             "birth_place": node.birth_place,
             "generation": node.generation,
             "avatar_url": node.avatar_url,
-            "is_clan_member": node.is_clan_member,
-            "is_clan_founder": node.is_clan_founder,
+            "membership_role": node.membership_role,
+            "is_founder": node.is_founder,
             "depth": node.depth,
             "spouses": node.spouses,
             "children": [node_to_dict(c) for c in node.children],
@@ -205,10 +218,11 @@ async def find_clan_founder(
     """Return the id of the clan founder (root of the tree)."""
     result = await db.execute(
         text(
-            "SELECT id FROM public.members "
-            "WHERE clan_id = :clan_id "
-            "  AND is_clan_founder = true "
-            "  AND is_deleted = false "
+            "SELECT cm.person_id FROM public.clan_memberships cm "
+            "JOIN public.persons p ON p.id = cm.person_id "
+            "WHERE cm.clan_id = :clan_id "
+            "  AND cm.is_founder = true "
+            "  AND p.is_deleted = false "
             "LIMIT 1"
         ),
         {"clan_id": clan_id},

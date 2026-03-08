@@ -17,7 +17,8 @@ from app.core.pagination import build_page, paginate_query
 from app.core.security import get_super_admin
 from app.models.audit_log import AuditLog
 from app.models.clan import Clan
-from app.models.member import Member
+from app.models.clan_membership import ClanMembership
+from app.models.person import Person
 from app.models.user_clan_role import UserClanRole
 
 router = APIRouter(prefix="/platform", tags=["Platform Admin"])
@@ -63,8 +64,8 @@ async def get_clan_detail(
     # Gather stats
     member_count = await db.execute(
         select(func.count())
-        .select_from(Member)
-        .where(Member.clan_id == clan_id, Member.is_deleted.is_(False))
+        .select_from(ClanMembership)
+        .where(ClanMembership.clan_id == clan_id)
     )
     user_count = await db.execute(
         select(func.count()).select_from(UserClanRole).where(UserClanRole.clan_id == clan_id)
@@ -150,7 +151,7 @@ async def platform_metrics(
     ).scalar() or 0
     total_members = (
         await db.execute(
-            select(func.count()).select_from(Member).where(Member.is_deleted.is_(False))
+            select(func.count()).select_from(Person).where(Person.is_deleted.is_(False))
         )
     ).scalar() or 0
     total_users = (await db.execute(select(func.count()).select_from(UserClanRole))).scalar() or 0

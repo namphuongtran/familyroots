@@ -10,11 +10,11 @@ const ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.doc,.docx'
 const MAX_MB = 20
 
 interface DocumentUploadProps {
-  memberId?: string
+  personId?: string
   onSuccess?: () => void
 }
 
-export function DocumentUpload({ memberId, onSuccess }: DocumentUploadProps) {
+export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
   const t = useTranslations('documents')
   const { uploadDocument } = useDocumentMutations()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -43,7 +43,7 @@ export function DocumentUpload({ memberId, onSuccess }: DocumentUploadProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedFile) return
-    await uploadDocument.mutateAsync({ file: selectedFile, title, member_id: memberId })
+    await uploadDocument.mutateAsync({ file: selectedFile, title, person_id: personId })
     setSelectedFile(null)
     setTitle('')
     onSuccess?.()

@@ -1,6 +1,6 @@
 """Kinship term generator — describes the relationship between two members.
 
-Given a path from member A to member B (from ``find_relationship_path``),
+Given a path from person A to person B (from ``find_relationship_path``),
 generates a human-readable localized description using edge-sequence
 pattern matching and the ``t()`` i18n function.
 """
@@ -38,7 +38,7 @@ def describe_relationship(
     """Return a localized relationship description from a path of steps.
 
     ``path`` is a list of dicts with at least ``edge_type`` (str).
-    The first element is the source member (no edge), so edges start
+    The first element is the source person (no edge), so edges start
     at index 1.
     """
     if not path or len(path) < 2:

@@ -9,15 +9,15 @@ PLATFORM LEVEL (public schema)          CLAN LEVEL (clan-scoped via RLS)
 ─────────────────────────────           ──────────────────────────
 super_admin                             admin
   │                                       │
-  ├── Manage all clans                   ├── Manage clan members
+  ├── Manage all clans                   ├── Manage clan persons
   ├── Provision / suspend clans          ├── Approve new user registrations
   ├── View platform-wide metrics         ├── Assign editor/viewer roles
   ├── Promote/demote clan admins         └── Manage clan settings
   ├── Access all clan data (audit)
   └── Cannot be created via API          editor
       (bootstrap only)                     │
-                                           ├── Create/edit members
-                                           ├── Create/edit relationships
+                                           ├── Create/edit persons
+                                           ├── Create/edit marriages & parent-child
                                            ├── Upload documents
                                            └── Create/edit events
 
@@ -49,18 +49,18 @@ Stored in `public.user_clan_roles` table. A user can belong to at most one clan 
 | Delete clan                    | ✅           | ❌     | ❌      | ❌      |
 | View all clans (platform)      | ✅           | ❌     | ❌      | ❌      |
 | Suspend/reactivate clan        | ✅           | ❌     | ❌      | ❌      |
-| **MEMBERS**                    |             |       |        |        |
-| View members                   | ✅           | ✅     | ✅      | ✅      |
-| Create member                  | ✅           | ✅     | ✅      | ❌      |
-| Edit member                    | ✅           | ✅     | ✅      | ❌      |
-| Soft-delete member             | ✅           | ✅     | ❌      | ❌      |
-| Restore deleted member         | ✅           | ✅     | ❌      | ❌      |
-| Hard-delete member             | ✅           | ❌     | ❌      | ❌      |
-| **RELATIONSHIPS**              |             |       |        |        |
+| **PERSONS**                    |             |       |        |        |
+| View persons                   | ✅           | ✅     | ✅      | ✅      |
+| Create person                  | ✅           | ✅     | ✅      | ❌      |
+| Edit person                    | ✅           | ✅     | ✅      | ❌      |
+| Soft-delete person             | ✅           | ✅     | ❌      | ❌      |
+| Restore deleted person         | ✅           | ✅     | ❌      | ❌      |
+| Hard-delete person             | ✅           | ❌     | ❌      | ❌      |
+| **MARRIAGES & PARENT-CHILD**   |             |       |        |        |
 | View relationships             | ✅           | ✅     | ✅      | ✅      |
-| Create relationship            | ✅           | ✅     | ✅      | ❌      |
-| Edit relationship              | ✅           | ✅     | ✅      | ❌      |
-| Delete relationship            | ✅           | ✅     | ❌      | ❌      |
+| Create marriage/parent-child   | ✅           | ✅     | ✅      | ❌      |
+| Edit marriage/parent-child     | ✅           | ✅     | ✅      | ❌      |
+| Delete marriage/parent-child   | ✅           | ✅     | ❌      | ❌      |
 | **DOCUMENTS**                  |             |       |        |        |
 | View documents                 | ✅           | ✅     | ✅      | ✅      |
 | Upload document                | ✅           | ✅     | ✅      | ❌      |
@@ -96,11 +96,11 @@ Permission checks use a dependency factory pattern in `backend/app/core/permissi
 from app.core.permissions import ClanRole, require_role, RequireEditor, RequireAdmin
 
 # Option 1: inline dependency
-@router.post("/members", dependencies=[Depends(require_role(ClanRole.EDITOR))])
+@router.post("/persons", dependencies=[Depends(require_role(ClanRole.EDITOR))])
 
 # Option 2: convenience constants
-@router.post("/members", dependencies=[RequireEditor])
-@router.delete("/members/{id}", dependencies=[RequireAdmin])
+@router.post("/persons", dependencies=[RequireEditor])
+@router.delete("/persons/{id}", dependencies=[RequireAdmin])
 ```
 
 The `require_role()` dependency:

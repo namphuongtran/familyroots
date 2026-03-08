@@ -23,7 +23,7 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
 
   return (
     <div
-      onClick={() => router.push(`/members/${data.id}`)}
+      onClick={() => router.push(`/persons/${data.id}`)}
       className={cn(
         'relative flex flex-col items-center gap-1 p-2 rounded-xl border-2 cursor-pointer',
         'bg-white shadow-sm hover:shadow-md transition-all w-36',

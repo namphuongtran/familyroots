@@ -52,8 +52,8 @@ async def send_anniversary_notifications() -> None:
                     e.clan_id,
                     e.event_type,
                     e.title,
-                    e.member_id,
-                    m.full_name AS member_name,
+                    e.person_id,
+                    p.full_name AS person_name,
                     e.notify_days_before,
                     CASE
                         WHEN (MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::INT,
@@ -68,7 +68,7 @@ async def send_anniversary_notifications() -> None:
                                        EXTRACT(DAY FROM e.event_date)::INT)
                     END AS next_occurrence
                 FROM public.events e
-                LEFT JOIN public.members m ON m.id = e.member_id
+                LEFT JOIN public.persons p ON p.id = e.person_id
                 WHERE e.is_recurring = true
             """)
         )
@@ -100,7 +100,7 @@ async def send_anniversary_notifications() -> None:
                 title_key=f"notification.{event['event_type']}.title",
                 body_key=f"notification.{event['event_type']}.body",
                 db=db,
-                name=event["member_name"] or event["title"],
+                name=event["person_name"] or event["title"],
                 days=event["notify_days_before"],
             )
 

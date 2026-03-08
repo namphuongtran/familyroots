@@ -5,10 +5,10 @@ import { useTranslations } from 'next-intl'
 import { MemberAvatar } from './MemberAvatar'
 import { formatLifespan } from '@/lib/utils/date'
 import { cn } from '@/lib/utils/cn'
-import type { MemberSummary } from '@/lib/types'
+import type { PersonSummary } from '@/lib/types'
 
 interface MemberCardProps {
-  member: MemberSummary
+  member: PersonSummary
   className?: string
 }
 
@@ -18,7 +18,7 @@ export function MemberCard({ member, className }: MemberCardProps) {
 
   return (
     <Link
-      href={`/members/${member.id}`}
+      href={`/persons/${member.id}`}
       className={cn(
         'flex items-center gap-3 p-3 rounded-lg border border-cream-200 hover:border-primary-300',
         'hover:shadow-sm transition-all bg-white cursor-pointer',

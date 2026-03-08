@@ -9,18 +9,18 @@ export const treeKeys = {
     [...treeKeys.all, 'full', rootId, maxGen] as const,
   subtree: (rootId: string, maxGen?: number) =>
     [...treeKeys.all, 'subtree', rootId, maxGen] as const,
-  ancestors: (memberId: string, maxGen?: number) =>
-    [...treeKeys.all, 'ancestors', memberId, maxGen] as const,
+  ancestors: (personId: string, maxGen?: number) =>
+    [...treeKeys.all, 'ancestors', personId, maxGen] as const,
   path: (fromId: string, toId: string) =>
     [...treeKeys.all, 'path', fromId, toId] as const,
 }
 
-export function useFamilyTree(rootMemberId?: string, maxGenerations = 6) {
+export function useFamilyTree(rootPersonId?: string, maxGenerations = 6) {
   return useQuery({
-    queryKey: treeKeys.full(rootMemberId, maxGenerations),
+    queryKey: treeKeys.full(rootPersonId, maxGenerations),
     queryFn: () =>
       treeApi.getFullTree({
-        root_member_id: rootMemberId,
+        root_person_id: rootPersonId,
         max_generations: maxGenerations,
       }),
     staleTime: 60_000,

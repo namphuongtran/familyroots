@@ -10,11 +10,11 @@ export default function TreePage() {
   const t = useTranslations('tree')
   const { user } = useAuthStore()
   const clanId = user?.clan_id
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
 
-  // rootMemberId defaults to clan root — ideally this comes from clan config
+  // rootPersonId defaults to clan root — ideally this comes from clan config
   // For now use a known anchor or let useFamilyTree handle the clan root
-  const rootMemberId = 'root'
+  const rootPersonId = 'root'
 
   return (
     <div className="h-[calc(100vh-5rem)] relative">
@@ -23,13 +23,13 @@ export default function TreePage() {
       </div>
 
       <div className="pt-12 h-full">
-        <TreeCanvas rootMemberId={rootMemberId} />
+        <TreeCanvas rootPersonId={rootPersonId} />
       </div>
 
-      {selectedMemberId && (
+      {selectedPersonId && (
         <MemberSidebar
-          memberId={selectedMemberId}
-          onClose={() => setSelectedMemberId(null)}
+          personId={selectedPersonId}
+          onClose={() => setSelectedPersonId(null)}
         />
       )}
     </div>
