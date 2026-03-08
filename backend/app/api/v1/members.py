@@ -344,7 +344,7 @@ async def member_timeline(
     if member.birth_date:
         timeline.append(
             TimelineEvent(
-                date=member.birth_date,
+                event_date=member.birth_date,
                 date_approx=member.birth_date_approx,
                 event_type="birth",
                 title=t("timeline.birth"),
@@ -355,7 +355,7 @@ async def member_timeline(
     if member.death_date:
         timeline.append(
             TimelineEvent(
-                date=member.death_date,
+                event_date=member.death_date,
                 date_approx=member.death_date_approx,
                 event_type="death",
                 title=t("timeline.death"),
@@ -381,7 +381,7 @@ async def member_timeline(
     for row in spouse_result.mappings().all():
         timeline.append(
             TimelineEvent(
-                date=row["start_date"],
+                event_date=row["start_date"],
                 date_approx=False,
                 event_type="marriage",
                 title=t("timeline.marriage"),
@@ -397,7 +397,7 @@ async def member_timeline(
     for ev in events_result.scalars().all():
         timeline.append(
             TimelineEvent(
-                date=ev.event_date,
+                event_date=ev.event_date,
                 date_approx=False,
                 event_type=ev.event_type,
                 title=ev.title,
@@ -406,7 +406,7 @@ async def member_timeline(
         )
 
     # Sort chronologically (None dates last)
-    timeline.sort(key=lambda e: e.get("date") or "9999-12-31")
+    timeline.sort(key=lambda e: e.get("event_date") or "9999-12-31")
 
     return {"data": timeline}
 

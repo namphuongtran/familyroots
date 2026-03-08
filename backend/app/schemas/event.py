@@ -65,7 +65,7 @@ class UpcomingEvent(BaseModel):
 
 
 class TimelineEvent(BaseModel):
-    date: date | None = None
+    event_date: date | None = None
     date_approx: bool = False
     event_type: str
     title: str
