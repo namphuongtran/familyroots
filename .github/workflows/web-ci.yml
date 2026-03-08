@@ -5,72 +5,63 @@ on:
     branches: [main, develop]
     paths:
       - "web/**"
-      - "packages/**"
   pull_request:
     branches: [main, develop]
     paths:
       - "web/**"
-      - "packages/**"
 
 jobs:
-  analyze-and-test:
+  build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          channel: stable
-          cache: true
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-      - name: Get dependencies (shared package)
-        working-directory: packages/family_roots_core
-        run: dart pub get
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Get dependencies (web)
-        working-directory: web
-        run: flutter pub get
+      - name: Type-check
+        run: npx tsc --noEmit
 
-      - name: Analyze
-        working-directory: web
-        run: flutter analyze
+      - name: Lint
+        run: npm run lint
 
-      - name: Run tests
-        working-directory: web
-        run: flutter test
-
-      - name: Build web (release)
-        working-directory: web
-        run: flutter build web --release
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.example.com/api/v1
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
 
   deploy:
-    needs: analyze-and-test
+    needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          channel: stable
-          cache: true
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-      - name: Get dependencies (shared package)
-        working-directory: packages/family_roots_core
-        run: dart pub get
-
-      - name: Get dependencies (web)
-        working-directory: web
-        run: flutter pub get
-
-      - name: Build web (release)
-        working-directory: web
-        run: flutter build web --release
+      - name: Install dependencies
+        run: npm ci
 
       - name: Deploy to Vercel
-        working-directory: web
-        run: |
-          npm i -g vercel
-          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} build/web/
+        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+

@@ -61,6 +61,24 @@ services:
     networks:
       - familyroots
 
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: familyroots-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000/api/v1}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - familyroots
+
 volumes:
   pgdata:
 
