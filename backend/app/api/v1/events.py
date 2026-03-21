@@ -1,24 +1,30 @@
-"""Events API routes — death anniversaries, birthdays, clan events."""
+"""Events API routes — thin controller delegating to Event handlers."""
 
 import uuid
-from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.event.handlers import EventCommandHandler, EventQueryHandler
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError
-from app.core.pagination import build_page, paginate_query
 from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.models.audit_log import AuditLog
-from app.models.event import Event
-from app.models.person import Person
-from app.schemas.event import EventCreateRequest, EventResponse, EventUpdateRequest
+from app.domain.shared.value_objects import ActorInfo
+from app.schemas.event import EventCreateRequest, EventUpdateRequest
 
 router = APIRouter()
+
+
+def _make_handlers(db: AsyncSession) -> tuple[EventCommandHandler, EventQueryHandler]:
+    from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
+    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+
+    repo = SqlAlchemyEventRepository(db)
+    dispatcher = create_event_dispatcher(db)
+    uow = SqlAlchemyUnitOfWork(db, dispatcher)
+    return EventCommandHandler(repo, uow), EventQueryHandler(repo)
 
 
 @router.post("", status_code=201)
@@ -29,22 +35,11 @@ async def create_event(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
-    """Create a new event (death anniversary, birthday, etc.)."""
-    actor_id = uuid.UUID(current_user["sub"])
-
-    # Verify person exists if provided
-    if body.person_id:
-        result = await db.execute(
-            select(Person).where(
-                Person.id == body.person_id,
-                Person.is_deleted.is_(False),
-            )
-        )
-        if not result.scalar_one_or_none():
-            raise NotFoundError("person_not_found")
-
-    event = Event(
+    """Create a new event."""
+    cmd_handler, _ = _make_handlers(db)
+    event = await cmd_handler.create(
         clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "editor"),
         person_id=body.person_id,
         event_type=body.event_type,
         title=body.title,
@@ -53,22 +48,8 @@ async def create_event(
         is_lunar_calendar=body.is_lunar_calendar,
         is_recurring=body.is_recurring,
         notify_days_before=body.notify_days_before,
-        created_by=actor_id,
     )
-    db.add(event)
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=actor_id,
-            actor_role="editor",
-            action="event.create",
-            resource_type="event",
-            resource_id=event.id,
-        )
-    )
-    await db.commit()
-    await db.refresh(event)
-    return {"data": EventResponse.model_validate(event).model_dump()}
+    return {"data": event.model_dump()}
 
 
 @router.get("")
@@ -83,19 +64,12 @@ async def list_events(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """List events with optional filters."""
-    query = select(Event).where(Event.clan_id == clan_id)
-    if person_id:
-        query = query.where(Event.person_id == person_id)
-    if event_type:
-        query = query.where(Event.event_type == event_type)
-
-    query = paginate_query(query, Event, cursor, limit)
-    result = await db.execute(query)
-    events = list(result.scalars().all())
-
-    page = build_page(events, limit)
-    page["data"] = [EventResponse.model_validate(e).model_dump() for e in page["data"]]
-    return page
+    _, query_handler = _make_handlers(db)
+    items = await query_handler.list_events(
+        clan_id=clan_id, person_id=person_id, event_type=event_type,
+        cursor=cursor, limit=limit,
+    )
+    return {"data": [item.model_dump() for item in items]}
 
 
 @router.get("/upcoming")
@@ -106,80 +80,9 @@ async def get_upcoming_events(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
-    """Get upcoming events within the next N days.
-
-    For recurring events, compute the next occurrence using
-    MAKE_DATE with the current year.
-    """
-    today = date.today()
-    end_date = today + timedelta(days=days)
-
-    result = await db.execute(
-        text(
-            "SELECT e.id, e.person_id, e.event_type, e.title, e.event_date, "
-            "  e.is_lunar_calendar, e.is_recurring, "
-            "  p.full_name AS person_name, p.avatar_url AS person_avatar_url, "
-            "  CASE "
-            "    WHEN e.is_recurring THEN "
-            "      CASE "
-            "        WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, "
-            "             EXTRACT(MONTH FROM e.event_date)::int, "
-            "             EXTRACT(DAY FROM e.event_date)::int) >= CURRENT_DATE "
-            "        THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, "
-            "             EXTRACT(MONTH FROM e.event_date)::int, "
-            "             EXTRACT(DAY FROM e.event_date)::int) "
-            "        ELSE MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int + 1, "
-            "             EXTRACT(MONTH FROM e.event_date)::int, "
-            "             EXTRACT(DAY FROM e.event_date)::int) "
-            "      END "
-            "    ELSE e.event_date "
-            "  END AS next_occurrence "
-            "FROM public.events e "
-            "LEFT JOIN public.persons p ON p.id = e.person_id "
-            "WHERE e.clan_id = :clan_id "
-            "  AND ("
-            "    (e.is_recurring = true) OR "
-            "    (e.is_recurring = false AND e.event_date >= :today)"
-            "  ) "
-            "HAVING CASE "
-            "  WHEN e.is_recurring THEN "
-            "    CASE "
-            "      WHEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, "
-            "           EXTRACT(MONTH FROM e.event_date)::int, "
-            "           EXTRACT(DAY FROM e.event_date)::int) >= CURRENT_DATE "
-            "      THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, "
-            "           EXTRACT(MONTH FROM e.event_date)::int, "
-            "           EXTRACT(DAY FROM e.event_date)::int) "
-            "      ELSE MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int + 1, "
-            "           EXTRACT(MONTH FROM e.event_date)::int, "
-            "           EXTRACT(DAY FROM e.event_date)::int) "
-            "    END "
-            "  ELSE e.event_date "
-            "END BETWEEN :today AND :end_date "
-            "ORDER BY next_occurrence ASC "
-            "LIMIT 50"
-        ),
-        {"clan_id": clan_id, "today": today, "end_date": end_date},
-    )
-    rows = result.mappings().all()
-
-    upcoming = []
-    for row in rows:
-        next_occ = row["next_occurrence"]
-        upcoming.append(
-            {
-                "id": str(row["id"]),
-                "person_id": str(row["person_id"]) if row["person_id"] else None,
-                "person_name": row["person_name"],
-                "person_avatar_url": row["person_avatar_url"],
-                "event_type": row["event_type"],
-                "title": row["title"],
-                "event_date": row["event_date"].isoformat(),
-                "next_occurrence": next_occ.isoformat() if next_occ else None,
-                "days_until": (next_occ - today).days if next_occ else None,
-                "is_lunar_calendar": row["is_lunar_calendar"],
-            }
-        )
+    """Get upcoming events within the next N days."""
+    _, query_handler = _make_handlers(db)
+    upcoming = await query_handler.get_upcoming(clan_id=clan_id, days=days)
     return {"data": upcoming}
 
 
@@ -191,8 +94,9 @@ async def get_event(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
-    event = await _get_event_or_404(event_id, clan_id, db)
-    return {"data": EventResponse.model_validate(event).model_dump()}
+    _, query_handler = _make_handlers(db)
+    event = await query_handler.get(event_id=event_id, clan_id=clan_id)
+    return {"data": event.model_dump()}
 
 
 @router.patch("/{event_id}")
@@ -204,25 +108,14 @@ async def update_event(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
-    event = await _get_event_or_404(event_id, clan_id, db)
-
-    update_data = body.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(event, field, value)
-
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
-            actor_role="editor",
-            action="event.update",
-            resource_type="event",
-            resource_id=event.id,
-        )
+    cmd_handler, _ = _make_handlers(db)
+    event = await cmd_handler.update(
+        event_id=event_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "editor"),
+        changes=body.model_dump(exclude_unset=True),
     )
-    await db.commit()
-    await db.refresh(event)
-    return {"data": EventResponse.model_validate(event).model_dump()}
+    return {"data": event.model_dump()}
 
 
 @router.delete("/{event_id}")
@@ -233,26 +126,10 @@ async def delete_event(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
-    event = await _get_event_or_404(event_id, clan_id, db)
-
-    await db.delete(event)
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
-            actor_role="editor",
-            action="event.delete",
-            resource_type="event",
-            resource_id=event_id,
-        )
+    cmd_handler, _ = _make_handlers(db)
+    await cmd_handler.delete(
+        event_id=event_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "editor"),
     )
-    await db.commit()
     return {"data": {"message": "Event deleted", "id": str(event_id)}}
-
-
-async def _get_event_or_404(event_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession) -> Event:
-    result = await db.execute(select(Event).where(Event.id == event_id, Event.clan_id == clan_id))
-    event = result.scalar_one_or_none()
-    if not event:
-        raise NotFoundError("event_not_found")
-    return event

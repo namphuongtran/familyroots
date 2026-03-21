@@ -1,0 +1,148 @@
+"""Person use-case handlers.
+
+Orchestrates domain entities + repository + UoW to execute commands/queries.
+Each handler method is a single use case — one public method per action.
+"""
+
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+from app.application.person.commands import (
+    CreatePerson,
+    DeletePerson,
+    GetPerson,
+    GetPersonTimeline,
+    ListPersons,
+    RestorePerson,
+    SearchPersons,
+    UpdatePerson,
+)
+from app.domain.person.entity import Person
+from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
+from app.domain.shared.exceptions import EntityNotFoundError
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.schemas.person import PersonResponse
+
+
+class PersonCommandHandler:
+    """Handles Person write operations (create, update, delete, restore)."""
+
+    def __init__(self, repo: PersonRepository, uow: SqlAlchemyUnitOfWork) -> None:
+        self._repo = repo
+        self._uow = uow
+
+    async def create(self, cmd: CreatePerson) -> PersonResponse:
+        """Create a new person and their clan membership."""
+        person = Person.create(
+            full_name=cmd.full_name,
+            actor=cmd.actor,
+            clan_id=cmd.clan_id,
+            gender=cmd.gender,
+            birth_name=cmd.birth_name,
+            courtesy_name=cmd.courtesy_name,
+            posthumous_name=cmd.posthumous_name,
+            alias_name=cmd.alias_name,
+            birth_date=cmd.birth_date,
+            birth_date_approx=cmd.birth_date_approx,
+            death_date=cmd.death_date,
+            death_date_approx=cmd.death_date_approx,
+            lunar_birth_date=cmd.lunar_birth_date,
+            lunar_death_date=cmd.lunar_death_date,
+            birth_place=cmd.birth_place,
+            death_place=cmd.death_place,
+            burial_place=cmd.burial_place,
+            tomb_location=cmd.tomb_location,
+            residence_place=cmd.residence_place,
+            religion=cmd.religion,
+            nationality=cmd.nationality,
+            occupation=cmd.occupation,
+            education_level=cmd.education_level,
+            title_rank=cmd.title_rank,
+            phone=cmd.phone,
+            email=cmd.email,
+            biography=cmd.biography,
+            avatar_url=cmd.avatar_url,
+            notes=cmd.notes,
+            origin_clan_id=cmd.origin_clan_id or cmd.clan_id,
+        )
+
+        self._uow.track(person)
+        await self._repo.save_with_membership(
+            person,
+            clan_id=cmd.clan_id,
+            role=cmd.membership_role,
+            generation=cmd.generation,
+            is_founder=cmd.is_founder,
+            branch_id=cmd.branch_id,
+        )
+        await self._uow.commit()
+        return PersonResponse.model_validate(person)
+
+    async def update(self, cmd: UpdatePerson) -> PersonResponse:
+        """Update a person's details."""
+        person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id)
+        if not person:
+            raise EntityNotFoundError("person_not_found")
+
+        person.update(cmd.changes, cmd.actor, cmd.clan_id)
+        self._uow.track(person)
+        await self._repo.save(person)
+        await self._uow.commit()
+        return PersonResponse.model_validate(person)
+
+    async def delete(self, cmd: DeletePerson) -> None:
+        """Soft-delete a person."""
+        person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id)
+        if not person:
+            raise EntityNotFoundError("person_not_found")
+
+        person.soft_delete(cmd.actor, cmd.clan_id)
+        self._uow.track(person)
+        await self._repo.save(person)
+        await self._uow.commit()
+
+    async def restore(self, cmd: RestorePerson) -> PersonResponse:
+        """Restore a soft-deleted person."""
+        person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id)
+        if not person:
+            raise EntityNotFoundError("person_not_found")
+
+        person.restore(cmd.actor, cmd.clan_id)
+        self._uow.track(person)
+        await self._repo.save(person)
+        await self._uow.commit()
+        return PersonResponse.model_validate(person)
+
+
+class PersonQueryHandler:
+    """Handles Person read operations (list, search, get, timeline)."""
+
+    def __init__(self, repo: PersonRepository) -> None:
+        self._repo = repo
+
+    async def list(self, query: ListPersons) -> tuple[list[PersonResponse], int]:
+        """List persons with filtering, pagination, and total count."""
+        filters = PersonFilters(
+            gender=query.gender,
+            is_deleted=query.is_deleted,
+            generation=query.generation,
+            branch_id=query.branch_id,
+        )
+        persons = await self._repo.list_in_clan(
+            query.clan_id, filters, query.cursor, query.limit
+        )
+        total = await self._repo.count_in_clan(query.clan_id, query.is_deleted)
+        return [PersonResponse.model_validate(p) for p in persons], total
+
+    async def get(self, query: GetPerson) -> PersonResponse:
+        """Get a single person."""
+        person = await self._repo.get_in_clan(query.person_id, query.clan_id)
+        if not person:
+            raise EntityNotFoundError("person_not_found")
+        return PersonResponse.model_validate(person)
+
+    async def search(self, query: SearchPersons) -> list[PersonSearchResult]:
+        """Search persons by name."""
+        return await self._repo.search(query.clan_id, query.query, query.limit)

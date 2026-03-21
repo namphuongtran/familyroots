@@ -1,30 +1,37 @@
-"""Documents API routes — upload, list, delete documents and photos."""
+"""Documents API routes — thin controller delegating to Document handlers."""
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError, ValidationError
-from app.core.pagination import build_page, paginate_query
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.models.audit_log import AuditLog
-from app.models.document import Document
-from app.models.person import Person
-from app.schemas.document import (
-    ALLOWED_MIME_TYPES,
-    MAX_FILE_SIZE_BYTES,
-    DocumentResponse,
-    DocumentSummary,
-)
-from app.services.storage import delete_file, get_presigned_url, upload_file
+from app.domain.shared.value_objects import ActorInfo
 
 router = APIRouter()
+
+
+def _make_handlers(
+    db: AsyncSession,
+) -> tuple[DocumentCommandHandler, DocumentQueryHandler]:
+    from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
+    from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
+    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+
+    repo = SqlAlchemyDocumentRepository(db)
+    storage = SupabaseStorageAdapter()
+    dispatcher = create_event_dispatcher(db)
+    uow = SqlAlchemyUnitOfWork(db, dispatcher)
+    return (
+        DocumentCommandHandler(repo, storage, uow),
+        DocumentQueryHandler(repo, storage),
+    )
 
 
 @router.post("", status_code=201)
@@ -41,74 +48,23 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
-    """Upload a document/photo to Supabase Storage and save metadata."""
-    actor_id = uuid.UUID(current_user["sub"])
-
-    # Validate mime type
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        raise ValidationError("invalid_mime_type", {"allowed": list(ALLOWED_MIME_TYPES)})
-
-    # Validate document_type
-    valid_types = {"photo", "id_document", "certificate", "audio", "video", "other"}
-    if document_type not in valid_types:
-        raise ValidationError("invalid_document_type")
-
-    # Read file content and validate size
+    """Upload a document/photo to storage and save metadata."""
+    cmd_handler, _ = _make_handlers(db)
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE_BYTES:
-        raise ValidationError("file_too_large", {"max_bytes": MAX_FILE_SIZE_BYTES})
-
-    # Verify person exists if provided
-    if person_id:
-        result = await db.execute(
-            select(Person).where(
-                Person.id == person_id,
-                Person.is_deleted.is_(False),
-            )
-        )
-        if not result.scalar_one_or_none():
-            raise NotFoundError("person_not_found")
-
-    # Build storage path
-    file_ext = (file.filename or "file").rsplit(".", 1)[-1] if file.filename else "bin"
-    file_id = uuid.uuid4()
-    storage_path = f"clans/{clan_id}/documents/{file_id}.{file_ext}"
-
-    await upload_file(storage_path, content, file.content_type)
-
-    doc = Document(
-        clan_id=clan_id,
-        person_id=person_id,
+    result = await cmd_handler.upload(
+        file_content=content,
+        filename=file.filename,
+        content_type=file.content_type,
         title=title,
-        description=description,
         document_type=document_type,
-        storage_path=storage_path,
-        file_size_bytes=len(content),
-        mime_type=file.content_type,
-        original_filename=file.filename,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "editor"),
+        person_id=person_id,
+        description=description,
         taken_date=taken_date,
         taken_place=taken_place,
-        created_by=actor_id,
     )
-    db.add(doc)
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=actor_id,
-            actor_role="editor",
-            action="document.upload",
-            resource_type="document",
-            resource_id=doc.id,
-        )
-    )
-    await db.commit()
-    await db.refresh(doc)
-
-    presigned = await get_presigned_url(doc.storage_path)
-    resp = DocumentResponse.model_validate(doc).model_dump()
-    resp["presigned_url"] = presigned
-    resp["presigned_url_expires_at"] = datetime.now(UTC).isoformat()
-    return {"data": resp}
+    return {"data": result.model_dump()}
 
 
 @router.get("")
@@ -123,19 +79,15 @@ async def list_documents(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """List documents with optional filters, paginated."""
-    query = select(Document).where(Document.clan_id == clan_id)
-    if person_id:
-        query = query.where(Document.person_id == person_id)
-    if document_type:
-        query = query.where(Document.document_type == document_type)
-
-    query = paginate_query(query, Document, cursor, limit)
-    result = await db.execute(query)
-    docs = list(result.scalars().all())
-
-    page = build_page(docs, limit)
-    page["data"] = [DocumentSummary.model_validate(d).model_dump() for d in page["data"]]
-    return page
+    _, query_handler = _make_handlers(db)
+    items = await query_handler.list_documents(
+        clan_id=clan_id,
+        person_id=person_id,
+        document_type=document_type,
+        cursor=cursor,
+        limit=limit,
+    )
+    return {"data": [item.model_dump() for item in items]}
 
 
 @router.get("/{document_id}")
@@ -147,11 +99,9 @@ async def get_document(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get document metadata with a presigned download URL."""
-    doc = await _get_doc_or_404(document_id, clan_id, db)
-    presigned = await get_presigned_url(doc.storage_path)
-    resp = DocumentResponse.model_validate(doc).model_dump()
-    resp["presigned_url"] = presigned
-    return {"data": resp}
+    _, query_handler = _make_handlers(db)
+    result = await query_handler.get(document_id=document_id, clan_id=clan_id)
+    return {"data": result.model_dump()}
 
 
 @router.delete("/{document_id}")
@@ -163,30 +113,12 @@ async def delete_document(
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Delete a document from storage and the database (admin only)."""
-    doc = await _get_doc_or_404(document_id, clan_id, db)
-
-    # Remove from storage
-    await delete_file(doc.storage_path)
-
-    # If this was an avatar, clear the person's avatar_url
-    if doc.is_avatar and doc.person_id:
-        result = await db.execute(select(Person).where(Person.id == doc.person_id))
-        person = result.scalar_one_or_none()
-        if person:
-            person.avatar_url = None
-
-    await db.delete(doc)
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
-            actor_role="admin",
-            action="document.delete",
-            resource_type="document",
-            resource_id=document_id,
-        )
+    cmd_handler, _ = _make_handlers(db)
+    await cmd_handler.delete(
+        document_id=document_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "admin"),
     )
-    await db.commit()
     return {"data": {"message": "Document deleted", "id": str(document_id)}}
 
 
@@ -199,43 +131,6 @@ async def set_document_as_avatar(
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Set a photo document as the person's avatar."""
-    doc = await _get_doc_or_404(document_id, clan_id, db)
-
-    if not doc.person_id:
-        raise ValidationError("document_not_linked_to_person")
-    if doc.document_type != "photo":
-        raise ValidationError("only_photo_can_be_avatar")
-
-    # Unset existing avatar for this person
-    existing = await db.execute(
-        select(Document).where(
-            Document.clan_id == clan_id,
-            Document.person_id == doc.person_id,
-            Document.is_avatar.is_(True),
-            Document.id != doc.id,
-        )
-    )
-    for old_avatar in existing.scalars().all():
-        old_avatar.is_avatar = False
-
-    doc.is_avatar = True
-
-    # Update the person's avatar_url
-    presigned = await get_presigned_url(doc.storage_path, expires_in=86400 * 30)
-    result = await db.execute(select(Person).where(Person.id == doc.person_id))
-    person = result.scalar_one_or_none()
-    if person:
-        person.avatar_url = presigned
-
-    await db.commit()
+    cmd_handler, _ = _make_handlers(db)
+    await cmd_handler.set_avatar(document_id=document_id, clan_id=clan_id)
     return {"data": {"message": "Avatar set", "document_id": str(document_id)}}
-
-
-async def _get_doc_or_404(doc_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession) -> Document:
-    result = await db.execute(
-        select(Document).where(Document.id == doc_id, Document.clan_id == clan_id)
-    )
-    doc = result.scalar_one_or_none()
-    if not doc:
-        raise NotFoundError("document_not_found")
-    return doc

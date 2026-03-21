@@ -55,3 +55,45 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
             }
         },
     )
+
+
+# ── Domain-to-HTTP exception mapper ──────────────────────────────
+
+
+async def domain_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Map framework-agnostic domain exceptions to the standard HTTP error envelope.
+
+    Registered alongside ``app_exception_handler`` in ``main.py`` so that
+    domain code never needs to import FastAPI exception types.
+    """
+    from app.domain.shared.exceptions import (
+        AuthenticationError as DomainAuthError,
+        BusinessRuleViolation,
+        ConflictError as DomainConflictError,
+        DomainError,
+        EntityNotFoundError,
+        ForbiddenError as DomainForbiddenError,
+    )
+    from app.services.translator import t
+
+    assert isinstance(exc, DomainError)
+
+    status_map: dict[type[DomainError], int] = {
+        EntityNotFoundError: 404,
+        DomainForbiddenError: 403,
+        DomainConflictError: 409,
+        DomainAuthError: 401,
+        BusinessRuleViolation: 422,
+    }
+    status_code = status_map.get(type(exc), 400)
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": t(f"error.{exc.code}"),
+                "detail": exc.detail,
+            }
+        },
+    )

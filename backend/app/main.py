@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
-from app.core.exceptions import AppError, app_exception_handler
+from app.core.exceptions import AppError, app_exception_handler, domain_exception_handler
+from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
 from app.services.notification import init_firebase
@@ -58,8 +59,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Register custom exception handler
+    # Register custom exception handlers
     application.add_exception_handler(AppError, app_exception_handler)
+    application.add_exception_handler(DomainError, domain_exception_handler)
 
     # CORS middleware
     application.add_middleware(
@@ -76,6 +78,16 @@ def create_app() -> FastAPI:
     # Sentry middleware
     if settings.SENTRY_DSN:
         application.add_middleware(SentryMiddleware)
+
+    # Rate limiting on auth endpoints (20 req/min per IP)
+    from app.core.rate_limit import RateLimitMiddleware
+
+    application.add_middleware(
+        RateLimitMiddleware,
+        path_prefix="/api/v1/auth",
+        max_requests=20,
+        window_seconds=60,
+    )
 
     # NOTE: No tenant middleware — clan_id isolation is handled by
     # Supabase RLS at the DB level + get_current_clan_id() dependency.

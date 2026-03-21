@@ -1,21 +1,30 @@
-"""Clan management API routes — clan info, user approval, role management."""
+"""Clan management API routes — thin controller delegating to use-case handlers.
+
+Clan info, user listing, approval, rejection, role management,
+and user removal — all with automatic audit logging via domain events.
+"""
 
 import uuid
-from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.clan.commands import (
+    ApproveUser,
+    ChangeUserRole,
+    RejectUser,
+    RemoveUser,
+    UpdateClan,
+)
+from app.application.clan.handlers import ClanCommandHandler
 from app.core.database import get_db
-from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
-from app.core.pagination import build_page, paginate_query
 from app.core.permissions import ClanRole, RequireAdmin, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.models.audit_log import AuditLog
-from app.models.clan import Clan
-from app.models.user_clan_role import UserClanRole
+from app.domain.shared.exceptions import EntityNotFoundError
+from app.domain.shared.value_objects import ActorInfo
+from app.infrastructure.dependencies import get_clan_command_handler
+from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
 from app.schemas.clan import ClanResponse, ClanUpdateRequest
 from app.services.translator import t
 
@@ -30,9 +39,10 @@ async def get_own_clan(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get the current user's active clan info."""
-    clan = await db.get(Clan, clan_id)
+    repo = SqlAlchemyClanRepository(db)
+    clan = await repo.get_clan(clan_id)
     if not clan:
-        raise NotFoundError("clan_not_found")
+        raise EntityNotFoundError("clan_not_found")
     return {"data": ClanResponse.model_validate(clan).model_dump()}
 
 
@@ -41,30 +51,17 @@ async def update_own_clan(
     body: ClanUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    handler: ClanCommandHandler = Depends(get_clan_command_handler),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Update current clan info (admin only)."""
-    clan = await db.get(Clan, clan_id)
-    if not clan:
-        raise NotFoundError("clan_not_found")
-
-    update_data = body.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(clan, field, value)
-
-    db.add(
-        AuditLog(
+    clan = await handler.update_clan(
+        UpdateClan(
             clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
-            actor_role="admin",
-            action="clan.update",
-            resource_type="clan",
-            resource_id=clan_id,
-            new_value=update_data,
+            actor=ActorInfo.from_jwt(current_user, "admin"),
+            changes=body.model_dump(exclude_unset=True),
         )
     )
-    await db.commit()
     return {"data": ClanResponse.model_validate(clan).model_dump()}
 
 
@@ -78,13 +75,8 @@ async def list_clan_users(
     limit: int = 20,
 ) -> dict[str, Any]:
     """List approved users in the current clan (paginated)."""
-    query = select(UserClanRole).where(
-        UserClanRole.clan_id == clan_id, UserClanRole.is_approved.is_(True)
-    )
-    query = paginate_query(query, UserClanRole, cursor, min(limit, 100))
-    result = await db.execute(query)
-    items = list(result.scalars().all())
-    page = build_page(items, min(limit, 100))
+    repo = SqlAlchemyClanRepository(db)
+    page = await repo.list_users(clan_id, approved=True, cursor=cursor, limit=limit)
     page["data"] = [
         {
             "id": str(u.id),
@@ -108,13 +100,8 @@ async def list_pending_users(
     limit: int = 20,
 ) -> dict[str, Any]:
     """List users pending approval (admin only)."""
-    query = select(UserClanRole).where(
-        UserClanRole.clan_id == clan_id, UserClanRole.is_approved.is_(False)
-    )
-    query = paginate_query(query, UserClanRole, cursor, min(limit, 100))
-    result = await db.execute(query)
-    items = list(result.scalars().all())
-    page = build_page(items, min(limit, 100))
+    repo = SqlAlchemyClanRepository(db)
+    page = await repo.list_users(clan_id, approved=False, cursor=cursor, limit=limit)
     page["data"] = [
         {
             "id": str(u.id),
@@ -132,36 +119,17 @@ async def approve_user(
     user_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    handler: ClanCommandHandler = Depends(get_clan_command_handler),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Approve a pending user (admin only)."""
-    result = await db.execute(
-        select(UserClanRole).where(UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id)
-    )
-    ucr = result.scalar_one_or_none()
-    if not ucr:
-        raise NotFoundError("user_not_found")
-    if ucr.is_approved:
-        raise ConflictError("user.already_approved")
-
-    ucr.is_approved = True
-    ucr.approved_by = uuid.UUID(current_user["sub"])
-    from datetime import datetime
-
-    ucr.approved_at = datetime.now(UTC)
-
-    db.add(
-        AuditLog(
+    await handler.approve_user(
+        ApproveUser(
             clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
-            actor_role="admin",
-            action="user.approve",
-            resource_type="user_clan_role",
-            resource_id=ucr.id,
+            target_user_id=user_id,
+            actor=ActorInfo.from_jwt(current_user, "admin"),
         )
     )
-    await db.commit()
     return {"data": {"message": t("user.approved"), "user_id": str(user_id)}}
 
 
@@ -170,33 +138,17 @@ async def reject_user(
     user_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    handler: ClanCommandHandler = Depends(get_clan_command_handler),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
-    """Reject a pending user (admin only). Deletes the membership row."""
-    result = await db.execute(
-        select(UserClanRole).where(
-            UserClanRole.clan_id == clan_id,
-            UserClanRole.user_id == user_id,
-            UserClanRole.is_approved.is_(False),
-        )
-    )
-    ucr = result.scalar_one_or_none()
-    if not ucr:
-        raise NotFoundError("user_not_found")
-
-    await db.delete(ucr)
-    db.add(
-        AuditLog(
+    """Reject a pending user (admin only)."""
+    await handler.reject_user(
+        RejectUser(
             clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
-            actor_role="admin",
-            action="user.reject",
-            resource_type="user_clan_role",
-            resource_id=ucr.id,
+            target_user_id=user_id,
+            actor=ActorInfo.from_jwt(current_user, "admin"),
         )
     )
-    await db.commit()
     return {"data": {"message": t("user.rejected"), "user_id": str(user_id)}}
 
 
@@ -206,54 +158,21 @@ async def change_user_role(
     role: str,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    handler: ClanCommandHandler = Depends(get_clan_command_handler),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Change a user's clan role (admin only)."""
-    if role not in ("admin", "editor", "viewer"):
-        raise ValidationError(
-            "validation",
-            {"field": "role", "allowed": ["admin", "editor", "viewer"]},
-        )
-
-    actor_id = uuid.UUID(current_user["sub"])
-
-    result = await db.execute(
-        select(UserClanRole).where(UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id)
-    )
-    ucr = result.scalar_one_or_none()
-    if not ucr:
-        raise NotFoundError("user_not_found")
-
-    # Prevent demoting yourself if you're the only admin
-    if user_id == actor_id and role != "admin":
-        admin_count = await db.execute(
-            select(func.count()).where(
-                UserClanRole.clan_id == clan_id,
-                UserClanRole.role == "admin",
-                UserClanRole.is_approved.is_(True),
-            )
-        )
-        if (admin_count.scalar() or 0) <= 1:
-            raise ForbiddenError("clan.last_admin_cannot_demote")
-
-    old_role = ucr.role
-    ucr.role = role
-
-    db.add(
-        AuditLog(
+    await handler.change_role(
+        ChangeUserRole(
             clan_id=clan_id,
-            actor_id=actor_id,
-            actor_role="admin",
-            action="user.change_role",
-            resource_type="user_clan_role",
-            resource_id=ucr.id,
-            old_value={"role": old_role},
-            new_value={"role": role},
+            target_user_id=user_id,
+            new_role=role,
+            actor=ActorInfo.from_jwt(current_user, "admin"),
         )
     )
-    await db.commit()
-    return {"data": {"message": t("user.role_changed"), "user_id": str(user_id), "role": role}}
+    return {
+        "data": {"message": t("user.role_changed"), "user_id": str(user_id), "role": role}
+    }
 
 
 @router.delete("/me/users/{user_id}")
@@ -261,32 +180,15 @@ async def remove_user(
     user_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    handler: ClanCommandHandler = Depends(get_clan_command_handler),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Remove a user from the clan (admin only)."""
-    actor_id = uuid.UUID(current_user["sub"])
-
-    if user_id == actor_id:
-        raise ForbiddenError("clan.cannot_remove_self")
-
-    result = await db.execute(
-        select(UserClanRole).where(UserClanRole.clan_id == clan_id, UserClanRole.user_id == user_id)
-    )
-    ucr = result.scalar_one_or_none()
-    if not ucr:
-        raise NotFoundError("user_not_found")
-
-    await db.delete(ucr)
-    db.add(
-        AuditLog(
+    await handler.remove_user(
+        RemoveUser(
             clan_id=clan_id,
-            actor_id=actor_id,
-            actor_role="admin",
-            action="user.remove",
-            resource_type="user_clan_role",
-            resource_id=ucr.id,
+            target_user_id=user_id,
+            actor=ActorInfo.from_jwt(current_user, "admin"),
         )
     )
-    await db.commit()
     return {"data": {"message": t("user.removed"), "user_id": str(user_id)}}

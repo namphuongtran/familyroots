@@ -1,21 +1,30 @@
-"""Branches API routes — CRUD for chi/phái/nhánh within a clan."""
+"""Branches API routes — thin controller delegating to Branch handlers."""
 
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.models.audit_log import AuditLog
-from app.models.branch import Branch
-from app.schemas.branch import BranchCreateRequest, BranchResponse, BranchUpdateRequest
+from app.domain.shared.value_objects import ActorInfo
+from app.schemas.branch import BranchCreateRequest, BranchUpdateRequest
 
 router = APIRouter()
+
+
+def _make_handlers(db: AsyncSession) -> tuple[BranchCommandHandler, BranchQueryHandler]:
+    from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
+    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+
+    repo = SqlAlchemyBranchRepository(db)
+    dispatcher = create_event_dispatcher(db)
+    uow = SqlAlchemyUnitOfWork(db, dispatcher)
+    return BranchCommandHandler(repo, uow), BranchQueryHandler(repo)
 
 
 @router.get("")
@@ -25,14 +34,10 @@ async def list_branches(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
-    """List all branches (chi/phái) for the current clan."""
-    result = await db.execute(
-        select(Branch)
-        .where(Branch.clan_id == clan_id)
-        .order_by(Branch.branch_order.asc().nullslast(), Branch.name.asc())
-    )
-    branches = result.scalars().all()
-    return {"data": [BranchResponse.model_validate(b).model_dump() for b in branches]}
+    """List all branches for the current clan."""
+    _, query_handler = _make_handlers(db)
+    branches = await query_handler.list_branches(clan_id=clan_id)
+    return {"data": [b.model_dump() for b in branches]}
 
 
 @router.post("", status_code=201)
@@ -43,41 +48,18 @@ async def create_branch(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
-    """Create a new branch within the current clan."""
-    actor_id = uuid.UUID(current_user["sub"])
-
-    # Validate parent_branch_id belongs to the same clan
-    if body.parent_branch_id:
-        parent = await db.execute(
-            select(Branch).where(
-                Branch.id == body.parent_branch_id, Branch.clan_id == clan_id
-            )
-        )
-        if not parent.scalar_one_or_none():
-            raise NotFoundError("branch_not_found", {"branch_id": str(body.parent_branch_id)})
-
-    branch = Branch(
+    """Create a new branch."""
+    cmd_handler, _ = _make_handlers(db)
+    branch = await cmd_handler.create(
         clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "editor"),
         name=body.name,
         description=body.description,
         founder_person_id=body.founder_person_id,
         parent_branch_id=body.parent_branch_id,
         branch_order=body.branch_order,
     )
-    db.add(branch)
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=actor_id,
-            actor_role="editor",
-            action="branch.create",
-            resource_type="branch",
-            resource_id=branch.id,
-        )
-    )
-    await db.commit()
-    await db.refresh(branch)
-    return {"data": BranchResponse.model_validate(branch).model_dump()}
+    return {"data": branch.model_dump()}
 
 
 @router.get("/{branch_id}")
@@ -89,8 +71,9 @@ async def get_branch(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a single branch by ID."""
-    branch = await _get_branch_or_404(branch_id, clan_id, db)
-    return {"data": BranchResponse.model_validate(branch).model_dump()}
+    _, query_handler = _make_handlers(db)
+    branch = await query_handler.get(branch_id=branch_id, clan_id=clan_id)
+    return {"data": branch.model_dump()}
 
 
 @router.patch("/{branch_id}")
@@ -103,26 +86,14 @@ async def update_branch(
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a branch."""
-    branch = await _get_branch_or_404(branch_id, clan_id, db)
-    actor_id = uuid.UUID(current_user["sub"])
-
-    update_data = body.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(branch, field, value)
-
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=actor_id,
-            actor_role="editor",
-            action="branch.update",
-            resource_type="branch",
-            resource_id=branch.id,
-        )
+    cmd_handler, _ = _make_handlers(db)
+    branch = await cmd_handler.update(
+        branch_id=branch_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "editor"),
+        changes=body.model_dump(exclude_unset=True),
     )
-    await db.commit()
-    await db.refresh(branch)
-    return {"data": BranchResponse.model_validate(branch).model_dump()}
+    return {"data": branch.model_dump()}
 
 
 @router.delete("/{branch_id}")
@@ -133,34 +104,11 @@ async def delete_branch(
     db: AsyncSession = Depends(get_db),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
-    """Delete a branch (admin only). Sets branch_id to NULL on related memberships."""
-    branch = await _get_branch_or_404(branch_id, clan_id, db)
-
-    await db.delete(branch)
-    db.add(
-        AuditLog(
-            clan_id=clan_id,
-            actor_id=uuid.UUID(current_user["sub"]),
-            actor_role="admin",
-            action="branch.delete",
-            resource_type="branch",
-            resource_id=branch_id,
-        )
+    """Delete a branch (admin only)."""
+    cmd_handler, _ = _make_handlers(db)
+    await cmd_handler.delete(
+        branch_id=branch_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "admin"),
     )
-    await db.commit()
     return {"data": {"message": "Branch deleted", "id": str(branch_id)}}
-
-
-# ── Helpers ───────────────────────────────────────────────────
-
-
-async def _get_branch_or_404(
-    branch_id: uuid.UUID, clan_id: uuid.UUID, db: AsyncSession
-) -> Branch:
-    result = await db.execute(
-        select(Branch).where(Branch.id == branch_id, Branch.clan_id == clan_id)
-    )
-    branch = result.scalar_one_or_none()
-    if not branch:
-        raise NotFoundError("branch_not_found")
-    return branch

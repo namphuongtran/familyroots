@@ -1,17 +1,16 @@
-"""Supabase Storage upload/delete service."""
+"""Supabase Storage upload/delete service (legacy — prefer SupabaseStorageAdapter)."""
 
 import logging
 
-from supabase import Client, create_client
-
 from app.core.config import settings
+from app.infrastructure.supabase_client import get_service_client
 
 logger = logging.getLogger(__name__)
 
 
-def get_storage_client() -> Client:
-    """Return a Supabase client using the service role key (bypasses RLS)."""
-    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+def get_storage_client():
+    """Return a cached Supabase client using the service role key."""
+    return get_service_client()
 
 
 async def upload_file(path: str, content: bytes, content_type: str) -> str:

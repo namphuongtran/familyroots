@@ -1,5 +1,6 @@
 """JWT validation via Supabase JWKS, auth dependencies, and super admin guard."""
 
+import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
@@ -18,24 +19,42 @@ from app.models.user_profile import UserProfile
 
 security = HTTPBearer()
 
+# Thread-safe JWKS cache using asyncio.Lock
 _jwks_cache: dict[str, Any] | None = None
 _jwks_cache_time: float = 0.0
+_jwks_lock: asyncio.Lock | None = None
 _JWKS_TTL: float = 3600.0  # 1 hour
 
 
+def _get_jwks_lock() -> asyncio.Lock:
+    """Lazily create a Lock bound to the current event loop."""
+    global _jwks_lock
+    if _jwks_lock is None:
+        _jwks_lock = asyncio.Lock()
+    return _jwks_lock
+
+
 async def get_supabase_jwks() -> dict[str, Any]:
-    """Fetch Supabase public JWKS with in-memory caching (1-hour TTL)."""
+    """Fetch Supabase public JWKS with thread-safe in-memory caching (1-hour TTL)."""
     global _jwks_cache, _jwks_cache_time
+
+    # Fast path: check without lock
     now = time.monotonic()
     if _jwks_cache is not None and (now - _jwks_cache_time) < _JWKS_TTL:
         return _jwks_cache
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json")
-        resp.raise_for_status()
-        _jwks_cache = resp.json()
-        _jwks_cache_time = now
-        return _jwks_cache
+    # Slow path: acquire lock, double-check, then fetch
+    async with _get_jwks_lock():
+        now = time.monotonic()
+        if _jwks_cache is not None and (now - _jwks_cache_time) < _JWKS_TTL:
+            return _jwks_cache
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json")
+            resp.raise_for_status()
+            _jwks_cache = resp.json()
+            _jwks_cache_time = now
+            return _jwks_cache
 
 
 async def verify_supabase_token(token: str) -> dict[str, Any]:
