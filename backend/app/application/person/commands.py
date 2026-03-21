@@ -54,7 +54,7 @@ class CreatePerson:
     biography: str | None = None
     avatar_url: str | None = None
     notes: str | None = None
-    origin_clan_id: uuid.UUID | None = None
+    created_by_clan_id: uuid.UUID | None = None
 
     # Membership-specific
     membership_role: str = "blood"

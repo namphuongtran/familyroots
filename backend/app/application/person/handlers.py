@@ -21,8 +21,9 @@ from app.application.person.commands import (
 )
 from app.domain.person.entity import Person
 from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
-from app.domain.shared.exceptions import EntityNotFoundError
+from app.domain.shared.exceptions import EntityNotFoundError, ForbiddenError
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.models.user_profile import UserProfile
 from app.schemas.person import PersonResponse
 
 
@@ -65,7 +66,7 @@ class PersonCommandHandler:
             biography=cmd.biography,
             avatar_url=cmd.avatar_url,
             notes=cmd.notes,
-            origin_clan_id=cmd.origin_clan_id or cmd.clan_id,
+            created_by_clan_id=cmd.created_by_clan_id or cmd.clan_id,
         )
 
         self._uow.track(person)
@@ -85,6 +86,20 @@ class PersonCommandHandler:
         person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id)
         if not person:
             raise EntityNotFoundError("person_not_found")
+
+        if cmd.actor.role == "viewer":
+            user_profile = await self._uow.session.get(UserProfile, cmd.actor.user_id)
+            if not user_profile or user_profile.person_id != cmd.person_id:
+                raise ForbiddenError("insufficient_permissions")
+                
+            allowed_fields = {
+                "phone", "email", "avatar_url", "residence_place", 
+                "biography", "notes", "religion", "occupation", 
+                "education_level", "title_rank"
+            }
+            invalid_fields = set(cmd.changes.keys()) - allowed_fields
+            if invalid_fields:
+                raise ForbiddenError(f"unauthorized_fields_update: {', '.join(invalid_fields)}")
 
         person.update(cmd.changes, cmd.actor, cmd.clan_id)
         self._uow.track(person)

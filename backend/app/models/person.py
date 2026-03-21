@@ -19,7 +19,7 @@ class Person(TimestampMixin, Base):
     )
 
     # Origin clan (nullable — may not belong to any clan in the system)
-    origin_clan_id: Mapped[uuid.UUID | None] = mapped_column(
+    created_by_clan_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("clans.id", ondelete="SET NULL"),
         default=None,
@@ -110,9 +110,6 @@ class Person(TimestampMixin, Base):
     )
     documents = relationship("Document", back_populates="person", lazy="selectin")
     events = relationship("Event", back_populates="person", lazy="selectin")
-    user_account = relationship(
-        "UserClanRole", back_populates="person", uselist=False
-    )
     marriages_as_person1 = relationship(
         "Marriage",
         foreign_keys="Marriage.person1_id",

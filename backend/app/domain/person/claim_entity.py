@@ -1,0 +1,45 @@
+from dataclasses import dataclass, field
+from datetime import datetime
+import uuid
+
+@dataclass
+class IdentityClaim:
+    user_id: uuid.UUID
+    person_id: uuid.UUID
+    requester_note: str | None = None
+    status: str = "PENDING"
+    reviewer_note: str | None = None
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: datetime | None = None
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+    def cancel(self, user_id: uuid.UUID) -> None:
+        if self.user_id != user_id:
+            raise ValueError("Only the requester can cancel their claim")
+        if self.status != "PENDING":
+            raise ValueError("Only PENDING claims can be cancelled")
+        
+        self.status = "CANCELLED"
+
+    def approve(self, admin_id: uuid.UUID, reviewer_note: str | None = None) -> None:
+        if self.status != "PENDING":
+            raise ValueError("Only PENDING claims can be approved")
+        
+        self.status = "APPROVED"
+        self.reviewed_by = admin_id
+        self.reviewer_note = reviewer_note
+
+    def reject(self, admin_id: uuid.UUID, reviewer_note: str | None = None) -> None:
+        if self.status != "PENDING":
+            raise ValueError("Only PENDING claims can be rejected")
+        
+        self.status = "REJECTED"
+        self.reviewed_by = admin_id
+        self.reviewer_note = reviewer_note
+
+    def reject_as_duplicate(self) -> None:
+        if self.status != "PENDING":
+            return
+        
+        self.status = "REJECTED"
+        self.reviewer_note = "Person verified by another user."

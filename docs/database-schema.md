@@ -1,4 +1,4 @@
-# Database Schema
+# FamilyRoots Database Schema
 
 ## Overview
 
@@ -15,18 +15,22 @@ Data isolation between clans is enforced by:
 
 ### Architecture Principle
 
-```
+```text
 Person ──────── exists globally (no clan_id)
 ClanMembership ── links Person ↔ Clan (M:N, with role + generation)
 Marriage ──────── global edge (person1 ↔ person2, created_by_clan_id for write RLS)
 ParentChild ───── global edge (parent → child, created_by_clan_id for write RLS)
 ```
 
-A person like "Đào Thị B" (origin clan Đào) who marries "Trần Văn A" (clan Trần) has:
-- **One** Person record (no duplication)
-- A `ClanMembership(B → Trần, role=spouse)`
-- A `Marriage(A ↔ B, created_by_clan_id=Trần)`
-- If clan Đào also uses the system: `ClanMembership(A → Đào, role=spouse)`
+**Example:**
+"Đào Thị B" (origin clan Đào) marries "Trần Văn A" (clan Trần). The system handles this with:
+- **Two** distinct `Person` records (no duplication).
+- A `ClanMembership(B → Trần, role=spouse)`.
+- A `Marriage(A ↔ B, created_by_clan_id=Trần)`.
+- If clan Đào also uses the system: `ClanMembership(A → Đào, role=spouse)`.
+
+> **💡 Note (VN) - Global Person Architecture:** 
+> Hệ thống được thiết kế theo mô hình **Global Person (Nhân vật Toàn cục)**. Thay vì mỗi dòng họ có một bản ghi riêng cho cùng một người (dễ dẫn tới rác dữ liệu ở các họ có liên hôn), một người chỉ tồn tại duy nhất 1 lần trên toàn hệ thống. Các dòng họ quản lý thành viên thông qua `clan_memberships`. Các mối quan hệ (Cưới hỏi, Cha con) là liên kết toàn cầu nhưng được kiểm soát quyền "Write" bởi dòng họ tạo ra nó thông qua `created_by_clan_id`.
 
 ---
 
@@ -52,7 +56,7 @@ erDiagram
 
     persons {
         uuid id PK
-        uuid origin_clan_id FK "nullable - original clan"
+        uuid created_by_clan_id FK "nullable - reference to creator clan"
         varchar full_name
         varchar birth_name
         varchar courtesy_name
@@ -137,7 +141,7 @@ erDiagram
         date divorce_date
         varchar marriage_place
         varchar status "married | divorced | widowed | separated"
-        smallint spouse_order "1st wife, 2nd wife... (from person1 perspective)"
+        smallint spouse_order "1st wife, 2nd wife... (from person1)"
         text notes
         uuid created_by
         uuid updated_by
@@ -169,12 +173,24 @@ erDiagram
         uuid id PK
         uuid clan_id FK
         uuid user_id FK "FK to user_profiles"
-        uuid person_id FK "nullable - linked person record"
         varchar role "admin | editor | viewer"
         boolean is_approved
         uuid approved_by
         timestamptz approved_at
         uuid invited_by
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    identity_claims {
+        uuid id PK
+        uuid user_id FK
+        uuid person_id FK
+        varchar status "PENDING | APPROVED | REJECTED | CANCELLED"
+        text requester_note
+        text reviewer_note
+        uuid reviewed_by
+        timestamptz reviewed_at
         timestamptz created_at
         timestamptz updated_at
     }
@@ -245,7 +261,7 @@ erDiagram
         uuid clan_id FK
         uuid requester_id
         varchar action "create | update | delete"
-        varchar resource_type "person | marriage | parent_child | event | document"
+        varchar resource_type
         uuid resource_id "nullable - null for create"
         jsonb payload
         varchar status "pending | approved | rejected"
@@ -299,6 +315,7 @@ erDiagram
     %% ── Relationships ──
     user_profiles ||--o{ user_clan_roles : "has clan roles"
     user_profiles ||--o{ user_devices : "has devices"
+    user_profiles ||--o| identity_claims : "submits"
     clans ||--o{ clan_memberships : "has members"
     clans ||--o{ user_clan_roles : "has roles"
     clans ||--|| clan_settings : "has settings"
@@ -318,9 +335,9 @@ erDiagram
     persons ||--o{ parent_child : "as child"
     persons ||--o{ events : "about"
     persons ||--o{ documents : "attached"
-    persons |o--o| user_clan_roles : "linked account"
+    persons ||--o{ identity_claims : "claimed by"
     persons |o--o| user_profiles : "canonical user link"
-    persons }o--o| clans : "origin_clan"
+    persons }o--o| clans : "created_by_clan"
     events ||--o{ notification_log : "triggers"
     branches ||--o{ clan_memberships : "has members"
     branches |o--o| persons : "founder"
@@ -331,289 +348,251 @@ erDiagram
 ## Table Details
 
 ### `clans`
-
 Central registry of family clans (dòng họ). Each clan is a tenant.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `name` | VARCHAR(255) | NOT NULL | Display name (e.g. "Họ Trần Văn") |
-| `slug` | VARCHAR(100) | UNIQUE, NOT NULL | URL-safe identifier |
-| `description` | TEXT | | |
+| `name` | VARCHAR(255) | NOT NULL | Display name (e.g. "Họ Trần Văn") / Tên dòng họ |
+| `slug` | VARCHAR(100) | UNIQUE, NOT NULL | URL-safe identifier / Đường dẫn thân thiện |
+| `description` | TEXT | | Mô tả / Lịch sử dòng họ |
 | `origin_place` | VARCHAR(255) | | Quê quán gốc |
 | `founded_year` | SMALLINT | | Năm thành lập |
-| `avatar_url` | VARCHAR(500) | | |
-| `motto` | TEXT | | Phương châm gia tộc |
+| `avatar_url` | VARCHAR(500) | | Logo / Gia huy dòng họ |
+| `motto` | TEXT | | Phương châm gia tộc / Khẩu hiệu |
 | `ancestral_hall_location` | VARCHAR(500) | | Địa chỉ nhà thờ tổ |
-| `clan_rules` | TEXT | | Gia huấn |
-| `is_active` | BOOLEAN | DEFAULT true | |
+| `clan_rules` | TEXT | | Gia huấn / Quy định của họ |
+| `is_active` | BOOLEAN | DEFAULT true | Trạng thái hoạt động |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Design notes:**
-- `approval_config` lives in `clan_settings` table (never on `clans`).
-
 ### `user_profiles`
-
-Local cache of Supabase Auth user data. Created lazily on first login via `ensure_user_profile()`. The primary key is the Supabase `auth.users.id` UUID.
+Local cache of Supabase Auth user data. Mapped 1:1 to a real-world Identity via `person_id`.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `id` | UUID | PK | Supabase `auth.users.id` (not auto-generated) |
-| `email` | VARCHAR(255) | UNIQUE, NOT NULL | Synced from JWT on first login |
-| `display_name` | VARCHAR(255) | | From JWT `user_metadata.full_name` or email prefix |
-| `avatar_url` | VARCHAR(500) | | Profile avatar |
-| `language` | VARCHAR(10) | DEFAULT 'vi' | UI language preference |
-| `timezone` | VARCHAR(50) | DEFAULT 'Asia/Ho_Chi_Minh' | User timezone |
-| `is_active` | BOOLEAN | DEFAULT true | App-level suspension |
-| `platform_role` | VARCHAR(50) | DEFAULT 'user' | `user` or `super_admin` |
-| `person_id` | UUID | FK → persons.id (SET NULL), UNIQUE, nullable | Canonical link to this user's person record |
-| `last_login_at` | TIMESTAMPTZ | | Updated on login (throttled to every 5 min) |
+| `id` | UUID | PK | Supabase `auth.users.id` |
+| `email` | VARCHAR(255) | UNIQUE, NOT NULL | Synced from JWT |
+| `display_name` | VARCHAR(255) | | Tên hiển thị |
+| `avatar_url` | VARCHAR(500) | | Ảnh đại diện tài khoản |
+| `language` | VARCHAR(10) | DEFAULT 'vi' | Ngôn ngữ giao diện |
+| `timezone` | VARCHAR(50) | DEFAULT 'Asia/Ho_Chi_Minh' | Múi giờ |
+| `is_active` | BOOLEAN | DEFAULT true | Tài khoản còn hoạt động không |
+| `platform_role` | VARCHAR(50) | DEFAULT 'user' | Quyền trên toàn hệ thống (`user` | `super_admin`) |
+| `person_id` | UUID | FK → persons.id (SET NULL) | UNIQUE. Canonical link to person / Link định danh với nhân vật trong gia phả. |
+| `last_login_at` | TIMESTAMPTZ | | Lần đăng nhập cuối |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Sync strategy:** On-first-login (lazy creation). When `get_current_user()` validates the JWT, `ensure_user_profile()` checks if a `user_profiles` row exists. If not, it creates one from JWT claims. No Supabase webhooks or triggers needed.
+> **💡 Note (VN) - User vs Person Profile:**
+> Tại sao KHÔNG để `clan_id` ở `user_profile`? Một user có thể tham gia nhiều gia phả (nội, ngoại, vợ). Việc phân quyền thuộc về bảng vòng `user_clan_roles`. Giá trị `person_id` ở đây là liên kết hệ thống: Nó ánh xạ User (tài khoản số) tới Person (nhân vật lịch sử). 
 
-**`person_id` — canonical user↔person link:** A user is one real person. This 1:1 link (UNIQUE constraint) is the canonical binding. `user_clan_roles.person_id` remains as a denormalized convenience reference per-clan.
-
-### `user_devices`
-
-Tracks FCM tokens per user device for push notifications. Replaces the old `fcm_token` column on `notification_log`.
+### `identity_claims`
+Workflow queue for users claiming an identity in the family tree.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL | |
-| `fcm_token` | VARCHAR(500) | UNIQUE, NOT NULL | Firebase Cloud Messaging token |
-| `device_name` | VARCHAR(255) | | e.g. "iPhone 15 Pro" |
-| `platform` | VARCHAR(20) | NOT NULL | `ios`, `android`, `web` |
-| `is_active` | BOOLEAN | DEFAULT true | Deactivated when token expires |
-| `last_used_at` | TIMESTAMPTZ | | |
-| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `user_id` | UUID | FK → user_profiles.id | Requester / Người gửi yêu cầu |
+| `person_id` | UUID | FK → persons.id | Identity to claim / Nhân vật muốn nhận diện |
+| `status` | VARCHAR | | PENDING, APPROVED, REJECTED, CANCELLED |
+| `requester_note` | TEXT | | User justification / Lý do từ phía user (ví dụ: tôi là con ông B) |
+| `reviewer_note` | TEXT | | Admin feedback / Lý do duyệt/từ chối của admin |
+| `reviewed_by` | UUID | | Admin ID / Người duyệt |
+| `reviewed_at` | TIMESTAMPTZ | | |
+| `created_at` | TIMESTAMPTZ | NOT NULL | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | |
+
+> **💡 Note (VN) - Ngăn Spam & Race Condition:** 
+> Hệ thống chặn spam bằng Constraint `UNIQUE(user_id) WHERE status = 'PENDING'` (một user chỉ có 1 request đang chờ). Khi claim được Approve, hệ thống gán `user_profile.person_id` và tự động Reject toàn bộ các claims Pending khác vào cùng nhân vật này, ngăn Race Condition.
 
 ### `persons`
-
 Global person entity — independent of any clan. A person exists once and can appear in multiple clans via `clan_memberships`.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `origin_clan_id` | UUID | FK → clans.id (SET NULL), nullable | Họ gốc (reference only) |
+| `created_by_clan_id` | UUID | FK → clans.id | Creator clan / Dòng họ Owner tạo ra bản ghi này |
 | `full_name` | VARCHAR(255) | NOT NULL | Tên đầy đủ |
 | `birth_name` | VARCHAR(255) | | Tên khai sinh |
-| `courtesy_name` | VARCHAR(255) | | Tên tự / tên chữ |
-| `posthumous_name` | VARCHAR(255) | | Tên huý / tên thụy (ancestor worship) |
-| `alias_name` | VARCHAR(255) | | Biệt danh / tên thường gọi |
-| `gender` | VARCHAR(20) | NOT NULL, DEFAULT 'unknown' | male, female, unknown |
-| `birth_date` | DATE | | Solar calendar (canonical for sorting) |
-| `birth_date_approx` | BOOLEAN | DEFAULT false | True if date is estimated |
-| `death_date` | DATE | | Solar calendar |
-| `death_date_approx` | BOOLEAN | DEFAULT false | |
-| `lunar_birth_date` | VARCHAR(30) | | Display only, e.g. "15/08 Nhâm Tý" |
-| `lunar_death_date` | VARCHAR(30) | | Display only |
+| `courtesy_name` | VARCHAR(255) | | Tên tự / Tên chữ |
+| `posthumous_name` | VARCHAR(255) | | Tên huý / Tên thụy (dùng trong cúng giỗ) |
+| `alias_name` | VARCHAR(255) | | Biệt danh / Tên thường gọi |
+| `gender` | VARCHAR(20) | NOT NULL, DEFAULT 'unknown' | Giới tính (male, female, unknown) |
+| `birth_date` | DATE | | Ngày sinh (Dương lịch - canonical) |
+| `birth_date_approx` | BOOLEAN | DEFAULT false | Ngày sinh là ước lượng / khoảng chừng |
+| `death_date` | DATE | | Ngày mất (Dương lịch) |
+| `death_date_approx` | BOOLEAN | DEFAULT false | Ngày mất là ước lượng / khoảng chừng |
+| `lunar_birth_date` | VARCHAR(30) | | Ngày sinh Âm lịch (chỉ để display/lưu text) |
+| `lunar_death_date` | VARCHAR(30) | | Ngày mất Âm lịch (chỉ để display/lưu text) |
 | `birth_place` | VARCHAR(255) | | Nơi sinh |
 | `death_place` | VARCHAR(255) | | Nơi mất |
 | `burial_place` | VARCHAR(255) | | Nơi an táng |
-| `tomb_location` | VARCHAR(500) | | Phần mộ hiện tại (may differ from burial) |
-| `residence_place` | VARCHAR(255) | | Chỗ ở hiện tại |
+| `tomb_location` | VARCHAR(500) | | Tọa độ/Vị trí phần mộ hiện tại |
+| `residence_place` | VARCHAR(255) | | Địa chỉ chỗ ở thường trú |
 | `religion` | VARCHAR(100) | | Tôn giáo |
 | `nationality` | VARCHAR(100) | DEFAULT 'VN' | Quốc tịch |
-| `occupation` | VARCHAR(255) | | Nghề nghiệp |
-| `education_level` | VARCHAR(255) | | Học vấn |
-| `title_rank` | VARCHAR(255) | | Chức danh, phẩm hàm |
-| `phone` | VARCHAR(50) | | Số điện thoại |
+| `occupation` | VARCHAR(255) | | Nghề nghiệp hiện tại / lúc sinh thời |
+| `education_level` | VARCHAR(255) | | Trình độ học vấn |
+| `title_rank` | VARCHAR(255) | | Chức danh, phẩm hàm, tước vị |
+| `phone` | VARCHAR(50) | | Số điện thoại liên hệ |
 | `email` | VARCHAR(255) | | Email liên hệ |
-| `biography` | TEXT | | Tiểu sử |
-| `avatar_url` | VARCHAR(500) | | Ảnh đại diện |
-| `notes` | TEXT | | Ghi chú |
-| `is_deleted` | BOOLEAN | DEFAULT false | Soft delete |
+| `biography` | TEXT | | Tiểu sử / Câu chuyện cuộc đời |
+| `avatar_url` | VARCHAR(500) | | Link ảnh đại diện chân dung |
+| `notes` | TEXT | | Ghi chú nội bộ |
+| `is_deleted` | BOOLEAN | DEFAULT false | Soft delete / Đã xoá mềm |
 | `deleted_at` | TIMESTAMPTZ | | |
 | `deleted_by` | UUID | | |
-| `created_by` | UUID | NOT NULL | |
+| `created_by` | UUID | NOT NULL | Người tạo bản ghi |
 | `updated_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Design notes:**
-- **No `clan_id`** — Person is a global entity. Clan association is via `clan_memberships`.
-- **Lunar dates as VARCHAR** — Lunar calendar doesn't map 1:1 to solar (leap months, can chi). Stored as display text. Solar DATE columns remain canonical for computation/sorting.
-- **`origin_clan_id`** — Soft reference to original clan. Not required. Useful for display ("Họ gốc: Đào").
+> **💡 Note (VN) - Data Ownership:**
+> Cột `created_by_clan_id` giúp xác định ai là "Chủ Thực Sự" (Owner) của bản ghi này. Dòng họ Owner có quyển Edit lớn nhất, trong khi các dòng họ khác chỉ có thể link (tạo Reference) hoặc Submit các Change Request xuyên dòng họ.
 
 ### `clan_memberships`
-
 M:N link between persons and clans. Determines which persons appear in which clan's tree.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `person_id` | UUID | FK → persons.id (CASCADE), NOT NULL | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `role` | VARCHAR(20) | DEFAULT 'blood' | blood, spouse, adopted |
+| `person_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Thực thể Nhân vật |
+| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Thuộc Dòng họ nào |
+| `role` | VARCHAR(20) | DEFAULT 'blood' | Vai trò huyết thống: blood (rút ruột), spouse (dâu rể), adopted (con nuôi) |
 | `generation` | SMALLINT | | Đời thứ mấy — relative to this clan |
-| `is_founder` | BOOLEAN | DEFAULT false | Thuỷ tổ |
-| `branch_id` | UUID | FK → branches.id (SET NULL), nullable | Chi/phái within the clan |
-| `joined_at` | TIMESTAMPTZ | | |
+| `is_founder` | BOOLEAN | DEFAULT false | Là Thuỷ tổ (người sáng lập dòng họ này) |
+| `branch_id` | UUID | FK → branches.id (SET NULL), nullable | Thuộc chi/phái nào trong họ |
+| `joined_at` | TIMESTAMPTZ | | Thời điểm gắn vào họ |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Constraints:** `UNIQUE(person_id, clan_id)` — a person can only have one membership per clan.
-
-**Why `generation` is here, not on `persons`:** The same person can be generation 5 in clan Trần but generation 1 (founder) if they start a new branch/clan. Generation is relative to the clan context.
+> **💡 Note (VN) - Thế Thứ Tương Đối:**
+> Tại sao `generation` (đời thứ mấy) nằm ở đây thay vì ở `persons`? Vì ở họ của mẹ, người này có thể thuộc đời thứ 5, nhưng khi họ lập ra một chi báo/dòng họ mới của bản thân, họ lại là đời số 1 (Thuỷ tổ) của dòng họ đó!
 
 ### `marriages`
-
 Global edge linking two persons. Supports polygamy, divorce, remarriage.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `person1_id` | UUID | FK → persons.id (CASCADE), NOT NULL | |
-| `person2_id` | UUID | FK → persons.id (CASCADE), NOT NULL | |
-| `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan that manages this record |
+| `person1_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Sinh ra từ gốc dòng họ chính |
+| `person2_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Dâu / Rể |
+| `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
 | `marriage_date` | DATE | | Ngày cưới |
-| `divorce_date` | DATE | | Ngày ly hôn |
-| `marriage_place` | VARCHAR(255) | | Nơi kết hôn |
-| `status` | VARCHAR(20) | DEFAULT 'married' | married, divorced, widowed, separated |
-| `spouse_order` | SMALLINT | | Vợ cả=1, vợ hai=2, vợ ba=3... (from person1's perspective) |
-| `notes` | TEXT | | |
-| `created_by` | UUID | NOT NULL | User who created |
-| `updated_by` | UUID | | User who last updated |
-| `is_deleted` | BOOLEAN | DEFAULT false | Soft delete |
+| `divorce_date` | DATE | | Ngày ly dị |
+| `marriage_place` | VARCHAR(255) | | Nơi tổ chức lễ cưới |
+| `status` | VARCHAR(20) | DEFAULT 'married' | Tình trạng: married, divorced, widowed (góa), separated (ly thân) |
+| `spouse_order` | SMALLINT | | Thứ tự hôn nhân (Vợ cả=1, vợ hai=2...) |
+| `notes` | TEXT | | Ghi chú |
+| `created_by` | UUID | NOT NULL | |
+| `updated_by` | UUID | | |
+| `is_deleted` | BOOLEAN | DEFAULT false | |
 | `deleted_at` | TIMESTAMPTZ | | |
 | `deleted_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Constraints:**
-- `CHECK(person1_id != person2_id)` — cannot marry self
-- `UNIQUE INDEX(LEAST(p1,p2), GREATEST(p1,p2), status) WHERE status = 'married'` — prevents duplicate active marriages
-
-**`created_by_clan_id` — not `clan_id`:** The marriage is a global fact. The clan only manages write access. RLS policy: `allow write if created_by_clan_id = current_clan`. Both clans can read.
-
-**Real-world cases handled:**
-
-| Case | Model |
-|------|-------|
-| Cụ ông lấy 3 bà | 3 Marriage rows: A-B, A-C, A-D with `spouse_order` 1, 2, 3 |
-| Ly hôn | `status='divorced'`, `divorce_date` set |
-| Tái hôn | New Marriage row with new spouse |
-| Goá | `status='widowed'` |
-| Con ngoài giá thú | No Marriage needed — only ParentChild edges |
-
 ### `parent_child`
-
 Global edge linking parent to child. Supports biological, adopted, step, foster.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `parent_id` | UUID | FK → persons.id (CASCADE), NOT NULL | |
-| `child_id` | UUID | FK → persons.id (CASCADE), NOT NULL | |
-| `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan that manages this record |
-| `relationship_type` | VARCHAR(20) | DEFAULT 'biological' | biological, adopted, step, foster |
-| `birth_order` | SMALLINT | | Thứ tự con: con cả=1, con thứ=2... |
-| `notes` | TEXT | | |
+| `parent_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Cha / Mẹ |
+| `child_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Con |
+| `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
+| `relationship_type` | VARCHAR(20) | DEFAULT 'biological' | Loại quan hệ: biological (con đẻ), adopted (con nuôi), step (con riêng của vợ/chồng), foster (con đỡ đầu) |
+| `birth_order` | SMALLINT | | Thứ tự sinh (con cả=1, con thứ=2...) |
+| `notes` | TEXT | | Ghi chú |
 | `created_by` | UUID | NOT NULL | |
-| `updated_by` | UUID | | User who last updated |
-| `is_deleted` | BOOLEAN | DEFAULT false | Soft delete |
+| `updated_by` | UUID | | |
+| `is_deleted` | BOOLEAN | DEFAULT false | |
 | `deleted_at` | TIMESTAMPTZ | | |
 | `deleted_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Constraints:**
-- `UNIQUE(parent_id, child_id, relationship_type)` — prevents duplicate edges
-- `CHECK(parent_id != child_id)` — cannot be own parent
-- `CHECK(birth_order IS NULL OR birth_order > 0)` — positive birth order
-
-**Every child has up to 2 ParentChild rows** (one per parent). This naturally handles:
-
-| Case | Model |
-|------|-------|
-| Con ruột (A + B → child) | `ParentChild(A→child, bio)` + `ParentChild(B→child, bio)` |
-| Con nuôi | `ParentChild(A→child, adopted)` — UI renders as dashed line |
-| Con riêng (step) | `ParentChild(A→child, step)` |
-| Con ngoài giá thú (A + C → child, but A married B) | `ParentChild(A→child, bio)` + `ParentChild(C→child, bio)`, no Marriage A-C needed |
+> **💡 Note (VN) - Global Edge Monopoly (Độc quyền Liên kết):**
+> Các table `marriages` và `parent_child` bị giới hạn tạo bởi constraint Unique trên `(person1, person2, status)` hoặc `(parent_id, child_id, relationship_type)`. Điều này có nghĩa nếu Họ Nguyễn đã cấp liên kết "A là con B", thì Họ Lê không thể tạo thêm 1 liên kết "A là con B" thứ 2. Việc này giảm rác, nhưng yêu cầu việc Edit liên kết phải thông qua Clan gốc ở `created_by_clan_id` hoặc theo cơ chế Cross-Clan Change Request.
 
 ### `user_clan_roles`
-
-Maps users to clans with RBAC roles. A user may belong to **multiple clans** — each with an independent role. The active clan is selected at runtime via the `X-Current-Clan-Id` header.
+Maps users to clans with RBAC roles.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL, indexed | |
-| `person_id` | UUID | FK → persons.id (SET NULL) | Links user account to their person record |
+| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Thuộc dòng họ nào |
+| `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL | Tài khoản User |
 | `role` | VARCHAR(20) | DEFAULT 'viewer' | admin, editor, viewer |
-| `is_approved` | BOOLEAN | DEFAULT false | Pending approval by admin |
-| `approved_by` | UUID | | Admin who approved |
+| `is_approved` | BOOLEAN | DEFAULT false | Pending admin approval / Đã được admin duyệt chưa |
+| `approved_by` | UUID | | Người duyệt |
 | `approved_at` | TIMESTAMPTZ | | |
-| `invited_by` | UUID | | User who sent the invite |
+| `invited_by` | UUID | | Phân biệt tự xin vào (join request) hay được admin mời |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Constraints:** `UNIQUE(user_id, clan_id)` — one role per user per clan.
+### `user_devices`
+Tracks FCM tokens per user device for push notifications.
 
-**Role hierarchy:** `viewer` < `editor` < `admin`. Super admin is checked via `user_profiles.platform_role`.
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | |
+| `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL | Tài khoản User |
+| `fcm_token` | VARCHAR(500) | UNIQUE, NOT NULL | Firebase token |
+| `device_name` | VARCHAR(255) | | e.g. "iPhone 15 Pro" / Tên thiết bị |
+| `platform` | VARCHAR(20) | NOT NULL | `ios`, `android`, `web` |
+| `is_active` | BOOLEAN | DEFAULT true | Thiết bị còn nhận thông báo không |
+| `last_used_at` | TIMESTAMPTZ | | |
+| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `change_requests`
-
-Configurable cross-approval workflow. When `clan_settings.approval_config` requires approval for an action, changes go through this queue instead of being applied directly.
+Configurable cross-approval workflow. Uses `clan_settings.approval_config`.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `requester_id` | UUID | NOT NULL | User who proposed the change |
+| `requester_id` | UUID | NOT NULL | User who proposed the change / Người đề xuất thay đổi |
 | `action` | VARCHAR(20) | NOT NULL | create, update, delete |
-| `resource_type` | VARCHAR(50) | NOT NULL | person, marriage, parent_child, event, document |
+| `resource_type` | VARCHAR(50) | NOT NULL | person, marriage, parent_child, event, document / Loại dữ liệu |
 | `resource_id` | UUID | | NULL for create; existing id for update/delete |
-| `payload` | JSONB | | The proposed data |
+| `payload` | JSONB | | The proposed data / Dữ liệu đề xuất (JSON) |
 | `status` | VARCHAR(20) | DEFAULT 'pending' | pending, approved, rejected |
-| `reviewed_by` | UUID | | Admin who approved/rejected |
+| `reviewed_by` | UUID | | Người duyệt / Admin thực hiện duyệt |
 | `reviewed_at` | TIMESTAMPTZ | | |
-| `review_notes` | TEXT | | Reviewer comments |
+| `review_notes` | TEXT | | Lý do từ chối/duyệt |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Workflow:** Editor creates change_request → Different admin reviews (cross-approval to prevent errors) → System applies the change on approval.
-
 ### `branches`
-
-Chi/phái/nhánh within a clan. Vietnamese genealogy divides large clans into branches (chi). Supports nested hierarchy via self-referential `parent_branch_id`.
+Chi/phái/nhánh within a clan. Supports nested hierarchy.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `name` | VARCHAR(255) | NOT NULL | "Chi Hai", "Phái Bắc" |
-| `description` | TEXT | | |
+| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Thuộc dòng họ nào |
+| `name` | VARCHAR(255) | NOT NULL | "Chi Hai", "Phái Bắc" / Tên đại diện nhánh |
+| `description` | TEXT | | Mô tả |
 | `founder_person_id` | UUID | FK → persons.id (SET NULL), nullable | Ông tổ chi này |
-| `parent_branch_id` | UUID | FK → branches.id (SET NULL), nullable | Nhánh cha (tree structure) |
-| `branch_order` | SMALLINT | | Thứ tự hiển thị among siblings |
+| `parent_branch_id` | UUID | FK → branches.id (SET NULL), nullable | Nhánh cha (tree structure) / Chi gốc chứa nhánh này |
+| `branch_order` | SMALLINT | | Thứ tự hiển thị |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Design notes:**
-- Self-referential tree: `parent_branch_id` → `branches.id` allows arbitrary depth.
-- `clan_memberships.branch_id` links persons to their branch within the clan.
-- A clan can have zero branches (optional feature for smaller clans).
-
 ### `clan_settings`
-
-Per-clan configuration. One row per clan (enforced by `UNIQUE(clan_id)`). Created automatically when a new clan is provisioned.
+Per-clan configuration. Auto-created with new clans.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `clan_id` | UUID | FK → clans.id (CASCADE), UNIQUE, NOT NULL | One settings row per clan |
-| `approval_config` | JSONB | | Configurable approval workflow |
+| `approval_config` | JSONB | | Configurable approval workflow / Cấu hình duyệt dữ liệu (theo quyền hạn) |
 | `default_language` | VARCHAR(10) | DEFAULT 'vi' | Default UI language for clan members |
-| `tree_display_mode` | VARCHAR(20) | DEFAULT 'vertical' | `vertical` or `horizontal` tree rendering |
-| `allow_public_tree` | BOOLEAN | DEFAULT false | Whether the family tree is publicly viewable |
-| `notification_defaults` | JSONB | | Default notification settings for new members |
+| `tree_display_mode` | VARCHAR(20) | DEFAULT 'vertical' | `vertical` or `horizontal` tree rendering / Hiển thị cây dọc hay ngang |
+| `allow_public_tree` | BOOLEAN | DEFAULT false | Whether the family tree is publicly viewable / Có cho phép public cây gia phả không |
+| `notification_defaults` | JSONB | | Default notification settings for new members / Cấu hình thông báo mặc định cho member |
 | `privacy_level` | VARCHAR(20) | DEFAULT 'clan_members' | `private`, `clan_members`, or `public` |
-| `max_upload_size_mb` | SMALLINT | DEFAULT 10 | Max file upload size in MB |
+| `max_upload_size_mb` | SMALLINT | DEFAULT 10 | Max file upload size in MB / Dung lượng tối đa cho phép upload |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
@@ -644,45 +623,40 @@ Per-clan configuration. One row per clan (enforced by `UNIQUE(clan_id)`). Create
 ```
 
 ### `clan_invitations`
-
-Tracks pending invitations to join a clan. Supports secure invite links with expiration.
+Tracks pending email invitations to join a clan.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `email` | VARCHAR(255) | NOT NULL | Invited email address |
-| `role` | VARCHAR(20) | DEFAULT 'viewer' | Role assigned upon acceptance |
-| `invited_by` | UUID | NOT NULL | Admin who created the invite |
-| `token` | VARCHAR(255) | UNIQUE, NOT NULL | Secure invite token for the link |
-| `expires_at` | TIMESTAMPTZ | NOT NULL | Invitation expiry |
-| `accepted_at` | TIMESTAMPTZ | | NULL = still pending |
+| `email` | VARCHAR(255) | NOT NULL | Invited email address / Email người được mời |
+| `role` | VARCHAR(20) | DEFAULT 'viewer' | Role assigned upon acceptance / Vai trò (admin, editor, viewer) |
+| `invited_by` | UUID | NOT NULL | Admin who created the invite / Admin gửi lời mời |
+| `token` | VARCHAR(255) | UNIQUE, NOT NULL | Secure invite token for the link / Mã token trên URL thư mời |
+| `expires_at` | TIMESTAMPTZ | NOT NULL | Invitation expiry / Hạn sử dụng lời mời |
+| `accepted_at` | TIMESTAMPTZ | | NULL = still pending / Thời điểm chấp nhận |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-**Index:** `(clan_id, email)` for fast lookup of pending invitations per clan.
-
 ### `events`
-
-Family events and milestones. Clan-scoped (uses `ClanScopedMixin`).
+Family events and milestones. Clan-scoped.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `person_id` | UUID | FK → persons.id (CASCADE) | Nullable — clan-wide events have no person |
-| `event_type` | VARCHAR(30) | NOT NULL | death_anniversary, birthday, wedding_anniversary, clan_ceremony, custom |
-| `title` | VARCHAR(255) | NOT NULL | |
-| `description` | TEXT | | |
-| `event_date` | DATE | NOT NULL | |
-| `is_lunar_calendar` | BOOLEAN | DEFAULT false | |
-| `is_recurring` | BOOLEAN | DEFAULT true | |
-| `notify_days_before` | SMALLINT | DEFAULT 7 | |
-| `created_by` | UUID | NOT NULL | |
+| `person_id` | UUID | FK → persons.id (CASCADE) | Nullable — clan-wide events have no person / Sự kiện cá nhân hay dòng họ |
+| `event_type` | VARCHAR(30) | NOT NULL | death_anniversary (giỗ), birthday (sinh nhật), wedding_anniversary, clan_ceremony (lễ họ), custom |
+| `title` | VARCHAR(255) | NOT NULL | Tiêu đề sự kiện |
+| `description` | TEXT | | Nội dung |
+| `event_date` | DATE | NOT NULL | Ngày diễn ra |
+| `is_lunar_calendar` | BOOLEAN | DEFAULT false | Tính theo âm lịch không? |
+| `is_recurring` | BOOLEAN | DEFAULT true | Lặp lại hằng năm? |
+| `notify_days_before` | SMALLINT | DEFAULT 7 | Báo trước bao nhiêu ngày |
+| `created_by` | UUID | NOT NULL | Người tạo |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `documents`
-
 Uploaded files (photos, certificates, audio/video). Clan-scoped.
 
 | Column | Type | Constraints | Description |
@@ -690,64 +664,63 @@ Uploaded files (photos, certificates, audio/video). Clan-scoped.
 | `id` | UUID | PK | |
 | `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
 | `person_id` | UUID | FK → persons.id (SET NULL) | |
-| `title` | VARCHAR(255) | NOT NULL | |
-| `description` | TEXT | | |
-| `document_type` | VARCHAR(20) | NOT NULL | photo, id_document, certificate, audio, video, other |
+| `title` | VARCHAR(255) | NOT NULL | Tiêu đề tài liệu / Tên file |
+| `description` | TEXT | | Ghi chú |
+| `document_type` | VARCHAR(20) | NOT NULL | photo, id_document, certificate, audio, video, other / Loại tài liệu |
 | `storage_path` | VARCHAR(500) | UNIQUE, NOT NULL | Supabase Storage path |
-| `file_size_bytes` | BIGINT | | |
+| `file_size_bytes` | BIGINT | | Dung lượng file |
 | `mime_type` | VARCHAR(100) | | |
-| `original_filename` | VARCHAR(255) | | |
-| `taken_date` | DATE | | |
-| `taken_place` | VARCHAR(255) | | |
-| `is_avatar` | BOOLEAN | DEFAULT false | |
+| `original_filename` | VARCHAR(255) | | Tên file gốc |
+| `taken_date` | DATE | | Ngày tháng của tài liệu (ví dụ: ngày chụp ảnh) |
+| `taken_place` | VARCHAR(255) | | Địa điểm của tài liệu (ví dụ: nơi chụp ảnh) |
+| `is_avatar` | BOOLEAN | DEFAULT false | Có dùng làm avatar không |
 | `created_by` | UUID | NOT NULL | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `audit_logs`
-
-Immutable log of all write actions. Not clan-scoped (uses own timestamps).
+Immutable log of all write actions. Not clan-scoped.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | | Nullable for platform-level actions |
-| `actor_id` | UUID | NOT NULL | |
-| `actor_role` | VARCHAR(50) | NOT NULL | |
-| `action` | VARCHAR(100) | NOT NULL | |
-| `resource_type` | VARCHAR(50) | NOT NULL | |
-| `resource_id` | UUID | | |
-| `old_value` | JSONB | | Snapshot before change |
-| `new_value` | JSONB | | Snapshot after change |
-| `ip_address` | INET | | |
-| `user_agent` | VARCHAR(500) | | |
+| `clan_id` | UUID | | Nullable for platform-level actions / Null nếu thao tác hệ thống |
+| `actor_id` | UUID | NOT NULL | The user ID / Người thực hiện |
+| `actor_role` | VARCHAR(50) | NOT NULL | Editor, Viewer, SuperAdmin / Role của người thực hiện |
+| `action` | VARCHAR(100) | NOT NULL | e.g. 'person.create', 'claim.approve' |
+| `resource_type` | VARCHAR(50) | NOT NULL | 'person', 'claim' / Cấu phần dữ liệu bị ảnh hưởng |
+| `resource_id` | UUID | | ID của resource |
+| `old_value` | JSONB | | Snapshot before change / Dữ liệu trước khi đổi |
+| `new_value` | JSONB | | Snapshot after change / Dữ liệu sau khi đổi |
+| `ip_address` | INET | | Địa chỉ IP thao tác |
+| `user_agent` | VARCHAR(500) | | Trình duyệt/Thiết bị |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `notification_log`
-
 Tracks push notification delivery. FCM tokens are now stored in `user_devices` (not per-notification).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
-| `event_id` | UUID | FK → events.id (SET NULL) | |
-| `user_id` | UUID | NOT NULL | |
-| `notification_type` | VARCHAR(50) | NOT NULL | |
-| `title` | VARCHAR(255) | NOT NULL | |
-| `body` | TEXT | NOT NULL | |
-| `status` | VARCHAR(20) | DEFAULT 'pending' | |
-| `sent_at` | TIMESTAMPTZ | | |
-| `error_message` | TEXT | | |
+| `event_id` | UUID | FK → events.id (SET NULL) | Sự kiện liên quan |
+| `user_id` | UUID | NOT NULL | Người nhận thông báo |
+| `notification_type` | VARCHAR(50) | NOT NULL | Loại thông báo (event_reminder, claim_approved ...) |
+| `title` | VARCHAR(255) | NOT NULL | Tiêu đề |
+| `body` | TEXT | NOT NULL | Nội dung |
+| `status` | VARCHAR(20) | DEFAULT 'pending' | pending, sent, failed |
+| `sent_at` | TIMESTAMPTZ | | Thời điểm gửi |
+| `error_message` | TEXT | | Lỗi nếu có |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ---
 
-## Indexes
-
-### Recommended indexes for common query patterns
+## Indexes & Performance Tuning
 
 ```sql
+-- Identity Claims
+CREATE UNIQUE INDEX idx_identity_claims_pending_user ON identity_claims(user_id) WHERE status = 'PENDING';
+
 -- Person lookups within a clan (the most common query)
 CREATE INDEX idx_clan_memberships_clan_id ON clan_memberships(clan_id);
 CREATE INDEX idx_clan_memberships_person_id ON clan_memberships(person_id);
@@ -770,7 +743,7 @@ CREATE INDEX idx_branches_clan ON branches(clan_id);
 CREATE INDEX idx_branches_parent ON branches(parent_branch_id);
 
 -- Person origin clan
-CREATE INDEX idx_persons_origin_clan ON persons(origin_clan_id);
+CREATE INDEX idx_persons_created_by_clan ON persons(created_by_clan_id);
 
 -- User role lookups
 CREATE INDEX idx_user_clan_roles_user ON user_clan_roles(user_id);
@@ -809,8 +782,7 @@ CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 
 ## RLS Policies
 
-### Read access
-
+**Read Access**
 ```sql
 -- Persons: visible if person is in user's current clan
 CREATE POLICY persons_select ON persons FOR SELECT USING (
@@ -840,35 +812,28 @@ CREATE POLICY parent_child_select ON parent_child FOR SELECT USING (
 );
 ```
 
-### Write access
-
+**Write Access**
 ```sql
--- Marriages: writable only by the managing clan
+-- Marriages & ParentChild: writable only by the managing clan
 CREATE POLICY marriages_write ON marriages FOR ALL USING (
   created_by_clan_id = current_setting('app.current_clan_id')::uuid
 );
 
--- ParentChild: writable only by the managing clan
 CREATE POLICY parent_child_write ON parent_child FOR ALL USING (
   created_by_clan_id = current_setting('app.current_clan_id')::uuid
 );
 
 -- Clan-scoped tables (events, documents): standard clan_id check
-CREATE POLICY events_access ON events FOR ALL USING (
-  clan_id = current_setting('app.current_clan_id')::uuid
-);
-CREATE POLICY documents_access ON documents FOR ALL USING (
+CREATE POLICY clan_scoped_access ON events FOR ALL USING (
   clan_id = current_setting('app.current_clan_id')::uuid
 );
 ```
 
----
-
-## Storage
+## Storage Strategy
 
 Single shared Supabase Storage bucket with path-based clan isolation:
 
-```
+```text
 family-roots-files/
 ├── clans/{clan_id}/persons/{person_id}/avatar.jpg
 ├── clans/{clan_id}/persons/{person_id}/photos/
@@ -877,8 +842,6 @@ family-roots-files/
 ```
 
 RLS policy on `storage.objects` ensures users can only access files under their clan's path.
-
----
 
 ## Migrations
 

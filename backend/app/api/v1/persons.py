@@ -31,9 +31,12 @@ from app.models.document import Document
 from app.models.event import Event
 from app.models.marriage import Marriage
 from app.models.parent_child import ParentChild
+from app.schemas.auth import UserProfile
+from app.schemas.claim import IdentityClaimResponse, IdentityClaimSubmit
 from app.schemas.event import TimelineEvent
 from app.schemas.person import PersonCreateRequest, PersonUpdateRequest
 from app.services.translator import t
+from app.application.person.claim_handlers import ClaimCommandHandler
 
 router = APIRouter()
 
@@ -121,8 +124,8 @@ async def create_person(
         CreatePerson(
             actor=ActorInfo.from_jwt(current_user, "editor"),
             clan_id=clan_id,
-            origin_clan_id=body.origin_clan_id or clan_id,
-            **body.model_dump(exclude={"origin_clan_id"}),
+            created_by_clan_id=body.created_by_clan_id or clan_id,
+            **body.model_dump(exclude={"created_by_clan_id"}),
         )
     )
     return {"data": person.model_dump()}
@@ -148,14 +151,14 @@ async def update_person(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonCommandHandler = Depends(get_person_command_handler),
-    _role: ClanRole = RequireEditor,
+    user_role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Update a person's details."""
     person = await handler.update(
         UpdatePerson(
             person_id=person_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "editor"),
+            actor=ActorInfo.from_jwt(current_user, user_role.value),
             changes=body.model_dump(exclude_unset=True),
         )
     )
@@ -198,6 +201,24 @@ async def restore_person(
         )
     )
     return {"data": {"message": t("person.restored"), "id": str(person_id)}}
+
+
+@router.post("/{person_id}/claim", response_model=IdentityClaimResponse, status_code=201)
+async def submit_identity_claim(
+    person_id: uuid.UUID,
+    body: IdentityClaimSubmit,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _role: ClanRole = RequireViewer,
+) -> IdentityClaimResponse:
+    """Submit a claim for linking a user profile to a person in the family tree."""
+    user_id = uuid.UUID(current_user["sub"])
+    handler = ClaimCommandHandler(db)
+    return await handler.submit_claim(
+        user_id=user_id,
+        person_id=person_id,
+        requester_note=body.requester_note,
+    )
 
 
 # ── Sub-resources (kept DB-direct until later phases migrate) ─

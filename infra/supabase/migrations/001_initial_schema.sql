@@ -459,9 +459,6 @@ CREATE TABLE public.user_clan_roles (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clan_id         UUID NOT NULL REFERENCES public.clans (id) ON DELETE CASCADE,
     user_id         UUID NOT NULL REFERENCES public.user_profiles (id) ON DELETE CASCADE,
-    person_id       UUID REFERENCES public.persons (id) ON DELETE SET NULL,
-    -- person_id: links this user account to their person profile in the tree
-    -- nullable: admin account may not be a person in the tree
 
     role            clan_role NOT NULL DEFAULT 'viewer',
     is_approved     BOOLEAN NOT NULL DEFAULT false,
@@ -486,6 +483,33 @@ CREATE INDEX idx_user_clan_roles_clan ON public.user_clan_roles (clan_id);
 CREATE INDEX idx_user_clan_roles_pending
     ON public.user_clan_roles (clan_id, is_approved)
     WHERE is_approved = false;
+
+-- ============================================================
+-- TABLE: identity_claims
+-- Associates a user profile with their real-world person record.
+-- Supports an approval workflow where clan admins approve claims.
+-- ============================================================
+CREATE TABLE public.identity_claims (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES public.user_profiles (id) ON DELETE CASCADE,
+    person_id       UUID NOT NULL REFERENCES public.persons (id) ON DELETE CASCADE,
+    status          VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    requester_note  TEXT,
+    reasoning       TEXT,
+    reviewed_by     UUID REFERENCES public.user_profiles (id) ON DELETE SET NULL,
+    reviewed_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT identity_claims_status_check
+        CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'))
+);
+
+CREATE UNIQUE INDEX idx_identity_claims_pending_user
+    ON public.identity_claims (user_id)
+    WHERE status = 'PENDING';
+
+CREATE INDEX idx_identity_claims_person ON public.identity_claims (person_id);
 
 -- ============================================================
 -- TABLE: change_requests
@@ -613,6 +637,10 @@ CREATE TRIGGER trg_events_updated_at
 
 CREATE TRIGGER trg_user_profiles_updated_at
     BEFORE UPDATE ON public.user_profiles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_identity_claims_updated_at
+    BEFORE UPDATE ON public.identity_claims
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_clan_settings_updated_at

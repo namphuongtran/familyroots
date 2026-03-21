@@ -41,7 +41,7 @@ class PersonCreateRequest(BaseModel):
     avatar_url: str | None = Field(None, max_length=500)
     notes: str | None = None
 
-    origin_clan_id: uuid.UUID | None = None
+    created_by_clan_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def validate_death_after_birth(self) -> "PersonCreateRequest":
@@ -85,7 +85,7 @@ class PersonUpdateRequest(BaseModel):
     avatar_url: str | None = Field(None, max_length=500)
     notes: str | None = None
 
-    origin_clan_id: uuid.UUID | None = None
+    created_by_clan_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def validate_death_after_birth(self) -> "PersonUpdateRequest":
@@ -98,7 +98,7 @@ class PersonResponse(BaseModel):
     """Response schema for a single person."""
 
     id: uuid.UUID
-    origin_clan_id: uuid.UUID | None = None
+    created_by_clan_id: uuid.UUID | None = None
 
     full_name: str
     birth_name: str | None = None

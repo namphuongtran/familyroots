@@ -688,12 +688,6 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column(
-            "person_id",
-            UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-        sa.Column(
             "role",
             sa.Enum("admin", "editor", "viewer", name="clan_role", create_type=True),
             nullable=False,
@@ -729,6 +723,61 @@ def upgrade() -> None:
         "CREATE INDEX idx_user_clan_roles_pending ON user_clan_roles (clan_id, is_approved) "
         "WHERE is_approved = false"
     )
+
+    # -- Table: identity_claims --
+    op.create_table(
+        "identity_claims",
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
+        sa.Column(
+            "user_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("user_profiles.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "person_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.String(20),
+            nullable=False,
+            server_default=sa.text("'PENDING'"),
+        ),
+        sa.Column("requester_note", sa.Text, nullable=True),
+        sa.Column("reasoning", sa.Text, nullable=True),
+        sa.Column(
+            "reviewed_by",
+            UUID(as_uuid=True),
+            sa.ForeignKey("user_profiles.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.CheckConstraint(
+            "status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')",
+            name="identity_claims_status_check",
+        ),
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX idx_identity_claims_pending_user ON identity_claims (user_id) WHERE status = 'PENDING'"
+    )
+    op.create_index("idx_identity_claims_person", "identity_claims", ["person_id"])
 
     # -- Table: change_requests --
     op.create_table(

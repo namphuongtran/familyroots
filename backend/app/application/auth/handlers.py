@@ -23,6 +23,7 @@ from app.domain.shared.exceptions import AuthenticationError
 from app.infrastructure.supabase_client import get_anon_client, get_service_client
 from app.models.clan import Clan
 from app.models.user_clan_role import UserClanRole
+from app.models.user_profile import UserProfile as UserProfileModel
 from app.schemas.auth import (
     LoginResponse,
     RegisterResponse,
@@ -179,9 +180,10 @@ class AuthCommandHandler:
 
         user_id = uuid.UUID(user.id)
         result = await self._db.execute(
-            select(UserClanRole, Clan)
-            .join(Clan, UserClanRole.clan_id == Clan.id)
-            .where(UserClanRole.user_id == user_id)
+            select(UserProfileModel, UserClanRole, Clan)
+            .outerjoin(UserClanRole, UserProfileModel.id == UserClanRole.user_id)
+            .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
+            .where(UserProfileModel.id == user_id)
             .limit(1)
         )
         row = result.first()
@@ -194,11 +196,11 @@ class AuthCommandHandler:
                 id=user_id,
                 email=email,
                 full_name=user.user_metadata.get("full_name", ""),
-                clan_id=row.UserClanRole.clan_id if row else None,
-                clan_name=row.Clan.name if row else None,
-                role=row.UserClanRole.role if row and row.UserClanRole.is_approved else None,
-                is_approved=row.UserClanRole.is_approved if row else False,
-                person_id=row.UserClanRole.person_id if row else None,
+                clan_id=row.UserClanRole.clan_id if row and row.UserClanRole else None,
+                clan_name=row.Clan.name if row and row.Clan else None,
+                role=row.UserClanRole.role if row and row.UserClanRole and row.UserClanRole.is_approved else None,
+                is_approved=row.UserClanRole.is_approved if row and row.UserClanRole else False,
+                person_id=row.UserProfileModel.person_id if row else None,
             ),
         )
 
@@ -212,9 +214,10 @@ class AuthQueryHandler:
     async def get_profile(self, *, user_id: uuid.UUID, email: str, full_name: str) -> UserProfile:
         """Return the authenticated user's profile."""
         result = await self._db.execute(
-            select(UserClanRole, Clan)
-            .join(Clan, UserClanRole.clan_id == Clan.id)
-            .where(UserClanRole.user_id == user_id, UserClanRole.is_approved.is_(True))
+            select(UserProfileModel, UserClanRole, Clan)
+            .outerjoin(UserClanRole, (UserProfileModel.id == UserClanRole.user_id) & UserClanRole.is_approved.is_(True))
+            .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
+            .where(UserProfileModel.id == user_id)
             .limit(1)
         )
         row = result.first()
@@ -223,11 +226,11 @@ class AuthQueryHandler:
             id=user_id,
             email=email,
             full_name=full_name,
-            clan_id=row.UserClanRole.clan_id if row else None,
-            clan_name=row.Clan.name if row else None,
-            role=row.UserClanRole.role if row else None,
-            is_approved=bool(row),
-            person_id=row.UserClanRole.person_id if row else None,
+            clan_id=row.UserClanRole.clan_id if row and row.UserClanRole else None,
+            clan_name=row.Clan.name if row and row.Clan else None,
+            role=row.UserClanRole.role if row and row.UserClanRole else None,
+            is_approved=bool(row and row.UserClanRole),
+            person_id=row.UserProfileModel.person_id if row else None,
         )
 
 

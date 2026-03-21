@@ -70,7 +70,7 @@ class Person(AggregateRoot):
     notes: str | None = None
 
     # ── Origin ────────────────────────────────────────────────
-    origin_clan_id: uuid.UUID | None = None
+    created_by_clan_id: uuid.UUID | None = None
 
     # ── Soft delete ───────────────────────────────────────────
     is_deleted: bool = False
