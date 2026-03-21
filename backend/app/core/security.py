@@ -3,7 +3,7 @@
 import asyncio
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -106,13 +106,13 @@ async def ensure_user_profile(
             id=user_id,
             email=email,
             display_name=display_name,
-            last_login_at=datetime.now(timezone.utc),
+            last_login_at=datetime.now(UTC),
         )
         db.add(profile)
         await db.flush()
     else:
         # Throttle: only update last_login_at if stale
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if (
             profile.last_login_at is None
             or (now - profile.last_login_at).total_seconds() > _LOGIN_UPDATE_INTERVAL

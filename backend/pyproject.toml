@@ -41,6 +41,7 @@ select = ["A", "E", "W", "F", "I", "B", "C4", "UP", "SIM", "PTH", "RUF"]
 "app/api/v1/*.py" = ["B008"]
 "app/core/security.py" = ["B008"]
 "app/core/permissions.py" = ["B008"]
+"app/infrastructure/dependencies.py" = ["B008"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

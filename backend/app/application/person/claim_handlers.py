@@ -5,52 +5,43 @@ as well as admins reviewing (approving/rejecting) those claims.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
-from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
 from app.domain.person.claim_entity import IdentityClaim as ClaimEntity
-from app.models.clan_membership import ClanMembership
+from app.models.audit_log import AuditLog
 from app.models.identity_claim import IdentityClaim as ClaimModel
 from app.models.person import Person
-from app.models.user_profile import UserProfile
 from app.models.user_clan_role import UserClanRole
-from app.models.audit_log import AuditLog
-from app.schemas.claim import IdentityClaimResponse, IdentityClaimPaginatedResponse
+from app.models.user_profile import UserProfile
+from app.schemas.claim import IdentityClaimPaginatedResponse, IdentityClaimResponse
 
 
 class ClaimCommandHandler:
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
+    def __init__(self, repo: ClaimRepository, uow: Any) -> None:
+        self._repo = repo
+        self._uow = uow
 
     async def submit_claim(self, *, user_id: uuid.UUID, person_id: uuid.UUID, requester_note: str | None) -> IdentityClaimResponse:
         """Submit a new identity claim for a global person."""
         # Val 1: Does user already have a linked person?
-        user = await self._db.get(UserProfile, user_id)
+        user = await self._repo.get_user_profile(user_id)
         if not user:
             raise NotFoundError("user_not_found")
         if user.person_id:
             raise ConflictError("user_already_linked_to_person")
 
         # Val 2: Is person already linked to another user?
-        existing_link = await self._db.execute(
-            select(UserProfile.id).where(UserProfile.person_id == person_id).limit(1)
-        )
-        if existing_link.scalar_one_or_none():
+        if await self._repo.is_person_linked(person_id):
             raise ConflictError("person_already_linked_to_user")
 
         # Val 3: Does user already have ANY pending claims globally?
-        pending_claims = await self._db.execute(
-            select(ClaimModel.id).where(ClaimModel.user_id == user_id, ClaimModel.status == "PENDING").limit(1)
-        )
-        if pending_claims.scalar_one_or_none():
+        if await self._repo.has_pending_claims(user_id):
             raise ConflictError("user_already_has_pending_claim")
 
         # Val 4: Person must exist
-        person = await self._db.get(Person, person_id)
+        person = await self._repo.get_person(person_id)
         if not person:
             raise NotFoundError("person_not_found")
 
@@ -61,8 +52,9 @@ class ClaimCommandHandler:
             requester_note=requester_note,
             status="PENDING"
         )
-        self._db.add(claim_model)
-        await self._db.flush()
+        self._repo.add_claim(claim_model)
+        self._uow.track(claim_model)
+        await self._uow.flush()
 
         audit = AuditLog(
             clan_id=person.created_by_clan_id,
@@ -74,19 +66,18 @@ class ClaimCommandHandler:
             old_value=None,
             new_value={"status": "PENDING", "person_id": str(person_id)},
         )
-        self._db.add(audit)
+        self._repo.add_audit(audit)
 
-        await self._db.commit()
-        await self._db.refresh(claim_model)
+        await self._uow.commit()
 
         return IdentityClaimResponse.model_validate(claim_model)
 
     async def cancel_claim(self, *, claim_id: uuid.UUID, user_id: uuid.UUID) -> None:
         """Cancel a pending claim submitted by the user."""
-        claim = await self._db.get(ClaimModel, claim_id)
+        claim = await self._repo.get_claim(claim_id)
         if not claim:
             raise NotFoundError("claim_not_found")
-        
+
         # Domain entity logic
         entity = ClaimEntity(
             id=claim.id,
@@ -99,7 +90,7 @@ class ClaimCommandHandler:
         claim.status = entity.status
 
         # Get the clan_id for the audit log
-        person = await self._db.get(Person, claim.person_id)
+        person = await self._repo.get_person(claim.person_id)
         if person:
             audit = AuditLog(
                 clan_id=person.created_by_clan_id,
@@ -111,13 +102,13 @@ class ClaimCommandHandler:
                 old_value={"status": "PENDING"},
                 new_value={"status": "CANCELLED"},
             )
-            self._db.add(audit)
+            self._repo.add_audit(audit)
 
-        await self._db.commit()
+        await self._uow.commit()
 
     async def approve_claim(self, *, claim_id: uuid.UUID, admin_id: uuid.UUID, reviewer_note: str | None) -> IdentityClaimResponse:
         """Approve a claim by a clan admin of the person's origin clan."""
-        claim = await self._db.get(ClaimModel, claim_id, options=[selectinload(ClaimModel.person)])
+        claim = await self._repo.get_claim(claim_id, load_person=True)
         if not claim or not claim.person:
             raise NotFoundError("claim_not_found")
 
@@ -125,15 +116,12 @@ class ClaimCommandHandler:
         await self._verify_admin_access(admin_id, claim.person.created_by_clan_id)
 
         # Race Guard 1: User Profile still not linked
-        user = await self._db.get(UserProfile, claim.user_id)
+        user = await self._repo.get_user_profile(claim.user_id)
         if not user or user.person_id:
             raise ConflictError("user_already_linked")
-        
+
         # Race Guard 2: Person still not linked
-        existing_link = await self._db.execute(
-            select(UserProfile.id).where(UserProfile.person_id == claim.person_id).limit(1)
-        )
-        if existing_link.scalar_one_or_none():
+        if await self._repo.is_person_linked(claim.person_id):
             raise ConflictError("person_already_linked")
 
         # Domain Logic
@@ -149,31 +137,22 @@ class ClaimCommandHandler:
         claim.status = entity.status
         claim.reviewed_by = entity.reviewed_by
         claim.reviewer_note = entity.reviewer_note
-        claim.reviewed_at = datetime.now(timezone.utc)
+        claim.reviewed_at = datetime.now(UTC)
 
         user.person_id = claim.person_id
 
         # Auto-reject other pending claims for this person
-        await self._db.execute(
-            update(ClaimModel)
-            .where(ClaimModel.person_id == claim.person_id, ClaimModel.id != claim.id, ClaimModel.status == "PENDING")
-            .values(
-                status="REJECTED",
-                reviewer_note="Person verified by another user.",
-                reviewed_by=admin_id,
-                reviewed_at=datetime.now(timezone.utc)
-            )
+        await self._repo.auto_reject_other_pending_claims(
+            person_id=claim.person_id,
+            exclude_claim_id=claim.id,
+            admin_id=admin_id,
+            reviewer_note="Person verified by another user."
         )
-        
+
         # Auto-grant default `viewer` role in the person's created_by_clan if user has no role
-        existing_role = await self._db.execute(
-            select(UserClanRole.id).where(
-                UserClanRole.user_id == claim.user_id,
-                UserClanRole.clan_id == claim.person.created_by_clan_id
-            ).limit(1)
-        )
-        if not existing_role.scalar_one_or_none():
-            self._db.add(UserClanRole(
+        existing_role = await self._repo.get_role(claim.user_id, claim.person.created_by_clan_id)
+        if not existing_role:
+            self._repo.add_role(UserClanRole(
                 user_id=claim.user_id,
                 clan_id=claim.person.created_by_clan_id,
                 role="viewer",
@@ -198,7 +177,7 @@ class ClaimCommandHandler:
 
     async def reject_claim(self, *, claim_id: uuid.UUID, admin_id: uuid.UUID, reviewer_note: str | None) -> IdentityClaimResponse:
         """Reject a claim by a clan admin."""
-        claim = await self._db.get(ClaimModel, claim_id, options=[selectinload(ClaimModel.person)])
+        claim = await self._repo.get_claim(claim_id, load_person=True)
         if not claim or not claim.person:
             raise NotFoundError("claim_not_found")
 
@@ -216,7 +195,7 @@ class ClaimCommandHandler:
         claim.status = entity.status
         claim.reviewed_by = entity.reviewed_by
         claim.reviewer_note = entity.reviewer_note
-        claim.reviewed_at = datetime.now(timezone.utc)
+        claim.reviewed_at = datetime.now(UTC)
 
         audit = AuditLog(
             clan_id=claim.person.created_by_clan_id,
@@ -240,12 +219,12 @@ class ClaimCommandHandler:
         await self._verify_admin_access(admin_id, clan_id)
 
         # 2. Verify target user
-        user = await self._db.get(UserProfile, user_id_to_unlink)
+        user = await self._repo.get_user_profile(user_id_to_unlink)
         if not user or not user.person_id:
             raise NotFoundError("user_not_linked_to_person")
 
         # 3. Ensure the person belongs to the clan the admin controls
-        person = await self._db.get(Person, user.person_id)
+        person = await self._repo.get_person(user.person_id)
         if not person or person.created_by_clan_id != clan_id:
             raise ForbiddenError("person_not_controlled_by_this_clan")
 
@@ -255,19 +234,12 @@ class ClaimCommandHandler:
         user.person_id = None
 
         # 5. Cancel or reject their last approved claim
-        last_approved_claim = await self._db.execute(
-            select(ClaimModel).where(
-                ClaimModel.user_id == user_id_to_unlink,
-                ClaimModel.person_id == person_id,
-                ClaimModel.status == "APPROVED"
-            ).order_by(ClaimModel.created_at.desc()).limit(1)
-        )
-        claim = last_approved_claim.scalar_one_or_none()
+        claim = await self._repo.get_last_approved_claim(user_id_to_unlink, person_id)
         if claim:
             claim.status = "CANCELLED"
             claim.reviewer_note = f"Unlinked by Admin: {reason}"
             claim.reviewed_by = admin_id
-            claim.reviewed_at = datetime.now(timezone.utc)
+            claim.reviewed_at = datetime.now(UTC)
 
         audit = AuditLog(
             clan_id=clan_id,
@@ -279,79 +251,50 @@ class ClaimCommandHandler:
             old_value={"person_id": str(person_id)},
             new_value={"person_id": None, "reason": reason},
         )
-        self._db.add(audit)
+        self._repo.add_audit(audit)
 
         # 6. Auto-reject orphans (PENDING claims for this user or this person)
-        from sqlalchemy import or_
-        await self._db.execute(
-            update(ClaimModel)
-            .where(
-                or_(
-                    ClaimModel.user_id == user_id_to_unlink,
-                    ClaimModel.person_id == person_id
-                ),
-                ClaimModel.status == "PENDING"
-            )
-            .values(
-                status="REJECTED",
-                reviewer_note=f"Auto-rejected during identity unlink: {reason}",
-                reviewed_by=admin_id,
-                reviewed_at=datetime.now(timezone.utc)
-            )
+        await self._repo.auto_reject_all_pending_claims(
+            user_id=user_id_to_unlink,
+            person_id=person_id,
+            admin_id=admin_id,
+            reviewer_note=f"Auto-rejected during identity unlink: {reason}"
         )
 
-        await self._db.commit()
+        await self._uow.commit()
 
     async def prelink_identity(self, *, clan_id: uuid.UUID, user_id_to_link: uuid.UUID, person_id: uuid.UUID, admin_id: uuid.UUID) -> IdentityClaimResponse:
         """Admins directly link a clan member to a person record, bypassing the claim workflow."""
         await self._verify_admin_access(admin_id, clan_id)
 
-        user = await self._db.get(UserProfile, user_id_to_link)
+        user = await self._repo.get_user_profile(user_id_to_link)
         if not user:
             raise NotFoundError("user_not_found")
         if user.person_id:
             raise ConflictError("user_already_linked_to_person")
 
-        person = await self._db.get(Person, person_id)
+        person = await self._repo.get_person(person_id)
         if not person:
             raise NotFoundError("person_not_found")
         if person.created_by_clan_id != clan_id:
             raise ForbiddenError("person_not_controlled_by_this_clan")
 
-        existing_link = await self._db.execute(select(UserProfile.id).where(UserProfile.person_id == person_id).limit(1))
-        if existing_link.scalar_one_or_none():
+        if await self._repo.is_person_linked(person_id):
             raise ConflictError("person_already_linked")
 
         # Ensure user is actually in the clan
-        role_check = await self._db.execute(
-            select(UserClanRole.id).where(
-                UserClanRole.user_id == user_id_to_link,
-                UserClanRole.clan_id == clan_id,
-                UserClanRole.is_approved.is_(True)
-            ).limit(1)
-        )
-        if not role_check.scalar_one_or_none():
+        role = await self._repo.get_role(user_id_to_link, clan_id)
+        if not role:
             raise ForbiddenError("user_not_in_clan")
 
         user.person_id = person_id
 
         # Auto-reject orphans
-        from sqlalchemy import or_
-        await self._db.execute(
-            update(ClaimModel)
-            .where(
-                or_(
-                    ClaimModel.user_id == user_id_to_link,
-                    ClaimModel.person_id == person_id
-                ),
-                ClaimModel.status == "PENDING"
-            )
-            .values(
-                status="REJECTED",
-                reviewer_note="Auto-rejected during Admin Pre-link.",
-                reviewed_by=admin_id,
-                reviewed_at=datetime.now(timezone.utc)
-            )
+        await self._repo.auto_reject_all_pending_claims(
+            user_id=user_id_to_link,
+            person_id=person_id,
+            admin_id=admin_id,
+            reviewer_note="Auto-rejected during Admin Pre-link."
         )
 
         # Create audit record
@@ -362,10 +305,11 @@ class ClaimCommandHandler:
             requester_note="Admin Pre-link",
             reviewer_note="Admin Pre-link",
             reviewed_by=admin_id,
-            reviewed_at=datetime.now(timezone.utc)
+            reviewed_at=datetime.now(UTC)
         )
-        self._db.add(claim_model)
-        await self._db.flush()
+        self._repo.add_claim(claim_model)
+        self._uow.track(claim_model)
+        await self._uow.flush()
 
         audit = AuditLog(
             clan_id=clan_id,
@@ -377,49 +321,27 @@ class ClaimCommandHandler:
             old_value=None,
             new_value={"person_id": str(person_id), "user_id": str(user_id_to_link)},
         )
-        self._db.add(audit)
-        
-        await self._db.commit()
-        await self._db.refresh(claim_model)
+        self._repo.add_audit(audit)
+
+        await self._uow.commit()
         return IdentityClaimResponse.model_validate(claim_model)
 
     async def _verify_admin_access(self, admin_id: uuid.UUID, clan_id: uuid.UUID | None) -> None:
         if not clan_id:
             raise ForbiddenError("person_has_no_controlling_clan")
-            
-        role = await self._db.execute(
-            select(UserClanRole.role).where(
-                UserClanRole.user_id == admin_id,
-                UserClanRole.clan_id == clan_id,
-                UserClanRole.is_approved.is_(True)
-            ).limit(1)
-        )
-        if role.scalar_one_or_none() != "admin":
+
+        role = await self._repo.get_role(admin_id, clan_id)
+        if role != "admin":
             raise ForbiddenError("only_clan_admin_can_review_claims")
 
 
 class ClaimQueryHandler:
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
+    def __init__(self, query_port: ClaimQueryPort) -> None:
+        self._query_port = query_port
 
     async def list_clan_claims(self, *, clan_id: uuid.UUID, status: str | None = None, page: int = 1, page_size: int = 20) -> IdentityClaimPaginatedResponse:
         """List claims linked to persons created by the given clan."""
-        query = (
-            select(ClaimModel)
-            .join(Person, ClaimModel.person_id == Person.id)
-            .where(Person.created_by_clan_id == clan_id)
-        )
-        
-        if status:
-            query = query.where(ClaimModel.status == status)
-
-        # Pagination
-        count_query = select(func.count()).select_from(query.subquery())
-        total = await self._db.scalar(count_query) or 0
-
-        query = query.order_by(ClaimModel.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
-        result = await self._db.execute(query)
-        claims = result.scalars().all()
+        claims, total = await self._query_port.list_clan_claims(clan_id, status, page, page_size)
 
         return IdentityClaimPaginatedResponse(
             items=[IdentityClaimResponse.model_validate(c) for c in claims],

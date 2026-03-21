@@ -86,3 +86,7 @@ class PersonRepository(Protocol):
     async def count_in_clan(self, clan_id: uuid.UUID, is_deleted: bool = False) -> int:
         """Count persons in a clan (for pagination metadata)."""
         ...
+
+    async def get_stats_for_persons(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+        """Get spouse and child counts for a list of persons."""
+        ...

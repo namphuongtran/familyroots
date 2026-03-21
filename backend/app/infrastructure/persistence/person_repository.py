@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.person.entity import Person as PersonEntity
-from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
+from app.domain.person.repository import PersonFilters, PersonSearchResult
 from app.infrastructure.persistence.person_mapper import apply_to_orm, to_domain, to_orm
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person as PersonModel
@@ -165,3 +165,19 @@ class SqlAlchemyPersonRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar() or 0
+
+    async def get_stats_for_persons(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+        if not person_ids:
+            return {}
+        stmt = text("""
+            SELECT p.id, 
+                (SELECT COUNT(*) FROM public.marriages m WHERE (m.person1_id=p.id OR m.person2_id=p.id) AND m.is_deleted=false) as spouse_count,
+                (SELECT COUNT(*) FROM public.parent_child pc WHERE pc.parent_id=p.id AND pc.is_deleted=false) as child_count
+            FROM public.persons p
+            WHERE p.id = ANY(:pids)
+        """).bindparams(pids=[str(pid) for pid in person_ids])
+        result = await self._session.execute(stmt)
+        return {
+            uuid.UUID(str(row["id"])): {"spouse_count": row["spouse_count"], "child_count": row["child_count"]}
+            for row in result.mappings().all()
+        }

@@ -7,7 +7,6 @@ one for anon key (client-level auth operations).
 from __future__ import annotations
 
 import threading
-from typing import Any
 
 from supabase import Client, create_client
 

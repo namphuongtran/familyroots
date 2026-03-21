@@ -5,32 +5,19 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.exceptions import ForbiddenError
+from app.domain.me.query_port import MeQueryPort
 
 
 class MeQueryHandler:
     """Read-only handler for current-user clan queries."""
 
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
+    def __init__(self, query_port: MeQueryPort) -> None:
+        self._query_port = query_port
 
     async def list_clans(self, *, user_id: str) -> dict[str, Any]:
         """List all approved clan memberships for the user."""
-        result = await self._db.execute(
-            text(
-                "SELECT ucr.clan_id, c.name AS clan_name, c.slug AS clan_slug, "
-                "ucr.role, ucr.joined_at "
-                "FROM user_clan_roles ucr "
-                "JOIN clans c ON c.id = ucr.clan_id "
-                "WHERE ucr.user_id = :user_id AND ucr.is_approved = true "
-                "ORDER BY ucr.joined_at"
-            ),
-            {"user_id": user_id},
-        )
-        rows = result.fetchall()
+        rows = await self._query_port.list_clans(user_id)
 
         return {
             "clans": [
@@ -48,18 +35,7 @@ class MeQueryHandler:
 
     async def select_clan(self, *, user_id: str, clan_id: uuid.UUID) -> dict[str, Any]:
         """Validate and select a clan as the active context."""
-        result = await self._db.execute(
-            text(
-                "SELECT ucr.clan_id, c.name AS clan_name, c.slug AS clan_slug, "
-                "ucr.role "
-                "FROM user_clan_roles ucr "
-                "JOIN clans c ON c.id = ucr.clan_id "
-                "WHERE ucr.user_id = :user_id AND ucr.clan_id = :clan_id "
-                "AND ucr.is_approved = true"
-            ),
-            {"user_id": user_id, "clan_id": str(clan_id)},
-        )
-        row = result.fetchone()
+        row = await self._query_port.get_clan_membership(user_id, clan_id)
 
         if not row:
             raise ForbiddenError("You do not have approved membership in this clan")

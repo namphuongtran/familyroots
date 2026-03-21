@@ -4,7 +4,6 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.handlers import (
     AuthCommandHandler,
@@ -12,8 +11,12 @@ from app.application.auth.handlers import (
     FCMTokenHandler,
     SupabaseAuthService,
 )
-from app.core.database import get_db
 from app.core.security import get_current_user
+from app.infrastructure.dependencies import (
+    get_auth_command_handler,
+    get_auth_query_handler,
+    get_fcm_token_handler,
+)
 from app.schemas.auth import (
     FCMTokenRequest,
     LoginRequest,
@@ -29,9 +32,10 @@ router = APIRouter()
 
 
 @router.post("/register", status_code=201)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) -> RegisterResponse:
+async def register(
+    body: RegisterRequest, handler: AuthCommandHandler = Depends(get_auth_command_handler)
+) -> RegisterResponse:
     """Register a new user — either create a new clan or join an existing one."""
-    handler = AuthCommandHandler(db)
     return await handler.register(
         email=body.email,
         password=body.password,
@@ -44,9 +48,10 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/login")
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)) -> LoginResponse:
+async def login(
+    body: LoginRequest, handler: AuthCommandHandler = Depends(get_auth_command_handler)
+) -> LoginResponse:
     """Authenticate a user via Supabase Auth."""
-    handler = AuthCommandHandler(db)
     return await handler.login(email=body.email, password=body.password)
 
 
@@ -66,10 +71,9 @@ async def refresh_token(body: RefreshRequest) -> dict[str, Any]:
 @router.get("/me")
 async def get_me(
     current_user: dict[str, Any] = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    handler: AuthQueryHandler = Depends(get_auth_query_handler),
 ) -> dict[str, Any]:
     """Return the authenticated user's profile."""
-    handler = AuthQueryHandler(db)
     profile = await handler.get_profile(
         user_id=uuid.UUID(current_user["sub"]),
         email=current_user.get("email", ""),
@@ -97,10 +101,9 @@ async def update_me(
 async def register_fcm_token(
     body: FCMTokenRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    handler: FCMTokenHandler = Depends(get_fcm_token_handler),
 ) -> dict[str, Any]:
     """Register or update an FCM push token."""
-    handler = FCMTokenHandler(db)
     await handler.register_token(
         user_id=current_user["sub"],
         token=body.token,
@@ -113,9 +116,8 @@ async def register_fcm_token(
 async def remove_fcm_token(
     body: FCMTokenRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    handler: FCMTokenHandler = Depends(get_fcm_token_handler),
 ) -> dict[str, Any]:
     """Remove an FCM token (e.g. on logout)."""
-    handler = FCMTokenHandler(db)
     await handler.remove_token(user_id=current_user["sub"], token=body.token)
     return {"data": {"message": t("auth.fcm_token_removed")}}

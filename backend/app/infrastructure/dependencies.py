@@ -6,8 +6,25 @@ handlers receive fully assembled collaborators via ``Depends(…)``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    from app.application.auth.handlers import AuthCommandHandler, AuthQueryHandler, FCMTokenHandler
+    from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
+    from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
+    from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
+    from app.application.event.handlers import EventCommandHandler, EventQueryHandler
+    from app.application.me.handlers import MeQueryHandler
+    from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
+    from app.application.platform_admin.handlers import (
+        PlatformAdminCommandHandler,
+        PlatformAdminQueryHandler,
+    )
+    from app.application.relationship.handlers import MarriageQueryHandler, ParentChildQueryHandler
+    from app.application.tree.handlers import TreeQueryHandler
 
 from app.application.person.handlers import PersonCommandHandler, PersonQueryHandler
 from app.application.relationship.handlers import MarriageCommandHandler, ParentChildCommandHandler
@@ -23,7 +40,7 @@ from app.infrastructure.persistence.relationship_repository import (
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
-async def get_unit_of_work(
+def get_unit_of_work(
     db: AsyncSession = Depends(get_db),
 ) -> SqlAlchemyUnitOfWork:
     """Provide a Unit of Work scoped to the current request."""
@@ -34,7 +51,7 @@ async def get_unit_of_work(
 # ── Person handlers ──────────────────────────────────────────────
 
 
-async def get_person_command_handler(
+def get_person_command_handler(
     db: AsyncSession = Depends(get_db),
 ) -> PersonCommandHandler:
     dispatcher = create_event_dispatcher(db)
@@ -43,11 +60,110 @@ async def get_person_command_handler(
     return PersonCommandHandler(repo, uow)
 
 
-async def get_person_query_handler(
+def get_person_query_handler(
     db: AsyncSession = Depends(get_db),
 ) -> PersonQueryHandler:
+    from app.infrastructure.persistence.person_query_port import SqlAlchemyPersonQueryPort
+
     repo = SqlAlchemyPersonRepository(db)
-    return PersonQueryHandler(repo)
+    query_port = SqlAlchemyPersonQueryPort(db)
+    return PersonQueryHandler(repo, query_port)
+
+
+# ── Claim handlers ──────────────────────────────────────────────
+
+
+def get_claim_command_handler(
+    db: AsyncSession = Depends(get_db),
+) -> ClaimCommandHandler:
+    from app.application.person.claim_handlers import ClaimCommandHandler
+    from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
+    from app.infrastructure.persistence.uow import SqlAlchemyUnitOfWork
+
+    repo = SqlAlchemyClaimRepository(db)
+    uow = SqlAlchemyUnitOfWork(db)
+    return ClaimCommandHandler(repo, uow)
+
+
+def get_claim_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> ClaimQueryHandler:
+    from app.application.person.claim_handlers import ClaimQueryHandler
+    from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimQueryPort
+
+    query_port = SqlAlchemyClaimQueryPort(db)
+    return ClaimQueryHandler(query_port)
+
+
+# ── Me handlers ─────────────────────────────────────────────────
+
+
+def get_me_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> MeQueryHandler:
+    from app.infrastructure.persistence.me_query_port import SqlAlchemyMeQueryPort
+
+    query_port = SqlAlchemyMeQueryPort(db)
+    return MeQueryHandler(query_port)
+
+
+# ── Platform Admin handlers ──────────────────────────────────────
+
+
+def get_platform_admin_command_handler(
+    db: AsyncSession = Depends(get_db),
+) -> PlatformAdminCommandHandler:
+    from app.application.platform_admin.handlers import PlatformAdminCommandHandler
+    from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
+    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+
+    dispatcher = create_event_dispatcher(db)
+    uow = SqlAlchemyUnitOfWork(db, dispatcher)
+    repo = SqlAlchemyClanRepository(db)
+    return PlatformAdminCommandHandler(repo, uow)
+
+
+def get_platform_admin_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> PlatformAdminQueryHandler:
+    from app.application.platform_admin.handlers import PlatformAdminQueryHandler
+    from app.infrastructure.persistence.platform_admin_query_port import SqlAlchemyPlatformAdminQueryPort
+
+    query_port = SqlAlchemyPlatformAdminQueryPort(db)
+    return PlatformAdminQueryHandler(query_port)
+
+
+# ── Auth handlers ───────────────────────────────────────────────
+
+
+def get_auth_command_handler(
+    db: AsyncSession = Depends(get_db),
+) -> AuthCommandHandler:
+    from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
+    from app.infrastructure.persistence.uow import SqlAlchemyUnitOfWork
+
+    repo = SqlAlchemyAuthRepository(db)
+    uow = SqlAlchemyUnitOfWork(db)
+    return AuthCommandHandler(repo, uow)
+
+
+def get_auth_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> AuthQueryHandler:
+    from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthQueryPort
+
+    query_port = SqlAlchemyAuthQueryPort(db)
+    return AuthQueryHandler(query_port)
+
+
+def get_fcm_token_handler(
+    db: AsyncSession = Depends(get_db),
+) -> FCMTokenHandler:
+    from app.infrastructure.persistence.auth_repository import SqlAlchemyFCMTokenRepository
+
+    repo = SqlAlchemyFCMTokenRepository(db)
+    return FCMTokenHandler(repo)
 
 
 # ── Relationship handlers ───────────────────────────────────────
@@ -58,7 +174,7 @@ def _build_relationship_validator(db: AsyncSession) -> RelationshipDomainValidat
     return RelationshipDomainValidator(query_port)
 
 
-async def get_marriage_command_handler(
+def get_marriage_command_handler(
     db: AsyncSession = Depends(get_db),
 ) -> MarriageCommandHandler:
     dispatcher = create_event_dispatcher(db)
@@ -68,7 +184,7 @@ async def get_marriage_command_handler(
     return MarriageCommandHandler(repo, uow, validator)
 
 
-async def get_parent_child_command_handler(
+def get_parent_child_command_handler(
     db: AsyncSession = Depends(get_db),
 ) -> ParentChildCommandHandler:
     dispatcher = create_event_dispatcher(db)
@@ -78,12 +194,30 @@ async def get_parent_child_command_handler(
     return ParentChildCommandHandler(repo, uow, validator)
 
 
+def get_marriage_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> MarriageQueryHandler:
+    from app.application.relationship.handlers import MarriageQueryHandler
+
+    repo = SqlAlchemyMarriageRepository(db)
+    return MarriageQueryHandler(repo)
+
+
+def get_parent_child_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> ParentChildQueryHandler:
+    from app.application.relationship.handlers import ParentChildQueryHandler
+
+    repo = SqlAlchemyParentChildRepository(db)
+    return ParentChildQueryHandler(repo)
+
+
 # ── Clan handlers ────────────────────────────────────────────────
 
 
-async def get_clan_command_handler(
+def get_clan_command_handler(
     db: AsyncSession = Depends(get_db),
-) -> "ClanCommandHandler":
+) -> ClanCommandHandler:
     from app.application.clan.handlers import ClanCommandHandler
     from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
 
@@ -93,12 +227,22 @@ async def get_clan_command_handler(
     return ClanCommandHandler(repo, uow)
 
 
+def get_clan_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> ClanQueryHandler:
+    from app.application.clan.handlers import ClanQueryHandler
+    from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
+
+    repo = SqlAlchemyClanRepository(db)
+    return ClanQueryHandler(repo)
+
+
 # ── Tree handlers ───────────────────────────────────────────────
 
 
-async def get_tree_query_handler(
+def get_tree_query_handler(
     db: AsyncSession = Depends(get_db),
-) -> "TreeQueryHandler":
+) -> TreeQueryHandler:
     from app.application.tree.handlers import TreeQueryHandler
     from app.infrastructure.persistence.tree_repository import SqlAlchemyTreeRepository
 
@@ -109,9 +253,9 @@ async def get_tree_query_handler(
 # ── Branch handlers ─────────────────────────────────────────────
 
 
-async def get_branch_command_handler(
+def get_branch_command_handler(
     db: AsyncSession = Depends(get_db),
-) -> "BranchCommandHandler":
+) -> BranchCommandHandler:
     from app.application.branch.handlers import BranchCommandHandler
     from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
 
@@ -121,9 +265,9 @@ async def get_branch_command_handler(
     return BranchCommandHandler(repo, uow)
 
 
-async def get_branch_query_handler(
+def get_branch_query_handler(
     db: AsyncSession = Depends(get_db),
-) -> "BranchQueryHandler":
+) -> BranchQueryHandler:
     from app.application.branch.handlers import BranchQueryHandler
     from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
 
@@ -134,9 +278,9 @@ async def get_branch_query_handler(
 # ── Document handlers ───────────────────────────────────────────
 
 
-async def get_document_command_handler(
+def get_document_command_handler(
     db: AsyncSession = Depends(get_db),
-) -> "DocumentCommandHandler":
+) -> DocumentCommandHandler:
     from app.application.document.handlers import DocumentCommandHandler
     from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
     from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
@@ -148,9 +292,9 @@ async def get_document_command_handler(
     return DocumentCommandHandler(repo, storage, uow)
 
 
-async def get_document_query_handler(
+def get_document_query_handler(
     db: AsyncSession = Depends(get_db),
-) -> "DocumentQueryHandler":
+) -> DocumentQueryHandler:
     from app.application.document.handlers import DocumentQueryHandler
     from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
     from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
@@ -163,9 +307,9 @@ async def get_document_query_handler(
 # ── Event handlers ──────────────────────────────────────────────
 
 
-async def get_event_command_handler(
+def get_event_command_handler(
     db: AsyncSession = Depends(get_db),
-) -> "EventCommandHandler":
+) -> EventCommandHandler:
     from app.application.event.handlers import EventCommandHandler
     from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
 
@@ -175,9 +319,9 @@ async def get_event_command_handler(
     return EventCommandHandler(repo, uow)
 
 
-async def get_event_query_handler(
+def get_event_query_handler(
     db: AsyncSession = Depends(get_db),
-) -> "EventQueryHandler":
+) -> EventQueryHandler:
     from app.application.event.handlers import EventQueryHandler
     from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
 

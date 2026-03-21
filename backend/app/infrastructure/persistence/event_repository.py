@@ -14,7 +14,6 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.event.entity import Event as EventEntity
-from app.domain.event.repository import EventRepository
 from app.infrastructure.persistence.event_mapper import apply_to_orm, to_domain, to_orm
 from app.models.event import Event as EventModel
 

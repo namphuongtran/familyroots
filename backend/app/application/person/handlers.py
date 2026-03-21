@@ -13,13 +13,13 @@ from app.application.person.commands import (
     CreatePerson,
     DeletePerson,
     GetPerson,
-    GetPersonTimeline,
     ListPersons,
     RestorePerson,
     SearchPersons,
     UpdatePerson,
 )
 from app.domain.person.entity import Person
+from app.domain.person.query_port import PersonQueryPort
 from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
 from app.domain.shared.exceptions import EntityNotFoundError, ForbiddenError
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
@@ -91,10 +91,10 @@ class PersonCommandHandler:
             user_profile = await self._uow.session.get(UserProfile, cmd.actor.user_id)
             if not user_profile or user_profile.person_id != cmd.person_id:
                 raise ForbiddenError("insufficient_permissions")
-                
+
             allowed_fields = {
-                "phone", "email", "avatar_url", "residence_place", 
-                "biography", "notes", "religion", "occupation", 
+                "phone", "email", "avatar_url", "residence_place",
+                "biography", "notes", "religion", "occupation",
                 "education_level", "title_rank"
             }
             invalid_fields = set(cmd.changes.keys()) - allowed_fields
@@ -134,8 +134,9 @@ class PersonCommandHandler:
 class PersonQueryHandler:
     """Handles Person read operations (list, search, get, timeline)."""
 
-    def __init__(self, repo: PersonRepository) -> None:
+    def __init__(self, repo: PersonRepository, query_port: PersonQueryPort | None = None) -> None:
         self._repo = repo
+        self._query_port = query_port
 
     async def list(self, query: ListPersons) -> tuple[list[PersonResponse], int]:
         """List persons with filtering, pagination, and total count."""
@@ -161,3 +162,67 @@ class PersonQueryHandler:
     async def search(self, query: SearchPersons) -> list[PersonSearchResult]:
         """Search persons by name."""
         return await self._repo.search(query.clan_id, query.query, query.limit)
+
+    async def get_persons_stats(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+        """Fetch statistics for a list of persons."""
+        return await self._repo.get_stats_for_persons(person_ids)
+
+    async def get_marriages(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        if not self._query_port:
+            raise NotImplementedError("Query port not configured for this handler")
+        return await self._query_port.get_marriages(person_id)
+
+    async def get_parent_child(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        if not self._query_port:
+            raise NotImplementedError("Query port not configured for this handler")
+        return await self._query_port.get_parent_child_links(person_id)
+
+    async def get_documents(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        if not self._query_port:
+            raise NotImplementedError("Query port not configured for this handler")
+        return await self._query_port.get_documents(clan_id, person_id)
+
+    async def get_events(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        if not self._query_port:
+            raise NotImplementedError("Query port not configured for this handler")
+        return await self._query_port.get_events(clan_id, person_id)
+
+    async def get_timeline(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        from app.application.person.commands import GetPerson
+        from app.schemas.event import TimelineEvent
+        from app.services.translator import t
+
+        person = await self.get(GetPerson(person_id=person_id, clan_id=clan_id))
+        timeline = []
+
+        if person.birth_date:
+            timeline.append(TimelineEvent(event_date=person.birth_date, date_approx=person.birth_date_approx, event_type="birth", title=t("timeline.birth")).model_dump())
+        if person.death_date:
+            timeline.append(TimelineEvent(event_date=person.death_date, date_approx=person.death_date_approx, event_type="death", title=t("timeline.death")).model_dump())
+
+        spouse_result = await self._session.execute(
+            text("""
+                SELECT m.marriage_date, m.divorce_date, m.status,
+                       CASE WHEN m.person1_id = :pid THEN m.person2_id
+                            ELSE m.person1_id END AS spouse_id,
+                       p.full_name AS spouse_name
+                FROM public.marriages m
+                JOIN public.persons p
+                  ON p.id = CASE WHEN m.person1_id = :pid
+                                 THEN m.person2_id ELSE m.person1_id END
+                WHERE (m.person1_id = :pid OR m.person2_id = :pid)
+                  AND m.is_deleted = false
+            """),
+            {"pid": person_id},
+        )
+        for row in spouse_result.mappings().all():
+            timeline.append(TimelineEvent(event_date=row["marriage_date"], date_approx=False, event_type="marriage", title=t("timeline.marriage"), related_person_id=row["spouse_id"], related_person_name=row["spouse_name"]).model_dump())
+
+        events_result = await self._session.execute(
+            select(Event).where(Event.clan_id == clan_id, Event.person_id == person_id)
+        )
+        for ev in events_result.scalars().all():
+            timeline.append(TimelineEvent(event_date=ev.event_date, date_approx=False, event_type=ev.event_type, title=ev.title, description=ev.description).model_dump())
+
+        timeline.sort(key=lambda e: e.get("event_date") or date.max)
+        return timeline

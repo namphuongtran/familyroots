@@ -44,7 +44,7 @@ class PersonCreateRequest(BaseModel):
     created_by_clan_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
-    def validate_death_after_birth(self) -> "PersonCreateRequest":
+    def validate_death_after_birth(self) -> PersonCreateRequest:
         if self.birth_date and self.death_date and self.death_date < self.birth_date:
             raise ValueError("death_date must not be earlier than birth_date")
         return self
@@ -88,7 +88,7 @@ class PersonUpdateRequest(BaseModel):
     created_by_clan_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
-    def validate_death_after_birth(self) -> "PersonUpdateRequest":
+    def validate_death_after_birth(self) -> PersonUpdateRequest:
         if self.birth_date and self.death_date and self.death_date < self.birth_date:
             raise ValueError("death_date must not be earlier than birth_date")
         return self
@@ -148,3 +148,58 @@ class PersonListResponse(BaseModel):
     total: int
     page: int = 1
     page_size: int = 50
+
+
+class PersonMini(BaseModel):
+    """Minimal representation of a person for embedded relationships."""
+    id: uuid.UUID
+    full_name: str
+    gender: str
+    avatar_url: str | None = None
+    birth_date: date | None = None
+    death_date: date | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PersonSummary(BaseModel):
+    """Summary profile for list views."""
+    id: uuid.UUID
+    full_name: str
+    gender: str
+    avatar_url: str | None = None
+    birth_date: date | None = None
+    death_date: date | None = None
+    generation: int | None = None
+    is_founder: bool | None = None
+    membership_role: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PersonDetail(PersonSummary):
+    """Detailed profile with most biographical data, but without audit fields."""
+    birth_name: str | None = None
+    birth_place: str | None = None
+    death_place: str | None = None
+    occupation: str | None = None
+    religion: str | None = None
+    notes: str | None = None
+
+
+class PersonStats(BaseModel):
+    """Additional statistics for a person."""
+    spouse_count: int
+    child_count: int
+
+
+from typing import Any
+
+
+class PersonDetailComposite(PersonResponse):
+    """Includes optional sub-resources when requested via ?include="""
+    marriages: list[Any] | None = None
+    parent_child: list[Any] | None = None
+    timeline: list[Any] | None = None
+    documents: list[Any] | None = None
+

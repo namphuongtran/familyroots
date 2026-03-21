@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.document.entity import Document as DocumentEntity
-from app.domain.document.repository import DocumentRepository
 from app.infrastructure.persistence.document_mapper import apply_to_orm, to_domain, to_orm
 from app.models.document import Document as DocumentModel
 

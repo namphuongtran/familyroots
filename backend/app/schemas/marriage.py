@@ -21,7 +21,7 @@ class MarriageCreateRequest(BaseModel):
     notes: str | None = None
 
     @model_validator(mode="after")
-    def validate_marriage(self) -> "MarriageCreateRequest":
+    def validate_marriage(self) -> MarriageCreateRequest:
         if str(self.person1_id) == str(self.person2_id):
             raise ValueError("person1_id and person2_id must be different")
         if self.marriage_date and self.divorce_date and self.divorce_date < self.marriage_date:

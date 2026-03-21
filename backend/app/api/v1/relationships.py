@@ -8,7 +8,6 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.relationship.commands import (
     CreateMarriage,
@@ -18,16 +17,21 @@ from app.application.relationship.commands import (
     UpdateMarriage,
     UpdateParentChild,
 )
-from app.application.relationship.handlers import MarriageCommandHandler, ParentChildCommandHandler
-from app.core.database import get_db
+from app.application.relationship.handlers import (
+    MarriageCommandHandler,
+    MarriageQueryHandler,
+    ParentChildCommandHandler,
+    ParentChildQueryHandler,
+)
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
-from app.infrastructure.dependencies import get_marriage_command_handler, get_parent_child_command_handler
-from app.infrastructure.persistence.relationship_repository import (
-    SqlAlchemyMarriageRepository,
-    SqlAlchemyParentChildRepository,
+from app.infrastructure.dependencies import (
+    get_marriage_command_handler,
+    get_marriage_query_handler,
+    get_parent_child_command_handler,
+    get_parent_child_query_handler,
 )
 from app.schemas.marriage import MarriageCreateRequest, MarriageResponse, MarriageUpdateRequest
 from app.schemas.parent_child import (
@@ -73,12 +77,13 @@ async def get_marriage(
     marriage_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    query_handler: MarriageQueryHandler = Depends(get_marriage_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a marriage by ID."""
-    repo = SqlAlchemyMarriageRepository(db)
-    marriage = await repo.get_by_id(marriage_id)
+    marriage = await query_handler.get_by_id(marriage_id)
     if not marriage:
         raise EntityNotFoundError("marriage_not_found")
     return {"data": MarriageResponse.model_validate(marriage).model_dump()}
@@ -158,12 +163,13 @@ async def get_parent_child(
     link_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    query_handler: ParentChildQueryHandler = Depends(get_parent_child_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a parent-child relationship by ID."""
-    repo = SqlAlchemyParentChildRepository(db)
-    link = await repo.get_by_id(link_id)
+    link = await query_handler.get_by_id(link_id)
     if not link:
         raise EntityNotFoundError("parent_child_not_found")
     return {"data": ParentChildResponse.model_validate(link).model_dump()}

@@ -20,7 +20,7 @@ class ParentChildCreateRequest(BaseModel):
     notes: str | None = None
 
     @model_validator(mode="after")
-    def validate_ids(self) -> "ParentChildCreateRequest":
+    def validate_ids(self) -> ParentChildCreateRequest:
         if str(self.parent_id) == str(self.child_id):
             raise ValueError("parent_id and child_id must be different")
         return self

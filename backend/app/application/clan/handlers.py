@@ -169,3 +169,18 @@ class ClanCommandHandler:
         )
         self._uow.track(agg)
         await self._uow.commit()
+
+
+class ClanQueryHandler:
+    """Handles Clan read operations."""
+
+    def __init__(self, repo: ClanRepository) -> None:
+        self._repo = repo
+
+    async def get_clan(self, clan_id: uuid.UUID) -> Any:
+        return await self._repo.get_clan(clan_id)
+
+    async def list_users(
+        self, clan_id: uuid.UUID, approved: bool, cursor: str | None, limit: int
+    ) -> dict[str, Any]:
+        return await self._repo.list_users(clan_id, approved, cursor, limit)

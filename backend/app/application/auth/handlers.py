@@ -14,11 +14,10 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
 from app.domain.shared.exceptions import AuthenticationError
 from app.infrastructure.supabase_client import get_anon_client, get_service_client
 from app.models.clan import Clan
@@ -89,10 +88,11 @@ _INVALID_CREDENTIALS = "auth.invalid_credentials"
 
 
 class AuthCommandHandler:
-    """Handles Auth write operations that require DB access."""
+    """Handles Auth write operations."""
 
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
+    def __init__(self, repo: AuthRepository, uow: Any) -> None:
+        self._repo = repo
+        self._uow = uow
 
     async def register(
         self,
@@ -124,17 +124,18 @@ class AuthCommandHandler:
         user_id = uuid.UUID(auth_resp.user.id)
 
         if clan_action == "create":
-            existing = await self._db.execute(select(Clan).where(Clan.slug == clan_slug))
-            if existing.scalar_one_or_none():
+            existing = await self._repo.get_clan_by_slug(clan_slug)
+            if existing:
                 raise ConflictError("auth.clan_slug_taken")
 
             clan = Clan(name=clan_name, slug=clan_slug)
-            self._db.add(clan)
-            await self._db.flush()
+            self._repo.add_clan(clan)
+            self._uow.track(clan)
+            await self._uow.commit()
 
             role = UserClanRole(clan_id=clan.id, user_id=user_id, role="admin", is_approved=True)
-            self._db.add(role)
-            await self._db.commit()
+            self._repo.add_user_role(role)
+            await self._uow.commit()
 
             return RegisterResponse(
                 user_id=user_id,
@@ -145,14 +146,14 @@ class AuthCommandHandler:
                 message=t("auth.clan_created"),
             )
         else:
-            clan_or_none = await self._db.get(Clan, clan_id)
+            clan_or_none = await self._repo.get_clan_by_id(clan_id)
             if not clan_or_none:
                 raise NotFoundError("clan_not_found")
             clan = clan_or_none
 
             role = UserClanRole(clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False)
-            self._db.add(role)
-            await self._db.commit()
+            self._repo.add_user_role(role)
+            await self._uow.commit()
 
             return RegisterResponse(
                 user_id=user_id,
@@ -179,14 +180,7 @@ class AuthCommandHandler:
             raise AuthenticationError(_INVALID_CREDENTIALS)
 
         user_id = uuid.UUID(user.id)
-        result = await self._db.execute(
-            select(UserProfileModel, UserClanRole, Clan)
-            .outerjoin(UserClanRole, UserProfileModel.id == UserClanRole.user_id)
-            .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
-            .where(UserProfileModel.id == user_id)
-            .limit(1)
-        )
-        row = result.first()
+        row = await self._repo.get_login_profile(user_id)
 
         return LoginResponse(
             access_token=session.access_token,
@@ -208,19 +202,12 @@ class AuthCommandHandler:
 class AuthQueryHandler:
     """Read-only handler for auth queries."""
 
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
+    def __init__(self, query_port: AuthQueryPort) -> None:
+        self._query_port = query_port
 
     async def get_profile(self, *, user_id: uuid.UUID, email: str, full_name: str) -> UserProfile:
         """Return the authenticated user's profile."""
-        result = await self._db.execute(
-            select(UserProfileModel, UserClanRole, Clan)
-            .outerjoin(UserClanRole, (UserProfileModel.id == UserClanRole.user_id) & UserClanRole.is_approved.is_(True))
-            .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
-            .where(UserProfileModel.id == user_id)
-            .limit(1)
-        )
-        row = result.first()
+        row = await self._query_port.get_profile(user_id)
 
         return UserProfile(
             id=user_id,
@@ -237,24 +224,11 @@ class AuthQueryHandler:
 class FCMTokenHandler:
     """Handles FCM push token registration."""
 
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
+    def __init__(self, repo: FCMTokenRepository) -> None:
+        self._repo = repo
 
     async def register_token(self, *, user_id: str, token: str, device_platform: str) -> None:
-        await self._db.execute(
-            text("""
-                INSERT INTO public.user_fcm_tokens (user_id, token, device_platform)
-                VALUES (:user_id, :token, :platform)
-                ON CONFLICT (token) DO UPDATE
-                SET user_id = :user_id, device_platform = :platform, updated_at = NOW()
-            """),
-            {"user_id": user_id, "token": token, "platform": device_platform},
-        )
-        await self._db.commit()
+        await self._repo.register_token(user_id, token, device_platform)
 
     async def remove_token(self, *, user_id: str, token: str) -> None:
-        await self._db.execute(
-            text("DELETE FROM public.user_fcm_tokens WHERE user_id = :user_id AND token = :token"),
-            {"user_id": user_id, "token": token},
-        )
-        await self._db.commit()
+        await self._repo.remove_token(user_id, token)

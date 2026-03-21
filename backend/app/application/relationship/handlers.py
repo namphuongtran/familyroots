@@ -5,6 +5,7 @@ Orchestrate domain entities, repository, validator, and UoW.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from app.application.relationship.commands import (
@@ -137,3 +138,19 @@ class ParentChildCommandHandler:
         self._uow.track(link)
         await self._repo.save(link)
         await self._uow.commit()
+
+
+class MarriageQueryHandler:
+    def __init__(self, repo: MarriageRepository) -> None:
+        self._repo = repo
+
+    async def get_by_id(self, marriage_id: uuid.UUID) -> Marriage | None:
+        return await self._repo.get_by_id(marriage_id)
+
+
+class ParentChildQueryHandler:
+    def __init__(self, repo: ParentChildRepository) -> None:
+        self._repo = repo
+
+    async def get_by_id(self, link_id: uuid.UUID) -> ParentChild | None:
+        return await self._repo.get_by_id(link_id)

@@ -41,7 +41,7 @@ class TreeNode(BaseModel):
     is_founder: bool = False
     depth: int = 0
     spouses: list[SpouseNode] = []
-    children: list["TreeNode"] = []  # recursive
+    children: list[TreeNode] = []  # recursive
 
     model_config = {"from_attributes": True}
 
@@ -63,3 +63,36 @@ class TreeResponse(BaseModel):
     tree: TreeNode
     total_persons: int
     total_generations: int
+
+class TreeNodeSummary(BaseModel):
+    """Minimal node representation for the tree structure."""
+    id: str
+    full_name: str
+    gender: str
+    birth_date: date | None = None
+    death_date: date | None = None
+    generation: int | None = None
+    avatar_url: str | None = None
+    is_founder: bool = False
+    depth: int = 0
+    spouses: list[SpouseNode] = []
+    children: list[TreeNodeSummary] = []
+
+    model_config = {"from_attributes": True}
+
+TreeNodeSummary.model_rebuild()
+
+class TreeNodeDetail(TreeNodeSummary):
+    """Detail node with some biographic data."""
+    birth_name: str | None = None
+    posthumous_name: str | None = None
+    birth_date_approx: bool = False
+    death_date_approx: bool = False
+    birth_place: str | None = None
+    membership_role: str | None = None  # blood, spouse, adopted
+    children: list[TreeNodeDetail] = []
+
+    model_config = {"from_attributes": True}
+
+TreeNodeDetail.model_rebuild()
+

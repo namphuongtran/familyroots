@@ -14,7 +14,6 @@ from app.models.marriage import Marriage as MarriageModel
 from app.models.parent_child import ParentChild as ParentChildModel
 from app.models.person import Person as PersonModel
 
-
 # ── Mappers (inline, these models are simpler) ──────────────────
 
 

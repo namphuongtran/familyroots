@@ -68,10 +68,16 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     """
     from app.domain.shared.exceptions import (
         AuthenticationError as DomainAuthError,
+    )
+    from app.domain.shared.exceptions import (
         BusinessRuleViolation,
-        ConflictError as DomainConflictError,
         DomainError,
         EntityNotFoundError,
+    )
+    from app.domain.shared.exceptions import (
+        ConflictError as DomainConflictError,
+    )
+    from app.domain.shared.exceptions import (
         ForbiddenError as DomainForbiddenError,
     )
     from app.services.translator import t

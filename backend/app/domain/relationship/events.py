@@ -8,7 +8,6 @@ from typing import Any
 
 from app.domain.shared.events import AuditableEvent
 
-
 # ── Marriage events ──────────────────────────────────────────────
 
 

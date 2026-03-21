@@ -5,13 +5,13 @@ Sub-resource endpoints (marriages, parent-child, documents, events, timeline)
 remain DB-direct until their respective bounded contexts are migrated.
 """
 
+import asyncio
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.person.claim_handlers import ClaimCommandHandler
 from app.application.person.commands import (
     CreatePerson,
     DeletePerson,
@@ -22,21 +22,22 @@ from app.application.person.commands import (
     UpdatePerson,
 )
 from app.application.person.handlers import PersonCommandHandler, PersonQueryHandler
-from app.core.database import get_db
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
-from app.infrastructure.dependencies import get_person_command_handler, get_person_query_handler
-from app.models.document import Document
-from app.models.event import Event
-from app.models.marriage import Marriage
-from app.models.parent_child import ParentChild
-from app.schemas.auth import UserProfile
+from app.infrastructure.dependencies import (
+    get_claim_command_handler,
+    get_person_command_handler,
+    get_person_query_handler,
+)
 from app.schemas.claim import IdentityClaimResponse, IdentityClaimSubmit
-from app.schemas.event import TimelineEvent
-from app.schemas.person import PersonCreateRequest, PersonUpdateRequest
+from app.schemas.person import (
+    PersonCreateRequest,
+    PersonDetail,
+    PersonSummary,
+    PersonUpdateRequest,
+)
 from app.services.translator import t
-from app.application.person.claim_handlers import ClaimCommandHandler
 
 router = APIRouter()
 
@@ -55,6 +56,8 @@ async def list_persons(
     generation: int | None = None,
     gender: str | None = None,
     is_alive: bool | None = None,
+    profile: str = Query("full", pattern="^(summary|detail|full)$"),
+    include: str | None = Query(None),
 ) -> dict[str, Any]:
     """List persons belonging to a clan with pagination."""
     persons, total = await handler.list(
@@ -66,18 +69,27 @@ async def list_persons(
             limit=limit,
         )
     )
+
+    stats_map = {}
+    if include == "stats" and persons:
+        person_ids = [p.id for p in persons]
+        stats_map = await handler.get_persons_stats(person_ids)
+
+    res_data = []
+    for p in persons:
+        if profile == "summary":
+            p_dict = PersonSummary.model_validate(p).model_dump(exclude_unset=True)
+        elif profile == "detail":
+            p_dict = PersonDetail.model_validate(p).model_dump(exclude_unset=True)
+        else:
+            p_dict = p.model_dump()
+
+        if include == "stats" and p.id in stats_map:
+            p_dict["stats"] = stats_map[p.id]
+        res_data.append(p_dict)
+
     return {
-        "data": [
-            {
-                "id": str(p.id),
-                "full_name": p.full_name,
-                "gender": p.gender,
-                "birth_date": p.birth_date.isoformat() if p.birth_date else None,
-                "death_date": p.death_date.isoformat() if p.death_date else None,
-                "avatar_url": p.avatar_url,
-            }
-            for p in persons
-        ],
+        "data": res_data,
         "total": total,
     }
 
@@ -131,6 +143,32 @@ async def create_person(
     return {"data": person.model_dump()}
 
 
+async def _fetch_included_data(
+    handler: PersonQueryHandler,
+    clan_id: uuid.UUID,
+    person_id: uuid.UUID,
+    includes: list[str],
+) -> dict[str, list[Any]]:
+    tasks = {}
+    if "marriages" in includes:
+        tasks["marriages"] = handler.get_marriages(person_id)
+    if "parent_child" in includes:
+        tasks["parent_child"] = handler.get_parent_child(person_id)
+    if "timeline" in includes:
+        tasks["timeline"] = handler.get_timeline(clan_id, person_id)
+    if "documents" in includes:
+        tasks["documents"] = handler.get_documents(clan_id, person_id)
+
+    if not tasks:
+        return {}
+
+    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    res_dict = {}
+    for key, res in zip(tasks.keys(), results):
+        res_dict[key] = res if isinstance(res, list) else []
+    return res_dict
+
+
 @router.get("/{person_id}")
 async def get_person(
     person_id: uuid.UUID,
@@ -138,10 +176,25 @@ async def get_person(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
+    include: str | None = Query(None),
+    profile: str = Query("full", pattern="^(summary|detail|full)$"),
 ) -> dict[str, Any]:
     """Get a single person's full detail."""
     person = await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    return {"data": person.model_dump()}
+
+    if profile == "summary":
+        p_dict = PersonSummary.model_validate(person).model_dump(exclude_unset=True)
+    elif profile == "detail":
+        p_dict = PersonDetail.model_validate(person).model_dump(exclude_unset=True)
+    else:
+        p_dict = person.model_dump()
+
+    if include:
+        includes = [i.strip() for i in include.split(",")]
+        included_data = await _fetch_included_data(handler, clan_id, person_id, includes)
+        p_dict.update(included_data)
+
+    return {"data": p_dict}
 
 
 @router.patch("/{person_id}")
@@ -208,12 +261,11 @@ async def submit_identity_claim(
     person_id: uuid.UUID,
     body: IdentityClaimSubmit,
     current_user: dict[str, Any] = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    handler: ClaimCommandHandler = Depends(get_claim_command_handler),
     _role: ClanRole = RequireViewer,
 ) -> IdentityClaimResponse:
     """Submit a claim for linking a user profile to a person in the family tree."""
     user_id = uuid.UUID(current_user["sub"])
-    handler = ClaimCommandHandler(db)
     return await handler.submit_claim(
         user_id=user_id,
         person_id=person_id,
@@ -221,7 +273,7 @@ async def submit_identity_claim(
     )
 
 
-# ── Sub-resources (kept DB-direct until later phases migrate) ─
+# ── Sub-resources  ────────────────────────────────────────────────
 
 
 @router.get("/{person_id}/marriages")
@@ -229,22 +281,13 @@ async def person_marriages(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get all marriages for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    from app.schemas.marriage import MarriageResponse
-
-    result = await db.execute(
-        select(Marriage).where(
-            or_(Marriage.person1_id == person_id, Marriage.person2_id == person_id),
-            Marriage.is_deleted.is_(False),
-        )
-    )
-    marriages = result.scalars().all()
-    return {"data": [MarriageResponse.model_validate(m).model_dump() for m in marriages]}
+    marriages = await handler.get_marriages(person_id)
+    return {"data": marriages}
 
 
 @router.get("/{person_id}/parent-child")
@@ -252,22 +295,13 @@ async def person_parent_child(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get all parent-child relationships for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    from app.schemas.parent_child import ParentChildResponse
-
-    result = await db.execute(
-        select(ParentChild).where(
-            or_(ParentChild.parent_id == person_id, ParentChild.child_id == person_id),
-            ParentChild.is_deleted.is_(False),
-        )
-    )
-    links = result.scalars().all()
-    return {"data": [ParentChildResponse.model_validate(link).model_dump() for link in links]}
+    links = await handler.get_parent_child(person_id)
+    return {"data": links}
 
 
 @router.get("/{person_id}/documents")
@@ -275,19 +309,13 @@ async def person_documents(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get all documents for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    result = await db.execute(
-        select(Document).where(Document.clan_id == clan_id, Document.person_id == person_id)
-    )
-    docs = result.scalars().all()
-    from app.schemas.document import DocumentSummary
-
-    return {"data": [DocumentSummary.model_validate(d).model_dump() for d in docs]}
+    docs = await handler.get_documents(clan_id, person_id)
+    return {"data": docs}
 
 
 @router.get("/{person_id}/events")
@@ -295,19 +323,13 @@ async def person_events(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get all events for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    result = await db.execute(
-        select(Event).where(Event.clan_id == clan_id, Event.person_id == person_id)
-    )
-    events = result.scalars().all()
-    from app.schemas.event import EventResponse
-
-    return {"data": [EventResponse.model_validate(e).model_dump() for e in events]}
+    events = await handler.get_events(clan_id, person_id)
+    return {"data": events}
 
 
 @router.get("/{person_id}/timeline")
@@ -315,80 +337,9 @@ async def person_timeline(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Return a chronological timeline of life events for a person."""
-    person = await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    timeline: list[dict[str, Any]] = []
-
-    # Birth
-    if person.birth_date:
-        timeline.append(
-            TimelineEvent(
-                event_date=person.birth_date,
-                date_approx=person.birth_date_approx,
-                event_type="birth",
-                title=t("timeline.birth"),
-            ).model_dump()
-        )
-
-    # Death
-    if person.death_date:
-        timeline.append(
-            TimelineEvent(
-                event_date=person.death_date,
-                date_approx=person.death_date_approx,
-                event_type="death",
-                title=t("timeline.death"),
-            ).model_dump()
-        )
-
-    # Marriages (raw SQL stays until Relationship context migrated)
-    spouse_result = await db.execute(
-        text("""
-            SELECT m.marriage_date, m.divorce_date, m.status,
-                   CASE WHEN m.person1_id = :pid THEN m.person2_id
-                        ELSE m.person1_id END AS spouse_id,
-                   p.full_name AS spouse_name
-            FROM public.marriages m
-            JOIN public.persons p
-              ON p.id = CASE WHEN m.person1_id = :pid
-                             THEN m.person2_id ELSE m.person1_id END
-            WHERE (m.person1_id = :pid OR m.person2_id = :pid)
-              AND m.is_deleted = false
-        """),
-        {"pid": person_id},
-    )
-    for row in spouse_result.mappings().all():
-        timeline.append(
-            TimelineEvent(
-                event_date=row["marriage_date"],
-                date_approx=False,
-                event_type="marriage",
-                title=t("timeline.marriage"),
-                related_person_id=row["spouse_id"],
-                related_person_name=row["spouse_name"],
-            ).model_dump()
-        )
-
-    # Custom events
-    events_result = await db.execute(
-        select(Event).where(Event.clan_id == clan_id, Event.person_id == person_id)
-    )
-    for ev in events_result.scalars().all():
-        timeline.append(
-            TimelineEvent(
-                event_date=ev.event_date,
-                date_approx=False,
-                event_type=ev.event_type,
-                title=ev.title,
-                description=ev.description,
-            ).model_dump()
-        )
-
-    # Sort chronologically (None dates last)
-    timeline.sort(key=lambda e: e.get("event_date") or "9999-12-31")
-
+    timeline = await handler.get_timeline(clan_id, person_id)
     return {"data": timeline}

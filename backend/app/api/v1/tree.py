@@ -10,6 +10,7 @@ from app.application.tree.queries import FindPath, GetAncestors, GetFullTree, Ge
 from app.core.permissions import ClanRole, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.infrastructure.dependencies import get_tree_query_handler
+from app.schemas.tree import TreeNodeDetail, TreeNodeSummary
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ async def get_full_tree(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: TreeQueryHandler = Depends(get_tree_query_handler),
     _role: ClanRole = RequireViewer,
+    profile: str = Query("full", pattern="^(summary|detail|full)$"),
 ) -> dict[str, Any]:
     """Return the full family tree rooted at a person (or clan founder)."""
     result = await handler.get_full_tree(
@@ -31,6 +33,10 @@ async def get_full_tree(
             max_generations=max_generations,
         )
     )
+    if profile == "summary":
+        result["tree"] = TreeNodeSummary.model_validate(result["tree"]).model_dump(exclude_unset=True)
+    elif profile == "detail":
+        result["tree"] = TreeNodeDetail.model_validate(result["tree"]).model_dump(exclude_unset=True)
     return {"data": result}
 
 
@@ -42,6 +48,7 @@ async def get_subtree(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: TreeQueryHandler = Depends(get_tree_query_handler),
     _role: ClanRole = RequireViewer,
+    profile: str = Query("full", pattern="^(summary|detail|full)$"),
 ) -> dict[str, Any]:
     """Return a subtree rooted at a specific person."""
     result = await handler.get_subtree(
@@ -51,6 +58,10 @@ async def get_subtree(
             max_generations=max_generations,
         )
     )
+    if profile == "summary":
+        result["tree"] = TreeNodeSummary.model_validate(result["tree"]).model_dump(exclude_unset=True)
+    elif profile == "detail":
+        result["tree"] = TreeNodeDetail.model_validate(result["tree"]).model_dump(exclude_unset=True)
     return {"data": result}
 
 

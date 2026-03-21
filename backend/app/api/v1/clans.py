@@ -8,7 +8,6 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.clan.commands import (
     ApproveUser,
@@ -17,14 +16,12 @@ from app.application.clan.commands import (
     RemoveUser,
     UpdateClan,
 )
-from app.application.clan.handlers import ClanCommandHandler
-from app.core.database import get_db
+from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
 from app.core.permissions import ClanRole, RequireAdmin, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
-from app.infrastructure.dependencies import get_clan_command_handler
-from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
+from app.infrastructure.dependencies import get_clan_command_handler, get_clan_query_handler
 from app.schemas.clan import ClanResponse, ClanUpdateRequest
 from app.services.translator import t
 
@@ -35,12 +32,11 @@ router = APIRouter()
 async def get_own_clan(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get the current user's active clan info."""
-    repo = SqlAlchemyClanRepository(db)
-    clan = await repo.get_clan(clan_id)
+    clan = await query_handler.get_clan(clan_id)
     if not clan:
         raise EntityNotFoundError("clan_not_found")
     return {"data": ClanResponse.model_validate(clan).model_dump()}
@@ -69,14 +65,13 @@ async def update_own_clan(
 async def list_clan_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
     _role: ClanRole = RequireViewer,
     cursor: str | None = None,
     limit: int = 20,
 ) -> dict[str, Any]:
     """List approved users in the current clan (paginated)."""
-    repo = SqlAlchemyClanRepository(db)
-    page = await repo.list_users(clan_id, approved=True, cursor=cursor, limit=limit)
+    page = await query_handler.list_users(clan_id, approved=True, cursor=cursor, limit=limit)
     page["data"] = [
         {
             "id": str(u.id),
@@ -94,14 +89,13 @@ async def list_clan_users(
 async def list_pending_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
     _role: ClanRole = RequireAdmin,
     cursor: str | None = None,
     limit: int = 20,
 ) -> dict[str, Any]:
     """List users pending approval (admin only)."""
-    repo = SqlAlchemyClanRepository(db)
-    page = await repo.list_users(clan_id, approved=False, cursor=cursor, limit=limit)
+    page = await query_handler.list_users(clan_id, approved=False, cursor=cursor, limit=limit)
     page["data"] = [
         {
             "id": str(u.id),

@@ -12,7 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.branch.entity import Branch as BranchEntity
-from app.domain.branch.repository import BranchRepository
 from app.infrastructure.persistence.branch_mapper import apply_to_orm, to_domain, to_orm
 from app.models.branch import Branch as BranchModel
 

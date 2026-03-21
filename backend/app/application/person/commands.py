@@ -12,7 +12,6 @@ from datetime import date
 
 from app.domain.shared.value_objects import ActorInfo
 
-
 # ── Commands ─────────────────────────────────────────────────────
 
 

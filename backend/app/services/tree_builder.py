@@ -69,7 +69,7 @@ class TreeNode:
     parent_id: uuid.UUID | None
     depth: int
     spouses: list[dict[str, Any]] = field(default_factory=list)
-    children: list["TreeNode"] = field(default_factory=list)
+    children: list[TreeNode] = field(default_factory=list)
 
 
 async def build_descendants_tree(

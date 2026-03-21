@@ -4,10 +4,8 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
-from app.core.database import get_db
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
@@ -16,26 +14,17 @@ from app.schemas.branch import BranchCreateRequest, BranchUpdateRequest
 router = APIRouter()
 
 
-def _make_handlers(db: AsyncSession) -> tuple[BranchCommandHandler, BranchQueryHandler]:
-    from app.infrastructure.event_dispatcher import create_event_dispatcher
-    from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
-    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
-
-    repo = SqlAlchemyBranchRepository(db)
-    dispatcher = create_event_dispatcher(db)
-    uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    return BranchCommandHandler(repo, uow), BranchQueryHandler(repo)
+from app.infrastructure.dependencies import get_branch_command_handler, get_branch_query_handler
 
 
 @router.get("")
 async def list_branches(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    query_handler: BranchQueryHandler = Depends(get_branch_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """List all branches for the current clan."""
-    _, query_handler = _make_handlers(db)
     branches = await query_handler.list_branches(clan_id=clan_id)
     return {"data": [b.model_dump() for b in branches]}
 
@@ -45,11 +34,10 @@ async def create_branch(
     body: BranchCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    cmd_handler: BranchCommandHandler = Depends(get_branch_command_handler),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a new branch."""
-    cmd_handler, _ = _make_handlers(db)
     branch = await cmd_handler.create(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, "editor"),
@@ -67,11 +55,10 @@ async def get_branch(
     branch_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    query_handler: BranchQueryHandler = Depends(get_branch_query_handler),
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a single branch by ID."""
-    _, query_handler = _make_handlers(db)
     branch = await query_handler.get(branch_id=branch_id, clan_id=clan_id)
     return {"data": branch.model_dump()}
 
@@ -82,11 +69,10 @@ async def update_branch(
     body: BranchUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    cmd_handler: BranchCommandHandler = Depends(get_branch_command_handler),
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a branch."""
-    cmd_handler, _ = _make_handlers(db)
     branch = await cmd_handler.update(
         branch_id=branch_id,
         clan_id=clan_id,
@@ -101,11 +87,10 @@ async def delete_branch(
     branch_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    db: AsyncSession = Depends(get_db),
+    cmd_handler: BranchCommandHandler = Depends(get_branch_command_handler),
     _role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Delete a branch (admin only)."""
-    cmd_handler, _ = _make_handlers(db)
     await cmd_handler.delete(
         branch_id=branch_id,
         clan_id=clan_id,
