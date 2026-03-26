@@ -7,7 +7,7 @@ bounded context with automatic audit logging via domain events.
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.application.relationship.commands import (
     CreateMarriage,
@@ -75,8 +75,6 @@ async def create_marriage(
 @router.get("/marriages/{marriage_id}")
 async def get_marriage(
     marriage_id: uuid.UUID,
-    current_user: dict[str, Any] = Depends(get_current_user),
-    clan_id: uuid.UUID = Depends(get_current_clan_id),
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: MarriageQueryHandler = Depends(get_marriage_query_handler),
@@ -161,8 +159,6 @@ async def create_parent_child(
 @router.get("/parent-child/{link_id}")
 async def get_parent_child(
     link_id: uuid.UUID,
-    current_user: dict[str, Any] = Depends(get_current_user),
-    clan_id: uuid.UUID = Depends(get_current_clan_id),
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: ParentChildQueryHandler = Depends(get_parent_child_query_handler),

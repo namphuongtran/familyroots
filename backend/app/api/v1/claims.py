@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query, status
 from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
 from app.core.security import RequireClanRole, require_active_user
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
+from typing import Any
+
 from app.schemas.auth import UserProfile
 from app.schemas.claim import (
     IdentityClaimPaginatedResponse,
@@ -39,7 +41,6 @@ async def cancel_claim(
 
 @admin_claims_router.get(
     "",
-    response_model=IdentityClaimPaginatedResponse,
     summary="List claims for a clan",
 )
 async def list_clan_claims(
@@ -49,11 +50,20 @@ async def list_clan_claims(
     page_size: int = Query(20, ge=1, le=100),
     user: UserProfile = Depends(RequireClanRole(["admin", "editor"])),
     handler: ClaimQueryHandler = Depends(get_claim_query_handler),
-) -> IdentityClaimPaginatedResponse:
+    fields: str | None = Query(None),
+) -> dict[str, Any]:
     """List paginated identity claims for persons created by this clan."""
-    return await handler.list_clan_claims(
+    paginated = await handler.list_clan_claims(
         clan_id=clan_id, status=status, page=page, page_size=page_size
     )
+    res_dict = paginated.model_dump()
+    if fields:
+        field_set = {f.strip() for f in fields.split(",")}
+        res_dict["claims"] = [
+            {k: v for k, v in c.items() if k in field_set}
+            for c in res_dict["claims"]
+        ]
+    return res_dict
 
 
 @admin_claims_router.post(

@@ -59,6 +59,7 @@ async def list_documents(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: DocumentQueryHandler = Depends(get_document_query_handler),
     _role: ClanRole = RequireViewer,
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List documents with optional filters, paginated."""
     items = await query_handler.list_documents(
@@ -68,7 +69,11 @@ async def list_documents(
         cursor=cursor,
         limit=limit,
     )
-    return {"data": [item.model_dump() for item in items]}
+    data = [item.model_dump() for item in items]
+    if fields:
+        field_set = {f.strip() for f in fields.split(",")}
+        data = [{k: v for k, v in d.items() if k in field_set} for d in data]
+    return {"data": data}
 
 
 @router.get("/{document_id}")

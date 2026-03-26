@@ -3,7 +3,7 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
@@ -23,10 +23,15 @@ async def list_branches(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: BranchQueryHandler = Depends(get_branch_query_handler),
     _role: ClanRole = RequireViewer,
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List all branches for the current clan."""
     branches = await query_handler.list_branches(clan_id=clan_id)
-    return {"data": [b.model_dump() for b in branches]}
+    data = [b.model_dump() for b in branches]
+    if fields:
+        field_set = {f.strip() for f in fields.split(",")}
+        data = [{k: v for k, v in d.items() if k in field_set} for d in data]
+    return {"data": data}
 
 
 @router.post("", status_code=201)

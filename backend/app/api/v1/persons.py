@@ -58,6 +58,7 @@ async def list_persons(
     is_alive: bool | None = None,
     profile: str = Query("full", pattern="^(summary|detail|full)$"),
     include: str | None = Query(None),
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List persons belonging to a clan with pagination."""
     persons, total = await handler.list(
@@ -86,6 +87,13 @@ async def list_persons(
 
         if include == "stats" and p.id in stats_map:
             p_dict["stats"] = stats_map[p.id]
+
+        if fields:
+            field_set = {f.strip() for f in fields.split(",")}
+            if include:
+                field_set.update([i.strip() for i in include.split(",")])
+            p_dict = {k: v for k, v in p_dict.items() if k in field_set}
+
         res_data.append(p_dict)
 
     return {
@@ -169,6 +177,17 @@ async def _fetch_included_data(
     return res_dict
 
 
+def _filter_list_by_fields(items: list[Any], fields: str | None) -> list[Any]:
+    if not fields or not items:
+        return items
+    field_set = {f.strip() for f in fields.split(",")}
+    filtered = []
+    for item in items:
+        d = item if isinstance(item, dict) else item.model_dump()
+        filtered.append({k: v for k, v in d.items() if k in field_set})
+    return filtered
+
+
 @router.get("/{person_id}")
 async def get_person(
     person_id: uuid.UUID,
@@ -177,6 +196,7 @@ async def get_person(
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
     include: str | None = Query(None),
+    fields: str | None = Query(None),
     profile: str = Query("full", pattern="^(summary|detail|full)$"),
 ) -> dict[str, Any]:
     """Get a single person's full detail."""
@@ -193,6 +213,12 @@ async def get_person(
         includes = [i.strip() for i in include.split(",")]
         included_data = await _fetch_included_data(handler, clan_id, person_id, includes)
         p_dict.update(included_data)
+
+    if fields:
+        field_set = {f.strip() for f in fields.split(",")}
+        if include:
+            field_set.update([i.strip() for i in include.split(",")])
+        p_dict = {k: v for k, v in p_dict.items() if k in field_set}
 
     return {"data": p_dict}
 
@@ -283,11 +309,12 @@ async def person_marriages(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all marriages for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
     marriages = await handler.get_marriages(person_id)
-    return {"data": marriages}
+    return {"data": _filter_list_by_fields(marriages, fields)}
 
 
 @router.get("/{person_id}/parent-child")
@@ -297,11 +324,12 @@ async def person_parent_child(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all parent-child relationships for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
     links = await handler.get_parent_child(person_id)
-    return {"data": links}
+    return {"data": _filter_list_by_fields(links, fields)}
 
 
 @router.get("/{person_id}/documents")
@@ -311,11 +339,12 @@ async def person_documents(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all documents for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
     docs = await handler.get_documents(clan_id, person_id)
-    return {"data": docs}
+    return {"data": _filter_list_by_fields(docs, fields)}
 
 
 @router.get("/{person_id}/events")
@@ -325,11 +354,12 @@ async def person_events(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all events for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
     events = await handler.get_events(clan_id, person_id)
-    return {"data": events}
+    return {"data": _filter_list_by_fields(events, fields)}
 
 
 @router.get("/{person_id}/timeline")
