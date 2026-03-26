@@ -1,16 +1,14 @@
 """Unit tests for Hybrid REST API features: sparse fieldsets and compound documents."""
 
 import uuid
-from datetime import date, datetime
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.api.v1.persons import _fetch_included_data, _filter_list_by_fields
 
-
 # ── _filter_list_by_fields helper ────────────────────────────────
+
 
 class TestFilterListByFields:
     """Tests for the sparse fieldsets helper function."""
@@ -26,8 +24,20 @@ class TestFilterListByFields:
 
     def test_filters_to_requested_fields(self) -> None:
         items = [
-            {"id": "1", "full_name": "Test", "gender": "male", "birth_date": "2000-01-01", "avatar_url": None},
-            {"id": "2", "full_name": "Other", "gender": "female", "birth_date": "1990-05-15", "avatar_url": "url"},
+            {
+                "id": "1",
+                "full_name": "Test",
+                "gender": "male",
+                "birth_date": "2000-01-01",
+                "avatar_url": None,
+            },
+            {
+                "id": "2",
+                "full_name": "Other",
+                "gender": "female",
+                "birth_date": "1990-05-15",
+                "avatar_url": "url",
+            },
         ]
         result = _filter_list_by_fields(items, "id,full_name")
         assert result == [
@@ -52,6 +62,7 @@ class TestFilterListByFields:
 
 
 # ── _fetch_included_data helper ─────────────────────────────────
+
 
 class TestFetchIncludedData:
     """Tests for the compound document helper function."""
@@ -97,9 +108,7 @@ class TestFetchIncludedData:
         handler = AsyncMock()
         handler.get_marriages.side_effect = Exception("DB error")
 
-        result = await _fetch_included_data(
-            handler, uuid.uuid4(), uuid.uuid4(), ["marriages"]
-        )
+        result = await _fetch_included_data(handler, uuid.uuid4(), uuid.uuid4(), ["marriages"])
         assert result["marriages"] == []
 
     @pytest.mark.asyncio
@@ -113,11 +122,13 @@ class TestFetchIncludedData:
 
 # ── PersonSummary / PersonDetail profile schemas ─────────────────
 
+
 class TestPersonProfileSchemas:
     """Tests that profile schemas correctly narrow fields."""
 
     def test_summary_excludes_biography(self) -> None:
         from app.schemas.person import PersonSummary
+
         data = PersonSummary(
             id=uuid.uuid4(),
             full_name="Test",
@@ -129,6 +140,7 @@ class TestPersonProfileSchemas:
 
     def test_detail_includes_birth_place(self) -> None:
         from app.schemas.person import PersonDetail
+
         data = PersonDetail(
             id=uuid.uuid4(),
             full_name="Test",

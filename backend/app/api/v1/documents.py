@@ -10,11 +10,9 @@ from app.application.document.handlers import DocumentCommandHandler, DocumentQu
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
+from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
 
 router = APIRouter()
-
-
-from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
 
 
 @router.post("", status_code=201)

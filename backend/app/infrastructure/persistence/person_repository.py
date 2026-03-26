@@ -28,9 +28,7 @@ class SqlAlchemyPersonRepository:
         result = await self._session.get(PersonModel, person_id)
         return to_domain(result) if result else None
 
-    async def get_in_clan(
-        self, person_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> PersonEntity | None:
+    async def get_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> PersonEntity | None:
         """Fetch person only if they have a membership in the given clan."""
         stmt = (
             select(PersonModel)
@@ -104,9 +102,7 @@ class SqlAlchemyPersonRepository:
             ORDER BY similarity(unaccent(lower(p.full_name)), unaccent(lower(:q))) DESC
             LIMIT :lim
         """)
-        result = await self._session.execute(
-            stmt, {"clan_id": clan_id, "q": query, "lim": limit}
-        )
+        result = await self._session.execute(stmt, {"clan_id": clan_id, "q": query, "lim": limit})
         rows = result.mappings().all()
         return [
             PersonSearchResult(
@@ -166,18 +162,27 @@ class SqlAlchemyPersonRepository:
         result = await self._session.execute(stmt)
         return result.scalar() or 0
 
-    async def get_stats_for_persons(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+    async def get_stats_for_persons(
+        self, person_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, int]]:
         if not person_ids:
             return {}
         stmt = text("""
-            SELECT p.id, 
-                (SELECT COUNT(*) FROM public.marriages m WHERE (m.person1_id=p.id OR m.person2_id=p.id) AND m.is_deleted=false) as spouse_count,
-                (SELECT COUNT(*) FROM public.parent_child pc WHERE pc.parent_id=p.id AND pc.is_deleted=false) as child_count
+            SELECT p.id,
+                (SELECT COUNT(*) FROM public.marriages m
+                 WHERE (m.person1_id=p.id OR m.person2_id=p.id)
+                 AND m.is_deleted=false) as spouse_count,
+                (SELECT COUNT(*) FROM public.parent_child pc
+                 WHERE pc.parent_id=p.id
+                 AND pc.is_deleted=false) as child_count
             FROM public.persons p
             WHERE p.id = ANY(:pids)
         """).bindparams(pids=[str(pid) for pid in person_ids])
         result = await self._session.execute(stmt)
         return {
-            uuid.UUID(str(row["id"])): {"spouse_count": row["spouse_count"], "child_count": row["child_count"]}
+            uuid.UUID(str(row["id"])): {
+                "spouse_count": row["spouse_count"],
+                "child_count": row["child_count"],
+            }
             for row in result.mappings().all()
         }

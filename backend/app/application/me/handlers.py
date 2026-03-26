@@ -46,6 +46,7 @@ class MeQueryHandler:
             "clan_slug": row.clan_slug,
             "role": row.role,
             "message": (
-                "Clan selected. Set X-Current-Clan-Id header to this clan_id on subsequent requests."
+                "Clan selected. Set X-Current-Clan-Id header"
+                " to this clan_id on subsequent requests."
             ),
         }

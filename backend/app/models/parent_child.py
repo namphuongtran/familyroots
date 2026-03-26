@@ -26,9 +26,7 @@ class ParentChild(TimestampMixin, Base):
         CheckConstraint("parent_id != child_id", name="parent_child_no_self"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     parent_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -49,27 +47,19 @@ class ParentChild(TimestampMixin, Base):
     )
 
     # biological, adopted, step, foster
-    relationship_type: Mapped[str] = mapped_column(
-        String(20), default="biological"
-    )
+    relationship_type: Mapped[str] = mapped_column(String(20), default="biological")
 
     # Birth order among siblings under same parent (con cả=1, con thứ=2...)
     birth_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
-    updated_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), default=None
-    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
 
     # ── Soft delete ───────────────────────────────────────────
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
-    )
-    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), default=None
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
 
     # ── ORM Relationships ─────────────────────────────────────
     parent = relationship(

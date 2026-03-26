@@ -40,9 +40,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # {client_ip: [(timestamp, ...),]}
         self._hits: dict[str, list[float]] = defaultdict(list)
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not request.url.path.startswith(self._prefix):
             return await call_next(request)
 

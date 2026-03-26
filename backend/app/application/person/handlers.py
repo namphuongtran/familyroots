@@ -93,9 +93,16 @@ class PersonCommandHandler:
                 raise ForbiddenError("insufficient_permissions")
 
             allowed_fields = {
-                "phone", "email", "avatar_url", "residence_place",
-                "biography", "notes", "religion", "occupation",
-                "education_level", "title_rank"
+                "phone",
+                "email",
+                "avatar_url",
+                "residence_place",
+                "biography",
+                "notes",
+                "religion",
+                "occupation",
+                "education_level",
+                "title_rank",
             }
             invalid_fields = set(cmd.changes.keys()) - allowed_fields
             if invalid_fields:
@@ -138,7 +145,7 @@ class PersonQueryHandler:
         self._repo = repo
         self._query_port = query_port
 
-    async def list(self, query: ListPersons) -> tuple[list[PersonResponse], int]:
+    async def list_persons(self, query: ListPersons) -> tuple[list[PersonResponse], int]:
         """List persons with filtering, pagination, and total count."""
         filters = PersonFilters(
             gender=query.gender,
@@ -146,9 +153,7 @@ class PersonQueryHandler:
             generation=query.generation,
             branch_id=query.branch_id,
         )
-        persons = await self._repo.list_in_clan(
-            query.clan_id, filters, query.cursor, query.limit
-        )
+        persons = await self._repo.list_in_clan(query.clan_id, filters, query.cursor, query.limit)
         total = await self._repo.count_in_clan(query.clan_id, query.is_deleted)
         return [PersonResponse.model_validate(p) for p in persons], total
 
@@ -163,7 +168,9 @@ class PersonQueryHandler:
         """Search persons by name."""
         return await self._repo.search(query.clan_id, query.query, query.limit)
 
-    async def get_persons_stats(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+    async def get_persons_stats(
+        self, person_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, int]]:
         """Fetch statistics for a list of persons."""
         return await self._repo.get_stats_for_persons(person_ids)
 

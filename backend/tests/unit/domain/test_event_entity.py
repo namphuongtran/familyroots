@@ -10,7 +10,6 @@ from app.domain.event.events import EventCreated, EventDeleted, EventUpdated
 from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
 
-
 # ── Event.create ─────────────────────────────────────────────────
 
 

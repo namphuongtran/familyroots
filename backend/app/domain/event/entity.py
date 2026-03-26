@@ -15,14 +15,27 @@ from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
 
-_VALID_EVENT_TYPES = frozenset({
-    "death_anniversary", "birthday", "wedding_anniversary", "clan_ceremony", "custom",
-})
+_VALID_EVENT_TYPES = frozenset(
+    {
+        "death_anniversary",
+        "birthday",
+        "wedding_anniversary",
+        "clan_ceremony",
+        "custom",
+    }
+)
 
-_UPDATABLE_FIELDS = frozenset({
-    "event_type", "title", "description", "event_date",
-    "is_lunar_calendar", "is_recurring", "notify_days_before",
-})
+_UPDATABLE_FIELDS = frozenset(
+    {
+        "event_type",
+        "title",
+        "description",
+        "event_date",
+        "is_lunar_calendar",
+        "is_recurring",
+        "notify_days_before",
+    }
+)
 
 
 @dataclass
@@ -100,17 +113,13 @@ class Event(AggregateRoot):
         old_values: dict[str, object] = {}
         for field_name, new_value in changes.items():
             if field_name not in _UPDATABLE_FIELDS:
-                raise BusinessRuleViolation(
-                    "field_not_updatable", {"field": field_name}
-                )
+                raise BusinessRuleViolation("field_not_updatable", {"field": field_name})
             old_values[field_name] = getattr(self, field_name, None)
             setattr(self, field_name, new_value)
 
         # Validate event_type if it was changed
         if "event_type" in changes and self.event_type not in _VALID_EVENT_TYPES:
-            raise BusinessRuleViolation(
-                "invalid_event_type", {"event_type": self.event_type}
-            )
+            raise BusinessRuleViolation("invalid_event_type", {"event_type": self.event_type})
 
         self.updated_at = datetime.now(UTC)
         self.add_event(

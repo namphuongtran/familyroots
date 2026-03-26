@@ -6,18 +6,19 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from app.application.event.handlers import EventCommandHandler, EventQueryHandler
+from app.application.person.commands import GetPerson
+from app.application.person.handlers import PersonQueryHandler
 from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
+from app.infrastructure.dependencies import (
+    get_event_command_handler,
+    get_event_query_handler,
+    get_person_query_handler,
+)
 from app.schemas.event import EventCreateRequest, EventUpdateRequest
 
 router = APIRouter()
-
-
-from app.infrastructure.dependencies import get_event_command_handler, get_event_query_handler
-from app.infrastructure.dependencies import get_person_query_handler
-from app.application.person.handlers import PersonQueryHandler
-from app.application.person.commands import GetPerson
 
 
 @router.post("", status_code=201)
@@ -58,8 +59,11 @@ async def list_events(
 ) -> dict[str, Any]:
     """List events with optional filters."""
     items = await query_handler.list_events(
-        clan_id=clan_id, person_id=person_id, event_type=event_type,
-        cursor=cursor, limit=limit,
+        clan_id=clan_id,
+        person_id=person_id,
+        event_type=event_type,
+        cursor=cursor,
+        limit=limit,
     )
     data = [item.model_dump() for item in items]
     if fields:

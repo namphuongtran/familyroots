@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from typing import Any
 
 from app.domain.person.events import (
     PersonCreated,
@@ -92,7 +93,7 @@ class Person(AggregateRoot):
         full_name: str,
         actor: ActorInfo,
         clan_id: uuid.UUID,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> Person:
         """Factory method to create a new Person with a creation event."""
         person = cls(

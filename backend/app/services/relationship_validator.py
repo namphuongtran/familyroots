@@ -121,9 +121,7 @@ class RelationshipValidator:
         if result.first():
             raise ConflictError("relationship.duplicate_parent_child")
 
-    async def _count_bio_parents(
-        self, child_id: uuid.UUID, db: AsyncSession
-    ) -> int:
+    async def _count_bio_parents(self, child_id: uuid.UUID, db: AsyncSession) -> int:
         """Count biological parent relationships for a person."""
         result = await db.execute(
             text("""

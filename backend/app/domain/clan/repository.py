@@ -13,9 +13,7 @@ class ClanRepository(Protocol):
         """Get clan ORM model by ID."""
         ...
 
-    async def get_user_clan_role(
-        self, clan_id: uuid.UUID, user_id: uuid.UUID
-    ) -> Any | None:
+    async def get_user_clan_role(self, clan_id: uuid.UUID, user_id: uuid.UUID) -> Any | None:
         """Get a user's clan role record."""
         ...
 

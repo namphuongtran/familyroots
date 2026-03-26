@@ -8,6 +8,7 @@ delegated to the repository protocol so this validator stays infrastructure-free
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Protocol
 
 from app.domain.shared.exceptions import BusinessRuleViolation, ConflictError
@@ -20,8 +21,12 @@ class RelationshipQueryPort(Protocol):
     async def count_bio_parents(self, child_id: uuid.UUID) -> int: ...
     async def has_active_marriage(self, person1_id: uuid.UUID, person2_id: uuid.UUID) -> bool: ...
     async def has_parent_child_link(self, parent_id: uuid.UUID, child_id: uuid.UUID) -> bool: ...
-    async def is_ancestor(self, descendant_id: uuid.UUID, ancestor_id: uuid.UUID, clan_id: uuid.UUID) -> bool: ...
-    async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, object]: ...
+    async def is_ancestor(
+        self, descendant_id: uuid.UUID, ancestor_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool: ...
+    async def get_birth_dates(
+        self, person_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, date | None]: ...
 
 
 class RelationshipDomainValidator:
@@ -53,7 +58,7 @@ class RelationshipDomainValidator:
         parent_bd = dates.get(parent_id)
         child_bd = dates.get(child_id)
         if parent_bd and child_bd:
-            age_gap = (child_bd - parent_bd).days / 365.25  # type: ignore[union-attr]
+            age_gap = (child_bd - parent_bd).days / 365.25
             if age_gap < 12:
                 raise BusinessRuleViolation(
                     "relationship.parent_too_young",
@@ -68,14 +73,10 @@ class RelationshipDomainValidator:
 
         return None
 
-    async def check_duplicate_parent_child(
-        self, parent_id: uuid.UUID, child_id: uuid.UUID
-    ) -> None:
+    async def check_duplicate_parent_child(self, parent_id: uuid.UUID, child_id: uuid.UUID) -> None:
         if await self._q.has_parent_child_link(parent_id, child_id):
             raise ConflictError("relationship.duplicate_parent_child")
 
-    async def check_duplicate_marriage(
-        self, person1_id: uuid.UUID, person2_id: uuid.UUID
-    ) -> None:
+    async def check_duplicate_marriage(self, person1_id: uuid.UUID, person2_id: uuid.UUID) -> None:
         if await self._q.has_active_marriage(person1_id, person2_id):
             raise ConflictError("relationship.duplicate_marriage")

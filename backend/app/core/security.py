@@ -99,7 +99,7 @@ async def ensure_user_profile(
 
     if profile is None:
         email: str = current_user.get("email", "")
-        user_metadata: dict = current_user.get("user_metadata", {})
+        user_metadata: dict[str, Any] = current_user.get("user_metadata", {})
         display_name = user_metadata.get("full_name") or email.split("@")[0]
 
         profile = UserProfile(

@@ -34,9 +34,13 @@ async def get_full_tree(
         )
     )
     if profile == "summary":
-        result["tree"] = TreeNodeSummary.model_validate(result["tree"]).model_dump(exclude_unset=True)
+        result["tree"] = TreeNodeSummary.model_validate(result["tree"]).model_dump(
+            exclude_unset=True
+        )
     elif profile == "detail":
-        result["tree"] = TreeNodeDetail.model_validate(result["tree"]).model_dump(exclude_unset=True)
+        result["tree"] = TreeNodeDetail.model_validate(result["tree"]).model_dump(
+            exclude_unset=True
+        )
     return {"data": result}
 
 
@@ -59,9 +63,13 @@ async def get_subtree(
         )
     )
     if profile == "summary":
-        result["tree"] = TreeNodeSummary.model_validate(result["tree"]).model_dump(exclude_unset=True)
+        result["tree"] = TreeNodeSummary.model_validate(result["tree"]).model_dump(
+            exclude_unset=True
+        )
     elif profile == "detail":
-        result["tree"] = TreeNodeDetail.model_validate(result["tree"]).model_dump(exclude_unset=True)
+        result["tree"] = TreeNodeDetail.model_validate(result["tree"]).model_dump(
+            exclude_unset=True
+        )
     return {"data": result}
 
 
@@ -74,9 +82,7 @@ async def get_ancestors(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Return the ancestor chain from a person up to the root."""
-    ancestors = await handler.get_ancestors(
-        GetAncestors(person_id=person_id, clan_id=clan_id)
-    )
+    ancestors = await handler.get_ancestors(GetAncestors(person_id=person_id, clan_id=clan_id))
     return {"data": ancestors}
 
 
@@ -90,7 +96,5 @@ async def find_path(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Find the relationship path between two persons."""
-    result = await handler.find_path(
-        FindPath(from_id=from_id, to_id=to_id, clan_id=clan_id)
-    )
+    result = await handler.find_path(FindPath(from_id=from_id, to_id=to_id, clan_id=clan_id))
     return {"data": result}

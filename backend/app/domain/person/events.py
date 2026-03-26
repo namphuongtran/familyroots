@@ -47,10 +47,16 @@ class PersonUpdated(AuditableEvent):
             object.__setattr__(self, "resource_id", self.person_id)
         if self.new_value is None and self.changes:
             # Serialize changes for audit log storage
-            serializable = {k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v for k, v in self.changes.items()}
+            serializable = {
+                k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                for k, v in self.changes.items()
+            }
             object.__setattr__(self, "new_value", serializable)
         if self.old_value is None and self.old_values:
-            serializable = {k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v for k, v in self.old_values.items()}
+            serializable = {
+                k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                for k, v in self.old_values.items()
+            }
             object.__setattr__(self, "old_value", serializable)
 
 

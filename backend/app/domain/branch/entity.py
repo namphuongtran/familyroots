@@ -17,9 +17,15 @@ from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
 
-_UPDATABLE_FIELDS = frozenset({
-    "name", "description", "founder_person_id", "parent_branch_id", "branch_order",
-})
+_UPDATABLE_FIELDS = frozenset(
+    {
+        "name",
+        "description",
+        "founder_person_id",
+        "parent_branch_id",
+        "branch_order",
+    }
+)
 
 
 @dataclass
@@ -85,9 +91,7 @@ class Branch(AggregateRoot):
         old_values: dict[str, object] = {}
         for field_name, new_value in changes.items():
             if field_name not in _UPDATABLE_FIELDS:
-                raise BusinessRuleViolation(
-                    "field_not_updatable", {"field": field_name}
-                )
+                raise BusinessRuleViolation("field_not_updatable", {"field": field_name})
             old_values[field_name] = getattr(self, field_name, None)
             setattr(self, field_name, new_value)
 

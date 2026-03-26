@@ -6,9 +6,19 @@ from app.domain.document.entity import Document as DocumentEntity
 from app.models.document import Document as DocumentModel
 
 _MAPPED_FIELDS = (
-    "clan_id", "person_id", "title", "description", "document_type",
-    "storage_path", "file_size_bytes", "mime_type", "original_filename",
-    "taken_date", "taken_place", "is_avatar", "created_by",
+    "clan_id",
+    "person_id",
+    "title",
+    "description",
+    "document_type",
+    "storage_path",
+    "file_size_bytes",
+    "mime_type",
+    "original_filename",
+    "taken_date",
+    "taken_place",
+    "is_avatar",
+    "created_by",
 )
 
 

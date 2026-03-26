@@ -14,8 +14,8 @@ from app.services.tree_builder import build_descendants_tree, find_clan_founder
 from tests.conftest import (
     MockMappingResult,
     MockScalarResult,
-    make_person_row,
     make_mock_db,
+    make_person_row,
     make_spouse_row,
 )
 
@@ -28,9 +28,7 @@ CLAN_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 @pytest.mark.asyncio
 async def test_single_person():
     root_id = uuid.uuid4()
-    rows = [
-        make_person_row(person_id=root_id, full_name="Nguyễn Văn A", is_founder=True, depth=0)
-    ]
+    rows = [make_person_row(person_id=root_id, full_name="Nguyễn Văn A", is_founder=True, depth=0)]
     spouse_rows: list[dict[str, Any]] = []
 
     db = make_mock_db(

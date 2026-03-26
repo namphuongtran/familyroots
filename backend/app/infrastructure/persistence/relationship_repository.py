@@ -60,8 +60,16 @@ def _marriage_to_orm(e: MarriageEntity) -> MarriageModel:
 
 
 _MARRIAGE_UPDATABLE = (
-    "marriage_date", "divorce_date", "marriage_place", "status",
-    "spouse_order", "notes", "updated_by", "is_deleted", "deleted_at", "deleted_by",
+    "marriage_date",
+    "divorce_date",
+    "marriage_place",
+    "status",
+    "spouse_order",
+    "notes",
+    "updated_by",
+    "is_deleted",
+    "deleted_at",
+    "deleted_by",
 )
 
 
@@ -102,8 +110,13 @@ def _pc_to_orm(e: ParentChildEntity) -> ParentChildModel:
 
 
 _PC_UPDATABLE = (
-    "relationship_type", "birth_order", "notes", "updated_by",
-    "is_deleted", "deleted_at", "deleted_by",
+    "relationship_type",
+    "birth_order",
+    "notes",
+    "updated_by",
+    "is_deleted",
+    "deleted_at",
+    "deleted_by",
 )
 
 
@@ -212,8 +225,6 @@ class SqlAlchemyRelationshipQueryPort:
     async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, date | None]:
         if not person_ids:
             return {}
-        stmt = select(PersonModel.id, PersonModel.birth_date).where(
-            PersonModel.id.in_(person_ids)
-        )
+        stmt = select(PersonModel.id, PersonModel.birth_date).where(PersonModel.id.in_(person_ids))
         result = await self._session.execute(stmt)
         return {row.id: row.birth_date for row in result}

@@ -7,7 +7,7 @@ bounded context with automatic audit logging via domain events.
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from app.application.relationship.commands import (
     CreateMarriage,

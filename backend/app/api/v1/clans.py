@@ -164,9 +164,7 @@ async def change_user_role(
             actor=ActorInfo.from_jwt(current_user, "admin"),
         )
     )
-    return {
-        "data": {"message": t("user.role_changed"), "user_id": str(user_id), "role": role}
-    }
+    return {"data": {"message": t("user.role_changed"), "user_id": str(user_id), "role": role}}
 
 
 @router.delete("/me/users/{user_id}")

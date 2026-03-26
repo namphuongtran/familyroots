@@ -13,13 +13,9 @@ from app.models.base import Base, TimestampMixin
 
 class Marriage(TimestampMixin, Base):
     __tablename__ = "marriages"
-    __table_args__ = (
-        CheckConstraint("person1_id != person2_id", name="marriages_no_self"),
-    )
+    __table_args__ = (CheckConstraint("person1_id != person2_id", name="marriages_no_self"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     person1_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -41,9 +37,7 @@ class Marriage(TimestampMixin, Base):
 
     marriage_date: Mapped[date | None] = mapped_column(Date, default=None)
     divorce_date: Mapped[date | None] = mapped_column(Date, default=None)
-    marriage_place: Mapped[str | None] = mapped_column(
-        String(255), default=None
-    )
+    marriage_place: Mapped[str | None] = mapped_column(String(255), default=None)
     status: Mapped[str] = mapped_column(
         String(20), default="married"
     )  # married, divorced, widowed, separated
@@ -53,18 +47,12 @@ class Marriage(TimestampMixin, Base):
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
-    updated_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), default=None
-    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
 
     # ── Soft delete ───────────────────────────────────────────
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
-    )
-    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), default=None
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
 
     # ── ORM Relationships ─────────────────────────────────────
     person1 = relationship(

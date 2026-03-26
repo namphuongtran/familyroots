@@ -64,8 +64,10 @@ class TreeResponse(BaseModel):
     total_persons: int
     total_generations: int
 
+
 class TreeNodeSummary(BaseModel):
     """Minimal node representation for the tree structure."""
+
     id: str
     full_name: str
     gender: str
@@ -80,19 +82,22 @@ class TreeNodeSummary(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
 TreeNodeSummary.model_rebuild()
+
 
 class TreeNodeDetail(TreeNodeSummary):
     """Detail node with some biographic data."""
+
     birth_name: str | None = None
     posthumous_name: str | None = None
     birth_date_approx: bool = False
     death_date_approx: bool = False
     birth_place: str | None = None
     membership_role: str | None = None  # blood, spouse, adopted
-    children: list[TreeNodeDetail] = []
+    children: list[TreeNodeDetail] = []  # type: ignore[assignment]
 
     model_config = {"from_attributes": True}
 
-TreeNodeDetail.model_rebuild()
 
+TreeNodeDetail.model_rebuild()

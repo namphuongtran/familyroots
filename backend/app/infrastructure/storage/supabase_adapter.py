@@ -13,7 +13,6 @@ from app.infrastructure.supabase_client import get_service_client
 logger = logging.getLogger(__name__)
 
 
-
 class SupabaseStorageAdapter:
     """Concrete storage adapter backed by Supabase Storage."""
 
@@ -22,7 +21,10 @@ class SupabaseStorageAdapter:
         client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload(
             path=path,
             file=content,
-            file_options={"content-type": content_type or "application/octet-stream", "upsert": "false"},
+            file_options={
+                "content-type": content_type or "application/octet-stream",
+                "upsert": "false",
+            },
         )
         return path
 

@@ -102,7 +102,7 @@ def create_app() -> FastAPI:
 
     # Health check with DB connectivity probe
     @application.get("/health", tags=["health"], response_model=None)
-    async def health(db: AsyncSession = Depends(get_db)):
+    async def health(db: AsyncSession = Depends(get_db)) -> dict[str, str] | JSONResponse:
         try:
             await db.execute(text("SELECT 1"))
             return {"status": "ok", "database": "connected"}

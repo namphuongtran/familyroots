@@ -77,10 +77,7 @@ class SqlAlchemyPlatformAdminQueryPort(PlatformAdminQueryPort):
     async def get_metrics(self) -> dict[str, Any]:
         total_clans = select(func.count()).select_from(Clan).scalar_subquery()
         active_clans = (
-            select(func.count())
-            .select_from(Clan)
-            .where(Clan.is_active.is_(True))
-            .scalar_subquery()
+            select(func.count()).select_from(Clan).where(Clan.is_active.is_(True)).scalar_subquery()
         )
         total_members = (
             select(func.count())

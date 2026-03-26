@@ -22,13 +22,9 @@ class SqlAlchemyBranchRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(
-        self, branch_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> BranchEntity | None:
+    async def get_by_id(self, branch_id: uuid.UUID, clan_id: uuid.UUID) -> BranchEntity | None:
         result = await self._session.execute(
-            select(BranchModel).where(
-                BranchModel.id == branch_id, BranchModel.clan_id == clan_id
-            )
+            select(BranchModel).where(BranchModel.id == branch_id, BranchModel.clan_id == clan_id)
         )
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
@@ -54,9 +50,7 @@ class SqlAlchemyBranchRepository:
 
     async def delete(self, branch: BranchEntity) -> None:
         """Hard-delete a branch."""
-        result = await self._session.execute(
-            select(BranchModel).where(BranchModel.id == branch.id)
-        )
+        result = await self._session.execute(select(BranchModel).where(BranchModel.id == branch.id))
         model = result.scalar_one_or_none()
         if model:
             await self._session.delete(model)

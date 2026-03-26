@@ -17,8 +17,12 @@ class IdentityClaimSubmit(IdentityClaimBase):
 class IdentityClaimReview(BaseModel):
     reviewer_note: str | None = Field(default=None, max_length=1000)
 
+
 class IdentityClaimUnlink(BaseModel):
-    reason: str = Field(..., max_length=1000, description="Mandatory reason for unlinking identity.")
+    reason: str = Field(
+        ..., max_length=1000, description="Mandatory reason for unlinking identity."
+    )
+
 
 class IdentityClaimPrelink(BaseModel):
     person_id: uuid.UUID = Field(..., description="ID of the Person to link the user to.")

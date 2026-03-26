@@ -9,7 +9,6 @@ from app.domain.branch.events import BranchCreated, BranchDeleted, BranchUpdated
 from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
 
-
 # ── Branch.create ────────────────────────────────────────────────
 
 
@@ -29,9 +28,7 @@ class TestBranchCreate:
 
     def test_create_emits_event(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
-        branch = Branch.create(
-            clan_id=uuid.uuid4(), actor=actor, name="Test Branch"
-        )
+        branch = Branch.create(clan_id=uuid.uuid4(), actor=actor, name="Test Branch")
         events = branch.collect_events()
         assert len(events) == 1
         assert isinstance(events[0], BranchCreated)
@@ -62,9 +59,7 @@ class TestBranchCreate:
 class TestBranchUpdate:
     def test_update_changes_fields(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
-        branch = Branch.create(
-            clan_id=uuid.uuid4(), actor=actor, name="Before"
-        )
+        branch = Branch.create(clan_id=uuid.uuid4(), actor=actor, name="Before")
         branch.collect_events()  # drain creation event
 
         branch.update({"name": "After", "description": "Updated desc"}, actor)
@@ -73,9 +68,7 @@ class TestBranchUpdate:
 
     def test_update_emits_event(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
-        branch = Branch.create(
-            clan_id=uuid.uuid4(), actor=actor, name="Test"
-        )
+        branch = Branch.create(clan_id=uuid.uuid4(), actor=actor, name="Test")
         branch.collect_events()
 
         branch.update({"name": "Updated"}, actor)
@@ -86,9 +79,7 @@ class TestBranchUpdate:
 
     def test_update_rejects_non_whitelisted_field(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
-        branch = Branch.create(
-            clan_id=uuid.uuid4(), actor=actor, name="Test"
-        )
+        branch = Branch.create(clan_id=uuid.uuid4(), actor=actor, name="Test")
         branch.collect_events()
 
         with pytest.raises(BusinessRuleViolation, match="field_not_updatable"):
@@ -96,9 +87,7 @@ class TestBranchUpdate:
 
     def test_update_rejects_self_parent(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
-        branch = Branch.create(
-            clan_id=uuid.uuid4(), actor=actor, name="Test"
-        )
+        branch = Branch.create(clan_id=uuid.uuid4(), actor=actor, name="Test")
         branch.collect_events()
 
         with pytest.raises(BusinessRuleViolation, match="branch_cannot_be_own_parent"):
@@ -111,9 +100,7 @@ class TestBranchUpdate:
 class TestBranchDelete:
     def test_delete_emits_event(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="admin")
-        branch = Branch.create(
-            clan_id=uuid.uuid4(), actor=actor, name="Test"
-        )
+        branch = Branch.create(clan_id=uuid.uuid4(), actor=actor, name="Test")
         branch.collect_events()
 
         branch.delete(actor)

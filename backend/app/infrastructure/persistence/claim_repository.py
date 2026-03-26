@@ -41,27 +41,36 @@ class SqlAlchemyClaimRepository(ClaimRepository):
 
     async def has_pending_claims(self, user_id: uuid.UUID) -> bool:
         result = await self._session.execute(
-            select(ClaimModel.id).where(ClaimModel.user_id == user_id, ClaimModel.status == "PENDING").limit(1)
+            select(ClaimModel.id)
+            .where(ClaimModel.user_id == user_id, ClaimModel.status == "PENDING")
+            .limit(1)
         )
         return result.scalar_one_or_none() is not None
 
     async def get_role(self, user_id: uuid.UUID, clan_id: uuid.UUID) -> str | None:
         result = await self._session.execute(
-            select(UserClanRole.role).where(
+            select(UserClanRole.role)
+            .where(
                 UserClanRole.user_id == user_id,
                 UserClanRole.clan_id == clan_id,
-                UserClanRole.is_approved.is_(True)
-            ).limit(1)
+                UserClanRole.is_approved.is_(True),
+            )
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
-    async def get_last_approved_claim(self, user_id: uuid.UUID, person_id: uuid.UUID) -> ClaimModel | None:
+    async def get_last_approved_claim(
+        self, user_id: uuid.UUID, person_id: uuid.UUID
+    ) -> ClaimModel | None:
         result = await self._session.execute(
-            select(ClaimModel).where(
+            select(ClaimModel)
+            .where(
                 ClaimModel.user_id == user_id,
                 ClaimModel.person_id == person_id,
-                ClaimModel.status == "APPROVED"
-            ).order_by(ClaimModel.created_at.desc()).limit(1)
+                ClaimModel.status == "APPROVED",
+            )
+            .order_by(ClaimModel.created_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -83,12 +92,16 @@ class SqlAlchemyClaimRepository(ClaimRepository):
     ) -> None:
         await self._session.execute(
             update(ClaimModel)
-            .where(ClaimModel.person_id == person_id, ClaimModel.id != exclude_claim_id, ClaimModel.status == "PENDING")
+            .where(
+                ClaimModel.person_id == person_id,
+                ClaimModel.id != exclude_claim_id,
+                ClaimModel.status == "PENDING",
+            )
             .values(
                 status="REJECTED",
                 reviewer_note=reviewer_note,
                 reviewed_by=admin_id,
-                reviewed_at=datetime.now(UTC)
+                reviewed_at=datetime.now(UTC),
             )
         )
 
@@ -102,17 +115,14 @@ class SqlAlchemyClaimRepository(ClaimRepository):
         await self._session.execute(
             update(ClaimModel)
             .where(
-                or_(
-                    ClaimModel.user_id == user_id,
-                    ClaimModel.person_id == person_id
-                ),
-                ClaimModel.status == "PENDING"
+                or_(ClaimModel.user_id == user_id, ClaimModel.person_id == person_id),
+                ClaimModel.status == "PENDING",
             )
             .values(
                 status="REJECTED",
                 reviewer_note=reviewer_note,
                 reviewed_by=admin_id,
-                reviewed_at=datetime.now(UTC)
+                reviewed_at=datetime.now(UTC),
             )
         )
 
@@ -142,7 +152,11 @@ class SqlAlchemyClaimQueryPort(ClaimQueryPort):
         count_query = select(func.count()).select_from(query.subquery())
         total = await self._session.scalar(count_query) or 0
 
-        query = query.order_by(ClaimModel.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        query = (
+            query.order_by(ClaimModel.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         result = await self._session.execute(query)
         claims = list(result.scalars().all())
 

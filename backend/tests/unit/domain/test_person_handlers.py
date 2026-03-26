@@ -11,7 +11,6 @@ from app.domain.person.entity import Person
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 
-
 # ── Fixtures ────────────────────────────────────────────────────
 
 
@@ -123,9 +122,7 @@ class TestPersonQueryHandlerGet:
         mock_repo.get_in_clan.return_value = person
 
         handler = PersonQueryHandler(mock_repo)
-        result = await handler.get(
-            GetPerson(person_id=person.id, clan_id=uuid.uuid4())
-        )
+        result = await handler.get(GetPerson(person_id=person.id, clan_id=uuid.uuid4()))
         assert result.id == person.id
 
     @pytest.mark.asyncio

@@ -77,8 +77,8 @@ def get_claim_command_handler(
     db: AsyncSession = Depends(get_db),
 ) -> ClaimCommandHandler:
     from app.application.person.claim_handlers import ClaimCommandHandler
-    from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
     from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
     from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     repo = SqlAlchemyClaimRepository(db)
@@ -130,7 +130,9 @@ def get_platform_admin_query_handler(
     db: AsyncSession = Depends(get_db),
 ) -> PlatformAdminQueryHandler:
     from app.application.platform_admin.handlers import PlatformAdminQueryHandler
-    from app.infrastructure.persistence.platform_admin_query_port import SqlAlchemyPlatformAdminQueryPort
+    from app.infrastructure.persistence.platform_admin_query_port import (
+        SqlAlchemyPlatformAdminQueryPort,
+    )
 
     query_port = SqlAlchemyPlatformAdminQueryPort(db)
     return PlatformAdminQueryHandler(query_port)
@@ -142,8 +144,8 @@ def get_platform_admin_query_handler(
 def get_auth_command_handler(
     db: AsyncSession = Depends(get_db),
 ) -> AuthCommandHandler:
-    from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
     from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
     from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     repo = SqlAlchemyAuthRepository(db)

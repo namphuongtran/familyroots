@@ -43,7 +43,10 @@ class SqlAlchemyAuthQueryPort(AuthQueryPort):
     async def get_profile(self, user_id: uuid.UUID) -> Any | None:
         result = await self._session.execute(
             select(UserProfileModel, UserClanRole, Clan)
-            .outerjoin(UserClanRole, (UserProfileModel.id == UserClanRole.user_id) & UserClanRole.is_approved.is_(True))
+            .outerjoin(
+                UserClanRole,
+                (UserProfileModel.id == UserClanRole.user_id) & UserClanRole.is_approved.is_(True),
+            )
             .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
             .where(UserProfileModel.id == user_id)
             .limit(1)

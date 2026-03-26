@@ -133,8 +133,7 @@ def upgrade() -> None:
         ),
     )
     op.execute(
-        "CREATE INDEX idx_persons_is_deleted ON persons "
-        "(is_deleted) WHERE is_deleted = false"
+        "CREATE INDEX idx_persons_is_deleted ON persons (is_deleted) WHERE is_deleted = false"
     )
     op.execute(
         "CREATE INDEX idx_persons_origin_clan ON persons "
@@ -344,8 +343,7 @@ def upgrade() -> None:
         "WHERE status = 'married'"
     )
     op.execute(
-        "CREATE INDEX idx_marriages_is_deleted ON marriages "
-        "(is_deleted) WHERE is_deleted = false"
+        "CREATE INDEX idx_marriages_is_deleted ON marriages (is_deleted) WHERE is_deleted = false"
     )
 
     # -- Table: parent_child (global edge: parent → child) --
@@ -556,7 +554,9 @@ def upgrade() -> None:
         sa.Column("display_name", sa.String(255), nullable=True),
         sa.Column("avatar_url", sa.String(500), nullable=True),
         sa.Column("language", sa.String(10), nullable=False, server_default=sa.text("'vi'")),
-        sa.Column("timezone", sa.String(50), nullable=False, server_default=sa.text("'Asia/Ho_Chi_Minh'")),
+        sa.Column(
+            "timezone", sa.String(50), nullable=False, server_default=sa.text("'Asia/Ho_Chi_Minh'")
+        ),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
         sa.Column("platform_role", sa.String(50), nullable=False, server_default=sa.text("'user'")),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
@@ -621,12 +621,20 @@ def upgrade() -> None:
             unique=True,
         ),
         sa.Column("approval_config", JSONB, nullable=True),
-        sa.Column("default_language", sa.String(10), nullable=False, server_default=sa.text("'vi'")),
-        sa.Column("tree_display_mode", sa.String(20), nullable=False, server_default=sa.text("'vertical'")),
+        sa.Column(
+            "default_language", sa.String(10), nullable=False, server_default=sa.text("'vi'")
+        ),
+        sa.Column(
+            "tree_display_mode", sa.String(20), nullable=False, server_default=sa.text("'vertical'")
+        ),
         sa.Column("allow_public_tree", sa.Boolean, nullable=False, server_default=sa.text("false")),
         sa.Column("notification_defaults", JSONB, nullable=True),
-        sa.Column("privacy_level", sa.String(20), nullable=False, server_default=sa.text("'clan_members'")),
-        sa.Column("max_upload_size_mb", sa.SmallInteger, nullable=False, server_default=sa.text("10")),
+        sa.Column(
+            "privacy_level", sa.String(20), nullable=False, server_default=sa.text("'clan_members'")
+        ),
+        sa.Column(
+            "max_upload_size_mb", sa.SmallInteger, nullable=False, server_default=sa.text("10")
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -922,9 +930,18 @@ def upgrade() -> None:
     """)
 
     for table in (
-        "clans", "persons", "clan_memberships", "marriages", "parent_child",
-        "branches", "documents", "events", "user_profiles", "clan_settings",
-        "user_clan_roles", "change_requests",
+        "clans",
+        "persons",
+        "clan_memberships",
+        "marriages",
+        "parent_child",
+        "branches",
+        "documents",
+        "events",
+        "user_profiles",
+        "clan_settings",
+        "user_clan_roles",
+        "change_requests",
     ):
         op.execute(
             f"CREATE TRIGGER trg_{table}_updated_at "
@@ -936,8 +953,18 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop triggers
     for table in (
-        "change_requests", "clan_settings", "user_clan_roles", "events", "documents",
-        "parent_child", "marriages", "branches", "clan_memberships", "user_profiles", "persons", "clans",
+        "change_requests",
+        "clan_settings",
+        "user_clan_roles",
+        "events",
+        "documents",
+        "parent_child",
+        "marriages",
+        "branches",
+        "clan_memberships",
+        "user_profiles",
+        "persons",
+        "clans",
     ):
         op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_updated_at ON {table}")
     op.execute("DROP FUNCTION IF EXISTS update_updated_at_column()")

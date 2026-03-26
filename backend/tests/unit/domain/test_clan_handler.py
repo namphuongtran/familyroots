@@ -8,7 +8,6 @@ import pytest
 from app.application.clan.commands import (
     ApproveUser,
     ChangeUserRole,
-    RejectUser,
     RemoveUser,
     UpdateClan,
 )
@@ -54,9 +53,7 @@ class TestApproveUser:
         h = _make_handler(get_user_clan_role=ucr)
         with pytest.raises(ConflictError, match="already_approved"):
             await h.approve_user(
-                ApproveUser(
-                    clan_id=uuid.uuid4(), target_user_id=uuid.uuid4(), actor=_actor()
-                )
+                ApproveUser(clan_id=uuid.uuid4(), target_user_id=uuid.uuid4(), actor=_actor())
             )
 
     @pytest.mark.asyncio
@@ -64,9 +61,7 @@ class TestApproveUser:
         h = _make_handler(get_user_clan_role=None)
         with pytest.raises(EntityNotFoundError):
             await h.approve_user(
-                ApproveUser(
-                    clan_id=uuid.uuid4(), target_user_id=uuid.uuid4(), actor=_actor()
-                )
+                ApproveUser(clan_id=uuid.uuid4(), target_user_id=uuid.uuid4(), actor=_actor())
             )
 
 
@@ -107,9 +102,7 @@ class TestRemoveUser:
         h = _make_handler()
         with pytest.raises(ForbiddenError, match="cannot_remove_self"):
             await h.remove_user(
-                RemoveUser(
-                    clan_id=uuid.uuid4(), target_user_id=actor.user_id, actor=actor
-                )
+                RemoveUser(clan_id=uuid.uuid4(), target_user_id=actor.user_id, actor=actor)
             )
 
     @pytest.mark.asyncio
@@ -117,7 +110,5 @@ class TestRemoveUser:
         h = _make_handler(get_user_clan_role=None)
         with pytest.raises(EntityNotFoundError):
             await h.remove_user(
-                RemoveUser(
-                    clan_id=uuid.uuid4(), target_user_id=uuid.uuid4(), actor=_actor()
-                )
+                RemoveUser(clan_id=uuid.uuid4(), target_user_id=uuid.uuid4(), actor=_actor())
             )

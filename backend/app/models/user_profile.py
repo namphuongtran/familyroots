@@ -30,9 +30,7 @@ class UserProfile(TimestampMixin, Base):
     # Values: "user" (default) | "super_admin"
     platform_role: Mapped[str] = mapped_column(String(50), default="user")
 
-    last_login_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
-    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     # Canonical link to this user's person record (1:1, nullable)
     person_id: Mapped[uuid.UUID | None] = mapped_column(

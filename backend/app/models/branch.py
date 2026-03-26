@@ -13,9 +13,7 @@ from app.models.base import Base, TimestampMixin
 class Branch(TimestampMixin, Base):
     __tablename__ = "branches"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     clan_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -47,10 +45,6 @@ class Branch(TimestampMixin, Base):
     # ── ORM Relationships ─────────────────────────────────────
     clan = relationship("Clan", back_populates="branches")
     founder = relationship("Person", foreign_keys=[founder_person_id])
-    parent_branch = relationship(
-        "Branch", remote_side=[id], back_populates="child_branches"
-    )
-    child_branches = relationship(
-        "Branch", back_populates="parent_branch", lazy="selectin"
-    )
+    parent_branch = relationship("Branch", remote_side=[id], back_populates="child_branches")
+    child_branches = relationship("Branch", back_populates="parent_branch", lazy="selectin")
     members = relationship("ClanMembership", back_populates="branch")

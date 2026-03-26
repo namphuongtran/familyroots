@@ -154,16 +154,27 @@ class EventQueryHandler:
         limit: int = 20,
     ) -> list[EventResponse]:
         events = await self._repo.list_in_clan(
-            clan_id, person_id=person_id, event_type=event_type,
-            cursor=cursor, limit=limit,
+            clan_id,
+            person_id=person_id,
+            event_type=event_type,
+            cursor=cursor,
+            limit=limit,
         )
         return [
             EventResponse(
-                id=e.id, clan_id=e.clan_id, person_id=e.person_id,
-                event_type=e.event_type, title=e.title, description=e.description,
-                event_date=e.event_date, is_lunar_calendar=e.is_lunar_calendar,
-                is_recurring=e.is_recurring, notify_days_before=e.notify_days_before,
-                created_by=e.created_by, created_at=e.created_at, updated_at=e.updated_at,
+                id=e.id,
+                clan_id=e.clan_id,
+                person_id=e.person_id,
+                event_type=e.event_type,
+                title=e.title,
+                description=e.description,
+                event_date=e.event_date,
+                is_lunar_calendar=e.is_lunar_calendar,
+                is_recurring=e.is_recurring,
+                notify_days_before=e.notify_days_before,
+                created_by=e.created_by,
+                created_at=e.created_at,
+                updated_at=e.updated_at,
             )
             for e in events
         ]

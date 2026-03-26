@@ -26,9 +26,7 @@ class TreeRepository(Protocol):
         """Build a hierarchical tree dict rooted at root_id."""
         ...
 
-    async def get_ancestors(
-        self, person_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> list[dict[str, Any]]:
+    async def get_ancestors(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> list[dict[str, Any]]:
         """Return a flat list of ancestors from person up to root."""
         ...
 

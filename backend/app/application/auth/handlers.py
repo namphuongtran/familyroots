@@ -14,15 +14,12 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
 from app.domain.shared.exceptions import AuthenticationError
 from app.infrastructure.supabase_client import get_anon_client, get_service_client
 from app.models.clan import Clan
 from app.models.user_clan_role import UserClanRole
-from app.models.user_profile import UserProfile as UserProfileModel
 from app.schemas.auth import (
     LoginResponse,
     RegisterResponse,
@@ -192,7 +189,9 @@ class AuthCommandHandler:
                 full_name=user.user_metadata.get("full_name", ""),
                 clan_id=row.UserClanRole.clan_id if row and row.UserClanRole else None,
                 clan_name=row.Clan.name if row and row.Clan else None,
-                role=row.UserClanRole.role if row and row.UserClanRole and row.UserClanRole.is_approved else None,
+                role=row.UserClanRole.role
+                if row and row.UserClanRole and row.UserClanRole.is_approved
+                else None,
                 is_approved=row.UserClanRole.is_approved if row and row.UserClanRole else False,
                 person_id=row.UserProfileModel.person_id if row else None,
             ),

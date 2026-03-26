@@ -4,7 +4,7 @@ import logging
 import uuid
 from typing import Any
 
-import firebase_admin  # type: ignore[import-untyped]
+import firebase_admin
 from firebase_admin import credentials, messaging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

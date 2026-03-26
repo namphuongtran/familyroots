@@ -1,7 +1,7 @@
 """Unit tests for infrastructure — event dispatcher and Unit of Work."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -12,7 +12,6 @@ from app.infrastructure.event_dispatcher import (
     InMemoryEventDispatcher,
 )
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
-
 
 # ── InMemoryEventDispatcher ─────────────────────────────────────
 

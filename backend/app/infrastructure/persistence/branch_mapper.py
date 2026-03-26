@@ -10,8 +10,12 @@ from app.domain.branch.entity import Branch as BranchEntity
 from app.models.branch import Branch as BranchModel
 
 _MAPPED_FIELDS = (
-    "clan_id", "name", "description",
-    "founder_person_id", "parent_branch_id", "branch_order",
+    "clan_id",
+    "name",
+    "description",
+    "founder_person_id",
+    "parent_branch_id",
+    "branch_order",
 )
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from typing import Any
 
 from app.domain.relationship.events import (
     MarriageCreated,
@@ -63,7 +64,7 @@ class Marriage(AggregateRoot):
         person2_id: uuid.UUID,
         clan_id: uuid.UUID,
         actor: ActorInfo,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> Marriage:
         marriage = cls(
             person1_id=person1_id,
@@ -152,7 +153,7 @@ class ParentChild(AggregateRoot):
         child_id: uuid.UUID,
         clan_id: uuid.UUID,
         actor: ActorInfo,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> ParentChild:
         link = cls(
             parent_id=parent_id,

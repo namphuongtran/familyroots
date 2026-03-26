@@ -12,9 +12,7 @@ from app.models.base import Base
 
 class ClanInvitation(Base):
     __tablename__ = "clan_invitations"
-    __table_args__ = (
-        Index("ix_clan_invitations_clan_email", "clan_id", "email"),
-    )
+    __table_args__ = (Index("ix_clan_invitations_clan_email", "clan_id", "email"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     clan_id: Mapped[uuid.UUID] = mapped_column(

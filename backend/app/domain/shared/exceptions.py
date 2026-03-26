@@ -52,12 +52,16 @@ class ForbiddenError(DomainError):
 class AuthenticationError(DomainError):
     """Raised on authentication failures (invalid credentials, expired tokens)."""
 
-    def __init__(self, code: str = "authentication_error", detail: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, code: str = "authentication_error", detail: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(code, detail)
 
 
 class ValidationError(DomainError):
     """Raised on input validation failures (invalid format, out-of-range values)."""
 
-    def __init__(self, code: str = "validation_error", detail: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, code: str = "validation_error", detail: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(code, detail)

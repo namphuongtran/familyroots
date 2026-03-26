@@ -121,7 +121,9 @@ class DocumentCommandHandler:
 
         # Clear old avatars
         old_avatars = await self._repo.get_person_avatars(
-            clan_id, doc.person_id, doc.id  # type: ignore[arg-type]
+            clan_id,
+            doc.person_id,  # type: ignore[arg-type]
+            doc.id,
         )
         for old in old_avatars:
             old.unset_avatar()
@@ -185,14 +187,21 @@ class DocumentQueryHandler:
     ) -> list[DocumentSummary]:
         """List documents with optional filters."""
         docs = await self._repo.list_in_clan(
-            clan_id, person_id=person_id, document_type=document_type,
-            cursor=cursor, limit=limit,
+            clan_id,
+            person_id=person_id,
+            document_type=document_type,
+            cursor=cursor,
+            limit=limit,
         )
         return [
             DocumentSummary(
-                id=d.id, title=d.title, document_type=d.document_type,
-                mime_type=d.mime_type, file_size_bytes=d.file_size_bytes,
-                is_avatar=d.is_avatar, created_at=d.created_at,
+                id=d.id,
+                title=d.title,
+                document_type=d.document_type,
+                mime_type=d.mime_type,
+                file_size_bytes=d.file_size_bytes,
+                is_avatar=d.is_avatar,
+                created_at=d.created_at,
             )
             for d in docs
         ]

@@ -26,23 +26,11 @@ class Clan(TimestampMixin, Base):
     ancestral_hall_location: Mapped[str | None] = mapped_column(
         String(500), default=None
     )  # nhà thờ tổ
-    clan_rules: Mapped[str | None] = mapped_column(
-        Text, default=None
-    )  # gia huấn
+    clan_rules: Mapped[str | None] = mapped_column(Text, default=None)  # gia huấn
 
     # ── ORM Relationships ─────────────────────────────────────
-    origin_persons = relationship(
-        "Person", back_populates="origin_clan", lazy="selectin"
-    )
-    clan_memberships = relationship(
-        "ClanMembership", back_populates="clan", lazy="selectin"
-    )
-    user_roles = relationship(
-        "UserClanRole", back_populates="clan", lazy="selectin"
-    )
-    settings = relationship(
-        "ClanSettings", back_populates="clan", uselist=False, lazy="selectin"
-    )
-    branches = relationship(
-        "Branch", back_populates="clan", lazy="selectin"
-    )
+    origin_persons = relationship("Person", back_populates="origin_clan", lazy="selectin")
+    clan_memberships = relationship("ClanMembership", back_populates="clan", lazy="selectin")
+    user_roles = relationship("UserClanRole", back_populates="clan", lazy="selectin")
+    settings = relationship("ClanSettings", back_populates="clan", uselist=False, lazy="selectin")
+    branches = relationship("Branch", back_populates="clan", lazy="selectin")

@@ -17,7 +17,6 @@ from app.domain.relationship.validator import RelationshipDomainValidator
 from app.domain.shared.exceptions import BusinessRuleViolation, ConflictError
 from app.domain.shared.value_objects import ActorInfo
 
-
 # ── Marriage entity ──────────────────────────────────────────────
 
 
@@ -41,8 +40,10 @@ class TestMarriage:
         actor = ActorInfo(user_id=uuid.uuid4(), role="admin")
         clan_id = uuid.uuid4()
         m = Marriage.create(
-            person1_id=uuid.uuid4(), person2_id=uuid.uuid4(),
-            clan_id=clan_id, actor=actor,
+            person1_id=uuid.uuid4(),
+            person2_id=uuid.uuid4(),
+            clan_id=clan_id,
+            actor=actor,
         )
         m.collect_events()  # drain
         m.soft_delete(actor, clan_id)
@@ -60,8 +61,10 @@ class TestParentChild:
         actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
         clan_id = uuid.uuid4()
         link = ParentChild.create(
-            parent_id=uuid.uuid4(), child_id=uuid.uuid4(),
-            clan_id=clan_id, actor=actor,
+            parent_id=uuid.uuid4(),
+            child_id=uuid.uuid4(),
+            clan_id=clan_id,
+            actor=actor,
         )
         events = link.collect_events()
         assert len(events) == 1
@@ -77,8 +80,10 @@ class TestParentChild:
         actor = ActorInfo(user_id=uuid.uuid4(), role="admin")
         clan_id = uuid.uuid4()
         link = ParentChild.create(
-            parent_id=uuid.uuid4(), child_id=uuid.uuid4(),
-            clan_id=clan_id, actor=actor,
+            parent_id=uuid.uuid4(),
+            child_id=uuid.uuid4(),
+            clan_id=clan_id,
+            actor=actor,
         )
         link.collect_events()
         link.soft_delete(actor, clan_id)
@@ -113,9 +118,7 @@ class TestRelationshipDomainValidator:
     async def test_too_many_bio_parents_raises(self) -> None:
         v = self._make_validator(count_bio_parents=2)
         with pytest.raises(ConflictError, match="too_many_biological_parents"):
-            await v.validate_parent_child(
-                uuid.uuid4(), uuid.uuid4(), "biological", uuid.uuid4()
-            )
+            await v.validate_parent_child(uuid.uuid4(), uuid.uuid4(), "biological", uuid.uuid4())
 
     @pytest.mark.asyncio
     async def test_parent_too_young_raises(self) -> None:
@@ -130,9 +133,7 @@ class TestRelationshipDomainValidator:
     async def test_cycle_detection_raises(self) -> None:
         v = self._make_validator(is_ancestor=True)
         with pytest.raises(BusinessRuleViolation, match="creates_cycle"):
-            await v.validate_parent_child(
-                uuid.uuid4(), uuid.uuid4(), "biological", uuid.uuid4()
-            )
+            await v.validate_parent_child(uuid.uuid4(), uuid.uuid4(), "biological", uuid.uuid4())
 
     @pytest.mark.asyncio
     async def test_duplicate_marriage_raises(self) -> None:
@@ -160,8 +161,6 @@ class TestRelationshipDomainValidator:
         v = self._make_validator(
             get_birth_dates={parent_id: date(1900, 1, 1), child_id: date(1990, 1, 1)},
         )
-        result = await v.validate_parent_child(
-            parent_id, child_id, "biological", uuid.uuid4()
-        )
+        result = await v.validate_parent_child(parent_id, child_id, "biological", uuid.uuid4())
         assert result is not None
         assert "warning" in result

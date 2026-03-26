@@ -93,7 +93,9 @@ class ParentChildCommandHandler:
         self._uow = uow
         self._validator = validator
 
-    async def create(self, cmd: CreateParentChild) -> tuple[ParentChildResponse, dict[str, Any] | None]:
+    async def create(
+        self, cmd: CreateParentChild
+    ) -> tuple[ParentChildResponse, dict[str, Any] | None]:
         """Create parent-child link. Returns (link, optional warning dict)."""
         await self._validator.check_duplicate_parent_child(cmd.parent_id, cmd.child_id)
         warning = await self._validator.validate_parent_child(

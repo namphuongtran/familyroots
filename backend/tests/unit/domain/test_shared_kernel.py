@@ -22,7 +22,6 @@ from app.domain.shared.exceptions import (
 )
 from app.domain.shared.value_objects import ActorInfo, ClanScope
 
-
 # ── Entity ──────────────────────────────────────────────────────
 
 
@@ -92,7 +91,7 @@ class TestDomainEvent:
         """DomainEvent is immutable."""
         event = DomainEvent()
         with pytest.raises(AttributeError):
-            event.occurred_at = None  # type: ignore[misc]
+            event.occurred_at = None  # type: ignore[assignment, misc]
 
 
 # ── AuditableEvent ──────────────────────────────────────────────

@@ -24,13 +24,9 @@ class SqlAlchemyEventRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(
-        self, event_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> EventEntity | None:
+    async def get_by_id(self, event_id: uuid.UUID, clan_id: uuid.UUID) -> EventEntity | None:
         result = await self._session.execute(
-            select(EventModel).where(
-                EventModel.id == event_id, EventModel.clan_id == clan_id
-            )
+            select(EventModel).where(EventModel.id == event_id, EventModel.clan_id == clan_id)
         )
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
@@ -129,9 +125,7 @@ class SqlAlchemyEventRepository:
 
     async def save(self, event: EventEntity) -> None:
         """Insert or update an Event."""
-        existing = await self._session.execute(
-            select(EventModel).where(EventModel.id == event.id)
-        )
+        existing = await self._session.execute(select(EventModel).where(EventModel.id == event.id))
         model = existing.scalar_one_or_none()
         if model:
             apply_to_orm(event, model)
@@ -140,9 +134,7 @@ class SqlAlchemyEventRepository:
 
     async def delete(self, event: EventEntity) -> None:
         """Hard-delete an event."""
-        result = await self._session.execute(
-            select(EventModel).where(EventModel.id == event.id)
-        )
+        result = await self._session.execute(select(EventModel).where(EventModel.id == event.id))
         model = result.scalar_one_or_none()
         if model:
             await self._session.delete(model)

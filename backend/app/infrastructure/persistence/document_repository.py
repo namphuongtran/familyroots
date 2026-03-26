@@ -18,9 +18,7 @@ class SqlAlchemyDocumentRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(
-        self, document_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> DocumentEntity | None:
+    async def get_by_id(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> DocumentEntity | None:
         result = await self._session.execute(
             select(DocumentModel).where(
                 DocumentModel.id == document_id, DocumentModel.clan_id == clan_id

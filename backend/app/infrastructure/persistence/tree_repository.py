@@ -42,9 +42,7 @@ class SqlAlchemyTreeRepository:
     ) -> dict[str, Any] | None:
         return await build_descendants_tree(self._session, root_id, clan_id, max_generations)
 
-    async def get_ancestors(
-        self, person_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> list[dict[str, Any]]:
+    async def get_ancestors(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> list[dict[str, Any]]:
         result = await self._session.execute(
             text(
                 "WITH RECURSIVE ancestors AS ("

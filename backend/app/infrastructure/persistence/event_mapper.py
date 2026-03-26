@@ -6,8 +6,15 @@ from app.domain.event.entity import Event as EventEntity
 from app.models.event import Event as EventModel
 
 _MAPPED_FIELDS = (
-    "clan_id", "person_id", "event_type", "title", "description",
-    "event_date", "is_lunar_calendar", "is_recurring", "notify_days_before",
+    "clan_id",
+    "person_id",
+    "event_type",
+    "title",
+    "description",
+    "event_date",
+    "is_lunar_calendar",
+    "is_recurring",
+    "notify_days_before",
     "created_by",
 )
 

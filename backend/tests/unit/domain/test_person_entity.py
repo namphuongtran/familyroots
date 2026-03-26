@@ -3,8 +3,6 @@
 import uuid
 from datetime import date
 
-import pytest
-
 from app.domain.person.entity import Person
 from app.domain.person.events import (
     PersonCreated,
@@ -13,7 +11,6 @@ from app.domain.person.events import (
     PersonUpdated,
 )
 from app.domain.shared.value_objects import ActorInfo
-
 
 # ── Person.create ────────────────────────────────────────────────
 

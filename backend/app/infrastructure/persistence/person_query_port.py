@@ -67,9 +67,7 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         timeline: list[dict[str, Any]] = []
 
         # Fetch person for birth/death dates
-        person_result = await self._session.execute(
-            select(Person).where(Person.id == person_id)
-        )
+        person_result = await self._session.execute(select(Person).where(Person.id == person_id))
         person = person_result.scalar_one_or_none()
 
         if person and person.birth_date:

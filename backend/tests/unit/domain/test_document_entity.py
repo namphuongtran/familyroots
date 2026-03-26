@@ -1,7 +1,6 @@
 """Unit tests for Document domain entity."""
 
 import uuid
-from datetime import date
 
 import pytest
 
@@ -9,7 +8,6 @@ from app.domain.document.entity import Document
 from app.domain.document.events import DocumentCreated, DocumentDeleted
 from app.domain.shared.exceptions import BusinessRuleViolation, ValidationError
 from app.domain.shared.value_objects import ActorInfo
-
 
 # ── Document.create ──────────────────────────────────────────────
 

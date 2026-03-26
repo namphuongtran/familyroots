@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Protocol
 
 from app.domain.person.entity import Person
@@ -31,7 +32,7 @@ class PersonSearchResult:
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     full_name: str = ""
     birth_name: str | None = None
-    birth_date: object = None
+    birth_date: date | None = None
     gender: str = "unknown"
     avatar_url: str | None = None
     generation: int | None = None
@@ -87,6 +88,8 @@ class PersonRepository(Protocol):
         """Count persons in a clan (for pagination metadata)."""
         ...
 
-    async def get_stats_for_persons(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+    async def get_stats_for_persons(
+        self, person_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, int]]:
         """Get spouse and child counts for a list of persons."""
         ...

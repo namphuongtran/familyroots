@@ -9,8 +9,6 @@ import asyncio
 import uuid
 from typing import Any
 
-from app.core.fieldsets import filter_dict, filter_list, parse_field_set, parse_includes
-
 from fastapi import APIRouter, Depends, Query
 
 from app.application.person.claim_handlers import ClaimCommandHandler
@@ -24,6 +22,7 @@ from app.application.person.commands import (
     UpdatePerson,
 )
 from app.application.person.handlers import PersonCommandHandler, PersonQueryHandler
+from app.core.fieldsets import filter_dict, filter_list, parse_field_set, parse_includes
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
@@ -62,7 +61,7 @@ async def list_persons(
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List persons belonging to a clan with pagination."""
-    persons, total = await handler.list(
+    persons, total = await handler.list_persons(
         ListPersons(
             clan_id=clan_id,
             gender=gender,
@@ -169,7 +168,7 @@ async def _fetch_included_data(
 
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
     res_dict = {}
-    for key, res in zip(tasks.keys(), results):
+    for key, res in zip(tasks.keys(), results, strict=False):
         res_dict[key] = res if isinstance(res, list) else []
     return res_dict
 

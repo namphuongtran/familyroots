@@ -1,17 +1,15 @@
 """Identity claim endpoints for Clan Admins and Users."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, status
 
 from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
 from app.core.permissions import RequireClanRole, require_active_user
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
-from typing import Any
-
 from app.schemas.auth import UserProfile
 from app.schemas.claim import (
-    IdentityClaimPaginatedResponse,
     IdentityClaimPrelink,
     IdentityClaimResponse,
     IdentityClaimReview,
@@ -102,6 +100,7 @@ async def reject_claim(
         reviewer_note=body.reviewer_note,
     )
 
+
 @admin_claims_router.post(
     "/members/{user_id}/unlink",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -121,6 +120,7 @@ async def unlink_identity(
         admin_id=user.id,
         reason=body.reason,
     )
+
 
 @admin_claims_router.post(
     "/members/{user_id}/prelink",

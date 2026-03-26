@@ -13,13 +13,9 @@ from app.models.base import Base, TimestampMixin
 
 class ClanMembership(TimestampMixin, Base):
     __tablename__ = "clan_memberships"
-    __table_args__ = (
-        UniqueConstraint("person_id", "clan_id", name="uq_person_clan"),
-    )
+    __table_args__ = (UniqueConstraint("person_id", "clan_id", name="uq_person_clan"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     person_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("persons.id", ondelete="CASCADE"),
@@ -46,9 +42,7 @@ class ClanMembership(TimestampMixin, Base):
         index=True,
     )
 
-    joined_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
-    )
+    joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     # ── ORM Relationships ─────────────────────────────────────
     person = relationship("Person", back_populates="clan_memberships")

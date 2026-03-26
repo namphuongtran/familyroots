@@ -13,9 +13,7 @@ class ParentChildCreateRequest(BaseModel):
 
     parent_id: uuid.UUID
     child_id: uuid.UUID
-    relationship_type: str = Field(
-        "biological", pattern="^(biological|adopted|step|foster)$"
-    )
+    relationship_type: str = Field("biological", pattern="^(biological|adopted|step|foster)$")
     birth_order: int | None = Field(None, gt=0)
     notes: str | None = None
 
@@ -29,9 +27,7 @@ class ParentChildCreateRequest(BaseModel):
 class ParentChildUpdateRequest(BaseModel):
     """Request body for updating a parent-child relationship."""
 
-    relationship_type: str | None = Field(
-        None, pattern="^(biological|adopted|step|foster)$"
-    )
+    relationship_type: str | None = Field(None, pattern="^(biological|adopted|step|foster)$")
     birth_order: int | None = Field(None, gt=0)
     notes: str | None = None
 

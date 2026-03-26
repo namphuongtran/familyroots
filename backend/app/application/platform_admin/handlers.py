@@ -14,11 +14,6 @@ from app.domain.clan.repository import ClanRepository
 from app.domain.platform_admin.query_port import PlatformAdminQueryPort
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
-from app.models.audit_log import AuditLog
-from app.models.clan import Clan
-from app.models.clan_membership import ClanMembership
-from app.models.person import Person
-from app.models.user_clan_role import UserClanRole
 
 
 class PlatformAdminCommandHandler:

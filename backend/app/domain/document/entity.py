@@ -17,10 +17,19 @@ from app.domain.shared.value_objects import ActorInfo
 
 _VALID_DOC_TYPES = frozenset({"photo", "id_document", "certificate", "audio", "video", "other"})
 
-ALLOWED_MIME_TYPES = frozenset({
-    "image/jpeg", "image/png", "image/webp", "image/heic",
-    "application/pdf", "audio/mpeg", "audio/wav", "video/mp4", "video/quicktime",
-})
+ALLOWED_MIME_TYPES = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "application/pdf",
+        "audio/mpeg",
+        "audio/wav",
+        "video/mp4",
+        "video/quicktime",
+    }
+)
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 

@@ -86,5 +86,8 @@ async def audit_log(
 ) -> dict[str, Any]:
     """Cross-clan audit log."""
     return await handler.get_audit_log(
-        clan_id=clan_id, action=action, cursor=cursor, limit=limit,
+        clan_id=clan_id,
+        action=action,
+        cursor=cursor,
+        limit=limit,
     )

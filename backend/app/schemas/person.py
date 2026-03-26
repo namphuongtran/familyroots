@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -152,6 +153,7 @@ class PersonListResponse(BaseModel):
 
 class PersonMini(BaseModel):
     """Minimal representation of a person for embedded relationships."""
+
     id: uuid.UUID
     full_name: str
     gender: str
@@ -164,6 +166,7 @@ class PersonMini(BaseModel):
 
 class PersonSummary(BaseModel):
     """Summary profile for list views."""
+
     id: uuid.UUID
     full_name: str
     gender: str
@@ -179,6 +182,7 @@ class PersonSummary(BaseModel):
 
 class PersonDetail(PersonSummary):
     """Detailed profile with most biographical data, but without audit fields."""
+
     birth_name: str | None = None
     birth_place: str | None = None
     death_place: str | None = None
@@ -189,17 +193,15 @@ class PersonDetail(PersonSummary):
 
 class PersonStats(BaseModel):
     """Additional statistics for a person."""
+
     spouse_count: int
     child_count: int
 
 
-from typing import Any
-
-
 class PersonDetailComposite(PersonResponse):
     """Includes optional sub-resources when requested via ?include="""
+
     marriages: list[Any] | None = None
     parent_child: list[Any] | None = None
     timeline: list[Any] | None = None
     documents: list[Any] | None = None
-
