@@ -75,6 +75,14 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deployment secret
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK secret is missing! Please add it to GitHub Secrets."
+            exit 1
+          fi
+
       - name: Trigger Render deploy
-        working-directory: .
-        run: curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}"
+        run: curl -f -s -S "${{ secrets.RENDER_DEPLOY_HOOK }}"
