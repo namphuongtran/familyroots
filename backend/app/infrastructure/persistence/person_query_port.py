@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.person.query_port import PersonQueryPort
@@ -13,10 +14,12 @@ from app.models.document import Document
 from app.models.event import Event
 from app.models.marriage import Marriage
 from app.models.parent_child import ParentChild
+from app.models.person import Person
 from app.schemas.document import DocumentSummary
-from app.schemas.event import EventResponse
+from app.schemas.event import EventResponse, TimelineEvent
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
+from app.services.translator import t
 
 
 class SqlAlchemyPersonQueryPort(PersonQueryPort):
@@ -58,3 +61,79 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         )
         events = result.scalars().all()
         return [EventResponse.model_validate(e).model_dump() for e in events]
+
+    async def get_timeline(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        """Build a chronological timeline from birth/death, marriages, and events."""
+        timeline: list[dict[str, Any]] = []
+
+        # Fetch person for birth/death dates
+        person_result = await self._session.execute(
+            select(Person).where(Person.id == person_id)
+        )
+        person = person_result.scalar_one_or_none()
+
+        if person and person.birth_date:
+            timeline.append(
+                TimelineEvent(
+                    event_date=person.birth_date,
+                    date_approx=person.birth_date_approx,
+                    event_type="birth",
+                    title=t("timeline.birth"),
+                ).model_dump()
+            )
+        if person and person.death_date:
+            timeline.append(
+                TimelineEvent(
+                    event_date=person.death_date,
+                    date_approx=person.death_date_approx,
+                    event_type="death",
+                    title=t("timeline.death"),
+                ).model_dump()
+            )
+
+        # Fetch marriages
+        spouse_result = await self._session.execute(
+            text("""
+                SELECT m.marriage_date, m.divorce_date, m.status,
+                       CASE WHEN m.person1_id = :pid THEN m.person2_id
+                            ELSE m.person1_id END AS spouse_id,
+                       p.full_name AS spouse_name
+                FROM public.marriages m
+                JOIN public.persons p
+                  ON p.id = CASE WHEN m.person1_id = :pid
+                                 THEN m.person2_id ELSE m.person1_id END
+                WHERE (m.person1_id = :pid OR m.person2_id = :pid)
+                  AND m.is_deleted = false
+            """),
+            {"pid": person_id},
+        )
+        for row in spouse_result.mappings().all():
+            if row["marriage_date"]:
+                timeline.append(
+                    TimelineEvent(
+                        event_date=row["marriage_date"],
+                        date_approx=False,
+                        event_type="marriage",
+                        title=t("timeline.marriage"),
+                        related_person_id=row["spouse_id"],
+                        related_person_name=row["spouse_name"],
+                    ).model_dump()
+                )
+
+        # Fetch lifecycle events
+        events_result = await self._session.execute(
+            select(Event).where(Event.clan_id == clan_id, Event.person_id == person_id)
+        )
+        for ev in events_result.scalars().all():
+            timeline.append(
+                TimelineEvent(
+                    event_date=ev.event_date,
+                    date_approx=False,
+                    event_type=ev.event_type,
+                    title=ev.title,
+                    description=ev.description,
+                ).model_dump()
+            )
+
+        timeline.sort(key=lambda e: e.get("event_date") or date.max)
+        return timeline

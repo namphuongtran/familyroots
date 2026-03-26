@@ -188,41 +188,11 @@ class PersonQueryHandler:
         return await self._query_port.get_events(clan_id, person_id)
 
     async def get_timeline(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
-        from app.application.person.commands import GetPerson
-        from app.schemas.event import TimelineEvent
-        from app.services.translator import t
+        """Return a chronological timeline for a person.
 
-        person = await self.get(GetPerson(person_id=person_id, clan_id=clan_id))
-        timeline = []
-
-        if person.birth_date:
-            timeline.append(TimelineEvent(event_date=person.birth_date, date_approx=person.birth_date_approx, event_type="birth", title=t("timeline.birth")).model_dump())
-        if person.death_date:
-            timeline.append(TimelineEvent(event_date=person.death_date, date_approx=person.death_date_approx, event_type="death", title=t("timeline.death")).model_dump())
-
-        spouse_result = await self._session.execute(
-            text("""
-                SELECT m.marriage_date, m.divorce_date, m.status,
-                       CASE WHEN m.person1_id = :pid THEN m.person2_id
-                            ELSE m.person1_id END AS spouse_id,
-                       p.full_name AS spouse_name
-                FROM public.marriages m
-                JOIN public.persons p
-                  ON p.id = CASE WHEN m.person1_id = :pid
-                                 THEN m.person2_id ELSE m.person1_id END
-                WHERE (m.person1_id = :pid OR m.person2_id = :pid)
-                  AND m.is_deleted = false
-            """),
-            {"pid": person_id},
-        )
-        for row in spouse_result.mappings().all():
-            timeline.append(TimelineEvent(event_date=row["marriage_date"], date_approx=False, event_type="marriage", title=t("timeline.marriage"), related_person_id=row["spouse_id"], related_person_name=row["spouse_name"]).model_dump())
-
-        events_result = await self._session.execute(
-            select(Event).where(Event.clan_id == clan_id, Event.person_id == person_id)
-        )
-        for ev in events_result.scalars().all():
-            timeline.append(TimelineEvent(event_date=ev.event_date, date_approx=False, event_type=ev.event_type, title=ev.title, description=ev.description).model_dump())
-
-        timeline.sort(key=lambda e: e.get("event_date") or date.max)
-        return timeline
+        Delegates entirely to the query port which handles fetching
+        birth/death dates, marriages, and events from the database.
+        """
+        if not self._query_port:
+            raise NotImplementedError("Query port not configured for this handler")
+        return await self._query_port.get_timeline(clan_id, person_id)

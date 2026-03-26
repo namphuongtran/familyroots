@@ -78,10 +78,12 @@ def get_claim_command_handler(
 ) -> ClaimCommandHandler:
     from app.application.person.claim_handlers import ClaimCommandHandler
     from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
-    from app.infrastructure.persistence.uow import SqlAlchemyUnitOfWork
+    from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     repo = SqlAlchemyClaimRepository(db)
-    uow = SqlAlchemyUnitOfWork(db)
+    dispatcher = create_event_dispatcher(db)
+    uow = SqlAlchemyUnitOfWork(db, dispatcher)
     return ClaimCommandHandler(repo, uow)
 
 
@@ -141,10 +143,12 @@ def get_auth_command_handler(
     db: AsyncSession = Depends(get_db),
 ) -> AuthCommandHandler:
     from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
-    from app.infrastructure.persistence.uow import SqlAlchemyUnitOfWork
+    from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     repo = SqlAlchemyAuthRepository(db)
-    uow = SqlAlchemyUnitOfWork(db)
+    dispatcher = create_event_dispatcher(db)
+    uow = SqlAlchemyUnitOfWork(db, dispatcher)
     return AuthCommandHandler(repo, uow)
 
 

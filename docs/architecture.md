@@ -7,7 +7,7 @@ FamilyRoots is a Vietnamese family genealogy platform with a monorepo structure.
 ```
 ┌─────────────────┐     ┌─────────────────┐
 │  Mobile App      │     │  Web App         │
-│  (Flutter)       │     │  (Flutter Web)   │
+│  (Flutter)       │     │  (Next.js 16)    │
 │  iOS / Android   │     │  Browser + Admin │
 └────────┬────────┘     └────────┬────────┘
          │                       │
@@ -33,20 +33,63 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation, enfo
 
 See [Data Isolation Design](tenant-design.md) for details.
 
-## Clean Architecture Layers
+## Backend Architecture (DDD)
 
-### Backend (Python / FastAPI)
+The backend follows **Domain-Driven Design** with **CQRS** (Command/Query Responsibility Segregation) and the **hexagonal architecture** pattern (ports and adapters).
 
-| Layer           | Directory      | Responsibility                           |
-|-----------------|----------------|------------------------------------------|
-| API             | `app/api/`     | HTTP endpoints, request/response DTOs    |
-| Services        | `app/services/`| Business logic, orchestration            |
-| Models          | `app/models/`  | SQLAlchemy ORM models                    |
-| Schemas         | `app/schemas/` | Pydantic validation schemas              |
-| Middleware      | `app/middleware/` | Language detection, Sentry integration |
-| Core            | `app/core/`    | Config, security, database, logging      |
+### Layer Structure
 
-### Flutter (Dart / Mobile + Web)
+```
+app/
+├── api/             # Controllers — thin HTTP layer, request/response mapping
+├── application/     # Use cases — command/query handlers (CQRS)
+├── domain/          # Core business logic — entities, events, value objects, ports
+├── infrastructure/  # Adapters — repositories, UoW, event dispatcher, external services
+├── core/            # Cross-cutting — config, security, database, permissions, exceptions
+├── middleware/       # HTTP middleware — language detection, rate limiting
+├── models/          # SQLAlchemy ORM models (shared infrastructure)
+└── schemas/         # Pydantic v2 request/response DTOs
+```
+
+### Layer Rules
+
+| Layer            | Can Depend On                              | Must NOT Import            |
+|------------------|--------------------------------------------|----------------------------|
+| `domain/`        | Nothing (pure Python, framework-agnostic)  | FastAPI, SQLAlchemy, Pydantic |
+| `application/`   | `domain/`                                  | `infrastructure/`, `api/`  |
+| `infrastructure/`| `domain/`, `models/`, `schemas/`           | `api/`, `application/`     |
+| `api/`           | `application/`, `schemas/`, `core/`        | `domain/` (indirect via handlers) |
+
+### Bounded Contexts
+
+Each bounded context follows a consistent structure:
+
+```
+domain/{context}/
+├── entity.py        # Aggregate root
+├── events.py        # Domain events
+├── repository.py    # Repository protocol (port)
+├── query_port.py    # Read-side query protocol (port)
+└── value_objects.py # Value objects (if any)
+
+application/{context}/
+├── commands.py      # Frozen dataclass command/query DTOs
+└── handlers.py      # CommandHandler / QueryHandler
+```
+
+Active contexts: `person`, `relationship`, `auth`, `clan`, `document`, `event`, `tree`, `branch`, `me`, `platform_admin`.
+
+### Key Patterns
+
+| Pattern             | Implementation                                                     |
+|---------------------|--------------------------------------------------------------------|
+| **Unit of Work**    | `SqlAlchemyUnitOfWork` — flush → collect events → dispatch → commit |
+| **Domain Events**   | `InMemoryEventDispatcher` — automatic `AuditLog` for `AuditableEvent`s |
+| **CQRS**            | Separate `CommandHandler` (writes) and `QueryHandler` (reads)      |
+| **Hexagonal Ports** | `Protocol`-based ports in `domain/`, adapters in `infrastructure/` |
+| **Sparse Fieldsets**| `?fields=`, `?profile=summary|detail|full`, `?include=` query params |
+
+### Flutter (Dart / Mobile)
 
 | Layer           | Directory        | Responsibility                         |
 |-----------------|------------------|----------------------------------------|
@@ -57,26 +100,26 @@ See [Data Isolation Design](tenant-design.md) for details.
 ## Technology Stack
 
 | Component     | Technology                  |
-|---------------|-----------------------------|
-| Backend API   | FastAPI (Python 3.12+)      |
-| Mobile        | Flutter (Dart)              |
-| Web           | Flutter Web (Dart)          |
+|---------------|------------------------------|
+| Backend API   | FastAPI (Python 3.14+)       |
+| Mobile        | Flutter (Dart)               |
+| Web           | Next.js 16 (App Router)      |
 | Database      | PostgreSQL 18 (Docker/Render) / PostgreSQL 17 (Supabase) |
-| Auth          | JWT (python-jose)           |
-| Push Notifs   | Firebase Cloud Messaging    |
-| Error Track   | Sentry                      |
-| IaC           | Pulumi (Python)             |
-| Hosting       | Render (API), Vercel (Web)  |
-| CI/CD         | GitHub Actions              |
+| Auth          | JWT via Supabase JWKS (RS256)|
+| Push Notifs   | Firebase Cloud Messaging     |
+| Error Track   | Sentry                       |
+| IaC           | Pulumi (Python)              |
+| Hosting       | Render (API), Vercel (Web)   |
+| CI/CD         | GitHub Actions               |
 
 ## Shared Code
 
-The `packages/family_roots_core/` Dart package contains shared entities, API clients, and utilities used by both mobile and web apps. It is referenced as a path dependency in each `pubspec.yaml`.
+The `packages/family_roots_core/` Dart package contains shared entities, API clients, and utilities used by the mobile app. It is referenced as a path dependency in each `pubspec.yaml`.
 
 ## Deployment
 
 - **Backend**: Docker → Render.com (via `render.yaml`)
-- **Web**: Flutter Web → Vercel (via GitHub Actions)
+- **Web**: Next.js → Vercel (via GitHub Actions)
 - **Mobile**: Flutter → App Store / Google Play (via GitHub Actions APK build)
 - **Database**: Supabase managed PostgreSQL
 

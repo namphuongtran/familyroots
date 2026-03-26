@@ -3,6 +3,8 @@
 import uuid
 from typing import Any
 
+from fastapi import APIRouter, Depends
+
 from app.application.me.handlers import MeQueryHandler
 from app.core.security import get_current_user
 from app.infrastructure.dependencies import get_me_query_handler

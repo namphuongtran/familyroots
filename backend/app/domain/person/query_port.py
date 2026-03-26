@@ -26,3 +26,7 @@ class PersonQueryPort(Protocol):
     async def get_events(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         """Fetch all lifecycle events for a person in a given clan."""
         ...
+
+    async def get_timeline(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        """Build a chronological timeline combining birth, death, marriages, and events."""
+        ...

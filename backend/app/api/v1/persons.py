@@ -9,6 +9,8 @@ import asyncio
 import uuid
 from typing import Any
 
+from app.core.fieldsets import filter_dict, filter_list, parse_field_set, parse_includes
+
 from fastapi import APIRouter, Depends, Query
 
 from app.application.person.claim_handlers import ClaimCommandHandler
@@ -55,7 +57,6 @@ async def list_persons(
     limit: int = Query(default=20, ge=1, le=100),
     generation: int | None = None,
     gender: str | None = None,
-    is_alive: bool | None = None,
     profile: str = Query("full", pattern="^(summary|detail|full)$"),
     include: str | None = Query(None),
     fields: str | None = Query(None),
@@ -70,6 +71,8 @@ async def list_persons(
             limit=limit,
         )
     )
+
+    field_set = parse_field_set(fields, include=include)
 
     stats_map = {}
     if include == "stats" and persons:
@@ -88,13 +91,7 @@ async def list_persons(
         if include == "stats" and p.id in stats_map:
             p_dict["stats"] = stats_map[p.id]
 
-        if fields:
-            field_set = {f.strip() for f in fields.split(",")}
-            if include:
-                field_set.update([i.strip() for i in include.split(",")])
-            p_dict = {k: v for k, v in p_dict.items() if k in field_set}
-
-        res_data.append(p_dict)
+        res_data.append(filter_dict(p_dict, field_set))
 
     return {
         "data": res_data,
@@ -178,14 +175,7 @@ async def _fetch_included_data(
 
 
 def _filter_list_by_fields(items: list[Any], fields: str | None) -> list[Any]:
-    if not fields or not items:
-        return items
-    field_set = {f.strip() for f in fields.split(",")}
-    filtered = []
-    for item in items:
-        d = item if isinstance(item, dict) else item.model_dump()
-        filtered.append({k: v for k, v in d.items() if k in field_set})
-    return filtered
+    return filter_list(items, parse_field_set(fields))
 
 
 @router.get("/{person_id}")
@@ -209,16 +199,12 @@ async def get_person(
     else:
         p_dict = person.model_dump()
 
-    if include:
-        includes = [i.strip() for i in include.split(",")]
+    includes = parse_includes(include)
+    if includes:
         included_data = await _fetch_included_data(handler, clan_id, person_id, includes)
         p_dict.update(included_data)
 
-    if fields:
-        field_set = {f.strip() for f in fields.split(",")}
-        if include:
-            field_set.update([i.strip() for i in include.split(",")])
-        p_dict = {k: v for k, v in p_dict.items() if k in field_set}
+    p_dict = filter_dict(p_dict, parse_field_set(fields, include=include))
 
     return {"data": p_dict}
 

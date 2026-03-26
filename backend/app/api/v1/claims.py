@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 
 from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
-from app.core.security import RequireClanRole, require_active_user
+from app.core.permissions import RequireClanRole, require_active_user
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
 from typing import Any
 
@@ -58,11 +58,9 @@ async def list_clan_claims(
     )
     res_dict = paginated.model_dump()
     if fields:
-        field_set = {f.strip() for f in fields.split(",")}
-        res_dict["claims"] = [
-            {k: v for k, v in c.items() if k in field_set}
-            for c in res_dict["claims"]
-        ]
+        from app.core.fieldsets import filter_list, parse_field_set
+
+        res_dict["claims"] = filter_list(res_dict["claims"], parse_field_set(fields))
     return res_dict
 
 

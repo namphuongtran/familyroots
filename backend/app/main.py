@@ -5,11 +5,15 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.exceptions import AppError, app_exception_handler, domain_exception_handler
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
@@ -96,10 +100,17 @@ def create_app() -> FastAPI:
     # Include API v1 routes
     application.include_router(api_v1_router, prefix="/api/v1")
 
-    # Health check
-    @application.get("/health", tags=["health"])
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
+    # Health check with DB connectivity probe
+    @application.get("/health", tags=["health"], response_model=None)
+    async def health(db: AsyncSession = Depends(get_db)):
+        try:
+            await db.execute(text("SELECT 1"))
+            return {"status": "ok", "database": "connected"}
+        except Exception:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "degraded", "database": "unreachable"},
+            )
 
     return application
 

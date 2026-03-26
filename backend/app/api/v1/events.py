@@ -15,6 +15,9 @@ router = APIRouter()
 
 
 from app.infrastructure.dependencies import get_event_command_handler, get_event_query_handler
+from app.infrastructure.dependencies import get_person_query_handler
+from app.application.person.handlers import PersonQueryHandler
+from app.application.person.commands import GetPerson
 
 
 @router.post("", status_code=201)
@@ -84,10 +87,37 @@ async def get_event(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: EventQueryHandler = Depends(get_event_query_handler),
+    person_handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
+    include: str | None = Query(None),
+    fields: str | None = Query(None),
 ) -> dict[str, Any]:
     event = await query_handler.get(event_id=event_id, clan_id=clan_id)
-    return {"data": event.model_dump()}
+    data = event.model_dump()
+
+    if include:
+        includes = {i.strip() for i in include.split(",")}
+        if "person" in includes and event.person_id:
+            try:
+                person = await person_handler.get(
+                    GetPerson(person_id=event.person_id, clan_id=clan_id)
+                )
+                data["person"] = {
+                    "id": str(person.id),
+                    "full_name": person.full_name,
+                    "gender": person.gender,
+                    "avatar_url": person.avatar_url,
+                }
+            except Exception:
+                data["person"] = None
+
+    if fields:
+        field_set = {f.strip() for f in fields.split(",")}
+        if include:
+            field_set.update({i.strip() for i in include.split(",")})
+        data = {k: v for k, v in data.items() if k in field_set}
+
+    return {"data": data}
 
 
 @router.patch("/{event_id}")

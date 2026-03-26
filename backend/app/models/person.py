@@ -106,10 +106,10 @@ class Person(TimestampMixin, Base):
         "UserProfile", back_populates="person", uselist=False
     )
     clan_memberships = relationship(
-        "ClanMembership", back_populates="person", lazy="selectin"
+        "ClanMembership", back_populates="person", lazy="noload"
     )
-    documents = relationship("Document", back_populates="person", lazy="selectin")
-    events = relationship("Event", back_populates="person", lazy="selectin")
+    documents = relationship("Document", back_populates="person", lazy="noload")
+    events = relationship("Event", back_populates="person", lazy="noload")
     marriages_as_person1 = relationship(
         "Marriage",
         foreign_keys="Marriage.person1_id",
