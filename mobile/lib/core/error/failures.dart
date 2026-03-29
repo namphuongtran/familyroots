@@ -1,4 +1,4 @@
-/// Failure classes for domain layer error handling.
+// Failure classes for domain layer error handling.
 
 // TODO: implement in Prompt 2
 

@@ -1,4 +1,4 @@
-/// Custom exception classes.
+// Custom exception classes.
 
 // TODO: implement in Prompt 2
 
