@@ -6,6 +6,8 @@ Vietnamese family genealogy platform. Monorepo: Python FastAPI backend + Flutter
 
 > **Note on Mobile UI Development:** See `mobile/CLAUDE.md` for specific rules regarding Flutter UI implementation, Design System ("Arbor Heritage") adherence, and Stitch integration workflow.
 
+> **Note on Shared Packages:** See `packages/CLAUDE.md` for guidelines on the shared `family_roots_core` package (entities, repositories, mocks) used by both mobile and web apps.
+
 ## Architecture
 
 Backend uses **Domain-Driven Design** with CQRS, hexagonal ports/adapters, and Unit of Work.

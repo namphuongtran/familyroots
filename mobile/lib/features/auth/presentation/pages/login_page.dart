@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/l10n/app_localizations.dart';
 import '../../../../shared/widgets/custom_text_field.dart';
 import '../../../../shared/widgets/primary_button.dart';
 import '../../../../shared/widgets/social_login_button.dart';
@@ -18,6 +19,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -47,7 +50,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-          
+
           // Blur wrapper for organic shapes
           Positioned.fill(
             child: BackdropFilter(
@@ -84,7 +87,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          'Gia Phả Di Sản',
+                          l10n.appName,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.displaySmall?.copyWith(
                             color: AppColors.primary,
@@ -92,7 +95,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Lưu giữ cội nguồn - Kết nối tương lai',
+                          l10n.loginSubtitle,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppColors.textSecondary,
@@ -108,21 +111,21 @@ class _LoginPageState extends State<LoginPage> {
                             child: Container(
                               padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
-                                color: AppColors.surface.withAlpha(204), // 80% opacity
+                                color: AppColors.surface.withAlpha(204),
                                 borderRadius: BorderRadius.circular(32),
                               ),
                               child: Column(
                                 children: [
-                                  const CustomTextField(
-                                    label: 'Email',
-                                    hint: 'Nhập email của bạn',
+                                  CustomTextField(
+                                    label: l10n.emailLabel,
+                                    hint: l10n.emailHint,
                                     prefixIcon: Icons.email_outlined,
                                     keyboardType: TextInputType.emailAddress,
                                   ),
                                   const SizedBox(height: 20),
                                   CustomTextField(
-                                    label: 'Mật khẩu',
-                                    hint: 'Nhập mật khẩu',
+                                    label: l10n.passwordLabel,
+                                    hint: l10n.passwordHint,
                                     prefixIcon: Icons.lock_outline,
                                     isPassword: true,
                                     obscureText: _obscurePassword,
@@ -140,7 +143,7 @@ class _LoginPageState extends State<LoginPage> {
                                       style: TextButton.styleFrom(
                                         foregroundColor: AppColors.primary,
                                       ),
-                                      child: const Text('Quên mật khẩu?'),
+                                      child: Text(l10n.forgotPassword),
                                     ),
                                   ),
                                 ],
@@ -148,11 +151,11 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 32),
 
                         PrimaryButton(
-                          text: 'Đăng Nhập',
+                          text: l10n.loginButton,
                           onPressed: () {
                             context.go('/');
                           },
@@ -165,8 +168,8 @@ class _LoginPageState extends State<LoginPage> {
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 16),
                               child: Text(
-                                'Hoặc',
-                                style: TextStyle(color: AppColors.textSecondary),
+                                l10n.orDivider,
+                                style: const TextStyle(color: AppColors.textSecondary),
                               ),
                             ),
                             const Expanded(child: Divider(color: AppColors.outlineVariant)),
@@ -183,13 +186,13 @@ class _LoginPageState extends State<LoginPage> {
                           provider: SocialProvider.apple,
                           onPressed: () {},
                         ),
-                        
+
                         const Spacer(),
                         const SizedBox(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text('Chưa có tài khoản? ', style: TextStyle(color: AppColors.textSecondary)),
+                            Text(l10n.noAccountPrompt, style: const TextStyle(color: AppColors.textSecondary)),
                             TextButton(
                               onPressed: () {
                                 context.push('/register');
@@ -197,7 +200,7 @@ class _LoginPageState extends State<LoginPage> {
                               style: TextButton.styleFrom(
                                 foregroundColor: AppColors.primary,
                               ),
-                              child: const Text('Đăng ký ngay'),
+                              child: Text(l10n.registerLink),
                             ),
                           ],
                         )
@@ -213,4 +216,3 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
-

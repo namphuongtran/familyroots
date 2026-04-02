@@ -60,3 +60,64 @@ Always run code generation if you change BLoC States, Freezed models, or Localiz
 ```bash
 flutter pub run build_runner build --delete-conflicting-outputs
 ```
+
+### Platform-Specific Testing
+**iOS (Simulator):**
+```bash
+# List available simulators
+xcrun simctl list devices available
+# Boot a simulator (e.g. iPhone 16)
+xcrun simctl boot "iPhone 16"
+# Run on iOS
+flutter run -d "iPhone 16"
+# Run tests on iOS simulator
+flutter test --device-id=<simulator_id>
+```
+
+**Android (Emulator):**
+```bash
+# List available AVDs
+flutter emulators
+# Launch an emulator
+flutter emulators --launch <emulator_id>
+# Run on Android
+flutter run -d <device_id>
+```
+
+## 5. Localization (l10n) Rules
+
+All user-facing text **MUST** use `AppLocalizations`, never hardcoded strings.
+
+### Adding New Strings
+1. Add the key + English text to `lib/shared/l10n/app_en.arb`.
+2. Add the key + Vietnamese text to `lib/shared/l10n/app_vi.arb`.
+3. Add the abstract getter/method to `app_localizations.dart`.
+4. Implement the getter/method in both `app_localizations_en.dart` and `app_localizations_vi.dart`.
+5. Use in widget: `final l10n = AppLocalizations.of(context); Text(l10n.myKey)`
+
+### Parameterized Strings
+Use method parameters for dynamic text:
+```dart
+// In ARB: "greeting": "Hello, {name}"
+// In localizations: String greeting(String name);
+// Usage: l10n.greeting('Minh')
+```
+
+### Plurals
+Use `intl.Intl.pluralLogic` for count-based strings.
+
+## 6. Architecture & Data Layer
+
+### Repository Pattern
+- **Interface** lives in `packages/family_roots_core/lib/repositories/`.
+- **Mock implementation** lives in `packages/family_roots_core/lib/mocks/`.
+- **Real API implementation** will live in `mobile/lib/features/<feature>/data/`.
+
+### Switching Mock → Real API
+```dart
+// In DI setup (get_it/injectable), change:
+// getIt.registerLazySingleton<MemberRepository>(() => MockMemberRepository());
+// to:
+// getIt.registerLazySingleton<MemberRepository>(() => ApiMemberRepository(dio));
+```
+No widget code changes required — the UI depends on the abstract interface only.

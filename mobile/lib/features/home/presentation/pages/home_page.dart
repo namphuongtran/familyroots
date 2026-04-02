@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/l10n/app_localizations.dart';
 import '../../../../shared/widgets/event_card.dart';
 
 class HomePage extends StatelessWidget {
@@ -9,6 +10,8 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
@@ -66,9 +69,9 @@ class HomePage extends StatelessWidget {
                          Row(
                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                            children: [
-                             const Text(
-                               'Kính chào',
-                               style: TextStyle(color: Colors.white70, fontSize: 16),
+                             Text(
+                               l10n.greeting,
+                               style: const TextStyle(color: Colors.white70, fontSize: 16),
                              ),
                              CircleAvatar(
                                backgroundColor: Colors.white.withAlpha(51),
@@ -77,9 +80,9 @@ class HomePage extends StatelessWidget {
                            ],
                          ),
                          const SizedBox(height: 8),
-                         const Text(
-                           'Dòng họ Trần Văn',
-                           style: TextStyle(
+                         Text(
+                           l10n.familyNameTitle('Trần Văn'),
+                           style: const TextStyle(
                              color: Colors.white,
                              fontSize: 32,
                              fontWeight: FontWeight.bold,
@@ -94,16 +97,16 @@ class HomePage extends StatelessWidget {
                              child: Container(
                                padding: const EdgeInsets.symmetric(vertical: 16),
                                decoration: BoxDecoration(
-                                 color: Colors.white.withAlpha(38), // 15% opacity white
+                                 color: Colors.white.withAlpha(38),
                                  borderRadius: BorderRadius.circular(24),
                                ),
                                child: Row(
                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                  children: [
-                                   _buildQuickAction(Icons.search, 'Tìm kiếm', context, () {}),
-                                   _buildQuickAction(Icons.person_add, 'Thêm người', context, () => context.push('/members')),
-                                   _buildQuickAction(Icons.event_available, 'Sự kiện', context, () {}),
-                                   _buildQuickAction(Icons.history_edu, 'Gia phả', context, () => context.push('/tree')),
+                                   _buildQuickAction(Icons.search, l10n.searchAction, context, () {}),
+                                   _buildQuickAction(Icons.person_add, l10n.addMemberAction, context, () => context.push('/members')),
+                                   _buildQuickAction(Icons.event_available, l10n.eventsAction, context, () {}),
+                                   _buildQuickAction(Icons.history_edu, l10n.genealogyAction, context, () => context.push('/tree')),
                                  ],
                                ),
                              ),
@@ -127,7 +130,7 @@ class HomePage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Sự Kiện Sắp Tới',
+                        l10n.upcomingEvents,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       TextButton(
@@ -135,7 +138,7 @@ class HomePage extends StatelessWidget {
                         style: TextButton.styleFrom(
                           foregroundColor: AppColors.primary,
                         ),
-                        child: const Text('Xem tất cả'),
+                        child: Text(l10n.viewAll),
                       ),
                     ],
                   ),
@@ -146,26 +149,32 @@ class HomePage extends StatelessWidget {
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    children: const [
+                    children: [
                       EventCard(
                         title: 'Giỗ Tổ Dòng Họ',
                         date: 'Mùng 10/03 ÂL',
                         description: 'Họp mặt toàn thể con cháu họ Trần tại nhà thờ tổ chức lễ.',
                         isLunar: true,
+                        lunarLabel: l10n.lunarCalendar,
+                        solarLabel: l10n.solarCalendar,
                       ),
-                      SizedBox(width: 16),
+                      const SizedBox(width: 16),
                       EventCard(
                         title: 'Đám Cưới Minh & Lan',
                         date: '15/10/2026',
                         description: 'Lễ thành hôn của Trần Minh và Nguyễn Lan lúc 9:00 AM.',
                         isLunar: false,
+                        lunarLabel: l10n.lunarCalendar,
+                        solarLabel: l10n.solarCalendar,
                       ),
-                      SizedBox(width: 16),
+                      const SizedBox(width: 16),
                       EventCard(
                         title: 'Giỗ Cụ Khảo',
                         date: '12/08 ÂL',
                         description: 'Giỗ cụ Trần Khảo đời thứ 4.',
                         isLunar: true,
+                        lunarLabel: l10n.lunarCalendar,
+                        solarLabel: l10n.solarCalendar,
                       ),
                     ],
                   ),
@@ -176,12 +185,12 @@ class HomePage extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
-                    'Hoạt Động Mới Nhất',
+                    l10n.recentActivity,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Activities List
                 ListView.builder(
                   physics: const NeverScrollableScrollPhysics(),
@@ -195,10 +204,9 @@ class HomePage extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(24),
-                        // Soft organic shadow
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withAlpha(10), // super subtle 
+                            color: Colors.black.withAlpha(10),
                             blurRadius: 20,
                             offset: const Offset(0, 4),
                           )
@@ -231,7 +239,7 @@ class HomePage extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                const Text('2 giờ trước', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                Text(l10n.hoursAgo(2), style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                               ],
                             ),
                           ),
@@ -258,7 +266,7 @@ class HomePage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withAlpha(51), // 20% opacity
+              color: Colors.white.withAlpha(51),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: Colors.white, size: 28),

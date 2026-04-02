@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/l10n/app_localizations.dart';
 
 class MemberDirectoryPage extends StatelessWidget {
   const MemberDirectoryPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Thành viện'),
+        title: Text(l10n.membersTitle),
         backgroundColor: AppColors.primaryContainer,
         foregroundColor: AppColors.onPrimary,
         elevation: 0,
@@ -28,11 +31,11 @@ class MemberDirectoryPage extends StatelessWidget {
               ),
               child: TextField(
                 style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: 'Tìm kiếm thành viên...',
-                  hintStyle: TextStyle(color: Colors.white70),
+                decoration: InputDecoration(
+                  hintText: l10n.searchMembersHint,
+                  hintStyle: const TextStyle(color: Colors.white70),
                   border: InputBorder.none,
-                  icon: Icon(Icons.search, color: Colors.white),
+                  icon: const Icon(Icons.search, color: Colors.white),
                 ),
               ),
             ),
@@ -43,7 +46,7 @@ class MemberDirectoryPage extends StatelessWidget {
               itemCount: 10,
               separatorBuilder: (context, index) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
-                return _buildMemberCard(context, index);
+                return _buildMemberCard(context, index, l10n);
               },
             ),
           ),
@@ -57,7 +60,7 @@ class MemberDirectoryPage extends StatelessWidget {
     );
   }
 
-  Widget _buildMemberCard(BuildContext context, int index) {
+  Widget _buildMemberCard(BuildContext context, int index, AppLocalizations l10n) {
     return GestureDetector(
       onTap: () => context.push('/member_profile'),
       child: Container(
@@ -75,12 +78,12 @@ class MemberDirectoryPage extends StatelessWidget {
         ),
         child: Row(
           children: [
-          CircleAvatar(
+          const CircleAvatar(
             radius: 28,
             backgroundColor: AppColors.primaryFixedDim,
             child: Text(
               'TV',
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -101,7 +104,7 @@ class MemberDirectoryPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Đời thứ 4 · Nhánh 2',
+                  l10n.generationBranch(4, 2),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.textSecondary,
                   ),

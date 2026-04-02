@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/l10n/app_localizations.dart';
 
 class FamilyTreePage extends StatefulWidget {
   const FamilyTreePage({super.key});
@@ -12,10 +13,12 @@ class FamilyTreePage extends StatefulWidget {
 class _FamilyTreePageState extends State<FamilyTreePage> {
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Gia Phả'),
+        title: Text(l10n.genealogyTitle),
         backgroundColor: AppColors.primaryContainer,
         foregroundColor: AppColors.onPrimary,
         elevation: 0,
@@ -59,7 +62,7 @@ class _FamilyTreePageState extends State<FamilyTreePage> {
               child: const SizedBox(),
             ),
           ),
-          
+
           InteractiveViewer(
             constrained: false,
             boundaryMargin: const EdgeInsets.all(500),
@@ -74,29 +77,27 @@ class _FamilyTreePageState extends State<FamilyTreePage> {
                   Positioned(
                     top: 100,
                     left: 900,
-                    child: _buildTreeNode('Cụ Khảo', 'Đời 1', true),
+                    child: _buildTreeNode('Cụ Khảo', l10n.generationLabel(1), true),
                   ),
-                  
-                  // Lines would go here using CustomPaint
-                  
+
                   // Child 1
                   Positioned(
                     top: 300,
                     left: 700,
-                    child: _buildTreeNode('Trần Văn A', 'Đời 2', false),
+                    child: _buildTreeNode('Trần Văn A', l10n.generationLabel(2), false),
                   ),
-                  
+
                   // Child 2
                   Positioned(
                     top: 300,
                     left: 1100,
-                    child: _buildTreeNode('Trần Văn B', 'Đời 2', false),
+                    child: _buildTreeNode('Trần Văn B', l10n.generationLabel(2), false),
                   ),
                 ],
               ),
             ),
           ),
-          
+
           Positioned(
             bottom: 24,
             right: 24,
@@ -105,7 +106,7 @@ class _FamilyTreePageState extends State<FamilyTreePage> {
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.onPrimary,
               icon: const Icon(Icons.add),
-              label: const Text('Thêm nhánh'),
+              label: Text(l10n.addBranch),
             ),
           )
         ],

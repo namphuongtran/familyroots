@@ -1,18 +1,27 @@
-# Packages Architecture Guidelines
+# FamilyRoots Packages
 
-This directory contains standalone Dart/Flutter packages that are decoupled from the main app. 
+## Overview
+This directory contains shared Dart packages used by both the `mobile` and `web` apps. The key principle is: **shared logic lives here, platform-specific UI lives in the respective app directories.**
 
-## Rationale
-Extracting features into `packages/` enforces a strict separation of concerns (SoC). Code here cannot depend on the main app (`mobile/`). This forces developers to write clean, reusable interfaces and allows us to test packages completely in isolation.
+## Packages
 
-## Guidelines
-1. **No App-level Dependencies**: A package here (like `family_roots_core`) should only depend on basic Flutter/Dart SDKs or explicitly declared third-party libraries. It must never import from `family_roots_mobile`.
-2. **Clear Public API**: Use the `lib/package_name.dart` file (e.g., `lib/family_roots_core.dart`) as a barrel file to export the public API of the package. Hide internal implementation details.
-3. **Theming & Core Data**: Shared UI tokens (`AppColors`, `AppTypography`) and base entity models should live here so they can be reused if we build a companion app or a web version.
+### `family_roots_core`
+Pure Dart package (no Flutter dependency). Contains:
 
-## Creation
-To create a new package:
-```bash
-cd packages
-flutter create --template=package new_package_name
-```
+- **`entities/`** — Domain models (`MemberModel`, `FamilyEvent`, `Relationship`) with `fromJson`/`toJson` methods for easy API integration.
+- **`repositories/`** — Abstract repository interfaces (`MemberRepository`, `EventRepository`) that define the data contract.
+- **`mocks/`** — Mock implementations (`MockMemberRepository`, `MockEventRepository`) with realistic Vietnamese family data. Used during UI development before the backend API is ready.
+
+### Adding New Packages
+When adding a new shared package:
+1. Create it under `packages/` with `dart create -t package`.
+2. Add the repository interface in `lib/repositories/`.
+3. Add the mock implementation in `lib/mocks/`.
+4. Export everything from the barrel file `lib/<package_name>.dart`.
+5. Add `path` dependency in the consuming app's `pubspec.yaml`.
+
+### Switching from Mock to Real API
+To switch from mock data to a real backend:
+1. Create `ApiMemberRepository` (or similar) that implements the same interface.
+2. In the dependency injection setup, swap `MockMemberRepository` → `ApiMemberRepository`.
+3. No UI code changes required — the repository interface is the contract.

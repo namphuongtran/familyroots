@@ -5,10 +5,10 @@
 library family_roots_core;
 
 // Entities
-// TODO: export entity classes in Prompt 2
+export 'entities/entities.dart';
 
-// API models
-// TODO: export API response models in Prompt 2
+// Repository interfaces (contracts)
+export 'repositories/repositories.dart';
 
-// Utilities
-// TODO: export utility functions in Prompt 2
+// Mock implementations (for UI development)
+export 'mocks/mocks.dart';

@@ -1,12 +1,14 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/l10n/app_localizations.dart';
 
 class MemberProfilePage extends StatelessWidget {
   const MemberProfilePage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
@@ -66,9 +68,9 @@ class MemberProfilePage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'Đời thứ 4 · Trưởng họ',
-                          style: TextStyle(
+                        Text(
+                          '${l10n.generationLabel(4)} · Trưởng họ',
+                          style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 16,
                           ),
@@ -89,15 +91,15 @@ class MemberProfilePage extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatCard(context, 'Năm sinh', '1950'),
-                      _buildStatCard(context, 'Tình trạng', 'Còn sống'),
-                      _buildStatCard(context, 'Hậu duệ', '12'),
+                      _buildStatCard(context, l10n.profileBirthYear, '1950'),
+                      _buildStatCard(context, l10n.profileStatus, l10n.profileStatusAlive),
+                      _buildStatCard(context, l10n.profileDescendants, '12'),
                     ],
                   ),
                   const SizedBox(height: 32),
-                  const Text(
-                    'Tiểu Sử',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  Text(
+                    l10n.biographyTitle,
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -105,15 +107,15 @@ class MemberProfilePage extends StatelessWidget {
                     style: TextStyle(fontSize: 16, color: AppColors.textSecondary, height: 1.5),
                   ),
                   const SizedBox(height: 32),
-                  const Text(
-                    'Quan hệ gia đình',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  Text(
+                    l10n.familyRelationsTitle,
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 16),
-                  _buildRelativeItem(context, 'Bố', 'Trần Văn Khảo'),
-                  _buildRelativeItem(context, 'Vợ', 'Nguyễn Thị Hoa'),
-                  _buildRelativeItem(context, 'Con trai', 'Trần Văn Bảo'),
-                  _buildRelativeItem(context, 'Con gái', 'Trần Thị Hằng'),
+                  _buildRelativeItem(context, l10n.relationFather, 'Trần Văn Khảo'),
+                  _buildRelativeItem(context, l10n.relationWife, 'Nguyễn Thị Hoa'),
+                  _buildRelativeItem(context, l10n.relationSon, 'Trần Văn Bảo'),
+                  _buildRelativeItem(context, l10n.relationDaughter, 'Trần Thị Hằng'),
                 ],
               ),
             ),

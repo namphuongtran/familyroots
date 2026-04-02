@@ -4,19 +4,133 @@
   "appName": "FamilyRoots",
   "@appName": { "description": "The name of the application" },
 
+  "greeting": "Welcome",
+  "@greeting": { "description": "Home page greeting" },
+
+  "familyNameTitle": "The {surname} Family",
+  "@familyNameTitle": {
+    "description": "Main family name on home page",
+    "placeholders": { "surname": { "type": "String" } }
+  },
+
+  "searchAction": "Search",
+  "@searchAction": { "description": "Quick action: search" },
+
+  "addMemberAction": "Add Person",
+  "@addMemberAction": { "description": "Quick action: add member" },
+
+  "eventsAction": "Events",
+  "@eventsAction": { "description": "Quick action: events" },
+
+  "genealogyAction": "Genealogy",
+  "@genealogyAction": { "description": "Quick action: genealogy" },
+
+  "upcomingEvents": "Upcoming Events",
+  "@upcomingEvents": { "description": "Section title for events" },
+
+  "viewAll": "View all",
+  "@viewAll": { "description": "View all button text" },
+
+  "recentActivity": "Recent Activity",
+  "@recentActivity": { "description": "Section title for activity feed" },
+
+  "hoursAgo": "{count} hours ago",
+  "@hoursAgo": {
+    "description": "Relative time display",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
   "loginTitle": "Sign In",
   "@loginTitle": { "description": "Login screen title" },
 
-  "memberCount": "{count, plural, =0{No members} =1{1 member} other{{count} members}}",
-  "@memberCount": {
-    "description": "Member count with plural",
-    "placeholders": { "count": { "type": "int" } }
+  "loginSubtitle": "Preserve your roots — Connect the future",
+  "@loginSubtitle": { "description": "Login screen subtitle" },
+
+  "emailLabel": "Email",
+  "@emailLabel": { "description": "Email field label" },
+
+  "emailHint": "Enter your email",
+  "@emailHint": { "description": "Email field placeholder" },
+
+  "passwordLabel": "Password",
+  "@passwordLabel": { "description": "Password field label" },
+
+  "passwordHint": "Enter your password",
+  "@passwordHint": { "description": "Password field placeholder" },
+
+  "forgotPassword": "Forgot password?",
+  "@forgotPassword": { "description": "Forgot password link" },
+
+  "loginButton": "Sign In",
+  "@loginButton": { "description": "Login button text" },
+
+  "orDivider": "Or",
+  "@orDivider": { "description": "Divider between login methods" },
+
+  "noAccountPrompt": "Don't have an account? ",
+  "@noAccountPrompt": { "description": "Register prompt text" },
+
+  "registerLink": "Register now",
+  "@registerLink": { "description": "Register link text" },
+
+  "registerTitle": "Create Account",
+  "@registerTitle": { "description": "Register screen title" },
+
+  "registerSubtitle": "Start your journey to preserve family heritage",
+  "@registerSubtitle": { "description": "Register screen subtitle" },
+
+  "fullNameLabel": "Full name",
+  "@fullNameLabel": { "description": "Full name field label" },
+
+  "fullNameHint": "Enter your full name",
+  "@fullNameHint": { "description": "Full name field placeholder" },
+
+  "confirmPasswordLabel": "Confirm password",
+  "@confirmPasswordLabel": { "description": "Confirm password field label" },
+
+  "confirmPasswordHint": "Re-enter your password",
+  "@confirmPasswordHint": { "description": "Confirm password field placeholder" },
+
+  "registerButton": "Register",
+  "@registerButton": { "description": "Register button text" },
+
+  "hasAccountPrompt": "Already have an account? ",
+  "@hasAccountPrompt": { "description": "Login prompt text" },
+
+  "loginLink": "Sign in",
+  "@loginLink": { "description": "Login link text" },
+
+  "membersTitle": "Members",
+  "@membersTitle": { "description": "Member directory title" },
+
+  "searchMembersHint": "Search members...",
+  "@searchMembersHint": { "description": "Member search placeholder" },
+
+  "generationBranch": "Generation {gen} · Branch {branch}",
+  "@generationBranch": {
+    "description": "Member generation and branch info",
+    "placeholders": {
+      "gen": { "type": "int" },
+      "branch": { "type": "int" }
+    }
   },
+
+  "genealogyTitle": "Genealogy",
+  "@genealogyTitle": { "description": "Family tree page title" },
+
+  "addBranch": "Add branch",
+  "@addBranch": { "description": "Add branch FAB label" },
 
   "generationLabel": "Generation {number}",
   "@generationLabel": {
     "description": "Generation label in family tree",
     "placeholders": { "number": { "type": "int" } }
+  },
+
+  "memberCount": "{count, plural, =0{No members} =1{1 member} other{{count} members}}",
+  "@memberCount": {
+    "description": "Member count with plural",
+    "placeholders": { "count": { "type": "int" } }
   },
 
   "deathAnniversaryNotification": "{name}'s death anniversary is in {days} days",
@@ -26,5 +140,41 @@
       "name": { "type": "String" },
       "days": { "type": "int" }
     }
-  }
+  },
+
+  "profileBirthYear": "Birth year",
+  "@profileBirthYear": { "description": "Profile stat label" },
+
+  "profileStatus": "Status",
+  "@profileStatus": { "description": "Profile stat label" },
+
+  "profileStatusAlive": "Living",
+  "@profileStatusAlive": { "description": "Living status" },
+
+  "profileDescendants": "Descendants",
+  "@profileDescendants": { "description": "Profile stat label" },
+
+  "biographyTitle": "Biography",
+  "@biographyTitle": { "description": "Biography section title" },
+
+  "familyRelationsTitle": "Family Relations",
+  "@familyRelationsTitle": { "description": "Family relations section title" },
+
+  "relationFather": "Father",
+  "@relationFather": { "description": "Father relation" },
+
+  "relationWife": "Wife",
+  "@relationWife": { "description": "Wife relation" },
+
+  "relationSon": "Son",
+  "@relationSon": { "description": "Son relation" },
+
+  "relationDaughter": "Daughter",
+  "@relationDaughter": { "description": "Daughter relation" },
+
+  "lunarCalendar": "Lunar",
+  "@lunarCalendar": { "description": "Lunar calendar tag" },
+
+  "solarCalendar": "Solar",
+  "@solarCalendar": { "description": "Solar calendar tag" }
 }

@@ -17,14 +17,8 @@ class FamilyRootsApp extends StatelessWidget {
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: const [
-        Locale('vi'),
-        Locale('en'),
-        Locale('zh'),
-        Locale('fr'),
-      ],
-      // TODO: implement in Prompt 2 — persist user language preference
-      // locale: ref.watch(localeProvider),
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('vi'), // Default to Vietnamese
     );
   }
 }

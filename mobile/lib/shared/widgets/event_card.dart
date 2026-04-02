@@ -6,6 +6,8 @@ class EventCard extends StatelessWidget {
   final String date;
   final String description;
   final bool isLunar;
+  final String lunarLabel;
+  final String solarLabel;
 
   const EventCard({
     super.key,
@@ -13,6 +15,8 @@ class EventCard extends StatelessWidget {
     required this.date,
     required this.description,
     this.isLunar = false,
+    this.lunarLabel = 'Lunar',
+    this.solarLabel = 'Solar',
   });
 
   @override
@@ -26,7 +30,7 @@ class EventCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withAlpha(76), // 0.3 * 255
+            color: AppColors.primary.withAlpha(76),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -41,11 +45,11 @@ class EventCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(51), // 0.2 * 255
+                  color: Colors.white.withAlpha(51),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  isLunar ? 'Âm lịch' : 'Dương lịch',
+                  isLunar ? lunarLabel : solarLabel,
                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),

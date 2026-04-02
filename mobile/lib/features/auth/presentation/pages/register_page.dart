@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/l10n/app_localizations.dart';
 import '../../../../shared/widgets/custom_text_field.dart';
 import '../../../../shared/widgets/primary_button.dart';
 
@@ -18,6 +19,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -47,7 +50,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ),
-          
+
           // Blur wrapper for organic shapes
           Positioned.fill(
             child: BackdropFilter(
@@ -78,9 +81,9 @@ class _RegisterPageState extends State<RegisterPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        
+
                         Text(
-                          'Tạo Tài Khoản',
+                          l10n.registerTitle,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.displaySmall?.copyWith(
                             color: AppColors.primary,
@@ -88,7 +91,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Bắt đầu hành trình lưu giữ di sản gia đình',
+                          l10n.registerSubtitle,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppColors.textSecondary,
@@ -104,27 +107,27 @@ class _RegisterPageState extends State<RegisterPage> {
                             child: Container(
                               padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
-                                color: AppColors.surface.withAlpha(204), // 80% opacity
+                                color: AppColors.surface.withAlpha(204),
                                 borderRadius: BorderRadius.circular(32),
                               ),
                               child: Column(
                                 children: [
-                                  const CustomTextField(
-                                    label: 'Họ và tên',
-                                    hint: 'Nhập họ và tên của bạn',
+                                  CustomTextField(
+                                    label: l10n.fullNameLabel,
+                                    hint: l10n.fullNameHint,
                                     prefixIcon: Icons.person_outline,
                                   ),
                                   const SizedBox(height: 20),
-                                  const CustomTextField(
-                                    label: 'Email',
-                                    hint: 'Nhập email của bạn',
+                                  CustomTextField(
+                                    label: l10n.emailLabel,
+                                    hint: l10n.emailHint,
                                     prefixIcon: Icons.email_outlined,
                                     keyboardType: TextInputType.emailAddress,
                                   ),
                                   const SizedBox(height: 20),
                                   CustomTextField(
-                                    label: 'Mật khẩu',
-                                    hint: 'Nhập mật khẩu',
+                                    label: l10n.passwordLabel,
+                                    hint: l10n.passwordHint,
                                     prefixIcon: Icons.lock_outline,
                                     isPassword: true,
                                     obscureText: _obscurePassword,
@@ -136,8 +139,8 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ),
                                   const SizedBox(height: 20),
                                   CustomTextField(
-                                    label: 'Xác nhận mật khẩu',
-                                    hint: 'Nhập lại mật khẩu',
+                                    label: l10n.confirmPasswordLabel,
+                                    hint: l10n.confirmPasswordHint,
                                     prefixIcon: Icons.lock_outline,
                                     isPassword: true,
                                     obscureText: _obscureConfirmPassword,
@@ -153,22 +156,22 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 32),
 
                         PrimaryButton(
-                          text: 'Đăng Ký',
+                          text: l10n.registerButton,
                           onPressed: () {
                             context.go('/');
                           },
                         ),
-                        
+
                         const Spacer(),
                         const SizedBox(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text('Đã có tài khoản? ', style: TextStyle(color: AppColors.textSecondary)),
+                            Text(l10n.hasAccountPrompt, style: const TextStyle(color: AppColors.textSecondary)),
                             TextButton(
                               onPressed: () {
                                 context.pop();
@@ -176,7 +179,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               style: TextButton.styleFrom(
                                 foregroundColor: AppColors.primary,
                               ),
-                              child: const Text('Đăng nhập'),
+                              child: Text(l10n.loginLink),
                             ),
                           ],
                         )
