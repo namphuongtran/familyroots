@@ -7,7 +7,7 @@ and user removal — all with automatic audit logging via domain events.
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.application.clan.commands import (
     ApproveUser,
@@ -22,7 +22,7 @@ from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_clan_command_handler, get_clan_query_handler
-from app.schemas.clan import ClanResponse, ClanUpdateRequest
+from app.schemas.clan import ClanResponse, ClanStats, ClanUpdateRequest
 from app.services.translator import t
 
 router = APIRouter()
@@ -34,12 +34,20 @@ async def get_own_clan(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
     _role: ClanRole = RequireViewer,
+    include: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get the current user's active clan info."""
     clan = await query_handler.get_clan(clan_id)
     if not clan:
         raise EntityNotFoundError("clan_not_found")
-    return {"data": ClanResponse.model_validate(clan).model_dump()}
+
+    data = ClanResponse.model_validate(clan).model_dump()
+    includes = {item.strip() for item in include.split(",")} if include else set()
+    if "stats" in includes:
+        stats = await query_handler.get_clan_stats(clan_id)
+        data["stats"] = ClanStats.model_validate(stats).model_dump()
+
+    return {"data": data}
 
 
 @router.patch("/me")

@@ -184,3 +184,7 @@ class ClanQueryHandler:
         self, clan_id: uuid.UUID, approved: bool, cursor: str | None, limit: int
     ) -> dict[str, Any]:
         return await self._repo.list_users(clan_id, approved, cursor, limit)
+
+    async def get_clan_stats(self, clan_id: uuid.UUID) -> dict[str, int]:
+        """Get aggregate stats for clan dashboards."""
+        return await self._repo.get_clan_stats(clan_id)

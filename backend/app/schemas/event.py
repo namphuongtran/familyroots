@@ -51,11 +51,20 @@ class EventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventPersonSummary(BaseModel):
+    """Minimal person payload embedded in event responses."""
+
+    id: uuid.UUID
+    full_name: str
+    avatar_url: str | None = None
+
+
 class UpcomingEvent(BaseModel):
     id: uuid.UUID
     person_id: uuid.UUID | None = None
     person_name: str | None = None
     person_avatar_url: str | None = None
+    person: EventPersonSummary | None = None
     event_type: str
     title: str
     event_date: date

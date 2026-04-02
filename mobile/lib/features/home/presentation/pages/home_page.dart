@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/event_card.dart';
 
@@ -9,186 +11,265 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('FamilyRoots'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-          const CircleAvatar(
-            backgroundColor: AppColors.secondary,
-            child: Text('TV', style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Welcome Header
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 280.0,
+            floating: false,
+            pinned: true,
+            backgroundColor: AppColors.primaryContainer,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
                 children: [
-                  const Text(
-                    'Kính chào',
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Dòng họ Trần Văn',
-                    style: TextStyle(
-                      color: AppColors.secondary,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                   Container(
+                     decoration: const BoxDecoration(
+                       gradient: LinearGradient(
+                         begin: Alignment.topCenter,
+                         end: Alignment.bottomCenter,
+                         colors: [
+                           AppColors.primary,
+                           AppColors.primaryFixedDim,
+                         ],
+                       ),
+                     ),
+                   ),
+                   Positioned(
+                     bottom: -50,
+                     right: -50,
+                     child: Container(
+                       width: 200,
+                       height: 200,
+                       decoration: BoxDecoration(
+                         shape: BoxShape.circle,
+                         color: Colors.white.withAlpha(26),
+                       ),
+                     ),
+                   ),
+                     Positioned(
+                       top: 50,
+                       left: -50,
+                       child: Container(
+                         width: 150,
+                         height: 150,
+                         decoration: BoxDecoration(
+                           shape: BoxShape.circle,
+                           color: AppColors.secondaryContainer.withAlpha(51),
+                         ),
+                       ),
+                     ),
+                   Padding(
+                     padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Row(
+                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                           children: [
+                             const Text(
+                               'Kính chào',
+                               style: TextStyle(color: Colors.white70, fontSize: 16),
+                             ),
+                             CircleAvatar(
+                               backgroundColor: Colors.white.withAlpha(51),
+                               child: const Text('TV', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                             ),
+                           ],
+                         ),
+                         const SizedBox(height: 8),
+                         const Text(
+                           'Dòng họ Trần Văn',
+                           style: TextStyle(
+                             color: Colors.white,
+                             fontSize: 32,
+                             fontWeight: FontWeight.bold,
+                           ),
+                         ),
+                         const Spacer(),
+                         // Quick Action row utilizing glassmorphism
+                         ClipRRect(
+                           borderRadius: BorderRadius.circular(24),
+                           child: BackdropFilter(
+                             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                             child: Container(
+                               padding: const EdgeInsets.symmetric(vertical: 16),
+                               decoration: BoxDecoration(
+                                 color: Colors.white.withAlpha(38), // 15% opacity white
+                                 borderRadius: BorderRadius.circular(24),
+                               ),
+                               child: Row(
+                                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                 children: [
+                                   _buildQuickAction(Icons.search, 'Tìm kiếm', context, () {}),
+                                   _buildQuickAction(Icons.person_add, 'Thêm người', context, () => context.push('/members')),
+                                   _buildQuickAction(Icons.event_available, 'Sự kiện', context, () {}),
+                                   _buildQuickAction(Icons.history_edu, 'Gia phả', context, () => context.push('/tree')),
+                                 ],
+                               ),
+                             ),
+                           ),
+                         )
+                       ],
+                     ),
+                   ),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 32),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildQuickAction(Icons.search, 'Tìm kiếm', context),
-                      _buildQuickAction(Icons.person_add, 'Thêm người', context),
-                      _buildQuickAction(Icons.event_available, 'Tạo sự kiện', context),
-                      _buildQuickAction(Icons.history_edu, 'Gia phả', context),
+                      Text(
+                        'Sự Kiện Sắp Tới',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      TextButton(
+                        onPressed: () {},
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                        ),
+                        child: const Text('Xem tất cả'),
+                      ),
                     ],
-                  )
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 32),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 180,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    children: const [
+                      EventCard(
+                        title: 'Giỗ Tổ Dòng Họ',
+                        date: 'Mùng 10/03 ÂL',
+                        description: 'Họp mặt toàn thể con cháu họ Trần tại nhà thờ tổ chức lễ.',
+                        isLunar: true,
+                      ),
+                      SizedBox(width: 16),
+                      EventCard(
+                        title: 'Đám Cưới Minh & Lan',
+                        date: '15/10/2026',
+                        description: 'Lễ thành hôn của Trần Minh và Nguyễn Lan lúc 9:00 AM.',
+                        isLunar: false,
+                      ),
+                      SizedBox(width: 16),
+                      EventCard(
+                        title: 'Giỗ Cụ Khảo',
+                        date: '12/08 ÂL',
+                        description: 'Giỗ cụ Trần Khảo đời thứ 4.',
+                        isLunar: true,
+                      ),
+                    ],
+                  ),
+                ),
 
-            // Upcoming Events Slider
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Sự Kiện Sắp Tới',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  ),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text('Xem tất cả'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 160,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                children: const [
-                  EventCard(
-                    title: 'Giỗ Tổ Dòng Họ',
-                    date: 'Mùng 10/03 ÂL',
-                    description: 'Họp mặt toàn thể con cháu họ Trần tại nhà thờ tổ chức lễ.',
-                    isLunar: true,
-                  ),
-                  EventCard(
-                    title: 'Đám Cưới Minh & Lan',
-                    date: '15/10/2026',
-                    description: 'Lễ thành hôn của Trần Minh và Nguyễn Lan lúc 9:00 AM.',
-                    isLunar: false,
-                  ),
-                  EventCard(
-                    title: 'Giỗ Cụ Khảo',
-                    date: '12/08 ÂL',
-                    description: 'Giỗ cụ Trần Khảo đời thứ 4.',
-                    isLunar: true,
-                  ),
-                ],
-              ),
-            ),
+                const SizedBox(height: 32),
 
-            const SizedBox(height: 32),
-
-            // Feed Updates
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'Hoạt Động Mới Nhất',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListView.separated(
-              physics: const NeverScrollableScrollPhysics(),
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              itemCount: 3,
-              separatorBuilder: (context, index) => const Divider(height: 32),
-              itemBuilder: (context, index) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: AppColors.primary.withAlpha(26), // 0.1 * 255
-                      child: const Icon(Icons.person, color: AppColors.primary),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'Hoạt Động Mới Nhất',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Activities List
+                ListView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  itemCount: 3,
+                  itemBuilder: (context, index) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(24),
+                        // Soft organic shadow
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(10), // super subtle 
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          )
+                        ]
+                      ),
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          RichText(
-                            text: const TextSpan(
-                              style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: const BoxDecoration(
+                              color: AppColors.primaryContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.edit_document, color: AppColors.onPrimary, size: 20),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                TextSpan(text: 'Trần Văn Tèo ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                TextSpan(text: 'đã cập nhật thông tin tiểu sử cho '),
-                                TextSpan(text: 'Trần Văn Tí', style: TextStyle(fontWeight: FontWeight.bold)),
+                                RichText(
+                                  text: TextSpan(
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                    children: const [
+                                      TextSpan(text: 'Trần Văn Tèo ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                      TextSpan(text: 'đã cập nhật thông tin tiểu sử cho '),
+                                      TextSpan(text: 'Trần Văn Tí', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text('2 giờ trước', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          const Text('2 giờ trước', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                         ],
                       ),
-                    ),
-                  ],
-                );
-              },
+                    );
+                  },
+                ),
+                const SizedBox(height: 40),
+              ],
             ),
-            const SizedBox(height: 40),
-          ],
-        ),
+          )
+        ],
       ),
     );
   }
 
-  Widget _buildQuickAction(IconData icon, String label, BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(26), // 0.1 * 255
-            shape: BoxShape.circle,
+  Widget _buildQuickAction(IconData icon, String label, BuildContext context, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(51), // 20% opacity
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.white, size: 28),
           ),
-          child: Icon(icon, color: Colors.white, size: 28),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,25 +1,41 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary - Blood Red / Burgundy
-  static const Color primary = Color(0xFF8B0000);
-  static const Color primaryLight = Color(0xFFC04040);
-  static const Color primaryDark = Color(0xFF5A0000);
+  // Primary (Botanical Green)
+  static const Color primary = Color(0xFF37563B);
+  static const Color primaryContainer = Color(0xFF4F6F52);
+  static const Color onPrimary = Color(0xFFFFFFFF);
+  static const Color primaryFixedDim = Color(0xFFACD0AD);
 
-  // Secondary - Gold
-  static const Color secondary = Color(0xFFD4AF37);
-  static const Color secondaryLight = Color(0xFFFFE169);
-  static const Color secondaryDark = Color(0xFF9E8124);
+  // Secondary (Muted Rose)
+  static const Color secondary = Color(0xFF6E5959);
+  static const Color secondaryContainer = Color(0xFFF8DCDC);
+  static const Color onSecondaryContainer = Color(0xFF745F5F);
 
-  // Neutrals
-  static const Color background = Color(0xFFF9F9F9);
-  static const Color surface = Colors.white;
-  static const Color textPrimary = Color(0xFF1E1E1E);
-  static const Color textSecondary = Color(0xFF757575);
-  static const Color divider = Color(0xFFE0E0E0);
-  static const Color border = Color(0xFFD6D6D6);
+  // Tertiary
+  static const Color tertiary = Color(0xFF62494A);
+
+  // Surfaces (The Layering Principle)
+  static const Color background = Color(0xFFFFF9EF); // Base surface
+  static const Color surface = Color(0xFFFFF9EF); // Base
+  static const Color surfaceContainerLow = Color(0xFFF9F3EA); // Secondary Content
+  static const Color surfaceContainer = Color(0xFFF3EDE4); // Interactive Cards
+  static const Color surfaceContainerHigh = Color(0xFFEDE7DE); // Footers
+  static const Color surfaceContainerHighest = Color(0xFFE7E2D9); // Elevated Details
+  static const Color surfaceContainerLowest = Color(0xFFFFFFFF); // Clean inputs
+
+  // Typography
+  static const Color onSurface = Color(0xFF1D1B16); // Replaces pure black
+  static const Color onSurfaceVariant = Color(0xFF424841); // Recessional text
+  static const Color textPrimary = onSurface;
+  static const Color textSecondary = onSurfaceVariant;
+
+  // Borders and Outline
+  static const Color outlineVariant = Color(0xFFC2C8BF);
+  static const Color border = outlineVariant; // "Ghost border" base color
 
   // Status
   static const Color success = Color(0xFF2E7D32);
-  static const Color error = Color(0xFFC62828);
+  static const Color error = Color(0xFFBA1A1A); // from design system error
 }
+

@@ -95,6 +95,50 @@ class PersonUpdateRequest(BaseModel):
         return self
 
 
+class PersonBatchGetRequest(BaseModel):
+    """Request body for fetching multiple persons in one read operation."""
+
+    ids: list[uuid.UUID] = Field(..., min_length=1, max_length=100)
+    profile: str = Field("full", pattern="^(summary|detail|full)$")
+    include: str | None = Field(
+        None,
+        description=(
+            "Global comma-separated embedded resources. "
+            "Supported: stats,marriages,parent_child,timeline,documents"
+        ),
+    )
+    fields: str | None = Field(
+        None,
+        description="Comma-separated sparse fields. Example: id,full_name,stats",
+    )
+    include_by_id: dict[uuid.UUID, str] | None = Field(
+        None,
+        description=(
+            "Per-person embedded resources keyed by person id. "
+            "Values are comma-separated include tokens with same support as include."
+        ),
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "ids": [
+                        "11111111-1111-1111-1111-111111111111",
+                        "22222222-2222-2222-2222-222222222222",
+                    ],
+                    "profile": "summary",
+                    "include": "stats",
+                    "fields": "id,full_name,stats",
+                    "include_by_id": {
+                        "11111111-1111-1111-1111-111111111111": "marriages,parent_child"
+                    },
+                }
+            ]
+        }
+    }
+
+
 class PersonResponse(BaseModel):
     """Response schema for a single person."""
 

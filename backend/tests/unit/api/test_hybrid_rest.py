@@ -1,11 +1,17 @@
 """Unit tests for Hybrid REST API features: sparse fieldsets and compound documents."""
 
 import uuid
+from dataclasses import dataclass
 from unittest.mock import AsyncMock
 
 import pytest
 
-from app.api.v1.persons import _fetch_included_data, _filter_list_by_fields
+from app.api.v1.persons import (
+    _dedupe_person_ids,
+    _fetch_included_data,
+    _filter_list_by_fields,
+    _serialize_person_by_profile,
+)
 
 # ── _filter_list_by_fields helper ────────────────────────────────
 
@@ -150,3 +156,54 @@ class TestPersonProfileSchemas:
         dumped = data.model_dump(exclude_unset=True)
         assert dumped["birth_place"] == "Hanoi"
         assert "biography" not in dumped
+
+
+@dataclass
+class _FakePerson:
+    id: uuid.UUID
+    full_name: str
+    gender: str
+    biography: str | None = None
+
+    def model_dump(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "full_name": self.full_name,
+            "gender": self.gender,
+            "biography": self.biography,
+        }
+
+
+class TestPersonHelperUtilities:
+    def test_serialize_summary_profile_filters_extra_fields(self) -> None:
+        person = _FakePerson(
+            id=uuid.uuid4(),
+            full_name="Test",
+            gender="male",
+            biography="hidden",
+        )
+
+        payload = _serialize_person_by_profile(person, "summary")
+
+        assert payload["full_name"] == "Test"
+        assert "biography" not in payload
+
+    def test_serialize_full_profile_uses_model_dump(self) -> None:
+        person = _FakePerson(
+            id=uuid.uuid4(),
+            full_name="Test",
+            gender="male",
+            biography="visible",
+        )
+
+        payload = _serialize_person_by_profile(person, "full")
+
+        assert payload["biography"] == "visible"
+
+    def test_dedupe_person_ids_preserves_order(self) -> None:
+        id1 = uuid.uuid4()
+        id2 = uuid.uuid4()
+
+        deduped = _dedupe_person_ids([id1, id2, id1, id2, id1])
+
+        assert deduped == [id1, id2]

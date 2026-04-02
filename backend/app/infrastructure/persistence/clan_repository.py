@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import build_page, paginate_query
 from app.models.clan import Clan
+from app.models.clan_membership import ClanMembership
 from app.models.user_clan_role import UserClanRole
 
 
@@ -60,6 +61,33 @@ class SqlAlchemyClanRepository:
         result = await self._session.execute(query)
         items = list(result.scalars().all())
         return build_page(items, capped)
+
+    async def get_clan_stats(self, clan_id: uuid.UUID) -> dict[str, int]:
+        total_users_result = await self._session.execute(
+            select(func.count()).where(UserClanRole.clan_id == clan_id)
+        )
+        approved_users_result = await self._session.execute(
+            select(func.count()).where(
+                UserClanRole.clan_id == clan_id,
+                UserClanRole.is_approved.is_(True),
+            )
+        )
+        pending_users_result = await self._session.execute(
+            select(func.count()).where(
+                UserClanRole.clan_id == clan_id,
+                UserClanRole.is_approved.is_(False),
+            )
+        )
+        total_members_result = await self._session.execute(
+            select(func.count()).where(ClanMembership.clan_id == clan_id)
+        )
+
+        return {
+            "total_users": total_users_result.scalar() or 0,
+            "approved_users": approved_users_result.scalar() or 0,
+            "pending_users": pending_users_result.scalar() or 0,
+            "total_members": total_members_result.scalar() or 0,
+        }
 
     async def update_clan(self, clan_id: uuid.UUID, changes: dict[str, object]) -> Clan:
         clan = await self._session.get(Clan, clan_id)

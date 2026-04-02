@@ -67,7 +67,7 @@ class EventCard extends StatelessWidget {
           Text(
             date,
             style: const TextStyle(
-              color: AppColors.secondaryLight,
+              color: AppColors.primaryFixedDim,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

@@ -31,6 +31,10 @@ class ClanRepository(Protocol):
         """List users with pagination. Returns (items, has_next)."""
         ...
 
+    async def get_clan_stats(self, clan_id: uuid.UUID) -> dict[str, int]:
+        """Get aggregate statistics for a clan."""
+        ...
+
     async def update_clan(self, clan_id: uuid.UUID, changes: dict[str, object]) -> Any:
         """Apply changes to a clan record."""
         ...

@@ -4,17 +4,17 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/custom_text_field.dart';
 import '../../../../shared/widgets/primary_button.dart';
-import '../../../../shared/widgets/social_login_button.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _RegisterPageState extends State<RegisterPage> {
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +25,7 @@ class _LoginPageState extends State<LoginPage> {
           // Organic shape backgrounds
           Positioned(
             top: -100,
-            right: -50,
+            left: -50,
             child: Container(
               width: 300,
               height: 300,
@@ -37,7 +37,7 @@ class _LoginPageState extends State<LoginPage> {
           ),
           Positioned(
             bottom: -50,
-            left: -100,
+            right: -100,
             child: Container(
               width: 250,
               height: 250,
@@ -66,25 +66,21 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(height: 40),
-                        Center(
-                          child: Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryContainer,
-                              borderRadius: BorderRadius.circular(32),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => context.pop(),
+                              icon: const Icon(Icons.arrow_back),
+                              color: AppColors.textPrimary,
                             ),
-                            child: const Icon(
-                              Icons.park_rounded,
-                              size: 40,
-                              color: Colors.white,
-                            ),
-                          ),
+                            const Spacer(),
+                          ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
+                        
                         Text(
-                          'Gia Phả Di Sản',
+                          'Tạo Tài Khoản',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.displaySmall?.copyWith(
                             color: AppColors.primary,
@@ -92,7 +88,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Lưu giữ cội nguồn - Kết nối tương lai',
+                          'Bắt đầu hành trình lưu giữ di sản gia đình',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppColors.textSecondary,
@@ -114,6 +110,12 @@ class _LoginPageState extends State<LoginPage> {
                               child: Column(
                                 children: [
                                   const CustomTextField(
+                                    label: 'Họ và tên',
+                                    hint: 'Nhập họ và tên của bạn',
+                                    prefixIcon: Icons.person_outline,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  const CustomTextField(
                                     label: 'Email',
                                     hint: 'Nhập email của bạn',
                                     prefixIcon: Icons.email_outlined,
@@ -132,17 +134,20 @@ class _LoginPageState extends State<LoginPage> {
                                       });
                                     },
                                   ),
-                                  const SizedBox(height: 8),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      onPressed: () {},
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: AppColors.primary,
-                                      ),
-                                      child: const Text('Quên mật khẩu?'),
-                                    ),
+                                  const SizedBox(height: 20),
+                                  CustomTextField(
+                                    label: 'Xác nhận mật khẩu',
+                                    hint: 'Nhập lại mật khẩu',
+                                    prefixIcon: Icons.lock_outline,
+                                    isPassword: true,
+                                    obscureText: _obscureConfirmPassword,
+                                    onToggleObscure: () {
+                                      setState(() {
+                                        _obscureConfirmPassword = !_obscureConfirmPassword;
+                                      });
+                                    },
                                   ),
+                                  const SizedBox(height: 24),
                                 ],
                               ),
                             ),
@@ -152,36 +157,10 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 32),
 
                         PrimaryButton(
-                          text: 'Đăng Nhập',
+                          text: 'Đăng Ký',
                           onPressed: () {
                             context.go('/');
                           },
-                        ),
-                        const SizedBox(height: 32),
-
-                        Row(
-                          children: [
-                            const Expanded(child: Divider(color: AppColors.outlineVariant)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'Hoặc',
-                                style: TextStyle(color: AppColors.textSecondary),
-                              ),
-                            ),
-                            const Expanded(child: Divider(color: AppColors.outlineVariant)),
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-
-                        SocialLoginButton(
-                          provider: SocialProvider.google,
-                          onPressed: () {},
-                        ),
-                        const SizedBox(height: 16),
-                        SocialLoginButton(
-                          provider: SocialProvider.apple,
-                          onPressed: () {},
                         ),
                         
                         const Spacer(),
@@ -189,15 +168,15 @@ class _LoginPageState extends State<LoginPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text('Chưa có tài khoản? ', style: TextStyle(color: AppColors.textSecondary)),
+                            const Text('Đã có tài khoản? ', style: TextStyle(color: AppColors.textSecondary)),
                             TextButton(
                               onPressed: () {
-                                context.push('/register');
+                                context.pop();
                               },
                               style: TextButton.styleFrom(
                                 foregroundColor: AppColors.primary,
                               ),
-                              child: const Text('Đăng ký ngay'),
+                              child: const Text('Đăng nhập'),
                             ),
                           ],
                         )
@@ -213,4 +192,3 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
-

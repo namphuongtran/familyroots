@@ -5,6 +5,8 @@ import type {
   PersonCreateInput,
   PersonUpdateInput,
   TimelineEvent,
+  PersonBatchGetInput,
+  PersonBatchGetResponse,
   ApiResponse,
   CursorPage,
 } from '@/lib/types'
@@ -111,6 +113,16 @@ export const personsApi = {
       `/persons/${id}/documents`,
     )
     return data.data
+  },
+
+  batchGet: async (input: PersonBatchGetInput): Promise<PersonBatchGetResponse> => {
+    if (isMock) {
+      const ids = new Set(input.ids)
+      const data = MOCK_PERSONS.filter((p) => ids.has(p.id))
+      return { data: data as unknown as Array<Record<string, unknown>>, errors: [] }
+    }
+    const { data } = await api.post<PersonBatchGetResponse>('/persons/batch', input)
+    return data
   },
 
   create: async (input: PersonCreateInput): Promise<Person> => {

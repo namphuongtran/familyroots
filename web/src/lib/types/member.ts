@@ -99,3 +99,23 @@ export interface TimelineEvent {
   related_person_id?: string
   related_person_name?: string
 }
+
+export type PersonProfile = 'summary' | 'detail' | 'full'
+
+export interface PersonBatchGetInput {
+  ids: string[]
+  profile?: PersonProfile
+  include?: string
+  fields?: string
+  include_by_id?: Record<string, string>
+}
+
+export interface PersonBatchGetError {
+  id: string
+  code: string
+}
+
+export interface PersonBatchGetResponse {
+  data: Array<Record<string, unknown>>
+  errors: PersonBatchGetError[]
+}

@@ -36,6 +36,8 @@ class PersonSearchResult:
     gender: str = "unknown"
     avatar_url: str | None = None
     generation: int | None = None
+    membership_role: str | None = None
+    is_founder: bool | None = None
 
 
 class PersonRepository(Protocol):

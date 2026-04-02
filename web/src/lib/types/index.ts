@@ -6,6 +6,10 @@ export type {
   PersonCreateInput,
   PersonUpdateInput,
   TimelineEvent,
+  PersonProfile,
+  PersonBatchGetInput,
+  PersonBatchGetError,
+  PersonBatchGetResponse,
 } from './member'
 export type {
   Marriage,

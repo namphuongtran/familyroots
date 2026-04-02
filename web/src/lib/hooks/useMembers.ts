@@ -7,7 +7,11 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { personsApi, type PersonsListParams } from '@/lib/api/members'
-import type { PersonCreateInput, PersonUpdateInput } from '@/lib/types'
+import type {
+  PersonBatchGetInput,
+  PersonCreateInput,
+  PersonUpdateInput,
+} from '@/lib/types'
 
 export const personKeys = {
   all: ['persons'] as const,
@@ -20,6 +24,7 @@ export const personKeys = {
   parentChild: (id: string) => [...personKeys.detail(id), 'parent-child'] as const,
   timeline: (id: string) => [...personKeys.detail(id), 'timeline'] as const,
   documents: (id: string) => [...personKeys.detail(id), 'documents'] as const,
+  batch: (input: PersonBatchGetInput) => [...personKeys.all, 'batch', input] as const,
 }
 
 /** Infinite scroll cursor-paginated person list */
@@ -76,6 +81,15 @@ export function usePersonTimeline(id: string | undefined) {
     queryKey: personKeys.timeline(id!),
     queryFn: () => personsApi.getTimeline(id!),
     enabled: !!id,
+  })
+}
+
+/** Batch person read with optional profile/include/fields/include_by_id. */
+export function usePersonsBatch(input: PersonBatchGetInput, enabled = true) {
+  return useQuery({
+    queryKey: personKeys.batch(input),
+    queryFn: () => personsApi.batchGet(input),
+    enabled: enabled && input.ids.length > 0,
   })
 }
 

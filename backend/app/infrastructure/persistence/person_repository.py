@@ -89,7 +89,8 @@ class SqlAlchemyPersonRepository:
         previously inline in the persons route handler."""
         stmt = text("""
             SELECT p.id, p.full_name, p.birth_name, p.birth_date,
-                   p.gender, p.avatar_url, cm.generation
+                 p.gender, p.avatar_url, cm.generation, cm.role AS membership_role,
+                 cm.is_founder
             FROM persons p
             JOIN clan_memberships cm ON cm.person_id = p.id
             WHERE cm.clan_id = :clan_id
@@ -113,6 +114,8 @@ class SqlAlchemyPersonRepository:
                 gender=row["gender"],
                 avatar_url=row["avatar_url"],
                 generation=row["generation"],
+                membership_role=row["membership_role"],
+                is_founder=row["is_founder"],
             )
             for row in rows
         ]

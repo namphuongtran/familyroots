@@ -57,6 +57,7 @@ dependencies:
   # Sentry
   sentry_flutter: any
   crypto: ^3.0.7
+  google_fonts: ^8.0.2
 
 dev_dependencies:
   flutter_test:

@@ -80,9 +80,20 @@ async def get_ancestors(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: TreeQueryHandler = Depends(get_tree_query_handler),
     _role: ClanRole = RequireViewer,
+    profile: str = Query("full", pattern="^(summary|detail|full)$"),
 ) -> dict[str, Any]:
     """Return the ancestor chain from a person up to the root."""
     ancestors = await handler.get_ancestors(GetAncestors(person_id=person_id, clan_id=clan_id))
+
+    if profile == "summary":
+        ancestors = [
+            TreeNodeSummary.model_validate(a).model_dump(exclude_unset=True) for a in ancestors
+        ]
+    elif profile == "detail":
+        ancestors = [
+            TreeNodeDetail.model_validate(a).model_dump(exclude_unset=True) for a in ancestors
+        ]
+
     return {"data": ancestors}
 
 

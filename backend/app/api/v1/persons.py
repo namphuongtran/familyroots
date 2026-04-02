@@ -25,6 +25,7 @@ from app.application.person.handlers import PersonCommandHandler, PersonQueryHan
 from app.core.fieldsets import filter_dict, filter_list, parse_field_set, parse_includes
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
+from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import (
     get_claim_command_handler,
@@ -33,6 +34,7 @@ from app.infrastructure.dependencies import (
 )
 from app.schemas.claim import IdentityClaimResponse, IdentityClaimSubmit
 from app.schemas.person import (
+    PersonBatchGetRequest,
     PersonCreateRequest,
     PersonDetail,
     PersonSummary,
@@ -41,6 +43,32 @@ from app.schemas.person import (
 from app.services.translator import t
 
 router = APIRouter()
+
+
+def _serialize_person_by_profile(person: Any, profile: str) -> dict[str, Any]:
+    """Serialize a person to the selected response profile."""
+    if profile == "summary":
+        return PersonSummary.model_validate(person).model_dump(exclude_unset=True)
+    if profile == "detail":
+        return PersonDetail.model_validate(person).model_dump(exclude_unset=True)
+    return person.model_dump()
+
+
+def _dedupe_person_ids(ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Return IDs with original order preserved and duplicates removed."""
+    return list(dict.fromkeys(ids))
+
+
+def _parse_include_by_id(
+    include_by_id: dict[uuid.UUID, str] | None,
+) -> dict[uuid.UUID, list[str]]:
+    """Parse per-person include values into normalized include lists."""
+    if not include_by_id:
+        return {}
+    return {
+        uuid.UUID(str(person_id)): parse_includes(value)
+        for person_id, value in include_by_id.items()
+    }
 
 
 # ── List / Search ──────────────────────────────────────────────
@@ -56,9 +84,19 @@ async def list_persons(
     limit: int = Query(default=20, ge=1, le=100),
     generation: int | None = None,
     gender: str | None = None,
-    profile: str = Query("full", pattern="^(summary|detail|full)$"),
-    include: str | None = Query(None),
-    fields: str | None = Query(None),
+    profile: str = Query(
+        "full",
+        pattern="^(summary|detail|full)$",
+        description="Response profile. Use summary for list cards, detail for medium payload, full for all fields.",
+    ),
+    include: str | None = Query(
+        None,
+        description="Comma-separated embedded resources. Example: stats",
+    ),
+    fields: str | None = Query(
+        None,
+        description="Comma-separated sparse fields. Example: id,full_name,stats",
+    ),
 ) -> dict[str, Any]:
     """List persons belonging to a clan with pagination."""
     persons, total = await handler.list_persons(
@@ -71,23 +109,20 @@ async def list_persons(
         )
     )
 
+    includes = parse_includes(include)
+    include_set = set(includes)
     field_set = parse_field_set(fields, include=include)
 
     stats_map = {}
-    if include == "stats" and persons:
+    if "stats" in include_set and persons:
         person_ids = [p.id for p in persons]
         stats_map = await handler.get_persons_stats(person_ids)
 
     res_data = []
     for p in persons:
-        if profile == "summary":
-            p_dict = PersonSummary.model_validate(p).model_dump(exclude_unset=True)
-        elif profile == "detail":
-            p_dict = PersonDetail.model_validate(p).model_dump(exclude_unset=True)
-        else:
-            p_dict = p.model_dump()
+        p_dict = _serialize_person_by_profile(p, profile)
 
-        if include == "stats" and p.id in stats_map:
+        if "stats" in include_set and p.id in stats_map:
             p_dict["stats"] = stats_map[p.id]
 
         res_data.append(filter_dict(p_dict, field_set))
@@ -118,6 +153,8 @@ async def search_persons(
                 "birth_date": r.birth_date.isoformat() if r.birth_date else None,
                 "avatar_url": r.avatar_url,
                 "generation": r.generation,
+                "membership_role": r.membership_role,
+                "is_founder": r.is_founder,
             }
             for r in results
         ]
@@ -177,6 +214,82 @@ def _filter_list_by_fields(items: list[Any], fields: str | None) -> list[Any]:
     return filter_list(items, parse_field_set(fields))
 
 
+@router.post("/batch")
+async def batch_get_persons(
+    body: PersonBatchGetRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    handler: PersonQueryHandler = Depends(get_person_query_handler),
+    _role: ClanRole = RequireViewer,
+) -> dict[str, Any]:
+    """Fetch multiple persons in one request with optional include/fields/profile.
+
+    Supported include tokens:
+    - ``stats`` (spouse_count, child_count)
+    - ``marriages``
+    - ``parent_child``
+    - ``timeline``
+    - ``documents``
+
+    ``include`` applies globally. ``include_by_id`` allows per-person overrides.
+    Unknown include tokens are ignored for backward compatibility.
+    """
+    person_ids = _dedupe_person_ids(body.ids)
+
+    person_tasks = [
+        handler.get(GetPerson(person_id=person_id, clan_id=clan_id)) for person_id in person_ids
+    ]
+    person_results = await asyncio.gather(*person_tasks, return_exceptions=True)
+
+    persons = []
+    errors: list[dict[str, str]] = []
+    for person_id, result in zip(person_ids, person_results, strict=False):
+        if isinstance(result, EntityNotFoundError):
+            errors.append({"id": str(person_id), "code": "person_not_found"})
+            continue
+        if isinstance(result, Exception):
+            raise result
+        persons.append(result)
+
+    includes = parse_includes(body.include)
+    includes_by_id = _parse_include_by_id(body.include_by_id)
+    all_include_keys = set(includes)
+    for per_person_includes in includes_by_id.values():
+        all_include_keys.update(per_person_includes)
+    include_union = ",".join(sorted(all_include_keys)) if all_include_keys else None
+    field_set = parse_field_set(body.fields, include=include_union)
+
+    stats_map: dict[uuid.UUID, dict[str, int]] = {}
+    if "stats" in all_include_keys and persons:
+        stats_map = await handler.get_persons_stats([person.id for person in persons])
+
+    included_results: list[dict[str, list[Any]]] = await asyncio.gather(
+        *[
+            _fetch_included_data(
+                handler,
+                clan_id,
+                person.id,
+                list(dict.fromkeys([*includes, *includes_by_id.get(person.id, [])])),
+            )
+            for person in persons
+        ]
+    )
+
+    data = []
+    for idx, person in enumerate(persons):
+        p_dict = _serialize_person_by_profile(person, body.profile)
+
+        if "stats" in all_include_keys and person.id in stats_map:
+            p_dict["stats"] = stats_map[person.id]
+
+        if idx < len(included_results):
+            p_dict.update(included_results[idx])
+
+        data.append(filter_dict(p_dict, field_set))
+
+    return {"data": data, "errors": errors}
+
+
 @router.get("/{person_id}")
 async def get_person(
     person_id: uuid.UUID,
@@ -184,19 +297,25 @@ async def get_person(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
     _role: ClanRole = RequireViewer,
-    include: str | None = Query(None),
-    fields: str | None = Query(None),
-    profile: str = Query("full", pattern="^(summary|detail|full)$"),
+    include: str | None = Query(
+        None,
+        description=(
+            "Comma-separated embedded resources. Supported: marriages,parent_child,timeline,documents"
+        ),
+    ),
+    fields: str | None = Query(
+        None,
+        description="Comma-separated sparse fields. Example: id,full_name,gender,marriages",
+    ),
+    profile: str = Query(
+        "full",
+        pattern="^(summary|detail|full)$",
+        description="Response profile. summary/detail/full",
+    ),
 ) -> dict[str, Any]:
     """Get a single person's full detail."""
     person = await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-
-    if profile == "summary":
-        p_dict = PersonSummary.model_validate(person).model_dump(exclude_unset=True)
-    elif profile == "detail":
-        p_dict = PersonDetail.model_validate(person).model_dump(exclude_unset=True)
-    else:
-        p_dict = person.model_dump()
+    p_dict = _serialize_person_by_profile(person, profile)
 
     includes = parse_includes(include)
     if includes:

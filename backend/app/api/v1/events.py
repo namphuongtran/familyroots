@@ -79,9 +79,23 @@ async def get_upcoming_events(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: EventQueryHandler = Depends(get_event_query_handler),
     _role: ClanRole = RequireViewer,
+    include: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get upcoming events within the next N days."""
     upcoming = await query_handler.get_upcoming(clan_id=clan_id, days=days)
+
+    includes = {item.strip() for item in include.split(",")} if include else set()
+    if "person" in includes:
+        for item in upcoming:
+            if item.get("person_id") and item.get("person_name"):
+                item["person"] = {
+                    "id": item["person_id"],
+                    "full_name": item["person_name"],
+                    "avatar_url": item.get("person_avatar_url"),
+                }
+            else:
+                item["person"] = None
+
     return {"data": upcoming}
 
 

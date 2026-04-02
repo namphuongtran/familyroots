@@ -53,6 +53,15 @@ class ClanResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ClanStats(BaseModel):
+    """Aggregate counters used by clan dashboard views."""
+
+    total_users: int
+    approved_users: int
+    pending_users: int
+    total_members: int
+
+
 class ClanUpdateRequest(BaseModel):
     """Request body for updating clan info."""
 
