@@ -32,11 +32,11 @@ export const authApi = {
 
   logout: () => api.post('/auth/logout'),
 
-  getProfile: () => api.get<ApiResponse<UserProfile>>('/auth/profile'),
+  getProfile: () => api.get<ApiResponse<UserProfile>>('/auth/me'),
 
   updateProfile: (data: { full_name?: string; preferred_locale?: 'vi' | 'en' | 'zh' | 'fr' }) =>
-    api.patch<ApiResponse<UserProfile>>('/auth/profile', data),
+    api.patch('/auth/me', data),
 
   registerFcmToken: (token: string, device_platform: 'android' | 'ios' | 'web') =>
-    api.post('/auth/fcm-token', { token, device_platform }),
+    api.post('/auth/me/fcm-token', { token, device_platform }),
 }

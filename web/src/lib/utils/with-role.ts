@@ -26,7 +26,10 @@ export async function requireRole(
     redirect(`/${locale}/login`)
   }
 
-  const userRole = user.user_metadata?.clan_role as AppRole | undefined
+  const clanRole = user.user_metadata?.clan_role as AppRole | undefined
+  const platformRole = user.user_metadata?.platform_role as 'super_admin' | undefined
+  const userRole: AppRole | undefined =
+    platformRole === 'super_admin' ? 'super_admin' : clanRole
   const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles]
 
   if (!userRole || !roles.includes(userRole)) {

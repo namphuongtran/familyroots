@@ -1,6 +1,8 @@
 'use client'
 
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { listDocuments } from '@/application/documents/use-cases/document-queries'
+import { documentQueryRepository } from '@/infrastructure/documents/document-query-repository'
 import { documentsApi } from '@/lib/api/documents'
 
 export const documentKeys = {
@@ -12,7 +14,11 @@ export const documentKeys = {
 export function useDocuments(personId?: string) {
   return useInfiniteQuery({
     queryKey: documentKeys.list(personId),
-    queryFn: ({ pageParam }) => documentsApi.list({ person_id: personId, cursor: pageParam as string | undefined }),
+    queryFn: ({ pageParam }) =>
+      listDocuments(documentQueryRepository, {
+        person_id: personId,
+        cursor: pageParam as string | undefined,
+      }),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     initialPageParam: undefined as string | undefined,
     staleTime: 60_000,

@@ -1,99 +1,119 @@
 'use client'
 
 import { useCallback, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import {
+  hydrateAuthContext,
+  selectActiveClan,
+} from '@/application/auth/use-cases/auth-context'
+import { authProfileRepository } from '@/infrastructure/auth/http-auth-profile-repository'
+import { authSessionPort } from '@/infrastructure/auth/supabase-auth-session-port'
 import { useAuthStore } from '@/store/auth.store'
-import type { UserProfile } from '@/lib/types'
 
 export function useAuth() {
-  const { user, isLoading, setUser, setLoading, clear } = useAuthStore()
-  const supabase = createClient()
+  const {
+    user,
+    currentClanId,
+    clanMemberships,
+    isLoading,
+    setUser,
+    setCurrentClan,
+    setClanMemberships,
+    setLoading,
+    clear,
+  } = useAuthStore()
+
+  const syncAuthContext = useCallback(async () => {
+    const context = await hydrateAuthContext(authSessionPort, authProfileRepository)
+    if (!context.user) {
+      clear()
+      return
+    }
+
+    setUser(context.user)
+    setClanMemberships(context.clanMemberships)
+
+    const activeClanId = context.currentClanId ?? context.user.clan_id
+    setCurrentClan(activeClanId)
+
+    if (typeof window !== 'undefined') {
+      if (activeClanId) {
+        localStorage.setItem('current_clan_id', activeClanId)
+      }
+      localStorage.setItem('preferred_locale', context.user.preferred_locale)
+    }
+  }, [clear, setClanMemberships, setCurrentClan, setUser])
 
   // Sync Supabase session → auth store on mount and on auth state change
   useEffect(() => {
+    let isMounted = true
     setLoading(true)
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const meta = session.user.user_metadata
-        setUser({
-          id: session.user.id,
-          email: session.user.email ?? '',
-          full_name: meta?.full_name ?? '',
-          clan_id: meta?.clan_id,
-          clan_name: meta?.clan_name,
-          role: meta?.clan_role,
-          is_approved: meta?.is_approved ?? false,
-          person_id: meta?.person_id,
-          preferred_locale: meta?.preferred_locale ?? 'vi',
-        } satisfies UserProfile)
-      } else {
-        clear()
+    syncAuthContext().finally(() => {
+      if (isMounted) {
+        setLoading(false)
       }
     })
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const meta = session.user.user_metadata
-        setUser({
-          id: session.user.id,
-          email: session.user.email ?? '',
-          full_name: meta?.full_name ?? '',
-          clan_id: meta?.clan_id,
-          clan_name: meta?.clan_name,
-          role: meta?.clan_role,
-          is_approved: meta?.is_approved ?? false,
-          person_id: meta?.person_id,
-          preferred_locale: meta?.preferred_locale ?? 'vi',
-        })
-      } else {
-        clear()
-      }
+    const unsubscribe = authSessionPort.onAuthStateChange(() => {
+      syncAuthContext().finally(() => {
+        if (isMounted) {
+          setLoading(false)
+        }
+      })
     })
 
-    return () => subscription.unsubscribe()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
+  }, [setLoading, syncAuthContext])
 
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      return data
+      await authSessionPort.signInWithEmail(email, password)
+      await syncAuthContext()
     },
-    [supabase],
+    [syncAuthContext],
   )
 
   const signInWithGoogle = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    if (error) throw error
-  }, [supabase])
+    await authSessionPort.signInWithOAuth('google')
+  }, [])
 
   const signInWithApple = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'apple',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    if (error) throw error
-  }, [supabase])
+    await authSessionPort.signInWithOAuth('apple')
+  }, [])
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    await authSessionPort.signOut()
     clear()
-    window.location.href = '/login'
-  }, [supabase, clear])
+
+    const locale = user?.preferred_locale ?? 'vi'
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('current_clan_id')
+      window.location.href = `/${locale}/login`
+    }
+  }, [clear, user?.preferred_locale])
+
+  const selectClan = useCallback(
+    async (clanId: string) => {
+      const selectedClanId = await selectActiveClan(authProfileRepository, clanId)
+      setCurrentClan(selectedClanId)
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('current_clan_id', selectedClanId)
+      }
+
+      await syncAuthContext()
+      return selectedClanId
+    },
+    [setCurrentClan, syncAuthContext],
+  )
 
   return {
     user,
+    currentClanId,
+    clanMemberships,
     isLoading,
     isAuthenticated: !!user,
     isApproved: user?.is_approved ?? false,
@@ -101,33 +121,27 @@ export function useAuth() {
     signInWithGoogle,
     signInWithApple,
     signOut,
+    selectClan,
+    syncAuthContext,
   }
 }
 
 // Convenience alias used by auth pages
 export function useAuthActions() {
   const { signInWithEmail, signOut } = useAuth()
-  const supabase = createClient()
 
   const signIn = useCallback(
-    async (email: string, password: string) => signInWithEmail(email, password),
+    async (email: string, password: string) => {
+      await signInWithEmail(email, password)
+    },
     [signInWithEmail],
   )
 
   const signUp = useCallback(
     async (email: string, password: string, fullName: string) => {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName },
-          emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-        },
-      })
-      if (error) throw error
-      return data
+      await authSessionPort.signUp(email, password, fullName)
     },
-    [supabase],
+    [],
   )
 
   return { signIn, signUp, signOut }

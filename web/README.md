@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FamilyRoots Web
 
-## Getting Started
+Frontend for the FamilyRoots platform, implemented with Next.js App Router and integrated with the FastAPI backend.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 + React 19
+- TypeScript (strict mode)
+- next-intl (vi/en/zh/fr)
+- TanStack Query + Zustand
+- Supabase auth (SSR/browser)
+- Tailwind CSS + Radix UI
+
+## Quick Start
+
+1. Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Configure env:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.example .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Required values:
 
-## Learn More
+- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-To learn more about Next.js, take a look at the following resources:
+3. Run dev server:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Architecture Direction (DDD + Clean Architecture)
 
-## Deploy on Vercel
+The web app is being incrementally migrated to layered frontend architecture:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `src/domain`: framework-agnostic domain types and business rules
+- `src/application`: use-cases and repository ports
+- `src/infrastructure`: adapters (HTTP, Supabase, mappers)
+- `src/components`, `src/app`, `src/lib/hooks`: presentation and route composition
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Dependency Rules
+
+- Presentation can depend on application
+- Application can depend on domain
+- Infrastructure can depend on application and domain
+- Domain must not import framework, transport, or UI code
+
+## Backend Contract Requirements
+
+All clan-scoped requests must send:
+
+- `Authorization: Bearer <token>`
+- `Accept-Language`
+- `X-Current-Clan-Id`
+
+Query semantics to preserve:
+
+- Cursor pagination (`next_cursor`, `has_more`)
+- `profile=summary|detail|full`
+- `include` compound documents
+- `fields` sparse fieldsets
+- Batch include gotcha: include keys from `include_by_id` must be merged into sparse fields
+
+## Scripts
+
+- `pnpm dev`
+- `pnpm build`
+- `pnpm start`
+- `pnpm type-check`
+- `pnpm format`
+
+## Superpowers Workflow
+
+This repository uses the superpowers methodology for planning and implementation. See `docs/superpowers.md` for install and usage.
+
+Recommended execution loop per feature slice:
+
+1. Brainstorm and confirm design
+2. Generate task plan with file-level actions
+3. Execute in small batches via subagents
+4. Run verification gates (type-check/tests)
+5. Request code review before merge

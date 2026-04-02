@@ -1,7 +1,11 @@
 'use client'
 
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
-import { eventsApi } from '@/lib/api/events'
+import {
+  getUpcomingEvents,
+  listEvents,
+} from '@/application/events/use-cases/event-queries'
+import { eventQueryRepository } from '@/infrastructure/events/event-query-repository'
 import type { CursorPage } from '@/lib/types/api'
 import type { ClanEvent } from '@/lib/types'
 
@@ -15,7 +19,7 @@ export const eventKeys = {
 export function useUpcomingEvents(days = 30) {
   return useQuery({
     queryKey: eventKeys.upcoming(days),
-    queryFn: () => eventsApi.getUpcoming(days),
+    queryFn: () => getUpcomingEvents(eventQueryRepository, days),
     staleTime: 5 * 60_000,
   })
 }
@@ -23,7 +27,7 @@ export function useUpcomingEvents(days = 30) {
 export function useEvents() {
   return useInfiniteQuery<CursorPage<ClanEvent>, Error, { pages: CursorPage<ClanEvent>[]; pageParams: (string | undefined)[] }, readonly unknown[], string | undefined>({
     queryKey: eventKeys.list(),
-    queryFn: ({ pageParam }) => eventsApi.list({ cursor: pageParam }),
+    queryFn: ({ pageParam }) => listEvents(eventQueryRepository, { cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
     staleTime: 60_000,

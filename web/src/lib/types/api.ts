@@ -34,11 +34,24 @@ export interface ClanSwitchResponse {
   clan_id: string
   clan_name: string
   clan_slug: string
-  role: string
+  role: 'viewer' | 'editor' | 'admin'
   message: string
 }
 
-/** User profile returned by /auth/profile and /auth/login */
+export interface UserClanMembership {
+  clan_id: string
+  clan_name: string
+  clan_slug: string
+  role: 'viewer' | 'editor' | 'admin'
+  joined_at?: string | null
+}
+
+export interface UserClansResponse {
+  clans: UserClanMembership[]
+  count: number
+}
+
+/** User profile returned by /auth/me and /auth/login */
 export interface UserProfile {
   id: string
   email: string
@@ -46,6 +59,7 @@ export interface UserProfile {
   clan_id?: string
   clan_name?: string
   role?: 'viewer' | 'editor' | 'admin' | 'super_admin'
+  platform_role?: 'super_admin' | null
   is_approved: boolean
   person_id?: string
   preferred_locale: 'vi' | 'en' | 'zh' | 'fr'

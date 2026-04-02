@@ -1,36 +1,17 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import api from '@/lib/api/axios'
-
-interface ClanSettings {
-  name: string
-  description?: string
-  founding_year?: number
-  origin_location?: string
-}
+import { useClanSettings, useClanSettingsMutation } from '@/lib/hooks/useAdmin'
+import type { ClanSettings } from '@/lib/types'
 
 export default function AdminClanPage() {
   const t = useTranslations('admin')
-  const qc = useQueryClient()
-
-  const { data: clan, isLoading } = useQuery({
-    queryKey: ['clan', 'settings'],
-    queryFn: async () => {
-      const res = await api.get<ClanSettings>('/clans/me')
-      return res.data
-    },
-  })
+  const { data: clan, isLoading } = useClanSettings()
+  const updateMutation = useClanSettingsMutation()
 
   const { register, handleSubmit, formState: { isSubmitting } } = useForm<ClanSettings>({
     values: clan,
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: (data: ClanSettings) => api.patch('/clans/me', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['clan', 'settings'] }),
   })
 
   return (
@@ -38,9 +19,12 @@ export default function AdminClanPage() {
       <h1 className="font-serif text-2xl text-gray-800">{t('clan_settings')}</h1>
 
       <form
-        onSubmit={handleSubmit(data => updateMutation.mutateAsync(data))}
+        onSubmit={handleSubmit((data) => updateMutation.mutateAsync(data))}
         className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4"
       >
+        {isLoading && (
+          <p className="text-sm text-gray-400">Loading...</p>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('clan_name')}</label>
           <input
@@ -63,14 +47,14 @@ export default function AdminClanPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('founding_year')}</label>
             <input
               type="number"
-              {...register('founding_year', { valueAsNumber: true })}
+              {...register('founded_year', { valueAsNumber: true })}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('origin_location')}</label>
             <input
-              {...register('origin_location')}
+              {...register('origin_place')}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>

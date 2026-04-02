@@ -7,6 +7,17 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { personsApi, type PersonsListParams } from '@/lib/api/members'
+import {
+  batchGetPersons,
+  getPerson,
+  getPersonDocuments,
+  getPersonMarriages,
+  getPersonParentChild,
+  getPersonTimeline,
+  listPersons,
+  searchPersons,
+} from '@/application/persons/use-cases/person-queries'
+import { personQueryRepository } from '@/infrastructure/persons/person-query-repository'
 import type {
   PersonBatchGetInput,
   PersonCreateInput,
@@ -32,7 +43,10 @@ export function usePersons(params: Omit<PersonsListParams, 'cursor'> = {}) {
   return useInfiniteQuery({
     queryKey: personKeys.list(params),
     queryFn: ({ pageParam }) =>
-      personsApi.list({ ...params, cursor: pageParam as string | undefined }),
+      listPersons(personQueryRepository, {
+        ...params,
+        cursor: pageParam as string | undefined,
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
@@ -42,7 +56,7 @@ export function usePersons(params: Omit<PersonsListParams, 'cursor'> = {}) {
 export function usePerson(id: string | undefined) {
   return useQuery({
     queryKey: personKeys.detail(id!),
-    queryFn: () => personsApi.get(id!),
+    queryFn: () => getPerson(personQueryRepository, id!),
     enabled: !!id,
   })
 }
@@ -51,7 +65,7 @@ export function usePerson(id: string | undefined) {
 export function usePersonSearch(q: string) {
   return useQuery({
     queryKey: personKeys.search(q),
-    queryFn: () => personsApi.search(q),
+    queryFn: () => searchPersons(personQueryRepository, q),
     enabled: q.length >= 2,
     staleTime: 30_000,
   })
@@ -61,7 +75,7 @@ export function usePersonSearch(q: string) {
 export function usePersonMarriages(id: string | undefined) {
   return useQuery({
     queryKey: personKeys.marriages(id!),
-    queryFn: () => personsApi.getMarriages(id!),
+    queryFn: () => getPersonMarriages(personQueryRepository, id!),
     enabled: !!id,
   })
 }
@@ -70,7 +84,7 @@ export function usePersonMarriages(id: string | undefined) {
 export function usePersonParentChild(id: string | undefined) {
   return useQuery({
     queryKey: personKeys.parentChild(id!),
-    queryFn: () => personsApi.getParentChild(id!),
+    queryFn: () => getPersonParentChild(personQueryRepository, id!),
     enabled: !!id,
   })
 }
@@ -79,7 +93,7 @@ export function usePersonParentChild(id: string | undefined) {
 export function usePersonTimeline(id: string | undefined) {
   return useQuery({
     queryKey: personKeys.timeline(id!),
-    queryFn: () => personsApi.getTimeline(id!),
+    queryFn: () => getPersonTimeline(personQueryRepository, id!),
     enabled: !!id,
   })
 }
@@ -88,7 +102,7 @@ export function usePersonTimeline(id: string | undefined) {
 export function usePersonsBatch(input: PersonBatchGetInput, enabled = true) {
   return useQuery({
     queryKey: personKeys.batch(input),
-    queryFn: () => personsApi.batchGet(input),
+    queryFn: () => batchGetPersons(personQueryRepository, input),
     enabled: enabled && input.ids.length > 0,
   })
 }

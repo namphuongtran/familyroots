@@ -1,4 +1,9 @@
 import api from './axios'
+import {
+  normalizeIncludeAndFields,
+  normalizePersonsBatchInput,
+  normalizePersonsProfile,
+} from '@/infrastructure/http/query-policy'
 import type {
   Person,
   PersonSummary,
@@ -20,6 +25,9 @@ export interface PersonsListParams {
   gender?: string
   is_alive?: boolean
   search?: string
+  profile?: 'summary' | 'detail' | 'full'
+  include?: string
+  fields?: string
 }
 
 // ── Mock data for offline/demo mode ──────────────────────────────────────────
@@ -63,10 +71,24 @@ const isMock = !process.env.NEXT_PUBLIC_API_URL
 
 export const personsApi = {
   list: async (params: PersonsListParams = {}): Promise<CursorPage<PersonSummary>> => {
+    const normalized = normalizeIncludeAndFields({
+      include: params.include,
+      fields: params.fields,
+    })
+
+    const normalizedParams: PersonsListParams = {
+      ...params,
+      profile: normalizePersonsProfile(params.profile),
+      include: normalized.include,
+      fields: normalized.fields,
+    }
+
     if (isMock) {
       return { data: MOCK_PERSONS, next_cursor: null, has_more: false }
     }
-    const { data } = await api.get<CursorPage<PersonSummary>>('/persons', { params })
+    const { data } = await api.get<CursorPage<PersonSummary>>('/persons', {
+      params: normalizedParams,
+    })
     return data
   },
 
@@ -116,12 +138,17 @@ export const personsApi = {
   },
 
   batchGet: async (input: PersonBatchGetInput): Promise<PersonBatchGetResponse> => {
+    const normalizedInput = normalizePersonsBatchInput(input)
+
     if (isMock) {
-      const ids = new Set(input.ids)
+      const ids = new Set(normalizedInput.ids)
       const data = MOCK_PERSONS.filter((p) => ids.has(p.id))
       return { data: data as unknown as Array<Record<string, unknown>>, errors: [] }
     }
-    const { data } = await api.post<PersonBatchGetResponse>('/persons/batch', input)
+    const { data } = await api.post<PersonBatchGetResponse>(
+      '/persons/batch',
+      normalizedInput,
+    )
     return data
   },
 

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { createClient } from '@/lib/supabase/client'
+import { getRequestContext } from '@/infrastructure/http/request-context'
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1',
@@ -7,7 +8,7 @@ const api = axios.create({
   timeout: 30_000,
 })
 
-// ── Request interceptor: attach JWT + locale ──────────────────────────────────
+// ── Request interceptor: attach JWT + request context ─────────────────────────
 api.interceptors.request.use(async (config) => {
   try {
     const supabase = createClient()
@@ -22,10 +23,11 @@ api.interceptors.request.use(async (config) => {
     // getSession may throw in SSR context — ignore
   }
 
-  // Attach preferred locale from localStorage (client-side only)
-  if (typeof window !== 'undefined') {
-    const locale = localStorage.getItem('preferred_locale') ?? 'vi'
-    config.headers['Accept-Language'] = locale
+  const context = getRequestContext()
+  config.headers['Accept-Language'] = context.locale
+
+  if (context.currentClanId) {
+    config.headers['X-Current-Clan-Id'] = context.currentClanId
   }
 
   return config
@@ -40,7 +42,8 @@ api.interceptors.response.use(
         const supabase = createClient()
         await supabase.auth.signOut()
       } finally {
-        window.location.href = '/login'
+        const { locale } = getRequestContext()
+        window.location.href = `/${locale}/login`
       }
     }
     return Promise.reject(error)

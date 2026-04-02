@@ -4,51 +4,16 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { PendingUsersList } from '@/components/admin/PendingUsersList'
 import { RoleSelector } from '@/components/admin/RoleSelector'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import api from '@/lib/api/axios'
-
-type ClanRole = 'admin' | 'editor' | 'viewer'
-
-interface ClanMember {
-  id: string
-  full_name: string
-  email: string
-  avatar_url?: string | null
-  role: ClanRole
-  is_approved: boolean
-  created_at: string
-}
+import { useClanUserMutations, useClanUsers } from '@/lib/hooks/useAdmin'
+import type { ClanRole } from '@/lib/types'
 
 export default function AdminUsersPage() {
   const t = useTranslations('admin')
-  const qc = useQueryClient()
+  const { data, isLoading } = useClanUsers()
+  const { approve, reject, changeRole } = useClanUserMutations()
 
-  const { data, isLoading } = useQuery<ClanMember[]>({
-    queryKey: ['admin', 'users'],
-    queryFn: async () => {
-      const res = await api.get<{ data: ClanMember[] }>('/clans/me/members')
-      return res.data.data
-    },
-  })
-
-  const approveMutation = useMutation({
-    mutationFn: (userId: string) => api.patch(`/clans/me/members/${userId}/approve`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
-  })
-
-  const rejectMutation = useMutation({
-    mutationFn: (userId: string) => api.delete(`/clans/me/members/${userId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
-  })
-
-  const rolesMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: ClanRole }) =>
-      api.patch(`/clans/me/members/${userId}/role`, { role }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
-  })
-
-  const pending = data?.filter(u => !u.is_approved) ?? []
-  const approved = data?.filter(u => u.is_approved) ?? []
+  const pending = data?.pending ?? []
+  const approved = data?.approved ?? []
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -59,10 +24,15 @@ export default function AdminUsersPage() {
           {t('pending_approval')}
         </h2>
         <PendingUsersList
-          users={pending}
+          users={pending.map((u) => ({
+            id: u.user_id,
+            full_name: u.user_id,
+            email: u.user_id,
+            created_at: u.created_at,
+          }))}
           isLoading={isLoading}
-          onApprove={id => approveMutation.mutate(id)}
-          onReject={id => rejectMutation.mutate(id)}
+          onApprove={(id) => approve.mutate(id)}
+          onReject={(id) => reject.mutate(id)}
         />
       </section>
 
@@ -70,15 +40,15 @@ export default function AdminUsersPage() {
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
           {t('all_members')}
         </h2>
-        {approved.map(user => (
+        {approved.map((user) => (
           <div key={user.id} className="flex items-center justify-between py-2 border-b last:border-0 border-gray-50">
             <div>
-              <p className="text-sm font-medium text-gray-700">{user.full_name}</p>
-              <p className="text-xs text-gray-400">{user.email}</p>
+              <p className="text-sm font-medium text-gray-700">{user.user_id}</p>
+              <p className="text-xs text-gray-400">{user.person_id ?? '-'}</p>
             </div>
             <RoleSelector
               value={user.role}
-              onChange={role => rolesMutation.mutate({ userId: user.id, role })}
+              onChange={(role: ClanRole) => changeRole.mutate({ userId: user.user_id, role })}
             />
           </div>
         ))}
