@@ -77,3 +77,13 @@ pre-commit-install: ## Install pre-commit hooks
 
 pre-commit-run: ## Run pre-commit on all files
 	pre-commit run --all-files
+
+# ─── Git ──────────────────────────────────────────────────────────────
+sync: ## Commit and push all changes. Usage: make sync m="your commit message"
+	@if [ -z "$(m)" ]; then \
+		echo "Error: Commit message is required. Usage: make sync m=\"message\""; \
+		exit 1; \
+	fi
+	git add -A
+	git commit -m "$(m)"
+	git push origin HEAD
