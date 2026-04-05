@@ -158,18 +158,7 @@ flutter run -d "Your iPhone Name"
 
 > **Note:** A free Apple Developer account works, but apps installed this way expire after 7 days and must be reinstalled.
 
-### Step 2.7 — Run Flutter Web
-
-```bash
-cd web
-flutter run -d chrome
-
-# Or run on a local dev server
-flutter run -d web-server --web-port=3000
-# Open in browser: http://localhost:3000
-```
-
-### Step 2.8 — Hot Reload & Hot Restart
+### Step 2.7 — Hot Reload & Hot Restart
 
 While the app is running in your terminal:
 
@@ -181,7 +170,7 @@ While the app is running in your terminal:
 
 ---
 
-## PART 3 — BUILDING FOR RELEASE (APK / IPA / Web)
+## PART 3 — BUILDING FOR RELEASE (APK / IPA)
 
 ### Step 3.1 — Build Android APK (for internal testing)
 
@@ -600,3 +589,4 @@ base64 -i family-roots-release.keystore | pbcopy
 - [ ] Privacy Manifest (`PrivacyInfo.xcprivacy`) declared (required since 2024)
 - [ ] Screenshots are the correct size (6.5" is mandatory)
 - [ ] App icon is 1024×1024 PNG with no alpha channel
+annel

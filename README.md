@@ -44,7 +44,6 @@ family-roots/
 ├── backend/          # FastAPI Python service (pure REST API)
 ├── mobile/           # Flutter app — Android + iOS + Tablet
 ├── web/              # Next.js web app — Dashboard + Admin Panel + Backoffice
-├── packages/         # Shared Dart packages (family_roots_core — used by mobile)
 ├── infra/            # Infrastructure as Code (Pulumi, Render, Supabase, Firebase)
 ├── docs/             # Architecture docs, guides, ADRs
 ├── scripts/          # Utility scripts (seeding, export, super admin bootstrap)

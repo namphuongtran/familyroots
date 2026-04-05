@@ -54,9 +54,8 @@ cp .env.example .env
 # Generate Flutter platform directories (first time only)
 flutter create --org com.familyroots --project-name familyroots .
 
-# Get dependencies (shared package + mobile)
-cd ../packages/family_roots_core && flutter pub get
-cd ../../mobile && flutter pub get
+# Get dependencies
+flutter pub get
 
 # Run code generation
 flutter pub run build_runner build --delete-conflicting-outputs
@@ -73,18 +72,11 @@ cd web
 # Create .env from template
 cp .env.example .env
 
-# Generate Flutter web project (first time only)
-flutter create --org com.familyroots --project-name familyroots_web --platforms web .
-
-# Get dependencies
-cd ../packages/family_roots_core && flutter pub get
-cd ../../web && flutter pub get
-
-# Run code generation
-flutter pub run build_runner build --delete-conflicting-outputs
+# Install dependencies
+pnpm install
 
 # Run the web app
-flutter run -d chrome
+pnpm dev
 ```
 
 ## 5. Docker Compose (Full Stack)
@@ -128,8 +120,7 @@ make docker-down       # Stop Docker services
 familyroots/
 ├── backend/           # FastAPI backend (Python)
 ├── mobile/            # Flutter mobile app (Dart)
-├── web/               # Flutter web app (Dart)
-├── packages/          # Shared Dart packages
+├── web/               # Next.js web app (React, TypeScript)
 ├── infra/             # Infrastructure as Code
 ├── docs/              # Documentation
 ├── scripts/           # Utility scripts

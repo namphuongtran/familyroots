@@ -68,7 +68,6 @@ seed: ## Seed development data
 
 # ─── Packages ─────────────────────────────────────────────────────────
 packages-get: ## Get dependencies for all projects
-	cd packages/family_roots_core && dart pub get
 	cd mobile && flutter pub get
 	cd web && pnpm install
 

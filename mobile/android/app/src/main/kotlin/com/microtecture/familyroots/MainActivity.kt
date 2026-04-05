@@ -1,4 +1,4 @@
-package com.example.family_roots_mobile
+package com.microtecture.familyroots
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -2,7 +2,7 @@
 ///
 /// This package contains pure Dart code with no Flutter dependency,
 /// shared between the mobile and web apps.
-library family_roots_core;
+library domain;
 
 // Entities
 export 'entities/entities.dart';

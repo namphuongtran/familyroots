@@ -22,7 +22,7 @@ Growing, with strong architectural foundations and active scaffold-to-build work
 - Clan-scoped APIs must enforce X-Current-Clan-Id context and role checks.
 - Public API errors should keep stable structured envelope semantics.
 - Mobile UI must follow Arbor Heritage design mandates and localization rules.
-- Shared cross-app Dart business entities live in packages/family_roots_core.
+- Dart business entities live in mobile/lib/domain.
 
 ## Never Do
 - Never bypass clan isolation checks for convenience.

@@ -12,10 +12,6 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # Shared package
-  family_roots_core:
-    path: ../packages/family_roots_core
-
   # State management
   flutter_bloc: ^8.1.0
   equatable: ^2.0.0

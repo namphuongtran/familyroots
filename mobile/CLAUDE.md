@@ -11,12 +11,6 @@ All new features and screens must follow this 4-step process:
 3. **Mock Data Implementation:** Build the UI in Flutter using static mock data to achieve pixel-perfect fidelity with the design. Do not connect to the backend API during this phase to avoid being blocked by backend state constraints and to quickly iterate on the visual layout.
 4. **Backend Integration:** Replace the mock data with real API calls *only after* the UI is perfectly aligned with the design and approved.
 
-## 2. Shared Packages Architecture
-
-Our application follows a modular approach. Core styles, assets, and base models live inside the local `packages/` directory instead of `mobile/lib/`.
-- **Why?** This enforces strict boundary isolation and lets us independently test business logic and component catalogs.
-- **Reference**: Please review exactly how to develop and extract code to packages via [Packages Guidelines](../packages/CLAUDE.md).
-
 ## 3. The "Arbor Heritage" Design System Mandates
 
 Our active design system requires a specific organic, premium editorial feel. Adhere strictly to the following rules:
@@ -109,8 +103,8 @@ Use `intl.Intl.pluralLogic` for count-based strings.
 ## 6. Architecture & Data Layer
 
 ### Repository Pattern
-- **Interface** lives in `packages/family_roots_core/lib/repositories/`.
-- **Mock implementation** lives in `packages/family_roots_core/lib/mocks/`.
+- **Interface** lives in `mobile/lib/domain/repositories/`.
+- **Mock implementation** lives in `mobile/lib/domain/mocks/`.
 - **Real API implementation** will live in `mobile/lib/features/<feature>/data/`.
 
 ### Switching Mock → Real API

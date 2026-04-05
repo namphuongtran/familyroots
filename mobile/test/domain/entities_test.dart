@@ -1,5 +1,5 @@
-import 'package:family_roots_core/entities/entities.dart';
-import 'package:test/test.dart';
+import 'package:family_roots_mobile/domain/entities/entities.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('MemberModel', () {

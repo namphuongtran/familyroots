@@ -1,62 +1,65 @@
-# FamilyRoots — Genealogy Platform for Vietnamese Clans
+# FamilyRoots
 
-A comprehensive, cross-platform genealogy system designed specifically for Vietnamese family clans. It features multi-clan workspaces (Slack-style), interactive family trees, fuzzy name search, and strict data isolation via Row-Level Security.
+## What This System Does
+FamilyRoots is a Vietnamese genealogy platform that allows clans to maintain accurate family trees, member profiles, and life events across web and mobile clients. The platform caters to two primary personas: "Clan Elders" who manage and curate the historical records, and "Younger Generations" who consume notifications (e.g., death anniversaries) and explore their heritage. It features multi-clan workspaces, role-based access, and clan-scoped data isolation, monetized potentially through premium features or subscriptions for larger clans.
 
-## Project Architecture & Tech Stack
+## System Stage
+Growing — Transitioning from in-process events to a distributed architecture (adding Redis Pub/Sub and a dedicated async worker for heavy exports) to support scaling. The team consists of one human engineer and an Agentic AI acting as a Solo-Dev team.
 
-### Core Architecture
-- **Monorepo:** Managed with `uv` (backend), `pnpm` (web), and `flutter/pub` (mobile).
-- **Backend:** Python 3.14+ / FastAPI following **DDD + CQRS + Hexagonal** architecture.
-- **Web:** Next.js 16 (React 19, TypeScript) with **Zustand** and **XYFlow** for tree visualization.
-- **Mobile:** Flutter (Dart) using **BLoC** pattern, **Retrofit** for API, and **GetIt** for DI.
-- **Infrastructure:** **Supabase** (PostgreSQL 18, Auth, Storage), **Firebase** (FCM), **Pulumi** (IaC), **Render/Vercel** (Hosting).
+## How to Use This Second Brain
+- Before planning:       paste `docs/prompts/before-plan.md`
+- Brainstorming:         paste `docs/prompts/brainstorm.md`
+- Cross-service change:  paste `docs/prompts/check-contracts.md`
+- End of session:        paste `docs/prompts/update-knowledge.md`
+- New service:           paste `docs/prompts/new-service.md`
 
-### Data Isolation & Multitenancy
-- **Single Schema + RLS:** Data isolation is enforced at the database level using PostgreSQL Row-Level Security.
-- **Clan Context:** Clients must provide the `X-Current-Clan-Id` header to scope requests.
+## Global Rules
+- Backend follows DDD + CQRS + hexagonal boundaries.
+- Domain layer must remain framework-agnostic.
+- Application layer may import domain only, not infrastructure.
+- All write operations should flow through Unit of Work and publish events to Redis.
+- Clan-scoped APIs must enforce X-Current-Clan-Id context and role checks.
+- Public API errors should keep stable structured envelope semantics.
+- Mobile UI must follow Arbor Heritage design mandates and localization rules.
+- **ALWAYS check docker-compose to ensure backend and frontend are working as expected.**
+- **Be exceptionally careful with `user` and `person` data in the clan, as these are critical landmines.**
 
-## Development Workflow
+## Never Do
+- Never bypass clan isolation checks for convenience.
+- Never import FastAPI/SQLAlchemy/Pydantic directly into backend domain layer.
+- Never bypass repository/application boundaries from frontend presentation code.
+- Never commit secrets or plain .env files.
+- Never treat in-process events as durable integration events (migrating to Redis).
 
-### Key Commands (via Root Makefile)
-| Category | Command | Description |
-| :--- | :--- | :--- |
-| **Infrastructure** | `make docker-up` | Start local Postgres + pgAdmin |
-| **Backend** | `make backend-dev` | Run FastAPI with hot reload (:8000) |
-| | `make backend-test` | Run pytest with coverage |
-| | `make backend-lint` | Run Ruff (lint/format) and MyPy |
-| | `make migrate` | Run Alembic migrations |
-| **Web** | `make web-dev` | Run Next.js in dev mode (:3000) |
-| | `make web-type-check` | Run TypeScript compiler check |
-| **Mobile** | `make mobile-run` | Run Flutter app on default device |
-| | `make mobile-test` | Run Flutter unit/widget tests |
-| **General** | `make seed` | Seed development data |
+## Services Map
+| Service | Responsibility | Tech | Port |
+|---------|---------------|------|------|
+| backend | Canonical business logic, persistence, auth validation, contracts | FastAPI, SQLAlchemy async, PostgreSQL | 8000 |
+| web | Browser UX and admin workflows over backend contracts | Next.js 16, React 19, TypeScript | 3000 |
+| mobile | Native UX and app interactions over backend contracts | Flutter, Dart, BLoC, Dio/Retrofit | N/A |
+| worker | Heavy async processing (e.g., PDF/Tree exports) | Python, Redis | N/A |
 
-### Backend Conventions
-- **Domain Layer:** Must remain framework-agnostic (no FastAPI/SQLAlchemy/Pydantic imports).
-- **Application Layer:** Orchestrates domain logic; may import Domain but not Infrastructure.
-- **Infrastructure Layer:** Implements persistence (Repositories) and external integrations.
-- **Write Operations:** Should flow through a **Unit of Work** and emit domain events.
-- **Type Safety:** Strict MyPy checks are enforced. Use `uv run mypy app/` to verify.
+## Shared Infrastructure
+- PostgreSQL (Supabase managed and local Docker)
+- Supabase Auth and Storage
+- Firebase Cloud Messaging
+- Redis (Pub/Sub message broker for events)
+- Sentry monitoring
+- Render backend hosting blueprint
+- Vercel web deployment pipeline
+- GitHub Actions CI/CD workflows (Mobile deployed automatically to App/Play Store via CI)
 
-### Web & Mobile Conventions
-- **Contracts:** API interaction must align with definitions in `docs/contracts/`.
-- **State:** Zustand for Web; BLoC for Mobile.
-- **Localization:** Supports `vi`, `en`, `zh`, `fr`. Follow established i18n patterns in each service.
+## Key Global Commands
+- Local infra: `make docker-up` or `docker compose up -d`
+- Check all infra: `make docker-all` (Crucial to verify backend & frontend stability)
+- Backend dev: `make backend-dev`
+- Backend test: `make backend-test`
+- Backend migrate: `make migrate`
+- Web dev: `make web-dev`
+- Web quality: `make web-type-check` and `make web-lint`
+- Mobile dev: `make mobile-run`
+- Mobile quality: `make mobile-test` and `make mobile-analyze`
 
-## Project Structure
-```text
-family-roots/
-├── backend/          # FastAPI service (DDD/Hexagonal)
-├── mobile/           # Flutter app (BLoC/Clean Architecture)
-├── web/              # Next.js app (Dashboard/Admin)
-├── packages/         # Shared Dart packages (family_roots_core)
-├── infra/            # Pulumi IaC and database migrations
-├── docs/             # Architecture, ADRs, and API contracts
-└── scripts/          # Automation and seeding utilities
-```
-
-## Critical Rules & Constraints
-- **Security:** Never bypass clan isolation checks. Always validate `clan_id` context.
-- **Commits:** Follow [Conventional Commits](https://www.conventionalcommits.org/).
-- **Validation:** Always run `make backend-lint`, `make web-type-check`, or `make mobile-analyze` before submitting changes.
-- **Documentation:** Architecture decisions are recorded in `docs/decisions/`. Read them before proposing major structural changes.
+## Known Pain Points
+- Migrating in-process events to Redis Pub/Sub requires refactoring the Unit of Work (ADR-004).
+- Pulumi resources are currently stubs and create deployment drift.

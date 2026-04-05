@@ -8,9 +8,13 @@ flowchart TD
        W[Web App\nNext.js] -->|REST + JWT| B
        B -->|SQL| DB[(PostgreSQL\nSupabase/Local)]
        B -->|Push send| FCM[Firebase Cloud Messaging]
+       B -->|Publishes Events| REDIS[Redis]
+       REDIS -->|Consumes Events| WRK[Worker Service]
+       WRK -->|Stores Files| STOR[(Supabase Storage)]
        B -->|Errors/Tracing| SEN[Sentry]
        GH[GitHub Actions] -->|Build/Test/Deploy| B
        GH -->|Build/Test/Deploy| W
+       GH -->|Auto Publish| M_STORES[App Store / Play Store]
        R[Render] --> B
        V[Vercel] --> W
 ```
@@ -18,83 +22,70 @@ flowchart TD
 ## Communication Model
 
 ### Sync Paths
-- Web and mobile communicate with backend via REST under /api/v1.
+- Web and mobile communicate with backend via REST under `/api/v1`.
 - Auth uses Supabase-issued bearer JWT validated by backend JWKS flow.
-- Clan context is selected via X-Current-Clan-Id and enforced at API and DB layers.
+- Clan context is selected via `X-Current-Clan-Id` and enforced at API and DB layers.
 
 ### Async Paths
-- Backend emits in-process domain events during Unit of Work commit.
+- Backend publishes domain events to Redis during Unit of Work commit.
+- The dedicated Worker service consumes Redis events for heavy tasks (exports).
 - Audit logging subscribes to auditable domain events.
-- Notification scheduler and push delivery are asynchronous side effects.
+- Notification scheduler and push delivery (FCM) are asynchronous side effects.
 
 ## Service Ownership
 
 | Service | Owns | Depends On |
 |---------|------|------------|
-| backend | Domain rules, canonical persistence, contracts, audit logic | PostgreSQL, Supabase Auth, FCM, Sentry |
-| web | Browser UX, admin/backoffice flows, route/session state | backend REST, Supabase session |
-| mobile | Native UX, app navigation/state, device-level behavior | backend REST, Supabase auth, FCM |
+| backend | Domain rules, persistence, contracts | PostgreSQL, Supabase Auth, FCM, Sentry, Redis |
+| web | Browser UX, admin flows | backend REST, Supabase session |
+| mobile | Native UX, app navigation | backend REST, Supabase auth, FCM |
+| worker | Heavy async processing (exports) | Redis, Supabase Storage |
 
 ## Critical User Journeys
 
 ### 1. User Login and Clan Context Selection
-1. User authenticates via Supabase flow (web/mobile).
-2. Client sends bearer token to backend /auth or /me endpoints.
-3. Backend validates JWT, ensures user profile exists, resolves clan memberships.
-4. Client selects active clan and includes X-Current-Clan-Id in subsequent calls.
+1. User authenticates via Supabase flow.
+2. Client sends token to backend.
+3. Backend validates JWT and clan memberships.
+4. Client selects active clan and sends `X-Current-Clan-Id`.
 
 ### 2. Add Family Member and Relationship Link
-1. Client submits person creation request to backend.
-2. Backend command handler validates business invariants and writes through Unit of Work.
-3. Domain events are collected and dispatched in-process.
-4. Audit log captures mutation metadata.
-5. Client fetches updated person/relationship graph via query APIs.
+1. Client submits person creation to backend.
+2. Backend validates invariants and writes via Unit of Work.
+3. Domain events are published to Redis.
+4. Audit log captures mutation.
+5. Client fetches updated person/relationship graph.
 
 ### 3. Browse Family Tree
-1. Client requests /tree or /tree/subtree with optional profile/include tuning.
-2. Backend query handlers load graph-relevant data with clan scoping.
-3. Response is rendered in XYFlow (web) or custom tree widgets (mobile).
-4. Any missing/invalid links are surfaced via API error envelope for UI handling.
+1. Client requests tree with profile/include tuning.
+2. Backend queries data with clan scoping.
+3. Rendered in XYFlow (web) or custom widgets (mobile).
 
-## Shared Infrastructure and Ownership
+### 4. Export Family Tree
+1. Client requests PDF export.
+2. Backend queues task in Redis and returns Job ID.
+3. Worker processes job, generates PDF, uploads to Supabase.
+4. Worker notifies Backend or Client fetches status.
 
+## Shared Infrastructure
 | Component | Purpose | Primary Owner |
 |-----------|---------|---------------|
-| PostgreSQL/Supabase | Canonical data store and RLS | backend
-| Supabase Auth | Identity and JWT issuance | backend integration + client auth flows
-| Firebase Cloud Messaging | Push notification delivery | backend/mobile integration
-| Sentry | Error and performance telemetry | all services (integration strongest in backend/mobile)
-| Render | Backend runtime hosting | backend/infra
-| Vercel | Web runtime hosting | web/infra
-| GitHub Actions | CI/CD automation | repo-wide
-| Pulumi | IaC intent and future automation | infra (currently partial)
+| PostgreSQL/Supabase | Canonical data store and RLS | backend |
+| Redis | Event bus / Queue | backend / worker |
+| Supabase Auth | Identity and JWT issuance | backend / clients |
+| Firebase Cloud Messaging | Push notification delivery | backend / mobile |
+| GitHub Actions | CI/CD automation & Mobile App Store Publish | repo-wide |
 
 ## Scalability Assumptions
-- Current architecture assumes moderate clan sizes with REST query optimization via profile/include fields.
-- PostgreSQL with indexes, trigram/unaccent search, and RLS should serve current growth stage.
-- In-process event dispatch is acceptable for current scale but may require broker-backed durability for critical workflows.
-- Read/write hotspots are expected around persons, relationships, and tree traversal queries.
+- Moderate clan sizes handled by REST query optimization.
+- Redis provides durable async message brokering.
+- Heavy processing is isolated to the Worker to protect Backend API latency.
 
 ## Failure Assumptions
-- If Supabase JWKS fetch fails transiently, auth validation can degrade and must be retried/fallback-cached.
-- If event dispatch fails inside Unit of Work, write completion may be impacted based on transaction boundary behavior.
-- If clan context header is missing or incorrect, requests should fail closed rather than leak cross-clan data.
-- If push delivery fails, core write operations should remain successful and log recoverable notification errors.
+- If Redis fails, background tasks are delayed, but API should ideally queue locally or fail gracefully.
+- Docker-compose must always be monitored for backend/frontend stability.
 
 ## Constraints to Preserve
-- Backend domain layer remains framework-agnostic.
-- Application layer keeps strict dependency direction.
-- Contract changes require docs/contracts updates and compatibility analysis.
-- Mobile UI must preserve Arbor Heritage and localization rules.
-
-## Related Docs
-- tenant-design.md
-- api-design.md
-- database-schema.md
-- rbac.md
-- iac-guide.md
-- onboarding.md
-- contracts/README.md
-- ops/README.md
-- decisions/README.md
-- contracts/
+- Strict domain boundaries in backend.
+- Extreme care with `person` and `user` entities (Landmines).
+- Automated CI pipeline for Flutter mobile app must remain unbroken.

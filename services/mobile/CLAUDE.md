@@ -17,7 +17,7 @@ It does not own canonical business rules, backend data integrity, or infra provi
 ## Domain Model
 Feature modules align with backend contexts:
 - auth, members, family_tree, events, documents, notifications
-- shared package family_roots_core provides reusable entities and repositories
+- lib/domain provides reusable entities and repositories
 
 ## API Surface
 Consumes backend REST endpoints under /api/v1 with bearer auth.
