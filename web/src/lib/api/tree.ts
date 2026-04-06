@@ -71,8 +71,8 @@ export const treeApi = {
     if (isMock) {
       return { tree: MOCK_TREE, total_persons: 3, total_generations: 3 }
     }
-    const { data } = await api.get<TreeApiResponse>('/tree', { params })
-    return data
+    const { data } = await api.get<ApiResponse<TreeApiResponse>>('/tree', { params })
+    return data.data
   },
 
   getSubtree: async (
@@ -82,10 +82,10 @@ export const treeApi = {
     if (isMock) {
       return { tree: MOCK_TREE, total_persons: 3, total_generations: 3 }
     }
-    const { data } = await api.get<TreeApiResponse>(`/tree/subtree/${rootId}`, {
+    const { data } = await api.get<ApiResponse<TreeApiResponse>>(`/tree/subtree/${rootId}`, {
       params: { max_generations: maxGenerations },
     })
-    return data
+    return data.data
   },
 
   getAncestors: async (

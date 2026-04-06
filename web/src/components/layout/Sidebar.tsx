@@ -29,7 +29,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
   { href: '/tree', labelKey: 'nav.tree', icon: GitFork },
-  { href: '/persons', labelKey: 'nav.members', icon: Users },
+  { href: '/members', labelKey: 'nav.members', icon: Users },
   { href: '/events', labelKey: 'nav.events', icon: CalendarDays },
   { href: '/documents', labelKey: 'nav.documents', icon: FolderOpen },
   { href: '/admin/users', labelKey: 'nav.admin', icon: Settings, adminOnly: true },

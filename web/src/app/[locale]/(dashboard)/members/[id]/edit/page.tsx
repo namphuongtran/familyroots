@@ -31,7 +31,7 @@ export default function EditMemberPage() {
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
           <MemberForm
             member={member}
-            onSuccess={() => router.push(`/${locale}/persons/${id}`)}
+            onSuccess={() => router.push(`/${locale}/members/${id}`)}
             onCancel={() => router.back()}
           />
         </div>

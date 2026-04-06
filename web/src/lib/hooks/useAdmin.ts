@@ -5,6 +5,7 @@ import {
   approveClanUser,
   changeClanUserRole,
   getClanSettings,
+  getPlatformMetrics,
   listClanUsers,
   listPlatformClans,
   rejectClanUser,
@@ -75,5 +76,12 @@ export function usePlatformClans() {
   return useQuery({
     queryKey: adminKeys.platformClans(),
     queryFn: () => listPlatformClans(platformAdminRepository),
+  })
+}
+
+export function usePlatformMetrics() {
+  return useQuery({
+    queryKey: [...adminKeys.all, 'platform', 'metrics'] as const,
+    queryFn: () => getPlatformMetrics(platformAdminRepository),
   })
 }

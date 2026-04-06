@@ -86,10 +86,14 @@ export const personsApi = {
     if (isMock) {
       return { data: MOCK_PERSONS, next_cursor: null, has_more: false }
     }
-    const { data } = await api.get<CursorPage<PersonSummary>>('/persons', {
+    const { data } = await api.get<{ data: PersonSummary[]; total: number }>('/persons', {
       params: normalizedParams,
     })
-    return data
+    return {
+      data: data.data,
+      next_cursor: null,
+      has_more: false,
+    }
   },
 
   search: async (q: string, limit = 20): Promise<PersonSummary[]> => {

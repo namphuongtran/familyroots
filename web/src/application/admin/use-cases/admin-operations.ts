@@ -7,6 +7,7 @@ import type {
   ClanRole,
   ClanSettings,
   ClanUserMembership,
+  PlatformMetrics,
   PlatformClanSummary,
 } from '@/lib/types'
 
@@ -63,4 +64,10 @@ export function listPlatformClans(
   params?: { cursor?: string; limit?: number },
 ): Promise<PlatformClanSummary[]> {
   return repository.listClans(params)
+}
+
+export function getPlatformMetrics(
+  repository: PlatformAdminQueryRepository,
+): Promise<PlatformMetrics> {
+  return repository.getMetrics()
 }

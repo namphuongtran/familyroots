@@ -49,22 +49,6 @@ export class SupabaseAuthSessionPort implements AuthSessionPort {
     }
   }
 
-  async signUp(email: string, password: string, fullName: string): Promise<void> {
-    const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-      },
-    })
-
-    if (error) {
-      throw error
-    }
-  }
-
   async signInWithOAuth(provider: 'google' | 'apple'): Promise<void> {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOAuth({

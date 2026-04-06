@@ -6,10 +6,10 @@ export default async function DashboardPage() {
   const t = await getTranslations('dashboard')
 
   const quickLinks = [
-    { href: './tree', icon: GitBranch, label: t('tree'), color: 'bg-blue-50 text-blue-700' },
-    { href: './persons', icon: Users, label: t('members'), color: 'bg-green-50 text-green-700' },
-    { href: './events', icon: Calendar, label: t('events'), color: 'bg-amber-50 text-amber-700' },
-    { href: './documents', icon: FileText, label: t('documents'), color: 'bg-purple-50 text-purple-700' },
+    { href: '../tree', icon: GitBranch, label: t('tree'), color: 'bg-blue-50 text-blue-700' },
+    { href: '../members', icon: Users, label: t('members'), color: 'bg-green-50 text-green-700' },
+    { href: '../events', icon: Calendar, label: t('events'), color: 'bg-amber-50 text-amber-700' },
+    { href: '../documents', icon: FileText, label: t('documents'), color: 'bg-purple-50 text-purple-700' },
   ]
 
   return (

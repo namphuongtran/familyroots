@@ -1,5 +1,6 @@
 'use client'
 
+import { useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import { LogOut, User, ChevronDown } from 'lucide-react'
 import { LocaleSwitcher } from './LocaleSwitcher'
@@ -14,9 +15,10 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const t = useTranslations()
-  const { signOut } = useAuth()
-  const { user } = useAuthStore()
+  const { signOut, selectClan } = useAuth()
+  const { user, currentClanId, clanMemberships, needsClanSelection } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isSwitching, startTransition] = useTransition()
 
   return (
     <header className="h-16 flex items-center justify-between px-6 bg-white border-b border-cream-200 shrink-0">
@@ -25,6 +27,35 @@ export function Header({ title }: HeaderProps) {
       </h1>
 
       <div className="flex items-center gap-3">
+        {clanMemberships.length > 0 && (
+          <label className="hidden md:flex items-center gap-2 text-sm text-gray-600">
+            <span className="text-xs uppercase tracking-wide text-gray-400">Clan</span>
+            <select
+              value={currentClanId ?? ''}
+              disabled={isSwitching || clanMemberships.length === 1}
+              onChange={(event) => {
+                const nextClanId = event.target.value
+                if (!nextClanId || nextClanId === currentClanId) {
+                  return
+                }
+
+                startTransition(async () => {
+                  await selectClan(nextClanId)
+                  setMenuOpen(false)
+                })
+              }}
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 disabled:cursor-default disabled:opacity-70"
+            >
+              {needsClanSelection && <option value="">Select clan</option>}
+              {clanMemberships.map((membership) => (
+                <option key={membership.clan_id} value={membership.clan_id}>
+                  {membership.clan_name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <LocaleSwitcher />
 
         {/* User menu */}
@@ -59,6 +90,35 @@ export function Header({ title }: HeaderProps) {
                   </p>
                   <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                 </div>
+                {clanMemberships.length > 1 && (
+                  <div className="px-3 py-2 border-b border-cream-100">
+                    <p className="mb-1 text-[11px] uppercase tracking-wide text-gray-400">
+                      Clan
+                    </p>
+                    <select
+                      value={currentClanId ?? ''}
+                      disabled={isSwitching}
+                      onChange={(event) => {
+                        const nextClanId = event.target.value
+                        if (!nextClanId || nextClanId === currentClanId) {
+                          return
+                        }
+
+                        startTransition(async () => {
+                          await selectClan(nextClanId)
+                          setMenuOpen(false)
+                        })
+                      }}
+                      className="w-full rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700"
+                    >
+                      {clanMemberships.map((membership) => (
+                        <option key={membership.clan_id} value={membership.clan_id}>
+                          {membership.clan_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <button
                   onClick={signOut}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"

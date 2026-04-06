@@ -1,5 +1,7 @@
 import type {
   AuthProfileRepository,
+  RegisterInput,
+  RegisterResult,
 } from '@/application/auth/ports/auth-repository'
 import api from '@/lib/api/axios'
 import type {
@@ -31,6 +33,11 @@ export class HttpAuthProfileRepository implements AuthProfileRepository {
 
   async selectClan(clanId: string): Promise<ClanSwitchResponse> {
     const { data } = await api.post<ClanSwitchResponse>(`/me/clans/${clanId}/select`)
+    return data
+  }
+
+  async register(input: RegisterInput): Promise<RegisterResult> {
+    const { data } = await api.post<RegisterResult>('/auth/register', input)
     return data
   }
 }

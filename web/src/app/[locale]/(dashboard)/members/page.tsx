@@ -12,7 +12,7 @@ export default async function MembersPage() {
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl text-gray-800">{t('page_title')}</h1>
         <Link
-          href="./persons/new"
+          href="./new"
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
         >
           <Plus className="h-4 w-4" />

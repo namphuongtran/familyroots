@@ -8,6 +8,7 @@ import type {
   ClanRole,
   ClanSettings,
   ClanUserMembership,
+  PlatformMetrics,
   PlatformClanSummary,
 } from '@/lib/types'
 
@@ -77,6 +78,11 @@ export class HttpPlatformAdminRepository implements PlatformAdminQueryRepository
     const { data } = await api.get<{ data: PlatformClanSummary[] }>('/platform/clans', {
       params,
     })
+    return data.data
+  }
+
+  async getMetrics(): Promise<PlatformMetrics> {
+    const { data } = await api.get<{ data: PlatformMetrics }>('/platform/metrics')
     return data.data
   }
 }

@@ -25,7 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 const NODE_TYPES = { memberNode: MemberNode }
 const EDGE_TYPES = { spouseEdge: SpouseEdge }
 
-function TreeFlowInner({ rootPersonId }: { rootPersonId: string }) {
+function TreeFlowInner({ rootPersonId }: { rootPersonId?: string }) {
   const { treeMaxGenerations } = useUIStore()
   const { data, isLoading } = useFamilyTree(rootPersonId, treeMaxGenerations)
 
@@ -74,7 +74,7 @@ function TreeFlowInner({ rootPersonId }: { rootPersonId: string }) {
   )
 }
 
-export function TreeCanvas({ rootPersonId }: { rootPersonId: string }) {
+export function TreeCanvas({ rootPersonId }: { rootPersonId?: string }) {
   return (
     <ReactFlowProvider>
       <TreeFlowInner rootPersonId={rootPersonId} />

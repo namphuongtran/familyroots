@@ -11,8 +11,12 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [clanAction, setClanAction] = useState<'join' | 'create'>('join')
+  const [clanId, setClanId] = useState('')
+  const [clanName, setClanName] = useState('')
+  const [clanSlug, setClanSlug] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,8 +24,16 @@ export default function RegisterPage() {
     setError(null)
     setIsLoading(true)
     try {
-      await signUp(email, password, fullName)
-      setSuccess(true)
+      const result = await signUp({
+        email,
+        password,
+        full_name: fullName,
+        clan_action: clanAction,
+        clan_id: clanAction === 'join' ? clanId : undefined,
+        clan_name: clanAction === 'create' ? clanName : undefined,
+        clan_slug: clanAction === 'create' ? clanSlug : undefined,
+      })
+      setSuccess(result.message)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('register_error'))
     } finally {
@@ -33,9 +45,12 @@ export default function RegisterPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream px-4">
         <div className="max-w-sm w-full text-center bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
-          <div className="text-4xl mb-3">✉️</div>
-          <h2 className="font-serif text-xl text-gray-800 mb-2">{t('verify_email_title')}</h2>
-          <p className="text-sm text-gray-500">{t('verify_email_body')}</p>
+          <div className="text-4xl mb-3">OK</div>
+          <h2 className="font-serif text-xl text-gray-800 mb-2">{t('register_title')}</h2>
+          <p className="text-sm text-gray-500">{success}</p>
+          <Link href="./login" className="mt-4 inline-flex text-sm text-primary-600 hover:underline">
+            {t('login_link')}
+          </Link>
         </div>
       </div>
     )
@@ -92,6 +107,62 @@ export default function RegisterPage() {
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
+
+          <div className="space-y-2">
+            <p className="block text-sm font-medium text-gray-700">{t('register_subtitle')}</p>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="radio"
+                name="clanAction"
+                checked={clanAction === 'join'}
+                onChange={() => setClanAction('join')}
+              />
+              {t('join_clan')}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="radio"
+                name="clanAction"
+                checked={clanAction === 'create'}
+                onChange={() => setClanAction('create')}
+              />
+              {t('create_clan')}
+            </label>
+          </div>
+
+          {clanAction === 'join' ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('clan_slug')}</label>
+              <input
+                required
+                value={clanId}
+                onChange={e => setClanId(e.target.value)}
+                placeholder="UUID"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('clan_name')}</label>
+                <input
+                  required
+                  value={clanName}
+                  onChange={e => setClanName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('clan_slug')}</label>
+                <input
+                  required
+                  value={clanSlug}
+                  onChange={e => setClanSlug(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </>
+          )}
 
           <button
             type="submit"

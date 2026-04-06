@@ -33,4 +33,10 @@ export type {
 export type { TreeNode, SpouseNode, PathStep, RelationshipPath } from './tree'
 export type { ClanEvent, UpcomingEvent, EventType, EventCreateInput, EventUpdateInput } from './event'
 export type { DocumentResponse, DocumentSummary, DocumentUploadMeta, DocumentType } from './document'
-export type { ClanRole, ClanUserMembership, ClanSettings, PlatformClanSummary } from './admin'
+export type {
+  ClanRole,
+  ClanUserMembership,
+  ClanSettings,
+  PlatformClanSummary,
+  PlatformMetrics,
+} from './admin'

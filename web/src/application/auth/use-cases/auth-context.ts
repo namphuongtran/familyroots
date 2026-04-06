@@ -8,6 +8,15 @@ import type {
   UserProfile,
 } from '@/lib/types'
 
+export interface HydratedAuthContext {
+  user: UserProfile | null
+  clanMemberships: UserClanMembership[]
+  currentClanId?: string
+  activeMembership?: UserClanMembership
+  isPendingApproval: boolean
+  needsClanSelection: boolean
+}
+
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
@@ -40,14 +49,18 @@ export function mapSessionUserToProfile(user: SessionUser): UserProfile {
 export async function hydrateAuthContext(
   sessionPort: AuthSessionPort,
   profileRepository: AuthProfileRepository,
-): Promise<{
-  user: UserProfile | null
-  clanMemberships: UserClanMembership[]
-  currentClanId?: string
-}> {
+  preferredClanId?: string,
+): Promise<HydratedAuthContext> {
   const sessionUser = await sessionPort.getSessionUser()
   if (!sessionUser) {
-    return { user: null, clanMemberships: [], currentClanId: undefined }
+    return {
+      user: null,
+      clanMemberships: [],
+      currentClanId: undefined,
+      activeMembership: undefined,
+      isPendingApproval: false,
+      needsClanSelection: false,
+    }
   }
 
   const fallbackProfile = mapSessionUserToProfile(sessionUser)
@@ -58,14 +71,28 @@ export async function hydrateAuthContext(
       profileRepository.listMyClans(),
     ])
 
+    const currentClanId = resolveCurrentClanId(memberships.clans, preferredClanId, profile.clan_id)
+    const activeMembership = memberships.clans.find((membership) => membership.clan_id === currentClanId)
+    const mergedProfile = {
+      ...fallbackProfile,
+      ...profile,
+      clan_id: currentClanId,
+      clan_name: activeMembership?.clan_name ?? profile.clan_name ?? fallbackProfile.clan_name,
+      role: activeMembership?.role ?? profile.role ?? fallbackProfile.role,
+      is_approved: memberships.clans.length > 0 || profile.is_approved,
+      preferred_locale: profile.preferred_locale ?? fallbackProfile.preferred_locale,
+    }
+
     return {
-      user: {
-        ...fallbackProfile,
-        ...profile,
-        preferred_locale: profile.preferred_locale ?? fallbackProfile.preferred_locale,
-      },
+      user: mergedProfile,
       clanMemberships: memberships.clans,
-      currentClanId: profile.clan_id ?? memberships.clans[0]?.clan_id,
+      currentClanId,
+      activeMembership,
+      isPendingApproval:
+        !mergedProfile.platform_role &&
+        memberships.clans.length === 0 &&
+        !mergedProfile.is_approved,
+      needsClanSelection: memberships.clans.length > 1 && !currentClanId,
     }
   } catch {
     // If backend profile endpoints are unavailable, keep the session fallback.
@@ -73,6 +100,9 @@ export async function hydrateAuthContext(
       user: fallbackProfile,
       clanMemberships: [],
       currentClanId: fallbackProfile.clan_id,
+      activeMembership: undefined,
+      isPendingApproval: false,
+      needsClanSelection: false,
     }
   }
 }
@@ -83,4 +113,26 @@ export async function selectActiveClan(
 ): Promise<string> {
   const result = await profileRepository.selectClan(clanId)
   return result.clan_id
+}
+
+function resolveCurrentClanId(
+  memberships: UserClanMembership[],
+  preferredClanId?: string,
+  profileClanId?: string,
+): string | undefined {
+  const validClanIds = new Set(memberships.map((membership) => membership.clan_id))
+
+  if (preferredClanId && validClanIds.has(preferredClanId)) {
+    return preferredClanId
+  }
+
+  if (profileClanId && validClanIds.has(profileClanId)) {
+    return profileClanId
+  }
+
+  if (memberships.length === 1) {
+    return memberships[0]?.clan_id
+  }
+
+  return undefined
 }

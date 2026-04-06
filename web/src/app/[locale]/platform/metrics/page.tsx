@@ -1,26 +1,11 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { useQuery } from '@tanstack/react-query'
-import api from '@/lib/api/axios'
-
-interface PlatformMetrics {
-  total_clans: number
-  total_members: number
-  total_users: number
-  active_clans_30d: number
-}
+import { usePlatformMetrics } from '@/lib/hooks/useAdmin'
 
 export default function PlatformMetricsPage() {
   const t = useTranslations('platform')
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['platform', 'metrics'],
-    queryFn: async () => {
-      const res = await api.get<PlatformMetrics>('/platform/metrics')
-      return res.data
-    },
-  })
+  const { data, isLoading } = usePlatformMetrics()
 
   const metrics: Array<{ label: string; value: number | undefined; color: string }> = [
     { label: t('total_clans'), value: data?.total_clans, color: 'bg-blue-50 text-blue-700' },

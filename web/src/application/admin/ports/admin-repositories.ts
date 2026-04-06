@@ -2,6 +2,7 @@ import type {
   ClanRole,
   ClanSettings,
   ClanUserMembership,
+  PlatformMetrics,
   PlatformClanSummary,
 } from '@/lib/types'
 
@@ -21,4 +22,5 @@ export interface ClanAdminCommandRepository {
 
 export interface PlatformAdminQueryRepository {
   listClans(params?: { cursor?: string; limit?: number }): Promise<PlatformClanSummary[]>
+  getMetrics(): Promise<PlatformMetrics>
 }

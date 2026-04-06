@@ -29,8 +29,12 @@ export const eventsApi = {
     if (isMock) {
       return { data: MOCK_UPCOMING, next_cursor: null, has_more: false }
     }
-    const { data } = await api.get<CursorPage<ClanEvent>>('/events', { params })
-    return data
+    const { data } = await api.get<{ data: ClanEvent[] }>('/events', { params })
+    return {
+      data: data.data,
+      next_cursor: null,
+      has_more: false,
+    }
   },
 
   getUpcoming: async (days = 30): Promise<UpcomingEvent[]> => {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -9,15 +9,27 @@ import { useUIStore } from '@/store/ui.store'
 import { cn } from '@/lib/utils/cn'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, isPendingApproval, needsClanSelection } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const { sidebarOpen } = useUIStore()
+  const locale = pathname.split('/')[1] || 'vi'
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push('./login')
+      router.push(`/${locale}/login`)
+      return
     }
-  }, [user, isLoading, router])
+
+    if (!isLoading && user && isPendingApproval) {
+      router.push(`/${locale}/pending-approval`)
+      return
+    }
+
+    if (!isLoading && user && needsClanSelection) {
+      router.push(`/${locale}/dashboard`)
+    }
+  }, [user, isLoading, isPendingApproval, locale, needsClanSelection, router])
 
   if (isLoading) {
     return (
@@ -27,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     )
   }
 
-  if (!user) return null
+  if (!user || isPendingApproval) return null
 
   return (
     <div className="flex h-screen overflow-hidden bg-cream">

@@ -79,11 +79,9 @@ pre-commit-run: ## Run pre-commit on all files
 	pre-commit run --all-files
 
 # ─── Git ──────────────────────────────────────────────────────────────
-sync: ## Commit and push all changes. Usage: make sync m="your commit message"
+sync: ## Commit and push all changes to the current branch. Usage: make sync m="type(scope): message"
 	@if [ -z "$(m)" ]; then \
-		echo "Error: Commit message is required. Usage: make sync m=\"message\""; \
+		echo "Error: Commit message is required. Usage: make sync m=\"type(scope): message\""; \
 		exit 1; \
 	fi
-	git add -A
-	git commit -m "$(m)"
-	git push origin HEAD
+	./scripts/git_sync.sh "$(m)"

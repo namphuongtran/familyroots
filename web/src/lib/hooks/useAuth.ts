@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import type { RegisterResult } from '@/application/auth/ports/auth-repository'
 import {
   hydrateAuthContext,
   selectActiveClan,
@@ -15,15 +17,21 @@ export function useAuth() {
     currentClanId,
     clanMemberships,
     isLoading,
+    isPendingApproval,
+    needsClanSelection,
     setUser,
     setCurrentClan,
     setClanMemberships,
     setLoading,
+    setAccessState,
     clear,
   } = useAuthStore()
+  const router = useRouter()
 
   const syncAuthContext = useCallback(async () => {
-    const context = await hydrateAuthContext(authSessionPort, authProfileRepository)
+    const preferredClanId =
+      typeof window !== 'undefined' ? localStorage.getItem('current_clan_id') ?? undefined : undefined
+    const context = await hydrateAuthContext(authSessionPort, authProfileRepository, preferredClanId)
     if (!context.user) {
       clear()
       return
@@ -34,14 +42,20 @@ export function useAuth() {
 
     const activeClanId = context.currentClanId ?? context.user.clan_id
     setCurrentClan(activeClanId)
+    setAccessState({
+      isPendingApproval: context.isPendingApproval,
+      needsClanSelection: context.needsClanSelection,
+    })
 
     if (typeof window !== 'undefined') {
       if (activeClanId) {
         localStorage.setItem('current_clan_id', activeClanId)
+      } else {
+        localStorage.removeItem('current_clan_id')
       }
       localStorage.setItem('preferred_locale', context.user.preferred_locale)
     }
-  }, [clear, setClanMemberships, setCurrentClan, setUser])
+  }, [clear, setAccessState, setClanMemberships, setCurrentClan, setUser])
 
   // Sync Supabase session → auth store on mount and on auth state change
   useEffect(() => {
@@ -71,9 +85,17 @@ export function useAuth() {
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
       await authSessionPort.signInWithEmail(email, password)
+      const context = await hydrateAuthContext(authSessionPort, authProfileRepository)
       await syncAuthContext()
+
+      if (context.isPendingApproval) {
+        router.push(`/${context.user?.preferred_locale ?? 'vi'}/pending-approval`)
+        return
+      }
+
+      router.push(`/${context.user?.preferred_locale ?? 'vi'}/dashboard`)
     },
-    [syncAuthContext],
+    [router, syncAuthContext],
   )
 
   const signInWithGoogle = useCallback(async () => {
@@ -115,8 +137,10 @@ export function useAuth() {
     currentClanId,
     clanMemberships,
     isLoading,
+    isPendingApproval,
+    needsClanSelection,
     isAuthenticated: !!user,
-    isApproved: user?.is_approved ?? false,
+    isApproved: !isPendingApproval,
     signInWithEmail,
     signInWithGoogle,
     signInWithApple,
@@ -138,12 +162,19 @@ export function useAuthActions() {
   )
 
   const signUp = useCallback(
-    async (email: string, password: string, fullName: string) => {
-      await authSessionPort.signUp(email, password, fullName)
+    async (input: {
+      email: string
+      password: string
+      full_name: string
+      clan_action: 'join' | 'create'
+      clan_id?: string
+      clan_name?: string
+      clan_slug?: string
+    }): Promise<RegisterResult> => {
+      return authProfileRepository.register(input)
     },
     [],
   )
 
   return { signIn, signUp, signOut }
 }
-

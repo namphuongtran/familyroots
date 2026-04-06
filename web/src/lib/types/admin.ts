@@ -29,3 +29,10 @@ export interface PlatformClanSummary {
   is_active: boolean
   created_at?: string | null
 }
+
+export interface PlatformMetrics {
+  total_clans: number
+  total_members: number
+  total_users: number
+  active_clans_30d: number
+}
