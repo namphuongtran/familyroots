@@ -14,7 +14,7 @@ It does not own canonical domain rules, persistence, or authorization policy dec
 
 ## Domain Model
 Domain and application layers mirror backend concepts for UI orchestration:
-- Persons, relationships, documents, events, clans, auth session context
+- Persons, relationships, documents, events, clans, auth session context, admin operations, platform metrics
 - Repositories in infrastructure adapt HTTP payloads into domain-friendly types
 
 ## API Surface
@@ -27,6 +27,7 @@ Consumes backend REST APIs:
 - /api/v1/tree/*
 - /api/v1/documents/*
 - /api/v1/events/*
+- /api/v1/platform-admin/*
 
 Uses request headers:
 - Authorization bearer token

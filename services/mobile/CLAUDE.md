@@ -19,6 +19,16 @@ Feature modules align with backend contexts:
 - auth, members, family_tree, events, documents, notifications
 - lib/domain provides reusable entities and repositories
 
+Key entities in lib/domain/entities:
+- Member, FamilyEvent, Relationship
+
+Repositories in lib/domain/repositories:
+- MemberRepository, EventRepository (interfaces with mock implementations in lib/domain/mocks)
+
+BLoC state management:
+- MemberListCubit, MemberDetailCubit (members feature)
+- EventListCubit (home feature)
+
 ## API Surface
 Consumes backend REST endpoints under /api/v1 with bearer auth.
 Primary integrations:
