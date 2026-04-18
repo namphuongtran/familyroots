@@ -17,6 +17,10 @@ class AuthRepository(Protocol):
         """Get clan by ID."""
         ...
 
+    async def get_user_role(self, user_id: uuid.UUID, clan_id: uuid.UUID) -> Any | None:
+        """Get an existing membership for a user in a clan."""
+        ...
+
     def add_clan(self, clan: Any) -> None:
         """Add a new clan to persistence context."""
         ...
@@ -35,6 +39,10 @@ class AuthQueryPort(Protocol):
 
     async def get_login_profile(self, user_id: uuid.UUID) -> Any | None:
         """Get initial login profile for a user ID (including pending roles)."""
+        ...
+
+    async def has_pending_membership(self, user_id: uuid.UUID) -> bool:
+        """Whether the user has any pending clan membership."""
         ...
 
 

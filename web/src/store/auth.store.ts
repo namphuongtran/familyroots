@@ -8,6 +8,7 @@ interface AuthState {
   clanMemberships: UserClanMembership[]
   isLoading: boolean
   isPendingApproval: boolean
+  needsOnboarding: boolean
   needsClanSelection: boolean
   setUser: (user: UserProfile | null) => void
   setCurrentClan: (clanId?: string) => void
@@ -15,6 +16,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setAccessState: (input: {
     isPendingApproval: boolean
+    needsOnboarding: boolean
     needsClanSelection: boolean
   }) => void
   clear: () => void
@@ -28,6 +30,7 @@ export const useAuthStore = create<AuthState>()(
       clanMemberships: [],
       isLoading: true,
       isPendingApproval: false,
+      needsOnboarding: false,
       needsClanSelection: false,
       setUser: (user) =>
         set((state) => ({
@@ -39,8 +42,8 @@ export const useAuthStore = create<AuthState>()(
       setCurrentClan: (currentClanId) => set({ currentClanId }),
       setClanMemberships: (clanMemberships) => set({ clanMemberships }),
       setLoading: (isLoading) => set({ isLoading }),
-      setAccessState: ({ isPendingApproval, needsClanSelection }) =>
-        set({ isPendingApproval, needsClanSelection }),
+      setAccessState: ({ isPendingApproval, needsOnboarding, needsClanSelection }) =>
+        set({ isPendingApproval, needsOnboarding, needsClanSelection }),
       clear: () =>
         set({
           user: null,
@@ -48,6 +51,7 @@ export const useAuthStore = create<AuthState>()(
           clanMemberships: [],
           isLoading: false,
           isPendingApproval: false,
+          needsOnboarding: false,
           needsClanSelection: false,
         }),
     }),
@@ -59,6 +63,7 @@ export const useAuthStore = create<AuthState>()(
         currentClanId: state.currentClanId,
         clanMemberships: state.clanMemberships,
         isPendingApproval: state.isPendingApproval,
+        needsOnboarding: state.needsOnboarding,
         needsClanSelection: state.needsClanSelection,
       }),
     },

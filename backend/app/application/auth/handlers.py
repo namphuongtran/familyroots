@@ -91,34 +91,21 @@ class AuthCommandHandler:
         self._repo = repo
         self._uow = uow
 
-    async def register(
+    async def _assign_clan_membership(
         self,
         *,
+        user_id: uuid.UUID,
         email: str,
-        password: str,
         full_name: str,
         clan_action: str,
         clan_id: uuid.UUID | None = None,
         clan_name: str | None = None,
         clan_slug: str | None = None,
     ) -> RegisterResponse:
-        """Register a new user — create or join a clan."""
         if clan_action == "join" and not clan_id:
             raise ValidationError("auth.clan_id_required_for_join")
         if clan_action == "create" and (not clan_name or not clan_slug):
             raise ValidationError("auth.clan_name_required_for_create")
-
-        sb = _supabase_admin()
-        try:
-            auth_resp = sb.auth.admin.create_user(
-                {"email": email, "password": password, "email_confirm": True}
-            )
-        except Exception as e:
-            if "already" in str(e).lower():
-                raise ConflictError("auth.email_already_exists") from e
-            raise ValidationError("auth.registration_failed", {"detail": str(e)}) from e
-
-        user_id = uuid.UUID(auth_resp.user.id)
 
         if clan_action == "create":
             existing = await self._repo.get_clan_by_slug(clan_slug)
@@ -142,24 +129,85 @@ class AuthCommandHandler:
                 is_approved=True,
                 message=t("auth.clan_created"),
             )
-        else:
-            clan_or_none = await self._repo.get_clan_by_id(clan_id)
-            if not clan_or_none:
-                raise NotFoundError("clan_not_found")
-            clan = clan_or_none
 
-            role = UserClanRole(clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False)
-            self._repo.add_user_role(role)
-            await self._uow.commit()
+        clan_or_none = await self._repo.get_clan_by_id(clan_id)
+        if not clan_or_none:
+            raise NotFoundError("clan_not_found")
+        clan = clan_or_none
 
-            return RegisterResponse(
-                user_id=user_id,
-                email=email,
-                full_name=full_name,
-                clan_id=clan.id,
-                is_approved=False,
-                message=t("auth.registration_pending"),
+        existing_role = await self._repo.get_user_role(user_id, clan.id)
+        if existing_role:
+            if existing_role.is_approved:
+                raise ConflictError("auth.already_joined_clan")
+            raise ConflictError("auth.membership_already_pending")
+
+        role = UserClanRole(clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False)
+        self._repo.add_user_role(role)
+        await self._uow.commit()
+
+        return RegisterResponse(
+            user_id=user_id,
+            email=email,
+            full_name=full_name,
+            clan_id=clan.id,
+            is_approved=False,
+            message=t("auth.registration_pending"),
+        )
+
+    async def register(
+        self,
+        *,
+        email: str,
+        password: str,
+        full_name: str,
+        clan_action: str,
+        clan_id: uuid.UUID | None = None,
+        clan_name: str | None = None,
+        clan_slug: str | None = None,
+    ) -> RegisterResponse:
+        """Register a new user — create or join a clan."""
+        sb = _supabase_admin()
+        try:
+            auth_resp = sb.auth.admin.create_user(
+                {"email": email, "password": password, "email_confirm": True}
             )
+        except Exception as e:
+            if "already" in str(e).lower():
+                raise ConflictError("auth.email_already_exists") from e
+            raise ValidationError("auth.registration_failed", {"detail": str(e)}) from e
+
+        user_id = uuid.UUID(auth_resp.user.id)
+        return await self._assign_clan_membership(
+            user_id=user_id,
+            email=email,
+            full_name=full_name,
+            clan_action=clan_action,
+            clan_id=clan_id,
+            clan_name=clan_name,
+            clan_slug=clan_slug,
+        )
+
+    async def onboard_authenticated_user(
+        self,
+        *,
+        user_id: uuid.UUID,
+        email: str,
+        full_name: str,
+        clan_action: str,
+        clan_id: uuid.UUID | None = None,
+        clan_name: str | None = None,
+        clan_slug: str | None = None,
+    ) -> RegisterResponse:
+        """Attach the current authenticated user to a clan without creating a new Supabase user."""
+        return await self._assign_clan_membership(
+            user_id=user_id,
+            email=email,
+            full_name=full_name,
+            clan_action=clan_action,
+            clan_id=clan_id,
+            clan_name=clan_name,
+            clan_slug=clan_slug,
+        )
 
     async def login(self, *, email: str, password: str) -> LoginResponse:
         """Authenticate via Supabase and return tokens + profile."""
@@ -207,6 +255,7 @@ class AuthQueryHandler:
     async def get_profile(self, *, user_id: uuid.UUID, email: str, full_name: str) -> UserProfile:
         """Return the authenticated user's profile."""
         row = await self._query_port.get_profile(user_id)
+        has_pending_membership = await self._query_port.has_pending_membership(user_id)
 
         return UserProfile(
             id=user_id,
@@ -216,6 +265,7 @@ class AuthQueryHandler:
             clan_name=row.Clan.name if row and row.Clan else None,
             role=row.UserClanRole.role if row and row.UserClanRole else None,
             is_approved=bool(row and row.UserClanRole),
+            has_pending_membership=has_pending_membership,
             person_id=row.UserProfileModel.person_id if row else None,
         )
 

@@ -1,4 +1,5 @@
 import type {
+  AuthenticatedOnboardingInput,
   AuthProfileRepository,
   RegisterInput,
   RegisterResult,
@@ -38,6 +39,11 @@ export class HttpAuthProfileRepository implements AuthProfileRepository {
 
   async register(input: RegisterInput): Promise<RegisterResult> {
     const { data } = await api.post<RegisterResult>('/auth/register', input)
+    return data
+  }
+
+  async onboard(input: AuthenticatedOnboardingInput): Promise<RegisterResult> {
+    const { data } = await api.post<RegisterResult>('/auth/onboard', input)
     return data
   }
 }

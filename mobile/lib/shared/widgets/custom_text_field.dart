@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 class CustomTextField extends StatelessWidget {
   final String label;
@@ -31,7 +32,7 @@ class CustomTextField extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: Colors.grey[700],
+            color: AppColors.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 8),
@@ -39,15 +40,15 @@ class CustomTextField extends StatelessWidget {
           controller: controller,
           obscureText: isPassword ? obscureText : false,
           keyboardType: keyboardType,
-          style: const TextStyle(fontSize: 16),
+          style: const TextStyle(fontSize: 16, color: AppColors.onSurface),
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: Colors.grey) : null,
+            prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: AppColors.outlineVariant) : null,
             suffixIcon: isPassword
                 ? IconButton(
                     icon: Icon(
                       obscureText ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.grey,
+                      color: AppColors.outlineVariant,
                     ),
                     onPressed: onToggleObscure,
                   )

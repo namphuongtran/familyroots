@@ -4,6 +4,7 @@ export type {
   CursorPage,
   ApiError,
   TreeApiResponse,
+  TreeAncestorsResponse,
   ClanSwitchResponse,
   UserProfile,
   UserClanMembership,

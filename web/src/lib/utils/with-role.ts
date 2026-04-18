@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requireServerRole, hasMinServerRole } from '@/lib/server/auth-context'
 
 export type AppRole = 'viewer' | 'editor' | 'admin' | 'super_admin'
 
@@ -17,25 +16,7 @@ export async function requireRole(
   requiredRoles: AppRole | AppRole[],
   locale: string,
 ): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect(`/${locale}/login`)
-  }
-
-  const clanRole = user.user_metadata?.clan_role as AppRole | undefined
-  const platformRole = user.user_metadata?.platform_role as 'super_admin' | undefined
-  const userRole: AppRole | undefined =
-    platformRole === 'super_admin' ? 'super_admin' : clanRole
-  const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles]
-
-  if (!userRole || !roles.includes(userRole)) {
-    // Insufficient privilege — send back to user dashboard
-    redirect(`/${locale}/dashboard`)
-  }
+  await requireServerRole(requiredRoles, locale)
 }
 
 /**
@@ -43,12 +24,8 @@ export async function requireRole(
  * Role hierarchy (ascending privilege): viewer < editor < admin < super_admin
  */
 export function hasMinRole(userRole: AppRole | undefined, minRole: AppRole): boolean {
-  const HIERARCHY: Record<AppRole, number> = {
-    viewer: 0,
-    editor: 1,
-    admin: 2,
-    super_admin: 3,
-  }
   if (!userRole) return false
-  return HIERARCHY[userRole] >= HIERARCHY[minRole]
+  if (userRole === 'super_admin') return true
+  if (minRole === 'super_admin') return false
+  return hasMinServerRole(userRole, minRole)
 }

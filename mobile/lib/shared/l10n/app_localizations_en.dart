@@ -155,6 +155,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileStatusAlive => 'Living';
 
   @override
+  String get profileStatusDeceased => 'Deceased';
+
+  @override
   String get profileDescendants => 'Descendants';
 
   @override
@@ -170,10 +173,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get relationWife => 'Wife';
 
   @override
+  String get relationHusband => 'Husband';
+
+  @override
   String get relationSon => 'Son';
 
   @override
   String get relationDaughter => 'Daughter';
+
+  @override
+  String get relationMother => 'Mother';
 
   @override
   String get lunarCalendar => 'Lunar';

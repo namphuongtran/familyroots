@@ -16,6 +16,13 @@ class RegisterRequest(BaseModel):
     clan_slug: str | None = Field(None, max_length=100)
 
 
+class AuthenticatedOnboardingRequest(BaseModel):
+    clan_action: Literal["join", "create"]
+    clan_id: uuid.UUID | None = None
+    clan_name: str | None = Field(None, max_length=255)
+    clan_slug: str | None = Field(None, max_length=100)
+
+
 class RegisterResponse(BaseModel):
     user_id: uuid.UUID
     email: str
@@ -38,6 +45,7 @@ class UserProfile(BaseModel):
     clan_name: str | None = None
     role: str | None = None
     is_approved: bool = False
+    has_pending_membership: bool = False
     person_id: uuid.UUID | None = None
     preferred_locale: str = "vi"
 

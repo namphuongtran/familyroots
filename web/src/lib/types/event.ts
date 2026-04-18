@@ -15,8 +15,6 @@ export interface ClanEvent {
   title: string
   description?: string
   event_date: string          // ISO date YYYY-MM-DD
-  end_date?: string           // optional end date
-  location?: string           // optional venue
   is_lunar_calendar: boolean  // âm lịch
   is_recurring: boolean
   notify_days_before: number  // 0–30

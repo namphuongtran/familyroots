@@ -350,6 +350,12 @@ abstract class AppLocalizations {
   /// **'Living'**
   String get profileStatusAlive;
 
+  /// Deceased status
+  ///
+  /// In en, this message translates to:
+  /// **'Deceased'**
+  String get profileStatusDeceased;
+
   /// Profile stat label
   ///
   /// In en, this message translates to:
@@ -380,6 +386,12 @@ abstract class AppLocalizations {
   /// **'Wife'**
   String get relationWife;
 
+  /// Husband relation
+  ///
+  /// In en, this message translates to:
+  /// **'Husband'**
+  String get relationHusband;
+
   /// Son relation
   ///
   /// In en, this message translates to:
@@ -391,6 +403,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Daughter'**
   String get relationDaughter;
+
+  /// Mother relation
+  ///
+  /// In en, this message translates to:
+  /// **'Mother'**
+  String get relationMother;
 
   /// Lunar calendar tag
   ///

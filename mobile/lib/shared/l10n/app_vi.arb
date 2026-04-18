@@ -53,9 +53,12 @@
   "biographyTitle": "Tiểu Sử",
   "familyRelationsTitle": "Quan hệ gia đình",
   "relationFather": "Bố",
+  "relationMother": "Mẹ",
   "relationWife": "Vợ",
+  "relationHusband": "Chồng",
   "relationSon": "Con trai",
   "relationDaughter": "Con gái",
+  "profileStatusDeceased": "Đã mất",
   "lunarCalendar": "Âm lịch",
   "solarCalendar": "Dương lịch"
 }

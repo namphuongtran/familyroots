@@ -151,6 +151,9 @@
   "profileStatusAlive": "Living",
   "@profileStatusAlive": { "description": "Living status" },
 
+  "profileStatusDeceased": "Deceased",
+  "@profileStatusDeceased": { "description": "Deceased status" },
+
   "profileDescendants": "Descendants",
   "@profileDescendants": { "description": "Profile stat label" },
 
@@ -165,6 +168,18 @@
 
   "relationWife": "Wife",
   "@relationWife": { "description": "Wife relation" },
+
+  "relationHusband": "Husband",
+  "@relationHusband": { "description": "Husband relation" },
+
+  "relationSon": "Son",
+  "@relationSon": { "description": "Son relation" },
+
+  "relationDaughter": "Daughter",
+  "@relationDaughter": { "description": "Daughter relation" },
+
+  "relationMother": "Mother",
+  "@relationMother": { "description": "Mother relation" },
 
   "relationSon": "Son",
   "@relationSon": { "description": "Son relation" },

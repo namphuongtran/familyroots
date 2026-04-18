@@ -34,7 +34,6 @@ export interface DocumentSummary {
   document_type: DocumentType
   mime_type?: string
   file_size_bytes?: number
-  file_url: string
   is_avatar: boolean
   created_at: string
 }

@@ -2,12 +2,19 @@
 
 import { useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import type { RegisterResult } from '@/application/auth/ports/auth-repository'
+import type {
+  AuthenticatedOnboardingInput,
+  RegisterResult,
+} from '@/application/auth/ports/auth-repository'
 import {
   hydrateAuthContext,
   selectActiveClan,
 } from '@/application/auth/use-cases/auth-context'
 import { authProfileRepository } from '@/infrastructure/auth/http-auth-profile-repository'
+import {
+  clearCurrentClanId,
+  persistCurrentClanId,
+} from '@/infrastructure/auth/clan-selection-storage'
 import { authSessionPort } from '@/infrastructure/auth/supabase-auth-session-port'
 import { useAuthStore } from '@/store/auth.store'
 
@@ -18,6 +25,7 @@ export function useAuth() {
     clanMemberships,
     isLoading,
     isPendingApproval,
+    needsOnboarding,
     needsClanSelection,
     setUser,
     setCurrentClan,
@@ -44,14 +52,15 @@ export function useAuth() {
     setCurrentClan(activeClanId)
     setAccessState({
       isPendingApproval: context.isPendingApproval,
+      needsOnboarding: context.needsOnboarding,
       needsClanSelection: context.needsClanSelection,
     })
 
     if (typeof window !== 'undefined') {
       if (activeClanId) {
-        localStorage.setItem('current_clan_id', activeClanId)
+        persistCurrentClanId(activeClanId)
       } else {
-        localStorage.removeItem('current_clan_id')
+        clearCurrentClanId()
       }
       localStorage.setItem('preferred_locale', context.user.preferred_locale)
     }
@@ -93,6 +102,16 @@ export function useAuth() {
         return
       }
 
+      if (context.needsOnboarding) {
+        router.push(`/${context.user?.preferred_locale ?? 'vi'}/register?mode=oauth`)
+        return
+      }
+
+      if (context.needsClanSelection) {
+        router.push(`/${context.user?.preferred_locale ?? 'vi'}/select-clan`)
+        return
+      }
+
       router.push(`/${context.user?.preferred_locale ?? 'vi'}/dashboard`)
     },
     [router, syncAuthContext],
@@ -112,7 +131,7 @@ export function useAuth() {
 
     const locale = user?.preferred_locale ?? 'vi'
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('current_clan_id')
+      clearCurrentClanId()
       window.location.href = `/${locale}/login`
     }
   }, [clear, user?.preferred_locale])
@@ -123,7 +142,7 @@ export function useAuth() {
       setCurrentClan(selectedClanId)
 
       if (typeof window !== 'undefined') {
-        localStorage.setItem('current_clan_id', selectedClanId)
+        persistCurrentClanId(selectedClanId)
       }
 
       await syncAuthContext()
@@ -132,27 +151,56 @@ export function useAuth() {
     [setCurrentClan, syncAuthContext],
   )
 
+  const completeOnboarding = useCallback(
+    async (input: AuthenticatedOnboardingInput): Promise<RegisterResult> => {
+      if (input.full_name?.trim()) {
+        await authProfileRepository.updateMe({ full_name: input.full_name.trim() })
+      }
+
+      const result = await authProfileRepository.onboard(input)
+      const context = await hydrateAuthContext(authSessionPort, authProfileRepository)
+      await syncAuthContext()
+
+      const locale = context.user?.preferred_locale ?? 'vi'
+      if (context.isPendingApproval) {
+        router.push(`/${locale}/pending-approval`)
+        return result
+      }
+
+      if (context.needsClanSelection) {
+        router.push(`/${locale}/select-clan`)
+        return result
+      }
+
+      router.push(`/${locale}/dashboard`)
+      return result
+    },
+    [router, syncAuthContext],
+  )
+
   return {
     user,
     currentClanId,
     clanMemberships,
     isLoading,
     isPendingApproval,
+    needsOnboarding,
     needsClanSelection,
     isAuthenticated: !!user,
-    isApproved: !isPendingApproval,
+    isApproved: !isPendingApproval && !needsOnboarding,
     signInWithEmail,
     signInWithGoogle,
     signInWithApple,
     signOut,
     selectClan,
+    completeOnboarding,
     syncAuthContext,
   }
 }
 
 // Convenience alias used by auth pages
 export function useAuthActions() {
-  const { signInWithEmail, signOut } = useAuth()
+  const { signInWithEmail, signInWithGoogle, signOut, completeOnboarding } = useAuth()
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -176,5 +224,5 @@ export function useAuthActions() {
     [],
   )
 
-  return { signIn, signUp, signOut }
+  return { signIn, signInWithGoogle, signUp, completeOnboarding, signOut }
 }

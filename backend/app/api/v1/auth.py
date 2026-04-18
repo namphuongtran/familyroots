@@ -18,6 +18,7 @@ from app.infrastructure.dependencies import (
     get_fcm_token_handler,
 )
 from app.schemas.auth import (
+    AuthenticatedOnboardingRequest,
     FCMTokenRequest,
     LoginRequest,
     LoginResponse,
@@ -40,6 +41,24 @@ async def register(
         email=body.email,
         password=body.password,
         full_name=body.full_name,
+        clan_action=body.clan_action,
+        clan_id=body.clan_id,
+        clan_name=body.clan_name,
+        clan_slug=body.clan_slug,
+    )
+
+
+@router.post("/onboard", status_code=201)
+async def onboard_authenticated_user(
+    body: AuthenticatedOnboardingRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    handler: AuthCommandHandler = Depends(get_auth_command_handler),
+) -> RegisterResponse:
+    """Attach the current authenticated user to a clan after OAuth login."""
+    return await handler.onboard_authenticated_user(
+        user_id=uuid.UUID(current_user["sub"]),
+        email=current_user.get("email", ""),
+        full_name=current_user.get("user_metadata", {}).get("full_name", ""),
         clan_action=body.clan_action,
         clan_id=body.clan_id,
         clan_name=body.clan_name,

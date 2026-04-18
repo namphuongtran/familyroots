@@ -24,9 +24,31 @@ class PrimaryButton extends StatelessWidget {
         child: _buildContent(),
       );
     }
-    return ElevatedButton(
-      onPressed: isLoading ? () {} : onPressed,
-      child: _buildContent(),
+    
+    // Botanical Gradient from primary to primaryContainer at 135 degrees
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(9999),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight, // Approx 135 degrees
+          colors: [
+            Color(0xFF37563B), // AppColors.primary
+            Color(0xFF4F6F52), // AppColors.primaryContainer
+          ],
+        ),
+      ),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(9999), 
+          ),
+        ),
+        onPressed: isLoading ? () {} : onPressed,
+        child: _buildContent(),
+      ),
     );
   }
 

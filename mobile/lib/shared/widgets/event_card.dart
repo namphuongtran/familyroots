@@ -22,17 +22,17 @@ class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 240,
-      margin: const EdgeInsets.only(right: 16),
-      padding: const EdgeInsets.all(16),
+      width: 260,
+      margin: const EdgeInsets.only(right: 20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(32), // 'lg' corner radius
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withAlpha(76),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: AppColors.onSurface.withAlpha(15), // 6% opacity shadow
+            blurRadius: 32,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -43,45 +43,47 @@ class EventCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(51),
-                  borderRadius: BorderRadius.circular(20),
+                  color: AppColors.primary.withAlpha(26), // soft primary tint
+                  borderRadius: BorderRadius.circular(9999), // full rounded
                 ),
                 child: Text(
                   isLunar ? lunarLabel : solarLabel,
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
-              const Icon(Icons.event, color: Colors.white70, size: 20),
+              const Icon(Icons.event_note_outlined, color: AppColors.onSurfaceVariant, size: 20),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Text(
             title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppColors.onSurface,
+              height: 1.2,
             ),
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             date,
-            style: const TextStyle(
-              color: AppColors.primaryFixedDim,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const Spacer(),
           Text(
             description,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.onSurfaceVariant,
+              height: 1.5,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,

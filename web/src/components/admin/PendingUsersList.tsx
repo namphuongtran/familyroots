@@ -11,10 +11,9 @@ import { formatDate } from '@/lib/utils/date'
 
 interface PendingUser {
   id: string
-  full_name: string
-  email: string
-  avatar_url?: string | null
+  label: string
   created_at: string
+  role?: string
 }
 
 interface PendingUsersListProps {
@@ -59,14 +58,13 @@ export function PendingUsersList({ users, isLoading, onApprove, onReject }: Pend
       {users.map(user => (
         <div key={user.id} className="flex items-center gap-3 py-3">
           <MemberAvatar
-            avatarUrl={user.avatar_url ?? undefined}
-            fullName={user.full_name}
+            fullName={user.label}
             gender="unknown"
             size="md"
           />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-800 truncate">{user.full_name}</p>
-            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+            <p className="text-sm font-medium text-gray-800 truncate">{user.label}</p>
+            {user.role && <p className="text-xs text-gray-400 truncate">{user.role}</p>}
             <p className="text-[10px] text-gray-300 flex items-center gap-1 mt-0.5">
               <Clock className="h-2.5 w-2.5" />
               {formatDate(user.created_at)}

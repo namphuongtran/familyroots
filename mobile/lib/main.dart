@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'app/app.dart';
-
-// TODO: implement in Prompt 2 — initialize Firebase, Sentry, Hive, DI
+import 'core/di/injection.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // TODO: implement in Prompt 2
+  // TODO: initialize Firebase, Sentry, Hive when ready
   // await Firebase.initializeApp();
-  // await SentryFlutter.init(...);
+  // await SentryFlutter.init(...)  ;
   // await Hive.initFlutter();
-  // configureDependencies();
+
+  configureDependencies();
 
   runApp(const FamilyRootsApp());
 }

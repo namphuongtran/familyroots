@@ -2,16 +2,19 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
+import { SupabaseSetupNotice } from '@/components/auth/SupabaseSetupNotice'
 import { useAuthActions } from '@/lib/hooks/useAuth'
 
 export default function LoginPage() {
   const t = useTranslations('auth')
-  const { signIn } = useAuthActions()
+  const locale = useLocale()
+  const { signIn, signInWithGoogle } = useAuthActions()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,6 +29,17 @@ export default function LoginPage() {
     }
   }
 
+  const handleGoogleSignIn = async () => {
+    setError(null)
+    setIsGoogleLoading(true)
+    try {
+      await signInWithGoogle()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('login_error'))
+      setIsGoogleLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-cream px-4">
       <div className="w-full max-w-sm space-y-6">
@@ -35,6 +49,8 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">{t('login_subtitle')}</p>
         </div>
 
+        <SupabaseSetupNotice />
+
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-800">{t('login_title')}</h2>
 
@@ -43,6 +59,21 @@ export default function LoginPage() {
               {error}
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isLoading || isGoogleLoading}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isGoogleLoading ? t('google_signing_in') : t('google')}
+          </button>
+
+          <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-gray-400">
+            <span className="h-px flex-1 bg-gray-200" />
+            <span>{t('or')}</span>
+            <span className="h-px flex-1 bg-gray-200" />
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('email')}</label>
@@ -78,7 +109,7 @@ export default function LoginPage() {
 
           <p className="text-center text-xs text-gray-500">
             {t('no_account')}{' '}
-            <Link href="./register" className="text-primary-600 hover:underline">
+            <Link href={`/${locale}/register`} className="text-primary-600 hover:underline">
               {t('register_link')}
             </Link>
           </p>

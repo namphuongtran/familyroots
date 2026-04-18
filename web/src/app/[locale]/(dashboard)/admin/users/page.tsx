@@ -26,9 +26,9 @@ export default function AdminUsersPage() {
         <PendingUsersList
           users={pending.map((u) => ({
             id: u.user_id,
-            full_name: u.user_id,
-            email: u.user_id,
+            label: u.user_id,
             created_at: u.created_at,
+            role: u.role,
           }))}
           isLoading={isLoading}
           onApprove={(id) => approve.mutate(id)}
@@ -44,7 +44,7 @@ export default function AdminUsersPage() {
           <div key={user.id} className="flex items-center justify-between py-2 border-b last:border-0 border-gray-50">
             <div>
               <p className="text-sm font-medium text-gray-700">{user.user_id}</p>
-              <p className="text-xs text-gray-400">{user.person_id ?? '-'}</p>
+              <p className="text-xs text-gray-400">{user.person_id ? `Person: ${user.person_id}` : 'No linked person'}</p>
             </div>
             <RoleSelector
               value={user.role}

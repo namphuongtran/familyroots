@@ -3,6 +3,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslations } from 'next-intl'
+import { useCapabilities } from '@/lib/hooks/useCapabilities'
 import {
   marriageSchema,
   type MarriageFormValues,
@@ -20,6 +21,7 @@ interface MarriageFormProps {
 
 export function MarriageForm({ personId, onSuccess, onCancel }: MarriageFormProps) {
   const t = useTranslations('relationship_form')
+  const { canEditRelationships } = useCapabilities()
   const { create } = useMarriageMutations(personId)
 
   const {
@@ -32,8 +34,15 @@ export function MarriageForm({ personId, onSuccess, onCancel }: MarriageFormProp
   })
 
   const onSubmit = async (data: MarriageFormValues) => {
+    if (!canEditRelationships) {
+      return
+    }
     await create.mutateAsync(data)
     onSuccess?.()
+  }
+
+  if (!canEditRelationships) {
+    return <p className="text-sm text-gray-500">You do not have permission to edit relationships.</p>
   }
 
   return (
@@ -102,6 +111,7 @@ interface ParentChildFormProps {
 
 export function ParentChildForm({ personId, role, onSuccess, onCancel }: ParentChildFormProps) {
   const t = useTranslations('relationship_form')
+  const { canEditRelationships } = useCapabilities()
   const { create } = useParentChildMutations(personId)
 
   const defaultValues: Partial<ParentChildFormValues> =
@@ -119,8 +129,15 @@ export function ParentChildForm({ personId, role, onSuccess, onCancel }: ParentC
   })
 
   const onSubmit = async (data: ParentChildFormValues) => {
+    if (!canEditRelationships) {
+      return
+    }
     await create.mutateAsync(data)
     onSuccess?.()
+  }
+
+  if (!canEditRelationships) {
+    return <p className="text-sm text-gray-500">You do not have permission to edit relationships.</p>
   }
 
   const otherIdField = role === 'parent' ? 'child_id' : 'parent_id'

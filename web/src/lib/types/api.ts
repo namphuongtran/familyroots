@@ -29,6 +29,8 @@ export interface TreeApiResponse {
   total_generations: number
 }
 
+export type TreeAncestorsResponse = import('./tree').TreeNode[]
+
 /** Clan switch response */
 export interface ClanSwitchResponse {
   clan_id: string
@@ -61,6 +63,7 @@ export interface UserProfile {
   role?: 'viewer' | 'editor' | 'admin' | 'super_admin'
   platform_role?: 'super_admin' | null
   is_approved: boolean
+  has_pending_membership?: boolean
   person_id?: string
   preferred_locale: 'vi' | 'en' | 'zh' | 'fr'
 }

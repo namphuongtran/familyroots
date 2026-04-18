@@ -1,7 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { Calendar, MapPin, Users } from 'lucide-react'
+import { Calendar } from 'lucide-react'
 import { formatDate } from '@/lib/utils/date'
 import { cn } from '@/lib/utils/cn'
 import type { ClanEvent } from '@/lib/types'
@@ -46,14 +46,7 @@ export function EventCard({ event, className }: EventCardProps) {
         <span className="flex items-center gap-1">
           <Calendar className="h-3 w-3" />
           {formatDate(event.event_date)}
-          {event.end_date && ` – ${formatDate(event.end_date)}`}
         </span>
-        {event.location && (
-          <span className="flex items-center gap-1">
-            <MapPin className="h-3 w-3" />
-            {event.location}
-          </span>
-        )}
       </div>
     </div>
   )

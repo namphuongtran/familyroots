@@ -27,8 +27,11 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const MemberDirectoryPage(),
     ),
     GoRoute(
-      path: '/member_profile',
-      builder: (context, state) => const MemberProfilePage(),
+      path: '/member_profile/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return MemberProfilePage(memberId: id);
+      },
     ),
     GoRoute(
       path: '/tree',

@@ -14,6 +14,14 @@ export interface RegisterInput {
   clan_slug?: string
 }
 
+export interface AuthenticatedOnboardingInput {
+  full_name?: string
+  clan_action: 'join' | 'create'
+  clan_id?: string
+  clan_name?: string
+  clan_slug?: string
+}
+
 export interface RegisterResult {
   user_id: string
   email: string
@@ -32,6 +40,7 @@ export interface AuthProfileRepository {
   listMyClans(): Promise<UserClansResponse>
   selectClan(clanId: string): Promise<ClanSwitchResponse>
   register(input: RegisterInput): Promise<RegisterResult>
+  onboard(input: AuthenticatedOnboardingInput): Promise<RegisterResult>
 }
 
 export interface SessionUser {

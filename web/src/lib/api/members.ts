@@ -30,45 +30,6 @@ export interface PersonsListParams {
   fields?: string
 }
 
-// ── Mock data for offline/demo mode ──────────────────────────────────────────
-const MOCK_PERSONS: PersonSummary[] = [
-  {
-    id: '1',
-    full_name: 'Nguyễn Văn Tổ',
-    gender: 'male',
-    birth_date: '1850-01-01',
-    birth_date_approx: true,
-    death_date: '1920-03-15',
-    generation: 1,
-    avatar_url: undefined,
-    membership_role: 'blood',
-    is_founder: true,
-  },
-  {
-    id: '2',
-    full_name: 'Nguyễn Thị Hoa',
-    gender: 'female',
-    birth_date: '1880-06-12',
-    birth_date_approx: false,
-    death_date: '1955-09-20',
-    generation: 2,
-    avatar_url: undefined,
-    membership_role: 'blood',
-  },
-  {
-    id: '3',
-    full_name: 'Nguyễn Văn An',
-    gender: 'male',
-    birth_date: '1965-03-08',
-    birth_date_approx: false,
-    generation: 3,
-    avatar_url: undefined,
-    membership_role: 'blood',
-  },
-]
-
-const isMock = !process.env.NEXT_PUBLIC_API_URL
-
 export const personsApi = {
   list: async (params: PersonsListParams = {}): Promise<CursorPage<PersonSummary>> => {
     const normalized = normalizeIncludeAndFields({
@@ -83,9 +44,6 @@ export const personsApi = {
       fields: normalized.fields,
     }
 
-    if (isMock) {
-      return { data: MOCK_PERSONS, next_cursor: null, has_more: false }
-    }
     const { data } = await api.get<{ data: PersonSummary[]; total: number }>('/persons', {
       params: normalizedParams,
     })
@@ -97,11 +55,6 @@ export const personsApi = {
   },
 
   search: async (q: string, limit = 20): Promise<PersonSummary[]> => {
-    if (isMock) {
-      return MOCK_PERSONS.filter((m) =>
-        m.full_name.toLowerCase().includes(q.toLowerCase()),
-      )
-    }
     const { data } = await api.get<{ data: PersonSummary[] }>('/persons/search', {
       params: { q, limit },
     })
@@ -143,12 +96,6 @@ export const personsApi = {
 
   batchGet: async (input: PersonBatchGetInput): Promise<PersonBatchGetResponse> => {
     const normalizedInput = normalizePersonsBatchInput(input)
-
-    if (isMock) {
-      const ids = new Set(normalizedInput.ids)
-      const data = MOCK_PERSONS.filter((p) => ids.has(p.id))
-      return { data: data as unknown as Array<Record<string, unknown>>, errors: [] }
-    }
     const { data } = await api.post<PersonBatchGetResponse>(
       '/persons/batch',
       normalizedInput,

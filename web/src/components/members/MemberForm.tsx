@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslations } from 'next-intl'
+import { useCapabilities } from '@/lib/hooks/useCapabilities'
 import { personSchema, type PersonFormValues } from '@/lib/validations/member.schema'
 import { usePersonMutations } from '@/lib/hooks/useMembers'
 import type { Person } from '@/lib/types'
@@ -17,6 +18,7 @@ interface MemberFormProps {
 export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
   const t = useTranslations('member_form')
   const isEdit = !!member?.id
+  const { canEditPersons } = useCapabilities()
   const { create, update } = usePersonMutations()
   const createMember = create
   const updateMember = update
@@ -49,6 +51,9 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
   }, [member, reset])
 
   const onSubmit = async (data: PersonFormValues) => {
+    if (!canEditPersons) {
+      return
+    }
     if (isEdit) {
       await updateMember.mutateAsync({ id: member!.id, ...data })
       onSuccess?.(member!.id)
@@ -56,6 +61,10 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
       const created = await createMember.mutateAsync(data)
       onSuccess?.(created.id)
     }
+  }
+
+  if (!canEditPersons) {
+    return <p className="text-sm text-gray-500">You do not have permission to edit members.</p>
   }
 
   return (

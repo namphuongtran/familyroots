@@ -1,6 +1,7 @@
 import type { TreeQueryRepository } from '@/application/tree/ports/tree-query-repository'
 import type {
   RelationshipPath,
+  TreeAncestorsResponse,
   TreeApiResponse,
 } from '@/lib/types'
 import { treeApi } from '@/lib/api/tree'
@@ -17,7 +18,7 @@ export class HttpTreeQueryRepository implements TreeQueryRepository {
     return treeApi.getSubtree(rootId, maxGenerations)
   }
 
-  async getAncestors(personId: string, maxGenerations = 10): Promise<TreeApiResponse> {
+  async getAncestors(personId: string, maxGenerations = 10): Promise<TreeAncestorsResponse> {
     return treeApi.getAncestors(personId, maxGenerations)
   }
 

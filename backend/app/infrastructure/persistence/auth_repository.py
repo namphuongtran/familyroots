@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import exists, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
@@ -26,6 +26,15 @@ class SqlAlchemyAuthRepository(AuthRepository):
 
     async def get_clan_by_id(self, clan_id: uuid.UUID) -> Clan | None:
         return await self._session.get(Clan, clan_id)
+
+    async def get_user_role(self, user_id: uuid.UUID, clan_id: uuid.UUID) -> UserClanRole | None:
+        result = await self._session.execute(
+            select(UserClanRole).where(
+                UserClanRole.user_id == user_id,
+                UserClanRole.clan_id == clan_id,
+            )
+        )
+        return result.scalar_one_or_none()
 
     def add_clan(self, clan: Clan) -> None:
         self._session.add(clan)
@@ -62,6 +71,17 @@ class SqlAlchemyAuthQueryPort(AuthQueryPort):
             .limit(1)
         )
         return result.first()
+
+    async def has_pending_membership(self, user_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            select(
+                exists().where(
+                    UserClanRole.user_id == user_id,
+                    UserClanRole.is_approved.is_(False),
+                )
+            )
+        )
+        return bool(result.scalar())
 
 
 class SqlAlchemyFCMTokenRepository(FCMTokenRepository):

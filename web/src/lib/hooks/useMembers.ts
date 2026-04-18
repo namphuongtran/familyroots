@@ -6,7 +6,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query'
-import { personsApi, type PersonsListParams } from '@/lib/api/members'
+import type { PersonsListParams } from '@/lib/api/members'
 import {
   batchGetPersons,
   getPerson,
@@ -17,7 +17,18 @@ import {
   listPersons,
   searchPersons,
 } from '@/application/persons/use-cases/person-queries'
+import {
+  createPerson,
+  deletePerson,
+  updatePerson,
+} from '@/application/persons/use-cases/person-commands'
 import { personQueryRepository } from '@/infrastructure/persons/person-query-repository'
+import { personCommandRepository } from '@/infrastructure/persons/person-command-repository'
+import {
+  personCreateInvalidationKeys,
+  personDeleteInvalidationKeys,
+  personUpdateInvalidationKeys,
+} from '@/lib/hooks/query-invalidation'
 import type {
   PersonBatchGetInput,
   PersonCreateInput,
@@ -112,22 +123,31 @@ export function usePersonMutations() {
   const qc = useQueryClient()
 
   const create = useMutation({
-    mutationFn: (input: PersonCreateInput) => personsApi.create(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: personKeys.lists() }),
+    mutationFn: (input: PersonCreateInput) => createPerson(personCommandRepository, input),
+    onSuccess: () => {
+      personCreateInvalidationKeys().forEach((queryKey) => {
+        qc.invalidateQueries({ queryKey })
+      })
+    },
   })
 
   const update = useMutation({
     mutationFn: ({ id, ...input }: PersonUpdateInput & { id: string }) =>
-      personsApi.update(id, input),
+      updatePerson(personCommandRepository, id, input),
     onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: personKeys.detail(id) })
-      qc.invalidateQueries({ queryKey: personKeys.lists() })
+      personUpdateInvalidationKeys(id).forEach((queryKey) => {
+        qc.invalidateQueries({ queryKey })
+      })
     },
   })
 
   const remove = useMutation({
-    mutationFn: (id: string) => personsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: personKeys.lists() }),
+    mutationFn: (id: string) => deletePerson(personCommandRepository, id),
+    onSuccess: (_data, id) => {
+      personDeleteInvalidationKeys(id).forEach((queryKey) => {
+        qc.invalidateQueries({ queryKey })
+      })
+    },
   })
 
   return { create, update, remove }

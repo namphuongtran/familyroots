@@ -7,6 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:behavior": "node --experimental-strip-types --test tests/behavior/*.test.ts",
+    "test:contracts": "node --test tests/contracts/*.test.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

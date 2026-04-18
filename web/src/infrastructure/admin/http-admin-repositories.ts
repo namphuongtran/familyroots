@@ -8,13 +8,10 @@ import type {
   ClanRole,
   ClanSettings,
   ClanUserMembership,
+  CursorPage,
   PlatformMetrics,
   PlatformClanSummary,
 } from '@/lib/types'
-
-interface CursorPage<T> {
-  data: T[]
-}
 
 export class HttpClanAdminRepository
   implements ClanAdminQueryRepository, ClanAdminCommandRepository
@@ -23,7 +20,10 @@ export class HttpClanAdminRepository
     cursor?: string
     limit?: number
   }): Promise<ClanUserMembership[]> {
-    const { data } = await api.get<CursorPage<ClanUserMembership>>('/clans/me/users', {
+    const { data } = await api.get<{
+      data: ClanUserMembership[]
+      meta?: { cursor?: string | null; has_more?: boolean }
+    }>('/clans/me/users', {
       params,
     })
     return data.data
@@ -75,7 +75,10 @@ export class HttpPlatformAdminRepository implements PlatformAdminQueryRepository
     cursor?: string
     limit?: number
   }): Promise<PlatformClanSummary[]> {
-    const { data } = await api.get<{ data: PlatformClanSummary[] }>('/platform/clans', {
+    const { data } = await api.get<{
+      data: PlatformClanSummary[]
+      meta?: { cursor?: string | null; has_more?: boolean }
+    }>('/platform/clans', {
       params,
     })
     return data.data

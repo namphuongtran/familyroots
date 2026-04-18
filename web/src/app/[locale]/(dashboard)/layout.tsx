@@ -9,7 +9,7 @@ import { useUIStore } from '@/store/ui.store'
 import { cn } from '@/lib/utils/cn'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, isPendingApproval, needsClanSelection } = useAuth()
+  const { user, isLoading, isPendingApproval, needsOnboarding, needsClanSelection } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const { sidebarOpen } = useUIStore()
@@ -26,10 +26,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return
     }
 
-    if (!isLoading && user && needsClanSelection) {
-      router.push(`/${locale}/dashboard`)
+    if (!isLoading && user && needsOnboarding) {
+      router.push(`/${locale}/register?mode=oauth`)
+      return
     }
-  }, [user, isLoading, isPendingApproval, locale, needsClanSelection, router])
+
+    if (!isLoading && user && needsClanSelection) {
+      router.push(`/${locale}/select-clan`)
+    }
+  }, [user, isLoading, isPendingApproval, needsOnboarding, locale, needsClanSelection, router])
 
   if (isLoading) {
     return (
@@ -39,7 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     )
   }
 
-  if (!user || isPendingApproval) return null
+  if (!user || isPendingApproval || needsOnboarding) return null
 
   return (
     <div className="flex h-screen overflow-hidden bg-cream">

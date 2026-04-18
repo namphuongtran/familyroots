@@ -6,8 +6,10 @@ export const metadata: Metadata = {
   description: 'Vietnamese family genealogy platform',
 }
 
-// Root layout — minimal wrapper. The [locale] segment carries all real providers.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
 }
-

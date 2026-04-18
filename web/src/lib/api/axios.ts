@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { createClient } from '@/lib/supabase/client'
+import { createClientOrNull } from '@/lib/supabase/client'
 import { getRequestContext } from '@/infrastructure/http/request-context'
 
 const api = axios.create({
@@ -11,10 +11,10 @@ const api = axios.create({
 // ── Request interceptor: attach JWT + request context ─────────────────────────
 api.interceptors.request.use(async (config) => {
   try {
-    const supabase = createClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    const supabase = createClientOrNull()
+    const session = supabase
+      ? (await supabase.auth.getSession()).data.session
+      : null
 
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
@@ -39,8 +39,10 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       try {
-        const supabase = createClient()
-        await supabase.auth.signOut()
+        const supabase = createClientOrNull()
+        if (supabase) {
+          await supabase.auth.signOut()
+        }
       } finally {
         const { locale } = getRequestContext()
         window.location.href = `/${locale}/login`

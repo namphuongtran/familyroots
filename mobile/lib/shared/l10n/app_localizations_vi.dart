@@ -154,6 +154,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get profileStatusAlive => 'Còn sống';
 
   @override
+  String get profileStatusDeceased => 'Đã mất';
+
+  @override
   String get profileDescendants => 'Hậu duệ';
 
   @override
@@ -169,10 +172,16 @@ class AppLocalizationsVi extends AppLocalizations {
   String get relationWife => 'Vợ';
 
   @override
+  String get relationHusband => 'Chồng';
+
+  @override
   String get relationSon => 'Con trai';
 
   @override
   String get relationDaughter => 'Con gái';
+
+  @override
+  String get relationMother => 'Mẹ';
 
   @override
   String get lunarCalendar => 'Âm lịch';

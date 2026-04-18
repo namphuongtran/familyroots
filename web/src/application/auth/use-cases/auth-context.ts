@@ -14,6 +14,7 @@ export interface HydratedAuthContext {
   currentClanId?: string
   activeMembership?: UserClanMembership
   isPendingApproval: boolean
+  needsOnboarding: boolean
   needsClanSelection: boolean
 }
 
@@ -32,17 +33,15 @@ export function mapSessionUserToProfile(user: SessionUser): UserProfile {
     id: user.id,
     email: user.email,
     full_name: asString(meta.full_name) ?? user.email,
-    clan_id: asString(meta.clan_id),
-    clan_name: asString(meta.clan_name),
-    role:
-      (asString(meta.clan_role) as UserProfile['role']) ??
-      (asString(meta.role) as UserProfile['role']),
-    is_approved: asBoolean(meta.is_approved) ?? false,
-    person_id: asString(meta.person_id),
+    clan_id: undefined,
+    clan_name: undefined,
+    role: undefined,
+    is_approved: false,
+    has_pending_membership: false,
+    person_id: undefined,
     preferred_locale:
       (asString(meta.preferred_locale) as UserProfile['preferred_locale']) ?? 'vi',
-    platform_role:
-      (asString(meta.platform_role) as UserProfile['platform_role']) ?? undefined,
+    platform_role: undefined,
   }
 }
 
@@ -59,6 +58,7 @@ export async function hydrateAuthContext(
       currentClanId: undefined,
       activeMembership: undefined,
       isPendingApproval: false,
+      needsOnboarding: false,
       needsClanSelection: false,
     }
   }
@@ -77,11 +77,16 @@ export async function hydrateAuthContext(
       ...fallbackProfile,
       ...profile,
       clan_id: currentClanId,
-      clan_name: activeMembership?.clan_name ?? profile.clan_name ?? fallbackProfile.clan_name,
-      role: activeMembership?.role ?? profile.role ?? fallbackProfile.role,
+      clan_name: activeMembership?.clan_name ?? profile.clan_name,
+      role: activeMembership?.role ?? profile.role,
       is_approved: memberships.clans.length > 0 || profile.is_approved,
+      has_pending_membership: profile.has_pending_membership ?? false,
       preferred_locale: profile.preferred_locale ?? fallbackProfile.preferred_locale,
     }
+
+    const hasApprovedClanMembership = memberships.clans.length > 0
+    const hasPendingMembership = mergedProfile.has_pending_membership === true
+    const isPlatformOnlyUser = Boolean(mergedProfile.platform_role)
 
     return {
       user: mergedProfile,
@@ -89,19 +94,20 @@ export async function hydrateAuthContext(
       currentClanId,
       activeMembership,
       isPendingApproval:
-        !mergedProfile.platform_role &&
-        memberships.clans.length === 0 &&
-        !mergedProfile.is_approved,
+        !isPlatformOnlyUser && !hasApprovedClanMembership && hasPendingMembership,
+      needsOnboarding:
+        !isPlatformOnlyUser && !hasApprovedClanMembership && !hasPendingMembership,
       needsClanSelection: memberships.clans.length > 1 && !currentClanId,
     }
   } catch {
-    // If backend profile endpoints are unavailable, keep the session fallback.
+    // Keep a minimal identity-only fallback; do not derive clan or role truth from Supabase metadata.
     return {
       user: fallbackProfile,
       clanMemberships: [],
-      currentClanId: fallbackProfile.clan_id,
+      currentClanId: undefined,
       activeMembership: undefined,
       isPendingApproval: false,
+      needsOnboarding: false,
       needsClanSelection: false,
     }
   }

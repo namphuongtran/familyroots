@@ -20,6 +20,14 @@ export interface ClanSettings {
   ancestral_hall_location?: string | null
   clan_rules?: string | null
   is_active: boolean
+  created_at?: string
+  updated_at?: string
+  stats?: {
+    total_users: number
+    approved_users: number
+    pending_users: number
+    total_members: number
+  }
 }
 
 export interface PlatformClanSummary {
@@ -32,7 +40,8 @@ export interface PlatformClanSummary {
 
 export interface PlatformMetrics {
   total_clans: number
+  active_clans: number
+  suspended_clans: number
   total_members: number
   total_users: number
-  active_clans_30d: number
 }

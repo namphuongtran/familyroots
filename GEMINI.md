@@ -21,6 +21,7 @@ Growing — Transitioning from in-process events to a distributed architecture (
 - Clan-scoped APIs must enforce X-Current-Clan-Id context and role checks.
 - Public API errors should keep stable structured envelope semantics.
 - Mobile UI must follow Arbor Heritage design mandates and localization rules.
+- Mobile UI testing, dependency injection, and layout fixes must follow lessons in `docs/flutter-lessons.md`.
 - **ALWAYS check docker-compose to ensure backend and frontend are working as expected.**
 - **Be exceptionally careful with `user` and `person` data in the clan, as these are critical landmines.**
 

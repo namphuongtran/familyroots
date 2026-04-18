@@ -5,12 +5,20 @@ class AppColors {
   static const Color primary = Color(0xFF37563B);
   static const Color primaryContainer = Color(0xFF4F6F52);
   static const Color onPrimary = Color(0xFFFFFFFF);
+  static const Color onPrimaryContainer = Color(0xFFCCF0CC);
+  static const Color primaryFixed = Color(0xFFC8ECC8);
   static const Color primaryFixedDim = Color(0xFFACD0AD);
+  static const Color onPrimaryFixed = Color(0xFF03210B);
+  static const Color onPrimaryFixedVariant = Color(0xFF2F4E33);
 
   // Secondary (Muted Rose)
   static const Color secondary = Color(0xFF6E5959);
   static const Color secondaryContainer = Color(0xFFF8DCDC);
   static const Color onSecondaryContainer = Color(0xFF745F5F);
+  static const Color secondaryFixed = Color(0xFFF8DCDC);
+  static const Color secondaryFixedDim = Color(0xFFDBC0C0);
+  static const Color onSecondaryFixed = Color(0xFF261818);
+  static const Color onSecondaryFixedVariant = Color(0xFF554242);
 
   // Tertiary
   static const Color tertiary = Color(0xFF62494A);
