@@ -1,0 +1,1 @@
+Sync CLAUDE.md files with current repository state. Run the sync-claude-md skill.
