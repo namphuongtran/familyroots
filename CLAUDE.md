@@ -13,6 +13,7 @@ Growing, with strong architectural foundations and active scaffold-to-build work
 - Brainstorming: run /project:brainstorm
 - Cross-service change: run /project:check-contracts first
 - First-time refresh/bootstrap: run /project:setup-knowledge
+- Sync CLAUDE.md with repo changes: run /project:sync-claude-md
 
 ## Global Rules
 - Backend follows DDD + CQRS + hexagonal boundaries.
@@ -52,6 +53,7 @@ Growing, with strong architectural foundations and active scaffold-to-build work
 - Contracts: docs/contracts/README.md
 - Operations: docs/ops/README.md
 - Decisions: docs/decisions/README.md
+- Flutter Lessons: docs/flutter-lessons.md
 
 ## Key Global Commands
 - Local infra: docker compose up -d pgdb pgadmin
