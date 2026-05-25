@@ -2,7 +2,7 @@ Before we plan anything, do this first:
 
 1. Read root CLAUDE.md and understand system scope and global rules
 2. Read relevant services/{name}/CLAUDE.md for services involved
-3. Read docs/architecture.md and understand system-wide constraints
+3. Read docs/architecture/overview.md and understand system-wide constraints
 4. Read docs/contracts/ for any affected APIs or events
 5. Check docs/decisions/ for ADRs related to this area
 

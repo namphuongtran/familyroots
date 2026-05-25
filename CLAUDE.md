@@ -53,7 +53,9 @@ Growing, with strong architectural foundations and active scaffold-to-build work
 - Contracts: docs/contracts/README.md
 - Operations: docs/ops/README.md
 - Decisions: docs/decisions/README.md
-- Flutter Lessons: docs/flutter-lessons.md
+- Flutter Lessons: docs/guides/flutter-lessons.md
+- Architecture Overview: docs/architecture/overview.md
+- Documentation Index: docs/README.md
 
 ## Key Global Commands
 - Local infra: docker compose up -d pgdb pgadmin

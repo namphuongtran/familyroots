@@ -96,18 +96,20 @@ make mobile-run      # Run mobile app
 make web-dev         # Run Next.js web app (:3000)
 ```
 
-See [docs/onboarding.md](docs/onboarding.md) for the full developer setup guide.
+See [docs/guides/onboarding.md](docs/guides/onboarding.md) for the full developer setup guide.
 
 ## Documentation
 
-- [Architecture Overview](docs/architecture.md)
-- [Data Isolation Design](docs/tenant-design.md)
-- [Infrastructure as Code Guide](docs/iac-guide.md)
-- [Developer Onboarding](docs/onboarding.md)
-- [API Design](docs/api-design.md)
-- [Database Schema](docs/database-schema.md)
-- [RBAC Design](docs/rbac.md)
-- [Flutter Build & Publish](docs/flutter-build-publish.md)
+Start at [docs/README.md](docs/README.md) for the full index. Quick links:
+
+- [Architecture Overview](docs/architecture/overview.md)
+- [API Design](docs/architecture/api-design.md)
+- [Data Model](docs/architecture/data-model.md)
+- [RBAC Design](docs/architecture/rbac.md)
+- [Multi-Tenancy Design](docs/architecture/multi-tenancy.md)
+- [Developer Onboarding](docs/guides/onboarding.md)
+- [Infrastructure as Code Guide](docs/guides/iac-guide.md)
+- [Flutter Build & Publish](docs/guides/flutter-build-publish.md)
 
 ## Branch Strategy
 

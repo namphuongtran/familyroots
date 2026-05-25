@@ -6,7 +6,7 @@ Read these files before responding (I will paste their contents):
 
 - GEMINI.md (root)
 - services/{name}/GEMINI.md for relevant services
-- docs/architecture.md
+- docs/architecture/overview.md
 
 [PASTE RELEVANT FILE CONTENTS HERE]
 

@@ -3,7 +3,7 @@ I want to brainstorm: {feature or idea}
 Before generating ideas, ground yourself:
 1. Read root CLAUDE.md for system purpose and constraints
 2. Read relevant service CLAUDE.md files
-3. Read docs/architecture.md
+3. Read docs/architecture/overview.md
 
 Then structure the brainstorm as:
 

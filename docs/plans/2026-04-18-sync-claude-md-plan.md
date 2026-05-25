@@ -8,7 +8,7 @@
 
 **Tech Stack:** Claude Code skill system (SKILL.md frontmatter format), git CLI, Bash, Read/Edit tools.
 
-**Spec:** `docs/superpowers/specs/2026-04-18-sync-claude-md-design.md`
+**Spec:** `docs/plans/2026-04-18-sync-claude-md-design.md`
 
 ---
 
