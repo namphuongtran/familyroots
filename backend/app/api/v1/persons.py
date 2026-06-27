@@ -192,9 +192,9 @@ async def _fetch_included_data(
 ) -> dict[str, list[Any]]:
     tasks = {}
     if "marriages" in includes:
-        tasks["marriages"] = handler.get_marriages(person_id)
+        tasks["marriages"] = handler.get_marriages(clan_id, person_id)
     if "parent_child" in includes:
-        tasks["parent_child"] = handler.get_parent_child(person_id)
+        tasks["parent_child"] = handler.get_parent_child(clan_id, person_id)
     if "timeline" in includes:
         tasks["timeline"] = handler.get_timeline(clan_id, person_id)
     if "documents" in includes:
@@ -417,7 +417,7 @@ async def person_marriages(
 ) -> dict[str, Any]:
     """Get all marriages for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    marriages = await handler.get_marriages(person_id)
+    marriages = await handler.get_marriages(clan_id, person_id)
     return {"data": _filter_list_by_fields(marriages, fields)}
 
 
@@ -432,7 +432,7 @@ async def person_parent_child(
 ) -> dict[str, Any]:
     """Get all parent-child relationships for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    links = await handler.get_parent_child(person_id)
+    links = await handler.get_parent_child(clan_id, person_id)
     return {"data": _filter_list_by_fields(links, fields)}
 
 

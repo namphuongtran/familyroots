@@ -28,20 +28,26 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_marriages(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_marriages(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(Marriage).where(
                 or_(Marriage.person1_id == person_id, Marriage.person2_id == person_id),
+                Marriage.created_by_clan_id == clan_id,
                 Marriage.is_deleted.is_(False),
             )
         )
         marriages = result.scalars().all()
         return [MarriageResponse.model_validate(m).model_dump() for m in marriages]
 
-    async def get_parent_child_links(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_parent_child_links(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(ParentChild).where(
                 or_(ParentChild.parent_id == person_id, ParentChild.child_id == person_id),
+                ParentChild.created_by_clan_id == clan_id,
                 ParentChild.is_deleted.is_(False),
             )
         )
