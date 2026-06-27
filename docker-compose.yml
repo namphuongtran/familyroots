@@ -10,7 +10,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-family_roots}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Postgres 18+ stores data in a major-version subdir; mount at the parent
+      # (/var/lib/postgresql), not /data, or the image errors on an "unused mount".
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
