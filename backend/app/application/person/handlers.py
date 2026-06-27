@@ -87,6 +87,9 @@ class PersonCommandHandler:
         if not person:
             raise EntityNotFoundError("person_not_found")
 
+        # Self-edit carve-out: a viewer may edit ONLY their own linked person and ONLY
+        # the whitelisted fields below. Editors/admins (role != "viewer") skip this and
+        # may edit any field. This is why the route uses RequireViewer, not RequireEditor.
         if cmd.actor.role == "viewer":
             user_profile = await self._uow.session.get(UserProfile, cmd.actor.user_id)
             if not user_profile or user_profile.person_id != cmd.person_id:

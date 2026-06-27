@@ -334,6 +334,9 @@ async def update_person(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonCommandHandler = Depends(get_person_command_handler),
+    # RequireViewer (not RequireEditor) is intentional: the handler grants a viewer
+    # edit access ONLY to their own linked person and ONLY whitelisted fields, while
+    # editors/admins get full edits. See PersonCommandHandler.update.
     user_role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Update a person's details."""
