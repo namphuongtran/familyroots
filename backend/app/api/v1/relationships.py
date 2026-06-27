@@ -81,7 +81,7 @@ async def get_marriage(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a marriage by ID."""
-    marriage = await query_handler.get_by_id(marriage_id)
+    marriage = await query_handler.get_by_id(marriage_id, clan_id)
     if not marriage:
         raise EntityNotFoundError("marriage_not_found")
     return {"data": MarriageResponse.model_validate(marriage).model_dump()}
@@ -165,7 +165,7 @@ async def get_parent_child(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a parent-child relationship by ID."""
-    link = await query_handler.get_by_id(link_id)
+    link = await query_handler.get_by_id(link_id, clan_id)
     if not link:
         raise EntityNotFoundError("parent_child_not_found")
     return {"data": ParentChildResponse.model_validate(link).model_dump()}

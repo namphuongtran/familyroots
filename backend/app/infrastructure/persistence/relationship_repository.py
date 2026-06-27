@@ -127,11 +127,18 @@ class SqlAlchemyMarriageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(self, marriage_id: uuid.UUID) -> MarriageEntity | None:
-        model = await self._session.get(MarriageModel, marriage_id)
-        if not model or model.is_deleted:
-            return None
-        return _marriage_to_domain(model)
+    async def get_by_id(
+        self, marriage_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> MarriageEntity | None:
+        result = await self._session.execute(
+            select(MarriageModel).where(
+                MarriageModel.id == marriage_id,
+                MarriageModel.created_by_clan_id == clan_id,
+                MarriageModel.is_deleted.is_(False),
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _marriage_to_domain(model) if model else None
 
     async def save(self, marriage: MarriageEntity) -> None:
         existing = await self._session.get(MarriageModel, marriage.id)
@@ -146,11 +153,18 @@ class SqlAlchemyParentChildRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(self, link_id: uuid.UUID) -> ParentChildEntity | None:
-        model = await self._session.get(ParentChildModel, link_id)
-        if not model or model.is_deleted:
-            return None
-        return _pc_to_domain(model)
+    async def get_by_id(
+        self, link_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> ParentChildEntity | None:
+        result = await self._session.execute(
+            select(ParentChildModel).where(
+                ParentChildModel.id == link_id,
+                ParentChildModel.created_by_clan_id == clan_id,
+                ParentChildModel.is_deleted.is_(False),
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _pc_to_domain(model) if model else None
 
     async def save(self, link: ParentChildEntity) -> None:
         existing = await self._session.get(ParentChildModel, link.id)
