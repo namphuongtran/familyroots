@@ -76,6 +76,23 @@ class TestInMemoryEventDispatcher:
         with pytest.raises(RuntimeError, match="audit write failed"):
             await dispatcher.dispatch([DomainEvent()])
 
+    @pytest.mark.asyncio
+    async def test_dispatch_aborts_remaining_handlers_on_failure(self) -> None:
+        """First failing handler aborts dispatch; later handlers are not called."""
+        dispatcher = InMemoryEventDispatcher()
+        handler2 = AsyncMock()
+
+        async def boom(_event):
+            raise RuntimeError("first fails")
+
+        dispatcher.register(DomainEvent, boom)
+        dispatcher.register(DomainEvent, handler2)
+
+        with pytest.raises(RuntimeError):
+            await dispatcher.dispatch([DomainEvent()])
+
+        handler2.assert_not_awaited()
+
 
 # ── AuditLogHandler ─────────────────────────────────────────────
 
