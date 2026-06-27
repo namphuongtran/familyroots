@@ -14,7 +14,7 @@ from alembic.config import Config
 
 # Admin connection used to CREATE/DROP the throwaway test database.
 ADMIN_URL = os.environ.get(
-    "TEST_PG_ADMIN_URL", "postgresql+psycopg2://postgres:password@localhost:5432/postgres"
+    "TEST_PG_ADMIN_URL", "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"
 )
 TEST_DB_NAME = "family_roots_schema_test"
 

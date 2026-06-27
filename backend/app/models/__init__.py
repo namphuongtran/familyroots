@@ -10,6 +10,7 @@ from app.models.clan_membership import ClanMembership
 from app.models.clan_settings import ClanSettings
 from app.models.document import Document
 from app.models.event import Event
+from app.models.identity_claim import IdentityClaim
 from app.models.marriage import Marriage
 from app.models.notification_log import NotificationLog
 from app.models.parent_child import ParentChild
@@ -30,6 +31,7 @@ __all__ = [
     "ClanSettings",
     "Document",
     "Event",
+    "IdentityClaim",
     "Marriage",
     "NotificationLog",
     "ParentChild",
