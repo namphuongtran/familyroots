@@ -30,12 +30,12 @@ class ParentChild(TimestampMixin, Base):
 
     parent_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("persons.id", ondelete="CASCADE"),
+        ForeignKey("persons.id", ondelete="RESTRICT"),
         index=True,
     )
     child_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("persons.id", ondelete="CASCADE"),
+        ForeignKey("persons.id", ondelete="RESTRICT"),
         index=True,
     )
 

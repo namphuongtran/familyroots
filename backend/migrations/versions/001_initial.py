@@ -280,13 +280,13 @@ def upgrade() -> None:
         sa.Column(
             "person1_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
             "person2_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
@@ -359,13 +359,13 @@ def upgrade() -> None:
         sa.Column(
             "parent_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
             "child_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
