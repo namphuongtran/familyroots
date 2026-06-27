@@ -10,19 +10,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
-from app.models import (  # noqa: F401 — import all models for autogenerate
-    AuditLog,
-    ChangeRequest,
-    Clan,
-    ClanMembership,
-    Document,
-    Event,
-    Marriage,
-    NotificationLog,
-    ParentChild,
-    Person,
-    UserClanRole,
-)
+import app.models  # noqa: F401 — registers all ORM tables on Base.metadata
 from app.models.base import Base
 
 config = context.config
@@ -34,6 +22,19 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object_, name, type_, reflected, compare_to):
+    """Limit autogenerate to tables/columns/FKs/unique constraints.
+
+    Indexes (incl. expression/partial/trigram), check constraints, and the
+    f_unaccent function are maintained as raw SQL in the baseline migration and
+    are not reliably round-tripped by autogenerate, so we exclude them from the
+    diff. This keeps the autogen-diff regression test meaningful.
+    """
+    if type_ in ("index", "check_constraint"):
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -42,6 +43,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -57,7 +59,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+        )
 
         with context.begin_transaction():
             context.run_migrations()
