@@ -66,7 +66,7 @@ def upgrade() -> None:
             "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
         ),
         sa.Column(
-            "origin_clan_id",
+            "created_by_clan_id",
             UUID(as_uuid=True),
             sa.ForeignKey("clans.id", ondelete="SET NULL"),
             nullable=True,
@@ -136,8 +136,8 @@ def upgrade() -> None:
         "CREATE INDEX idx_persons_is_deleted ON persons (is_deleted) WHERE is_deleted = false"
     )
     op.execute(
-        "CREATE INDEX idx_persons_origin_clan ON persons "
-        "(origin_clan_id) WHERE origin_clan_id IS NOT NULL"
+        "CREATE INDEX idx_persons_created_by_clan ON persons "
+        "(created_by_clan_id) WHERE created_by_clan_id IS NOT NULL"
     )
     # Immutable unaccent wrapper for index expressions
     op.execute(
@@ -757,7 +757,7 @@ def upgrade() -> None:
             server_default=sa.text("'PENDING'"),
         ),
         sa.Column("requester_note", sa.Text, nullable=True),
-        sa.Column("reasoning", sa.Text, nullable=True),
+        sa.Column("reviewer_note", sa.Text, nullable=True),
         sa.Column(
             "reviewed_by",
             UUID(as_uuid=True),
