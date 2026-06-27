@@ -95,7 +95,7 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                 ).model_dump()
             )
 
-        # Fetch marriages
+        # Fetch marriages — scoped to the caller's clan to prevent cross-clan leaks
         spouse_result = await self._session.execute(
             text("""
                 SELECT m.marriage_date, m.divorce_date, m.status,
@@ -107,9 +107,10 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                   ON p.id = CASE WHEN m.person1_id = :pid
                                  THEN m.person2_id ELSE m.person1_id END
                 WHERE (m.person1_id = :pid OR m.person2_id = :pid)
+                  AND m.created_by_clan_id = :clan_id
                   AND m.is_deleted = false
             """),
-            {"pid": person_id},
+            {"pid": person_id, "clan_id": clan_id},
         )
         for row in spouse_result.mappings().all():
             if row["marriage_date"]:

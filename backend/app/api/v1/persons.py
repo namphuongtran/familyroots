@@ -482,5 +482,6 @@ async def person_timeline(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Return a chronological timeline of life events for a person."""
+    await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
     timeline = await handler.get_timeline(clan_id, person_id)
     return {"data": timeline}
