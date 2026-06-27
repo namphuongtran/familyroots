@@ -87,7 +87,10 @@ async def list_persons(
     profile: str = Query(
         "full",
         pattern="^(summary|detail|full)$",
-        description="Response profile. Use summary for list cards, detail for medium payload, full for all fields.",
+        description=(
+            "Response profile. Use summary for list cards, detail for medium "
+            "payload, full for all fields."
+        ),
     ),
     include: str | None = Query(
         None,
@@ -300,7 +303,8 @@ async def get_person(
     include: str | None = Query(
         None,
         description=(
-            "Comma-separated embedded resources. Supported: marriages,parent_child,timeline,documents"
+            "Comma-separated embedded resources. Supported: "
+            "marriages,parent_child,timeline,documents"
         ),
     ),
     fields: str | None = Query(

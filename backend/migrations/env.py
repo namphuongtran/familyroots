@@ -9,8 +9,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.core.config import settings
 import app.models  # noqa: F401 — registers all ORM tables on Base.metadata
+from app.core.config import settings
 from app.models.base import Base
 
 config = context.config
@@ -30,9 +30,7 @@ def include_object(object_, name, type_, reflected, compare_to):
     are not reliably round-tripped by autogenerate, so we exclude them from the
     diff. This keeps the autogen-diff regression test meaningful.
     """
-    if type_ in ("index", "check_constraint"):
-        return False
-    return True
+    return type_ not in ("index", "check_constraint")
 
 
 def run_migrations_offline() -> None:
