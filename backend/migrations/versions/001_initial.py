@@ -793,7 +793,7 @@ def upgrade() -> None:
         ),
     )
     op.execute(
-        "CREATE UNIQUE INDEX idx_identity_claims_pending_user ON identity_claims (user_id) WHERE status = 'PENDING'"
+        "CREATE UNIQUE INDEX uq_identity_claim_user_pending ON identity_claims (user_id) WHERE status = 'PENDING'"
     )
     op.create_index("idx_identity_claims_person", "identity_claims", ["person_id"])
 
