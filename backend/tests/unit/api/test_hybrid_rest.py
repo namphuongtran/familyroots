@@ -90,7 +90,7 @@ class TestFetchIncludedData:
 
         assert "marriages" in result
         assert result["marriages"] == [{"marriage_id": "m1"}]
-        handler.get_marriages.assert_awaited_once_with(person_id)
+        handler.get_marriages.assert_awaited_once_with(clan_id, person_id)
 
     @pytest.mark.asyncio
     async def test_multiple_includes_fetched_in_parallel(self) -> None:

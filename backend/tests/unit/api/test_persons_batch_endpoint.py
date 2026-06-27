@@ -61,10 +61,12 @@ class _FakePersonQueryHandler:
     ) -> dict[uuid.UUID, dict[str, int]]:
         return {pid: {"spouse_count": 1, "child_count": 2} for pid in person_ids}
 
-    async def get_marriages(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_marriages(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         return [{"marriage_id": f"m-{person_id}"}]
 
-    async def get_parent_child(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_parent_child(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
         return [{"relation_id": f"pc-{person_id}"}]
 
     async def get_timeline(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
