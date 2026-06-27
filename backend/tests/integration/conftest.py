@@ -12,6 +12,27 @@ import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 
+
+def _reset_settings(dsn: str) -> None:
+    """Force-reinitialise cached settings to use *dsn* as DATABASE_URL.
+
+    ``app.core.config.settings`` is a module-level singleton frozen by
+    ``@lru_cache``.  When app modules are imported during pytest collection
+    (before any fixture runs) the cache fills with the default DATABASE_URL.
+    Subsequent calls to ``get_settings()`` from ``migrations/env.py`` return
+    the stale cached value, so Alembic ignores the DSN we passed to
+    ``cfg.set_main_option``.  Clearing the cache and re-creating the singleton
+    after we set ``os.environ["DATABASE_URL"]`` guarantees that every Alembic
+    run in this session targets the throw-away test database.
+    """
+    import app.core.config as _cfg_module
+
+    _cfg_module.get_settings.cache_clear()
+    os.environ["DATABASE_URL"] = dsn
+    # Re-populate the module-level singleton that migrations/env.py reads.
+    new_settings = _cfg_module.get_settings()
+    _cfg_module.settings = new_settings
+
 # Admin connection used to CREATE/DROP the throwaway test database.
 ADMIN_URL = os.environ.get(
     "TEST_PG_ADMIN_URL", "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"
@@ -37,7 +58,9 @@ def migrated_db_url() -> Iterator[str]:
     cfg.set_main_option("script_location", "migrations")
     # env.py strips +asyncpg; pass the sync DSN directly.
     cfg.set_main_option("sqlalchemy.url", test_dsn)
-    os.environ["DATABASE_URL"] = test_dsn
+    # Clear the @lru_cache on get_settings() so that migrations/env.py uses the
+    # test DSN even when app modules were already imported during collection.
+    _reset_settings(test_dsn)
     command.upgrade(cfg, "head")
 
     yield test_dsn

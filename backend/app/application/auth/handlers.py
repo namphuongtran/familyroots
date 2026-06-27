@@ -12,6 +12,7 @@ Architecture:
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -112,12 +113,20 @@ class AuthCommandHandler:
             if existing:
                 raise ConflictError("auth.clan_slug_taken")
 
+            await self._repo.ensure_profile(user_id, email, full_name)
+
             clan = Clan(name=clan_name, slug=clan_slug)
             self._repo.add_clan(clan)
-            self._uow.track(clan)
-            await self._uow.commit()
+            await self._uow.flush()  # INSERT the clan first so the role FK resolves
 
-            role = UserClanRole(clan_id=clan.id, user_id=user_id, role="admin", is_approved=True)
+            role = UserClanRole(
+                clan_id=clan.id,
+                user_id=user_id,
+                role="admin",
+                is_approved=True,
+                approved_by=user_id,
+                approved_at=datetime.now(UTC),
+            )
             self._repo.add_user_role(role)
             await self._uow.commit()
 
@@ -141,6 +150,7 @@ class AuthCommandHandler:
                 raise ConflictError("auth.already_joined_clan")
             raise ConflictError("auth.membership_already_pending")
 
+        await self._repo.ensure_profile(user_id, email, full_name)
         role = UserClanRole(clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False)
         self._repo.add_user_role(role)
         await self._uow.commit()
