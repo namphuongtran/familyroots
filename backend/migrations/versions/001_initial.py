@@ -659,6 +659,8 @@ def upgrade() -> None:
         ),
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("role", sa.String(20), nullable=False, server_default=sa.text("'viewer'")),
+        sa.Column("status", sa.String(20), nullable=False, server_default=sa.text("'pending'")),
+        sa.Column("accepted_by", UUID(as_uuid=True), nullable=True),
         sa.Column("invited_by", UUID(as_uuid=True), nullable=False),
         sa.Column("token", sa.String(255), nullable=False, unique=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
@@ -669,9 +671,17 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("NOW()"),
         ),
+        sa.CheckConstraint(
+            "status IN ('pending', 'accepted', 'revoked', 'expired')",
+            name="clan_invitations_status_check",
+        ),
     )
     op.create_index("ix_clan_invitations_clan_id", "clan_invitations", ["clan_id"])
     op.create_index("ix_clan_invitations_clan_email", "clan_invitations", ["clan_id", "email"])
+    op.execute(
+        "CREATE UNIQUE INDEX uq_clan_invitations_pending "
+        "ON clan_invitations (clan_id, email) WHERE status = 'pending'"
+    )
 
     # -- Table: user_clan_roles --
     op.create_table(
