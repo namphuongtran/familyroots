@@ -987,6 +987,7 @@ def downgrade() -> None:
     op.drop_table("notification_log")
     op.drop_table("audit_logs")
     op.drop_table("change_requests")
+    op.drop_table("identity_claims")
     op.drop_table("clan_invitations")
     op.drop_table("clan_settings")
     op.drop_table("user_clan_roles")
