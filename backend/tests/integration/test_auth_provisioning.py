@@ -54,3 +54,46 @@ async def test_register_create_clan_provisions_profile(async_session: AsyncSessi
         sa.text("SELECT role FROM user_clan_roles WHERE user_id = :id"), {"id": user_id}
     )
     assert role.scalar_one() == "admin"
+
+
+@pytest.mark.asyncio
+async def test_register_join_clan_provisions_profile(async_session: AsyncSession):
+    repo = SqlAlchemyAuthRepository(async_session)
+    uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
+    handler = AuthCommandHandler(repo, uow)
+
+    # An admin creates a clan to join.
+    admin_id = uuid.uuid4()
+    slug = f"clan-{admin_id.hex[:8]}"
+    created = await handler._assign_clan_membership(
+        user_id=admin_id,
+        email=f"{admin_id.hex[:8]}@example.com",
+        full_name="Admin",
+        clan_action="create",
+        clan_name="Họ Trần",
+        clan_slug=slug,
+    )
+    clan_id = created.clan_id
+
+    # A second user joins it (pending approval).
+    joiner_id = uuid.uuid4()
+    resp = await handler._assign_clan_membership(
+        user_id=joiner_id,
+        email=f"{joiner_id.hex[:8]}@example.com",
+        full_name="Thành Viên",
+        clan_action="join",
+        clan_id=clan_id,
+    )
+    assert resp.is_approved is False
+
+    prof = await async_session.execute(
+        sa.text("SELECT id FROM user_profiles WHERE id = :id"), {"id": joiner_id}
+    )
+    assert prof.scalar_one() == joiner_id
+    role = await async_session.execute(
+        sa.text("SELECT role, is_approved FROM user_clan_roles WHERE user_id = :id"),
+        {"id": joiner_id},
+    )
+    row = role.first()
+    assert row.role == "viewer"
+    assert row.is_approved is False
