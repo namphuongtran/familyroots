@@ -6,10 +6,12 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 from fastapi import Depends, FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_v1_router
@@ -19,7 +21,9 @@ from app.core.exceptions import (
     AppError,
     app_exception_handler,
     domain_exception_handler,
+    http_exception_handler,
     unhandled_exception_handler,
+    validation_exception_handler,
 )
 from app.core.logging import configure_logging
 from app.domain.shared.exceptions import DomainError
@@ -71,9 +75,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Register custom exception handlers
+    # Register custom exception handlers. AppError is matched before the base
+    # StarletteHTTPException (more specific), so coded errors keep their envelope
+    # while bare HTTPExceptions and 422 validation errors are normalized too.
     application.add_exception_handler(AppError, app_exception_handler)
     application.add_exception_handler(DomainError, domain_exception_handler)
+    application.add_exception_handler(RequestValidationError, validation_exception_handler)
+    application.add_exception_handler(StarletteHTTPException, http_exception_handler)
     application.add_exception_handler(Exception, unhandled_exception_handler)
 
     # CORS middleware

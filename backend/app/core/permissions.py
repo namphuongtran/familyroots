@@ -5,11 +5,12 @@ from collections.abc import Callable
 from enum import StrEnum
 from typing import Any
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.exceptions import ForbiddenError
 from app.core.security import ensure_user_profile, get_current_clan_id, get_current_user
 from app.schemas.auth import UserProfile
 
@@ -54,15 +55,15 @@ def require_role(minimum_role: ClanRole) -> Callable[..., Any]:
         row = result.first()
 
         if not row or not row.is_approved:
-            raise HTTPException(status_code=403, detail="No approved clan membership")
+            raise ForbiddenError("no_approved_clan_membership")
 
         try:
             user_role = ClanRole(row.role)
         except ValueError as exc:
-            raise HTTPException(status_code=403, detail="Invalid role assignment") from exc
+            raise ForbiddenError("invalid_role_assignment") from exc
 
         if ROLE_HIERARCHY.index(user_role) < ROLE_HIERARCHY.index(minimum_role):
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
+            raise ForbiddenError("insufficient_permissions")
 
         return user_role
 
@@ -100,15 +101,15 @@ class RequireClanRole:
         row = result.first()
 
         if not row or not row.is_approved:
-            raise HTTPException(status_code=403, detail="No approved clan membership")
+            raise ForbiddenError("no_approved_clan_membership")
 
         try:
             user_role = ClanRole(row.role)
         except ValueError as exc:
-            raise HTTPException(status_code=403, detail="Invalid role assignment") from exc
+            raise ForbiddenError("invalid_role_assignment") from exc
 
         if user_role not in self._allowed_roles:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
+            raise ForbiddenError("insufficient_permissions")
 
         return profile
 

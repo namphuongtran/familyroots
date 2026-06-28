@@ -109,7 +109,7 @@ class PersonCommandHandler:
             }
             invalid_fields = set(cmd.changes.keys()) - allowed_fields
             if invalid_fields:
-                raise ForbiddenError(f"unauthorized_fields_update: {', '.join(invalid_fields)}")
+                raise ForbiddenError("field_not_updatable", {"fields": sorted(invalid_fields)})
 
         person.update(cmd.changes, cmd.actor, cmd.clan_id)
         self._uow.track(person)
