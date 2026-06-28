@@ -42,7 +42,9 @@ class PersonCreateRequest(BaseModel):
     avatar_url: str | None = Field(None, max_length=500)
     notes: str | None = None
 
-    created_by_clan_id: uuid.UUID | None = None
+    # created_by_clan_id is provenance, not client-settable: the handler always
+    # stamps it from the active clan (X-Current-Clan-Id). Accepting it from the
+    # body let a caller assign a person to an arbitrary clan.
 
     @model_validator(mode="after")
     def validate_death_after_birth(self) -> PersonCreateRequest:
@@ -86,7 +88,8 @@ class PersonUpdateRequest(BaseModel):
     avatar_url: str | None = Field(None, max_length=500)
     notes: str | None = None
 
-    created_by_clan_id: uuid.UUID | None = None
+    # created_by_clan_id is provenance and is NOT updatable — reassigning it would
+    # transfer claim-review control of the person to another clan.
 
     @model_validator(mode="after")
     def validate_death_after_birth(self) -> PersonUpdateRequest:

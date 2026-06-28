@@ -123,7 +123,8 @@ UPDATABLE_FIELDS = (
     "biography",
     "avatar_url",
     "notes",
-    "created_by_clan_id",
+    # created_by_clan_id is intentionally NOT updatable: it is provenance and the
+    # claim-authorization path keys on it (reassigning it = cross-clan escalation).
     "is_deleted",
     "deleted_at",
     "deleted_by",

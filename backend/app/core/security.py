@@ -170,30 +170,38 @@ async def get_current_clan_id(
     if not approved_clan_ids:
         raise HTTPException(status_code=403, detail="No approved clan membership")
 
-    # If client specifies a clan via header, validate membership
+    # Resolve the active clan from the header (validating membership) or auto-select.
     if x_current_clan_id is not None:
         try:
-            requested_clan_id = uuid.UUID(x_current_clan_id)
+            resolved_clan_id = uuid.UUID(x_current_clan_id)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid X-Current-Clan-Id format") from exc
 
-        if requested_clan_id not in approved_clan_ids:
+        if resolved_clan_id not in approved_clan_ids:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have approved membership in this clan",
             )
-        return requested_clan_id
+    elif len(approved_clan_ids) == 1:
+        # No header: auto-select if exactly one clan.
+        resolved_clan_id = approved_clan_ids[0]
+    else:
+        # Multiple clans, no header — client must specify.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "You belong to multiple clans. "
+                "Set X-Current-Clan-Id header to select the active clan. "
+                "Use GET /api/v1/me/clans to list your clans."
+            ),
+        )
 
-    # No header: auto-select if exactly one clan
-    if len(approved_clan_ids) == 1:
-        return approved_clan_ids[0]
+    # A suspended clan is off-limits to all its members, not just admins: reject
+    # every clan-scoped request once the platform has deactivated the clan.
+    from app.models.clan import Clan
 
-    # Multiple clans, no header — client must specify
-    raise HTTPException(
-        status_code=400,
-        detail=(
-            "You belong to multiple clans. "
-            "Set X-Current-Clan-Id header to select the active clan. "
-            "Use GET /api/v1/me/clans to list your clans."
-        ),
-    )
+    is_active = await db.scalar(select(Clan.is_active).where(Clan.id == resolved_clan_id))
+    if not is_active:
+        raise HTTPException(status_code=403, detail="This clan is suspended")
+
+    return resolved_clan_id

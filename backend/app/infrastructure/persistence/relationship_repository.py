@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.relationship.entities import Marriage as MarriageEntity
 from app.domain.relationship.entities import ParentChild as ParentChildEntity
+from app.models.clan_membership import ClanMembership
 from app.models.marriage import Marriage as MarriageModel
 from app.models.parent_child import ParentChild as ParentChildModel
 from app.models.person import Person as PersonModel
@@ -238,3 +239,20 @@ class SqlAlchemyRelationshipQueryPort:
         stmt = select(PersonModel.id, PersonModel.birth_date).where(PersonModel.id.in_(person_ids))
         result = await self._session.execute(stmt)
         return {row.id: row.birth_date for row in result}
+
+    async def persons_in_clan(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> set[uuid.UUID]:
+        """Subset of person_ids that are members of clan_id (clan_memberships).
+
+        Mirrors the read-path definition of "person in clan" used by
+        PersonRepository.get_in_clan.
+        """
+        if not person_ids:
+            return set()
+        stmt = select(ClanMembership.person_id).where(
+            ClanMembership.person_id.in_(person_ids),
+            ClanMembership.clan_id == clan_id,
+        )
+        result = await self._session.execute(stmt)
+        return set(result.scalars().all())

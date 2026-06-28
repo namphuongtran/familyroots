@@ -141,6 +141,9 @@ async def build_descendants_tree(
             "    ON cm.person_id = p.id AND cm.clan_id = :clan_id "
             "WHERE (m.person1_id = ANY(:ids) OR m.person2_id = ANY(:ids))"
             "  AND m.is_deleted = false"
+            # Clan isolation: only traverse marriage edges this clan owns, so a
+            # spouse recorded by another clan is never surfaced (C6).
+            "  AND m.created_by_clan_id = :clan_id"
         ),
         {"ids": person_ids, "clan_id": clan_id},
     )
