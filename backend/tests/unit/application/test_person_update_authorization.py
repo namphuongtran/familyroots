@@ -59,22 +59,8 @@ class _PersonEntity:
         self.changes_applied = changes
 
 
-class _Profile:
-    def __init__(self, person_id):
-        self.person_id = person_id
-
-
-class _FakeSession:
-    def __init__(self, profile):
-        self._profile = profile
-
-    async def get(self, model, key):
-        return self._profile
-
-
 class _FakeUow:
-    def __init__(self, profile):
-        self.session = _FakeSession(profile)
+    def __init__(self):
         self.commits = 0
 
     def track(self, agg):
@@ -85,11 +71,15 @@ class _FakeUow:
 
 
 class _FakeRepo:
-    def __init__(self, person):
+    def __init__(self, person, linked_person_id=None):
         self._person = person
+        self._linked_person_id = linked_person_id
 
     async def get_in_clan(self, person_id, clan_id):
         return self._person
+
+    async def get_linked_person_id(self, user_id):
+        return self._linked_person_id
 
     async def save(self, person):
         pass
@@ -104,7 +94,7 @@ def _actor(role, user_id):
 async def test_viewer_can_edit_own_whitelisted_field():
     person = _PersonEntity()
     uid = uuid.uuid4()
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(person.id)))  # type: ignore[arg-type]
+    handler = PersonCommandHandler(_FakeRepo(person, linked_person_id=person.id), _FakeUow())  # type: ignore[arg-type]
     cmd = UpdatePerson(
         person_id=person.id,
         clan_id=uuid.uuid4(),
@@ -120,7 +110,7 @@ async def test_viewer_cannot_edit_other_person():
     person = _PersonEntity()
     uid = uuid.uuid4()
     # profile is linked to a DIFFERENT person
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(uuid.uuid4())))  # type: ignore[arg-type]
+    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow())  # type: ignore[arg-type]
     cmd = UpdatePerson(
         person_id=person.id,
         clan_id=uuid.uuid4(),
@@ -135,7 +125,7 @@ async def test_viewer_cannot_edit_other_person():
 async def test_viewer_cannot_edit_nonwhitelisted_field():
     person = _PersonEntity()
     uid = uuid.uuid4()
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(person.id)))  # type: ignore[arg-type]
+    handler = PersonCommandHandler(_FakeRepo(person, linked_person_id=person.id), _FakeUow())  # type: ignore[arg-type]
     cmd = UpdatePerson(
         person_id=person.id,
         clan_id=uuid.uuid4(),
@@ -149,7 +139,7 @@ async def test_viewer_cannot_edit_nonwhitelisted_field():
 @pytest.mark.asyncio
 async def test_editor_can_edit_any_field():
     person = _PersonEntity()
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(uuid.uuid4())))  # type: ignore[arg-type]
+    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow())  # type: ignore[arg-type]
     cmd = UpdatePerson(
         person_id=person.id,
         clan_id=uuid.uuid4(),

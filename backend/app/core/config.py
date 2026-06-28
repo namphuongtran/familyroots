@@ -80,6 +80,18 @@ class Settings(BaseSettings):
                 raise ValueError("APP_DEBUG must be False in production")
             if self.ALLOWED_HOSTS == ["*"]:
                 raise ValueError("ALLOWED_HOSTS must be set explicitly in production")
+            # A localhost DSN in production almost certainly means DATABASE_URL was
+            # never wired — fail fast rather than boot against a non-existent local DB.
+            if "localhost" in self.DATABASE_URL or "127.0.0.1" in self.DATABASE_URL:
+                raise ValueError(
+                    "DATABASE_URL must point at the production database, not localhost"
+                )
+            # CORS must be real origins (not the localhost dev defaults, not wildcard —
+            # "*" is also invalid with allow_credentials=True).
+            if self.CORS_ORIGINS == ["*"] or any(
+                "localhost" in origin for origin in self.CORS_ORIGINS
+            ):
+                raise ValueError("CORS_ORIGINS must be explicit production origins")
         return self
 
 

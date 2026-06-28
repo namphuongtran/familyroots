@@ -31,11 +31,26 @@ def test_production_rejects_wildcard_allowed_hosts():
         _build(APP_ENV="production", APP_SECRET_KEY="a-real-secret", APP_DEBUG=False)
 
 
+_PROD_SAFE = {
+    "APP_ENV": "production",
+    "APP_SECRET_KEY": "a-real-secret",
+    "APP_DEBUG": False,
+    "ALLOWED_HOSTS": ["example.com"],
+    "DATABASE_URL": "postgresql+psycopg://u:p@db.prod.internal:5432/familyroots",
+    "CORS_ORIGINS": ["https://app.example.com"],
+}
+
+
 def test_production_with_safe_values_ok():
-    s = _build(
-        APP_ENV="production",
-        APP_SECRET_KEY="a-real-secret",
-        APP_DEBUG=False,
-        ALLOWED_HOSTS=["example.com"],
-    )
+    s = _build(**_PROD_SAFE)
     assert s.APP_ENV == "production"
+
+
+def test_production_rejects_localhost_database_url():
+    with pytest.raises(ValidationError):
+        _build(**{**_PROD_SAFE, "DATABASE_URL": "postgresql+psycopg://u:p@localhost:5432/x"})
+
+
+def test_production_rejects_localhost_cors_origin():
+    with pytest.raises(ValidationError):
+        _build(**{**_PROD_SAFE, "CORS_ORIGINS": ["http://localhost:3000"]})

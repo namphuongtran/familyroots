@@ -13,8 +13,8 @@ from typing import Any
 
 from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.events import AuditableEvent
+from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class CrudAuditEvent(AuditableEvent):
 
 
 async def emit_audit_event(
-    uow: SqlAlchemyUnitOfWork,
+    uow: UnitOfWork,
     *,
     action: str,
     resource_type: str,

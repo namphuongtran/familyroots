@@ -21,13 +21,13 @@ from app.domain.invitation.events import (
 from app.domain.invitation.repository import InvitationRepository
 from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.exceptions import ConflictError, EntityNotFoundError, ForbiddenError
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.domain.shared.unit_of_work import UnitOfWork
 from app.models.clan_invitation import ClanInvitation
 from app.models.user_clan_role import UserClanRole
 
 
 class InvitationCommandHandler:
-    def __init__(self, repo: InvitationRepository, uow: SqlAlchemyUnitOfWork) -> None:
+    def __init__(self, repo: InvitationRepository, uow: UnitOfWork) -> None:
         self._repo = repo
         self._uow = uow
 

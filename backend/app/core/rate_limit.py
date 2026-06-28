@@ -82,9 +82,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         if len(bucket) >= self._max:
             retry_after = int(bucket[0] - cutoff) + 1
+            # Middleware runs outside the exception-handler layer, so emit the
+            # standard {error:{code,message,detail}} envelope directly (clients parse
+            # error.code uniformly). LanguageMiddleware runs before this one, so the
+            # locale is set; t() falls back to vi otherwise.
+            from app.services.translator import t
+
             return JSONResponse(
                 status_code=429,
-                content={"detail": "Too many requests. Please try again later."},
+                content={
+                    "error": {
+                        "code": "rate_limited",
+                        "message": t("error.rate_limited"),
+                        "detail": {"retry_after": retry_after},
+                    }
+                },
                 headers={"Retry-After": str(retry_after)},
             )
 

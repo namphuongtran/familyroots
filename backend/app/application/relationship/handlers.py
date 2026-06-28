@@ -20,7 +20,7 @@ from app.domain.relationship.entities import Marriage, ParentChild
 from app.domain.relationship.repository import MarriageRepository, ParentChildRepository
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.domain.shared.exceptions import EntityNotFoundError
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.domain.shared.unit_of_work import UnitOfWork
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
 
@@ -29,7 +29,7 @@ class MarriageCommandHandler:
     def __init__(
         self,
         repo: MarriageRepository,
-        uow: SqlAlchemyUnitOfWork,
+        uow: UnitOfWork,
         validator: RelationshipDomainValidator,
     ) -> None:
         self._repo = repo
@@ -83,7 +83,7 @@ class ParentChildCommandHandler:
     def __init__(
         self,
         repo: ParentChildRepository,
-        uow: SqlAlchemyUnitOfWork,
+        uow: UnitOfWork,
         validator: RelationshipDomainValidator,
     ) -> None:
         self._repo = repo
