@@ -1,7 +1,8 @@
 """Alembic environment configuration — single schema.
 
 No multi-schema complexity. Alembic manages the public schema only.
-Clan data isolation is handled by clan_id column + Supabase RLS.
+Clan isolation is enforced in the application/repository layer; RLS is a planned
+defense-in-depth addition (not yet active).
 """
 
 from logging.config import fileConfig

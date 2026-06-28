@@ -15,6 +15,7 @@
   "error.only_photo_can_be_avatar": "Seules les photos peuvent servir d'avatar",
   "error.internal_error": "Une erreur inattendue s'est produite.",
   "error.forbidden": "Accès refusé",
+  "error.clan_context_mismatch": "Le clan dans l'URL ne correspond pas à votre clan actif.",
   "error.conflict": "Conflit de ressource",
   "error.validation": "Échec de la validation",
   "error.relationship.too_many_biological_parents": "Une personne ne peut pas avoir plus de deux parents biologiques",

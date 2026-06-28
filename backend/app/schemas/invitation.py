@@ -41,11 +41,6 @@ class InvitationCreatedResponse(BaseModel):
     accept_path: str  # e.g. "/api/v1/invitations/{token}/accept" — admin shares this
 
 
-class InvitationAcceptRequest(BaseModel):
-    # token comes from the path; body is currently empty but reserved.
-    pass
-
-
 class InvitationAcceptedResponse(BaseModel):
     clan_id: uuid.UUID
     role: str

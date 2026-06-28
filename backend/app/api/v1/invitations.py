@@ -3,7 +3,7 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from app.application.invitation.commands import (
     AcceptInvitation,
@@ -11,6 +11,7 @@ from app.application.invitation.commands import (
     RevokeInvitation,
 )
 from app.application.invitation.handlers import InvitationCommandHandler, InvitationQueryHandler
+from app.core.exceptions import ForbiddenError
 from app.core.permissions import RequireClanRole
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
@@ -40,7 +41,7 @@ async def create_invitation(
     handler: InvitationCommandHandler = Depends(get_invitation_command_handler),
 ) -> Any:
     if clan_id != active_clan_id:
-        raise HTTPException(status_code=403, detail="Path clan does not match your active clan")
+        raise ForbiddenError("clan_context_mismatch")
     out = await handler.create(
         CreateInvitation(
             clan_id=clan_id,
@@ -60,7 +61,7 @@ async def list_invitations(
     handler: InvitationQueryHandler = Depends(get_invitation_query_handler),
 ) -> dict[str, Any]:
     if clan_id != active_clan_id:
-        raise HTTPException(status_code=403, detail="Path clan does not match your active clan")
+        raise ForbiddenError("clan_context_mismatch")
     invites = await handler.list_for_clan(clan_id)
     return {"data": [InvitationResponse.model_validate(i).model_dump() for i in invites]}
 
@@ -74,7 +75,7 @@ async def revoke_invitation(
     handler: InvitationCommandHandler = Depends(get_invitation_command_handler),
 ) -> None:
     if clan_id != active_clan_id:
-        raise HTTPException(status_code=403, detail="Path clan does not match your active clan")
+        raise ForbiddenError("clan_context_mismatch")
     await handler.revoke(
         RevokeInvitation(
             clan_id=clan_id,

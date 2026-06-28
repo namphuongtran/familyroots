@@ -15,6 +15,7 @@
   "error.only_photo_can_be_avatar": "Chỉ ảnh mới có thể đặt làm ảnh đại diện",
   "error.internal_error": "Đã xảy ra lỗi không mong muốn.",
   "error.forbidden": "Truy cập bị từ chối",
+  "error.clan_context_mismatch": "Dòng họ trong URL không khớp với dòng họ hiện tại của bạn.",
   "error.conflict": "Xung đột tài nguyên",
   "error.validation": "Xác thực thất bại",
   "error.relationship.too_many_biological_parents": "Một người không thể có quá hai cha mẹ ruột",

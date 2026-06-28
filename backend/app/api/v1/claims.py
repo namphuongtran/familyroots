@@ -3,9 +3,10 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
+from app.core.exceptions import ForbiddenError
 from app.core.permissions import RequireClanRole, require_active_user
 from app.core.security import get_current_clan_id
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
@@ -54,9 +55,7 @@ async def list_clan_claims(
 ) -> dict[str, Any]:
     """List paginated identity claims for persons created by this clan."""
     if clan_id != active_clan_id:
-        raise HTTPException(
-            status_code=403, detail="Path clan does not match your active clan"
-        )
+        raise ForbiddenError("clan_context_mismatch")
     paginated = await handler.list_clan_claims(
         clan_id=clan_id, status=status, page=page, page_size=page_size
     )
