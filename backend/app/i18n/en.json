@@ -13,6 +13,7 @@
   "error.file_too_large": "File exceeds the maximum allowed size",
   "error.document_not_linked_to_member": "Document is not linked to a member",
   "error.only_photo_can_be_avatar": "Only photo documents can be set as avatar",
+  "error.internal_error": "An unexpected error occurred.",
   "error.forbidden": "Access denied",
   "error.conflict": "Resource conflict",
   "error.validation": "Validation failed",

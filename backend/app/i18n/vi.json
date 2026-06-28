@@ -13,6 +13,7 @@
   "error.file_too_large": "Tệp vượt quá kích thước tối đa",
   "error.document_not_linked_to_member": "Tài liệu không liên kết với thành viên",
   "error.only_photo_can_be_avatar": "Chỉ ảnh mới có thể đặt làm ảnh đại diện",
+  "error.internal_error": "Đã xảy ra lỗi không mong muốn.",
   "error.forbidden": "Truy cập bị từ chối",
   "error.conflict": "Xung đột tài nguyên",
   "error.validation": "Xác thực thất bại",

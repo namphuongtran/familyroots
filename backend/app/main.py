@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.exceptions import AppError, app_exception_handler, domain_exception_handler
+from app.core.exceptions import (
+    AppError,
+    app_exception_handler,
+    domain_exception_handler,
+    unhandled_exception_handler,
+)
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
@@ -66,6 +71,7 @@ def create_app() -> FastAPI:
     # Register custom exception handlers
     application.add_exception_handler(AppError, app_exception_handler)
     application.add_exception_handler(DomainError, domain_exception_handler)
+    application.add_exception_handler(Exception, unhandled_exception_handler)
 
     # CORS middleware
     application.add_middleware(

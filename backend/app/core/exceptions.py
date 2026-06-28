@@ -1,10 +1,13 @@
 """Custom exception classes and global exception handler with i18n support."""
 
+import logging
 from typing import Any
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
+
+logger = logging.getLogger(__name__)
 
 
 class AppError(HTTPException):
@@ -100,6 +103,26 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
                 "code": exc.code,
                 "message": t(f"error.{exc.code}"),
                 "detail": exc.detail,
+            }
+        },
+    )
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all: log the real error server-side, return the standard envelope.
+
+    Never leaks the exception message or traceback to the client.
+    """
+    from app.services.translator import t
+
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "internal_error",
+                "message": t("error.internal_error"),
+                "detail": {},
             }
         },
     )

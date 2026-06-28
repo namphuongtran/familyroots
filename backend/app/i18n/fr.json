@@ -13,6 +13,7 @@
   "error.file_too_large": "Le fichier dépasse la taille maximale autorisée",
   "error.document_not_linked_to_member": "Le document n'est pas lié à un membre",
   "error.only_photo_can_be_avatar": "Seules les photos peuvent servir d'avatar",
+  "error.internal_error": "Une erreur inattendue s'est produite.",
   "error.forbidden": "Accès refusé",
   "error.conflict": "Conflit de ressource",
   "error.validation": "Échec de la validation",
