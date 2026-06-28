@@ -66,6 +66,7 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
             jwks,
             algorithms=["RS256"],
             audience="authenticated",
+            issuer=f"{settings.SUPABASE_URL}/auth/v1",
         )
         return payload
     except JWTError as exc:
