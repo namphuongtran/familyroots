@@ -155,7 +155,9 @@ class EventQueryHandler:
         event_type: str | None = None,
         cursor: str | None = None,
         limit: int = 20,
-    ) -> list[EventResponse]:
+    ) -> tuple[list[EventResponse], dict[str, Any]]:
+        from app.core.pagination import build_page
+
         events = await self._repo.list_in_clan(
             clan_id,
             person_id=person_id,
@@ -163,7 +165,8 @@ class EventQueryHandler:
             cursor=cursor,
             limit=limit,
         )
-        return [
+        page = build_page(events, limit)
+        responses = [
             EventResponse(
                 id=e.id,
                 clan_id=e.clan_id,
@@ -179,8 +182,9 @@ class EventQueryHandler:
                 created_at=e.created_at,
                 updated_at=e.updated_at,
             )
-            for e in events
+            for e in page["data"]
         ]
+        return responses, page["meta"]
 
     async def get_upcoming(self, *, clan_id: uuid.UUID, days: int = 30) -> list[dict[str, Any]]:
         """Get upcoming events within the next N days with recurring logic."""

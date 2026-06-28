@@ -186,8 +186,12 @@ class DocumentQueryHandler:
         document_type: str | None = None,
         cursor: str | None = None,
         limit: int = 20,
-    ) -> list[DocumentSummary]:
-        """List documents with optional filters."""
+    ) -> tuple[list[DocumentSummary], dict[str, Any]]:
+        """List documents with optional filters. Returns (page items, cursor meta)."""
+        from app.core.pagination import build_page
+
+        # Repo fetches limit+1 (paginate_query); build_page slices to limit and
+        # derives the next-page cursor from the trailing row.
         docs = await self._repo.list_in_clan(
             clan_id,
             person_id=person_id,
@@ -195,7 +199,8 @@ class DocumentQueryHandler:
             cursor=cursor,
             limit=limit,
         )
-        return [
+        page = build_page(docs, limit)
+        summaries = [
             DocumentSummary(
                 id=d.id,
                 title=d.title,
@@ -205,5 +210,6 @@ class DocumentQueryHandler:
                 is_avatar=d.is_avatar,
                 created_at=d.created_at,
             )
-            for d in docs
+            for d in page["data"]
         ]
+        return summaries, page["meta"]
