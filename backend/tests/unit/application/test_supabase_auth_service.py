@@ -16,4 +16,4 @@ async def test_logout_revokes_session(monkeypatch):
     await svc.logout(access_token="the-access-token")
 
     # The service must have asked Supabase to sign the session out.
-    assert admin.auth.admin.sign_out.called
+    admin.auth.admin.sign_out.assert_called_once_with("the-access-token", "global")
