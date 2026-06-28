@@ -71,5 +71,7 @@
 
   "timeline.birth": "Sinh",
   "timeline.death": "Mất",
-  "timeline.marriage": "Kết hôn"
+  "timeline.marriage": "Kết hôn",
+
+  "invitation.accepted": "Đã chấp nhận lời mời"
 }

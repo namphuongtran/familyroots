@@ -71,5 +71,7 @@
 
   "timeline.birth": "出生",
   "timeline.death": "逝世",
-  "timeline.marriage": "结婚"
+  "timeline.marriage": "结婚",
+
+  "invitation.accepted": "邀请已接受"
 }

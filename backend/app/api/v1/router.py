@@ -8,6 +8,7 @@ from app.api.v1.claims import admin_claims_router, user_claims_router
 from app.api.v1.clans import router as clans_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.events import router as events_router
+from app.api.v1.invitations import admin_invitations_router, user_invitations_router
 from app.api.v1.me import router as me_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.persons import router as persons_router
@@ -31,4 +32,13 @@ api_v1_router.include_router(notifications_router, prefix="/notifications", tags
 # Claims
 api_v1_router.include_router(user_claims_router, prefix="/claims", tags=["claims"])
 api_v1_router.include_router(admin_claims_router, prefix="/clans/{clan_id}/claims", tags=["claims"])
+
+# Invitations
+api_v1_router.include_router(
+    admin_invitations_router, prefix="/clans/{clan_id}/invitations", tags=["invitations"]
+)
+api_v1_router.include_router(
+    user_invitations_router, prefix="/invitations", tags=["invitations"]
+)
+
 api_v1_router.include_router(platform_admin_router)

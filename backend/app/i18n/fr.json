@@ -71,5 +71,7 @@
 
   "timeline.birth": "Naissance",
   "timeline.death": "Décès",
-  "timeline.marriage": "Mariage"
+  "timeline.marriage": "Mariage",
+
+  "invitation.accepted": "Invitation acceptée"
 }
