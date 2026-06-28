@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.exc
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.application.person.claim_handlers import ClaimCommandHandler
@@ -33,6 +34,7 @@ async def async_engine(migrated_db_url: str):
     await engine.dispose()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_approve_claim_new_claimant_satisfies_check_constraint(
     async_engine,
@@ -143,14 +145,18 @@ async def test_approve_claim_new_claimant_satisfies_check_constraint(
                 reviewer_note="ok",
             )
         except sqlalchemy.exc.IntegrityError as exc:
-            # Pre-fix failure: CHECK constraint `user_clan_roles_approval_consistency`
+            # C1 regression: CHECK constraint `user_clan_roles_approval_consistency` fired.
+            # This means approved_by/approved_at were not set on the auto-granted role.
             pytest.fail(
                 f"approve_claim raised IntegrityError (CHECK constraint violated): {exc}"
             )
-        except Exception:
-            # Any other exception (e.g. pydantic ValidationError from model_validate after
-            # commit) is NOT the CHECK constraint bug -- commit already succeeded.
-            # DB assertions below confirm the committed state is correct.
+        except ValidationError:
+            # Known test-harness artifact: after a successful commit, approve_claim calls
+            # IdentityClaimResponse.model_validate() which lazy-loads `updated_at` on the
+            # ORM object. Outside FastAPI's async greenlet, that SQLAlchemy lazy-load raises
+            # MissingGreenlet wrapped inside a pydantic ValidationError. The commit already
+            # succeeded at this point, so the SQL assertions below still verify correctness.
+            # In production the handler runs inside an async greenlet and returns normally.
             pass
 
     # ── Assert phase (fresh session reads committed state) ───────────────────────
