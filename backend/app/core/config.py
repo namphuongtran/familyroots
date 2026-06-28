@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
     APP_SECRET_KEY: str = "change-me-in-production"
-    APP_DEBUG: bool = True
+    APP_DEBUG: bool = False
     APP_PORT: int = 8000
 
     # Supabase / PostgreSQL
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
+    ALLOWED_HOSTS: list[str] = ["*"]
 
     # Scheduler
     NOTIFICATION_CRON_HOUR: int = 7
@@ -43,6 +45,15 @@ class Settings(BaseSettings):
 
     # Invitations
     INVITATION_TTL_DAYS: int = 7
+
+    @model_validator(mode="after")
+    def _enforce_production_safety(self) -> Settings:
+        if self.APP_ENV == "production":
+            if self.APP_SECRET_KEY == "change-me-in-production":
+                raise ValueError("APP_SECRET_KEY must be set to a real secret in production")
+            if self.APP_DEBUG:
+                raise ValueError("APP_DEBUG must be False in production")
+        return self
 
 
 @lru_cache
