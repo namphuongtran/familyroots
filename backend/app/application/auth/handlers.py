@@ -213,6 +213,8 @@ class AuthCommandHandler:
         except Exception:
             # Compensate: the Supabase auth user exists but the DB membership
             # failed — delete the orphan so the email can be reused.
+            # Registration is all-or-nothing: any failure rolls back the just-created
+            # auth user so the email can be reused on retry.
             with suppress(Exception):
                 _supabase_admin().auth.admin.delete_user(str(user_id))
             raise
