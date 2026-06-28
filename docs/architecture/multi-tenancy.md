@@ -1,9 +1,16 @@
 # Data Isolation Design
 
-## Approach: Single Schema + clan_id + Row Level Security
+## Approach: Single Schema + clan_id, enforced in the application layer
 
-FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation,
-enforced by Supabase Row Level Security (RLS).
+FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
+
+> **Status (2026-06-28):** Isolation is enforced **in the application/repository
+> layer** — this is the primary, tested guarantee. Row-Level Security is a
+> **deferred defense-in-depth layer-2** (ADR-008): a single-table pilot exists on
+> `documents` (`ENABLE`d, not `FORCE`d) but the app still connects as a
+> privileged/bypass role, so **RLS is currently inert for application traffic**.
+> See `docs/architecture/backend-design-review-2026-06-28.md` for the full picture.
+> The sections below describe the application-layer mechanism that actually runs.
 
 ## Why not separate schemas?
 
@@ -13,7 +20,7 @@ Separate-schema multi-tenancy was considered and rejected:
 - **Breaks Supabase connection pooling** — PgBouncer and Supabase's built-in pooler don't work well with `SET search_path` switching per request.
 - **Alembic becomes painful** — Running migrations across N schemas requires custom `env.py` logic, per-schema migration tracking, and slow sequential execution.
 - **Infra complexity** — Tenant provisioner, per-tenant storage buckets, schema creation scripts — all unnecessary.
-- **Supabase RLS is purpose-built for this** — Row Level Security policies enforce data isolation at the database engine level, which is as secure as separate schemas for this use case.
+- **RLS is purpose-built as a future layer-2** — Row Level Security can enforce isolation at the database engine level as defense-in-depth behind the application layer (planned; ADR-008), without the operational cost of separate schemas.
 
 ## Schema layout
 
@@ -25,20 +32,33 @@ PostgreSQL instance
     ├── clan_memberships   (M:N link between persons and clans, filtered by clan_id)
     ├── marriages          (global edges, write-gated by created_by_clan_id)
     ├── parent_child       (global edges, write-gated by created_by_clan_id)
-    ├── documents          (filtered by clan_id via RLS)
-    ├── events             (filtered by clan_id via RLS)
+    ├── documents          (filtered by clan_id in the app layer; RLS pilot ENABLEd here only)
+    ├── events             (filtered by clan_id in the app layer)
     ├── user_clan_roles    (which user belongs to which clan, with what role)
     ├── change_requests    (approval workflow queue, filtered by clan_id)
     └── audit_log          (cross-clan audit trail)
 ```
 
-## How isolation works
+## How isolation works (application layer — the active mechanism)
 
-1. Every clan-scoped table has `clan_id UUID NOT NULL` (via `ClanScopedMixin`).
-2. RLS policies enforce `clan_id = auth.user_clan_id()` on every query.
-3. Application layer also filters by `clan_id` explicitly (defense in depth) via the `get_current_clan_id()` FastAPI dependency.
-4. Supabase Storage uses path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
-5. Backend always uses `get_current_clan_id()` dependency on protected routes.
+1. **Read side.** Every clan-scoped read filters by clan explicitly:
+   clan-owned tables (`documents`, `events`, `branches`) filter `clan_id`; relationship
+   edges (`marriages`, `parent_child`) filter `created_by_clan_id`; `persons` are global
+   and scoped via a `clan_memberships` join. There is intentionally **no tenant
+   middleware** — scoping lives in the repositories.
+2. **Active-clan resolution.** `get_current_clan_id()` reads the `X-Current-Clan-Id`
+   header, validates the clan is in the caller's *approved* memberships (403 otherwise),
+   and rejects a suspended clan (`is_active = false` → 403). Every clan-scoped route
+   depends on it.
+3. **Write side.** Create/update validate that body-supplied references (person ids on
+   relationship/event/branch, founder/parent ids) belong to the acting clan, so a clan
+   cannot attach its data to another clan's records.
+4. **RBAC.** `require_role` / `RequireClanRole` re-derive the caller's role from
+   `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
+5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
+6. **RLS (deferred layer-2).** A `documents` pilot exists (non-bypass `familyroots_app`
+   role + a fail-closed clan policy), proven by tests, but not yet wired into the app's
+   connection — see ADR-008.
 
 ## Multi-clan membership (clan switcher)
 

@@ -65,12 +65,11 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 | **DOCUMENTS**                  |             |       |        |        |
 | View documents                 | ✅           | ✅     | ✅      | ✅      |
 | Upload document                | ✅           | ✅     | ✅      | ❌      |
-| Delete own upload              | ✅           | ✅     | ✅      | ❌      |
-| Delete any document            | ✅           | ✅     | ❌      | ❌      |
+| Delete document                | ✅           | ✅     | ❌      | ❌      |
 | **EVENTS**                     |             |       |        |        |
 | View events                    | ✅           | ✅     | ✅      | ✅      |
 | Create/edit event              | ✅           | ✅     | ✅      | ❌      |
-| Delete event                   | ✅           | ✅     | ❌      | ❌      |
+| Delete event                   | ✅           | ✅     | ✅      | ❌      |
 | **FAMILY TREE**                |             |       |        |        |
 | View family tree               | ✅           | ✅     | ✅      | ✅      |
 | Export tree as PDF             | ✅           | ✅     | ✅      | ✅      |

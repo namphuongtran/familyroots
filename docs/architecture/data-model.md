@@ -8,10 +8,11 @@ FamilyRoots uses **PostgreSQL 16+** with a single `public` schema. The core data
 - **Edge** = `Marriage` | `ParentChild` (global relationships between persons)
 - **View** = `ClanMembership` (M:N link filtering persons into clan views)
 
-Data isolation between clans is enforced by:
-- `ClanMembership` for person visibility (read RLS)
-- `created_by_clan_id` on edges for write control (write RLS)
-- Supabase Row Level Security (RLS) policies at the database level
+Data isolation between clans is enforced **in the application/repository layer**
+(the active mechanism; DB-level RLS is a deferred layer-2 — see `multi-tenancy.md`):
+- `ClanMembership` join scopes person visibility per clan (read)
+- `created_by_clan_id` on edges scopes both reads and writes of relationships
+- writes validate that referenced persons belong to the acting clan
 
 ### Architecture Principle
 
@@ -782,7 +783,17 @@ CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 
 ## RLS Policies
 
-**Read Access**
+> **Status (2026-06-28) — ASPIRATIONAL, not yet active.** The policies below are
+> the *target* design for the deferred RLS layer-2 (ADR-008). They are **not**
+> applied to the running database, and the GUC shown here (`app.current_clan_id`)
+> differs from the one the implemented pilot uses (`app.clan_id`). What ships today:
+> a single `documents` pilot policy (`ENABLE`d, not `FORCE`d) under a non-bypass
+> `familyroots_app` role, while the app still connects as a bypass role — so these
+> reads/writes are gated by the **application/repository layer**, not RLS. See
+> `multi-tenancy.md` and `backend-design-review-2026-06-28.md`. Treat the SQL below
+> as the spec for a future activation phase, not a description of current behavior.
+
+**Read Access** *(target design — not active)*
 ```sql
 -- Persons: visible if person is in user's current clan
 CREATE POLICY persons_select ON persons FOR SELECT USING (
