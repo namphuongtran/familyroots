@@ -47,11 +47,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._hits: dict[str, list[float]] = defaultdict(list)
 
     def _client_ip(self, request: Request) -> str:
-        """Resolve the client IP, honoring X-Forwarded-For only when trusted."""
+        """Resolve the client IP, honoring X-Forwarded-For only when trusted.
+
+        Behind a single trusted proxy/LB (e.g. Render) that *appends* the peer
+        it observed, the trustworthy client IP is the RIGHTMOST X-Forwarded-For
+        entry. The leftmost entries are client-supplied and spoofable — using
+        them would let an attacker rotate a fake IP per request to bypass the
+        limit and inflate bucket memory. (Assumes exactly one trusted appending
+        proxy; multiple proxies would need a configurable trusted-hop count.)
+        """
         if self._trust_xff:
             xff = request.headers.get("x-forwarded-for")
             if xff:
-                return xff.split(",")[0].strip()
+                return xff.split(",")[-1].strip()
         return request.client.host if request.client else "unknown"
 
     def _prune(self, client_ip: str, cutoff: float) -> list[float]:

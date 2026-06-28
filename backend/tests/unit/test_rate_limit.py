@@ -27,9 +27,11 @@ def _req(path: str, *, xff: str | None = None, host: str = "10.0.0.1") -> Simple
     )
 
 
-def test_client_ip_uses_xff_first_hop_when_trusted() -> None:
+def test_client_ip_uses_rightmost_xff_hop_when_trusted() -> None:
+    # Behind a single trusted appending proxy, the real client is the RIGHTMOST
+    # hop; the leftmost ("1.2.3.4") is client-supplied/spoofable and must be ignored.
     mw = _mw(trust=True)
-    ip = mw._client_ip(_req("/api/v1/auth/login", xff="203.0.113.7, 10.0.0.1"))  # type: ignore[arg-type]
+    ip = mw._client_ip(_req("/api/v1/auth/login", xff="1.2.3.4, 203.0.113.7"))  # type: ignore[arg-type]
     assert ip == "203.0.113.7"
 
 
