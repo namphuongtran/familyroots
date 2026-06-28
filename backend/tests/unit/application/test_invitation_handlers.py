@@ -8,9 +8,10 @@ import pytest
 from app.application.invitation.commands import (
     AcceptInvitation,
     CreateInvitation,
+    RevokeInvitation,
 )
 from app.application.invitation.handlers import InvitationCommandHandler
-from app.domain.shared.exceptions import ConflictError, ForbiddenError
+from app.domain.shared.exceptions import ConflictError, EntityNotFoundError, ForbiddenError
 from app.domain.shared.value_objects import ActorInfo
 
 
@@ -33,10 +34,11 @@ class _ExistingRole:
 
 
 class _FakeRepo:
-    def __init__(self, pending=None, by_token=None, existing_role=None):
+    def __init__(self, pending=None, by_token=None, existing_role=None, by_id=None):
         self._pending = pending
         self._by_token = by_token
         self._existing_role = existing_role
+        self._by_id = by_id
         self.added_invitations = []
         self.added_roles = []
         self.ensured = []
@@ -46,6 +48,9 @@ class _FakeRepo:
 
     async def get_by_token(self, token):
         return self._by_token
+
+    async def get_by_id(self, invitation_id, clan_id):
+        return self._by_id
 
     def add_invitation(self, inv):
         self.added_invitations.append(inv)
@@ -178,3 +183,37 @@ async def test_accept_promotes_pending_membership():
     assert existing.approved_by == inv.invited_by
     assert existing.approved_at is not None
     assert inv.status == "accepted"
+
+
+@pytest.mark.asyncio
+async def test_revoke_pending_sets_revoked():
+    inv = _Inv(status="pending")
+    repo = _FakeRepo(by_id=inv)
+    uow = _FakeUow()
+    handler = InvitationCommandHandler(repo, uow)
+    await handler.revoke(
+        RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=inv.id, actor=_actor())
+    )
+    assert inv.status == "revoked"
+    assert uow.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_revoke_nonpending_conflicts():
+    inv = _Inv(status="accepted")
+    repo = _FakeRepo(by_id=inv)
+    handler = InvitationCommandHandler(repo, _FakeUow())
+    with pytest.raises(ConflictError):
+        await handler.revoke(
+            RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=inv.id, actor=_actor())
+        )
+
+
+@pytest.mark.asyncio
+async def test_revoke_not_found():
+    repo = _FakeRepo(by_id=None)
+    handler = InvitationCommandHandler(repo, _FakeUow())
+    with pytest.raises(EntityNotFoundError):
+        await handler.revoke(
+            RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=uuid.uuid4(), actor=_actor())
+        )
