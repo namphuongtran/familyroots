@@ -62,20 +62,30 @@ graph TD
 
 > 🇻🇳 **Ghi chú:** `clan` (dòng họ) là ranh giới đa người thuê (tenant). Mọi
 > aggregate đều mang `clan_id`. `person` (nhân khẩu) và các cạnh quan hệ là
-> **dữ liệu cô lập theo dòng họ** — mỗi dòng họ chỉ thấy các bản ghi do chính mình
-> tạo ra (`created_by_clan_id`); truy vấn chéo dòng họ trả về not-found.
-> Mũi tên nét đứt (`tree`) là context **chỉ đọc**, không thay đổi dữ liệu.
+> **dữ liệu cô lập theo dòng họ** — truy vấn chéo dòng họ trả về not-found.
+> Tuy nhiên, cơ chế cô lập khác nhau: `person` được lọc qua bảng `clan_memberships`
+> (M:N), còn các cạnh quan hệ (marriage/parent_child) được lọc trực tiếp bằng
+> `created_by_clan_id`. Mũi tên nét đứt (`tree`) là context **chỉ đọc**, không thay đổi dữ liệu.
 
 Key cross-context rules:
 
 - **`clan` is the tenant boundary.** Every other aggregate carries `clan_id`.
-  Persons and relationship edges are **strictly clan-isolated**: a clan reads only
-  the records it created (`created_by_clan_id`); cross-clan reads return not-found.
+  Persons and relationship edges are **strictly clan-isolated**; cross-clan reads
+  return not-found. The isolation mechanism differs by aggregate:
+  - **Person read isolation** is via `clan_memberships` (M:N join): a clan sees
+    persons that are *members* of it (`ClanMembership.clan_id == clan_id`). A person
+    may belong to multiple clans via membership; each member-clan sees it. This is
+    still strict isolation — no clan sees persons it has no membership link to.
+    `Person.created_by_clan_id` records the *originating clan* (write attribution)
+    and is nullable; it is NOT the read filter.
+  - **Relationship edge read isolation** (Marriage, ParentChild) is via
+    `created_by_clan_id == active clan`; cross-clan → not-found.
   See [Multi-Tenancy](multi-tenancy.md) and [ADR-002](../decisions/002-clan-scoped-multitenancy.md).
 - **`person` is distinct from the authenticated user, and is clan-scoped.**
-  `created_by_clan_id` is the scoping key for both reads and writes. Isolation is
-  enforced in the application/repository layer (every clan-scoped read takes
-  `clan_id`). This is the "person vs user" distinction called out in [overview.md](overview.md).
+  Read isolation is enforced via the `clan_memberships` join in the repository
+  layer (every clan-scoped person read takes `clan_id` and joins on memberships).
+  `created_by_clan_id` is the write-attribution field only. This is the "person vs
+  user" distinction called out in [overview.md](overview.md).
 - **Invitation flow (coexists with self-request-join):** a clan admin creates an
   email-targeted invite token; the invitee follows the link, accepts, and is granted
   an approved `UserClanRole` membership (`approved_by` / `approved_at` set on

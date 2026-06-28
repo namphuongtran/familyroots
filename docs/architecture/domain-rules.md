@@ -71,11 +71,17 @@ flowchart TD
 `app/domain/person/entity.py`:
 
 - **Clan-scoped, not globally shared.** A `Person` is distinct from the
-  authenticated user; `created_by_clan_id` is both the write gate and the read
-  scope — a clan sees only the persons it created. Cross-clan reads return
-  not-found. Isolation is enforced in the application/repository layer (every
+  authenticated user. Persons are **strictly clan-isolated**: cross-clan reads
+  return not-found. Read isolation is enforced via a JOIN on `clan_memberships`
+  (`ClanMembership.clan_id == clan_id`) in the repository layer — a clan sees
+  persons that are *members* of it (M:N). A person may belong to multiple clans
+  via membership; each member-clan sees it. `Person.created_by_clan_id` records
+  the *originating clan* (write attribution) and is nullable; it is NOT the read
+  filter. Isolation is enforced in the application/repository layer (every
   clan-scoped read passes `clan_id`); RLS is a planned SP-3 defense-in-depth
   addition, not yet active.
+  By contrast, **relationship edges** (Marriage, ParentChild) are read-scoped by
+  `created_by_clan_id == active clan`; cross-clan → not-found.
   *(Legacy note: earlier docs described persons as "globally shared / visible across
   clans". That model was superseded by strict isolation in SP-2B.)*
 - **Soft delete.** `soft_delete()` sets `is_deleted`, `deleted_at`, `deleted_by` and
