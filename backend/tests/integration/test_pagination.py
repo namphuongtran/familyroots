@@ -19,7 +19,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.application.document.handlers import DocumentQueryHandler
+from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -63,7 +65,8 @@ async def test_document_list_paginates_with_cursor(async_engine: AsyncEngine) ->
             )
         await s.commit()
 
-        handler = DocumentQueryHandler(SqlAlchemyDocumentRepository(s), _NoStorage())
+        repo = SqlAlchemyDocumentRepository(SqlAlchemyUnitOfWork(s, create_event_dispatcher(s)))
+        handler = DocumentQueryHandler(repo, _NoStorage())
 
         # First page of 2 → exactly 2 items, has_more, a cursor (no sentinel leak).
         page1, meta1 = await handler.list_documents(clan_id=clan_id, limit=2)

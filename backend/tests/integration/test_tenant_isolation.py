@@ -81,8 +81,8 @@ def _handlers(session: AsyncSession) -> tuple[MarriageCommandHandler, ParentChil
     uow = SqlAlchemyUnitOfWork(session, create_event_dispatcher(session))
     validator = RelationshipDomainValidator(SqlAlchemyRelationshipQueryPort(session))
     return (
-        MarriageCommandHandler(SqlAlchemyMarriageRepository(session), uow, validator),
-        ParentChildCommandHandler(SqlAlchemyParentChildRepository(session), uow, validator),
+        MarriageCommandHandler(SqlAlchemyMarriageRepository(uow), uow, validator),
+        ParentChildCommandHandler(SqlAlchemyParentChildRepository(uow), uow, validator),
     )
 
 

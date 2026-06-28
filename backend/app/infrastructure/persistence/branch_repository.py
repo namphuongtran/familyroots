@@ -9,10 +9,10 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.branch.entity import Branch as BranchEntity
 from app.infrastructure.persistence.branch_mapper import apply_to_orm, to_domain, to_orm
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.branch import Branch as BranchModel
 from app.models.clan_membership import ClanMembership
 
@@ -20,8 +20,9 @@ from app.models.clan_membership import ClanMembership
 class SqlAlchemyBranchRepository:
     """Concrete Branch repository backed by SQLAlchemy + PostgreSQL."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
+        self._uow = uow
+        self._session = uow.session
 
     async def get_by_id(self, branch_id: uuid.UUID, clan_id: uuid.UUID) -> BranchEntity | None:
         result = await self._session.execute(
@@ -49,6 +50,7 @@ class SqlAlchemyBranchRepository:
 
     async def save(self, branch: BranchEntity) -> None:
         """Insert or update a Branch."""
+        self._uow.track(branch)
         existing = await self._session.execute(
             select(BranchModel).where(BranchModel.id == branch.id)
         )
@@ -60,6 +62,7 @@ class SqlAlchemyBranchRepository:
 
     async def delete(self, branch: BranchEntity) -> None:
         """Hard-delete a branch."""
+        self._uow.track(branch)
         result = await self._session.execute(select(BranchModel).where(BranchModel.id == branch.id))
         model = result.scalar_one_or_none()
         if model:

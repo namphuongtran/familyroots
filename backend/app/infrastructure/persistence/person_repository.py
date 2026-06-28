@@ -9,11 +9,11 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.person.entity import Person as PersonEntity
 from app.domain.person.repository import PersonFilters, PersonSearchResult
 from app.infrastructure.persistence.person_mapper import apply_to_orm, to_domain, to_orm
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person as PersonModel
 from app.models.user_profile import UserProfile
@@ -22,8 +22,11 @@ from app.models.user_profile import UserProfile
 class SqlAlchemyPersonRepository:
     """Concrete Person repository backed by SQLAlchemy + PostgreSQL."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
+        # Take the UoW (not a bare session) so save()/save_with_membership() can
+        # auto-track the aggregate — tracking can't be forgotten at the seam.
+        self._uow = uow
+        self._session = uow.session
 
     async def get_by_id(self, person_id: uuid.UUID) -> PersonEntity | None:
         result = await self._session.get(PersonModel, person_id)
@@ -129,6 +132,7 @@ class SqlAlchemyPersonRepository:
 
     async def save(self, person: PersonEntity) -> None:
         """Insert or update a Person."""
+        self._uow.track(person)
         existing = await self._session.get(PersonModel, person.id)
         if existing:
             apply_to_orm(person, existing)
@@ -146,6 +150,7 @@ class SqlAlchemyPersonRepository:
         branch_id: uuid.UUID | None = None,
     ) -> None:
         """Save a Person and its ClanMembership atomically."""
+        self._uow.track(person)
         model = to_orm(person)
         self._session.add(model)
 

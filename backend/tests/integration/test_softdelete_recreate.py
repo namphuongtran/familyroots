@@ -63,9 +63,10 @@ async def test_recreate_marriage_after_soft_delete(async_engine: AsyncEngine) ->
         await s.commit()
 
         editor = ActorInfo.from_jwt({"sub": str(actor)}, "editor")
+        uow = SqlAlchemyUnitOfWork(s, create_event_dispatcher(s))
         handler = MarriageCommandHandler(
-            SqlAlchemyMarriageRepository(s),
-            SqlAlchemyUnitOfWork(s, create_event_dispatcher(s)),
+            SqlAlchemyMarriageRepository(uow),
+            uow,
             RelationshipDomainValidator(SqlAlchemyRelationshipQueryPort(s)),
         )
 

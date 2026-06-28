@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import (
 from app.application.branch.handlers import BranchCommandHandler
 from app.application.document.handlers import DocumentCommandHandler
 from app.application.event.handlers import EventCommandHandler
+from app.domain.branch.entity import Branch
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
@@ -80,10 +81,32 @@ async def test_branch_create_writes_audit_log(async_engine: AsyncEngine) -> None
     clan_id, actor = uuid.uuid4(), uuid.uuid4()
     async with maker() as s:
         await _seed_clan(s, clan_id)
-        handler = BranchCommandHandler(SqlAlchemyBranchRepository(s), _uow(s))
+        uow = _uow(s)
+        handler = BranchCommandHandler(SqlAlchemyBranchRepository(uow), uow)
         await handler.create(
             clan_id=clan_id, actor=ActorInfo.from_jwt({"sub": str(actor)}, "editor"), name="Main"
         )
+        assert await _audit_count(s, clan_id, "branch") == 1
+
+
+async def test_repo_save_auto_tracks_without_explicit_handler_track(
+    async_engine: AsyncEngine,
+) -> None:
+    """The repo seam tracks the aggregate on save() — so even if a caller never
+    calls uow.track(), commit() still dispatches its events (the audit row appears).
+    This is the structural safety net: persisting an aggregate registers it."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id, actor = uuid.uuid4(), uuid.uuid4()
+    async with maker() as s:
+        await _seed_clan(s, clan_id)
+        uow = _uow(s)
+        repo = SqlAlchemyBranchRepository(uow)
+        branch = Branch.create(
+            clan_id=clan_id, name="Seam", actor=ActorInfo.from_jwt({"sub": str(actor)}, "editor")
+        )
+        # NOTE: deliberately NOT calling uow.track(branch) — only repo.save().
+        await repo.save(branch)
+        await uow.commit()
         assert await _audit_count(s, clan_id, "branch") == 1
 
 
@@ -92,7 +115,8 @@ async def test_event_create_writes_audit_log(async_engine: AsyncEngine) -> None:
     clan_id, actor = uuid.uuid4(), uuid.uuid4()
     async with maker() as s:
         await _seed_clan(s, clan_id)
-        handler = EventCommandHandler(SqlAlchemyEventRepository(s), _uow(s))
+        uow = _uow(s)
+        handler = EventCommandHandler(SqlAlchemyEventRepository(uow), uow)
         await handler.create(
             clan_id=clan_id,
             actor=ActorInfo.from_jwt({"sub": str(actor)}, "editor"),
@@ -113,7 +137,8 @@ async def test_document_upload_writes_audit_log(async_engine: AsyncEngine) -> No
     clan_id, actor = uuid.uuid4(), uuid.uuid4()
     async with maker() as s:
         await _seed_clan(s, clan_id)
-        handler = DocumentCommandHandler(SqlAlchemyDocumentRepository(s), _FakeStorage(), _uow(s))
+        uow = _uow(s)
+        handler = DocumentCommandHandler(SqlAlchemyDocumentRepository(uow), _FakeStorage(), uow)
         result: Any = await handler.upload(
             file_content=b"x",
             filename="p.jpg",

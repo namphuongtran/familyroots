@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.relationship.entities import Marriage as MarriageEntity
 from app.domain.relationship.entities import ParentChild as ParentChildEntity
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.marriage import Marriage as MarriageModel
 from app.models.parent_child import ParentChild as ParentChildModel
@@ -125,8 +126,9 @@ _PC_UPDATABLE = (
 
 
 class SqlAlchemyMarriageRepository:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
+        self._uow = uow
+        self._session = uow.session
 
     async def get_by_id(self, marriage_id: uuid.UUID, clan_id: uuid.UUID) -> MarriageEntity | None:
         result = await self._session.execute(
@@ -140,6 +142,7 @@ class SqlAlchemyMarriageRepository:
         return _marriage_to_domain(model) if model else None
 
     async def save(self, marriage: MarriageEntity) -> None:
+        self._uow.track(marriage)
         existing = await self._session.get(MarriageModel, marriage.id)
         if existing:
             for f in _MARRIAGE_UPDATABLE:
@@ -149,8 +152,9 @@ class SqlAlchemyMarriageRepository:
 
 
 class SqlAlchemyParentChildRepository:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
+        self._uow = uow
+        self._session = uow.session
 
     async def get_by_id(self, link_id: uuid.UUID, clan_id: uuid.UUID) -> ParentChildEntity | None:
         result = await self._session.execute(
@@ -164,6 +168,7 @@ class SqlAlchemyParentChildRepository:
         return _pc_to_domain(model) if model else None
 
     async def save(self, link: ParentChildEntity) -> None:
+        self._uow.track(link)
         existing = await self._session.get(ParentChildModel, link.id)
         if existing:
             for f in _PC_UPDATABLE:

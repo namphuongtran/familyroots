@@ -75,9 +75,8 @@ async def test_branch_rejects_cross_clan_founder(async_engine: AsyncEngine) -> N
         await _member(s, in_b, clan_b, actor)
         await s.commit()
 
-        h = BranchCommandHandler(
-            SqlAlchemyBranchRepository(s), SqlAlchemyUnitOfWork(s, create_event_dispatcher(s))
-        )
+        uow = SqlAlchemyUnitOfWork(s, create_event_dispatcher(s))
+        h = BranchCommandHandler(SqlAlchemyBranchRepository(uow), uow)
         # Founder belongs to clan B → rejected for clan A.
         with pytest.raises(EntityNotFoundError):
             await h.create(clan_id=clan_a, actor=_editor(actor), name="B", founder_person_id=in_b)
@@ -122,9 +121,8 @@ async def test_event_rejects_cross_clan_person(async_engine: AsyncEngine) -> Non
         await _member(s, in_b, clan_b, actor)
         await s.commit()
 
-        h = EventCommandHandler(
-            SqlAlchemyEventRepository(s), SqlAlchemyUnitOfWork(s, create_event_dispatcher(s))
-        )
+        uow = SqlAlchemyUnitOfWork(s, create_event_dispatcher(s))
+        h = EventCommandHandler(SqlAlchemyEventRepository(uow), uow)
 
         async def _create(person_id: uuid.UUID) -> object:
             return await h.create(

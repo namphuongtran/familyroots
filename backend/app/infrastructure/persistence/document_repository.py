@@ -5,18 +5,19 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.document.entity import Document as DocumentEntity
 from app.infrastructure.persistence.document_mapper import apply_to_orm, to_domain, to_orm
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.document import Document as DocumentModel
 
 
 class SqlAlchemyDocumentRepository:
     """Concrete Document repository backed by SQLAlchemy + PostgreSQL."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
+        self._uow = uow
+        self._session = uow.session
 
     async def get_by_id(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> DocumentEntity | None:
         result = await self._session.execute(
@@ -67,6 +68,7 @@ class SqlAlchemyDocumentRepository:
 
     async def save(self, doc: DocumentEntity) -> None:
         """Insert or update a Document."""
+        self._uow.track(doc)
         existing = await self._session.execute(
             select(DocumentModel).where(DocumentModel.id == doc.id)
         )
@@ -78,6 +80,7 @@ class SqlAlchemyDocumentRepository:
 
     async def delete(self, doc: DocumentEntity) -> None:
         """Hard-delete a document."""
+        self._uow.track(doc)
         result = await self._session.execute(
             select(DocumentModel).where(DocumentModel.id == doc.id)
         )
