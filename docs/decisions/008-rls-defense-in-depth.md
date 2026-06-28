@@ -1,7 +1,14 @@
 # ADR-008: Row-Level Security as Defense-in-Depth Layer-2
 
 ## Status
-Accepted
+Accepted — **Pilot only; not active for application traffic** (as of 2026-06-28).
+Shipped: the `documents` pilot (migration `002_rls_documents_pilot`) — a non-bypass
+`familyroots_app` role + a fail-closed clan policy, `ENABLE`d (not `FORCE`d), proven
+by `test_rls_documents`. Not yet implemented: runtime activation (the app still
+connects as a bypass role, so RLS is inert for app traffic), the per-request GUC
+plumbing, the role switch, the startup non-bypass assertion, and the table-by-table
+rollout + CI coverage test. Until activation, **application-layer isolation is the
+only enforced layer**.
 
 ## Context
 Clan isolation is currently enforced entirely in the **application/repository

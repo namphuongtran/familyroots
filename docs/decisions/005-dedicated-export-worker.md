@@ -1,7 +1,9 @@
 # ADR-005: Dedicated Worker Service for Heavy Exports
 
 ## Status
-Accepted
+Accepted — **Deferred / not yet implemented** (as of 2026-06-28). No `worker`
+service or export pipeline exists in the codebase, and it depends on ADR-004
+(Redis), which is also deferred. "Accepted" means agreed direction, not shipped.
 
 ## Context
 Generating PDF exports of large family trees is CPU and memory intensive. Running this in the main FastAPI event loop blocks standard API requests and degrades user experience.
