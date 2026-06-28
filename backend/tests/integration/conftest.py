@@ -36,7 +36,7 @@ def _reset_settings(dsn: str) -> None:
 
 # Admin connection used to CREATE/DROP the throwaway test database.
 ADMIN_URL = os.environ.get(
-    "TEST_PG_ADMIN_URL", "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"
+    "TEST_PG_ADMIN_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
 )
 TEST_DB_NAME = "family_roots_schema_test"
 
@@ -57,7 +57,7 @@ def migrated_db_url() -> Iterator[str]:
     test_dsn = _sync_dsn(TEST_DB_NAME)
     cfg = Config("alembic.ini")
     cfg.set_main_option("script_location", "migrations")
-    # env.py strips +asyncpg; pass the sync DSN directly.
+    # psycopg v3: one URL serves both alembic (sync) and the app (async).
     cfg.set_main_option("sqlalchemy.url", test_dsn)
     # Clear the @lru_cache on get_settings() so that migrations/env.py uses the
     # test DSN even when app modules were already imported during collection.

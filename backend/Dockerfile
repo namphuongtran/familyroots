@@ -6,7 +6,7 @@
 # fully reproducible builds.  Update the tag deliberately.
 FROM python:3.14-slim-bookworm AS builder
 
-# Native-extension build deps (asyncpg C extension, cryptography wheels, etc.)
+# Native-extension build deps (psycopg v3 + cryptography wheels, etc.)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc g++ libc6-dev \
     && rm -rf /var/lib/apt/lists/*

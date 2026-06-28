@@ -25,7 +25,7 @@ from app.services import scheduler
 
 @pytest.fixture()
 async def async_engine(migrated_db_url):
-    async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
+    async_dsn = migrated_db_url
     engine = create_async_engine(async_dsn)
     yield engine
     await engine.dispose()
