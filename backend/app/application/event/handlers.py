@@ -84,10 +84,10 @@ class EventCommandHandler:
         actor: ActorInfo,
         changes: dict[str, Any],
     ) -> EventResponse:
+        # Note: person_id is create-only (not in EventUpdateRequest, and excluded
+        # from the Event aggregate's updatable fields), so there is no cross-clan
+        # person reference to validate on update — only create needs the guard.
         event = await self._get_or_raise(event_id, clan_id)
-        new_person = changes.get("person_id")
-        if new_person is not None and not await self._repo.person_in_clan(new_person, clan_id):
-            raise EntityNotFoundError("person_not_found", {"person_id": str(new_person)})
         event.update(changes, actor)
         self._uow.track(event)
         await self._repo.save(event)

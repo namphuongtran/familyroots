@@ -83,6 +83,9 @@ class BranchCommandHandler:
         # update previously skipped them — a cross-clan parent/founder hole).
         new_parent = changes.get("parent_branch_id")
         if new_parent is not None:
+            # Guards direct self-parenting only; transitive cycles (A→B→A) are a
+            # known, pre-existing limitation (branches lack the is_ancestor cycle
+            # check relationships have) — tracked for a later phase.
             if new_parent == branch_id:
                 raise BusinessRuleViolation("branch_cannot_be_own_parent")
             if not await self._repo.get_by_id(new_parent, clan_id):

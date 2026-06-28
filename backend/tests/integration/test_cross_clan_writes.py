@@ -82,17 +82,31 @@ async def test_branch_rejects_cross_clan_founder(async_engine: AsyncEngine) -> N
         with pytest.raises(EntityNotFoundError):
             await h.create(clan_id=clan_a, actor=_editor(actor), name="B", founder_person_id=in_b)
 
-        # In-clan founder → succeeds; then an update pointing the parent at a
-        # non-existent (cross-clan) branch is rejected.
+        # In-clan founder → create succeeds.
         ok = await h.create(
             clan_id=clan_a, actor=_editor(actor), name="Root", founder_person_id=in_a
         )
+        # A real branch owned by clan B (the target for the cross-clan update tests).
+        clan_b_branch = await h.create(
+            clan_id=clan_b, actor=_editor(actor), name="BRoot", founder_person_id=in_b
+        )
+
+        # Update parent to a branch that genuinely exists in ANOTHER clan → rejected
+        # (proves clan-scoping, not mere existence).
         with pytest.raises(EntityNotFoundError):
             await h.update(
                 branch_id=ok.id,
                 clan_id=clan_a,
                 actor=_editor(actor),
-                changes={"parent_branch_id": uuid.uuid4()},
+                changes={"parent_branch_id": clan_b_branch.id},
+            )
+        # Update founder to a clan-B person → rejected.
+        with pytest.raises(EntityNotFoundError):
+            await h.update(
+                branch_id=ok.id,
+                clan_id=clan_a,
+                actor=_editor(actor),
+                changes={"founder_person_id": in_b},
             )
 
 
