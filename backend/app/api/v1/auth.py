@@ -9,15 +9,15 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.application.auth.handlers import (
     AuthCommandHandler,
     AuthQueryHandler,
+    AuthSessionService,
     FCMTokenHandler,
-    SupabaseAuthService,
 )
 from app.core.security import get_current_user, security
 from app.infrastructure.dependencies import (
     get_auth_command_handler,
     get_auth_query_handler,
+    get_auth_session_service,
     get_fcm_token_handler,
-    get_supabase_auth_service,
 )
 from app.schemas.auth import (
     AuthenticatedOnboardingRequest,
@@ -80,7 +80,7 @@ async def login(
 async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: dict[str, Any] = Depends(get_current_user),
-    svc: SupabaseAuthService = Depends(get_supabase_auth_service),
+    svc: AuthSessionService = Depends(get_auth_session_service),
 ) -> dict[str, Any]:
     """Invalidate the current session (revoke refresh tokens)."""
     await svc.logout(access_token=credentials.credentials)
@@ -90,7 +90,7 @@ async def logout(
 @router.post("/refresh")
 async def refresh_token(
     body: RefreshRequest,
-    svc: SupabaseAuthService = Depends(get_supabase_auth_service),
+    svc: AuthSessionService = Depends(get_auth_session_service),
 ) -> dict[str, Any]:
     """Exchange a refresh token for a new access token."""
     return await svc.refresh_token(refresh_token=body.refresh_token)
@@ -114,7 +114,7 @@ async def get_me(
 async def update_me(
     body: UserUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
-    svc: SupabaseAuthService = Depends(get_supabase_auth_service),
+    svc: AuthSessionService = Depends(get_auth_session_service),
 ) -> dict[str, Any]:
     """Update the authenticated user's profile."""
     await svc.update_profile(

@@ -11,18 +11,20 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.event.entity import Event as EventEntity
 from app.infrastructure.persistence.event_mapper import apply_to_orm, to_domain, to_orm
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
 
 
 class SqlAlchemyEventRepository:
     """Concrete Event repository backed by SQLAlchemy + PostgreSQL."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
+        self._uow = uow
+        self._session = uow.session
 
     async def get_by_id(self, event_id: uuid.UUID, clan_id: uuid.UUID) -> EventEntity | None:
         result = await self._session.execute(
@@ -30,6 +32,15 @@ class SqlAlchemyEventRepository:
         )
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
+
+    async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            select(ClanMembership.person_id).where(
+                ClanMembership.person_id == person_id,
+                ClanMembership.clan_id == clan_id,
+            )
+        )
+        return result.first() is not None
 
     async def list_in_clan(
         self,
@@ -125,6 +136,7 @@ class SqlAlchemyEventRepository:
 
     async def save(self, event: EventEntity) -> None:
         """Insert or update an Event."""
+        self._uow.track(event)
         existing = await self._session.execute(select(EventModel).where(EventModel.id == event.id))
         model = existing.scalar_one_or_none()
         if model:
@@ -134,6 +146,7 @@ class SqlAlchemyEventRepository:
 
     async def delete(self, event: EventEntity) -> None:
         """Hard-delete an event."""
+        self._uow.track(event)
         result = await self._session.execute(select(EventModel).where(EventModel.id == event.id))
         model = result.scalar_one_or_none()
         if model:

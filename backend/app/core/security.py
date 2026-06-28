@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.exceptions import AppError, AuthenticationError, ForbiddenError
 from app.models.user_profile import UserProfile
 
 security = HTTPBearer()
@@ -71,7 +72,7 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
         )
         return payload
     except JWTError as exc:
-        raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
+        raise AuthenticationError("invalid_token") from exc
 
 
 async def get_current_user(
@@ -133,7 +134,7 @@ async def get_super_admin(
     Queries ``user_profiles.platform_role`` for an active super_admin.
     """
     if profile.platform_role != "super_admin" or not profile.is_active:
-        raise HTTPException(status_code=403, detail="Super admin access required")
+        raise ForbiddenError("super_admin_required")
     return profile
 
 
@@ -168,32 +169,30 @@ async def get_current_clan_id(
     approved_clan_ids: list[uuid.UUID] = list(result.scalars().all())
 
     if not approved_clan_ids:
-        raise HTTPException(status_code=403, detail="No approved clan membership")
+        raise ForbiddenError("no_approved_clan_membership")
 
-    # If client specifies a clan via header, validate membership
+    # Resolve the active clan from the header (validating membership) or auto-select.
     if x_current_clan_id is not None:
         try:
-            requested_clan_id = uuid.UUID(x_current_clan_id)
+            resolved_clan_id = uuid.UUID(x_current_clan_id)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid X-Current-Clan-Id format") from exc
+            raise AppError(400, "invalid_clan_id_format") from exc
 
-        if requested_clan_id not in approved_clan_ids:
-            raise HTTPException(
-                status_code=403,
-                detail="You do not have approved membership in this clan",
-            )
-        return requested_clan_id
+        if resolved_clan_id not in approved_clan_ids:
+            raise ForbiddenError("clan_membership_required")
+    elif len(approved_clan_ids) == 1:
+        # No header: auto-select if exactly one clan.
+        resolved_clan_id = approved_clan_ids[0]
+    else:
+        # Multiple clans, no header — client must specify via X-Current-Clan-Id.
+        raise AppError(400, "multiple_clans_no_selection")
 
-    # No header: auto-select if exactly one clan
-    if len(approved_clan_ids) == 1:
-        return approved_clan_ids[0]
+    # A suspended clan is off-limits to all its members, not just admins: reject
+    # every clan-scoped request once the platform has deactivated the clan.
+    from app.models.clan import Clan
 
-    # Multiple clans, no header — client must specify
-    raise HTTPException(
-        status_code=400,
-        detail=(
-            "You belong to multiple clans. "
-            "Set X-Current-Clan-Id header to select the active clan. "
-            "Use GET /api/v1/me/clans to list your clans."
-        ),
-    )
+    is_active = await db.scalar(select(Clan.is_active).where(Clan.id == resolved_clan_id))
+    if not is_active:
+        raise ForbiddenError("clan_suspended")
+
+    return resolved_clan_id

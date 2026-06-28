@@ -1,9 +1,10 @@
 """Auth use-case handlers.
 
-Orchestrate Supabase Auth integration and clan membership.
+Orchestrate identity-provider integration (via the IdentityProvider port) and
+clan membership.
 
 Architecture:
-- ``SupabaseAuthService`` — DB-free, talks to Supabase Auth only.
+- ``AuthSessionService`` — DB-free; refresh/logout/profile via the IdentityProvider port.
 - ``AuthCommandHandler`` — DB-bound, orchestrates registration/login.
 - ``AuthQueryHandler``  — read-only profile queries.
 - ``FCMTokenHandler``   — push-token registration (raw SQL).
@@ -17,9 +18,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.domain.auth.identity_provider import (
+    IdentityAuthError,
+    IdentityError,
+    IdentityProvider,
+    IdentityUserExistsError,
+)
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
 from app.domain.shared.exceptions import AuthenticationError
-from app.infrastructure.supabase_client import get_anon_client, get_service_client
+from app.domain.shared.unit_of_work import UnitOfWork
 from app.models.clan import Clan
 from app.models.user_clan_role import UserClanRole
 from app.schemas.auth import (
@@ -29,67 +36,40 @@ from app.schemas.auth import (
 )
 from app.services.translator import t
 
-
-def _supabase_admin() -> Any:
-    return get_service_client()
+# ── DB-free auth-session service ────────────────────────────────
 
 
-def _supabase_anon() -> Any:
-    return get_anon_client()
+class AuthSessionService:
+    """Auth operations that do NOT require a database session — refresh, logout,
+    profile metadata. Depends only on the IdentityProvider port (no SDK import)."""
 
-
-# ── DB-free Supabase service ────────────────────────────────────
-
-
-class SupabaseAuthService:
-    """Pure Supabase operations that do NOT require a database session.
-
-    This class exists so that route handlers do not need to hack
-    around ``AuthCommandHandler.__new__`` to call DB-free methods.
-    """
+    def __init__(self, identity: IdentityProvider) -> None:
+        self._identity = identity
 
     async def refresh_token(self, *, refresh_token: str) -> dict[str, Any]:
         """Exchange a refresh token for a new access token."""
-        sb = _supabase_anon()
         try:
-            resp = sb.auth.refresh_session(refresh_token)
-        except Exception as exc:
+            tokens = await self._identity.refresh(refresh_token=refresh_token)
+        except IdentityAuthError as exc:
             raise AuthenticationError("auth.invalid_refresh_token") from exc
-
-        if not resp.session:
-            raise AuthenticationError("auth.invalid_refresh_token")
-
         return {
-            "access_token": resp.session.access_token,
-            "refresh_token": resp.session.refresh_token,
-            "expires_in": resp.session.expires_in,
+            "access_token": tokens.access_token,
+            "refresh_token": tokens.refresh_token,
+            "expires_in": tokens.expires_in,
         }
 
     async def logout(self, *, access_token: str) -> None:
-        """Revoke the user's Supabase session (refresh tokens).
-
-        The stateless access token remains valid until its short expiry; this
-        prevents the session from being renewed.
-        """
-        sb = _supabase_admin()
-        try:
-            sb.auth.admin.sign_out(access_token, "global")
-        except Exception:
-            return
+        """Revoke the user's session (best-effort; the stateless access token
+        remains valid until its short expiry)."""
+        await self._identity.sign_out(access_token=access_token)
 
     async def update_profile(
         self, *, user_sub: str, full_name: str | None, preferred_locale: str | None
     ) -> None:
-        """Update user profile on Supabase Auth."""
-        sb = _supabase_admin()
-        update_data: dict[str, Any] = {}
-        if full_name is not None:
-            update_data["user_metadata"] = {"full_name": full_name}
-        if preferred_locale is not None:
-            update_data.setdefault("user_metadata", {})["preferred_locale"] = preferred_locale
-
-        if update_data:
-            sb.auth.admin.update_user_by_id(user_sub, update_data)
+        """Update provider-side user metadata."""
+        await self._identity.update_user(
+            user_id=user_sub, full_name=full_name, preferred_locale=preferred_locale
+        )
 
 
 # ── DB-bound handlers ───────────────────────────────────────────
@@ -101,9 +81,10 @@ _INVALID_CREDENTIALS = "auth.invalid_credentials"
 class AuthCommandHandler:
     """Handles Auth write operations."""
 
-    def __init__(self, repo: AuthRepository, uow: Any) -> None:
+    def __init__(self, repo: AuthRepository, uow: UnitOfWork, identity: IdentityProvider) -> None:
         self._repo = repo
         self._uow = uow
+        self._identity = identity
 
     async def _assign_clan_membership(
         self,
@@ -189,17 +170,14 @@ class AuthCommandHandler:
         clan_slug: str | None = None,
     ) -> RegisterResponse:
         """Register a new user — create or join a clan."""
-        sb = _supabase_admin()
         try:
-            auth_resp = sb.auth.admin.create_user(
-                {"email": email, "password": password, "email_confirm": True}
-            )
-        except Exception as e:
-            if "already" in str(e).lower():
-                raise ConflictError("auth.email_already_exists") from e
+            user_id_str = await self._identity.create_user(email=email, password=password)
+        except IdentityUserExistsError as e:
+            raise ConflictError("auth.email_already_exists") from e
+        except IdentityError as e:
             raise ValidationError("auth.registration_failed", {"detail": str(e)}) from e
 
-        user_id = uuid.UUID(auth_resp.user.id)
+        user_id = uuid.UUID(user_id_str)
         try:
             return await self._assign_clan_membership(
                 user_id=user_id,
@@ -216,7 +194,7 @@ class AuthCommandHandler:
             # Registration is all-or-nothing: any failure rolls back the just-created
             # auth user so the email can be reused on retry.
             with suppress(Exception):
-                _supabase_admin().auth.admin.delete_user(str(user_id))
+                await self._identity.delete_user(str(user_id))
             raise
 
     async def onboard_authenticated_user(
@@ -242,31 +220,23 @@ class AuthCommandHandler:
         )
 
     async def login(self, *, email: str, password: str) -> LoginResponse:
-        """Authenticate via Supabase and return tokens + profile."""
-        sb = _supabase_anon()
+        """Authenticate via the identity provider and return tokens + profile."""
         try:
-            auth_resp = sb.auth.sign_in_with_password({"email": email, "password": password})
-        except Exception as exc:
+            identity = await self._identity.sign_in(email=email, password=password)
+        except IdentityAuthError as exc:
             raise AuthenticationError(_INVALID_CREDENTIALS) from exc
 
-        session = auth_resp.session
-        if session is None:
-            raise AuthenticationError(_INVALID_CREDENTIALS)
-        user = auth_resp.user
-        if user is None:
-            raise AuthenticationError(_INVALID_CREDENTIALS)
-
-        user_id = uuid.UUID(user.id)
+        user_id = uuid.UUID(identity.user_id)
         row = await self._repo.get_login_profile(user_id)
 
         return LoginResponse(
-            access_token=session.access_token,
-            refresh_token=session.refresh_token,
-            expires_in=session.expires_in,
+            access_token=identity.tokens.access_token,
+            refresh_token=identity.tokens.refresh_token,
+            expires_in=identity.tokens.expires_in,
             user=UserProfile(
                 id=user_id,
                 email=email,
-                full_name=user.user_metadata.get("full_name", ""),
+                full_name=identity.full_name,
                 clan_id=row.UserClanRole.clan_id if row and row.UserClanRole else None,
                 clan_name=row.Clan.name if row and row.Clan else None,
                 role=row.UserClanRole.role

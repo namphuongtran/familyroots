@@ -58,7 +58,7 @@ async def list_events(
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List events with optional filters."""
-    items = await query_handler.list_events(
+    items, meta = await query_handler.list_events(
         clan_id=clan_id,
         person_id=person_id,
         event_type=event_type,
@@ -69,7 +69,7 @@ async def list_events(
     if fields:
         field_set = {f.strip() for f in fields.split(",")}
         data = [{k: v for k, v in d.items() if k in field_set} for d in data]
-    return {"data": data}
+    return {"data": data, "meta": meta}
 
 
 @router.get("/upcoming")

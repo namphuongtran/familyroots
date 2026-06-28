@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from app.application.auth.handlers import (
         AuthCommandHandler,
         AuthQueryHandler,
+        AuthSessionService,
         FCMTokenHandler,
-        SupabaseAuthService,
     )
     from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
     from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
@@ -54,6 +54,12 @@ def get_unit_of_work(
     return SqlAlchemyUnitOfWork(db, dispatcher)
 
 
+def _repo_uow(db: AsyncSession) -> SqlAlchemyUnitOfWork:
+    """A UoW wrapping the request session, for repos used in read-only handlers
+    (reads go through uow.session; no commit is issued)."""
+    return SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+
+
 # ── Person handlers ──────────────────────────────────────────────
 
 
@@ -62,7 +68,7 @@ def get_person_command_handler(
 ) -> PersonCommandHandler:
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    repo = SqlAlchemyPersonRepository(db)
+    repo = SqlAlchemyPersonRepository(uow)
     return PersonCommandHandler(repo, uow)
 
 
@@ -71,7 +77,7 @@ def get_person_query_handler(
 ) -> PersonQueryHandler:
     from app.infrastructure.persistence.person_query_port import SqlAlchemyPersonQueryPort
 
-    repo = SqlAlchemyPersonRepository(db)
+    repo = SqlAlchemyPersonRepository(_repo_uow(db))
     query_port = SqlAlchemyPersonQueryPort(db)
     return PersonQueryHandler(repo, query_port)
 
@@ -152,12 +158,13 @@ def get_auth_command_handler(
 ) -> AuthCommandHandler:
     from app.infrastructure.event_dispatcher import create_event_dispatcher
     from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
+    from app.infrastructure.supabase_identity_provider import SupabaseIdentityProvider
     from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     repo = SqlAlchemyAuthRepository(db)
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    return AuthCommandHandler(repo, uow)
+    return AuthCommandHandler(repo, uow, SupabaseIdentityProvider())
 
 
 def get_auth_query_handler(
@@ -178,10 +185,11 @@ def get_fcm_token_handler(
     return FCMTokenHandler(repo)
 
 
-def get_supabase_auth_service() -> SupabaseAuthService:
-    from app.application.auth.handlers import SupabaseAuthService
+def get_auth_session_service() -> AuthSessionService:
+    from app.application.auth.handlers import AuthSessionService
+    from app.infrastructure.supabase_identity_provider import SupabaseIdentityProvider
 
-    return SupabaseAuthService()
+    return AuthSessionService(SupabaseIdentityProvider())
 
 
 # ── Relationship handlers ───────────────────────────────────────
@@ -197,7 +205,7 @@ def get_marriage_command_handler(
 ) -> MarriageCommandHandler:
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    repo = SqlAlchemyMarriageRepository(db)
+    repo = SqlAlchemyMarriageRepository(uow)
     validator = _build_relationship_validator(db)
     return MarriageCommandHandler(repo, uow, validator)
 
@@ -207,7 +215,7 @@ def get_parent_child_command_handler(
 ) -> ParentChildCommandHandler:
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    repo = SqlAlchemyParentChildRepository(db)
+    repo = SqlAlchemyParentChildRepository(uow)
     validator = _build_relationship_validator(db)
     return ParentChildCommandHandler(repo, uow, validator)
 
@@ -217,7 +225,7 @@ def get_marriage_query_handler(
 ) -> MarriageQueryHandler:
     from app.application.relationship.handlers import MarriageQueryHandler
 
-    repo = SqlAlchemyMarriageRepository(db)
+    repo = SqlAlchemyMarriageRepository(_repo_uow(db))
     return MarriageQueryHandler(repo)
 
 
@@ -226,7 +234,7 @@ def get_parent_child_query_handler(
 ) -> ParentChildQueryHandler:
     from app.application.relationship.handlers import ParentChildQueryHandler
 
-    repo = SqlAlchemyParentChildRepository(db)
+    repo = SqlAlchemyParentChildRepository(_repo_uow(db))
     return ParentChildQueryHandler(repo)
 
 
@@ -279,7 +287,7 @@ def get_branch_command_handler(
 
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    repo = SqlAlchemyBranchRepository(db)
+    repo = SqlAlchemyBranchRepository(uow)
     return BranchCommandHandler(repo, uow)
 
 
@@ -289,7 +297,7 @@ def get_branch_query_handler(
     from app.application.branch.handlers import BranchQueryHandler
     from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
 
-    repo = SqlAlchemyBranchRepository(db)
+    repo = SqlAlchemyBranchRepository(_repo_uow(db))
     return BranchQueryHandler(repo)
 
 
@@ -305,7 +313,7 @@ def get_document_command_handler(
 
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    repo = SqlAlchemyDocumentRepository(db)
+    repo = SqlAlchemyDocumentRepository(uow)
     storage = SupabaseStorageAdapter()
     return DocumentCommandHandler(repo, storage, uow)
 
@@ -317,7 +325,7 @@ def get_document_query_handler(
     from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
     from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
 
-    repo = SqlAlchemyDocumentRepository(db)
+    repo = SqlAlchemyDocumentRepository(_repo_uow(db))
     storage = SupabaseStorageAdapter()
     return DocumentQueryHandler(repo, storage)
 
@@ -333,7 +341,7 @@ def get_event_command_handler(
 
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    repo = SqlAlchemyEventRepository(db)
+    repo = SqlAlchemyEventRepository(uow)
     return EventCommandHandler(repo, uow)
 
 
@@ -343,7 +351,7 @@ def get_event_query_handler(
     from app.application.event.handlers import EventQueryHandler
     from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
 
-    repo = SqlAlchemyEventRepository(db)
+    repo = SqlAlchemyEventRepository(_repo_uow(db))
     return EventQueryHandler(repo)
 
 

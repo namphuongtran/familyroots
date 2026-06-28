@@ -1,7 +1,10 @@
 # ADR-004: Redis for Distributed Domain Events
 
 ## Status
-Accepted
+Accepted — **Deferred / not yet implemented** (as of 2026-06-28). The direction
+stands, but no Redis broker exists in the codebase: the backend dispatches domain
+events **in-process** (`InMemoryEventDispatcher`) within the Unit-of-Work
+transaction. "Accepted" here means agreed direction, not shipped.
 
 ## Context
 The backend currently uses an in-process event dispatcher. As the system scales and we introduce a dedicated worker service for heavy tasks, in-process events lack durability and cannot cross process boundaries.

@@ -20,7 +20,7 @@ from app.domain.relationship.entities import Marriage, ParentChild
 from app.domain.relationship.repository import MarriageRepository, ParentChildRepository
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.domain.shared.exceptions import EntityNotFoundError
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.domain.shared.unit_of_work import UnitOfWork
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
 
@@ -29,7 +29,7 @@ class MarriageCommandHandler:
     def __init__(
         self,
         repo: MarriageRepository,
-        uow: SqlAlchemyUnitOfWork,
+        uow: UnitOfWork,
         validator: RelationshipDomainValidator,
     ) -> None:
         self._repo = repo
@@ -37,6 +37,7 @@ class MarriageCommandHandler:
         self._validator = validator
 
     async def create(self, cmd: CreateMarriage) -> MarriageResponse:
+        await self._validator.ensure_persons_in_clan([cmd.person1_id, cmd.person2_id], cmd.clan_id)
         await self._validator.check_duplicate_marriage(cmd.person1_id, cmd.person2_id)
 
         marriage = Marriage.create(
@@ -82,7 +83,7 @@ class ParentChildCommandHandler:
     def __init__(
         self,
         repo: ParentChildRepository,
-        uow: SqlAlchemyUnitOfWork,
+        uow: UnitOfWork,
         validator: RelationshipDomainValidator,
     ) -> None:
         self._repo = repo
@@ -93,6 +94,7 @@ class ParentChildCommandHandler:
         self, cmd: CreateParentChild
     ) -> tuple[ParentChildResponse, dict[str, Any] | None]:
         """Create parent-child link. Returns (link, optional warning dict)."""
+        await self._validator.ensure_persons_in_clan([cmd.parent_id, cmd.child_id], cmd.clan_id)
         await self._validator.check_duplicate_parent_child(cmd.parent_id, cmd.child_id)
         warning = await self._validator.validate_parent_child(
             cmd.parent_id, cmd.child_id, cmd.relationship_type, cmd.clan_id

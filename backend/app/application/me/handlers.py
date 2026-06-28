@@ -38,7 +38,7 @@ class MeQueryHandler:
         row = await self._query_port.get_clan_membership(user_id, clan_id)
 
         if not row:
-            raise ForbiddenError("You do not have approved membership in this clan")
+            raise ForbiddenError("clan_membership_required", {"clan_id": str(clan_id)})
 
         return {
             "clan_id": str(row.clan_id),

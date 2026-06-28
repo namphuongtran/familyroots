@@ -31,13 +31,13 @@ from app.domain.shared.exceptions import (
     EntityNotFoundError,
     ForbiddenError,
 )
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.domain.shared.unit_of_work import UnitOfWork
 
 
 class ClanCommandHandler:
     """Handles Clan write operations."""
 
-    def __init__(self, repo: ClanRepository, uow: SqlAlchemyUnitOfWork) -> None:
+    def __init__(self, repo: ClanRepository, uow: UnitOfWork) -> None:
         self._repo = repo
         self._uow = uow
 

@@ -8,10 +8,12 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.application.relationship.handlers import MarriageQueryHandler, ParentChildQueryHandler
+from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.relationship_repository import (
     SqlAlchemyMarriageRepository,
     SqlAlchemyParentChildRepository,
 )
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.fixture()
@@ -64,7 +66,8 @@ async def _seed(session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID,
 @pytest.mark.asyncio
 async def test_marriage_not_readable_cross_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b, marriage_id, _ = await _seed(async_session)
-    handler = MarriageQueryHandler(SqlAlchemyMarriageRepository(async_session))
+    uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
+    handler = MarriageQueryHandler(SqlAlchemyMarriageRepository(uow))
     assert await handler.get_by_id(marriage_id, clan_a) is not None
     assert await handler.get_by_id(marriage_id, clan_b) is None
 
@@ -72,6 +75,7 @@ async def test_marriage_not_readable_cross_clan(async_session: AsyncSession) -> 
 @pytest.mark.asyncio
 async def test_parent_child_not_readable_cross_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b, _, link_id = await _seed(async_session)
-    handler = ParentChildQueryHandler(SqlAlchemyParentChildRepository(async_session))
+    uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
+    handler = ParentChildQueryHandler(SqlAlchemyParentChildRepository(uow))
     assert await handler.get_by_id(link_id, clan_a) is not None
     assert await handler.get_by_id(link_id, clan_b) is None

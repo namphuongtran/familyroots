@@ -39,6 +39,11 @@ class EventCommandHandler:
         is_recurring: bool,
         notify_days_before: int | None,
     ) -> EventResponse:
+        # A body-supplied person_id must belong to the acting clan (read isolation
+        # already filters by Event.clan_id, but the link itself must stay in-clan).
+        if person_id and not await self._repo.person_in_clan(person_id, clan_id):
+            raise EntityNotFoundError("person_not_found", {"person_id": str(person_id)})
+
         event = Event.create(
             clan_id=clan_id,
             actor=actor,
@@ -51,6 +56,7 @@ class EventCommandHandler:
             is_recurring=is_recurring,
             notify_days_before=notify_days_before or 7,
         )
+        self._uow.track(event)
         await self._repo.save(event)
         await self._uow.commit()
 
@@ -78,8 +84,12 @@ class EventCommandHandler:
         actor: ActorInfo,
         changes: dict[str, Any],
     ) -> EventResponse:
+        # Note: person_id is create-only (not in EventUpdateRequest, and excluded
+        # from the Event aggregate's updatable fields), so there is no cross-clan
+        # person reference to validate on update — only create needs the guard.
         event = await self._get_or_raise(event_id, clan_id)
         event.update(changes, actor)
+        self._uow.track(event)
         await self._repo.save(event)
         await self._uow.commit()
 
@@ -108,6 +118,7 @@ class EventCommandHandler:
     ) -> None:
         event = await self._get_or_raise(event_id, clan_id)
         event.delete(actor)
+        self._uow.track(event)
         await self._repo.delete(event)
         await self._uow.commit()
 
@@ -152,7 +163,9 @@ class EventQueryHandler:
         event_type: str | None = None,
         cursor: str | None = None,
         limit: int = 20,
-    ) -> list[EventResponse]:
+    ) -> tuple[list[EventResponse], dict[str, Any]]:
+        from app.core.pagination import build_page
+
         events = await self._repo.list_in_clan(
             clan_id,
             person_id=person_id,
@@ -160,7 +173,8 @@ class EventQueryHandler:
             cursor=cursor,
             limit=limit,
         )
-        return [
+        page = build_page(events, limit)
+        responses = [
             EventResponse(
                 id=e.id,
                 clan_id=e.clan_id,
@@ -176,8 +190,9 @@ class EventQueryHandler:
                 created_at=e.created_at,
                 updated_at=e.updated_at,
             )
-            for e in events
+            for e in page["data"]
         ]
+        return responses, page["meta"]
 
     async def get_upcoming(self, *, clan_id: uuid.UUID, days: int = 30) -> list[dict[str, Any]]:
         """Get upcoming events within the next N days with recurring logic."""

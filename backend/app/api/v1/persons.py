@@ -182,8 +182,9 @@ async def create_person(
         CreatePerson(
             actor=ActorInfo.from_jwt(current_user, "editor"),
             clan_id=clan_id,
-            created_by_clan_id=body.created_by_clan_id or clan_id,
-            **body.model_dump(exclude={"created_by_clan_id"}),
+            # Provenance is always the active clan; never client-supplied.
+            created_by_clan_id=clan_id,
+            **body.model_dump(),
         )
     )
     return {"data": person.model_dump()}

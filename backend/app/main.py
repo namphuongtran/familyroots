@@ -1,15 +1,17 @@
 """FamilyRoots FastAPI application factory."""
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 import sentry_sdk
 from fastapi import Depends, FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_v1_router
@@ -19,7 +21,9 @@ from app.core.exceptions import (
     AppError,
     app_exception_handler,
     domain_exception_handler,
+    http_exception_handler,
     unhandled_exception_handler,
+    validation_exception_handler,
 )
 from app.core.logging import configure_logging
 from app.domain.shared.exceptions import DomainError
@@ -34,30 +38,38 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Application lifespan — startup and shutdown logic."""
+    """Application lifespan — startup and shutdown logic.
+
+    Each optional integration (Sentry, i18n, Firebase, scheduler) is isolated:
+    a failure in one is logged but does not abort boot or skip the others, and
+    shutdown runs in a finally block so teardown can't be skipped. The API can
+    serve requests even if a non-critical side-channel (push, scheduling) is down.
+    """
     configure_logging()
 
-    # Initialize Sentry
+    def _safe(label: str, fn: Callable[[], object]) -> None:
+        try:
+            fn()
+        except Exception:
+            logger.exception("Startup step failed (continuing): %s", label)
+
     if settings.SENTRY_DSN:
-        sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
-            environment=settings.APP_ENV,
-            traces_sample_rate=0.1 if settings.APP_ENV == "production" else 1.0,
+        _safe(
+            "sentry",
+            lambda: sentry_sdk.init(
+                dsn=settings.SENTRY_DSN,
+                environment=settings.APP_ENV,
+                traces_sample_rate=0.1 if settings.APP_ENV == "production" else 1.0,
+            ),
         )
+    _safe("translations", load_translations)
+    _safe("firebase", init_firebase)
+    _safe("scheduler", start_scheduler)
 
-    # Load i18n translation files
-    load_translations()
-
-    # Initialize Firebase for push notifications
-    init_firebase()
-
-    # Start APScheduler
-    start_scheduler()
-
-    yield
-
-    # Shutdown APScheduler
-    stop_scheduler()
+    try:
+        yield
+    finally:
+        _safe("scheduler-stop", stop_scheduler)
 
 
 def create_app() -> FastAPI:
@@ -71,33 +83,24 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Register custom exception handlers
+    # Register custom exception handlers. AppError is matched before the base
+    # StarletteHTTPException (more specific), so coded errors keep their envelope
+    # while bare HTTPExceptions and 422 validation errors are normalized too.
     application.add_exception_handler(AppError, app_exception_handler)
     application.add_exception_handler(DomainError, domain_exception_handler)
+    application.add_exception_handler(RequestValidationError, validation_exception_handler)
+    application.add_exception_handler(StarletteHTTPException, http_exception_handler)
     application.add_exception_handler(Exception, unhandled_exception_handler)
 
-    # CORS middleware
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # TrustedHostMiddleware — rejects requests with unexpected Host headers
-    application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
-
-    # Language middleware — extract Accept-Language and set locale context
-    application.add_middleware(LanguageMiddleware)
-
-    # Sentry middleware
-    if settings.SENTRY_DSN:
-        application.add_middleware(SentryMiddleware)
-
-    # Rate limiting on auth endpoints (20 req/min per IP)
+    # Middleware order matters. Starlette wraps the LAST-added middleware OUTERMOST,
+    # so we add in reverse of the desired execution order. Desired (outermost →
+    # innermost): TrustedHost → CORS → Language → Sentry → RateLimit. This means:
+    #   - TrustedHost rejects a bad Host header before anything else runs;
+    #   - CORS wraps the rate limiter, so even a 429 carries CORS headers;
+    #   - Language sets the locale before RateLimit builds its (localized) 429 envelope.
     from app.core.rate_limit import RateLimitMiddleware
 
+    # innermost
     application.add_middleware(
         RateLimitMiddleware,
         path_prefix="/api/v1/auth",
@@ -105,6 +108,18 @@ def create_app() -> FastAPI:
         window_seconds=60,
         trust_forwarded_for=settings.RATE_LIMIT_TRUST_FORWARDED_FOR,
     )
+    if settings.SENTRY_DSN:
+        application.add_middleware(SentryMiddleware)
+    application.add_middleware(LanguageMiddleware)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    # outermost
+    application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
     # NOTE: No tenant middleware — clan isolation is enforced in the
     # application/repository layer (every clan-scoped read takes clan_id).

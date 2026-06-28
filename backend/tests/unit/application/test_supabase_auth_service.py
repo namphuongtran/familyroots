@@ -1,19 +1,18 @@
-"""SupabaseAuthService.logout must revoke the user's session via Supabase."""
+"""AuthSessionService.logout must revoke the session via the IdentityProvider port."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.application.auth import handlers
+from app.application.auth.handlers import AuthSessionService
 
 
 @pytest.mark.asyncio
-async def test_logout_revokes_session(monkeypatch):
-    admin = MagicMock()
-    monkeypatch.setattr(handlers, "_supabase_admin", lambda: admin)
+async def test_logout_revokes_session():
+    identity = AsyncMock()
+    svc = AuthSessionService(identity)
 
-    svc = handlers.SupabaseAuthService()
     await svc.logout(access_token="the-access-token")
 
-    # The service must have asked Supabase to sign the session out.
-    admin.auth.admin.sign_out.assert_called_once_with("the-access-token", "global")
+    # The service delegates revocation to the identity provider.
+    identity.sign_out.assert_awaited_once_with(access_token="the-access-token")

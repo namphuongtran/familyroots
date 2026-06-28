@@ -11,7 +11,11 @@ import uuid
 from datetime import date
 from typing import Protocol
 
-from app.domain.shared.exceptions import BusinessRuleViolation, ConflictError
+from app.domain.shared.exceptions import (
+    BusinessRuleViolation,
+    ConflictError,
+    EntityNotFoundError,
+)
 
 
 class RelationshipQueryPort(Protocol):
@@ -27,6 +31,9 @@ class RelationshipQueryPort(Protocol):
     async def get_birth_dates(
         self, person_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, date | None]: ...
+    async def persons_in_clan(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> set[uuid.UUID]: ...
 
 
 class RelationshipDomainValidator:
@@ -34,6 +41,23 @@ class RelationshipDomainValidator:
 
     def __init__(self, query_port: RelationshipQueryPort) -> None:
         self._q = query_port
+
+    async def ensure_persons_in_clan(self, person_ids: list[uuid.UUID], clan_id: uuid.UUID) -> None:
+        """Every referenced person must be a member of the acting clan.
+
+        Persons are global (M:N via clan_memberships); without this check a clan
+        could create an edge referencing another clan's person and then read that
+        person's data through the edge. Missing persons are reported as not-found
+        (a person outside your clan is invisible to you) rather than forbidden, so
+        the response does not leak whether the UUID exists in another clan.
+        """
+        present = await self._q.persons_in_clan(person_ids, clan_id)
+        missing = set(person_ids) - present
+        if missing:
+            raise EntityNotFoundError(
+                "person_not_found",
+                detail={"person_ids": sorted(str(pid) for pid in missing)},
+            )
 
     async def validate_parent_child(
         self,

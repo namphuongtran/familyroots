@@ -62,8 +62,8 @@ Returns `{"status": "ok"}`.
 
 | Method | Path               | Auth | Description                        |
 |--------|--------------------|------|------------------------------------|
-| GET    | `/clans`           | Yes  | List clans the user belongs to     |
-| POST   | `/switch-clan`     | Yes  | Switch active clan                 |
+| GET    | `/clans`                    | Yes  | List clans the user belongs to     |
+| POST   | `/clans/{clan_id}/select`   | Yes  | Select active clan (validates membership) |
 
 ---
 
@@ -252,7 +252,9 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 
 ## Platform Admin (`/api/v1/platform/`)
 
-All endpoints require the `SUPER_ADMIN_UID` match.
+All endpoints require `user_profiles.platform_role = 'super_admin'` **and** an active
+profile (`is_active = true`), checked by the `get_super_admin` dependency — not a
+`SUPER_ADMIN_UID` env match.
 
 | Method | Path                           | Auth        | Description                    |
 |--------|--------------------------------|-------------|--------------------------------|

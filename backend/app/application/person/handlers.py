@@ -22,15 +22,14 @@ from app.domain.person.entity import Person
 from app.domain.person.query_port import PersonQueryPort
 from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
 from app.domain.shared.exceptions import EntityNotFoundError, ForbiddenError
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
-from app.models.user_profile import UserProfile
+from app.domain.shared.unit_of_work import UnitOfWork
 from app.schemas.person import PersonResponse
 
 
 class PersonCommandHandler:
     """Handles Person write operations (create, update, delete, restore)."""
 
-    def __init__(self, repo: PersonRepository, uow: SqlAlchemyUnitOfWork) -> None:
+    def __init__(self, repo: PersonRepository, uow: UnitOfWork) -> None:
         self._repo = repo
         self._uow = uow
 
@@ -91,8 +90,8 @@ class PersonCommandHandler:
         # the whitelisted fields below. Editors/admins (role != "viewer") skip this and
         # may edit any field. This is why the route uses RequireViewer, not RequireEditor.
         if cmd.actor.role == "viewer":
-            user_profile = await self._uow.session.get(UserProfile, cmd.actor.user_id)
-            if not user_profile or user_profile.person_id != cmd.person_id:
+            linked_person_id = await self._repo.get_linked_person_id(cmd.actor.user_id)
+            if linked_person_id != cmd.person_id:
                 raise ForbiddenError("insufficient_permissions")
 
             allowed_fields = {
@@ -109,7 +108,7 @@ class PersonCommandHandler:
             }
             invalid_fields = set(cmd.changes.keys()) - allowed_fields
             if invalid_fields:
-                raise ForbiddenError(f"unauthorized_fields_update: {', '.join(invalid_fields)}")
+                raise ForbiddenError("field_not_updatable", {"fields": sorted(invalid_fields)})
 
         person.update(cmd.changes, cmd.actor, cmd.clan_id)
         self._uow.track(person)

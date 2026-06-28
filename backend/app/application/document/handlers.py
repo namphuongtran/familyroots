@@ -70,6 +70,7 @@ class DocumentCommandHandler:
 
         # Upload to storage, then persist metadata
         await self._storage.upload(storage_path, file_content, content_type)
+        self._uow.track(doc)
         await self._repo.save(doc)
         await self._uow.commit()
 
@@ -106,6 +107,7 @@ class DocumentCommandHandler:
         doc = await self._get_or_raise(document_id, clan_id)
         await self._storage.delete(doc.storage_path)
         doc.mark_deleted(actor)
+        self._uow.track(doc)
         await self._repo.delete(doc)
         await self._uow.commit()
 
@@ -184,8 +186,12 @@ class DocumentQueryHandler:
         document_type: str | None = None,
         cursor: str | None = None,
         limit: int = 20,
-    ) -> list[DocumentSummary]:
-        """List documents with optional filters."""
+    ) -> tuple[list[DocumentSummary], dict[str, Any]]:
+        """List documents with optional filters. Returns (page items, cursor meta)."""
+        from app.core.pagination import build_page
+
+        # Repo fetches limit+1 (paginate_query); build_page slices to limit and
+        # derives the next-page cursor from the trailing row.
         docs = await self._repo.list_in_clan(
             clan_id,
             person_id=person_id,
@@ -193,7 +199,8 @@ class DocumentQueryHandler:
             cursor=cursor,
             limit=limit,
         )
-        return [
+        page = build_page(docs, limit)
+        summaries = [
             DocumentSummary(
                 id=d.id,
                 title=d.title,
@@ -203,5 +210,6 @@ class DocumentQueryHandler:
                 is_avatar=d.is_avatar,
                 created_at=d.created_at,
             )
-            for d in docs
+            for d in page["data"]
         ]
+        return summaries, page["meta"]

@@ -51,6 +51,10 @@ class PersonRepository(Protocol):
         """Fetch a person only if they belong to the given clan."""
         ...
 
+    async def get_linked_person_id(self, user_id: uuid.UUID) -> uuid.UUID | None:
+        """The person_id a user profile is linked to (for the viewer self-edit check)."""
+        ...
+
     async def list_in_clan(
         self,
         clan_id: uuid.UUID,

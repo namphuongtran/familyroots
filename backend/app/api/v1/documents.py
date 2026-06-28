@@ -60,7 +60,7 @@ async def list_documents(
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List documents with optional filters, paginated."""
-    items = await query_handler.list_documents(
+    items, meta = await query_handler.list_documents(
         clan_id=clan_id,
         person_id=person_id,
         document_type=document_type,
@@ -71,7 +71,7 @@ async def list_documents(
     if fields:
         field_set = {f.strip() for f in fields.split(",")}
         data = [{k: v for k, v in d.items() if k in field_set} for d in data]
-    return {"data": data}
+    return {"data": data, "meta": meta}
 
 
 @router.get("/{document_id}")

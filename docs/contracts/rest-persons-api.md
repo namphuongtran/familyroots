@@ -31,9 +31,13 @@ Core operations:
 Example response shape (list):
 {
   "data": [...],
-  "next_cursor": "...",
-  "has_more": true
+  "total": 123
 }
+- The persons list returns a `total` count (not a cursor envelope). `cursor`/`limit`
+  query params drive which page of rows is fetched, but the response exposes `data`
+  + `total`, not `next_cursor`/`has_more`.
+- NOTE: `created_by_clan_id` is **not** accepted on create/update — it is provenance,
+  always stamped from the active clan (see the 2026-06-28 design review, C5).
 
 Example error shape:
 {

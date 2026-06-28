@@ -15,10 +15,19 @@ Base route: /api/v1/documents
 
 Core operations:
 - POST /
-- GET /
+- GET /  (cursor-paginated; query params: cursor, limit, person_id, document_type, fields)
 - GET /{id}
-- DELETE /{id}
+- DELETE /{id}  (admin)
 - PATCH /{id}/set-avatar
+
+List response envelope (cursor pagination):
+```
+{
+  "data": [ ... ],
+  "meta": { "cursor": "<base64|null>", "has_more": true, "limit": 20 }
+}
+```
+- `meta.cursor` is null on the last page; pass it back as `?cursor=` to fetch the next.
 
 Upload expectations:
 - multipart/form-data upload
