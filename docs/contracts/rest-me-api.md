@@ -14,13 +14,16 @@ backend
 Base route: /api/v1/me
 
 Core operations:
-- GET /clans
-- POST /switch-clan
+- GET /clans — list the current user's approved clan memberships
+- POST /clans/{clan_id}/select — validate membership and select the active clan
 
 Behavior:
-- Returns the current user's clan memberships.
-- Switch-clan updates the active clan context used by clan-scoped APIs.
-- Clients must persist the chosen clan context and send X-Current-Clan-Id on subsequent requests.
+- `GET /clans` returns the user's **approved** memberships only (pending/unapproved are excluded).
+- `POST /clans/{clan_id}/select` validates the user has an approved membership in that clan
+  (403 `clan_membership_required` otherwise) and echoes the selected clan context.
+- Clients must persist the chosen clan context and send `X-Current-Clan-Id` on subsequent
+  clan-scoped requests; `get_current_clan_id` re-validates membership (and clan `is_active`)
+  on every such request.
 
 ## Versioning & Compatibility Rules
 - Adding new membership metadata is non-breaking.
