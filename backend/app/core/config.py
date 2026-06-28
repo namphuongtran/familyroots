@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
     ALLOWED_HOSTS: list[str] = ["*"]
 
+    # Rate limiting — only trust X-Forwarded-For when behind a trusted proxy/LB.
+    RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
+
     # Scheduler
     NOTIFICATION_CRON_HOUR: int = 7
     NOTIFICATION_DAYS_BEFORE: int = 7
