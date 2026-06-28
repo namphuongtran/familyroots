@@ -3,6 +3,7 @@
 
 import uuid
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock
 
 import pytest
 import sqlalchemy as sa
@@ -28,7 +29,7 @@ async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
 async def test_register_create_clan_provisions_profile(async_session: AsyncSession) -> None:
     repo = SqlAlchemyAuthRepository(async_session)
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = AuthCommandHandler(repo, uow)
+    handler = AuthCommandHandler(repo, uow, AsyncMock())
 
     user_id = uuid.uuid4()
     slug = f"clan-{user_id.hex[:8]}"
@@ -59,7 +60,7 @@ async def test_register_create_clan_provisions_profile(async_session: AsyncSessi
 async def test_register_join_clan_provisions_profile(async_session: AsyncSession) -> None:
     repo = SqlAlchemyAuthRepository(async_session)
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = AuthCommandHandler(repo, uow)
+    handler = AuthCommandHandler(repo, uow, AsyncMock())
 
     # An admin creates a clan to join.
     admin_id = uuid.uuid4()

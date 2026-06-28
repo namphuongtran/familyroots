@@ -1,22 +1,20 @@
-"""register() must delete the orphaned Supabase user if the DB membership fails."""
+"""register() must delete the orphaned provider user if the DB membership fails."""
 
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.application.auth import handlers
 from app.application.auth.handlers import AuthCommandHandler
 
 
 @pytest.mark.asyncio
-async def test_register_deletes_supabase_user_on_db_failure(monkeypatch):
+async def test_register_deletes_provider_user_on_db_failure(monkeypatch):
     new_id = uuid.uuid4()
-    admin = MagicMock()
-    admin.auth.admin.create_user.return_value = MagicMock(user=MagicMock(id=str(new_id)))
-    monkeypatch.setattr(handlers, "_supabase_admin", lambda: admin)
+    identity = AsyncMock()
+    identity.create_user.return_value = str(new_id)
 
-    handler = AuthCommandHandler(repo=MagicMock(), uow=MagicMock())
+    handler = AuthCommandHandler(repo=MagicMock(), uow=MagicMock(), identity=identity)
 
     async def _boom(**kwargs):
         raise RuntimeError("db exploded")
@@ -33,5 +31,5 @@ async def test_register_deletes_supabase_user_on_db_failure(monkeypatch):
             clan_slug="c-slug",
         )
 
-    # Compensation: the orphaned auth user was deleted.
-    admin.auth.admin.delete_user.assert_called_once_with(str(new_id))
+    # Compensation: the orphaned auth user was deleted via the port.
+    identity.delete_user.assert_awaited_once_with(str(new_id))

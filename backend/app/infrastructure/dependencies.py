@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from app.application.auth.handlers import (
         AuthCommandHandler,
         AuthQueryHandler,
+        AuthSessionService,
         FCMTokenHandler,
-        SupabaseAuthService,
     )
     from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
     from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
@@ -152,12 +152,13 @@ def get_auth_command_handler(
 ) -> AuthCommandHandler:
     from app.infrastructure.event_dispatcher import create_event_dispatcher
     from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
+    from app.infrastructure.supabase_identity_provider import SupabaseIdentityProvider
     from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     repo = SqlAlchemyAuthRepository(db)
     dispatcher = create_event_dispatcher(db)
     uow = SqlAlchemyUnitOfWork(db, dispatcher)
-    return AuthCommandHandler(repo, uow)
+    return AuthCommandHandler(repo, uow, SupabaseIdentityProvider())
 
 
 def get_auth_query_handler(
@@ -178,10 +179,11 @@ def get_fcm_token_handler(
     return FCMTokenHandler(repo)
 
 
-def get_supabase_auth_service() -> SupabaseAuthService:
-    from app.application.auth.handlers import SupabaseAuthService
+def get_auth_session_service() -> AuthSessionService:
+    from app.application.auth.handlers import AuthSessionService
+    from app.infrastructure.supabase_identity_provider import SupabaseIdentityProvider
 
-    return SupabaseAuthService()
+    return AuthSessionService(SupabaseIdentityProvider())
 
 
 # ── Relationship handlers ───────────────────────────────────────
