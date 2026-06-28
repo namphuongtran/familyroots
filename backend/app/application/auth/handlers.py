@@ -12,6 +12,7 @@ Architecture:
 from __future__ import annotations
 
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -199,15 +200,22 @@ class AuthCommandHandler:
             raise ValidationError("auth.registration_failed", {"detail": str(e)}) from e
 
         user_id = uuid.UUID(auth_resp.user.id)
-        return await self._assign_clan_membership(
-            user_id=user_id,
-            email=email,
-            full_name=full_name,
-            clan_action=clan_action,
-            clan_id=clan_id,
-            clan_name=clan_name,
-            clan_slug=clan_slug,
-        )
+        try:
+            return await self._assign_clan_membership(
+                user_id=user_id,
+                email=email,
+                full_name=full_name,
+                clan_action=clan_action,
+                clan_id=clan_id,
+                clan_name=clan_name,
+                clan_slug=clan_slug,
+            )
+        except Exception:
+            # Compensate: the Supabase auth user exists but the DB membership
+            # failed — delete the orphan so the email can be reused.
+            with suppress(Exception):
+                _supabase_admin().auth.admin.delete_user(str(user_id))
+            raise
 
     async def onboard_authenticated_user(
         self,
