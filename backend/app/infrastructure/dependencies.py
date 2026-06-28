@@ -12,7 +12,12 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from app.application.auth.handlers import AuthCommandHandler, AuthQueryHandler, FCMTokenHandler
+    from app.application.auth.handlers import (
+        AuthCommandHandler,
+        AuthQueryHandler,
+        FCMTokenHandler,
+        SupabaseAuthService,
+    )
     from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
     from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
     from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
@@ -170,6 +175,12 @@ def get_fcm_token_handler(
 
     repo = SqlAlchemyFCMTokenRepository(db)
     return FCMTokenHandler(repo)
+
+
+def get_supabase_auth_service() -> SupabaseAuthService:
+    from app.application.auth.handlers import SupabaseAuthService
+
+    return SupabaseAuthService()
 
 
 # ── Relationship handlers ───────────────────────────────────────

@@ -16,6 +16,7 @@ from app.infrastructure.dependencies import (
     get_auth_command_handler,
     get_auth_query_handler,
     get_fcm_token_handler,
+    get_supabase_auth_service,
 )
 from app.schemas.auth import (
     AuthenticatedOnboardingRequest,
@@ -81,9 +82,11 @@ async def logout(current_user: dict[str, Any] = Depends(get_current_user)) -> di
 
 
 @router.post("/refresh")
-async def refresh_token(body: RefreshRequest) -> dict[str, Any]:
+async def refresh_token(
+    body: RefreshRequest,
+    svc: SupabaseAuthService = Depends(get_supabase_auth_service),
+) -> dict[str, Any]:
     """Exchange a refresh token for a new access token."""
-    svc = SupabaseAuthService()
     return await svc.refresh_token(refresh_token=body.refresh_token)
 
 
@@ -105,9 +108,9 @@ async def get_me(
 async def update_me(
     body: UserUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
+    svc: SupabaseAuthService = Depends(get_supabase_auth_service),
 ) -> dict[str, Any]:
     """Update the authenticated user's profile."""
-    svc = SupabaseAuthService()
     await svc.update_profile(
         user_sub=current_user["sub"],
         full_name=body.full_name,
