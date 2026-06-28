@@ -24,6 +24,14 @@ class _Inv:
             setattr(self, k, v)
 
 
+class _ExistingRole:
+    def __init__(self):
+        self.role = "viewer"
+        self.is_approved = False
+        self.approved_by = None
+        self.approved_at = None
+
+
 class _FakeRepo:
     def __init__(self, pending=None, by_token=None, existing_role=None):
         self._pending = pending
@@ -88,6 +96,7 @@ async def test_create_returns_token_and_path():
         CreateInvitation(clan_id=uuid.uuid4(), email="A@X.com", role="editor", actor=_actor())
     )
     assert out["token"]
+    assert len(out["token"]) >= 32
     assert out["accept_path"] == f"/api/v1/invitations/{out['token']}/accept"
     assert out["email"] == "a@x.com"  # normalized
     assert len(repo.added_invitations) == 1
@@ -143,3 +152,29 @@ async def test_accept_creates_approved_membership():
     assert role.is_approved is True
     assert role.approved_by == inv.invited_by and role.approved_at is not None
     assert uow.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_accept_promotes_pending_membership():
+    inv = _Inv(
+        clan_id=uuid.uuid4(), email="a@x.com", role="editor", invited_by=uuid.uuid4(),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+    )
+    existing = _ExistingRole()
+    repo = _FakeRepo(by_token=inv, existing_role=existing)
+    uow = _FakeUow()
+    handler = InvitationCommandHandler(repo, uow)
+
+    out = await handler.accept(
+        AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="a@x.com",
+                         user_full_name="X")
+    )
+
+    assert out["role"] == "editor"
+    # Promoted in place — no NEW role row added:
+    assert repo.added_roles == []
+    assert existing.role == "editor"
+    assert existing.is_approved is True
+    assert existing.approved_by == inv.invited_by
+    assert existing.approved_at is not None
+    assert inv.status == "accepted"
