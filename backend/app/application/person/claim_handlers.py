@@ -158,6 +158,8 @@ class ClaimCommandHandler:
                     clan_id=claim.person.created_by_clan_id,
                     role="viewer",
                     is_approved=True,
+                    approved_by=admin_id,
+                    approved_at=datetime.now(UTC),
                 )
             )
 
