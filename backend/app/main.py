@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
@@ -20,6 +21,7 @@ from app.core.exceptions import (
     domain_exception_handler,
     unhandled_exception_handler,
 )
+from app.core.logging import configure_logging
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
@@ -33,6 +35,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan — startup and shutdown logic."""
+    configure_logging()
 
     # Initialize Sentry
     if settings.SENTRY_DSN:
@@ -76,11 +79,14 @@ def create_app() -> FastAPI:
     # CORS middleware
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS if not settings.APP_DEBUG else ["*"],
+        allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # TrustedHostMiddleware — rejects requests with unexpected Host headers
+    application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
     # Language middleware — extract Accept-Language and set locale context
     application.add_middleware(LanguageMiddleware)
@@ -99,9 +105,10 @@ def create_app() -> FastAPI:
         window_seconds=60,
     )
 
-    # NOTE: No tenant middleware — clan_id isolation is handled by
-    # Supabase RLS at the DB level + get_current_clan_id() dependency.
-    # Users select their active clan via X-Current-Clan-Id header.
+    # NOTE: No tenant middleware — clan isolation is enforced in the
+    # application/repository layer (every clan-scoped read takes clan_id).
+    # Users select their active clan via the X-Current-Clan-Id header.
+    # DB-level RLS is a planned defense-in-depth addition (SP-3C), not yet active.
 
     # Include API v1 routes
     application.include_router(api_v1_router, prefix="/api/v1")

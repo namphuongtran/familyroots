@@ -1,8 +1,8 @@
 """Async SQLAlchemy engine and session management.
 
-Single schema — no search_path switching. clan_id isolation is handled
-by Supabase RLS at the database level and explicit filtering at the
-application level.
+Single schema — no search_path switching. clan_id isolation is enforced in the
+application/repository layer (explicit clan_id filtering on every clan-scoped
+read). DB-level RLS is a planned defense-in-depth addition (SP-3C), not yet active.
 """
 
 from collections.abc import AsyncIterator
