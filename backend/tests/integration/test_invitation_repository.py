@@ -14,7 +14,7 @@ from app.models.clan_invitation import ClanInvitation
 
 @pytest.fixture()
 async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
-    async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
+    async_dsn = migrated_db_url
     engine = create_async_engine(async_dsn)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with maker() as session:

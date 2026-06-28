@@ -16,9 +16,7 @@ from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 @pytest.fixture()
 async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
-    # migrated_db_url is a sync (psycopg2) DSN from the integration conftest;
-    # convert to the asyncpg driver for the app's async session.
-    async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
+    async_dsn = migrated_db_url
     engine = create_async_engine(async_dsn)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with maker() as session:

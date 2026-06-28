@@ -103,6 +103,7 @@ def create_app() -> FastAPI:
         path_prefix="/api/v1/auth",
         max_requests=20,
         window_seconds=60,
+        trust_forwarded_for=settings.RATE_LIMIT_TRUST_FORWARDED_FOR,
     )
 
     # NOTE: No tenant middleware — clan isolation is enforced in the

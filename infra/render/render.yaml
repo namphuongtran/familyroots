@@ -18,8 +18,15 @@ services:
           property: connectionString
       - key: APP_SECRET_KEY
         generateValue: true
+      # Required in production: the config fail-fast rejects a wildcard host
+      # allowlist. JSON list (pydantic-settings parses complex env vars as JSON).
+      - key: ALLOWED_HOSTS
+        value: '["familyroots-api.onrender.com"]'
     healthCheckPath: /health
-    # TODO: implement in Prompt 2 — add remaining env vars from .env.example
+    # Run DB migrations before each deploy goes live (blocks the deploy on failure).
+    preDeployCommand: alembic upgrade head
+    # TODO: add remaining production env vars from .env.example
+    # (SUPABASE_URL/keys, CORS_ORIGINS, SENTRY_DSN, Firebase) before go-live.
 
 databases:
   - name: familyroots-db

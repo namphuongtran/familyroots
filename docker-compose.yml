@@ -30,7 +30,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgdb:5432/${POSTGRES_DB:-family_roots}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgdb:5432/${POSTGRES_DB:-family_roots}
       APP_ENV: development
       APP_DEBUG: "true"
       APP_SECRET_KEY: ${APP_SECRET_KEY:-change-me-in-production}

@@ -34,7 +34,7 @@ from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 @pytest.fixture()
 async def async_engine(migrated_db_url: str) -> AsyncGenerator[AsyncEngine]:
     """Provide a shared async engine for the test (disposed after test)."""
-    async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
+    async_dsn = migrated_db_url
     engine = create_async_engine(async_dsn)
     yield engine
     await engine.dispose()

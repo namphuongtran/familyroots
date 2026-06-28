@@ -11,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 
+# NOTE: if DATABASE_URL is ever pointed at a transaction-mode connection pooler
+# (e.g. Supabase's pgbouncer on :6543), psycopg v3's automatic server-side
+# prepared statements break with DuplicatePreparedStatement. In that case add
+# connect_args={"prepare_threshold": None}. A direct Postgres (current Render
+# setup) does not need it.
 engine = create_async_engine(
     settings.DATABASE_URL,
     pool_size=10,
