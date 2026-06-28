@@ -11,7 +11,7 @@ from typing import Any
 
 from app.domain.branch.entity import Branch
 from app.domain.branch.repository import BranchRepository
-from app.domain.shared.exceptions import EntityNotFoundError
+from app.domain.shared.exceptions import BusinessRuleViolation, EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 from app.schemas.branch import BranchResponse
@@ -35,11 +35,14 @@ class BranchCommandHandler:
         parent_branch_id: uuid.UUID | None = None,
         branch_order: int | None = None,
     ) -> BranchResponse:
-        # Validate parent branch exists
+        # Validate parent branch and founder belong to the acting clan (both come
+        # from the request body; FKs only prove the row exists *somewhere*).
         if parent_branch_id:
             parent = await self._repo.get_by_id(parent_branch_id, clan_id)
             if not parent:
                 raise EntityNotFoundError("branch_not_found", {"branch_id": str(parent_branch_id)})
+        if founder_person_id and not await self._repo.person_in_clan(founder_person_id, clan_id):
+            raise EntityNotFoundError("person_not_found", {"person_id": str(founder_person_id)})
 
         branch = Branch.create(
             clan_id=clan_id,
@@ -75,6 +78,19 @@ class BranchCommandHandler:
         changes: dict[str, Any],
     ) -> BranchResponse:
         branch = await self._get_or_raise(branch_id, clan_id)
+
+        # The update path must re-validate body-supplied references (create did, but
+        # update previously skipped them — a cross-clan parent/founder hole).
+        new_parent = changes.get("parent_branch_id")
+        if new_parent is not None:
+            if new_parent == branch_id:
+                raise BusinessRuleViolation("branch_cannot_be_own_parent")
+            if not await self._repo.get_by_id(new_parent, clan_id):
+                raise EntityNotFoundError("branch_not_found", {"branch_id": str(new_parent)})
+        new_founder = changes.get("founder_person_id")
+        if new_founder is not None and not await self._repo.person_in_clan(new_founder, clan_id):
+            raise EntityNotFoundError("person_not_found", {"person_id": str(new_founder)})
+
         branch.update(changes, actor)
         self._uow.track(branch)
         await self._repo.save(branch)

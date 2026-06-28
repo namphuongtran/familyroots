@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.branch.entity import Branch as BranchEntity
 from app.infrastructure.persistence.branch_mapper import apply_to_orm, to_domain, to_orm
 from app.models.branch import Branch as BranchModel
+from app.models.clan_membership import ClanMembership
 
 
 class SqlAlchemyBranchRepository:
@@ -28,6 +29,15 @@ class SqlAlchemyBranchRepository:
         )
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
+
+    async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            select(ClanMembership.person_id).where(
+                ClanMembership.person_id == person_id,
+                ClanMembership.clan_id == clan_id,
+            )
+        )
+        return result.first() is not None
 
     async def list_in_clan(self, clan_id: uuid.UUID) -> list[BranchEntity]:
         result = await self._session.execute(

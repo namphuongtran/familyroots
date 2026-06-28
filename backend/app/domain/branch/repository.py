@@ -19,6 +19,10 @@ class BranchRepository(Protocol):
         """Fetch a branch by ID within a clan."""
         ...
 
+    async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        """Whether person_id is a member (clan_memberships) of clan_id."""
+        ...
+
     async def list_in_clan(self, clan_id: uuid.UUID) -> list[Branch]:
         """List all branches in a clan ordered by branch_order then name."""
         ...

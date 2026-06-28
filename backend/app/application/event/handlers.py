@@ -39,6 +39,11 @@ class EventCommandHandler:
         is_recurring: bool,
         notify_days_before: int | None,
     ) -> EventResponse:
+        # A body-supplied person_id must belong to the acting clan (read isolation
+        # already filters by Event.clan_id, but the link itself must stay in-clan).
+        if person_id and not await self._repo.person_in_clan(person_id, clan_id):
+            raise EntityNotFoundError("person_not_found", {"person_id": str(person_id)})
+
         event = Event.create(
             clan_id=clan_id,
             actor=actor,
@@ -80,6 +85,9 @@ class EventCommandHandler:
         changes: dict[str, Any],
     ) -> EventResponse:
         event = await self._get_or_raise(event_id, clan_id)
+        new_person = changes.get("person_id")
+        if new_person is not None and not await self._repo.person_in_clan(new_person, clan_id):
+            raise EntityNotFoundError("person_not_found", {"person_id": str(new_person)})
         event.update(changes, actor)
         self._uow.track(event)
         await self._repo.save(event)

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.event.entity import Event as EventEntity
 from app.infrastructure.persistence.event_mapper import apply_to_orm, to_domain, to_orm
+from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
 
 
@@ -30,6 +31,15 @@ class SqlAlchemyEventRepository:
         )
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
+
+    async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            select(ClanMembership.person_id).where(
+                ClanMembership.person_id == person_id,
+                ClanMembership.clan_id == clan_id,
+            )
+        )
+        return result.first() is not None
 
     async def list_in_clan(
         self,
