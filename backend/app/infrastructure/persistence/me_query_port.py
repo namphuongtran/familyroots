@@ -20,12 +20,14 @@ class SqlAlchemyMeQueryPort(MeQueryPort):
     async def list_clans(self, user_id: str) -> list[Any]:
         result = await self._session.execute(
             text(
+                # user_clan_roles has no joined_at column; created_at is the row's
+                # creation time, i.e. when the membership was established.
                 "SELECT ucr.clan_id, c.name AS clan_name, c.slug AS clan_slug, "
-                "ucr.role, ucr.joined_at "
+                "ucr.role, ucr.created_at AS joined_at "
                 "FROM user_clan_roles ucr "
                 "JOIN clans c ON c.id = ucr.clan_id "
                 "WHERE ucr.user_id = :user_id AND ucr.is_approved = true "
-                "ORDER BY ucr.joined_at"
+                "ORDER BY ucr.created_at"
             ),
             {"user_id": user_id},
         )

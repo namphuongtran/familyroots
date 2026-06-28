@@ -43,4 +43,3 @@ class UserProfile(TimestampMixin, Base):
     # ── ORM Relationships ─────────────────────────────────────
     person = relationship("Person", back_populates="user_profile", uselist=False)
     user_roles = relationship("UserClanRole", back_populates="user_profile", lazy="selectin")
-    devices = relationship("UserDevice", back_populates="user_profile", lazy="selectin")
