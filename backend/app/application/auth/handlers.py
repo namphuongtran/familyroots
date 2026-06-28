@@ -64,6 +64,18 @@ class SupabaseAuthService:
             "expires_in": resp.session.expires_in,
         }
 
+    async def logout(self, *, access_token: str) -> None:
+        """Revoke the user's Supabase session (refresh tokens).
+
+        The stateless access token remains valid until its short expiry; this
+        prevents the session from being renewed.
+        """
+        sb = _supabase_admin()
+        try:
+            sb.auth.admin.sign_out(access_token, "global")
+        except Exception:
+            return
+
     async def update_profile(
         self, *, user_sub: str, full_name: str | None, preferred_locale: str | None
     ) -> None:

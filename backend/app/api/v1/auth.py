@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from fastapi.security import HTTPAuthorizationCredentials
 
 from app.application.auth.handlers import (
     AuthCommandHandler,
@@ -11,7 +12,7 @@ from app.application.auth.handlers import (
     FCMTokenHandler,
     SupabaseAuthService,
 )
-from app.core.security import get_current_user
+from app.core.security import get_current_user, security
 from app.infrastructure.dependencies import (
     get_auth_command_handler,
     get_auth_query_handler,
@@ -76,8 +77,13 @@ async def login(
 
 
 @router.post("/logout")
-async def logout(current_user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
-    """Invalidate the current session."""
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_user: dict[str, Any] = Depends(get_current_user),
+    svc: SupabaseAuthService = Depends(get_supabase_auth_service),
+) -> dict[str, Any]:
+    """Invalidate the current session (revoke refresh tokens)."""
+    await svc.logout(access_token=credentials.credentials)
     return {"message": t("auth.logged_out")}
 
 
