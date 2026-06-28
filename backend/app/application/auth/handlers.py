@@ -1,9 +1,10 @@
 """Auth use-case handlers.
 
-Orchestrate Supabase Auth integration and clan membership.
+Orchestrate identity-provider integration (via the IdentityProvider port) and
+clan membership.
 
 Architecture:
-- ``SupabaseAuthService`` — DB-free, talks to Supabase Auth only.
+- ``AuthSessionService`` — DB-free; refresh/logout/profile via the IdentityProvider port.
 - ``AuthCommandHandler`` — DB-bound, orchestrates registration/login.
 - ``AuthQueryHandler``  — read-only profile queries.
 - ``FCMTokenHandler``   — push-token registration (raw SQL).
