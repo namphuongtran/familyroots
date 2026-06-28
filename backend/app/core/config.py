@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     NOTIFICATION_CRON_HOUR: int = 7
     NOTIFICATION_DAYS_BEFORE: int = 7
 
+    # Invitations
+    INVITATION_TTL_DAYS: int = 7
+
 
 @lru_cache
 def get_settings() -> Settings:

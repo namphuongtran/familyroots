@@ -66,3 +66,14 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
 
     def add_user_role(self, role: UserClanRole) -> None:
         self._session.add(role)
+
+    async def get_by_id(
+        self, invitation_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> ClanInvitation | None:
+        result = await self._session.execute(
+            select(ClanInvitation).where(
+                ClanInvitation.id == invitation_id,
+                ClanInvitation.clan_id == clan_id,
+            )
+        )
+        return result.scalar_one_or_none()

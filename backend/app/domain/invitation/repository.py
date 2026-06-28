@@ -36,3 +36,7 @@ class InvitationRepository(Protocol):
     def add_user_role(self, role: Any) -> None:
         """Stage a new user_clan_roles row."""
         ...
+
+    async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Any | None:
+        """Return a clan-scoped invitation by its primary key, if any."""
+        ...
