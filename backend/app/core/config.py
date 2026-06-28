@@ -2,8 +2,10 @@
 
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_CANONICAL_DB_DRIVER = "postgresql+psycopg"
 
 
 class Settings(BaseSettings):
@@ -23,7 +25,7 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
 
     # Supabase / PostgreSQL
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/family_roots"
+    DATABASE_URL: str = "postgresql+psycopg://postgres:password@localhost:5432/family_roots"
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_ANON_KEY: str = ""
@@ -48,6 +50,26 @@ class Settings(BaseSettings):
 
     # Invitations
     INVITATION_TTL_DAYS: int = 7
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        """Rewrite any supported URL form to the canonical psycopg v3 dialect.
+
+        Render injects bare ``postgresql://`` (or historically ``postgres://``)
+        via ``fromDatabase.connectionString``; older developer ``.env`` files may
+        still carry ``+asyncpg`` or ``+psycopg2``. Normalizing here means the app
+        engine (async) and Alembic (sync) always see one psycopg v3 URL.
+        """
+        if not isinstance(value, str) or "://" not in value:
+            return value
+        scheme, rest = value.split("://", 1)
+        base = scheme.split("+", 1)[0]
+        if base == "postgres":
+            base = "postgresql"
+        if base != "postgresql":
+            return value  # leave non-postgres URLs untouched
+        return f"{_CANONICAL_DB_DRIVER}://{rest}"
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Settings:
