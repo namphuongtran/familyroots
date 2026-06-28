@@ -48,9 +48,10 @@ class InMemoryEventDispatcher:
                             await handler(event)
                         except Exception:
                             logger.exception(
-                                "Event handler failed for %s",
+                                "Event handler failed for %s; aborting transaction",
                                 type(event).__name__,
                             )
+                            raise
 
 
 class AuditLogHandler:

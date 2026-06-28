@@ -4,6 +4,13 @@ on:
   pull_request:
     branches: [main, develop]
 
+# The semantic-pull-request and gitleaks actions read PR metadata/commits via the
+# API; without an explicit grant the default token can be contents-read-only,
+# which fails with "Resource not accessible by integration" (HTTP 403).
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   conventional-commits:
     name: Validate PR title

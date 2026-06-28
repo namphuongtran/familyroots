@@ -37,6 +37,7 @@ from app.schemas.person import (
     PersonBatchGetRequest,
     PersonCreateRequest,
     PersonDetail,
+    PersonResponse,
     PersonSummary,
     PersonUpdateRequest,
 )
@@ -51,7 +52,8 @@ def _serialize_person_by_profile(person: Any, profile: str) -> dict[str, Any]:
         return PersonSummary.model_validate(person).model_dump(exclude_unset=True)
     if profile == "detail":
         return PersonDetail.model_validate(person).model_dump(exclude_unset=True)
-    return person.model_dump()
+    dumped: dict[str, Any] = person.model_dump()
+    return dumped
 
 
 def _dedupe_person_ids(ids: list[uuid.UUID]) -> list[uuid.UUID]:
@@ -87,7 +89,10 @@ async def list_persons(
     profile: str = Query(
         "full",
         pattern="^(summary|detail|full)$",
-        description="Response profile. Use summary for list cards, detail for medium payload, full for all fields.",
+        description=(
+            "Response profile. Use summary for list cards, detail for medium "
+            "payload, full for all fields."
+        ),
     ),
     include: str | None = Query(
         None,
@@ -192,9 +197,9 @@ async def _fetch_included_data(
 ) -> dict[str, list[Any]]:
     tasks = {}
     if "marriages" in includes:
-        tasks["marriages"] = handler.get_marriages(person_id)
+        tasks["marriages"] = handler.get_marriages(clan_id, person_id)
     if "parent_child" in includes:
-        tasks["parent_child"] = handler.get_parent_child(person_id)
+        tasks["parent_child"] = handler.get_parent_child(clan_id, person_id)
     if "timeline" in includes:
         tasks["timeline"] = handler.get_timeline(clan_id, person_id)
     if "documents" in includes:
@@ -241,13 +246,13 @@ async def batch_get_persons(
     ]
     person_results = await asyncio.gather(*person_tasks, return_exceptions=True)
 
-    persons = []
+    persons: list[PersonResponse] = []
     errors: list[dict[str, str]] = []
     for person_id, result in zip(person_ids, person_results, strict=False):
         if isinstance(result, EntityNotFoundError):
             errors.append({"id": str(person_id), "code": "person_not_found"})
             continue
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             raise result
         persons.append(result)
 
@@ -300,7 +305,8 @@ async def get_person(
     include: str | None = Query(
         None,
         description=(
-            "Comma-separated embedded resources. Supported: marriages,parent_child,timeline,documents"
+            "Comma-separated embedded resources. Supported: "
+            "marriages,parent_child,timeline,documents"
         ),
     ),
     fields: str | None = Query(
@@ -334,6 +340,9 @@ async def update_person(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonCommandHandler = Depends(get_person_command_handler),
+    # RequireViewer (not RequireEditor) is intentional: the handler grants a viewer
+    # edit access ONLY to their own linked person and ONLY whitelisted fields, while
+    # editors/admins get full edits. See PersonCommandHandler.update.
     user_role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Update a person's details."""
@@ -417,7 +426,7 @@ async def person_marriages(
 ) -> dict[str, Any]:
     """Get all marriages for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    marriages = await handler.get_marriages(person_id)
+    marriages = await handler.get_marriages(clan_id, person_id)
     return {"data": _filter_list_by_fields(marriages, fields)}
 
 
@@ -432,7 +441,7 @@ async def person_parent_child(
 ) -> dict[str, Any]:
     """Get all parent-child relationships for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
-    links = await handler.get_parent_child(person_id)
+    links = await handler.get_parent_child(clan_id, person_id)
     return {"data": _filter_list_by_fields(links, fields)}
 
 
@@ -475,5 +484,6 @@ async def person_timeline(
     _role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Return a chronological timeline of life events for a person."""
+    await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
     timeline = await handler.get_timeline(clan_id, person_id)
     return {"data": timeline}

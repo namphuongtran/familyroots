@@ -45,7 +45,7 @@ The dispatcher is currently the in-process `InMemoryEventDispatcher` — treat i
 There is intentionally **no tenant middleware**. Clan scoping comes from two layers:
 
 1. `get_current_clan_id` dependency (`app/core/security.py`) reads the `X-Current-Clan-Id` header; users select their active clan client-side.
-2. Supabase RLS at the DB level enforces row visibility by `clan_id`.
+2. Clan isolation is enforced in the **application/repository layer**: every clan-scoped read takes `clan_id` as an explicit filter. Supabase RLS is a planned defense-in-depth addition (SP-3) and is **not yet active**.
 
 Auth is Supabase JWT validated against the project's JWKS (cached 1h, asyncio-Lock guarded). RBAC uses `ClanRole` (`viewer < editor < admin`) via `require_role(ClanRole.EDITOR)` for hierarchical checks or `RequireClanRole(["admin","editor"])` for explicit sets — both in `app/core/permissions.py`. Roles are read from `user_clan_role` and require `is_approved=True`.
 

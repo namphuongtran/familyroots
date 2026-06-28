@@ -49,17 +49,6 @@ class TestInMemoryEventDispatcher:
         await dispatcher.dispatch([DomainEvent()])  # Should not raise
 
     @pytest.mark.asyncio
-    async def test_handler_error_does_not_propagate(self) -> None:
-        """A failing handler logs but does not crash dispatch."""
-        dispatcher = InMemoryEventDispatcher()
-        failing_handler = AsyncMock(side_effect=RuntimeError("boom"))
-        dispatcher.register(DomainEvent, failing_handler)
-
-        # Should not raise
-        await dispatcher.dispatch([DomainEvent()])
-        failing_handler.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_multiple_handlers(self) -> None:
         """Multiple handlers for the same event are all called."""
         dispatcher = InMemoryEventDispatcher()
@@ -73,6 +62,36 @@ class TestInMemoryEventDispatcher:
 
         handler1.assert_awaited_once_with(event)
         handler2.assert_awaited_once_with(event)
+
+    @pytest.mark.asyncio
+    async def test_dispatch_reraises_handler_failure(self) -> None:
+        """A failing handler must propagate so the UoW aborts the commit."""
+        dispatcher = InMemoryEventDispatcher()
+
+        async def boom(_event):
+            raise RuntimeError("audit write failed")
+
+        dispatcher.register(DomainEvent, boom)
+
+        with pytest.raises(RuntimeError, match="audit write failed"):
+            await dispatcher.dispatch([DomainEvent()])
+
+    @pytest.mark.asyncio
+    async def test_dispatch_aborts_remaining_handlers_on_failure(self) -> None:
+        """First failing handler aborts dispatch; later handlers are not called."""
+        dispatcher = InMemoryEventDispatcher()
+        handler2 = AsyncMock()
+
+        async def boom(_event):
+            raise RuntimeError("first fails")
+
+        dispatcher.register(DomainEvent, boom)
+        dispatcher.register(DomainEvent, handler2)
+
+        with pytest.raises(RuntimeError):
+            await dispatcher.dispatch([DomainEvent()])
+
+        handler2.assert_not_awaited()
 
 
 # ── AuditLogHandler ─────────────────────────────────────────────

@@ -19,7 +19,7 @@ from app.application.relationship.commands import (
 from app.domain.relationship.entities import Marriage, ParentChild
 from app.domain.relationship.repository import MarriageRepository, ParentChildRepository
 from app.domain.relationship.validator import RelationshipDomainValidator
-from app.domain.shared.exceptions import EntityNotFoundError, ForbiddenError
+from app.domain.shared.exceptions import EntityNotFoundError
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
@@ -57,11 +57,9 @@ class MarriageCommandHandler:
         return MarriageResponse.model_validate(marriage)
 
     async def update(self, cmd: UpdateMarriage) -> MarriageResponse:
-        marriage = await self._repo.get_by_id(cmd.marriage_id)
+        marriage = await self._repo.get_by_id(cmd.marriage_id, cmd.clan_id)
         if not marriage:
             raise EntityNotFoundError("marriage_not_found")
-        if marriage.created_by_clan_id != cmd.clan_id:
-            raise ForbiddenError("not_managing_clan")
 
         marriage.update(cmd.changes, cmd.actor, cmd.clan_id)
         self._uow.track(marriage)
@@ -70,11 +68,9 @@ class MarriageCommandHandler:
         return MarriageResponse.model_validate(marriage)
 
     async def delete(self, cmd: DeleteMarriage) -> None:
-        marriage = await self._repo.get_by_id(cmd.marriage_id)
+        marriage = await self._repo.get_by_id(cmd.marriage_id, cmd.clan_id)
         if not marriage:
             raise EntityNotFoundError("marriage_not_found")
-        if marriage.created_by_clan_id != cmd.clan_id:
-            raise ForbiddenError("not_managing_clan")
 
         marriage.soft_delete(cmd.actor, cmd.clan_id)
         self._uow.track(marriage)
@@ -117,11 +113,9 @@ class ParentChildCommandHandler:
         return ParentChildResponse.model_validate(link), warning
 
     async def update(self, cmd: UpdateParentChild) -> ParentChildResponse:
-        link = await self._repo.get_by_id(cmd.link_id)
+        link = await self._repo.get_by_id(cmd.link_id, cmd.clan_id)
         if not link:
             raise EntityNotFoundError("parent_child_not_found")
-        if link.created_by_clan_id != cmd.clan_id:
-            raise ForbiddenError("not_managing_clan")
 
         link.update(cmd.changes, cmd.actor, cmd.clan_id)
         self._uow.track(link)
@@ -130,11 +124,9 @@ class ParentChildCommandHandler:
         return ParentChildResponse.model_validate(link)
 
     async def delete(self, cmd: DeleteParentChild) -> None:
-        link = await self._repo.get_by_id(cmd.link_id)
+        link = await self._repo.get_by_id(cmd.link_id, cmd.clan_id)
         if not link:
             raise EntityNotFoundError("parent_child_not_found")
-        if link.created_by_clan_id != cmd.clan_id:
-            raise ForbiddenError("not_managing_clan")
 
         link.soft_delete(cmd.actor, cmd.clan_id)
         self._uow.track(link)
@@ -146,13 +138,13 @@ class MarriageQueryHandler:
     def __init__(self, repo: MarriageRepository) -> None:
         self._repo = repo
 
-    async def get_by_id(self, marriage_id: uuid.UUID) -> Marriage | None:
-        return await self._repo.get_by_id(marriage_id)
+    async def get_by_id(self, marriage_id: uuid.UUID, clan_id: uuid.UUID) -> Marriage | None:
+        return await self._repo.get_by_id(marriage_id, clan_id)
 
 
 class ParentChildQueryHandler:
     def __init__(self, repo: ParentChildRepository) -> None:
         self._repo = repo
 
-    async def get_by_id(self, link_id: uuid.UUID) -> ParentChild | None:
-        return await self._repo.get_by_id(link_id)
+    async def get_by_id(self, link_id: uuid.UUID, clan_id: uuid.UUID) -> ParentChild | None:
+        return await self._repo.get_by_id(link_id, clan_id)

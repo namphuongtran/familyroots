@@ -13,7 +13,9 @@
   "error.file_too_large": "文件超过最大允许大小",
   "error.document_not_linked_to_member": "文档未关联到成员",
   "error.only_photo_can_be_avatar": "仅照片可设为头像",
+  "error.internal_error": "发生了意外错误。",
   "error.forbidden": "拒绝访问",
+  "error.clan_context_mismatch": "URL中的宗族与您的当前宗族不匹配。",
   "error.conflict": "资源冲突",
   "error.validation": "验证失败",
   "error.relationship.too_many_biological_parents": "一个人不能有两个以上的亲生父母",
@@ -71,5 +73,7 @@
 
   "timeline.birth": "出生",
   "timeline.death": "逝世",
-  "timeline.marriage": "结婚"
+  "timeline.marriage": "结婚",
+
+  "invitation.accepted": "邀请已接受"
 }

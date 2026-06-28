@@ -3,15 +3,26 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, MetaData, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+# Standard Alembic naming convention so future autogenerate runs produce stable,
+# predictable constraint/index names. Constraints that are explicitly named in
+# models or the baseline migration keep their given names.
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
 
 
 class Base(DeclarativeBase):
     """Base class for all ORM models."""
 
-    pass
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 class TimestampMixin:
@@ -31,8 +42,10 @@ class TimestampMixin:
 class ClanScopedMixin(TimestampMixin):
     """Mixin for all tables that belong to a specific clan.
 
-    Every query against these tables MUST include clan_id filter.
-    RLS enforces this at DB level; application layer enforces it explicitly too.
+    Every query against these tables MUST include a clan_id filter. Clan
+    isolation is enforced in the application layer (the repository contract);
+    a database-level RLS layer is a planned defense-in-depth addition (SP-3),
+    not yet active.
     """
 
     clan_id: Mapped[uuid.UUID] = mapped_column(

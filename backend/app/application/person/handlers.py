@@ -87,6 +87,9 @@ class PersonCommandHandler:
         if not person:
             raise EntityNotFoundError("person_not_found")
 
+        # Self-edit carve-out: a viewer may edit ONLY their own linked person and ONLY
+        # the whitelisted fields below. Editors/admins (role != "viewer") skip this and
+        # may edit any field. This is why the route uses RequireViewer, not RequireEditor.
         if cmd.actor.role == "viewer":
             user_profile = await self._uow.session.get(UserProfile, cmd.actor.user_id)
             if not user_profile or user_profile.person_id != cmd.person_id:
@@ -174,15 +177,17 @@ class PersonQueryHandler:
         """Fetch statistics for a list of persons."""
         return await self._repo.get_stats_for_persons(person_ids)
 
-    async def get_marriages(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_marriages(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         if not self._query_port:
             raise NotImplementedError("Query port not configured for this handler")
-        return await self._query_port.get_marriages(person_id)
+        return await self._query_port.get_marriages(clan_id, person_id)
 
-    async def get_parent_child(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_parent_child(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
         if not self._query_port:
             raise NotImplementedError("Query port not configured for this handler")
-        return await self._query_port.get_parent_child_links(person_id)
+        return await self._query_port.get_parent_child_links(clan_id, person_id)
 
     async def get_documents(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         if not self._query_port:

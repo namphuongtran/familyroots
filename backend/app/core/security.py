@@ -50,7 +50,8 @@ async def get_supabase_jwks() -> dict[str, Any]:
             return _jwks_cache
 
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json")
+            url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
+            resp = await client.get(url)
             resp.raise_for_status()
             _jwks_cache = resp.json()
             _jwks_cache_time = now
@@ -66,6 +67,7 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
             jwks,
             algorithms=["RS256"],
             audience="authenticated",
+            issuer=f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1",
         )
         return payload
     except JWTError as exc:

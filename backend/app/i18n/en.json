@@ -13,7 +13,9 @@
   "error.file_too_large": "File exceeds the maximum allowed size",
   "error.document_not_linked_to_member": "Document is not linked to a member",
   "error.only_photo_can_be_avatar": "Only photo documents can be set as avatar",
+  "error.internal_error": "An unexpected error occurred.",
   "error.forbidden": "Access denied",
+  "error.clan_context_mismatch": "The clan in the URL does not match your active clan.",
   "error.conflict": "Resource conflict",
   "error.validation": "Validation failed",
   "error.relationship.too_many_biological_parents": "A person cannot have more than two biological parents",
@@ -71,5 +73,7 @@
 
   "timeline.birth": "Birth",
   "timeline.death": "Death",
-  "timeline.marriage": "Marriage"
+  "timeline.marriage": "Marriage",
+
+  "invitation.accepted": "Invitation accepted"
 }

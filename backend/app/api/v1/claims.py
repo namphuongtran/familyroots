@@ -6,7 +6,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, status
 
 from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
+from app.core.exceptions import ForbiddenError
 from app.core.permissions import RequireClanRole, require_active_user
+from app.core.security import get_current_clan_id
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
 from app.schemas.auth import UserProfile
 from app.schemas.claim import (
@@ -47,10 +49,13 @@ async def list_clan_claims(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: UserProfile = Depends(RequireClanRole(["admin", "editor"])),
+    active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimQueryHandler = Depends(get_claim_query_handler),
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List paginated identity claims for persons created by this clan."""
+    if clan_id != active_clan_id:
+        raise ForbiddenError("clan_context_mismatch")
     paginated = await handler.list_clan_claims(
         clan_id=clan_id, status=status, page=page, page_size=page_size
     )

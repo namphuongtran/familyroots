@@ -42,6 +42,21 @@ class SqlAlchemyAuthRepository(AuthRepository):
     def add_user_role(self, role: UserClanRole) -> None:
         self._session.add(role)
 
+    async def ensure_profile(
+        self, user_id: uuid.UUID, email: str, display_name: str | None
+    ) -> None:
+        existing = await self._session.get(UserProfileModel, user_id)
+        if existing is not None:
+            return
+        self._session.add(
+            UserProfileModel(
+                id=user_id,
+                email=email,
+                display_name=display_name or email.split("@")[0],
+            )
+        )
+        await self._session.flush()
+
 
 class SqlAlchemyAuthQueryPort(AuthQueryPort):
     """SQLAlchemy implementation of Auth read persistence."""

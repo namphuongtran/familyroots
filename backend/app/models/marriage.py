@@ -19,12 +19,12 @@ class Marriage(TimestampMixin, Base):
 
     person1_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("persons.id", ondelete="CASCADE"),
+        ForeignKey("persons.id", ondelete="RESTRICT"),
         index=True,
     )
     person2_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("persons.id", ondelete="CASCADE"),
+        ForeignKey("persons.id", ondelete="RESTRICT"),
         index=True,
     )
 

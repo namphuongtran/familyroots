@@ -29,6 +29,12 @@ class AuthRepository(Protocol):
         """Add a new user clan role to persistence context."""
         ...
 
+    async def ensure_profile(
+        self, user_id: uuid.UUID, email: str, display_name: str | None
+    ) -> None:
+        """Idempotently ensure a user_profiles row exists for this user."""
+        ...
+
 
 class AuthQueryPort(Protocol):
     """Abstract persistence contract for Auth read operations."""

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,7 +12,16 @@ from app.models.base import Base
 
 class ClanInvitation(Base):
     __tablename__ = "clan_invitations"
-    __table_args__ = (Index("ix_clan_invitations_clan_email", "clan_id", "email"),)
+    __table_args__ = (
+        Index("ix_clan_invitations_clan_email", "clan_id", "email"),
+        Index(
+            "uq_clan_invitations_pending",
+            "clan_id",
+            "email",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     clan_id: Mapped[uuid.UUID] = mapped_column(
@@ -22,6 +31,8 @@ class ClanInvitation(Base):
     )
     email: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default="viewer")
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    accepted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     invited_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
     token: Mapped[str] = mapped_column(String(255), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

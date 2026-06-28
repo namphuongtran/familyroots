@@ -12,11 +12,17 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from app.application.auth.handlers import AuthCommandHandler, AuthQueryHandler, FCMTokenHandler
+    from app.application.auth.handlers import (
+        AuthCommandHandler,
+        AuthQueryHandler,
+        FCMTokenHandler,
+        SupabaseAuthService,
+    )
     from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
     from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
     from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
     from app.application.event.handlers import EventCommandHandler, EventQueryHandler
+    from app.application.invitation.handlers import InvitationCommandHandler, InvitationQueryHandler
     from app.application.me.handlers import MeQueryHandler
     from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
     from app.application.platform_admin.handlers import (
@@ -170,6 +176,12 @@ def get_fcm_token_handler(
 
     repo = SqlAlchemyFCMTokenRepository(db)
     return FCMTokenHandler(repo)
+
+
+def get_supabase_auth_service() -> SupabaseAuthService:
+    from app.application.auth.handlers import SupabaseAuthService
+
+    return SupabaseAuthService()
 
 
 # ── Relationship handlers ───────────────────────────────────────
@@ -333,3 +345,32 @@ def get_event_query_handler(
 
     repo = SqlAlchemyEventRepository(db)
     return EventQueryHandler(repo)
+
+
+# ── Invitation handlers ─────────────────────────────────────────
+
+
+def get_invitation_command_handler(
+    db: AsyncSession = Depends(get_db),
+) -> InvitationCommandHandler:
+    from app.application.invitation.handlers import InvitationCommandHandler
+    from app.infrastructure.event_dispatcher import create_event_dispatcher
+    from app.infrastructure.persistence.invitation_repository import (
+        SqlAlchemyInvitationRepository,
+    )
+    from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+
+    repo = SqlAlchemyInvitationRepository(db)
+    uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+    return InvitationCommandHandler(repo, uow)
+
+
+def get_invitation_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> InvitationQueryHandler:
+    from app.application.invitation.handlers import InvitationQueryHandler
+    from app.infrastructure.persistence.invitation_repository import (
+        SqlAlchemyInvitationRepository,
+    )
+
+    return InvitationQueryHandler(SqlAlchemyInvitationRepository(db))

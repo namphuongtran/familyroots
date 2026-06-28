@@ -13,7 +13,9 @@
   "error.file_too_large": "Tệp vượt quá kích thước tối đa",
   "error.document_not_linked_to_member": "Tài liệu không liên kết với thành viên",
   "error.only_photo_can_be_avatar": "Chỉ ảnh mới có thể đặt làm ảnh đại diện",
+  "error.internal_error": "Đã xảy ra lỗi không mong muốn.",
   "error.forbidden": "Truy cập bị từ chối",
+  "error.clan_context_mismatch": "Dòng họ trong URL không khớp với dòng họ hiện tại của bạn.",
   "error.conflict": "Xung đột tài nguyên",
   "error.validation": "Xác thực thất bại",
   "error.relationship.too_many_biological_parents": "Một người không thể có quá hai cha mẹ ruột",
@@ -71,5 +73,7 @@
 
   "timeline.birth": "Sinh",
   "timeline.death": "Mất",
-  "timeline.marriage": "Kết hôn"
+  "timeline.marriage": "Kết hôn",
+
+  "invitation.accepted": "Đã chấp nhận lời mời"
 }

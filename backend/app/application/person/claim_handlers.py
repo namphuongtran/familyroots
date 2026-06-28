@@ -158,6 +158,8 @@ class ClaimCommandHandler:
                     clan_id=claim.person.created_by_clan_id,
                     role="viewer",
                     is_approved=True,
+                    approved_by=admin_id,
+                    approved_at=datetime.now(UTC),
                 )
             )
 
@@ -171,10 +173,9 @@ class ClaimCommandHandler:
             old_value={"status": "PENDING"},
             new_value={"status": "APPROVED", "person_id": str(claim.person_id)},
         )
-        self._db.add(audit)
+        self._repo.add_audit(audit)
 
-        await self._db.commit()
-        await self._db.refresh(claim)
+        await self._uow.commit()
         return IdentityClaimResponse.model_validate(claim)
 
     async def reject_claim(
@@ -211,10 +212,9 @@ class ClaimCommandHandler:
             old_value={"status": "PENDING"},
             new_value={"status": "REJECTED"},
         )
-        self._db.add(audit)
+        self._repo.add_audit(audit)
 
-        await self._db.commit()
-        await self._db.refresh(claim)
+        await self._uow.commit()
         return IdentityClaimResponse.model_validate(claim)
 
     async def unlink_identity(

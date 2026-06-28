@@ -28,20 +28,24 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_marriages(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_marriages(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(Marriage).where(
                 or_(Marriage.person1_id == person_id, Marriage.person2_id == person_id),
+                Marriage.created_by_clan_id == clan_id,
                 Marriage.is_deleted.is_(False),
             )
         )
         marriages = result.scalars().all()
         return [MarriageResponse.model_validate(m).model_dump() for m in marriages]
 
-    async def get_parent_child_links(self, person_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_parent_child_links(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(ParentChild).where(
                 or_(ParentChild.parent_id == person_id, ParentChild.child_id == person_id),
+                ParentChild.created_by_clan_id == clan_id,
                 ParentChild.is_deleted.is_(False),
             )
         )
@@ -89,7 +93,7 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                 ).model_dump()
             )
 
-        # Fetch marriages
+        # Fetch marriages — scoped to the caller's clan to prevent cross-clan leaks
         spouse_result = await self._session.execute(
             text("""
                 SELECT m.marriage_date, m.divorce_date, m.status,
@@ -101,9 +105,10 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                   ON p.id = CASE WHEN m.person1_id = :pid
                                  THEN m.person2_id ELSE m.person1_id END
                 WHERE (m.person1_id = :pid OR m.person2_id = :pid)
+                  AND m.created_by_clan_id = :clan_id
                   AND m.is_deleted = false
             """),
-            {"pid": person_id},
+            {"pid": person_id, "clan_id": clan_id},
         )
         for row in spouse_result.mappings().all():
             if row["marriage_date"]:

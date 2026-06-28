@@ -66,7 +66,7 @@ def upgrade() -> None:
             "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
         ),
         sa.Column(
-            "origin_clan_id",
+            "created_by_clan_id",
             UUID(as_uuid=True),
             sa.ForeignKey("clans.id", ondelete="SET NULL"),
             nullable=True,
@@ -79,7 +79,7 @@ def upgrade() -> None:
         sa.Column("alias_name", sa.String(255), nullable=True),
         sa.Column(
             "gender",
-            sa.Enum("male", "female", "unknown", name="gender_type", create_type=True),
+            sa.String(20),
             nullable=False,
             server_default=sa.text("'unknown'"),
         ),
@@ -131,13 +131,17 @@ def upgrade() -> None:
             "death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date",
             name="persons_death_after_birth",
         ),
+        sa.CheckConstraint(
+            "gender IN ('male', 'female', 'unknown')",
+            name="persons_gender_check",
+        ),
     )
     op.execute(
         "CREATE INDEX idx_persons_is_deleted ON persons (is_deleted) WHERE is_deleted = false"
     )
     op.execute(
-        "CREATE INDEX idx_persons_origin_clan ON persons "
-        "(origin_clan_id) WHERE origin_clan_id IS NOT NULL"
+        "CREATE INDEX idx_persons_created_by_clan ON persons "
+        "(created_by_clan_id) WHERE created_by_clan_id IS NOT NULL"
     )
     # Immutable unaccent wrapper for index expressions
     op.execute(
@@ -276,13 +280,13 @@ def upgrade() -> None:
         sa.Column(
             "person1_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
             "person2_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
@@ -355,13 +359,13 @@ def upgrade() -> None:
         sa.Column(
             "parent_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
             "child_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("persons.id", ondelete="CASCADE"),
+            sa.ForeignKey("persons.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
@@ -440,16 +444,7 @@ def upgrade() -> None:
         sa.Column("description", sa.Text, nullable=True),
         sa.Column(
             "document_type",
-            sa.Enum(
-                "photo",
-                "id_document",
-                "certificate",
-                "audio",
-                "video",
-                "other",
-                name="document_type",
-                create_type=True,
-            ),
+            sa.String(20),
             nullable=False,
         ),
         sa.Column("storage_path", sa.String(500), nullable=False, unique=True),
@@ -475,6 +470,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "file_size_bytes IS NULL OR file_size_bytes <= 52428800",
             name="documents_file_size_limit",
+        ),
+        sa.CheckConstraint(
+            "document_type IN ('photo', 'id_document', 'certificate', 'audio', 'video', 'other')",
+            name="documents_type_check",
         ),
     )
     op.create_index("idx_documents_clan", "documents", ["clan_id"])
@@ -504,15 +503,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "event_type",
-            sa.Enum(
-                "death_anniversary",
-                "birthday",
-                "wedding_anniversary",
-                "clan_ceremony",
-                "custom",
-                name="event_type",
-                create_type=True,
-            ),
+            sa.String(30),
             nullable=False,
         ),
         sa.Column("title", sa.String(255), nullable=False),
@@ -537,6 +528,11 @@ def upgrade() -> None:
             server_default=sa.text("NOW()"),
         ),
         sa.CheckConstraint("notify_days_before BETWEEN 0 AND 30", name="events_notify_range"),
+        sa.CheckConstraint(
+            "event_type IN ('death_anniversary', 'birthday', 'wedding_anniversary', "
+            "'clan_ceremony', 'custom')",
+            name="events_type_check",
+        ),
     )
     op.create_index("idx_events_clan", "events", ["clan_id"])
     op.execute("CREATE INDEX idx_events_person ON events (person_id) WHERE person_id IS NOT NULL")
@@ -663,6 +659,8 @@ def upgrade() -> None:
         ),
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("role", sa.String(20), nullable=False, server_default=sa.text("'viewer'")),
+        sa.Column("status", sa.String(20), nullable=False, server_default=sa.text("'pending'")),
+        sa.Column("accepted_by", UUID(as_uuid=True), nullable=True),
         sa.Column("invited_by", UUID(as_uuid=True), nullable=False),
         sa.Column("token", sa.String(255), nullable=False, unique=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
@@ -673,9 +671,17 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("NOW()"),
         ),
+        sa.CheckConstraint(
+            "status IN ('pending', 'accepted', 'revoked', 'expired')",
+            name="clan_invitations_status_check",
+        ),
     )
     op.create_index("ix_clan_invitations_clan_id", "clan_invitations", ["clan_id"])
     op.create_index("ix_clan_invitations_clan_email", "clan_invitations", ["clan_id", "email"])
+    op.execute(
+        "CREATE UNIQUE INDEX uq_clan_invitations_pending "
+        "ON clan_invitations (clan_id, email) WHERE status = 'pending'"
+    )
 
     # -- Table: user_clan_roles --
     op.create_table(
@@ -697,7 +703,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "role",
-            sa.Enum("admin", "editor", "viewer", name="clan_role", create_type=True),
+            sa.String(20),
             nullable=False,
             server_default=sa.text("'viewer'"),
         ),
@@ -721,6 +727,10 @@ def upgrade() -> None:
             "(is_approved = false AND approved_by IS NULL AND approved_at IS NULL) "
             "OR (is_approved = true AND approved_by IS NOT NULL AND approved_at IS NOT NULL)",
             name="user_clan_roles_approval_consistency",
+        ),
+        sa.CheckConstraint(
+            "role IN ('admin', 'editor', 'viewer')",
+            name="user_clan_roles_role_check",
         ),
     )
     op.execute(
@@ -757,7 +767,7 @@ def upgrade() -> None:
             server_default=sa.text("'PENDING'"),
         ),
         sa.Column("requester_note", sa.Text, nullable=True),
-        sa.Column("reasoning", sa.Text, nullable=True),
+        sa.Column("reviewer_note", sa.Text, nullable=True),
         sa.Column(
             "reviewed_by",
             UUID(as_uuid=True),
@@ -783,7 +793,7 @@ def upgrade() -> None:
         ),
     )
     op.execute(
-        "CREATE UNIQUE INDEX idx_identity_claims_pending_user ON identity_claims (user_id) WHERE status = 'PENDING'"
+        "CREATE UNIQUE INDEX uq_identity_claim_user_pending ON identity_claims (user_id) WHERE status = 'PENDING'"
     )
     op.create_index("idx_identity_claims_person", "identity_claims", ["person_id"])
 
@@ -894,7 +904,7 @@ def upgrade() -> None:
         sa.Column("body", sa.Text, nullable=False),
         sa.Column(
             "status",
-            sa.Enum("pending", "sent", "failed", name="notification_status", create_type=True),
+            sa.String(20),
             nullable=False,
             server_default=sa.text("'pending'"),
         ),
@@ -905,6 +915,10 @@ def upgrade() -> None:
             sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.text("NOW()"),
+        ),
+        sa.CheckConstraint(
+            "status IN ('pending', 'sent', 'failed')",
+            name="notification_log_status_check",
         ),
     )
     op.create_index(
@@ -973,6 +987,7 @@ def downgrade() -> None:
     op.drop_table("notification_log")
     op.drop_table("audit_logs")
     op.drop_table("change_requests")
+    op.drop_table("identity_claims")
     op.drop_table("clan_invitations")
     op.drop_table("clan_settings")
     op.drop_table("user_clan_roles")
@@ -986,13 +1001,6 @@ def downgrade() -> None:
     op.drop_table("user_profiles")
     op.drop_table("persons")
     op.drop_table("clans")
-
-    # Drop enums
-    op.execute("DROP TYPE IF EXISTS notification_status")
-    op.execute("DROP TYPE IF EXISTS document_type")
-    op.execute("DROP TYPE IF EXISTS event_type")
-    op.execute("DROP TYPE IF EXISTS clan_role")
-    op.execute("DROP TYPE IF EXISTS gender_type")
 
     # Drop immutable unaccent wrapper
     op.execute("DROP FUNCTION IF EXISTS public.f_unaccent(text)")
