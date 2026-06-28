@@ -51,7 +51,10 @@ class ClaimCommandHandler:
             user_id=user_id, person_id=person_id, requester_note=requester_note, status="PENDING"
         )
         self._repo.add_claim(claim_model)
-        self._uow.track(claim_model)
+        # NOTE: do not uow.track(claim_model) — IdentityClaim is a plain ORM model,
+        # not an AggregateRoot, so it has no collect_events() and would crash at
+        # commit. This context records audit rows manually via add_audit (as the
+        # sibling cancel/approve/reject/unlink methods do).
         await self._uow.flush()
 
         audit = AuditLog(
@@ -321,7 +324,8 @@ class ClaimCommandHandler:
             reviewed_at=datetime.now(UTC),
         )
         self._repo.add_claim(claim_model)
-        self._uow.track(claim_model)
+        # See submit_claim: IdentityClaim is an ORM model, not an AggregateRoot;
+        # audit is recorded manually below, so it must not be tracked on the UoW.
         await self._uow.flush()
 
         audit = AuditLog(

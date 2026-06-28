@@ -16,7 +16,7 @@ from app.models.notification_log import NotificationLog
 from app.models.parent_child import ParentChild
 from app.models.person import Person
 from app.models.user_clan_role import UserClanRole
-from app.models.user_device import UserDevice
+from app.models.user_fcm_token import UserFcmToken
 from app.models.user_profile import UserProfile
 
 __all__ = [
@@ -38,6 +38,6 @@ __all__ = [
     "Person",
     "TimestampMixin",
     "UserClanRole",
-    "UserDevice",
+    "UserFcmToken",
     "UserProfile",
 ]
