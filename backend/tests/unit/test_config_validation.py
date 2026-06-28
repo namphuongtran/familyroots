@@ -26,6 +26,16 @@ def test_production_rejects_debug_true():
         _build(APP_ENV="production", APP_SECRET_KEY="a-real-secret", APP_DEBUG=True)
 
 
+def test_production_rejects_wildcard_allowed_hosts():
+    with pytest.raises(ValidationError):
+        _build(APP_ENV="production", APP_SECRET_KEY="a-real-secret", APP_DEBUG=False)
+
+
 def test_production_with_safe_values_ok():
-    s = _build(APP_ENV="production", APP_SECRET_KEY="a-real-secret", APP_DEBUG=False)
+    s = _build(
+        APP_ENV="production",
+        APP_SECRET_KEY="a-real-secret",
+        APP_DEBUG=False,
+        ALLOWED_HOSTS=["example.com"],
+    )
     assert s.APP_ENV == "production"

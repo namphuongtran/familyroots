@@ -53,6 +53,8 @@ class Settings(BaseSettings):
                 raise ValueError("APP_SECRET_KEY must be set to a real secret in production")
             if self.APP_DEBUG:
                 raise ValueError("APP_DEBUG must be False in production")
+            if self.ALLOWED_HOSTS == ["*"]:
+                raise ValueError("ALLOWED_HOSTS must be set explicitly in production")
         return self
 
 
