@@ -51,6 +51,7 @@ class EventCommandHandler:
             is_recurring=is_recurring,
             notify_days_before=notify_days_before or 7,
         )
+        self._uow.track(event)
         await self._repo.save(event)
         await self._uow.commit()
 
@@ -80,6 +81,7 @@ class EventCommandHandler:
     ) -> EventResponse:
         event = await self._get_or_raise(event_id, clan_id)
         event.update(changes, actor)
+        self._uow.track(event)
         await self._repo.save(event)
         await self._uow.commit()
 
@@ -108,6 +110,7 @@ class EventCommandHandler:
     ) -> None:
         event = await self._get_or_raise(event_id, clan_id)
         event.delete(actor)
+        self._uow.track(event)
         await self._repo.delete(event)
         await self._uow.commit()
 

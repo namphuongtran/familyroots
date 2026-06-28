@@ -70,6 +70,7 @@ class DocumentCommandHandler:
 
         # Upload to storage, then persist metadata
         await self._storage.upload(storage_path, file_content, content_type)
+        self._uow.track(doc)
         await self._repo.save(doc)
         await self._uow.commit()
 
@@ -106,6 +107,7 @@ class DocumentCommandHandler:
         doc = await self._get_or_raise(document_id, clan_id)
         await self._storage.delete(doc.storage_path)
         doc.mark_deleted(actor)
+        self._uow.track(doc)
         await self._repo.delete(doc)
         await self._uow.commit()
 
