@@ -104,10 +104,12 @@ def _actor(role, user_id):
 async def test_viewer_can_edit_own_whitelisted_field():
     person = _PersonEntity()
     uid = uuid.uuid4()
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(person.id)))
+    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(person.id)))  # type: ignore[arg-type]
     cmd = UpdatePerson(
-        person_id=person.id, clan_id=uuid.uuid4(),
-        actor=_actor("viewer", uid), changes={"phone": "0900000000"},
+        person_id=person.id,
+        clan_id=uuid.uuid4(),
+        actor=_actor("viewer", uid),
+        changes={"phone": "0900000000"},
     )
     await handler.update(cmd)
     assert person.changes_applied == {"phone": "0900000000"}
@@ -118,10 +120,12 @@ async def test_viewer_cannot_edit_other_person():
     person = _PersonEntity()
     uid = uuid.uuid4()
     # profile is linked to a DIFFERENT person
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(uuid.uuid4())))
+    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(uuid.uuid4())))  # type: ignore[arg-type]
     cmd = UpdatePerson(
-        person_id=person.id, clan_id=uuid.uuid4(),
-        actor=_actor("viewer", uid), changes={"phone": "x"},
+        person_id=person.id,
+        clan_id=uuid.uuid4(),
+        actor=_actor("viewer", uid),
+        changes={"phone": "x"},
     )
     with pytest.raises(ForbiddenError):
         await handler.update(cmd)
@@ -131,10 +135,12 @@ async def test_viewer_cannot_edit_other_person():
 async def test_viewer_cannot_edit_nonwhitelisted_field():
     person = _PersonEntity()
     uid = uuid.uuid4()
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(person.id)))
+    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(person.id)))  # type: ignore[arg-type]
     cmd = UpdatePerson(
-        person_id=person.id, clan_id=uuid.uuid4(),
-        actor=_actor("viewer", uid), changes={"full_name": "Hacked"},
+        person_id=person.id,
+        clan_id=uuid.uuid4(),
+        actor=_actor("viewer", uid),
+        changes={"full_name": "Hacked"},
     )
     with pytest.raises(ForbiddenError):
         await handler.update(cmd)
@@ -143,10 +149,12 @@ async def test_viewer_cannot_edit_nonwhitelisted_field():
 @pytest.mark.asyncio
 async def test_editor_can_edit_any_field():
     person = _PersonEntity()
-    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(uuid.uuid4())))
+    handler = PersonCommandHandler(_FakeRepo(person), _FakeUow(_Profile(uuid.uuid4())))  # type: ignore[arg-type]
     cmd = UpdatePerson(
-        person_id=person.id, clan_id=uuid.uuid4(),
-        actor=_actor("editor", uuid.uuid4()), changes={"full_name": "New Name"},
+        person_id=person.id,
+        clan_id=uuid.uuid4(),
+        actor=_actor("editor", uuid.uuid4()),
+        changes={"full_name": "New Name"},
     )
     await handler.update(cmd)
     assert person.changes_applied == {"full_name": "New Name"}

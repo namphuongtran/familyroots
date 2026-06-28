@@ -77,7 +77,7 @@ async def test_approve_claim_uses_uow_and_writes_audit():
     claim = _Claim(_Person(clan_id))
     repo = _FakeRepo(claim, clan_id)
     uow = _FakeUow()
-    handler = ClaimCommandHandler(repo, uow)
+    handler = ClaimCommandHandler(repo, uow)  # type: ignore[arg-type]
 
     result = await handler.approve_claim(
         claim_id=claim.id, admin_id=uuid.uuid4(), reviewer_note="ok"
@@ -95,7 +95,7 @@ async def test_reject_claim_uses_uow_and_writes_audit():
     claim = _Claim(_Person(clan_id))
     repo = _FakeRepo(claim, clan_id)
     uow = _FakeUow()
-    handler = ClaimCommandHandler(repo, uow)
+    handler = ClaimCommandHandler(repo, uow)  # type: ignore[arg-type]
 
     result = await handler.reject_claim(
         claim_id=claim.id, admin_id=uuid.uuid4(), reviewer_note="no"

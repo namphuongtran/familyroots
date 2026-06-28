@@ -1,6 +1,7 @@
 """SqlAlchemyInvitationRepository against a real migrated DB."""
 
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -12,7 +13,7 @@ from app.models.clan_invitation import ClanInvitation
 
 
 @pytest.fixture()
-async def async_session(migrated_db_url):
+async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
     async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
     engine = create_async_engine(async_dsn)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -21,7 +22,7 @@ async def async_session(migrated_db_url):
     await engine.dispose()
 
 
-async def _clan(session) -> uuid.UUID:
+async def _clan(session: AsyncSession) -> uuid.UUID:
     cid = uuid.uuid4()
     await session.execute(
         sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, :n, :s)"),
@@ -31,12 +32,17 @@ async def _clan(session) -> uuid.UUID:
 
 
 @pytest.mark.asyncio
-async def test_create_and_fetch_by_token_and_pending(async_session: AsyncSession):
+async def test_create_and_fetch_by_token_and_pending(async_session: AsyncSession) -> None:
     repo = SqlAlchemyInvitationRepository(async_session)
     clan_id = await _clan(async_session)
     inv = ClanInvitation(
-        clan_id=clan_id, email="a@example.com", role="viewer", invited_by=uuid.uuid4(),
-        token="tok-123", expires_at=datetime.now(UTC) + timedelta(days=7), status="pending",
+        clan_id=clan_id,
+        email="a@example.com",
+        role="viewer",
+        invited_by=uuid.uuid4(),
+        token="tok-123",
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+        status="pending",
     )
     repo.add_invitation(inv)
     await async_session.commit()
@@ -48,14 +54,18 @@ async def test_create_and_fetch_by_token_and_pending(async_session: AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_one_pending_per_email_enforced(async_session: AsyncSession):
+async def test_one_pending_per_email_enforced(async_session: AsyncSession) -> None:
     repo = SqlAlchemyInvitationRepository(async_session)
     clan_id = await _clan(async_session)
     for _ in range(2):
         repo.add_invitation(
             ClanInvitation(
-                clan_id=clan_id, email="dup@example.com", role="viewer", invited_by=uuid.uuid4(),
-                token=f"t-{uuid.uuid4().hex}", expires_at=datetime.now(UTC) + timedelta(days=7),
+                clan_id=clan_id,
+                email="dup@example.com",
+                role="viewer",
+                invited_by=uuid.uuid4(),
+                token=f"t-{uuid.uuid4().hex}",
+                expires_at=datetime.now(UTC) + timedelta(days=7),
                 status="pending",
             )
         )

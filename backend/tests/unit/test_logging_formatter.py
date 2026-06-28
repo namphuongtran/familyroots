@@ -8,8 +8,13 @@ from app.core.logging import JsonFormatter
 
 def _record(msg: str) -> logging.LogRecord:
     return logging.LogRecord(
-        name="test.logger", level=logging.INFO, pathname=__file__, lineno=1,
-        msg=msg, args=(), exc_info=None,
+        name="test.logger",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg=msg,
+        args=(),
+        exc_info=None,
     )
 
 

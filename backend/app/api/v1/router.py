@@ -37,8 +37,6 @@ api_v1_router.include_router(admin_claims_router, prefix="/clans/{clan_id}/claim
 api_v1_router.include_router(
     admin_invitations_router, prefix="/clans/{clan_id}/invitations", tags=["invitations"]
 )
-api_v1_router.include_router(
-    user_invitations_router, prefix="/invitations", tags=["invitations"]
-)
+api_v1_router.include_router(user_invitations_router, prefix="/invitations", tags=["invitations"])
 
 api_v1_router.include_router(platform_admin_router)

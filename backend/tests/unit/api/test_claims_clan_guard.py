@@ -26,8 +26,8 @@ async def test_list_clan_claims_rejects_path_clan_mismatch():
             page=1,
             page_size=20,
             active_clan_id=active_clan,
-            user=object(),
-            handler=_FakeHandler(),
+            user=object(),  # type: ignore[arg-type]
+            handler=_FakeHandler(),  # type: ignore[arg-type]
             fields=None,
         )
     assert exc.value.status_code == 403
@@ -42,8 +42,8 @@ async def test_list_clan_claims_allows_matching_clan():
         page=1,
         page_size=20,
         active_clan_id=clan,
-        user=object(),
-        handler=_FakeHandler(),
+        user=object(),  # type: ignore[arg-type]
+        handler=_FakeHandler(),  # type: ignore[arg-type]
         fields=None,
     )
     assert result == {"claims": [], "total": 0}

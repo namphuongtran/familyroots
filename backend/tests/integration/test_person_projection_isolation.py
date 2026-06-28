@@ -1,6 +1,7 @@
 """Person marriage/parent-child projections must only surface edges of the active clan."""
 
 import uuid
+from collections.abc import AsyncGenerator
 
 import pytest
 import sqlalchemy as sa
@@ -10,7 +11,7 @@ from app.infrastructure.persistence.person_query_port import SqlAlchemyPersonQue
 
 
 @pytest.fixture()
-async def async_session(migrated_db_url):
+async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
     async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
     engine = create_async_engine(async_dsn)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -20,7 +21,7 @@ async def async_session(migrated_db_url):
 
 
 @pytest.mark.asyncio
-async def test_get_marriages_scoped_to_clan(async_session: AsyncSession):
+async def test_get_marriages_scoped_to_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b = uuid.uuid4(), uuid.uuid4()
     for cid, s in ((clan_a, f"a-{clan_a.hex[:6]}"), (clan_b, f"b-{clan_b.hex[:6]}")):
         await async_session.execute(
@@ -53,7 +54,7 @@ async def test_get_marriages_scoped_to_clan(async_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_parent_child_links_scoped_to_clan(async_session: AsyncSession):
+async def test_get_parent_child_links_scoped_to_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b = uuid.uuid4(), uuid.uuid4()
     for cid, s in ((clan_a, f"a-{clan_a.hex[:6]}"), (clan_b, f"b-{clan_b.hex[:6]}")):
         await async_session.execute(

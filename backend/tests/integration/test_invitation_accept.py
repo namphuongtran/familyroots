@@ -1,6 +1,7 @@
 """Accepting an invitation creates an approved membership (real DB)."""
 
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -15,7 +16,7 @@ from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.fixture()
-async def async_session(migrated_db_url):
+async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
     async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
     engine = create_async_engine(async_dsn)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -25,7 +26,7 @@ async def async_session(migrated_db_url):
 
 
 @pytest.mark.asyncio
-async def test_accept_invitation_grants_approved_membership(async_session: AsyncSession):
+async def test_accept_invitation_grants_approved_membership(async_session: AsyncSession) -> None:
     clan_id, inviter, token = uuid.uuid4(), uuid.uuid4(), "tok-accept"
     await async_session.execute(
         sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :s)"),
@@ -36,8 +37,14 @@ async def test_accept_invitation_grants_approved_membership(async_session: Async
             "INSERT INTO clan_invitations (id, clan_id, email, role, invited_by, token, "
             "expires_at, status) VALUES (:id, :c, :e, 'editor', :ib, :t, :exp, 'pending')"
         ),
-        {"id": uuid.uuid4(), "c": clan_id, "e": "invitee@example.com", "ib": inviter,
-         "t": token, "exp": datetime.now(UTC) + timedelta(days=7)},
+        {
+            "id": uuid.uuid4(),
+            "c": clan_id,
+            "e": "invitee@example.com",
+            "ib": inviter,
+            "t": token,
+            "exp": datetime.now(UTC) + timedelta(days=7),
+        },
     )
     await async_session.commit()
 
@@ -47,8 +54,9 @@ async def test_accept_invitation_grants_approved_membership(async_session: Async
 
     invitee = uuid.uuid4()
     out = await handler.accept(
-        AcceptInvitation(token=token, user_id=invitee,
-                         user_email="invitee@example.com", user_full_name="Invitee")
+        AcceptInvitation(
+            token=token, user_id=invitee, user_email="invitee@example.com", user_full_name="Invitee"
+        )
     )
     assert out["role"] == "editor"
 
@@ -57,6 +65,7 @@ async def test_accept_invitation_grants_approved_membership(async_session: Async
         {"u": invitee},
     )
     r = role.first()
+    assert r is not None
     assert r.role == "editor" and r.is_approved is True
     inv_status = await async_session.execute(
         sa.text("SELECT status FROM clan_invitations WHERE token = :t"), {"t": token}

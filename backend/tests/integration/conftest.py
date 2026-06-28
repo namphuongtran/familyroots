@@ -33,6 +33,7 @@ def _reset_settings(dsn: str) -> None:
     new_settings = _cfg_module.get_settings()
     _cfg_module.settings = new_settings
 
+
 # Admin connection used to CREATE/DROP the throwaway test database.
 ADMIN_URL = os.environ.get(
     "TEST_PG_ADMIN_URL", "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"

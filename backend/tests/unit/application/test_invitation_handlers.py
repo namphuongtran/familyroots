@@ -86,7 +86,7 @@ def _actor():
 @pytest.mark.asyncio
 async def test_create_rejects_duplicate_pending():
     repo = _FakeRepo(pending=_Inv())
-    handler = InvitationCommandHandler(repo, _FakeUow())
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(ConflictError):
         await handler.create(
             CreateInvitation(clan_id=uuid.uuid4(), email="a@x.com", role="viewer", actor=_actor())
@@ -96,7 +96,7 @@ async def test_create_rejects_duplicate_pending():
 @pytest.mark.asyncio
 async def test_create_returns_token_and_path():
     repo = _FakeRepo()
-    handler = InvitationCommandHandler(repo, _FakeUow())
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     out = await handler.create(
         CreateInvitation(clan_id=uuid.uuid4(), email="A@X.com", role="editor", actor=_actor())
     )
@@ -110,69 +110,81 @@ async def test_create_returns_token_and_path():
 @pytest.mark.asyncio
 async def test_accept_email_mismatch_forbidden():
     inv = _Inv(
-        clan_id=uuid.uuid4(), email="invited@x.com", role="viewer", invited_by=uuid.uuid4(),
+        clan_id=uuid.uuid4(),
+        email="invited@x.com",
+        role="viewer",
+        invited_by=uuid.uuid4(),
         expires_at=datetime.now(UTC) + timedelta(days=1),
     )
     repo = _FakeRepo(by_token=inv)
-    handler = InvitationCommandHandler(repo, _FakeUow())
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(ForbiddenError):
         await handler.accept(
-            AcceptInvitation(token="t", user_id=uuid.uuid4(),
-                             user_email="someone-else@x.com", user_full_name="X")
+            AcceptInvitation(
+                token="t", user_id=uuid.uuid4(), user_email="someone-else@x.com", user_full_name="X"
+            )
         )
 
 
 @pytest.mark.asyncio
 async def test_accept_expired_conflict():
     inv = _Inv(
-        clan_id=uuid.uuid4(), email="a@x.com", role="viewer", invited_by=uuid.uuid4(),
+        clan_id=uuid.uuid4(),
+        email="a@x.com",
+        role="viewer",
+        invited_by=uuid.uuid4(),
         expires_at=datetime.now(UTC) - timedelta(days=1),
     )
     repo = _FakeRepo(by_token=inv)
-    handler = InvitationCommandHandler(repo, _FakeUow())
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(ConflictError):
         await handler.accept(
-            AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="a@x.com",
-                             user_full_name="X")
+            AcceptInvitation(
+                token="t", user_id=uuid.uuid4(), user_email="a@x.com", user_full_name="X"
+            )
         )
 
 
 @pytest.mark.asyncio
 async def test_accept_creates_approved_membership():
     inv = _Inv(
-        clan_id=uuid.uuid4(), email="a@x.com", role="editor", invited_by=uuid.uuid4(),
+        clan_id=uuid.uuid4(),
+        email="a@x.com",
+        role="editor",
+        invited_by=uuid.uuid4(),
         expires_at=datetime.now(UTC) + timedelta(days=1),
     )
     repo = _FakeRepo(by_token=inv)
     uow = _FakeUow()
-    handler = InvitationCommandHandler(repo, uow)
+    handler = InvitationCommandHandler(repo, uow)  # type: ignore[arg-type]
     out = await handler.accept(
-        AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="A@x.com",
-                         user_full_name="X")
+        AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="A@x.com", user_full_name="X")
     )
     assert out["role"] == "editor"
     assert inv.status == "accepted"
     assert len(repo.added_roles) == 1
     role = repo.added_roles[0]
     assert role.is_approved is True
-    assert role.approved_by == inv.invited_by and role.approved_at is not None
+    assert role.approved_by == inv.invited_by and role.approved_at is not None  # type: ignore[attr-defined]
     assert uow.commits == 1
 
 
 @pytest.mark.asyncio
 async def test_accept_promotes_pending_membership():
     inv = _Inv(
-        clan_id=uuid.uuid4(), email="a@x.com", role="editor", invited_by=uuid.uuid4(),
+        clan_id=uuid.uuid4(),
+        email="a@x.com",
+        role="editor",
+        invited_by=uuid.uuid4(),
         expires_at=datetime.now(UTC) + timedelta(days=1),
     )
     existing = _ExistingRole()
     repo = _FakeRepo(by_token=inv, existing_role=existing)
     uow = _FakeUow()
-    handler = InvitationCommandHandler(repo, uow)
+    handler = InvitationCommandHandler(repo, uow)  # type: ignore[arg-type]
 
     out = await handler.accept(
-        AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="a@x.com",
-                         user_full_name="X")
+        AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="a@x.com", user_full_name="X")
     )
 
     assert out["role"] == "editor"
@@ -180,7 +192,7 @@ async def test_accept_promotes_pending_membership():
     assert repo.added_roles == []
     assert existing.role == "editor"
     assert existing.is_approved is True
-    assert existing.approved_by == inv.invited_by
+    assert existing.approved_by == inv.invited_by  # type: ignore[attr-defined]
     assert existing.approved_at is not None
     assert inv.status == "accepted"
 
@@ -190,7 +202,7 @@ async def test_revoke_pending_sets_revoked():
     inv = _Inv(status="pending")
     repo = _FakeRepo(by_id=inv)
     uow = _FakeUow()
-    handler = InvitationCommandHandler(repo, uow)
+    handler = InvitationCommandHandler(repo, uow)  # type: ignore[arg-type]
     await handler.revoke(
         RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=inv.id, actor=_actor())
     )
@@ -202,7 +214,7 @@ async def test_revoke_pending_sets_revoked():
 async def test_revoke_nonpending_conflicts():
     inv = _Inv(status="accepted")
     repo = _FakeRepo(by_id=inv)
-    handler = InvitationCommandHandler(repo, _FakeUow())
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(ConflictError):
         await handler.revoke(
             RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=inv.id, actor=_actor())
@@ -212,7 +224,7 @@ async def test_revoke_nonpending_conflicts():
 @pytest.mark.asyncio
 async def test_revoke_not_found():
     repo = _FakeRepo(by_id=None)
-    handler = InvitationCommandHandler(repo, _FakeUow())
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(EntityNotFoundError):
         await handler.revoke(
             RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=uuid.uuid4(), actor=_actor())

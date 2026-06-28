@@ -127,9 +127,7 @@ class SqlAlchemyMarriageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(
-        self, marriage_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> MarriageEntity | None:
+    async def get_by_id(self, marriage_id: uuid.UUID, clan_id: uuid.UUID) -> MarriageEntity | None:
         result = await self._session.execute(
             select(MarriageModel).where(
                 MarriageModel.id == marriage_id,
@@ -153,9 +151,7 @@ class SqlAlchemyParentChildRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(
-        self, link_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> ParentChildEntity | None:
+    async def get_by_id(self, link_id: uuid.UUID, clan_id: uuid.UUID) -> ParentChildEntity | None:
         result = await self._session.execute(
             select(ParentChildModel).where(
                 ParentChildModel.id == link_id,

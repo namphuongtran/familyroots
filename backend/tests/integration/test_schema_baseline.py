@@ -67,8 +67,7 @@ def test_person_insert_and_select_roundtrip(sync_engine: sa.Engine) -> None:
     with sync_engine.begin() as conn:
         clan_id = conn.execute(
             sa.text(
-                "INSERT INTO clans (name, slug) "
-                "VALUES ('Test', 'test-clan-roundtrip') RETURNING id"
+                "INSERT INTO clans (name, slug) VALUES ('Test', 'test-clan-roundtrip') RETURNING id"
             )
         ).scalar_one()
         person_id = conn.execute(

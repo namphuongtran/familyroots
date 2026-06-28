@@ -17,9 +17,11 @@ def _make_keypair_and_jwk():
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),
     ).decode()
-    pub_pem = key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode()
+    pub_pem = (
+        key.public_key()
+        .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        .decode()
+    )
     public_jwk = jwk.construct(pub_pem, ALGORITHMS.RS256).to_dict()
     public_jwk["kid"] = "test-key"
     public_jwk = {k: (v.decode() if isinstance(v, bytes) else v) for k, v in public_jwk.items()}

@@ -39,9 +39,9 @@ async def test_create_invitation_rejects_path_clan_mismatch():
         await invitations.create_invitation(
             clan_id=path_clan,
             body=body,
-            user=user,
+            user=user,  # type: ignore[arg-type]
             active_clan_id=active_clan,
-            handler=_FakeCommandHandler(),
+            handler=_FakeCommandHandler(),  # type: ignore[arg-type]
         )
     assert exc.value.status_code == 403
 
@@ -54,9 +54,9 @@ async def test_list_invitations_rejects_path_clan_mismatch():
     with pytest.raises(HTTPException) as exc:
         await invitations.list_invitations(
             clan_id=path_clan,
-            user=object(),
+            user=object(),  # type: ignore[arg-type]
             active_clan_id=active_clan,
-            handler=_FakeQueryHandler(),
+            handler=_FakeQueryHandler(),  # type: ignore[arg-type]
         )
     assert exc.value.status_code == 403
 
@@ -71,8 +71,8 @@ async def test_revoke_invitation_rejects_path_clan_mismatch():
         await invitations.revoke_invitation(
             clan_id=path_clan,
             invitation_id=uuid.uuid4(),
-            user=user,
+            user=user,  # type: ignore[arg-type]
             active_clan_id=active_clan,
-            handler=_FakeCommandHandler(),
+            handler=_FakeCommandHandler(),  # type: ignore[arg-type]
         )
     assert exc.value.status_code == 403

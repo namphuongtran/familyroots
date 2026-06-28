@@ -11,13 +11,19 @@ then asserts the post-commit DB state is consistent.
 """
 
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.exc
 from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.application.person.claim_handlers import ClaimCommandHandler
 from app.infrastructure.event_dispatcher import create_event_dispatcher
@@ -26,7 +32,7 @@ from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.fixture()
-async def async_engine(migrated_db_url: str):
+async def async_engine(migrated_db_url: str) -> AsyncGenerator[AsyncEngine]:
     """Provide a shared async engine for the test (disposed after test)."""
     async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
     engine = create_async_engine(async_dsn)
@@ -37,7 +43,7 @@ async def async_engine(migrated_db_url: str):
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_approve_claim_new_claimant_satisfies_check_constraint(
-    async_engine,
+    async_engine: AsyncEngine,
 ) -> None:
     """Approving a claim for a NEW claimant must not raise IntegrityError.
 
@@ -67,8 +73,7 @@ async def test_approve_claim_new_claimant_satisfies_check_constraint(
         # admin user_profile (FK target for user_clan_roles.approved_by)
         await seed.execute(
             sa.text(
-                "INSERT INTO user_profiles (id, email, display_name) "
-                "VALUES (:id, :email, :name)"
+                "INSERT INTO user_profiles (id, email, display_name) VALUES (:id, :email, :name)"
             ),
             {"id": admin_id, "email": f"admin-{admin_id.hex[:6]}@example.com", "name": "Admin"},
         )
@@ -84,8 +89,7 @@ async def test_approve_claim_new_claimant_satisfies_check_constraint(
         # claimant user_profile (no person_id yet)
         await seed.execute(
             sa.text(
-                "INSERT INTO user_profiles (id, email, display_name) "
-                "VALUES (:id, :email, :name)"
+                "INSERT INTO user_profiles (id, email, display_name) VALUES (:id, :email, :name)"
             ),
             {
                 "id": claimant_id,
@@ -147,9 +151,7 @@ async def test_approve_claim_new_claimant_satisfies_check_constraint(
         except sqlalchemy.exc.IntegrityError as exc:
             # C1 regression: CHECK constraint `user_clan_roles_approval_consistency` fired.
             # This means approved_by/approved_at were not set on the auto-granted role.
-            pytest.fail(
-                f"approve_claim raised IntegrityError (CHECK constraint violated): {exc}"
-            )
+            pytest.fail(f"approve_claim raised IntegrityError (CHECK constraint violated): {exc}")
         except ValidationError:
             # Known test-harness artifact: after a successful commit, approve_claim calls
             # IdentityClaimResponse.model_validate() which lazy-loads `updated_at` on the

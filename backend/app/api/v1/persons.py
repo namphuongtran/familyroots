@@ -37,6 +37,7 @@ from app.schemas.person import (
     PersonBatchGetRequest,
     PersonCreateRequest,
     PersonDetail,
+    PersonResponse,
     PersonSummary,
     PersonUpdateRequest,
 )
@@ -51,7 +52,8 @@ def _serialize_person_by_profile(person: Any, profile: str) -> dict[str, Any]:
         return PersonSummary.model_validate(person).model_dump(exclude_unset=True)
     if profile == "detail":
         return PersonDetail.model_validate(person).model_dump(exclude_unset=True)
-    return person.model_dump()
+    dumped: dict[str, Any] = person.model_dump()
+    return dumped
 
 
 def _dedupe_person_ids(ids: list[uuid.UUID]) -> list[uuid.UUID]:
@@ -244,13 +246,13 @@ async def batch_get_persons(
     ]
     person_results = await asyncio.gather(*person_tasks, return_exceptions=True)
 
-    persons = []
+    persons: list[PersonResponse] = []
     errors: list[dict[str, str]] = []
     for person_id, result in zip(person_ids, person_results, strict=False):
         if isinstance(result, EntityNotFoundError):
             errors.append({"id": str(person_id), "code": "person_not_found"})
             continue
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             raise result
         persons.append(result)
 

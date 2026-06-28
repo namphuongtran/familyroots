@@ -1,6 +1,7 @@
 """A clan must not read relationship edges created by another clan (strict isolation)."""
 
 import uuid
+from collections.abc import AsyncGenerator
 
 import pytest
 import sqlalchemy as sa
@@ -14,7 +15,7 @@ from app.infrastructure.persistence.relationship_repository import (
 
 
 @pytest.fixture()
-async def async_session(migrated_db_url):
+async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
     async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
     engine = create_async_engine(async_dsn)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -23,7 +24,7 @@ async def async_session(migrated_db_url):
     await engine.dispose()
 
 
-async def _seed(session: AsyncSession):
+async def _seed(session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
     clan_a, clan_b = uuid.uuid4(), uuid.uuid4()
     for cid, slug in ((clan_a, f"a-{clan_a.hex[:6]}"), (clan_b, f"b-{clan_b.hex[:6]}")):
         await session.execute(
@@ -61,7 +62,7 @@ async def _seed(session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_marriage_not_readable_cross_clan(async_session: AsyncSession):
+async def test_marriage_not_readable_cross_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b, marriage_id, _ = await _seed(async_session)
     handler = MarriageQueryHandler(SqlAlchemyMarriageRepository(async_session))
     assert await handler.get_by_id(marriage_id, clan_a) is not None
@@ -69,7 +70,7 @@ async def test_marriage_not_readable_cross_clan(async_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_parent_child_not_readable_cross_clan(async_session: AsyncSession):
+async def test_parent_child_not_readable_cross_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b, _, link_id = await _seed(async_session)
     handler = ParentChildQueryHandler(SqlAlchemyParentChildRepository(async_session))
     assert await handler.get_by_id(link_id, clan_a) is not None

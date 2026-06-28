@@ -25,8 +25,12 @@ async def test_register_deletes_supabase_user_on_db_failure(monkeypatch):
 
     with pytest.raises(RuntimeError, match="db exploded"):
         await handler.register(
-            email="x@example.com", password="pw", full_name="X",
-            clan_action="create", clan_name="C", clan_slug="c-slug",
+            email="x@example.com",
+            password="pw",
+            full_name="X",
+            clan_action="create",
+            clan_name="C",
+            clan_slug="c-slug",
         )
 
     # Compensation: the orphaned auth user was deleted.

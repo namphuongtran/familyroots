@@ -28,9 +28,7 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_marriages(
-        self, clan_id: uuid.UUID, person_id: uuid.UUID
-    ) -> list[dict[str, Any]]:
+    async def get_marriages(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(Marriage).where(
                 or_(Marriage.person1_id == person_id, Marriage.person2_id == person_id),

@@ -2,6 +2,7 @@
 (regression for the FK violation where UserClanRole referenced a missing profile)."""
 
 import uuid
+from collections.abc import AsyncGenerator
 
 import pytest
 import sqlalchemy as sa
@@ -14,7 +15,7 @@ from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.fixture()
-async def async_session(migrated_db_url):
+async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
     # migrated_db_url is a sync (psycopg2) DSN from the integration conftest;
     # convert to the asyncpg driver for the app's async session.
     async_dsn = migrated_db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
@@ -26,7 +27,7 @@ async def async_session(migrated_db_url):
 
 
 @pytest.mark.asyncio
-async def test_register_create_clan_provisions_profile(async_session: AsyncSession):
+async def test_register_create_clan_provisions_profile(async_session: AsyncSession) -> None:
     repo = SqlAlchemyAuthRepository(async_session)
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
     handler = AuthCommandHandler(repo, uow)
@@ -57,7 +58,7 @@ async def test_register_create_clan_provisions_profile(async_session: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_register_join_clan_provisions_profile(async_session: AsyncSession):
+async def test_register_join_clan_provisions_profile(async_session: AsyncSession) -> None:
     repo = SqlAlchemyAuthRepository(async_session)
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
     handler = AuthCommandHandler(repo, uow)
@@ -95,5 +96,6 @@ async def test_register_join_clan_provisions_profile(async_session: AsyncSession
         {"id": joiner_id},
     )
     row = role.first()
+    assert row is not None
     assert row.role == "viewer"
     assert row.is_approved is False
