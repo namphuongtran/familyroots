@@ -126,3 +126,25 @@ Two candidate mechanisms:
 ## Recommendation
 
 Proceed in this order once the open questions are signed off: **role + system DSN + ContextVar/`get_db` plumbing + `documents` pilot + its isolation tests** as the first, self-contained PR. Treat the table-by-table expansion as subsequent, individually-reviewed phases. Keep the app-layer the primary guarantee throughout — RLS is the seatbelt, not the brakes.
+
+## Pilot status (implemented) + activation finding
+
+**Done (migration `002_rls_documents_pilot` + `tests/integration/test_rls_documents.py`):** the
+`familyroots_app` non-bypass role and an `ENABLE`d clan-isolation policy on `documents`.
+A DB-level integration test connects via `SET LOCAL ROLE familyroots_app` and proves
+clan-A-sees-only-A, clan-B-only-B, **default-deny when `app.clan_id` is unset**, and that
+the role does not bypass RLS. RLS is `ENABLE`d (not `FORCE`d) and the app still connects as
+the privileged/bypass role, so **the running app is unaffected** — this PR is the DB-level
+proof, not the activation.
+
+**Activation finding (for the next phase — app-side enforcement):** wiring the per-request
+context is harder than "`get_db` sets the GUC" because of dependency/transaction ordering.
+`get_current_clan_id` runs its membership-validation query on the *shared request session*,
+so that session's transaction begins **before** the validated `clan_id` is known — a naive
+`get_db` `SET LOCAL` (or an `after_begin` event) fires with no context and, in the same
+transaction, RLS-protected reads would default-deny. Recommended resolution for the next
+phase: give the auth dependencies (`get_current_user`/`get_current_clan_id`) a **separate
+short-lived session** so the request session's first transaction starts *after* the
+ContextVar is populated; then `SET LOCAL ROLE familyroots_app` + `SET LOCAL app.clan_id` at
+that transaction's start. Validate end-to-end through the documents endpoints before flipping
+the production connection role.
