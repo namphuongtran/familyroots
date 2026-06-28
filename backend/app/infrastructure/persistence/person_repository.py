@@ -16,6 +16,7 @@ from app.domain.person.repository import PersonFilters, PersonSearchResult
 from app.infrastructure.persistence.person_mapper import apply_to_orm, to_domain, to_orm
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person as PersonModel
+from app.models.user_profile import UserProfile
 
 
 class SqlAlchemyPersonRepository:
@@ -44,6 +45,12 @@ class SqlAlchemyPersonRepository:
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
+
+    async def get_linked_person_id(self, user_id: uuid.UUID) -> uuid.UUID | None:
+        result = await self._session.execute(
+            select(UserProfile.person_id).where(UserProfile.id == user_id)
+        )
+        return result.scalar_one_or_none()
 
     async def list_in_clan(
         self,

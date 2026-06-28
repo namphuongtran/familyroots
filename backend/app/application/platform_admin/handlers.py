@@ -12,14 +12,14 @@ from app.application.shared.audit import emit_audit_event
 from app.core.exceptions import NotFoundError
 from app.domain.clan.repository import ClanRepository
 from app.domain.platform_admin.query_port import PlatformAdminQueryPort
+from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 class PlatformAdminCommandHandler:
     """Handles platform admin write operations."""
 
-    def __init__(self, repo: ClanRepository, uow: SqlAlchemyUnitOfWork) -> None:
+    def __init__(self, repo: ClanRepository, uow: UnitOfWork) -> None:
         self._repo = repo
         self._uow = uow
 
