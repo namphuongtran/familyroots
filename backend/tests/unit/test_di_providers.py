@@ -23,9 +23,7 @@ import pytest
 from app.infrastructure import dependencies as deps
 
 PROVIDERS = sorted(
-    name
-    for name in dir(deps)
-    if name.startswith("get_") and callable(getattr(deps, name))
+    name for name in dir(deps) if name.startswith("get_") and callable(getattr(deps, name))
 )
 
 
