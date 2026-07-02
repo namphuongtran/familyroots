@@ -196,8 +196,7 @@ class SqlAlchemyRelationshipQueryPort:
             """),
             {"child_id": child_id},
         )
-        row = result.first()
-        return row[0] if row else 0
+        return int(result.scalar() or 0)
 
     async def has_active_marriage(self, person1_id: uuid.UUID, person2_id: uuid.UUID) -> bool:
         result = await self._session.execute(
