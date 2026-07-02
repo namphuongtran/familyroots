@@ -156,6 +156,7 @@ def get_platform_admin_query_handler(
 def get_auth_command_handler(
     db: AsyncSession = Depends(get_db),
 ) -> AuthCommandHandler:
+    from app.application.auth.handlers import AuthCommandHandler
     from app.infrastructure.event_dispatcher import create_event_dispatcher
     from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
     from app.infrastructure.supabase_identity_provider import SupabaseIdentityProvider
@@ -170,6 +171,7 @@ def get_auth_command_handler(
 def get_auth_query_handler(
     db: AsyncSession = Depends(get_db),
 ) -> AuthQueryHandler:
+    from app.application.auth.handlers import AuthQueryHandler
     from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthQueryPort
 
     query_port = SqlAlchemyAuthQueryPort(db)
@@ -179,6 +181,7 @@ def get_auth_query_handler(
 def get_fcm_token_handler(
     db: AsyncSession = Depends(get_db),
 ) -> FCMTokenHandler:
+    from app.application.auth.handlers import FCMTokenHandler
     from app.infrastructure.persistence.auth_repository import SqlAlchemyFCMTokenRepository
 
     repo = SqlAlchemyFCMTokenRepository(db)
