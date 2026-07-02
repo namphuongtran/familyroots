@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.domain.document.entity import Document as DocumentEntity
 from app.infrastructure.persistence.document_mapper import apply_to_orm, to_domain, to_orm
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.models.clan_membership import ClanMembership
 from app.models.document import Document as DocumentModel
 
 
@@ -65,6 +66,15 @@ class SqlAlchemyDocumentRepository:
             )
         )
         return [to_domain(m) for m in result.scalars().all()]
+
+    async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            select(ClanMembership.id).where(
+                ClanMembership.person_id == person_id,
+                ClanMembership.clan_id == clan_id,
+            )
+        )
+        return result.first() is not None
 
     async def save(self, doc: DocumentEntity) -> None:
         """Insert or update a Document."""

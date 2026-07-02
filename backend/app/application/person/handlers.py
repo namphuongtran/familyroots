@@ -129,7 +129,7 @@ class PersonCommandHandler:
 
     async def restore(self, cmd: RestorePerson) -> PersonResponse:
         """Restore a soft-deleted person."""
-        person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id)
+        person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id, include_deleted=True)
         if not person:
             raise EntityNotFoundError("person_not_found")
 
@@ -171,10 +171,10 @@ class PersonQueryHandler:
         return await self._repo.search(query.clan_id, query.query, query.limit)
 
     async def get_persons_stats(
-        self, person_ids: list[uuid.UUID]
+        self, clan_id: uuid.UUID, person_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, dict[str, int]]:
-        """Fetch statistics for a list of persons."""
-        return await self._repo.get_stats_for_persons(person_ids)
+        """Fetch statistics for a list of persons, scoped to the caller's clan."""
+        return await self._repo.get_stats_for_persons(clan_id, person_ids)
 
     async def get_marriages(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         if not self._query_port:

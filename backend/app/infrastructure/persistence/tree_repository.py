@@ -54,7 +54,7 @@ class SqlAlchemyTreeRepository:
                 "  LEFT JOIN public.parent_child pc "
                 "    ON pc.child_id = p.id AND pc.is_deleted = false "
                 "       AND pc.created_by_clan_id = :clan_id "
-                "  WHERE p.id = :person_id "
+                "  WHERE p.id = :person_id AND p.is_deleted = false "
                 "  UNION ALL "
                 "  SELECT p.id, p.full_name, p.gender, p.birth_date, p.death_date, "
                 "         p.avatar_url, cm.generation, pc.parent_id, a.depth + 1 "

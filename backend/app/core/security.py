@@ -18,7 +18,10 @@ from app.core.database import get_db
 from app.core.exceptions import AppError, AuthenticationError, ForbiddenError
 from app.models.user_profile import UserProfile
 
-security = HTTPBearer()
+# auto_error=False so a MISSING/malformed Authorization header raises our own
+# AuthenticationError (401) instead of FastAPI's bare HTTPException(403) — a present
+# token that is invalid also yields 401, so "no/!bad credentials" is consistently 401.
+security = HTTPBearer(auto_error=False)
 
 # Thread-safe JWKS cache using asyncio.Lock
 _jwks_cache: dict[str, Any] | None = None
@@ -76,9 +79,11 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict[str, Any]:
     """FastAPI dependency — extract and validate JWT from Authorization header."""
+    if credentials is None:
+        raise AuthenticationError("missing_token")
     return await verify_supabase_token(credentials.credentials)
 
 

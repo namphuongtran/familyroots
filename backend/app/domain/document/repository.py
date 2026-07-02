@@ -36,6 +36,11 @@ class DocumentRepository(Protocol):
         """Get current avatar documents for a person (for clearing old avatars)."""
         ...
 
+    async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        """Whether a person has a membership in the given clan (guards body-supplied
+        person_id on upload so a document can't link a person from another clan)."""
+        ...
+
     async def save(self, doc: Document) -> None:
         """Insert or update a Document entity."""
         ...

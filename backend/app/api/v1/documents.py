@@ -113,5 +113,9 @@ async def set_document_as_avatar(
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Set a photo document as the person's avatar."""
-    await cmd_handler.set_avatar(document_id=document_id, clan_id=clan_id)
+    await cmd_handler.set_avatar(
+        document_id=document_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, "editor"),
+    )
     return {"data": {"message": "Avatar set", "document_id": str(document_id)}}

@@ -11,6 +11,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from app.application.shared.audit import emit_audit_event
 from app.domain.document.entity import Document
 from app.domain.document.repository import DocumentRepository, StoragePort
 from app.domain.shared.exceptions import EntityNotFoundError
@@ -48,6 +49,11 @@ class DocumentCommandHandler:
         taken_place: str | None = None,
     ) -> DocumentResponse:
         """Upload a document to storage and save metadata."""
+        # A body-supplied person_id must belong to the acting clan, so a document
+        # can't link (or be filed under) a person owned by another clan.
+        if person_id and not await self._repo.person_in_clan(person_id, clan_id):
+            raise EntityNotFoundError("person_not_found", {"person_id": str(person_id)})
+
         file_ext = (filename or "file").rsplit(".", 1)[-1] if filename else "bin"
         file_id = uuid.uuid4()
         storage_path = f"clans/{clan_id}/documents/{file_id}.{file_ext}"
@@ -116,6 +122,7 @@ class DocumentCommandHandler:
         *,
         document_id: uuid.UUID,
         clan_id: uuid.UUID,
+        actor: ActorInfo,
     ) -> str | None:
         """Set a photo document as the person's avatar. Returns presigned URL."""
         doc = await self._get_or_raise(document_id, clan_id)
@@ -134,7 +141,17 @@ class DocumentCommandHandler:
         await self._repo.save(doc)
 
         presigned = await self._storage.get_presigned_url(doc.storage_path, expires_in=86400 * 30)
-        await self._uow.commit()
+        # Emit an audit row for the avatar change (the entity mutation itself carries
+        # no domain event) and commit doc + old-avatar clears in the same transaction.
+        await emit_audit_event(
+            self._uow,
+            action="document.set_avatar",
+            resource_type="document",
+            resource_id=doc.id,
+            actor=actor,
+            clan_id=clan_id,
+            new_value={"is_avatar": True, "person_id": str(doc.person_id)},
+        )
         return presigned
 
     async def _get_or_raise(self, doc_id: uuid.UUID, clan_id: uuid.UUID) -> Document:

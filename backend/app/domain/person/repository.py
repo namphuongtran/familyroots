@@ -47,8 +47,13 @@ class PersonRepository(Protocol):
         """Fetch a person by their global ID (not clan-scoped)."""
         ...
 
-    async def get_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> Person | None:
-        """Fetch a person only if they belong to the given clan."""
+    async def get_in_clan(
+        self, person_id: uuid.UUID, clan_id: uuid.UUID, include_deleted: bool = False
+    ) -> Person | None:
+        """Fetch a person only if they belong to the given clan.
+
+        Excludes soft-deleted persons unless ``include_deleted=True`` (used by the
+        restore path, which must fetch an already-deleted person)."""
         ...
 
     async def get_linked_person_id(self, user_id: uuid.UUID) -> uuid.UUID | None:
@@ -95,7 +100,8 @@ class PersonRepository(Protocol):
         ...
 
     async def get_stats_for_persons(
-        self, person_ids: list[uuid.UUID]
+        self, clan_id: uuid.UUID, person_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, dict[str, int]]:
-        """Get spouse and child counts for a list of persons."""
+        """Get spouse and child counts for a list of persons, counting only edges
+        owned by ``clan_id`` (``created_by_clan_id``) to avoid cross-clan leakage."""
         ...
