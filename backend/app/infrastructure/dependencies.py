@@ -115,6 +115,7 @@ def get_claim_query_handler(
 def get_me_query_handler(
     db: AsyncSession = Depends(get_db),
 ) -> MeQueryHandler:
+    from app.application.me.handlers import MeQueryHandler
     from app.infrastructure.persistence.me_query_port import SqlAlchemyMeQueryPort
 
     query_port = SqlAlchemyMeQueryPort(db)

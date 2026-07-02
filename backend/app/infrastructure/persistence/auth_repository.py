@@ -36,6 +36,16 @@ class SqlAlchemyAuthRepository(AuthRepository):
         )
         return result.scalar_one_or_none()
 
+    async def get_login_profile(self, user_id: uuid.UUID) -> Any | None:
+        result = await self._session.execute(
+            select(UserProfileModel, UserClanRole, Clan)
+            .outerjoin(UserClanRole, UserProfileModel.id == UserClanRole.user_id)
+            .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
+            .where(UserProfileModel.id == user_id)
+            .limit(1)
+        )
+        return result.first()
+
     def add_clan(self, clan: Clan) -> None:
         self._session.add(clan)
 

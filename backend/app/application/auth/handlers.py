@@ -264,7 +264,7 @@ class AuthCommandHandler:
                 if row and row.UserClanRole and row.UserClanRole.is_approved
                 else None,
                 is_approved=row.UserClanRole.is_approved if row and row.UserClanRole else False,
-                person_id=row.UserProfileModel.person_id if row else None,
+                person_id=row.UserProfile.person_id if row else None,
             ),
         )
 
@@ -289,7 +289,7 @@ class AuthQueryHandler:
             role=row.UserClanRole.role if row and row.UserClanRole else None,
             is_approved=bool(row and row.UserClanRole),
             has_pending_membership=has_pending_membership,
-            person_id=row.UserProfileModel.person_id if row else None,
+            person_id=row.UserProfile.person_id if row else None,
         )
 
 
