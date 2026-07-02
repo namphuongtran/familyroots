@@ -21,6 +21,10 @@ class AuthRepository(Protocol):
         """Get an existing membership for a user in a clan."""
         ...
 
+    async def get_login_profile(self, user_id: uuid.UUID) -> Any | None:
+        """Get the login profile (profile + membership + clan, incl. pending roles)."""
+        ...
+
     def add_clan(self, clan: Any) -> None:
         """Add a new clan to persistence context."""
         ...
