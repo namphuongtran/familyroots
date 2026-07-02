@@ -16,7 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.exceptions import (
     AppError,
     app_exception_handler,
@@ -27,6 +27,7 @@ from app.core.exceptions import (
     validation_exception_handler,
 )
 from app.core.logging import configure_logging
+from app.core.readiness import MIGRATIONS_CURRENT, migration_status
 from app.domain.auth.identity_provider import IdentityUnavailableError
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
@@ -79,6 +80,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "set" if settings.SUPABASE_ANON_KEY else "MISSING",
             "set" if settings.SUPABASE_SERVICE_ROLE_KEY else "MISSING",
         )
+
+    # DB readiness: an unmigrated runtime DB means "relation does not exist" 500s
+    # on nearly every endpoint. In production, refuse to boot (the deploy fails and
+    # the previous version keeps serving); in dev, warn loudly and continue.
+    try:
+        async with AsyncSessionLocal() as session:
+            status = await migration_status(session)
+    except Exception as exc:
+        status = f"db-unreachable ({type(exc).__name__})"
+    if status != MIGRATIONS_CURRENT:
+        message = (
+            f"Database is not ready (migrations: {status}). "
+            "Run `alembic upgrade head` against this database."
+        )
+        if settings.APP_ENV == "production":
+            raise RuntimeError(message)
+        logger.error(message)
 
     try:
         yield
@@ -147,14 +165,29 @@ def create_app() -> FastAPI:
     # Health check with DB connectivity probe
     @application.get("/health", tags=["health"], response_model=None)
     async def health(db: AsyncSession = Depends(get_db)) -> dict[str, str] | JSONResponse:
+        """Liveness + readiness. Deliberately does NOT call the auth provider:
+        a Supabase outage must not mark the pod unhealthy (restart loops) — auth
+        paths already surface 503 per-request via IdentityUnavailableError."""
         try:
             await db.execute(text("SELECT 1"))
-            return {"status": "ok", "database": "connected"}
         except Exception:
             return JSONResponse(
                 status_code=503,
                 content={"status": "degraded", "database": "unreachable"},
             )
+        migrations = await migration_status(db)
+        if migrations != MIGRATIONS_CURRENT:
+            # Schema missing/behind → most endpoints would 500; report degraded so
+            # deploys and load balancers get the true signal.
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "degraded",
+                    "database": "connected",
+                    "migrations": migrations,
+                },
+            )
+        return {"status": "ok", "database": "connected", "migrations": migrations}
 
     return application
 
