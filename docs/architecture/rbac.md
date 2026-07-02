@@ -5,7 +5,7 @@
 FamilyRoots uses a **two-level** role system:
 
 ```
-PLATFORM LEVEL (public schema)          CLAN LEVEL (clan-scoped via RLS)
+PLATFORM LEVEL (public schema)          CLAN LEVEL (clan-scoped, app-layer)
 ─────────────────────────────           ──────────────────────────
 super_admin                             admin
   │                                       │

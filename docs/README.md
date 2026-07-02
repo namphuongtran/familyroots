@@ -23,6 +23,8 @@ docs/
 System-wide design that touches more than one service.
 
 - [Overview](architecture/overview.md) — communication flows, failure assumptions, system map
+- [Bounded Contexts](architecture/bounded-contexts.md) — domain context map, aggregates, cross-context relationships
+- [Domain Rules](architecture/domain-rules.md) — genealogy invariants and error codes enforced in the domain layer
 - [API Design](architecture/api-design.md) — REST conventions, pagination, sparse fields, includes
 - [Data Model](architecture/data-model.md) — database schema reference
 - [RBAC](architecture/rbac.md) — clan roles, permission model, hierarchy

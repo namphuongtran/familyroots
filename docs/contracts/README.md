@@ -22,6 +22,8 @@ This folder is the canonical home for public API and event contract documentatio
 - [rest-platform-admin-api.md](rest-platform-admin-api.md)
 - [rest-notifications-api.md](rest-notifications-api.md)
 - [domain-events-audit.md](domain-events-audit.md)
+- [domain-events-catalog.md](domain-events-catalog.md)
+- [redis-domain-events.md](redis-domain-events.md)
 
 ## Maintenance Notes
 - Keep route names consistent with backend router prefixes.

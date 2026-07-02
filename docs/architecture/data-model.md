@@ -109,15 +109,13 @@ erDiagram
         timestamptz updated_at
     }
 
-    user_devices {
+    user_fcm_tokens {
         uuid id PK
         uuid user_id FK
-        varchar fcm_token UK
-        varchar device_name
-        varchar platform "ios | android | web"
-        boolean is_active
-        timestamptz last_used_at
+        text token UK
+        varchar device_platform "ios | android | web"
         timestamptz created_at
+        timestamptz updated_at
     }
 
     clan_memberships {
@@ -315,7 +313,7 @@ erDiagram
 
     %% ── Relationships ──
     user_profiles ||--o{ user_clan_roles : "has clan roles"
-    user_profiles ||--o{ user_devices : "has devices"
+    user_profiles ||--o{ user_fcm_tokens : "has FCM tokens"
     user_profiles ||--o| identity_claims : "submits"
     clans ||--o{ clan_memberships : "has members"
     clans ||--o{ user_clan_roles : "has roles"
@@ -477,8 +475,8 @@ Global edge linking two persons. Supports polygamy, divorce, remarriage.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `person1_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Sinh ra từ gốc dòng họ chính |
-| `person2_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Dâu / Rể |
+| `person1_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Sinh ra từ gốc dòng họ chính |
+| `person2_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Dâu / Rể |
 | `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
 | `marriage_date` | DATE | | Ngày cưới |
 | `divorce_date` | DATE | | Ngày ly dị |
@@ -500,8 +498,8 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `parent_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Cha / Mẹ |
-| `child_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Con |
+| `parent_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Cha / Mẹ |
+| `child_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Con |
 | `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
 | `relationship_type` | VARCHAR(20) | DEFAULT 'biological' | Loại quan hệ: biological (con đẻ), adopted (con nuôi), step (con riêng của vợ/chồng), foster (con đỡ đầu) |
 | `birth_order` | SMALLINT | | Thứ tự sinh (con cả=1, con thứ=2...) |
@@ -516,6 +514,15 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 
 > **💡 Note (VN) - Global Edge Monopoly (Độc quyền Liên kết):**
 > Các table `marriages` và `parent_child` bị giới hạn tạo bởi constraint Unique trên `(person1, person2, status)` hoặc `(parent_id, child_id, relationship_type)`. Điều này có nghĩa nếu Họ Nguyễn đã cấp liên kết "A là con B", thì Họ Lê không thể tạo thêm 1 liên kết "A là con B" thứ 2. Việc này giảm rác, nhưng yêu cầu việc Edit liên kết phải thông qua Clan gốc ở `created_by_clan_id` hoặc theo cơ chế Cross-Clan Change Request.
+
+> **💡 Note (VN) - Xóa person & cạnh mồ côi (`ON DELETE RESTRICT`):**
+> FK `person1_id/person2_id` (marriages) và `parent_id/child_id` (parent_child) dùng
+> **`RESTRICT`**, KHÔNG phải CASCADE — vì `persons` dùng **soft-delete**, không bao giờ
+> hard-delete. Hệ quả: khi soft-delete một person, các cạnh của họ **không tự động ẩn**
+> ở tầng dữ liệu (tree query đã lọc `is_deleted=false` nên không hiện trong cây, nhưng
+> cạnh vẫn tồn tại). **Quyết định (2026-07-02):** khi soft-delete một person sẽ **ẩn
+> luôn (soft-delete) các cạnh** của người đó — *hạng mục roadmap* (cần thiết kế cả logic
+> `restore`: chỉ khôi phục cạnh đã bị ẩn bởi chính lần xóa person đó).
 
 ### `user_clan_roles`
 Maps users to clans with RBAC roles.
@@ -533,22 +540,27 @@ Maps users to clans with RBAC roles.
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-### `user_devices`
-Tracks FCM tokens per user device for push notifications.
+### `user_fcm_tokens`
+Firebase Cloud Messaging tokens per device, for push notifications. This is the
+table the runtime actually uses (migration `004_fcm_tokens`); the earlier
+`user_devices` table was removed as an unused duplicate.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL | Tài khoản User |
-| `fcm_token` | VARCHAR(500) | UNIQUE, NOT NULL | Firebase token |
-| `device_name` | VARCHAR(255) | | e.g. "iPhone 15 Pro" / Tên thiết bị |
-| `platform` | VARCHAR(20) | NOT NULL | `ios`, `android`, `web` |
-| `is_active` | BOOLEAN | DEFAULT true | Thiết bị còn nhận thông báo không |
-| `last_used_at` | TIMESTAMPTZ | | |
+| `token` | TEXT | UNIQUE, NOT NULL | Firebase token — `INSERT ... ON CONFLICT (token)`: re-register moves the token to the current user |
+| `device_platform` | VARCHAR(20) | nullable | `ios`, `android`, `web` |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `change_requests`
 Configurable cross-approval workflow. Uses `clan_settings.approval_config`.
+
+> ⚠️ **Status (2026-07-02) — dormant / not implemented.** The table + ORM model +
+> Pydantic schema exist, but **no runtime code** references them (no domain context,
+> handler, or route). This is a planned feature (cross-clan propose-and-approve) —
+> see the roadmap in [db-design-review-2026-07-02.md](db-design-review-2026-07-02.md) (D1).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -582,6 +594,14 @@ Chi/phái/nhánh within a clan. Supports nested hierarchy.
 
 ### `clan_settings`
 Per-clan configuration. Auto-created with new clans.
+
+> ⚠️ **Status (2026-07-02) — mostly not enforced yet.** Only the row/columns exist;
+> the runtime does **not** read most knobs. In particular `max_upload_size_mb`
+> (default 10) is **not** applied — the document domain hard-codes a **50 MB** limit,
+> so the two disagree and must be reconciled when this is built. `privacy_level`,
+> `allow_public_tree`, `tree_display_mode`, `approval_config`,
+> `notification_defaults` are also inert. See roadmap D3 in
+> [db-design-review-2026-07-02.md](db-design-review-2026-07-02.md).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -698,7 +718,7 @@ Immutable log of all write actions. Not clan-scoped.
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `notification_log`
-Tracks push notification delivery. FCM tokens are now stored in `user_devices` (not per-notification).
+Tracks push notification delivery. FCM tokens are stored in `user_fcm_tokens` (not per-notification).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -771,8 +791,8 @@ CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
 CREATE INDEX idx_notification_log_clan ON notification_log(clan_id);
 CREATE INDEX idx_notification_log_event ON notification_log(event_id);
 
--- User devices
-CREATE INDEX ix_user_devices_user_id ON user_devices(user_id);
+-- FCM tokens
+CREATE INDEX ix_user_fcm_tokens_user_id ON user_fcm_tokens(user_id);
 
 -- Clan invitations
 CREATE INDEX ix_clan_invitations_clan_id ON clan_invitations(clan_id);
