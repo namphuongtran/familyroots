@@ -90,6 +90,7 @@
   "error.invalid_token": "Invalid or expired token",
   "error.missing_token": "Missing authentication token",
   "error.auth.invalid_credentials": "Invalid email or password",
+  "error.auth_provider_unavailable": "Authentication service is temporarily unavailable, please try again later",
   "error.invitation.already_member": "This user is already a member of the clan",
   "error.invitation.email_mismatch": "This invitation was issued to a different email",
   "error.invitation.expired": "This invitation has expired",

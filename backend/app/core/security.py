@@ -66,13 +66,18 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
     """Validate a Supabase-issued JWT. Returns the decoded payload."""
     try:
         jwks = await get_supabase_jwks()
-        # Supabase's modern asymmetric signing keys use ES256 (ECC); older projects
-        # used RS256. Accept both so token verification works regardless of the
-        # project's JWT signing-key type.
+        # Derive the accepted algorithms from the project's own JWKS keys instead
+        # of hardcoding (Supabase's modern signing keys are ES256, older projects
+        # RS256 — and a future rotation must not break verification). Fall back to
+        # both known families if the keys omit "alg".
+        algorithms = sorted({k["alg"] for k in jwks.get("keys", []) if k.get("alg")}) or [
+            "ES256",
+            "RS256",
+        ]
         payload = jwt.decode(
             token,
             jwks,
-            algorithms=["ES256", "RS256"],
+            algorithms=algorithms,
             audience="authenticated",
             issuer=f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1",
         )

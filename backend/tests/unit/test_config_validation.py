@@ -38,6 +38,10 @@ _PROD_SAFE = {
     "ALLOWED_HOSTS": ["example.com"],
     "DATABASE_URL": "postgresql+psycopg://u:p@db.prod.internal:5432/familyroots",
     "CORS_ORIGINS": ["https://app.example.com"],
+    # Auth config is required in production (fail fast instead of per-request 503s).
+    "SUPABASE_URL": "https://proj.supabase.co",
+    "SUPABASE_ANON_KEY": "sb_publishable_x",
+    "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_x",
 }
 
 

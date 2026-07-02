@@ -29,6 +29,7 @@ _HANDLER_CODES = {
     "rate_limited",
     "http_error",
     "internal_error",
+    "auth_provider_unavailable",
 }
 
 

@@ -115,6 +115,28 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
+async def identity_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Surface identity-provider outages/misconfiguration as 503, in one place.
+
+    Any auth path (login/register/refresh/onboard) that hits a DNS failure,
+    provider 5xx, or rejected API key gets a truthful 503 envelope instead of a
+    misleading 401 "invalid credentials" or an opaque 500."""
+    from app.services.translator import t
+
+    logger.error("Identity provider unavailable: %s", exc)
+    code = "auth_provider_unavailable"
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": code,
+                "message": t(f"error.{code}"),
+                "detail": {},
+            }
+        },
+    )
+
+
 _STATUS_CODE_TO_ERROR_CODE = {
     400: "bad_request",
     401: "unauthorized",

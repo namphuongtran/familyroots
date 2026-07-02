@@ -90,6 +90,7 @@
   "error.invalid_token": "Token không hợp lệ hoặc đã hết hạn",
   "error.missing_token": "Thiếu token xác thực",
   "error.auth.invalid_credentials": "Email hoặc mật khẩu không đúng",
+  "error.auth_provider_unavailable": "Dịch vụ xác thực tạm thời không khả dụng, vui lòng thử lại sau",
   "error.invitation.already_member": "Người dùng này đã là thành viên của dòng họ",
   "error.invitation.email_mismatch": "Lời mời này được cấp cho email khác",
   "error.invitation.expired": "Lời mời đã hết hạn",

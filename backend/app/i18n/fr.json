@@ -90,6 +90,7 @@
   "error.invalid_token": "Jeton invalide ou expiré",
   "error.missing_token": "Jeton d'authentification manquant",
   "error.auth.invalid_credentials": "E-mail ou mot de passe invalide",
+  "error.auth_provider_unavailable": "Le service d'authentification est temporairement indisponible, veuillez réessayer plus tard",
   "error.invitation.already_member": "Cet utilisateur est déjà membre du clan",
   "error.invitation.email_mismatch": "Cette invitation a été émise pour un autre e-mail",
   "error.invitation.expired": "Cette invitation a expiré",

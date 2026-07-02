@@ -22,10 +22,12 @@ from app.core.exceptions import (
     app_exception_handler,
     domain_exception_handler,
     http_exception_handler,
+    identity_unavailable_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
 from app.core.logging import configure_logging
+from app.domain.auth.identity_provider import IdentityUnavailableError
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
@@ -66,6 +68,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _safe("firebase", init_firebase)
     _safe("scheduler", start_scheduler)
 
+    # Auth config sanity (production fails fast in Settings; in dev we warn loudly
+    # so a missing key shows up at boot, not as per-request 401/503s).
+    if not settings.SUPABASE_URL:
+        logger.warning("SUPABASE_URL is not set — JWT verification and auth will fail")
+    elif not settings.SUPABASE_ANON_KEY or not settings.SUPABASE_SERVICE_ROLE_KEY:
+        logger.warning(
+            "Supabase keys incomplete (anon=%s, service_role=%s) — "
+            "sign-in and/or register/storage will fail",
+            "set" if settings.SUPABASE_ANON_KEY else "MISSING",
+            "set" if settings.SUPABASE_SERVICE_ROLE_KEY else "MISSING",
+        )
+
     try:
         yield
     finally:
@@ -88,6 +102,7 @@ def create_app() -> FastAPI:
     # while bare HTTPExceptions and 422 validation errors are normalized too.
     application.add_exception_handler(AppError, app_exception_handler)
     application.add_exception_handler(DomainError, domain_exception_handler)
+    application.add_exception_handler(IdentityUnavailableError, identity_unavailable_handler)
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
     application.add_exception_handler(StarletteHTTPException, http_exception_handler)
     application.add_exception_handler(Exception, unhandled_exception_handler)
