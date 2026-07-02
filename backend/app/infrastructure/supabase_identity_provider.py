@@ -11,14 +11,38 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import Any
 
+from supabase_auth.errors import AuthApiError, AuthRetryableError
+
 from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
     AuthTokens,
     IdentityAuthError,
     IdentityError,
+    IdentityUnavailableError,
     IdentityUserExistsError,
 )
 from app.infrastructure.supabase_client import get_anon_client, get_service_client
+
+
+def _classify(exc: Exception) -> IdentityError:
+    """Map an SDK/transport failure to the right domain exception.
+
+    Only a definitive API rejection of the *user's* credentials becomes
+    ``IdentityAuthError``. Everything infrastructural — network/DNS/timeout (the
+    request never reached the provider), provider 5xx, or a rejected *API key*
+    (our configuration) — becomes ``IdentityUnavailableError`` so callers surface
+    503 instead of lying "invalid credentials"."""
+    if isinstance(exc, AuthRetryableError):
+        return IdentityUnavailableError(str(exc))
+    if isinstance(exc, AuthApiError):
+        if "api key" in str(exc).lower():
+            return IdentityUnavailableError(str(exc))
+        if exc.status >= 500:
+            return IdentityUnavailableError(str(exc))
+        return IdentityAuthError()
+    # Non-HTTP failure (DNS, connection refused, TLS, timeout): never reached
+    # the provider.
+    return IdentityUnavailableError(str(exc))
 
 
 class SupabaseIdentityProvider:
@@ -33,6 +57,9 @@ class SupabaseIdentityProvider:
         except Exception as exc:
             if "already" in str(exc).lower():
                 raise IdentityUserExistsError() from exc
+            classified = _classify(exc)
+            if isinstance(classified, IdentityUnavailableError):
+                raise classified from exc
             raise IdentityError(str(exc)) from exc
         return str(resp.user.id)
 
@@ -44,7 +71,7 @@ class SupabaseIdentityProvider:
         try:
             resp = sb.auth.sign_in_with_password({"email": email, "password": password})
         except Exception as exc:
-            raise IdentityAuthError() from exc
+            raise _classify(exc) from exc
         if resp.session is None or resp.user is None:
             raise IdentityAuthError()
         return AuthenticatedIdentity(
@@ -63,7 +90,7 @@ class SupabaseIdentityProvider:
         try:
             resp = sb.auth.refresh_session(refresh_token)
         except Exception as exc:
-            raise IdentityAuthError() from exc
+            raise _classify(exc) from exc
         if resp.session is None:
             raise IdentityAuthError()
         return AuthTokens(

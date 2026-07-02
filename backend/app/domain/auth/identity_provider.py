@@ -42,6 +42,15 @@ class IdentityAuthError(IdentityError):
     """Raised when credentials / a refresh token are invalid or rejected."""
 
 
+class IdentityUnavailableError(IdentityError):
+    """The identity provider could not be reached or is misconfigured.
+
+    Covers DNS/connection/timeout failures, provider 5xx, and rejected *API keys*
+    (our configuration) — anything that is NOT the caller's credentials. Surfaced
+    as HTTP 503, never as "invalid credentials": conflating the two masked a
+    paused project and a wrong service key as user error."""
+
+
 class IdentityProvider(Protocol):
     """What the auth use-cases need from the external identity provider."""
 

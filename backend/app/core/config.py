@@ -92,6 +92,17 @@ class Settings(BaseSettings):
                 "localhost" in origin for origin in self.CORS_ORIGINS
             ):
                 raise ValueError("CORS_ORIGINS must be explicit production origins")
+            # Auth cannot work without the Supabase project URL + keys; fail fast at
+            # boot instead of 401/503-ing every request (a missing key previously
+            # surfaced only as per-request failures that were hard to diagnose).
+            if not self.SUPABASE_URL:
+                raise ValueError("SUPABASE_URL must be set in production")
+            if not self.SUPABASE_ANON_KEY:
+                raise ValueError("SUPABASE_ANON_KEY must be set in production (sign-in)")
+            if not self.SUPABASE_SERVICE_ROLE_KEY:
+                raise ValueError(
+                    "SUPABASE_SERVICE_ROLE_KEY must be set in production (register/storage)"
+                )
         return self
 
 

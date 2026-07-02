@@ -23,6 +23,7 @@ from app.domain.auth.identity_provider import (
     IdentityAuthError,
     IdentityError,
     IdentityProvider,
+    IdentityUnavailableError,
     IdentityUserExistsError,
 )
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
@@ -195,6 +196,10 @@ class AuthCommandHandler:
             user_id_str = await self._identity.create_user(email=email, password=password)
         except IdentityUserExistsError as e:
             raise ConflictError("auth.email_already_exists") from e
+        except IdentityUnavailableError:
+            # Provider outage/misconfiguration is not a validation failure — let the
+            # dedicated 503 handler surface it truthfully.
+            raise
         except IdentityError as e:
             raise ValidationError("auth.registration_failed", {"detail": str(e)}) from e
 
