@@ -1,37 +1,41 @@
-"""Smoke tests for the FastAPI DI providers in app.infrastructure.dependencies.
+"""Smoke test for every FastAPI DI provider in app.infrastructure.dependencies.
 
-Regression for a NameError shipped on main: several handler providers referenced
-their handler class (e.g. AuthCommandHandler / MeQueryHandler) but imported it only
-under ``if TYPE_CHECKING`` — so those endpoints 500'd at runtime. These db-only
-providers build their handler without touching the DB at construction time, so
-calling them with a mock session must return a handler and never raise NameError.
+Regression guard for the class of bug that shipped on main: a provider that
+referenced its handler class without importing it (it was under ``TYPE_CHECKING``)
+raised ``NameError`` only at request time — invisible to mypy and to handler unit
+tests. dependencies.py now imports everything at module level and each provider
+only wires collaborators, so:
+
+- importing the module catches any missing/typo'd import (ImportError), and
+- invoking every provider with a mock session catches any wiring/construction bug.
+
+The provider list is discovered dynamically, so new providers are covered
+automatically. Providers construct repos/query-ports/handlers (and the Supabase
+adapters, which create their SDK client lazily inside methods) without any DB or
+network I/O at construction, so a MagicMock session is sufficient.
 """
 
+import inspect
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.infrastructure import dependencies as deps
 
-# Providers that depend only on a DB session (no Supabase / storage clients at
-# construction), so they are safe to invoke with a mock in a pure unit test.
-DB_ONLY_QUERY_PROVIDERS = [
-    "get_me_query_handler",
-    "get_auth_query_handler",
-    "get_fcm_token_handler",
-    "get_person_query_handler",
-    "get_tree_query_handler",
-    "get_clan_query_handler",
-    "get_branch_query_handler",
-    "get_event_query_handler",
-    "get_marriage_query_handler",
-    "get_parent_child_query_handler",
-    "get_platform_admin_query_handler",
-]
+PROVIDERS = sorted(
+    name for name in dir(deps) if name.startswith("get_") and callable(getattr(deps, name))
+)
 
 
-@pytest.mark.parametrize("provider_name", DB_ONLY_QUERY_PROVIDERS)
-def test_di_provider_resolves_without_nameerror(provider_name: str) -> None:
+def test_providers_are_discovered() -> None:
+    # Guard against the discovery silently finding nothing (which would make the
+    # parametrized test vacuously pass).
+    assert len(PROVIDERS) >= 20, PROVIDERS
+
+
+@pytest.mark.parametrize("provider_name", PROVIDERS)
+def test_di_provider_wires_without_error(provider_name: str) -> None:
     provider = getattr(deps, provider_name)
-    handler = provider(db=MagicMock())
-    assert handler is not None
+    params = inspect.signature(provider).parameters
+    kwargs = {"db": MagicMock()} if "db" in params else {}
+    assert provider(**kwargs) is not None
