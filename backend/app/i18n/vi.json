@@ -89,6 +89,7 @@
   "error.invalid_role_assignment": "Phân vai trò không hợp lệ",
   "error.invalid_token": "Token không hợp lệ hoặc đã hết hạn",
   "error.missing_token": "Thiếu token xác thực",
+  "error.auth.invalid_credentials": "Email hoặc mật khẩu không đúng",
   "error.invitation.already_member": "Người dùng này đã là thành viên của dòng họ",
   "error.invitation.email_mismatch": "Lời mời này được cấp cho email khác",
   "error.invitation.expired": "Lời mời đã hết hạn",
