@@ -17,6 +17,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
+from app.application.shared.audit import emit_audit_event
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.auth.identity_provider import (
     IdentityAuthError,
@@ -27,6 +28,7 @@ from app.domain.auth.identity_provider import (
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
 from app.domain.shared.exceptions import AuthenticationError
 from app.domain.shared.unit_of_work import UnitOfWork
+from app.domain.shared.value_objects import ActorInfo
 from app.models.clan import Clan
 from app.models.user_clan_role import UserClanRole
 from app.schemas.auth import (
@@ -122,7 +124,17 @@ class AuthCommandHandler:
                 approved_at=datetime.now(UTC),
             )
             self._repo.add_user_role(role)
-            await self._uow.commit()
+            # Audit clan creation + self-granted admin (commits clan + role + audit
+            # in one transaction).
+            await emit_audit_event(
+                self._uow,
+                action="clan.create",
+                resource_type="clan",
+                resource_id=clan.id,
+                actor=ActorInfo(user_id=user_id, role="admin"),
+                clan_id=clan.id,
+                new_value={"clan_name": clan_name, "clan_slug": clan_slug, "role": "admin"},
+            )
 
             return RegisterResponse(
                 user_id=user_id,
@@ -147,7 +159,16 @@ class AuthCommandHandler:
         await self._repo.ensure_profile(user_id, email, full_name)
         role = UserClanRole(clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False)
         self._repo.add_user_role(role)
-        await self._uow.commit()
+        # Audit the pending join request (role grant is not yet approved).
+        await emit_audit_event(
+            self._uow,
+            action="clan.join_request",
+            resource_type="user_clan_role",
+            resource_id=clan.id,
+            actor=ActorInfo(user_id=user_id, role="viewer"),
+            clan_id=clan.id,
+            new_value={"role": "viewer", "is_approved": False},
+        )
 
         return RegisterResponse(
             user_id=user_id,

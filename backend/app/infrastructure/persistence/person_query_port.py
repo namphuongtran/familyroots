@@ -10,6 +10,7 @@ from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.person.query_port import PersonQueryPort
+from app.models.clan_membership import ClanMembership
 from app.models.document import Document
 from app.models.event import Event
 from app.models.marriage import Marriage
@@ -70,8 +71,18 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         """Build a chronological timeline from birth/death, marriages, and events."""
         timeline: list[dict[str, Any]] = []
 
-        # Fetch person for birth/death dates
-        person_result = await self._session.execute(select(Person).where(Person.id == person_id))
+        # Fetch person for birth/death dates — scoped to the caller's clan (via
+        # membership) and excluding soft-deleted, so the timeline is self-contained
+        # rather than relying on the route's prior clan check.
+        person_result = await self._session.execute(
+            select(Person)
+            .join(ClanMembership, ClanMembership.person_id == Person.id)
+            .where(
+                Person.id == person_id,
+                ClanMembership.clan_id == clan_id,
+                Person.is_deleted.is_(False),
+            )
+        )
         person = person_result.scalar_one_or_none()
 
         if person and person.birth_date:

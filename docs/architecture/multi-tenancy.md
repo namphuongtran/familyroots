@@ -93,5 +93,6 @@ Done in under 100ms.
 ## Related
 
 - [RBAC](rbac.md) — role hierarchy within clans
-- [Database Schema](database-schema.md) — table definitions
-- [Architecture](architecture.md) — system overview
+- [Data Model](data-model.md) — table definitions
+- [Overview](overview.md) — system overview
+- [ADR-008](../decisions/008-rls-defense-in-depth.md) — RLS defense-in-depth (deferred layer-2)

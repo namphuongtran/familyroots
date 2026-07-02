@@ -121,7 +121,7 @@ async def list_persons(
     stats_map = {}
     if "stats" in include_set and persons:
         person_ids = [p.id for p in persons]
-        stats_map = await handler.get_persons_stats(person_ids)
+        stats_map = await handler.get_persons_stats(clan_id, person_ids)
 
     res_data = []
     for p in persons:
@@ -267,7 +267,7 @@ async def batch_get_persons(
 
     stats_map: dict[uuid.UUID, dict[str, int]] = {}
     if "stats" in all_include_keys and persons:
-        stats_map = await handler.get_persons_stats([person.id for person in persons])
+        stats_map = await handler.get_persons_stats(clan_id, [person.id for person in persons])
 
     included_results: list[dict[str, list[Any]]] = await asyncio.gather(
         *[

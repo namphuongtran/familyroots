@@ -77,9 +77,12 @@ async def approve_claim(
     claim_id: uuid.UUID,
     body: IdentityClaimReview,
     user: UserProfile = Depends(RequireClanRole(["admin"])),
+    active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
 ) -> IdentityClaimResponse:
     """Approve a pending identity claim. Marks the user profile and rejects duplicate claims."""
+    if clan_id != active_clan_id:
+        raise ForbiddenError("clan_context_mismatch")
     return await handler.approve_claim(
         claim_id=claim_id,
         admin_id=user.id,
@@ -97,8 +100,11 @@ async def reject_claim(
     claim_id: uuid.UUID,
     body: IdentityClaimReview,
     user: UserProfile = Depends(RequireClanRole(["admin"])),
+    active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
 ) -> IdentityClaimResponse:
+    if clan_id != active_clan_id:
+        raise ForbiddenError("clan_context_mismatch")
     return await handler.reject_claim(
         claim_id=claim_id,
         admin_id=user.id,
@@ -116,9 +122,12 @@ async def unlink_identity(
     user_id: uuid.UUID,
     body: IdentityClaimUnlink,
     user: UserProfile = Depends(RequireClanRole(["admin"])),
+    active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
 ) -> None:
     """Unlink a claimed identity and revoke the link in UserProfile."""
+    if clan_id != active_clan_id:
+        raise ForbiddenError("clan_context_mismatch")
     await handler.unlink_identity(
         clan_id=clan_id,
         user_id_to_unlink=user_id,
@@ -138,9 +147,12 @@ async def prelink_identity(
     user_id: uuid.UUID,
     body: IdentityClaimPrelink,
     user: UserProfile = Depends(RequireClanRole(["admin"])),
+    active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
 ) -> IdentityClaimResponse:
     """Administratively link a clan member to a person in the tree."""
+    if clan_id != active_clan_id:
+        raise ForbiddenError("clan_context_mismatch")
     return await handler.prelink_identity(
         clan_id=clan_id,
         user_id_to_link=user_id,

@@ -57,7 +57,7 @@ class _FakePersonQueryHandler:
         return person
 
     async def get_persons_stats(
-        self, person_ids: list[uuid.UUID]
+        self, clan_id: uuid.UUID, person_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, dict[str, int]]:
         return {pid: {"spouse_count": 1, "child_count": 2} for pid in person_ids}
 
