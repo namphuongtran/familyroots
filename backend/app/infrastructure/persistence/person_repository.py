@@ -203,7 +203,7 @@ class SqlAlchemyPersonRepository:
                  AND pc.created_by_clan_id=:clan_id) as child_count
             FROM public.persons p
             WHERE p.id = ANY(:pids)
-        """).bindparams(pids=[str(pid) for pid in person_ids], clan_id=str(clan_id))
+        """).bindparams(pids=person_ids, clan_id=clan_id)
         result = await self._session.execute(stmt)
         return {
             uuid.UUID(str(row["id"])): {
