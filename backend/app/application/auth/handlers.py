@@ -248,7 +248,7 @@ class AuthCommandHandler:
             raise AuthenticationError(_INVALID_CREDENTIALS) from exc
 
         user_id = uuid.UUID(identity.user_id)
-        row = await self._repo.get_login_profile(user_id)
+        view = await self._repo.get_login_profile(user_id)
 
         return LoginResponse(
             access_token=identity.tokens.access_token,
@@ -258,13 +258,12 @@ class AuthCommandHandler:
                 id=user_id,
                 email=email,
                 full_name=identity.full_name,
-                clan_id=row.UserClanRole.clan_id if row and row.UserClanRole else None,
-                clan_name=row.Clan.name if row and row.Clan else None,
-                role=row.UserClanRole.role
-                if row and row.UserClanRole and row.UserClanRole.is_approved
-                else None,
-                is_approved=row.UserClanRole.is_approved if row and row.UserClanRole else False,
-                person_id=row.UserProfile.person_id if row else None,
+                clan_id=view.clan_id if view else None,
+                clan_name=view.clan_name if view else None,
+                # A pending membership carries a role but grants nothing yet.
+                role=view.role if view and view.is_approved else None,
+                is_approved=view.is_approved if view else False,
+                person_id=view.person_id if view else None,
             ),
         )
 
@@ -277,19 +276,21 @@ class AuthQueryHandler:
 
     async def get_profile(self, *, user_id: uuid.UUID, email: str, full_name: str) -> UserProfile:
         """Return the authenticated user's profile."""
-        row = await self._query_port.get_profile(user_id)
+        # get_profile joins approved memberships only, so a membership present in
+        # the view is by definition approved.
+        view = await self._query_port.get_profile(user_id)
         has_pending_membership = await self._query_port.has_pending_membership(user_id)
 
         return UserProfile(
             id=user_id,
             email=email,
             full_name=full_name,
-            clan_id=row.UserClanRole.clan_id if row and row.UserClanRole else None,
-            clan_name=row.Clan.name if row and row.Clan else None,
-            role=row.UserClanRole.role if row and row.UserClanRole else None,
-            is_approved=bool(row and row.UserClanRole),
+            clan_id=view.clan_id if view else None,
+            clan_name=view.clan_name if view else None,
+            role=view.role if view else None,
+            is_approved=view.is_approved if view else False,
             has_pending_membership=has_pending_membership,
-            person_id=row.UserProfile.person_id if row else None,
+            person_id=view.person_id if view else None,
         )
 
 

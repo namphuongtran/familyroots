@@ -1,9 +1,27 @@
-"""Repository protocols for Auth bounded context."""
+"""Repository protocols and read models for the Auth bounded context."""
 
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from typing import Any, Protocol
+
+
+@dataclass(frozen=True)
+class AuthProfileView:
+    """Flattened profile + membership + clan read model.
+
+    Replaces the raw SQLAlchemy ``Row`` that used to cross this seam — handlers
+    consume typed fields instead of ``row.<MappedClassName>`` attribute access
+    (which silently depends on ORM class names and broke at runtime).
+    ``clan_id``/``clan_name``/``role`` are None when the user has no membership.
+    """
+
+    person_id: uuid.UUID | None = None
+    clan_id: uuid.UUID | None = None
+    clan_name: str | None = None
+    role: str | None = None
+    is_approved: bool = False
 
 
 class AuthRepository(Protocol):
@@ -21,7 +39,7 @@ class AuthRepository(Protocol):
         """Get an existing membership for a user in a clan."""
         ...
 
-    async def get_login_profile(self, user_id: uuid.UUID) -> Any | None:
+    async def get_login_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
         """Get the login profile (profile + membership + clan, incl. pending roles)."""
         ...
 
@@ -43,12 +61,8 @@ class AuthRepository(Protocol):
 class AuthQueryPort(Protocol):
     """Abstract persistence contract for Auth read operations."""
 
-    async def get_profile(self, user_id: uuid.UUID) -> Any | None:
+    async def get_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
         """Get approved profile for a user ID."""
-        ...
-
-    async def get_login_profile(self, user_id: uuid.UUID) -> Any | None:
-        """Get initial login profile for a user ID (including pending roles)."""
         ...
 
     async def has_pending_membership(self, user_id: uuid.UUID) -> bool:

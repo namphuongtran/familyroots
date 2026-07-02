@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.me.query_port import MeQueryPort
+from app.domain.me.query_port import ClanMembershipView, MeQueryPort
 
 
 class SqlAlchemyMeQueryPort(MeQueryPort):
@@ -17,7 +16,7 @@ class SqlAlchemyMeQueryPort(MeQueryPort):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_clans(self, user_id: str) -> list[Any]:
+    async def list_clans(self, user_id: str) -> list[ClanMembershipView]:
         result = await self._session.execute(
             text(
                 # user_clan_roles has no joined_at column; created_at is the row's
@@ -31,9 +30,20 @@ class SqlAlchemyMeQueryPort(MeQueryPort):
             ),
             {"user_id": user_id},
         )
-        return list(result.fetchall())
+        return [
+            ClanMembershipView(
+                clan_id=row["clan_id"],
+                clan_name=row["clan_name"],
+                clan_slug=row["clan_slug"],
+                role=row["role"],
+                joined_at=row["joined_at"],
+            )
+            for row in result.mappings()
+        ]
 
-    async def get_clan_membership(self, user_id: str, clan_id: uuid.UUID) -> Any | None:
+    async def get_clan_membership(
+        self, user_id: str, clan_id: uuid.UUID
+    ) -> ClanMembershipView | None:
         result = await self._session.execute(
             text(
                 "SELECT ucr.clan_id, c.name AS clan_name, c.slug AS clan_slug, "
@@ -45,4 +55,12 @@ class SqlAlchemyMeQueryPort(MeQueryPort):
             ),
             {"user_id": user_id, "clan_id": str(clan_id)},
         )
-        return result.fetchone()
+        row = result.mappings().first()
+        if row is None:
+            return None
+        return ClanMembershipView(
+            clan_id=row["clan_id"],
+            clan_name=row["clan_name"],
+            clan_slug=row["clan_slug"],
+            role=row["role"],
+        )

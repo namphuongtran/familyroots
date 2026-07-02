@@ -124,10 +124,10 @@ async def test_me_list_clans_executes(async_engine: AsyncEngine) -> None:
 
         rows = await SqlAlchemyMeQueryPort(session).list_clans(str(user_id))
         assert len(rows) == 1
-        row = rows[0]._mapping
-        assert row["clan_id"] == clan_id
-        assert row["role"] == "admin"
-        assert row["joined_at"] is not None  # aliased from created_at
+        view = rows[0]  # typed ClanMembershipView, not a raw Row
+        assert view.clan_id == clan_id
+        assert view.role == "admin"
+        assert view.joined_at is not None  # aliased from created_at
 
 
 # ── C3: tree SQL functions exist and traverse a seeded graph ──────────────────────
