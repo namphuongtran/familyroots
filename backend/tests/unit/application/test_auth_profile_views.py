@@ -49,7 +49,7 @@ def _login_handler(view: AuthProfileView | None) -> AuthCommandHandler:
     return AuthCommandHandler(
         repo=None,  # type: ignore[arg-type]  # login never touches the write repo
         uow=None,  # type: ignore[arg-type]
-        identity=_StubIdentity(),
+        identity=_StubIdentity(),  # type: ignore[arg-type]  # stub: only sign_in is used
         query_port=_StubQueryPort(view),
     )
 

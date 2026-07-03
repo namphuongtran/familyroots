@@ -79,7 +79,7 @@ async def test_register_does_not_swallow_unavailable_into_422() -> None:
     handler = AuthCommandHandler(
         repo=None,  # type: ignore[arg-type]
         uow=None,  # type: ignore[arg-type]
-        identity=_UnavailableIdentity(),
+        identity=_UnavailableIdentity(),  # type: ignore[arg-type]  # stub: only create_user is used
         query_port=None,  # type: ignore[arg-type]
     )
     with pytest.raises(IdentityUnavailableError):
