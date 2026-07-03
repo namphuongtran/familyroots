@@ -50,7 +50,9 @@ services:
       start_period: 10s
     volumes:
       - ./backend/app:/app/app:ro
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Dev bootstrap: migrate to head before serving so a fresh pgdb volume works
+    # out of the box (an unmigrated DB previously 500'd on nearly every endpoint).
+    command: sh -c "python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     networks:
       - familyroots
 
