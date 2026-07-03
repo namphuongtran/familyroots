@@ -52,7 +52,6 @@ class MarriageCommandHandler:
             spouse_order=cmd.spouse_order,
             notes=cmd.notes,
         )
-        self._uow.track(marriage)
         await self._repo.save(marriage)
         await self._uow.commit()
         return MarriageResponse.model_validate(marriage)
@@ -63,7 +62,6 @@ class MarriageCommandHandler:
             raise EntityNotFoundError("marriage_not_found")
 
         marriage.update(cmd.changes, cmd.actor, cmd.clan_id)
-        self._uow.track(marriage)
         await self._repo.save(marriage)
         await self._uow.commit()
         return MarriageResponse.model_validate(marriage)
@@ -74,7 +72,6 @@ class MarriageCommandHandler:
             raise EntityNotFoundError("marriage_not_found")
 
         marriage.soft_delete(cmd.actor, cmd.clan_id)
-        self._uow.track(marriage)
         await self._repo.save(marriage)
         await self._uow.commit()
 
@@ -109,7 +106,6 @@ class ParentChildCommandHandler:
             birth_order=cmd.birth_order,
             notes=cmd.notes,
         )
-        self._uow.track(link)
         await self._repo.save(link)
         await self._uow.commit()
         return ParentChildResponse.model_validate(link), warning
@@ -120,7 +116,6 @@ class ParentChildCommandHandler:
             raise EntityNotFoundError("parent_child_not_found")
 
         link.update(cmd.changes, cmd.actor, cmd.clan_id)
-        self._uow.track(link)
         await self._repo.save(link)
         await self._uow.commit()
         return ParentChildResponse.model_validate(link)
@@ -131,7 +126,6 @@ class ParentChildCommandHandler:
             raise EntityNotFoundError("parent_child_not_found")
 
         link.soft_delete(cmd.actor, cmd.clan_id)
-        self._uow.track(link)
         await self._repo.save(link)
         await self._uow.commit()
 

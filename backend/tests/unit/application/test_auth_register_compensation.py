@@ -14,7 +14,9 @@ async def test_register_deletes_provider_user_on_db_failure(monkeypatch):
     identity = AsyncMock()
     identity.create_user.return_value = str(new_id)
 
-    handler = AuthCommandHandler(repo=MagicMock(), uow=MagicMock(), identity=identity)
+    handler = AuthCommandHandler(
+        repo=MagicMock(), uow=MagicMock(), identity=identity, query_port=MagicMock()
+    )
 
     async def _boom(**kwargs):
         raise RuntimeError("db exploded")

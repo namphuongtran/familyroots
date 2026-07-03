@@ -30,14 +30,6 @@ class _StubIdentity:
         )
 
 
-class _StubRepo:
-    def __init__(self, view: AuthProfileView | None) -> None:
-        self._view = view
-
-    async def get_login_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
-        return self._view
-
-
 class _StubQueryPort:
     def __init__(self, view: AuthProfileView | None, pending: bool = False) -> None:
         self._view = view
@@ -46,12 +38,20 @@ class _StubQueryPort:
     async def get_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
         return self._view
 
+    async def get_login_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
+        return self._view
+
     async def has_pending_membership(self, user_id: uuid.UUID) -> bool:
         return self._pending
 
 
 def _login_handler(view: AuthProfileView | None) -> AuthCommandHandler:
-    return AuthCommandHandler(_StubRepo(view), uow=None, identity=_StubIdentity())  # type: ignore[arg-type]
+    return AuthCommandHandler(
+        repo=None,  # type: ignore[arg-type]  # login never touches the write repo
+        uow=None,  # type: ignore[arg-type]
+        identity=_StubIdentity(),  # type: ignore[arg-type]  # stub: only sign_in is used
+        query_port=_StubQueryPort(view),
+    )
 
 
 @pytest.mark.asyncio

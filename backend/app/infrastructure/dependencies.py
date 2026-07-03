@@ -138,7 +138,12 @@ def get_platform_admin_query_handler(
 
 def get_auth_command_handler(db: AsyncSession = Depends(get_db)) -> AuthCommandHandler:
     uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
-    return AuthCommandHandler(SqlAlchemyAuthRepository(db), uow, SupabaseIdentityProvider())
+    return AuthCommandHandler(
+        SqlAlchemyAuthRepository(db),
+        uow,
+        SupabaseIdentityProvider(),
+        SqlAlchemyAuthQueryPort(db),
+    )
 
 
 def get_auth_query_handler(db: AsyncSession = Depends(get_db)) -> AuthQueryHandler:

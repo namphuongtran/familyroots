@@ -7,6 +7,12 @@ Wraps an ``AsyncSession`` and adds domain event dispatching. On
 2. Collects domain events from all tracked aggregates
 3. Dispatches events to handlers (audit log, notifications, …)
 4. Commits the transaction (including any audit log rows added by handlers)
+
+Tracking convention: aggregates are tracked at the **repository seam** —
+``save()``/``delete()`` call ``uow.track()`` so it cannot be forgotten. Handlers
+only track *transient* aggregates they construct themselves (the lightweight
+CRUD audit helper in ``app/application/shared/audit.py`` and the clan/invitation
+handlers); they never re-track what a repository persists.
 """
 
 from __future__ import annotations
