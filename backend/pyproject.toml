@@ -87,6 +87,80 @@ module = [
 ]
 ignore_missing_imports = true
 
+# ── Hexagonal boundaries, enforced by machine (run: uv run lint-imports) ──
+# The convention lived only in CLAUDE.md/reviews before; import-linter makes a
+# violation a CI failure instead of a review catch. "Ratchet" contracts pin
+# today's known debt via ignore_imports — the lists may shrink, never grow.
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Domain layer is pure: no outer layers, no frameworks"
+type = "forbidden"
+source_modules = ["app.domain"]
+forbidden_modules = [
+    "app.api",
+    "app.application",
+    "app.core",
+    "app.i18n",
+    "app.infrastructure",
+    "app.main",
+    "app.middleware",
+    "app.models",
+    "app.schemas",
+    "app.services",
+    "fastapi",
+    "sqlalchemy",
+    "pydantic",
+    "pydantic_settings",
+    "alembic",
+    "supabase",
+    "httpx",
+    "jose",
+    "firebase_admin",
+    "apscheduler",
+]
+
+[[tool.importlinter.contracts]]
+name = "Application layer depends inward only (never on adapters or routes)"
+type = "forbidden"
+source_modules = ["app.application"]
+forbidden_modules = [
+    "app.api",
+    "app.infrastructure",
+    "app.main",
+    "app.middleware",
+]
+
+[[tool.importlinter.contracts]]
+name = "Ratchet: application must not import ORM models (CQRS write side goes through domain + ports)"
+type = "forbidden"
+source_modules = ["app.application"]
+forbidden_modules = ["app.models"]
+allow_indirect_imports = true
+ignore_imports = [
+    "app.application.auth.handlers -> app.models.clan",
+    "app.application.auth.handlers -> app.models.user_clan_role",
+    "app.application.invitation.handlers -> app.models.clan_invitation",
+    "app.application.invitation.handlers -> app.models.user_clan_role",
+    "app.application.person.claim_handlers -> app.models.audit_log",
+    "app.application.person.claim_handlers -> app.models.identity_claim",
+    "app.application.person.claim_handlers -> app.models.user_clan_role",
+]
+
+[[tool.importlinter.contracts]]
+name = "API layer never touches SQLAlchemy or ORM models directly"
+type = "forbidden"
+source_modules = ["app.api"]
+forbidden_modules = ["sqlalchemy", "app.models"]
+allow_indirect_imports = true
+ignore_imports = [
+    # get_super_admin returns the UserProfile ORM row; the route needs the type.
+    # Known debt — remove when core/security grows a read-model for it.
+    "app.api.v1.platform_admin -> app.models.user_profile",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -100,6 +174,7 @@ markers = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "import-linter>=2.13",
     "mypy>=1.19.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",

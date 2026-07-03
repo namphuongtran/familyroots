@@ -46,21 +46,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --dev
 
-      - name: Lint (ruff check)
-        run: uvx ruff check .
-
-      - name: Format check (ruff format)
-        run: uvx ruff format --check .
-
-      - name: Type check (mypy)
-        run: uv run mypy app/ tests/
-
-      - name: Run tests
+      # The gate is one script shared with local dev (scripts/check.sh): CI and
+      # humans always run the identical, lockfile-pinned commands — a branch
+      # that fails here fails locally and vice versa.
+      - name: Gate (format, lint, import contracts, types, tests)
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/family_roots_test
           APP_ENV: testing
           APP_SECRET_KEY: test-secret-key
-        run: uv run pytest tests/ --cov=app --cov-report=xml
+        run: ./scripts/check.sh
 
       - name: Upload coverage to Codecov
         if: github.event_name == 'push'

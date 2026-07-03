@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from app.middleware.language_middleware import current_locale
+from app.core.locale import current_locale
 
 _translations: dict[str, dict[str, str]] = {}
 

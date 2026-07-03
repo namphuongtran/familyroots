@@ -16,9 +16,11 @@ network I/O at construction, so a MagicMock session is sufficient.
 """
 
 import inspect
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import params as fastapi_params
 
 from app.infrastructure import dependencies as deps
 
@@ -33,9 +35,22 @@ def test_providers_are_discovered() -> None:
     assert len(PROVIDERS) >= 20, PROVIDERS
 
 
+def _invoke_provider(provider: Any) -> Any:
+    """Call a provider, resolving each parameter the way FastAPI would:
+    ``db`` gets a mock session; a ``Depends(other_provider)`` default is
+    resolved by invoking that provider recursively. This keeps the guard
+    honest for provider-to-provider wiring (e.g. ``get_identity_provider``)."""
+    kwargs = {}
+    for name, param in inspect.signature(provider).parameters.items():
+        if name == "db":
+            kwargs[name] = MagicMock()
+        elif isinstance(param.default, fastapi_params.Depends) and callable(
+            param.default.dependency
+        ):
+            kwargs[name] = _invoke_provider(param.default.dependency)
+    return provider(**kwargs)
+
+
 @pytest.mark.parametrize("provider_name", PROVIDERS)
 def test_di_provider_wires_without_error(provider_name: str) -> None:
-    provider = getattr(deps, provider_name)
-    params = inspect.signature(provider).parameters
-    kwargs = {"db": MagicMock()} if "db" in params else {}
-    assert provider(**kwargs) is not None
+    assert _invoke_provider(getattr(deps, provider_name)) is not None
