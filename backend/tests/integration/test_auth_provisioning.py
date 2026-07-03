@@ -11,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.application.auth.handlers import AuthCommandHandler
 from app.infrastructure.event_dispatcher import create_event_dispatcher
-from app.infrastructure.persistence.auth_repository import SqlAlchemyAuthRepository
+from app.infrastructure.persistence.auth_repository import (
+    SqlAlchemyAuthQueryPort,
+    SqlAlchemyAuthRepository,
+)
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -29,7 +32,7 @@ async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
 async def test_register_create_clan_provisions_profile(async_session: AsyncSession) -> None:
     repo = SqlAlchemyAuthRepository(async_session)
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = AuthCommandHandler(repo, uow, AsyncMock())
+    handler = AuthCommandHandler(repo, uow, AsyncMock(), SqlAlchemyAuthQueryPort(async_session))
 
     user_id = uuid.uuid4()
     slug = f"clan-{user_id.hex[:8]}"
@@ -60,7 +63,7 @@ async def test_register_create_clan_provisions_profile(async_session: AsyncSessi
 async def test_register_join_clan_provisions_profile(async_session: AsyncSession) -> None:
     repo = SqlAlchemyAuthRepository(async_session)
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = AuthCommandHandler(repo, uow, AsyncMock())
+    handler = AuthCommandHandler(repo, uow, AsyncMock(), SqlAlchemyAuthQueryPort(async_session))
 
     # An admin creates a clan to join.
     admin_id = uuid.uuid4()

@@ -39,10 +39,6 @@ class AuthRepository(Protocol):
         """Get an existing membership for a user in a clan."""
         ...
 
-    async def get_login_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
-        """Get the login profile (profile + membership + clan, incl. pending roles)."""
-        ...
-
     def add_clan(self, clan: Any) -> None:
         """Add a new clan to persistence context."""
         ...
@@ -63,6 +59,14 @@ class AuthQueryPort(Protocol):
 
     async def get_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
         """Get approved profile for a user ID."""
+        ...
+
+    async def get_login_profile(self, user_id: uuid.UUID) -> AuthProfileView | None:
+        """Login profile (profile + membership + clan, *including* pending roles).
+
+        Lives on the query port, not the write repository: it is a projection
+        read — the CQRS rule here is that command handlers load aggregates via
+        repositories but read projections via query ports."""
         ...
 
     async def has_pending_membership(self, user_id: uuid.UUID) -> bool:

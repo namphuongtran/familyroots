@@ -82,12 +82,22 @@ _INVALID_CREDENTIALS = "auth.invalid_credentials"
 
 
 class AuthCommandHandler:
-    """Handles Auth write operations."""
+    """Handles Auth write operations.
 
-    def __init__(self, repo: AuthRepository, uow: UnitOfWork, identity: IdentityProvider) -> None:
+    Loads/persists via ``repo`` + ``uow``; projection reads (the login profile)
+    go through the ``query_port`` — the CQRS seam rule."""
+
+    def __init__(
+        self,
+        repo: AuthRepository,
+        uow: UnitOfWork,
+        identity: IdentityProvider,
+        query_port: AuthQueryPort,
+    ) -> None:
         self._repo = repo
         self._uow = uow
         self._identity = identity
+        self._query_port = query_port
 
     async def _assign_clan_membership(
         self,
@@ -253,7 +263,7 @@ class AuthCommandHandler:
             raise AuthenticationError(_INVALID_CREDENTIALS) from exc
 
         user_id = uuid.UUID(identity.user_id)
-        view = await self._repo.get_login_profile(user_id)
+        view = await self._query_port.get_login_profile(user_id)
 
         return LoginResponse(
             access_token=identity.tokens.access_token,

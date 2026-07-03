@@ -68,7 +68,6 @@ class PersonCommandHandler:
             created_by_clan_id=cmd.created_by_clan_id or cmd.clan_id,
         )
 
-        self._uow.track(person)
         await self._repo.save_with_membership(
             person,
             clan_id=cmd.clan_id,
@@ -111,7 +110,6 @@ class PersonCommandHandler:
                 raise ForbiddenError("field_not_updatable", {"fields": sorted(invalid_fields)})
 
         person.update(cmd.changes, cmd.actor, cmd.clan_id)
-        self._uow.track(person)
         await self._repo.save(person)
         await self._uow.commit()
         return PersonResponse.model_validate(person)
@@ -123,7 +121,6 @@ class PersonCommandHandler:
             raise EntityNotFoundError("person_not_found")
 
         person.soft_delete(cmd.actor, cmd.clan_id)
-        self._uow.track(person)
         await self._repo.save(person)
         await self._uow.commit()
 
@@ -134,7 +131,6 @@ class PersonCommandHandler:
             raise EntityNotFoundError("person_not_found")
 
         person.restore(cmd.actor, cmd.clan_id)
-        self._uow.track(person)
         await self._repo.save(person)
         await self._uow.commit()
         return PersonResponse.model_validate(person)

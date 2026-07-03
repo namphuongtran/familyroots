@@ -76,7 +76,12 @@ class _UnavailableIdentity:
 async def test_register_does_not_swallow_unavailable_into_422() -> None:
     """IdentityUnavailableError extends IdentityError — register must re-raise it
     (→ the global 503 handler), not convert it to 422 registration_failed."""
-    handler = AuthCommandHandler(repo=None, uow=None, identity=_UnavailableIdentity())  # type: ignore[arg-type]
+    handler = AuthCommandHandler(
+        repo=None,  # type: ignore[arg-type]
+        uow=None,  # type: ignore[arg-type]
+        identity=_UnavailableIdentity(),
+        query_port=None,  # type: ignore[arg-type]
+    )
     with pytest.raises(IdentityUnavailableError):
         await handler.register(
             email="a@b.c",

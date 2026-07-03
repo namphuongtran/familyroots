@@ -53,7 +53,6 @@ class BranchCommandHandler:
             parent_branch_id=parent_branch_id,
             branch_order=branch_order,
         )
-        self._uow.track(branch)
         await self._repo.save(branch)
         await self._uow.commit()
 
@@ -95,7 +94,6 @@ class BranchCommandHandler:
             raise EntityNotFoundError("person_not_found", {"person_id": str(new_founder)})
 
         branch.update(changes, actor)
-        self._uow.track(branch)
         await self._repo.save(branch)
         await self._uow.commit()
 
@@ -120,7 +118,6 @@ class BranchCommandHandler:
     ) -> None:
         branch = await self._get_or_raise(branch_id, clan_id)
         branch.delete(actor)
-        self._uow.track(branch)
         await self._repo.delete(branch)
         await self._uow.commit()
 
