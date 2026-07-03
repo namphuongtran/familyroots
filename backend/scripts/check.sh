@@ -12,10 +12,14 @@
 # Integration tests need Postgres: `docker compose up -d pgdb` from the repo
 # root (CI provides its own service container).
 #
+# Known divergence: env vars. CI sets DATABASE_URL / APP_ENV=testing /
+# APP_SECRET_KEY on the workflow step; locally the suite reads your shell and
+# backend/.env. The commands are identical — the environment is yours.
+#
 # Usage: scripts/check.sh [extra pytest args...]
 
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 PYTEST_EXTRA=("$@")
 failed=()

@@ -155,16 +155,15 @@ def client(
     app.dependency_overrides[get_identity_provider] = lambda: stub_identity
     # No context manager: lifespan (Sentry/Firebase/scheduler/migration check)
     # must stay out of scope — this suite tests the request path only.
+    #
+    # Budget note: RateLimitMiddleware allows 20 req/min/IP on /api/v1/auth and
+    # this app instance is shared module-wide — currently ~9 auth-path requests.
+    # Hitting mysterious 429s after adding tests? You've spent the budget.
     yield TestClient(app)
+    engine.sync_engine.dispose()
 
 
-# ── Happy path: the full flow that hid #12/#13 ────────────────────
-
-
-def test_register_login_me_clans_create_person(client: TestClient) -> None:
-    email, password = "smoke-founder@example.com", "s3cret-pass"
-
-    # Register, creating a clan → approved admin membership.
+def _register(client: TestClient, email: str, password: str, slug: str) -> dict[str, Any]:
     resp = client.post(
         "/api/v1/auth/register",
         json={
@@ -173,11 +172,35 @@ def test_register_login_me_clans_create_person(client: TestClient) -> None:
             "full_name": "Smoke Founder",
             "clan_action": "create",
             "clan_name": "Smoke Clan",
-            "clan_slug": "smoke-clan",
+            "clan_slug": slug,
         },
     )
     assert resp.status_code == 201, resp.text
-    reg = resp.json()
+    result: dict[str, Any] = resp.json()
+    return result
+
+
+@pytest.fixture(scope="module")
+def founder(client: TestClient) -> dict[str, Any]:
+    """A registered clan founder for the negative tests, so each of them is
+    self-contained (runnable via -k) instead of depending on the happy path.
+    Identifiers are unique per run — the migrated DB is session-scoped and
+    shared with other integration modules."""
+    email = f"smoke-founder-{uuid.uuid4().hex[:8]}@example.com"
+    password = "s3cret-pass"
+    reg = _register(client, email, password, f"smoke-clan-{uuid.uuid4().hex[:8]}")
+    return {"email": email, "password": password, "clan_id": reg["clan_id"]}
+
+
+# ── Happy path: the full flow that hid #12/#13 ────────────────────
+
+
+def test_register_login_me_clans_create_person(client: TestClient) -> None:
+    email = f"smoke-flow-{uuid.uuid4().hex[:8]}@example.com"
+    password = "s3cret-pass"
+
+    # Register, creating a clan → approved admin membership.
+    reg = _register(client, email, password, f"smoke-flow-{uuid.uuid4().hex[:8]}")
     assert reg["is_approved"] is True
     clan_id = reg["clan_id"]
 
@@ -239,34 +262,34 @@ def test_garbage_token_is_401_invalid_token(client: TestClient) -> None:
     assert resp.json()["error"]["code"] == "invalid_token"
 
 
-def test_wrong_password_is_401_invalid_credentials(client: TestClient) -> None:
+def test_wrong_password_is_401_invalid_credentials(
+    client: TestClient, founder: dict[str, Any]
+) -> None:
     resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "smoke-founder@example.com", "password": "wrong-password"},
+        json={"email": founder["email"], "password": "wrong-password"},
     )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "auth.invalid_credentials"
 
 
-def test_duplicate_email_registration_is_409(client: TestClient) -> None:
+def test_duplicate_email_registration_is_409(client: TestClient, founder: dict[str, Any]) -> None:
     resp = client.post(
         "/api/v1/auth/register",
         json={
-            "email": "smoke-founder@example.com",
+            "email": founder["email"],
             "password": "another-pass",
             "full_name": "Imposter",
             "clan_action": "create",
             "clan_name": "Other Clan",
-            "clan_slug": "other-clan",
+            "clan_slug": f"other-clan-{uuid.uuid4().hex[:8]}",
         },
     )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "auth.email_already_exists"
 
 
-def test_expired_token_is_rejected(
-    client: TestClient, rsa_keys: dict[str, Any], stub_identity: StubIdentityProvider
-) -> None:
+def test_expired_token_is_rejected(client: TestClient, rsa_keys: dict[str, Any]) -> None:
     """The real verifier must enforce expiry on an otherwise valid signature."""
     past = datetime.now(UTC) - timedelta(hours=2)
     claims = {

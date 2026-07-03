@@ -111,7 +111,10 @@ forbidden_modules = [
     "app.schemas",
     "app.services",
     "fastapi",
+    "starlette",
     "sqlalchemy",
+    "psycopg",
+    "asyncpg",
     "pydantic",
     "pydantic_settings",
     "alembic",
@@ -147,6 +150,28 @@ ignore_imports = [
     "app.application.person.claim_handlers -> app.models.audit_log",
     "app.application.person.claim_handlers -> app.models.identity_claim",
     "app.application.person.claim_handlers -> app.models.user_clan_role",
+]
+
+[[tool.importlinter.contracts]]
+# app.core.exceptions subclasses HTTPException, so these imports leak the
+# framework into use-cases (domain exceptions in app.domain.shared.exceptions
+# are the replacement); translator/descriptor are service-layer helpers; config
+# should be injected. All are Phase 2 cleanup targets.
+name = "Ratchet: application must not import core/services/i18n (domain + schemas only)"
+type = "forbidden"
+source_modules = ["app.application"]
+forbidden_modules = ["app.core", "app.services", "app.i18n"]
+allow_indirect_imports = true
+ignore_imports = [
+    "app.application.auth.handlers -> app.core.exceptions",
+    "app.application.auth.handlers -> app.services.translator",
+    "app.application.document.handlers -> app.core.pagination",
+    "app.application.event.handlers -> app.core.pagination",
+    "app.application.invitation.handlers -> app.core.config",
+    "app.application.me.handlers -> app.core.exceptions",
+    "app.application.person.claim_handlers -> app.core.exceptions",
+    "app.application.platform_admin.handlers -> app.core.exceptions",
+    "app.application.tree.handlers -> app.services.relationship_descriptor",
 ]
 
 [[tool.importlinter.contracts]]
