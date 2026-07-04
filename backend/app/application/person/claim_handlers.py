@@ -86,7 +86,7 @@ class ClaimCommandHandler:
             person_id=claim.person_id,
             status=claim.status,
         )
-        entity.cancel(user_id)  # Raises ValueError if not owner or not PENDING
+        entity.cancel(user_id)  # ForbiddenError if not owner, ConflictError if not PENDING
 
         claim.status = entity.status
 

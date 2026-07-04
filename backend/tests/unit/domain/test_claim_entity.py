@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from app.domain.person.claim_entity import IdentityClaim
+from app.domain.shared.exceptions import ConflictError, ForbiddenError
 
 
 def test_claim_approve_success():
@@ -26,7 +27,7 @@ def test_claim_approve_invalid_state():
         id=uuid.uuid4(), user_id=uuid.uuid4(), person_id=uuid.uuid4(), status="REJECTED"
     )
     admin_id = uuid.uuid4()
-    with pytest.raises(ValueError, match="Only PENDING claims can be approved"):
+    with pytest.raises(ConflictError, match=r"claim\.not_pending"):
         claim.approve(admin_id=admin_id, reviewer_note="Oops")
 
 
@@ -46,7 +47,7 @@ def test_claim_reject_invalid_state():
     claim = IdentityClaim(
         id=uuid.uuid4(), user_id=uuid.uuid4(), person_id=uuid.uuid4(), status="CANCELLED"
     )
-    with pytest.raises(ValueError, match="Only PENDING claims can be rejected"):
+    with pytest.raises(ConflictError, match=r"claim\.not_pending"):
         claim.reject(admin_id=uuid.uuid4(), reviewer_note="...")
 
 
@@ -65,7 +66,7 @@ def test_claim_cancel_wrong_user():
     claim = IdentityClaim(
         id=uuid.uuid4(), user_id=user_id, person_id=uuid.uuid4(), status="PENDING"
     )
-    with pytest.raises(ValueError, match="Only the requester can cancel their claim"):
+    with pytest.raises(ForbiddenError, match=r"claim\.not_owned"):
         claim.cancel(user_id=wrong_user_id)
 
 
@@ -74,5 +75,5 @@ def test_claim_cancel_invalid_state():
     claim = IdentityClaim(
         id=uuid.uuid4(), user_id=user_id, person_id=uuid.uuid4(), status="APPROVED"
     )
-    with pytest.raises(ValueError, match="Only PENDING claims can be cancelled"):
+    with pytest.raises(ConflictError, match=r"claim\.not_pending"):
         claim.cancel(user_id=user_id)

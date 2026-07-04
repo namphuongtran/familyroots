@@ -18,6 +18,27 @@ from app.models.clan_membership import ClanMembership
 from app.models.person import Person as PersonModel
 from app.models.user_profile import UserProfile
 
+# Search SQL, module-level so it can be EXPLAIN-checked in tests. The filter and
+# ORDER BY use `public.f_unaccent(<col>)` — the EXACT expression the GIN trigram
+# indexes are built on (idx_persons_fullname_trgm / idx_persons_birthname_trgm,
+# migration 009). Using `unaccent(lower(...))` instead (as before) makes the
+# expression differ from the index and forces a full sequential scan.
+_SEARCH_SQL = """
+    SELECT p.id, p.full_name, p.birth_name, p.birth_date,
+         p.gender, p.avatar_url, cm.generation, cm.role AS membership_role,
+         cm.is_founder
+    FROM persons p
+    JOIN clan_memberships cm ON cm.person_id = p.id
+    WHERE cm.clan_id = :clan_id
+      AND p.is_deleted = false
+      AND (
+          public.f_unaccent(p.full_name) ILIKE '%' || public.f_unaccent(:q) || '%'
+          OR public.f_unaccent(p.birth_name) ILIKE '%' || public.f_unaccent(:q) || '%'
+      )
+    ORDER BY similarity(public.f_unaccent(p.full_name), public.f_unaccent(:q)) DESC
+    LIMIT :lim
+"""
+
 
 class SqlAlchemyPersonRepository:
     """Concrete Person repository backed by SQLAlchemy + PostgreSQL."""
@@ -104,22 +125,7 @@ class SqlAlchemyPersonRepository:
     ) -> list[PersonSearchResult]:
         """Trigram/unaccent search — encapsulates the raw SQL that was
         previously inline in the persons route handler."""
-        stmt = text("""
-            SELECT p.id, p.full_name, p.birth_name, p.birth_date,
-                 p.gender, p.avatar_url, cm.generation, cm.role AS membership_role,
-                 cm.is_founder
-            FROM persons p
-            JOIN clan_memberships cm ON cm.person_id = p.id
-            WHERE cm.clan_id = :clan_id
-              AND p.is_deleted = false
-              AND (
-                  unaccent(lower(p.full_name)) ILIKE '%' || unaccent(lower(:q)) || '%'
-                  OR unaccent(lower(COALESCE(p.birth_name, '')))
-                     ILIKE '%' || unaccent(lower(:q)) || '%'
-              )
-            ORDER BY similarity(unaccent(lower(p.full_name)), unaccent(lower(:q))) DESC
-            LIMIT :lim
-        """)
+        stmt = text(_SEARCH_SQL)
         result = await self._session.execute(stmt, {"clan_id": clan_id, "q": query, "lim": limit})
         rows = result.mappings().all()
         return [

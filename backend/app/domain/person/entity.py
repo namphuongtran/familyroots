@@ -19,7 +19,43 @@ from app.domain.person.events import (
     PersonUpdated,
 )
 from app.domain.shared.entity import AggregateRoot
+from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
+
+# Profile fields a client may change via update() (mirrors the PersonUpdate schema).
+# Excludes created_by_clan_id (origin/isolation), soft-delete, and audit columns —
+# those are set only by create()/soft_delete()/restore(), never a blind setattr.
+_UPDATABLE_FIELDS = frozenset(
+    {
+        "full_name",
+        "birth_name",
+        "courtesy_name",
+        "posthumous_name",
+        "alias_name",
+        "gender",
+        "birth_date",
+        "birth_date_approx",
+        "death_date",
+        "death_date_approx",
+        "lunar_birth_date",
+        "lunar_death_date",
+        "birth_place",
+        "death_place",
+        "burial_place",
+        "tomb_location",
+        "residence_place",
+        "religion",
+        "nationality",
+        "occupation",
+        "education_level",
+        "title_rank",
+        "phone",
+        "email",
+        "biography",
+        "avatar_url",
+        "notes",
+    }
+)
 
 
 @dataclass
@@ -120,6 +156,8 @@ class Person(AggregateRoot):
         """
         old_values: dict[str, object] = {}
         for field_name, new_value in changes.items():
+            if field_name not in _UPDATABLE_FIELDS:
+                raise BusinessRuleViolation("field_not_updatable", {"field": field_name})
             old_values[field_name] = getattr(self, field_name, None)
             setattr(self, field_name, new_value)
 
