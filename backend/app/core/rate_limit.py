@@ -82,6 +82,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         a permanent single-entry bucket and let an attacker rotating source IPs grow
         ``_hits`` without bound. This caps it to roughly the IPs seen in the last window.
         Runs only on rate-limited paths (the only ones that populate ``_hits``).
+
+        The peak between sweeps is still proportional to attack throughput (one bucket
+        per new IP per window); a hard ``len(_hits)`` cap would make the ceiling
+        rate-independent, but is unnecessary at auth-endpoint volumes.
         """
         if now - self._last_sweep < self._window:
             return

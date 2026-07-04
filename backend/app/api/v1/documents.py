@@ -31,9 +31,12 @@ async def upload_document(
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Upload a document/photo to storage and save metadata."""
-    # Read at most MAX+1 bytes so an oversized (or unbounded) upload can't exhaust
-    # server memory before the size check runs. The +1 makes a file at exactly the
-    # limit+1 boundary still trip Document.create's file_too_large validation.
+    # Read at most MAX+1 bytes: bounds the in-RAM copy so an oversized body isn't
+    # pulled into one huge `bytes` before the size check (the +1 still trips
+    # Document.create's file_too_large at the boundary). NOTE: this does NOT stop an
+    # unbounded upload from being spooled to a temp file first — the multipart parser
+    # already streams the full body to disk. A hard total-body-size limit belongs at
+    # the proxy / ASGI layer (see review doc M7); this only closes the RAM vector.
     content = await file.read(MAX_FILE_SIZE_BYTES + 1)
     result = await cmd_handler.upload(
         file_content=content,
