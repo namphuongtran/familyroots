@@ -165,7 +165,8 @@ def get_auth_query_handler(db: AsyncSession = Depends(get_db)) -> AuthQueryHandl
 
 
 def get_fcm_token_handler(db: AsyncSession = Depends(get_db)) -> FCMTokenHandler:
-    return FCMTokenHandler(SqlAlchemyFCMTokenRepository(db))
+    uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+    return FCMTokenHandler(SqlAlchemyFCMTokenRepository(db), uow)
 
 
 def get_auth_session_service(
