@@ -34,14 +34,19 @@ class _ExistingRole:
 
 
 class _FakeRepo:
-    def __init__(self, pending=None, by_token=None, existing_role=None, by_id=None):
+    def __init__(
+        self, pending=None, by_token=None, existing_role=None, by_id=None, transition_result=True
+    ):
         self._pending = pending
         self._by_token = by_token
         self._existing_role = existing_role
         self._by_id = by_id
+        self._transition_result = transition_result
         self.added_invitations = []
         self.added_roles = []
         self.ensured = []
+        self.transition_calls = []
+        self.call_order = []
 
     async def get_pending_by_email(self, clan_id, email):
         return self._pending
@@ -56,13 +61,37 @@ class _FakeRepo:
         self.added_invitations.append(inv)
 
     async def ensure_profile(self, user_id, email, display_name):
+        self.call_order.append("ensure_profile")
         self.ensured.append(user_id)
 
     async def get_user_role(self, user_id, clan_id):
         return self._existing_role
 
     def add_user_role(self, role):
+        self.call_order.append("add_user_role")
         self.added_roles.append(role)
+
+    async def transition_status(
+        self, invitation_id, *, expected, to, accepted_by=None, accepted_at=None
+    ):
+        self.call_order.append("transition_status")
+        self.transition_calls.append(
+            {
+                "invitation_id": invitation_id,
+                "expected": expected,
+                "to": to,
+                "accepted_by": accepted_by,
+                "accepted_at": accepted_at,
+            }
+        )
+        if self._transition_result:
+            # Mirror the real repo's atomic write so the in-memory fake stays
+            # consistent with the DB-backed implementation.
+            if self._by_token is not None and self._by_token.id == invitation_id:
+                self._by_token.status = to
+            if self._by_id is not None and self._by_id.id == invitation_id:
+                self._by_id.status = to
+        return self._transition_result
 
 
 class _FakeUow:
@@ -229,3 +258,57 @@ async def test_revoke_not_found():
         await handler.revoke(
             RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=uuid.uuid4(), actor=_actor())
         )
+
+
+@pytest.mark.asyncio
+async def test_accept_conflicts_when_transition_loses_race():
+    """A concurrent revoke wins the row: transition_status returns False,
+    so accept must 409 and never grant a role."""
+    inv = _Inv(
+        clan_id=uuid.uuid4(),
+        email="a@x.com",
+        role="editor",
+        invited_by=uuid.uuid4(),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+    )
+    repo = _FakeRepo(by_token=inv, transition_result=False)
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
+    with pytest.raises(ConflictError, match=r"invitation\.not_pending"):
+        await handler.accept(
+            AcceptInvitation(
+                token="t", user_id=uuid.uuid4(), user_email="a@x.com", user_full_name="X"
+            )
+        )
+    assert repo.added_roles == []
+
+
+@pytest.mark.asyncio
+async def test_revoke_conflicts_when_transition_loses_race():
+    """A concurrent accept wins the row: transition_status returns False,
+    so revoke must 409."""
+    inv = _Inv(status="pending")
+    repo = _FakeRepo(by_id=inv, transition_result=False)
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
+    with pytest.raises(ConflictError, match=r"invitation\.not_pending"):
+        await handler.revoke(
+            RevokeInvitation(clan_id=uuid.uuid4(), invitation_id=inv.id, actor=_actor())
+        )
+
+
+@pytest.mark.asyncio
+async def test_accept_claims_before_granting_role():
+    """transition_status must be called before add_user_role, so a lost
+    race can never leave a granted role behind."""
+    inv = _Inv(
+        clan_id=uuid.uuid4(),
+        email="a@x.com",
+        role="editor",
+        invited_by=uuid.uuid4(),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+    )
+    repo = _FakeRepo(by_token=inv)
+    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
+    await handler.accept(
+        AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="a@x.com", user_full_name="X")
+    )
+    assert repo.call_order.index("transition_status") < repo.call_order.index("add_user_role")

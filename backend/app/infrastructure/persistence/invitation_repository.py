@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.invitation.repository import InvitationRepository
@@ -63,6 +64,28 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
             )
         )
         return result.scalar_one_or_none()
+
+    async def transition_status(
+        self,
+        invitation_id: uuid.UUID,
+        *,
+        expected: str,
+        to: str,
+        accepted_by: uuid.UUID | None = None,
+        accepted_at: datetime | None = None,
+    ) -> bool:
+        values: dict[str, object] = {"status": to}
+        if accepted_by is not None:
+            values["accepted_by"] = accepted_by
+        if accepted_at is not None:
+            values["accepted_at"] = accepted_at
+        result = await self._session.execute(
+            update(ClanInvitation)
+            .where(ClanInvitation.id == invitation_id, ClanInvitation.status == expected)
+            .values(**values)
+            .execution_options(synchronize_session=False)
+        )
+        return bool(result.rowcount)
 
     def add_user_role(self, role: UserClanRole) -> None:
         self._session.add(role)

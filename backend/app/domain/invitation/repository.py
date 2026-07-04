@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any, Protocol
 
 
@@ -39,4 +40,21 @@ class InvitationRepository(Protocol):
 
     async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Any | None:
         """Return a clan-scoped invitation by its primary key, if any."""
+        ...
+
+    async def transition_status(
+        self,
+        invitation_id: uuid.UUID,
+        *,
+        expected: str,
+        to: str,
+        accepted_by: uuid.UUID | None = None,
+        accepted_at: datetime | None = None,
+    ) -> bool:
+        """Atomically move status ``expected`` → ``to``.
+
+        Returns False (and writes nothing) if the row is no longer in
+        ``expected`` — the DB-side guard that closes the accept-vs-revoke race
+        (C3, seam-review-2026-07-04). The in-memory status checks in the
+        handler remain only as fast, friendly-error paths."""
         ...
