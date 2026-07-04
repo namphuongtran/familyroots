@@ -186,19 +186,22 @@ class SqlAlchemyRelationshipQueryPort:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def count_bio_parents(self, child_id: uuid.UUID) -> int:
+    async def count_bio_parents(self, child_id: uuid.UUID, clan_id: uuid.UUID) -> int:
         result = await self._session.execute(
             text("""
                 SELECT COUNT(*) FROM public.parent_child
                 WHERE child_id = :child_id
+                  AND created_by_clan_id = :clan_id
                   AND relationship_type = 'biological'
                   AND is_deleted = false
             """),
-            {"child_id": child_id},
+            {"child_id": child_id, "clan_id": clan_id},
         )
         return int(result.scalar() or 0)
 
-    async def has_active_marriage(self, person1_id: uuid.UUID, person2_id: uuid.UUID) -> bool:
+    async def has_active_marriage(
+        self, person1_id: uuid.UUID, person2_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool:
         result = await self._session.execute(
             text("""
                 SELECT 1 FROM public.marriages
@@ -206,24 +209,28 @@ class SqlAlchemyRelationshipQueryPort:
                     (person1_id = :p1 AND person2_id = :p2)
                     OR (person1_id = :p2 AND person2_id = :p1)
                 )
+                AND created_by_clan_id = :clan_id
                 AND status NOT IN ('divorced')
                 AND is_deleted = false
                 LIMIT 1
             """),
-            {"p1": person1_id, "p2": person2_id},
+            {"p1": person1_id, "p2": person2_id, "clan_id": clan_id},
         )
         return result.first() is not None
 
-    async def has_parent_child_link(self, parent_id: uuid.UUID, child_id: uuid.UUID) -> bool:
+    async def has_parent_child_link(
+        self, parent_id: uuid.UUID, child_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool:
         result = await self._session.execute(
             text("""
                 SELECT 1 FROM public.parent_child
                 WHERE parent_id = :parent_id
                   AND child_id = :child_id
+                  AND created_by_clan_id = :clan_id
                   AND is_deleted = false
                 LIMIT 1
             """),
-            {"parent_id": parent_id, "child_id": child_id},
+            {"parent_id": parent_id, "child_id": child_id, "clan_id": clan_id},
         )
         return result.first() is not None
 

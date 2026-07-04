@@ -22,9 +22,13 @@ class RelationshipQueryPort(Protocol):
     """Minimal query port for relationship validation — implemented
     by the infrastructure repository."""
 
-    async def count_bio_parents(self, child_id: uuid.UUID) -> int: ...
-    async def has_active_marriage(self, person1_id: uuid.UUID, person2_id: uuid.UUID) -> bool: ...
-    async def has_parent_child_link(self, parent_id: uuid.UUID, child_id: uuid.UUID) -> bool: ...
+    async def count_bio_parents(self, child_id: uuid.UUID, clan_id: uuid.UUID) -> int: ...
+    async def has_active_marriage(
+        self, person1_id: uuid.UUID, person2_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool: ...
+    async def has_parent_child_link(
+        self, parent_id: uuid.UUID, child_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool: ...
     async def is_ancestor(
         self, descendant_id: uuid.UUID, ancestor_id: uuid.UUID, clan_id: uuid.UUID
     ) -> bool: ...
@@ -71,9 +75,12 @@ class RelationshipDomainValidator:
         if parent_id == child_id:
             raise BusinessRuleViolation("self_parent_not_allowed")
 
-        # Rule: max 2 biological parents
+        # Rule: max 2 biological parents. Scoped to the acting clan: edges are
+        # owned per-clan (created_by_clan_id), and persons are shared M:N across
+        # clans, so another clan's parent edges must neither count against this
+        # clan's limit nor be disclosed via the resulting error.
         if relationship_type == "biological":
-            bio_count = await self._q.count_bio_parents(child_id)
+            bio_count = await self._q.count_bio_parents(child_id, clan_id)
             if bio_count >= 2:
                 raise ConflictError("relationship.too_many_biological_parents")
 
@@ -97,10 +104,17 @@ class RelationshipDomainValidator:
 
         return None
 
-    async def check_duplicate_parent_child(self, parent_id: uuid.UUID, child_id: uuid.UUID) -> None:
-        if await self._q.has_parent_child_link(parent_id, child_id):
+    async def check_duplicate_parent_child(
+        self, parent_id: uuid.UUID, child_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> None:
+        # Scoped to the acting clan: a duplicate is only a duplicate within the
+        # clan that owns the edge. Cross-clan edges for a shared person are
+        # legitimate and must not leak through this check (see validate_parent_child).
+        if await self._q.has_parent_child_link(parent_id, child_id, clan_id):
             raise ConflictError("relationship.duplicate_parent_child")
 
-    async def check_duplicate_marriage(self, person1_id: uuid.UUID, person2_id: uuid.UUID) -> None:
-        if await self._q.has_active_marriage(person1_id, person2_id):
+    async def check_duplicate_marriage(
+        self, person1_id: uuid.UUID, person2_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> None:
+        if await self._q.has_active_marriage(person1_id, person2_id, clan_id):
             raise ConflictError("relationship.duplicate_marriage")

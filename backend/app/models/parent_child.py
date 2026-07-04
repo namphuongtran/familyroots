@@ -10,7 +10,6 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,10 +20,13 @@ from app.models.base import Base, TimestampMixin
 
 class ParentChild(TimestampMixin, Base):
     __tablename__ = "parent_child"
-    __table_args__ = (
-        UniqueConstraint("parent_id", "child_id", "relationship_type", name="uq_parent_child_edge"),
-        CheckConstraint("parent_id != child_id", name="parent_child_no_self"),
-    )
+    # Edge-uniqueness is enforced by the partial, clan-scoped unique index
+    # `idx_parent_child_unique_edge` (migrations 006/007), NOT a table constraint:
+    # it must exclude soft-deleted rows and key on created_by_clan_id. Declaring a
+    # plain UniqueConstraint here would (a) not match the DB and (b) make autogenerate
+    # try to recreate a non-partial, non-clan-scoped constraint — reintroducing the
+    # soft-delete re-create bug. So only the self-edge CheckConstraint lives here.
+    __table_args__ = (CheckConstraint("parent_id != child_id", name="parent_child_no_self"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 

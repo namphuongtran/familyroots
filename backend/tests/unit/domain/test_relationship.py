@@ -139,13 +139,13 @@ class TestRelationshipDomainValidator:
     async def test_duplicate_marriage_raises(self) -> None:
         v = self._make_validator(has_active_marriage=True)
         with pytest.raises(ConflictError, match="duplicate_marriage"):
-            await v.check_duplicate_marriage(uuid.uuid4(), uuid.uuid4())
+            await v.check_duplicate_marriage(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
 
     @pytest.mark.asyncio
     async def test_duplicate_parent_child_raises(self) -> None:
         v = self._make_validator(has_parent_child_link=True)
         with pytest.raises(ConflictError, match="duplicate_parent_child"):
-            await v.check_duplicate_parent_child(uuid.uuid4(), uuid.uuid4())
+            await v.check_duplicate_parent_child(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
 
     @pytest.mark.asyncio
     async def test_valid_parent_child_passes(self) -> None:
