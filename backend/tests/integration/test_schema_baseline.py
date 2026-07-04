@@ -1,6 +1,7 @@
 """Schema baseline: the migrated DB must match the ORM models (SP-1)."""
 
 import os
+from typing import Any
 
 import sqlalchemy as sa
 from alembic import command
@@ -11,6 +12,36 @@ def _include_object(object_, name, type_, reflected, compare_to):
     """Mirror of migrations/env.py include_object (kept local to avoid importing
     env.py, which executes Alembic context at module top-level)."""
     return type_ not in ("index", "check_constraint")
+
+
+# The drift classes that silently ship model/DB divergence: missing/renamed tables or
+# columns, foreign keys, unique/other table constraints, and nullability. Indexes and
+# CHECK constraints are excluded by _include_object; modify_type / modify_default are
+# deliberately NOT gated (SQLAlchemy renders those with representation noise — varchar
+# length, server_default text — that isn't real drift). Note: type drift is therefore
+# intentionally uncovered.
+_DRIFT_OPS = {
+    "add_table",
+    "remove_table",
+    "add_column",
+    "remove_column",
+    "add_fk",
+    "remove_fk",
+    "add_constraint",
+    "remove_constraint",
+    "modify_nullable",
+}
+
+
+def _drift(diffs: list[Any]) -> list[Any]:
+    """Filter compare_metadata() output to the gated drift ops.
+
+    compare_metadata yields table/fk/constraint ops as flat tuples but COLUMN-level
+    modifications (modify_nullable/type/default) wrapped in a per-column LIST — so we
+    must flatten first, or every modify_* diff is silently skipped (a tuple-only
+    filter makes the nullability gate dead code)."""
+    flat = [x for d in diffs for x in (d if isinstance(d, list) else [d])]
+    return [d for d in flat if isinstance(d, tuple) and d and d[0] in _DRIFT_OPS]
 
 
 def _inspector(engine: sa.Engine) -> sa.Inspector:
@@ -111,9 +142,19 @@ def test_autogenerate_has_no_table_or_column_diff(migrated_db_url: str) -> None:
         diffs = compare_metadata(mc, Base.metadata)
     engine.dispose()
 
-    # Target exactly the drift class that broke the app: missing/renamed tables or
-    # columns. Indexes/checks are excluded by _include_object; we deliberately do
-    # not gate on modify_* (server-default/type representation noise).
-    drift_ops = {"add_table", "remove_table", "add_column", "remove_column"}
-    drift = [d for d in diffs if isinstance(d, tuple) and d and d[0] in drift_ops]
-    assert drift == [], f"unexpected schema drift: {drift}"
+    assert _drift(diffs) == [], f"unexpected schema drift: {_drift(diffs)}"
+
+
+def test_drift_filter_flattens_column_level_diffs() -> None:
+    """Negative control for the gate itself: column-level modifications arrive
+    list-wrapped, so a tuple-only filter would skip them. Guards against anyone
+    "simplifying" _drift back to `d for d in diffs` and silently disabling the
+    nullability/type gate."""
+    # shape compare_metadata actually returns for a single nullability change
+    diffs = [
+        [("modify_nullable", None, "persons", "nationality", {}, True, False)],
+        ("add_table", object()),  # a flat tuple, for good measure
+    ]
+    caught = _drift(diffs)
+    assert any(d[0] == "modify_nullable" for d in caught), caught
+    assert any(d[0] == "add_table" for d in caught), caught

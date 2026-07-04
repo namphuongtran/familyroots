@@ -13,7 +13,11 @@ from app.models.base import Base, TimestampMixin
 
 class ClanMembership(TimestampMixin, Base):
     __tablename__ = "clan_memberships"
-    __table_args__ = (UniqueConstraint("person_id", "clan_id", name="uq_person_clan"),)
+    # Explicit name matches the baseline migration; the uq naming convention would
+    # otherwise generate uq_clan_memberships_person_id and drift on autogenerate.
+    __table_args__ = (
+        UniqueConstraint("person_id", "clan_id", name="uq_clan_memberships_person_clan"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     person_id: Mapped[uuid.UUID] = mapped_column(
