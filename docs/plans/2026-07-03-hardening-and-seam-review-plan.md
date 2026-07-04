@@ -15,11 +15,12 @@ classes (seams S1–S9) with an adversarial review, before resuming features.
 
 | Phase | Item | Status |
 |-------|------|--------|
-| 1 | `backend/scripts/check.sh` — local gate mirroring CI exactly | ⬜ not started |
-| 1 | `import-linter` contracts in CI (hexagonal boundaries enforced by machine) | ⬜ not started |
-| 1 | HTTP-level auth smoke suite (TestClient + stub IdentityProvider + real DB) | ⬜ not started |
-| 2 | Adversarial review round 2 targeting seams S1–S7 | ⬜ not started |
-| 3 | Feature roadmap (below) on the hardened base | ⬜ blocked on 1–2 |
+| 1 | `backend/scripts/check.sh` — local gate mirroring CI exactly | ✅ PR #20 |
+| 1 | `import-linter` contracts in CI (hexagonal boundaries enforced by machine) | ✅ PR #20 |
+| 1 | HTTP-level auth smoke suite (TestClient + stub IdentityProvider + real DB) | ✅ PR #20 |
+| 2 | Adversarial review round 2 targeting seams S1–S7 | ✅ [seam-review-2026-07-04](../architecture/seam-review-2026-07-04.md) — 3 Critical + 16 Important confirmed; fix-class PRs F–K defined |
+| 3 | Fix-class PRs F–K from the review | ⬜ next (order F→G→H→I→J→K) |
+| 3 | Feature roadmap (below) on the hardened base | ⬜ after F–K |
 
 ## Phase 1 — Mechanize the lessons (one PR, "process hardening")
 
