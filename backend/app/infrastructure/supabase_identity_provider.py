@@ -37,7 +37,12 @@ def _classify(exc: Exception) -> IdentityError:
     if isinstance(exc, AuthApiError):
         if "api key" in str(exc).lower():
             return IdentityUnavailableError(str(exc))
-        if exc.status >= 500:
+        # Provider 5xx, plus 429 (rate limited) and 408 (request timeout), are
+        # transient/infrastructural — NOT a verdict on the user's credentials. Mapping
+        # them to IdentityAuthError would lie "invalid credentials" (401) when the truth
+        # is "try again later" (503). Only the remaining 4xx (a real invalid-credentials
+        # rejection) becomes IdentityAuthError.
+        if exc.status >= 500 or exc.status in (408, 429):
             return IdentityUnavailableError(str(exc))
         return IdentityAuthError()
     # Non-HTTP failure (DNS, connection refused, TLS, timeout): never reached

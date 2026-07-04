@@ -46,6 +46,9 @@ class _RaisingClient:
         # Provider-side failure.
         (AuthApiError("upstream exploded", 502, None), IdentityUnavailableError),
         (AuthRetryableError("timeout", 503), IdentityUnavailableError),
+        # Rate limited / upstream timeout are transient, not "wrong password" → 503.
+        (AuthApiError("Too Many Requests", 429, None), IdentityUnavailableError),
+        (AuthApiError("Request Timeout", 408, None), IdentityUnavailableError),
         # Transport failure — request never reached the provider (paused project
         # DNS NXDOMAIN surfaced exactly like this).
         (ConnectionError("[Errno -2] Name or service not known"), IdentityUnavailableError),
@@ -65,6 +68,33 @@ async def test_refresh_classifies_transport_failure(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(sip, "get_anon_client", lambda: _RaisingClient(ConnectionError("refused")))
     with pytest.raises(IdentityUnavailableError):
         await sip.SupabaseIdentityProvider().refresh(refresh_token="rt")
+
+
+class _RaisingAdmin:
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def create_user(self, *_a: Any, **_k: Any) -> Any:
+        raise self._exc
+
+
+class _RaisingServiceClient:
+    def __init__(self, exc: Exception) -> None:
+        self.auth = type("_A", (), {"admin": _RaisingAdmin(exc)})()
+
+
+@pytest.mark.asyncio
+async def test_create_user_rate_limit_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """create_user has its OWN wrapping (re-raises only IdentityUnavailableError, else
+    downgrades to a generic IdentityError) — pin that a 429 flows through as 503, not a
+    swallowed generic error, across this distinct call site."""
+    monkeypatch.setattr(
+        sip,
+        "get_service_client",
+        lambda: _RaisingServiceClient(AuthApiError("Too Many Requests", 429, None)),
+    )
+    with pytest.raises(IdentityUnavailableError):
+        await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="x")
 
 
 class _UnavailableIdentity:
