@@ -83,6 +83,20 @@ class InvitationCommandHandler:
         if inv.email.strip().lower() != cmd.user_email.strip().lower():
             raise ForbiddenError("invitation.email_mismatch")
 
+        # Claim the invitation atomically BEFORE any membership work: if a
+        # concurrent revoke (or another accept) already moved it out of
+        # "pending", we stop here with the contract's 409 and the transaction
+        # never grants anything.
+        claimed = await self._repo.transition_status(
+            inv.id,
+            expected="pending",
+            to="accepted",
+            accepted_by=cmd.user_id,
+            accepted_at=datetime.now(UTC),
+        )
+        if not claimed:
+            raise ConflictError("invitation.not_pending")
+
         await self._repo.ensure_profile(cmd.user_id, cmd.user_email, cmd.user_full_name)
 
         existing = await self._repo.get_user_role(cmd.user_id, inv.clan_id)
@@ -106,10 +120,6 @@ class InvitationCommandHandler:
                 )
             )
 
-        inv.status = "accepted"
-        inv.accepted_by = cmd.user_id
-        inv.accepted_at = datetime.now(UTC)
-
         agg = AggregateRoot()
         agg.add_event(
             InvitationAccepted(
@@ -130,7 +140,12 @@ class InvitationCommandHandler:
             raise EntityNotFoundError("invitation.not_found")
         if inv.status != "pending":
             raise ConflictError("invitation.not_pending")
-        inv.status = "revoked"
+        # Atomic guard: an accept that committed after our read wins the row;
+        # per owner decision (2026-07-04) revoke-after-accept is a 409 and
+        # membership removal stays in member management.
+        claimed = await self._repo.transition_status(inv.id, expected="pending", to="revoked")
+        if not claimed:
+            raise ConflictError("invitation.not_pending")
 
         agg = AggregateRoot()
         agg.add_event(
