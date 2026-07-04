@@ -164,3 +164,51 @@ async def test_approve_blocks_on_person_lock_then_conflicts(engine: AsyncEngine)
             {"p": seeded["person_id"], "u1": seeded["user1"], "u2": seeded["user2"]},
         )
     assert linked == 1, "exactly one user may be linked to the person"
+
+
+@pytest.mark.asyncio
+async def test_prelink_blocks_on_person_lock_then_conflicts(engine: AsyncEngine) -> None:
+    """The admin pre-link path takes the same person lock: while a winner holds it and
+    has linked user1, a concurrent prelink of user2 to the same person blocks, then
+    conflicts cleanly once the winner commits."""
+    maker = _maker(engine)
+    seeded = await _seed(maker)
+
+    # prelink requires the target user to already be a clan member.
+    async with maker() as s:
+        await s.execute(
+            sa.text(
+                "INSERT INTO user_clan_roles "
+                "(user_id, clan_id, role, is_approved, approved_by, approved_at) "
+                "VALUES (:u, :c, 'viewer', true, :a, :t)"
+            ),
+            {
+                "u": seeded["user2"],
+                "c": seeded["clan_id"],
+                "a": seeded["admin_id"],
+                "t": datetime.now(UTC),
+            },
+        )
+        await s.commit()
+
+    async with maker() as winner, maker() as loser_db:
+        await SqlAlchemyClaimRepository(winner).lock_person(seeded["person_id"])
+        await winner.execute(
+            sa.text("UPDATE user_profiles SET person_id = :p WHERE id = :u"),
+            {"p": seeded["person_id"], "u": seeded["user1"]},
+        )
+
+        task = asyncio.create_task(
+            _handler(loser_db).prelink_identity(
+                clan_id=seeded["clan_id"],
+                user_id_to_link=seeded["user2"],
+                person_id=seeded["person_id"],
+                admin_id=seeded["admin_id"],
+            )
+        )
+        done, _ = await asyncio.wait({task}, timeout=0.3)
+        assert not done, "prelink_identity must block on the person row lock"
+
+        await winner.commit()
+        with pytest.raises(ConflictError, match="person_already_linked"):
+            await asyncio.wait_for(task, timeout=5)

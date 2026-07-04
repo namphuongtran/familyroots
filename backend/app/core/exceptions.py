@@ -191,21 +191,35 @@ async def validation_exception_handler(request: Request, exc: Exception) -> JSON
 
 
 async def integrity_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Map an uncaught DB IntegrityError (unique / FK / check violation) to a clean 409.
+    """Map a DB *unique* violation to a clean 409; keep every other IntegrityError loud.
 
-    Safety net: a concurrent write that loses a uniqueness race, or any constraint
-    violation that slips past the application guards, surfaces as the stable conflict
-    envelope instead of a raw 500 with a stack trace. The real DB error is logged
-    server-side. Hot paths that can race (e.g. identity-claim linking) still take row
-    locks to fail earlier and more precisely — this only catches what they miss.
+    Safety net for the one constraint failure that is a legitimate client outcome — a
+    write that loses a uniqueness race (SQLSTATE 23505) — which surfaces as the stable
+    conflict envelope instead of a raw 500. Any OTHER integrity error (FK, NOT NULL,
+    CHECK) is almost always a server-side logic bug, so it is logged with a full
+    traceback (for logs/Sentry) and returned as 500 — never silently downgraded to a
+    409. Hot paths that can race (e.g. identity-claim linking) still take row locks to
+    fail earlier and more precisely; this only catches what they miss.
     """
     from app.services.translator import t
 
-    logger.warning("IntegrityError on %s %s: %s", request.method, request.url.path, exc)
-    code = "conflict"
+    sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+    if sqlstate == "23505":  # unique_violation
+        logger.warning("Unique violation on %s %s: %s", request.method, request.url.path, exc)
+        code = "conflict"
+        return JSONResponse(
+            status_code=409,
+            content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+        )
+
+    logger.error(
+        "Unexpected IntegrityError on %s %s", request.method, request.url.path, exc_info=exc
+    )
     return JSONResponse(
-        status_code=409,
-        content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+        status_code=500,
+        content={
+            "error": {"code": "internal_error", "message": t("error.internal_error"), "detail": {}}
+        },
     )
 
 
