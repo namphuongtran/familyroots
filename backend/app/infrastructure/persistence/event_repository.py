@@ -14,6 +14,7 @@ from sqlalchemy import select, text
 
 from app.domain.event.entity import Event as EventEntity
 from app.infrastructure.persistence.event_mapper import apply_to_orm, to_domain, to_orm
+from app.infrastructure.persistence.sql_dates import next_anniversary_sql
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
@@ -72,8 +73,10 @@ class SqlAlchemyEventRepository:
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """Upcoming events with recurring logic — optimized CTE."""
+        this_year = next_anniversary_sql("EXTRACT(YEAR FROM :today)", "e.event_date")
+        next_year = next_anniversary_sql("EXTRACT(YEAR FROM :today) + 1", "e.event_date")
         result = await self._session.execute(
-            text("""
+            text(f"""
                 WITH next_dates AS (
                     SELECT
                         e.id, e.person_id, e.event_type, e.title,
@@ -83,21 +86,8 @@ class SqlAlchemyEventRepository:
                         CASE
                             WHEN e.is_recurring THEN
                                 CASE
-                                    WHEN MAKE_DATE(
-                                        EXTRACT(YEAR FROM :today)::int,
-                                        EXTRACT(MONTH FROM e.event_date)::int,
-                                        EXTRACT(DAY FROM e.event_date)::int
-                                    ) >= :today
-                                    THEN MAKE_DATE(
-                                        EXTRACT(YEAR FROM :today)::int,
-                                        EXTRACT(MONTH FROM e.event_date)::int,
-                                        EXTRACT(DAY FROM e.event_date)::int
-                                    )
-                                    ELSE MAKE_DATE(
-                                        EXTRACT(YEAR FROM :today)::int + 1,
-                                        EXTRACT(MONTH FROM e.event_date)::int,
-                                        EXTRACT(DAY FROM e.event_date)::int
-                                    )
+                                    WHEN {this_year} >= :today THEN {this_year}
+                                    ELSE {next_year}
                                 END
                             ELSE e.event_date
                         END AS next_occurrence
