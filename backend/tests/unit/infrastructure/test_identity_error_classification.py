@@ -46,6 +46,9 @@ class _RaisingClient:
         # Provider-side failure.
         (AuthApiError("upstream exploded", 502, None), IdentityUnavailableError),
         (AuthRetryableError("timeout", 503), IdentityUnavailableError),
+        # Rate limited / upstream timeout are transient, not "wrong password" → 503.
+        (AuthApiError("Too Many Requests", 429, None), IdentityUnavailableError),
+        (AuthApiError("Request Timeout", 408, None), IdentityUnavailableError),
         # Transport failure — request never reached the provider (paused project
         # DNS NXDOMAIN surfaced exactly like this).
         (ConnectionError("[Errno -2] Name or service not known"), IdentityUnavailableError),
