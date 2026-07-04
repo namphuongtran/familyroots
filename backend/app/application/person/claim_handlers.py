@@ -118,6 +118,11 @@ class ClaimCommandHandler:
         # Auth check: admin_id must be "admin" in person.created_by_clan_id
         await self._verify_admin_access(admin_id, claim.person.created_by_clan_id)
 
+        # Serialize concurrent approvals for the SAME person: hold a row lock so the
+        # guards below run to completion before another approver can link this person
+        # (otherwise two winners race to the user_profiles.person_id unique index).
+        await self._repo.lock_person(claim.person_id)
+
         # Race Guard 1: User Profile still not linked
         user = await self._repo.get_user_profile(claim.user_id)
         if not user or user.person_id:
@@ -294,6 +299,9 @@ class ClaimCommandHandler:
             raise NotFoundError("person_not_found")
         if person.created_by_clan_id != clan_id:
             raise ForbiddenError("person_not_controlled_by_this_clan")
+
+        # Serialize concurrent pre-links for the same person (see approve_claim).
+        await self._repo.lock_person(person_id)
 
         if await self._repo.is_person_linked(person_id):
             raise ConflictError("person_already_linked")

@@ -50,6 +50,9 @@ class _FakeRepo:
     async def get_user_profile(self, user_id):
         return _UserProfile()
 
+    async def lock_person(self, person_id):
+        return None
+
     async def is_person_linked(self, person_id):
         return False
 

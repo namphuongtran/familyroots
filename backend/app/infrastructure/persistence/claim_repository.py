@@ -33,6 +33,17 @@ class SqlAlchemyClaimRepository(ClaimRepository):
         options = [selectinload(ClaimModel.person)] if load_person else []
         return await self._session.get(ClaimModel, claim_id, options=options)
 
+    async def lock_person(self, person_id: uuid.UUID) -> None:
+        # Row lock held until the request transaction commits, so two admins linking
+        # the same person serialize here; the loser then sees is_person_linked() and
+        # fails as a ConflictError before touching the unique index. Callers verify the
+        # person exists first (a missing id locks nothing). Correctness relies on the
+        # default READ COMMITTED isolation: the post-lock is_person_linked() SELECT must
+        # observe the winner's committed link.
+        await self._session.execute(
+            select(Person.id).where(Person.id == person_id).with_for_update()
+        )
+
     async def is_person_linked(self, person_id: uuid.UUID) -> bool:
         result = await self._session.execute(
             select(UserProfile.id).where(UserProfile.person_id == person_id).limit(1)

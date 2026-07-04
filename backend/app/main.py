@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -23,6 +24,7 @@ from app.core.exceptions import (
     domain_exception_handler,
     http_exception_handler,
     identity_unavailable_handler,
+    integrity_error_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
@@ -123,6 +125,10 @@ def create_app() -> FastAPI:
     application.add_exception_handler(IdentityUnavailableError, identity_unavailable_handler)
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
     application.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    # More specific than the catch-all Exception handler: a DB constraint violation
+    # is a 409, not a 500 (Starlette matches by the exception's MRO, so IntegrityError
+    # wins over Exception).
+    application.add_exception_handler(IntegrityError, integrity_error_handler)
     application.add_exception_handler(Exception, unhandled_exception_handler)
 
     # Middleware order matters. Starlette wraps the LAST-added middleware OUTERMOST,
