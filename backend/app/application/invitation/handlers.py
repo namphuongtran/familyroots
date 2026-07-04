@@ -22,8 +22,6 @@ from app.domain.invitation.repository import InvitationRepository
 from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.exceptions import ConflictError, EntityNotFoundError, ForbiddenError
 from app.domain.shared.unit_of_work import UnitOfWork
-from app.models.clan_invitation import ClanInvitation
-from app.models.user_clan_role import UserClanRole
 
 
 class InvitationCommandHandler:
@@ -38,17 +36,14 @@ class InvitationCommandHandler:
 
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now(UTC) + timedelta(days=settings.INVITATION_TTL_DAYS)
-        inv = ClanInvitation(
+        invitation_id = await self._repo.create_invitation(
             clan_id=cmd.clan_id,
             email=email,
             role=cmd.role,
             invited_by=cmd.actor.user_id,
             token=token,
             expires_at=expires_at,
-            status="pending",
         )
-        self._repo.add_invitation(inv)
-        await self._uow.flush()
 
         agg = AggregateRoot()
         agg.add_event(
@@ -56,7 +51,7 @@ class InvitationCommandHandler:
                 clan_id=cmd.clan_id,
                 actor_id=cmd.actor.user_id,
                 actor_role=cmd.actor.role,
-                resource_id=inv.id,
+                resource_id=invitation_id,
                 email=email,
                 invited_role=cmd.role,
             )
@@ -64,7 +59,7 @@ class InvitationCommandHandler:
         self._uow.track(agg)
         await self._uow.commit()
         return {
-            "id": inv.id,
+            "id": invitation_id,
             "email": email,
             "role": cmd.role,
             "token": token,
@@ -109,15 +104,12 @@ class InvitationCommandHandler:
             existing.approved_by = inv.invited_by
             existing.approved_at = datetime.now(UTC)
         else:
-            self._repo.add_user_role(
-                UserClanRole(
-                    clan_id=inv.clan_id,
-                    user_id=cmd.user_id,
-                    role=inv.role,
-                    is_approved=True,
-                    approved_by=inv.invited_by,
-                    approved_at=datetime.now(UTC),
-                )
+            self._repo.add_membership(
+                clan_id=inv.clan_id,
+                user_id=cmd.user_id,
+                role=inv.role,
+                approved_by=inv.invited_by,
+                approved_at=datetime.now(UTC),
             )
 
         agg = AggregateRoot()

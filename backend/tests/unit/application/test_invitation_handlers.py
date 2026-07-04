@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
@@ -57,8 +58,10 @@ class _FakeRepo:
     async def get_by_id(self, invitation_id, clan_id):
         return self._by_id
 
-    def add_invitation(self, inv):
-        self.added_invitations.append(inv)
+    async def create_invitation(self, *, clan_id, email, role, invited_by, token, expires_at):
+        inv_id = uuid.uuid4()
+        self.added_invitations.append(inv_id)
+        return inv_id
 
     async def ensure_profile(self, user_id, email, display_name):
         self.call_order.append("ensure_profile")
@@ -67,9 +70,18 @@ class _FakeRepo:
     async def get_user_role(self, user_id, clan_id):
         return self._existing_role
 
-    def add_user_role(self, role):
-        self.call_order.append("add_user_role")
-        self.added_roles.append(role)
+    def add_membership(self, *, clan_id, user_id, role, approved_by, approved_at):
+        self.call_order.append("add_membership")
+        self.added_roles.append(
+            SimpleNamespace(
+                clan_id=clan_id,
+                user_id=user_id,
+                role=role,
+                approved_by=approved_by,
+                approved_at=approved_at,
+                is_approved=True,
+            )
+        )
 
     async def transition_status(
         self, invitation_id, *, expected, to, accepted_by=None, accepted_at=None
@@ -311,4 +323,4 @@ async def test_accept_claims_before_granting_role():
     await handler.accept(
         AcceptInvitation(token="t", user_id=uuid.uuid4(), user_email="a@x.com", user_full_name="X")
     )
-    assert repo.call_order.index("transition_status") < repo.call_order.index("add_user_role")
+    assert repo.call_order.index("transition_status") < repo.call_order.index("add_membership")

@@ -34,8 +34,28 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
         )
         return result.scalar_one_or_none()
 
-    def add_invitation(self, invitation: ClanInvitation) -> None:
-        self._session.add(invitation)
+    async def create_invitation(
+        self,
+        *,
+        clan_id: uuid.UUID,
+        email: str,
+        role: str,
+        invited_by: uuid.UUID,
+        token: str,
+        expires_at: datetime,
+    ) -> uuid.UUID:
+        inv = ClanInvitation(
+            clan_id=clan_id,
+            email=email,
+            role=role,
+            invited_by=invited_by,
+            token=token,
+            expires_at=expires_at,
+            status="pending",
+        )
+        self._session.add(inv)
+        await self._session.flush()  # populate inv.id for the event + response
+        return inv.id
 
     async def list_by_clan(self, clan_id: uuid.UUID) -> list[ClanInvitation]:
         result = await self._session.execute(
@@ -87,8 +107,25 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
         )
         return bool(result.rowcount)
 
-    def add_user_role(self, role: UserClanRole) -> None:
-        self._session.add(role)
+    def add_membership(
+        self,
+        *,
+        clan_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+        approved_by: uuid.UUID,
+        approved_at: datetime,
+    ) -> None:
+        self._session.add(
+            UserClanRole(
+                clan_id=clan_id,
+                user_id=user_id,
+                role=role,
+                is_approved=True,
+                approved_by=approved_by,
+                approved_at=approved_at,
+            )
+        )
 
     async def get_by_id(
         self, invitation_id: uuid.UUID, clan_id: uuid.UUID
