@@ -53,7 +53,10 @@ class Person(TimestampMixin, Base):
 
     # ── Personal info ─────────────────────────────────────────
     religion: Mapped[str | None] = mapped_column(String(100), default=None)
-    nationality: Mapped[str] = mapped_column(String(100), default="VN")
+    # Nullable in the DB (baseline migration); the "VN" default applies on insert but
+    # the column permits NULL, so the ORM type must be Optional to match — otherwise
+    # autogenerate sees a modify_nullable drift.
+    nationality: Mapped[str | None] = mapped_column(String(100), default="VN")
     occupation: Mapped[str | None] = mapped_column(String(255), default=None)
     education_level: Mapped[str | None] = mapped_column(String(255), default=None)
     title_rank: Mapped[str | None] = mapped_column(String(255), default=None)  # chức danh, phẩm hàm
