@@ -37,7 +37,7 @@ class TestInMemoryEventDispatcher:
         dispatcher.register(DomainEvent, handler)
 
         # AuditableEvent inherits from DomainEvent
-        event = AuditableEvent(action="test.action")
+        event = AuditableEvent(action="test.action", clan_id=uuid.uuid4(), actor_id=uuid.uuid4())
         await dispatcher.dispatch([event])
 
         handler.assert_awaited_once_with(event)

@@ -120,8 +120,13 @@ class TestAuditableEvent:
 
     def test_inherits_domain_event(self) -> None:
         """AuditableEvent is a DomainEvent."""
-        event = AuditableEvent()
+        event = AuditableEvent(clan_id=uuid.uuid4(), actor_id=uuid.uuid4())
         assert isinstance(event, DomainEvent)
+
+    def test_clan_id_and_actor_id_are_required(self) -> None:
+        """No silent uuid4() default — an unattributable audit event can't be built."""
+        with pytest.raises(TypeError):
+            AuditableEvent()  # type: ignore[call-arg]
 
 
 # ── Value Objects ───────────────────────────────────────────────
