@@ -25,15 +25,21 @@ class DomainEvent:
 # ── Audit-relevant mixin ─────────────────────────────────────────
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AuditableEvent(DomainEvent):
     """A domain event that should produce an audit log entry.
 
     All subclasses are automatically picked up by the ``AuditLogHandler``.
+
+    ``clan_id`` and ``actor_id`` are REQUIRED — an audit row must be attributable to a
+    real tenant and actor. They previously defaulted to ``uuid.uuid4()``, which silently
+    fabricated a random clan/actor if a caller forgot to pass them (a multi-tenant audit
+    footgun). ``kw_only`` lets them be required even though the ``DomainEvent`` base has
+    defaulted fields; all event constructions already use keyword arguments.
     """
 
-    clan_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    actor_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    clan_id: uuid.UUID
+    actor_id: uuid.UUID
     actor_role: str = ""
     action: str = ""
     resource_type: str = ""
