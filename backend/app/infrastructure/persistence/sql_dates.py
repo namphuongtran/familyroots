@@ -11,7 +11,13 @@ non-leap years.
 
 def next_anniversary_sql(year_sql: str, date_col: str = "e.event_date") -> str:
     """SQL ``::date`` expression: the month/day of ``date_col`` in year
-    ``year_sql``, clamped to that month's last day (Feb 29 → Feb 28)."""
+    ``year_sql``, clamped to that month's last day (Feb 29 → Feb 28).
+
+    WARNING: this interpolates ``year_sql``/``date_col`` into the returned SQL
+    via f-strings, unescaped. Callers MUST pass only code-level constants
+    (e.g. ``"EXTRACT(YEAR FROM CURRENT_DATE)"``, ``"e.event_date"``) — never
+    request-derived or otherwise untrusted input.
+    """
     first_of_month = f"MAKE_DATE(({year_sql})::int, EXTRACT(MONTH FROM {date_col})::int, 1)"
     day_offset = f"(EXTRACT(DAY FROM {date_col})::int - 1) * INTERVAL '1 day'"
     last_of_month = f"({first_of_month} + INTERVAL '1 month' - INTERVAL '1 day')::date"
