@@ -16,9 +16,21 @@ Two complementary, planner-independent checks:
      the guard that fails if the query expression regresses.
 """
 
-import sqlalchemy as sa
+import uuid
+from collections.abc import AsyncGenerator
 
-from app.infrastructure.persistence.person_repository import _SEARCH_SQL
+import pytest
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from app.infrastructure.event_dispatcher import create_event_dispatcher
+from app.infrastructure.persistence.person_repository import _SEARCH_SQL, SqlAlchemyPersonRepository
+from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 def test_trigram_indexes_are_usable_for_search_expression(sync_engine: sa.Engine) -> None:
@@ -46,3 +58,66 @@ def test_search_sql_uses_the_indexed_expression() -> None:
     assert "public.f_unaccent(p.birth_name)" in _SEARCH_SQL
     # the pre-fix, index-defeating expression must not reappear
     assert "lower(" not in _SEARCH_SQL
+
+
+@pytest.fixture()
+async def async_engine(migrated_db_url: str) -> AsyncGenerator[AsyncEngine]:
+    engine = create_async_engine(migrated_db_url)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_search_is_accent_folding_and_case_insensitive(async_engine: AsyncEngine) -> None:
+    """Functional check that the index-aligned query still returns the right rows:
+    an unaccented, differently-cased term matches accented names on both full_name
+    and birth_name (the semantics that must survive dropping ``unaccent(lower(...))``)."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id, actor = uuid.uuid4(), uuid.uuid4()
+    p_full, p_birth = uuid.uuid4(), uuid.uuid4()
+    try:
+        async with maker() as s:
+            await s.execute(
+                sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'S', :slug)"),
+                {"id": clan_id, "slug": f"srch-{clan_id.hex[:8]}"},
+            )
+            # accented full_name; accented birth_name on a second person
+            await s.execute(
+                sa.text(
+                    "INSERT INTO persons (id, full_name, gender, created_by_clan_id, created_by) "
+                    "VALUES (:id, 'José Ramírez', 'male', :c, :a)"
+                ),
+                {"id": p_full, "c": clan_id, "a": actor},
+            )
+            await s.execute(
+                sa.text(
+                    "INSERT INTO persons (id, full_name, birth_name, gender, "
+                    "created_by_clan_id, created_by) "
+                    "VALUES (:id, 'Maria', 'Bích', 'female', :c, :a)"
+                ),
+                {"id": p_birth, "c": clan_id, "a": actor},
+            )
+            for pid in (p_full, p_birth):
+                await s.execute(
+                    sa.text("INSERT INTO clan_memberships (person_id, clan_id) VALUES (:p, :c)"),
+                    {"p": pid, "c": clan_id},
+                )
+            await s.commit()
+
+            repo = SqlAlchemyPersonRepository(SqlAlchemyUnitOfWork(s, create_event_dispatcher(s)))
+            # unaccented + lowercase query matches the accented, capitalised full_name
+            by_full = await repo.search(clan_id, "jose ramirez")
+            assert p_full in {r.id for r in by_full}
+            # uppercase, unaccented query matches the accented birth_name
+            by_birth = await repo.search(clan_id, "BICH")
+            assert p_birth in {r.id for r in by_birth}
+    finally:
+        async with maker() as s:
+            await s.execute(
+                sa.text("DELETE FROM clan_memberships WHERE clan_id = :c"), {"c": clan_id}
+            )
+            await s.execute(
+                sa.text("DELETE FROM persons WHERE created_by_clan_id = :c"), {"c": clan_id}
+            )
+            await s.execute(sa.text("DELETE FROM clans WHERE id = :c"), {"c": clan_id})
+            await s.commit()

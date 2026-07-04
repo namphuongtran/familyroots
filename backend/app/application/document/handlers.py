@@ -103,7 +103,13 @@ class DocumentCommandHandler:
             await self._repo.save(doc)
             await self._uow.commit()
         except Exception:
-            await self._storage.delete(storage_path)
+            # Best-effort compensation — never let a cleanup failure mask the
+            # original persistence error (which is what the caller must see).
+            try:
+                if not await self._storage.delete(storage_path):
+                    logger.warning("Orphaned blob after failed upload commit: %s", storage_path)
+            except Exception:
+                logger.warning("Orphaned blob after failed upload commit: %s", storage_path)
             raise
 
         presigned = await self._storage.get_presigned_url(doc.storage_path)
