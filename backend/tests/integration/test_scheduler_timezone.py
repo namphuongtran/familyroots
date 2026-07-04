@@ -13,8 +13,9 @@ from the real date. Matching therefore proves the query used ``:today`` — a re
 
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 import app.core.database  # noqa: F401 — imported early so _reset_settings can't rebind it
+from app.core.config import settings
 from app.services import scheduler
 
 
@@ -112,3 +114,51 @@ async def test_job_does_not_match_when_not_due(
     await scheduler.send_anniversary_notifications(today=fixed_today)
 
     assert spy.await_count == 0  # the "N days away" gate is exact w.r.t. the injected today
+
+
+@pytest.mark.asyncio
+async def test_job_is_idempotent_within_a_day(
+    async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Running the job twice on the same day (e.g. a misfire re-run) sends once — the
+    dedup keys on the row's platform-zone creation day. Uses the REAL platform-zone
+    today because the dedup compares created_at (the insert instant) to :today; an
+    injected far-future today wouldn't match created_at (see the `today` contract)."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+    spy = AsyncMock()
+    monkeypatch.setattr("app.services.notification.send_to_clan", spy)
+
+    today = datetime.now(ZoneInfo(settings.SCHEDULER_TIMEZONE)).date()
+    due = today + timedelta(days=7)  # year-end wrap out of scope, per test_scheduler_lock
+    await _seed_recurring_event(maker, month=due.month, day=due.day, notify_days_before=7)
+
+    await scheduler.send_anniversary_notifications(today=today)
+    await scheduler.send_anniversary_notifications(today=today)  # re-run same day
+
+    assert spy.await_count == 1, "second same-day run must be deduped"
+    async with maker() as s:
+        logged = await s.scalar(sa.text("SELECT COUNT(*) FROM notification_log"))
+    assert logged == 1
+
+
+@pytest.mark.asyncio
+async def test_job_handles_year_wrap(
+    async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Late-December today, early-January anniversary → the next occurrence is NEXT
+    year (the CASE ELSE branch), and days_until is computed across the boundary."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+    spy = AsyncMock()
+    monkeypatch.setattr("app.services.notification.send_to_clan", spy)
+
+    fixed_today = date(2075, 12, 28)
+    due = fixed_today + timedelta(days=6)  # 2076-01-03, six days across the year boundary
+    await _seed_recurring_event(maker, month=due.month, day=due.day, notify_days_before=6)
+
+    await scheduler.send_anniversary_notifications(today=fixed_today)
+
+    assert spy.await_count == 1  # matched the Jan-3 occurrence in the NEXT year

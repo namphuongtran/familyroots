@@ -1,6 +1,7 @@
 """Application configuration — loaded from environment variables."""
 
 from functools import lru_cache
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -48,6 +49,9 @@ class Settings(BaseSettings):
     # at NOTIFICATION_CRON_HOUR in this zone AND all of the job's date math is computed
     # against "today" in this zone, so there is a single clock (no container-local vs
     # DB-server-tz mismatch). Vietnamese genealogy platform → Asia/Ho_Chi_Minh.
+    # DESIGN NOTE: this is a single global platform zone; a clan in another timezone
+    # still gets notified on VN "today" at VN 07:00. Per-clan timezone is out of scope
+    # for M4 — revisit if the platform serves clans across zones.
     SCHEDULER_TIMEZONE: str = "Asia/Ho_Chi_Minh"
     NOTIFICATION_CRON_HOUR: int = 7
     NOTIFICATION_DAYS_BEFORE: int = 7
@@ -74,6 +78,17 @@ class Settings(BaseSettings):
         if base != "postgresql":
             return value  # leave non-postgres URLs untouched
         return f"{_CANONICAL_DB_DRIVER}://{rest}"
+
+    @field_validator("SCHEDULER_TIMEZONE")
+    @classmethod
+    def _validate_timezone(cls, value: str) -> str:
+        """Fail fast at config load with a clear message on a bad tz name, rather than
+        an opaque ZoneInfoNotFoundError deep in scheduler module import."""
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"SCHEDULER_TIMEZONE '{value}' is not a valid IANA timezone") from exc
+        return value
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Settings:

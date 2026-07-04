@@ -53,8 +53,15 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
     Single clock (M4): ``today`` is computed once in the platform timezone and threaded
     into the SQL as ``:today``; the query contains no ``CURRENT_DATE``, so the occurrence
     math and the "is it N days away" gate can't disagree because the container's local
-    date differs from the DB server's date. ``today`` is injectable for deterministic
-    tests.
+    date differs from the DB server's date.
+
+    ``today`` CONTRACT: it is the logical run-date. Production always leaves it None so
+    it is the real date in the platform zone (the cron fires once per that day). It is
+    injectable only for deterministic tests, and callers MUST pass the real current
+    date — the dedup below keys on the row's creation day, which equals ``today`` only
+    when ``today`` is "now". Replaying/backfilling a PAST ``today`` would therefore not
+    be dedup-protected (it would re-send); supporting backfill needs a dedicated
+    ``notified_on date`` column keyed to ``today``, out of scope here.
 
     Lock topology (C2, seam-review-2026-07-04): the advisory lock lives on ONE
     dedicated connection held for the whole job; the working session is bound
@@ -115,7 +122,11 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                 if days_until != event["notify_days_before"]:
                     continue
 
-                # Dedup: skip if already sent today for this event
+                # Dedup: skip if this event was already logged for today. created_at is
+                # a timestamptz; DATE(created_at AT TIME ZONE :tz) is its calendar day in
+                # the platform zone, which equals :today for a same-day run (the `today`
+                # contract in the docstring). Sound for production's daily/misfire re-run;
+                # see the docstring for the backfill caveat.
                 dedup = await db.execute(
                     text("""
                         SELECT 1 FROM public.notification_log
