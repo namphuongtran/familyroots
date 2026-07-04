@@ -70,6 +70,33 @@ async def test_refresh_classifies_transport_failure(monkeypatch: pytest.MonkeyPa
         await sip.SupabaseIdentityProvider().refresh(refresh_token="rt")
 
 
+class _RaisingAdmin:
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def create_user(self, *_a: Any, **_k: Any) -> Any:
+        raise self._exc
+
+
+class _RaisingServiceClient:
+    def __init__(self, exc: Exception) -> None:
+        self.auth = type("_A", (), {"admin": _RaisingAdmin(exc)})()
+
+
+@pytest.mark.asyncio
+async def test_create_user_rate_limit_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """create_user has its OWN wrapping (re-raises only IdentityUnavailableError, else
+    downgrades to a generic IdentityError) — pin that a 429 flows through as 503, not a
+    swallowed generic error, across this distinct call site."""
+    monkeypatch.setattr(
+        sip,
+        "get_service_client",
+        lambda: _RaisingServiceClient(AuthApiError("Too Many Requests", 429, None)),
+    )
+    with pytest.raises(IdentityUnavailableError):
+        await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="x")
+
+
 class _UnavailableIdentity:
     async def create_user(self, *, email: str, password: str) -> str:
         raise IdentityUnavailableError("provider down")
