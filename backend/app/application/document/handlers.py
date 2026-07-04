@@ -7,6 +7,8 @@ No SQLAlchemy or Supabase imports — fully DIP-compliant.
 
 from __future__ import annotations
 
+import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -18,6 +20,24 @@ from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 from app.schemas.document import DocumentResponse, DocumentSummary
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_extension(filename: str | None) -> str:
+    """Derive a storage-safe file extension from a client-supplied filename.
+
+    The extension is embedded in the storage key `clans/{clan_id}/documents/...`,
+    whose prefix is the storage tenancy boundary. A raw filename can contain
+    `/` or `..` (e.g. ``x.jpg/../../other-clan/evil``) and escape that prefix, so
+    we keep only lowercase alphanumerics from the last dot-segment. Falls back to
+    ``bin`` when there is no usable extension.
+    """
+    if not filename or "." not in filename:
+        return "bin"
+    raw = filename.rsplit(".", 1)[-1]
+    cleaned = re.sub(r"[^a-z0-9]", "", raw.lower())[:10]
+    return cleaned or "bin"
 
 
 class DocumentCommandHandler:
@@ -54,7 +74,7 @@ class DocumentCommandHandler:
         if person_id and not await self._repo.person_in_clan(person_id, clan_id):
             raise EntityNotFoundError("person_not_found", {"person_id": str(person_id)})
 
-        file_ext = (filename or "file").rsplit(".", 1)[-1] if filename else "bin"
+        file_ext = _safe_extension(filename)
         file_id = uuid.uuid4()
         storage_path = f"clans/{clan_id}/documents/{file_id}.{file_ext}"
 
@@ -74,10 +94,17 @@ class DocumentCommandHandler:
             taken_place=taken_place,
         )
 
-        # Upload to storage, then persist metadata
+        # Upload the blob first, then persist metadata. If persistence fails, the
+        # blob would be orphaned (a row-less object in the bucket), so compensate
+        # by deleting it before re-raising — leaving neither an orphan blob nor a
+        # dangling metadata row.
         await self._storage.upload(storage_path, file_content, content_type)
-        await self._repo.save(doc)
-        await self._uow.commit()
+        try:
+            await self._repo.save(doc)
+            await self._uow.commit()
+        except Exception:
+            await self._storage.delete(storage_path)
+            raise
 
         presigned = await self._storage.get_presigned_url(doc.storage_path)
         return DocumentResponse(
@@ -108,12 +135,21 @@ class DocumentCommandHandler:
         clan_id: uuid.UUID,
         actor: ActorInfo,
     ) -> None:
-        """Delete a document from storage and the database."""
+        """Delete a document from the database, then from storage.
+
+        DB-first: commit the row removal before touching storage. If storage
+        deletion fails afterwards the blob is merely orphaned (reclaimable by a
+        sweep) — the reverse order risks the transaction rolling back after the
+        blob is already gone, leaving a row whose object no longer exists.
+        """
         doc = await self._get_or_raise(document_id, clan_id)
-        await self._storage.delete(doc.storage_path)
+        storage_path = doc.storage_path
         doc.mark_deleted(actor)
         await self._repo.delete(doc)
         await self._uow.commit()
+
+        if not await self._storage.delete(storage_path):
+            logger.warning("Orphaned blob after document delete: %s", storage_path)
 
     async def set_avatar(
         self,

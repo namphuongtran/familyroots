@@ -38,7 +38,7 @@ class MarriageCommandHandler:
 
     async def create(self, cmd: CreateMarriage) -> MarriageResponse:
         await self._validator.ensure_persons_in_clan([cmd.person1_id, cmd.person2_id], cmd.clan_id)
-        await self._validator.check_duplicate_marriage(cmd.person1_id, cmd.person2_id)
+        await self._validator.check_duplicate_marriage(cmd.person1_id, cmd.person2_id, cmd.clan_id)
 
         marriage = Marriage.create(
             person1_id=cmd.person1_id,
@@ -92,7 +92,7 @@ class ParentChildCommandHandler:
     ) -> tuple[ParentChildResponse, dict[str, Any] | None]:
         """Create parent-child link. Returns (link, optional warning dict)."""
         await self._validator.ensure_persons_in_clan([cmd.parent_id, cmd.child_id], cmd.clan_id)
-        await self._validator.check_duplicate_parent_child(cmd.parent_id, cmd.child_id)
+        await self._validator.check_duplicate_parent_child(cmd.parent_id, cmd.child_id, cmd.clan_id)
         warning = await self._validator.validate_parent_child(
             cmd.parent_id, cmd.child_id, cmd.relationship_type, cmd.clan_id
         )
