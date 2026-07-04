@@ -77,6 +77,8 @@
   "error.branch_cannot_be_own_parent": "A branch cannot be its own parent",
   "error.branch_not_found": "Branch not found",
   "error.claim_not_found": "Identity claim not found",
+  "error.claim.not_owned": "Only the requester can cancel their claim",
+  "error.claim.not_pending": "This claim is no longer pending",
   "error.clan_membership_required": "You do not have approved membership in this clan",
   "error.clan_suspended": "This clan has been suspended",
   "error.document_not_linked_to_person": "Document is not linked to a member",

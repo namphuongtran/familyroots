@@ -2,6 +2,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.domain.shared.exceptions import ConflictError, ForbiddenError
+
 
 @dataclass
 class IdentityClaim:
@@ -15,16 +17,18 @@ class IdentityClaim:
     id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     def cancel(self, user_id: uuid.UUID) -> None:
+        # Domain exceptions (not ValueError) so the API maps these to 403/409 via
+        # the DomainError handler — a bare ValueError falls through to a 500.
         if self.user_id != user_id:
-            raise ValueError("Only the requester can cancel their claim")
+            raise ForbiddenError("claim.not_owned")
         if self.status != "PENDING":
-            raise ValueError("Only PENDING claims can be cancelled")
+            raise ConflictError("claim.not_pending")
 
         self.status = "CANCELLED"
 
     def approve(self, admin_id: uuid.UUID, reviewer_note: str | None = None) -> None:
         if self.status != "PENDING":
-            raise ValueError("Only PENDING claims can be approved")
+            raise ConflictError("claim.not_pending")
 
         self.status = "APPROVED"
         self.reviewed_by = admin_id
@@ -32,7 +36,7 @@ class IdentityClaim:
 
     def reject(self, admin_id: uuid.UUID, reviewer_note: str | None = None) -> None:
         if self.status != "PENDING":
-            raise ValueError("Only PENDING claims can be rejected")
+            raise ConflictError("claim.not_pending")
 
         self.status = "REJECTED"
         self.reviewed_by = admin_id

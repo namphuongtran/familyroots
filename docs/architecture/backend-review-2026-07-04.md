@@ -79,25 +79,25 @@ storage key stays a fixed 3-level path under `clans/{clan_id}/documents/` with n
 
 ---
 
-## 2. Still open (ranked; recommended next PRs)
+## 1b. Fixed in the follow-up branch (`fix/backend-review-h4-h7`)
 
-### HIGH
-- **H4 — `change_requests` UPDATE hard-fails.** `migrations/001` attaches the `updated_at` trigger
-  to a table with no `updated_at` column (reproduced live: `record "new" has no field "updated_at"`).
-  Latent — the table is dormant — but breaks the moment the D1 change-request workflow is wired.
-  Drop the trigger from that table.
-- **H5 — person search full seq-scan.** `person_repository.py` filters/sorts on
-  `unaccent(lower(full_name))` but the GIN trigram index is on `f_unaccent(full_name)` — expression
-  mismatch, index unused (verified via `EXPLAIN`, live search path). Make both sides one canonical
-  expression.
-- **H6 — `IdentityClaim` raises bare `ValueError` → HTTP 500.** `domain/person/claim_entity.py`;
-  only `DomainError` is mapped. Concurrent/duplicate claim transitions surface as 500 instead of
-  409/403. Raise `ConflictError`/`ForbiddenError`.
-- **H7 — aggregate `update()` blind `setattr`.** `relationship/entities.py` (Marriage/ParentChild)
-  and `person/entity.py` accept any key with no whitelist and don't re-check `__post_init__`
-  invariants — `update({"person2_id": person1_id})` recreates the forbidden self-marriage;
-  `update({"created_by_clan_id": other})` re-points ownership. Add `_UPDATABLE_FIELDS` + re-validate
-  (Branch/Event already do this).
+- **H4 — `change_requests` UPDATE hard-fails.** `migrations/001` attached the `updated_at` trigger
+  to a table with no `updated_at` column (`record "new" has no field "updated_at"`). **Migration 008**
+  drops it. Test `test_change_request_trigger.py` drives insert→UPDATE (sabotage-verified: fails with
+  the exact PL/pgSQL error when 008 is neutered).
+- **H5 — person search full seq-scan.** Query filtered/sorted on `unaccent(lower(full_name))` while
+  the GIN trigram index is on `f_unaccent(full_name)`. Query now uses `public.f_unaccent(...)` (the
+  exact indexed expression); **migration 009** adds the matching `birth_name` trigram index. Test
+  `test_person_search_index.py` (EXPLAIN with `enable_seqscan=off` proves both indexes are used;
+  static guard pins the expression).
+- **H6 — `IdentityClaim` bare `ValueError` → HTTP 500.** Now raises `ForbiddenError("claim.not_owned")`
+  / `ConflictError("claim.not_pending")` (mapped to 403/409); i18n keys added ×4 locales.
+- **H7 — aggregate `update()` blind `setattr`.** Marriage/ParentChild/Person `update()` now enforce
+  `_UPDATABLE_FIELDS` (raise `field_not_updatable`) and re-assert the self-edge invariant — a client
+  can no longer re-point `created_by_clan_id`, flip `is_deleted`, or set `person2_id = person1_id`.
+  Test `test_entity_update_whitelist.py`.
+
+## 2. Still open (ranked; recommended next PRs)
 
 ### MEDIUM
 - **M1** claim approve/prelink TOCTOU → uncaught `IntegrityError` 500 on the `user_profiles.person_id`

@@ -23,6 +23,14 @@ from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
 
+# Fields a client may change via update(). Deliberately excludes the person ids,
+# created_by_clan_id (edge ownership / isolation basis), and audit/soft-delete
+# columns — those are set only by create()/soft_delete(), never a blind setattr.
+_MARRIAGE_UPDATABLE_FIELDS = frozenset(
+    {"marriage_date", "divorce_date", "marriage_place", "status", "spouse_order", "notes"}
+)
+_PARENT_CHILD_UPDATABLE_FIELDS = frozenset({"relationship_type", "birth_order", "notes"})
+
 
 @dataclass
 class Marriage(AggregateRoot):
@@ -87,7 +95,14 @@ class Marriage(AggregateRoot):
 
     def update(self, changes: dict[str, object], actor: ActorInfo, clan_id: uuid.UUID) -> None:
         for field_name, new_value in changes.items():
+            if field_name not in _MARRIAGE_UPDATABLE_FIELDS:
+                raise BusinessRuleViolation("field_not_updatable", {"field": field_name})
             setattr(self, field_name, new_value)
+        # Re-assert the construction invariant (defence in depth — person ids are
+        # not updatable, so this cannot currently fail, but keeps the guard local
+        # to every state change).
+        if self.person1_id == self.person2_id:
+            raise BusinessRuleViolation("self_marriage_not_allowed")
         self.updated_by = actor.user_id
         self.updated_at = datetime.now(UTC)
 
@@ -177,7 +192,11 @@ class ParentChild(AggregateRoot):
 
     def update(self, changes: dict[str, object], actor: ActorInfo, clan_id: uuid.UUID) -> None:
         for field_name, new_value in changes.items():
+            if field_name not in _PARENT_CHILD_UPDATABLE_FIELDS:
+                raise BusinessRuleViolation("field_not_updatable", {"field": field_name})
             setattr(self, field_name, new_value)
+        if self.parent_id == self.child_id:
+            raise BusinessRuleViolation("self_parent_not_allowed")
         self.updated_by = actor.user_id
         self.updated_at = datetime.now(UTC)
 

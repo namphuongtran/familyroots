@@ -77,6 +77,8 @@
   "error.branch_cannot_be_own_parent": "Một chi không thể là chi cha của chính nó",
   "error.branch_not_found": "Không tìm thấy chi/nhánh",
   "error.claim_not_found": "Không tìm thấy yêu cầu nhận diện",
+  "error.claim.not_owned": "Chỉ người gửi mới có thể hủy yêu cầu của mình",
+  "error.claim.not_pending": "Yêu cầu này không còn ở trạng thái chờ",
   "error.clan_membership_required": "Bạn không có quyền thành viên được duyệt trong dòng họ này",
   "error.clan_suspended": "Dòng họ này đã bị tạm ngưng",
   "error.document_not_linked_to_person": "Tài liệu không liên kết với thành viên",

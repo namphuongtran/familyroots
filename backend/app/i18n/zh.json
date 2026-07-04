@@ -77,6 +77,8 @@
   "error.branch_cannot_be_own_parent": "分支不能作为自己的父级",
   "error.branch_not_found": "未找到分支",
   "error.claim_not_found": "未找到身份认领",
+  "error.claim.not_owned": "只有申请人可以取消自己的认领",
+  "error.claim.not_pending": "该认领已不在待处理状态",
   "error.clan_membership_required": "您在该宗族没有已批准的成员资格",
   "error.clan_suspended": "该宗族已被停用",
   "error.document_not_linked_to_person": "文档未关联到任何成员",
