@@ -21,6 +21,15 @@ class ClaimRepository(Protocol):
         """Get an identity claim by ID."""
         ...
 
+    async def lock_person(self, person_id: uuid.UUID) -> None:
+        """Take a row lock on the person for the current transaction.
+
+        Serializes concurrent identity-linking operations for the same person so the
+        loser observes ``is_person_linked() is True`` and fails with a clean
+        ``ConflictError`` instead of racing to the ``user_profiles.person_id`` unique
+        index (which would otherwise raise a raw IntegrityError → 500)."""
+        ...
+
     async def is_person_linked(self, person_id: uuid.UUID) -> bool:
         """Check if a person is already linked to any user."""
         ...
