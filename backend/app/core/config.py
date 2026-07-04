@@ -44,7 +44,11 @@ class Settings(BaseSettings):
     # Rate limiting — only trust X-Forwarded-For when behind a trusted proxy/LB.
     RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
 
-    # Scheduler
+    # Scheduler — the platform's authoritative timezone. The anniversary cron fires
+    # at NOTIFICATION_CRON_HOUR in this zone AND all of the job's date math is computed
+    # against "today" in this zone, so there is a single clock (no container-local vs
+    # DB-server-tz mismatch). Vietnamese genealogy platform → Asia/Ho_Chi_Minh.
+    SCHEDULER_TIMEZONE: str = "Asia/Ho_Chi_Minh"
     NOTIFICATION_CRON_HOUR: int = 7
     NOTIFICATION_DAYS_BEFORE: int = 7
 

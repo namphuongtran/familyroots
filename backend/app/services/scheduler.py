@@ -1,7 +1,8 @@
 """APScheduler job definitions — daily anniversary notification cron."""
 
 import logging
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,20 +16,29 @@ logger = logging.getLogger(__name__)
 # Fixed key for the cross-replica advisory lock guarding the anniversary job.
 _JOB_LOCK_KEY = 728_115_001
 
-scheduler = AsyncIOScheduler()
+# One authoritative clock for the whole scheduler (see Settings.SCHEDULER_TIMEZONE).
+_TZ = ZoneInfo(settings.SCHEDULER_TIMEZONE)
+
+scheduler = AsyncIOScheduler(timezone=_TZ)
 
 
 def start_scheduler() -> None:
     """Configure and start the cron scheduler."""
     scheduler.add_job(
         func=send_anniversary_notifications,
-        trigger=CronTrigger(hour=settings.NOTIFICATION_CRON_HOUR, minute=0),
+        # Explicit tz so "hour=7" means 07:00 in the platform zone regardless of the
+        # container's system timezone.
+        trigger=CronTrigger(hour=settings.NOTIFICATION_CRON_HOUR, minute=0, timezone=_TZ),
         id="anniversary_notifications",
         replace_existing=True,
         misfire_grace_time=3600,
     )
     scheduler.start()
-    logger.info("Scheduler started — cron at hour=%s", settings.NOTIFICATION_CRON_HOUR)
+    logger.info(
+        "Scheduler started — cron at hour=%s %s",
+        settings.NOTIFICATION_CRON_HOUR,
+        settings.SCHEDULER_TIMEZONE,
+    )
 
 
 def stop_scheduler() -> None:
@@ -37,8 +47,14 @@ def stop_scheduler() -> None:
     logger.info("Scheduler stopped")
 
 
-async def send_anniversary_notifications() -> None:
+async def send_anniversary_notifications(today: date | None = None) -> None:
     """Daily job: find events with upcoming anniversaries and send FCM notifications.
+
+    Single clock (M4): ``today`` is computed once in the platform timezone and threaded
+    into the SQL as ``:today``; the query contains no ``CURRENT_DATE``, so the occurrence
+    math and the "is it N days away" gate can't disagree because the container's local
+    date differs from the DB server's date. ``today`` is injectable for deterministic
+    tests.
 
     Lock topology (C2, seam-review-2026-07-04): the advisory lock lives on ONE
     dedicated connection held for the whole job; the working session is bound
@@ -50,9 +66,11 @@ async def send_anniversary_notifications() -> None:
     from app.infrastructure.persistence.sql_dates import next_anniversary_sql
     from app.services.notification import send_to_clan
 
-    today = date.today()
-    this_year = next_anniversary_sql("EXTRACT(YEAR FROM CURRENT_DATE)")
-    next_year = next_anniversary_sql("EXTRACT(YEAR FROM CURRENT_DATE) + 1")
+    if today is None:
+        today = datetime.now(_TZ).date()
+    tz_name = settings.SCHEDULER_TIMEZONE
+    this_year = next_anniversary_sql("EXTRACT(YEAR FROM :today ::date)")
+    next_year = next_anniversary_sql("EXTRACT(YEAR FROM :today ::date) + 1")
 
     async with engine.connect() as conn:
         acquired = await conn.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": _JOB_LOCK_KEY})
@@ -79,13 +97,14 @@ async def send_anniversary_notifications() -> None:
                         p.full_name AS person_name,
                         e.notify_days_before,
                         CASE
-                            WHEN {this_year} >= CURRENT_DATE THEN {this_year}
+                            WHEN {this_year} >= :today THEN {this_year}
                             ELSE {next_year}
                         END AS next_occurrence
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.is_recurring = true
-                """)
+                """),
+                {"today": today},
             )
             events = result.mappings().all()
 
@@ -102,10 +121,15 @@ async def send_anniversary_notifications() -> None:
                         SELECT 1 FROM public.notification_log
                         WHERE event_id = :event_id
                           AND notification_type = :ntype
-                          AND DATE(created_at) = CURRENT_DATE
+                          AND DATE(created_at AT TIME ZONE :tz) = :today
                         LIMIT 1
                     """),
-                    {"event_id": event["event_id"], "ntype": event["event_type"]},
+                    {
+                        "event_id": event["event_id"],
+                        "ntype": event["event_type"],
+                        "tz": tz_name,
+                        "today": today,
+                    },
                 )
                 if dedup.first():
                     continue
