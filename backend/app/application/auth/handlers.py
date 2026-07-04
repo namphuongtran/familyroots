@@ -114,6 +114,9 @@ class AuthCommandHandler:
             raise ValidationError("auth.clan_name_required_for_create")
 
         if clan_action == "create":
+            # Guaranteed non-None by the validation above; assert so the str-typed repo
+            # call is provably safe (auth.handlers currently has arg-type disabled).
+            assert clan_name is not None and clan_slug is not None
             existing = await self._repo.get_clan_by_slug(clan_slug)
             if existing:
                 raise ConflictError("auth.clan_slug_taken")

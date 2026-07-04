@@ -309,7 +309,7 @@ async def test_revoke_conflicts_when_transition_loses_race():
 
 @pytest.mark.asyncio
 async def test_accept_claims_before_granting_role():
-    """transition_status must be called before add_user_role, so a lost
+    """transition_status must be called before add_membership, so a lost
     race can never leave a granted role behind."""
     inv = _Inv(
         clan_id=uuid.uuid4(),
