@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
 
@@ -39,12 +40,24 @@ class AuthRepository(Protocol):
         """Get an existing membership for a user in a clan."""
         ...
 
-    def add_clan(self, clan: Any) -> None:
-        """Add a new clan to persistence context."""
+    async def create_clan(self, *, name: str, slug: str) -> uuid.UUID:
+        """Create a clan and return its id.
+
+        Builds the ORM row inside the adapter so the application layer never imports
+        ``app.models`` (CQRS write side goes through domain + ports)."""
         ...
 
-    def add_user_role(self, role: Any) -> None:
-        """Add a new user clan role to persistence context."""
+    def add_membership(
+        self,
+        *,
+        clan_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+        is_approved: bool,
+        approved_by: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+    ) -> None:
+        """Stage a user_clan_roles row (approved admin on create, pending viewer on join)."""
         ...
 
     async def ensure_profile(

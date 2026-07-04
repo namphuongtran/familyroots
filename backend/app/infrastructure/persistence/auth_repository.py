@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import exists, select, text
@@ -58,11 +59,32 @@ class SqlAlchemyAuthRepository(AuthRepository):
         )
         return result.scalar_one_or_none()
 
-    def add_clan(self, clan: Clan) -> None:
+    async def create_clan(self, *, name: str, slug: str) -> uuid.UUID:
+        clan = Clan(name=name, slug=slug)
         self._session.add(clan)
+        await self._session.flush()  # INSERT so the membership FK (and callers) get the id
+        return clan.id
 
-    def add_user_role(self, role: UserClanRole) -> None:
-        self._session.add(role)
+    def add_membership(
+        self,
+        *,
+        clan_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+        is_approved: bool,
+        approved_by: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+    ) -> None:
+        self._session.add(
+            UserClanRole(
+                clan_id=clan_id,
+                user_id=user_id,
+                role=role,
+                is_approved=is_approved,
+                approved_by=approved_by,
+                approved_at=approved_at,
+            )
+        )
 
     async def ensure_profile(
         self, user_id: uuid.UUID, email: str, display_name: str | None

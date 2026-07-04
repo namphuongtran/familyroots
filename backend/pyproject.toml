@@ -143,8 +143,6 @@ source_modules = ["app.application"]
 forbidden_modules = ["app.models"]
 allow_indirect_imports = true
 ignore_imports = [
-    "app.application.auth.handlers -> app.models.clan",
-    "app.application.auth.handlers -> app.models.user_clan_role",
     "app.application.person.claim_handlers -> app.models.audit_log",
     "app.application.person.claim_handlers -> app.models.identity_claim",
     "app.application.person.claim_handlers -> app.models.user_clan_role",
