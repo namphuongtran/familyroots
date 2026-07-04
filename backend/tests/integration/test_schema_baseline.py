@@ -111,9 +111,21 @@ def test_autogenerate_has_no_table_or_column_diff(migrated_db_url: str) -> None:
         diffs = compare_metadata(mc, Base.metadata)
     engine.dispose()
 
-    # Target exactly the drift class that broke the app: missing/renamed tables or
-    # columns. Indexes/checks are excluded by _include_object; we deliberately do
-    # not gate on modify_* (server-default/type representation noise).
-    drift_ops = {"add_table", "remove_table", "add_column", "remove_column"}
+    # Gate the drift classes that silently ship model/DB divergence: missing/renamed
+    # tables or columns, foreign keys, unique/other table constraints, and nullability.
+    # Indexes and CHECK constraints are excluded by _include_object; we still skip
+    # modify_type / modify_default (SQLAlchemy renders those with representation noise
+    # — server_default text, varchar length — that isn't real drift).
+    drift_ops = {
+        "add_table",
+        "remove_table",
+        "add_column",
+        "remove_column",
+        "add_fk",
+        "remove_fk",
+        "add_constraint",
+        "remove_constraint",
+        "modify_nullable",
+    }
     drift = [d for d in diffs if isinstance(d, tuple) and d and d[0] in drift_ops]
     assert drift == [], f"unexpected schema drift: {drift}"
