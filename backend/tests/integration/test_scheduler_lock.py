@@ -7,8 +7,9 @@ control is meaningful (it would fail if the lock gate were removed).
 """
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
@@ -21,7 +22,15 @@ from sqlalchemy.ext.asyncio import (
 )
 
 import app.core.database  # noqa: F401 — imported early so _reset_settings can't rebind it
+from app.core.config import settings
 from app.services import scheduler
+
+
+def _platform_today() -> date:
+    """The job computes 'today' in the platform timezone (M4), so tests must seed and
+    invoke on that SAME clock — using the container-local date.today() drifts by a day
+    whenever the two zones straddle midnight (e.g. CI running in the UTC evening)."""
+    return datetime.now(ZoneInfo(settings.SCHEDULER_TIMEZONE)).date()
 
 
 @pytest.fixture()
@@ -32,16 +41,16 @@ async def async_engine(migrated_db_url):
     await engine.dispose()
 
 
-async def _seed_due_event(maker: async_sessionmaker[AsyncSession]) -> uuid.UUID:
+async def _seed_due_event(maker: async_sessionmaker[AsyncSession], *, today: date) -> uuid.UUID:
     """Seed a clan + a recurring event whose next occurrence is exactly
     notify_days_before (7) days away — so the job WOULD process it if it ran.
 
     (event_date = today + 7 → next occurrence this year is today+7 → days_until
     == notify_days_before == 7. The rare year-end wrap is out of scope for this
-    test.)
+    test.) ``today`` is the platform-zone date shared with the job call.
     """
     clan_id = uuid.uuid4()
-    event_date = date.today() + timedelta(days=7)
+    event_date = today + timedelta(days=7)
     async with maker() as s:
         # The migrated DB is session-scoped (shared across tests); start each run
         # from a clean slate so the global job sees only this test's event.
@@ -75,7 +84,8 @@ async def test_job_skips_when_lock_held(
     spy = AsyncMock()
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
-    await _seed_due_event(maker)
+    today = _platform_today()
+    await _seed_due_event(maker, today=today)
 
     holder = await async_engine.connect()
     try:
@@ -86,7 +96,7 @@ async def test_job_skips_when_lock_held(
 
         # Lock held elsewhere → the job must fail to acquire it and no-op,
         # even though a due event is present.
-        await scheduler.send_anniversary_notifications()
+        await scheduler.send_anniversary_notifications(today=today)
 
         assert spy.await_count == 0
         async with maker() as s:
@@ -109,10 +119,11 @@ async def test_job_processes_due_event_when_lock_free(
     spy = AsyncMock()
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
-    await _seed_due_event(maker)
+    today = _platform_today()
+    await _seed_due_event(maker, today=today)
 
     # No lock held → the job acquires it, processes the due event, releases it.
-    await scheduler.send_anniversary_notifications()
+    await scheduler.send_anniversary_notifications(today=today)
 
     assert spy.await_count == 1
     async with maker() as s:
@@ -160,8 +171,9 @@ async def test_lock_released_even_after_midjob_commit(
     spy = AsyncMock()
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
-    await _seed_due_event(maker)
-    await scheduler.send_anniversary_notifications()  # sends + commits mid-job
+    today = _platform_today()
+    await _seed_due_event(maker, today=today)
+    await scheduler.send_anniversary_notifications(today=today)  # sends + commits mid-job
 
     assert spy.await_count == 1
     assert await _lock_is_free(async_engine), "advisory lock stranded after mid-job commit"
@@ -179,9 +191,10 @@ async def test_lock_released_and_error_propagates_after_failure(
     boom = RuntimeError("fcm exploded")
     monkeypatch.setattr("app.services.notification.send_to_clan", AsyncMock(side_effect=boom))
 
-    await _seed_due_event(maker)
+    today = _platform_today()
+    await _seed_due_event(maker, today=today)
     with pytest.raises(RuntimeError, match="fcm exploded"):
-        await scheduler.send_anniversary_notifications()
+        await scheduler.send_anniversary_notifications(today=today)
 
     assert await _lock_is_free(async_engine), "advisory lock stranded after job failure"
 
@@ -217,7 +230,8 @@ async def test_lock_and_unlock_run_on_one_dedicated_connection(
     spy = AsyncMock()
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
-    await _seed_due_event(maker)
+    today = _platform_today()
+    await _seed_due_event(maker, today=today)
 
     opened: list[AsyncConnection] = []
     lock_sql_by_conn_id: dict[int, list[str]] = {}
@@ -242,7 +256,7 @@ async def test_lock_and_unlock_run_on_one_dedicated_connection(
     monkeypatch.setattr(AsyncEngine, "connect", spying_connect)
     monkeypatch.setattr(AsyncConnection, "execute", spying_execute)
 
-    await scheduler.send_anniversary_notifications()
+    await scheduler.send_anniversary_notifications(today=today)
 
     assert spy.await_count == 1  # sanity: the due event was actually processed
 
