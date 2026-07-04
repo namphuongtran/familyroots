@@ -25,6 +25,23 @@ async def test_scheduler_starts_and_stops():
     assert scheduler.running is False
 
 
+class _FakeConnCtx:
+    """Minimal async context manager standing in for ``engine.connect()``.
+
+    Real ``MagicMock``/``AsyncMock`` async-dunder support is version-fiddly;
+    a tiny hand-written class keeps this unit test's await semantics obvious.
+    """
+
+    def __init__(self, conn: AsyncMock) -> None:
+        self._conn = conn
+
+    async def __aenter__(self) -> AsyncMock:
+        return self._conn
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+
 @pytest.mark.asyncio
 async def test_anniversary_dedup_skips_already_sent():
     """Already-sent notifications are not re-sent (dedup via notification_log)."""
@@ -57,7 +74,7 @@ async def test_anniversary_dedup_skips_already_sent():
 
     # notification_log check: already exists
     dedup_result = MagicMock()
-    dedup_result.scalar_one_or_none.return_value = 1  # exists
+    dedup_result.first.return_value = 1  # exists -> `if dedup.first(): continue`
 
     execute_calls = []
 
@@ -68,15 +85,23 @@ async def test_anniversary_dedup_skips_already_sent():
         return dedup_result
 
     mock_db.execute = AsyncMock(side_effect=mock_execute)
+    mock_db.commit = AsyncMock()
+    mock_db.rollback = AsyncMock()
+    mock_db.close = AsyncMock()
+
+    # Lock topology (C2): the job acquires the advisory lock on a dedicated
+    # connection (``engine.connect()``), then binds a session to it.
+    lock_result = MagicMock()
+    lock_result.scalar.return_value = True  # lock acquired
+    mock_conn = AsyncMock()
+    mock_conn.execute = AsyncMock(return_value=lock_result)
+
+    mock_engine = MagicMock()
+    mock_engine.connect = MagicMock(return_value=_FakeConnCtx(mock_conn))
 
     with (
-        patch(
-            "app.core.database.AsyncSessionLocal",
-            return_value=AsyncMock(
-                __aenter__=AsyncMock(return_value=mock_db),
-                __aexit__=AsyncMock(return_value=False),
-            ),
-        ),
+        patch("app.core.database.engine", mock_engine),
+        patch("app.services.scheduler.AsyncSession", return_value=mock_db),
         patch("app.services.notification.send_to_clan") as mock_send,
     ):
         await send_anniversary_notifications()

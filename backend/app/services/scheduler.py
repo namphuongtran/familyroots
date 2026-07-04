@@ -6,6 +6,7 @@ from datetime import date
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 
@@ -39,22 +40,36 @@ def stop_scheduler() -> None:
 async def send_anniversary_notifications() -> None:
     """Daily job: find events with upcoming anniversaries and send FCM notifications.
 
-    A PostgreSQL advisory lock ensures only one replica runs the job per tick;
-    other replicas acquire-fail and no-op. Deduplicates via ``notification_log``.
+    Lock topology (C2, seam-review-2026-07-04): the advisory lock lives on ONE
+    dedicated connection held for the whole job; the working session is bound
+    to that same connection, so mid-job commits can't release it back to the
+    pool and strand the lock. The finally block rolls back before unlocking so
+    a failed job can't mask its own error with InFailedSqlTransaction.
     """
-    from app.core.database import AsyncSessionLocal
+    from app.core.database import engine
+    from app.infrastructure.persistence.sql_dates import next_anniversary_sql
     from app.services.notification import send_to_clan
 
     today = date.today()
+    this_year = next_anniversary_sql("EXTRACT(YEAR FROM CURRENT_DATE)")
+    next_year = next_anniversary_sql("EXTRACT(YEAR FROM CURRENT_DATE) + 1")
 
-    async with AsyncSessionLocal() as db:
-        acquired = await db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": _JOB_LOCK_KEY})
+    async with engine.connect() as conn:
+        acquired = await conn.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": _JOB_LOCK_KEY})
         if not acquired.scalar():
             logger.info("Anniversary job lock held by another instance — skipping this run")
+            await conn.rollback()
             return
+        # End the autobegun transaction the lock SELECT opened (the
+        # session-level advisory lock survives commit). Otherwise the bound
+        # session below would JOIN that transaction via savepoints and its
+        # commits would not be durable until the connection commits.
+        await conn.commit()
+
+        db = AsyncSession(bind=conn, expire_on_commit=False)
         try:
             result = await db.execute(
-                text("""
+                text(f"""
                     SELECT
                         e.id AS event_id,
                         e.clan_id,
@@ -64,16 +79,8 @@ async def send_anniversary_notifications() -> None:
                         p.full_name AS person_name,
                         e.notify_days_before,
                         CASE
-                            WHEN (MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::INT,
-                                            EXTRACT(MONTH FROM e.event_date)::INT,
-                                            EXTRACT(DAY FROM e.event_date)::INT)
-                                  >= CURRENT_DATE)
-                            THEN MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::INT,
-                                           EXTRACT(MONTH FROM e.event_date)::INT,
-                                           EXTRACT(DAY FROM e.event_date)::INT)
-                            ELSE MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::INT + 1,
-                                           EXTRACT(MONTH FROM e.event_date)::INT,
-                                           EXTRACT(DAY FROM e.event_date)::INT)
+                            WHEN {this_year} >= CURRENT_DATE THEN {this_year}
+                            ELSE {next_year}
                         END AS next_occurrence
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
@@ -129,4 +136,10 @@ async def send_anniversary_notifications() -> None:
                 )
                 await db.commit()
         finally:
-            await db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _JOB_LOCK_KEY})
+            # Roll back any open/aborted transaction BEFORE unlocking: the
+            # session-level advisory lock survives rollback, and unlocking on
+            # an aborted tx would raise and mask the job's real error.
+            await db.rollback()
+            await db.close()
+            await conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _JOB_LOCK_KEY})
+            await conn.commit()

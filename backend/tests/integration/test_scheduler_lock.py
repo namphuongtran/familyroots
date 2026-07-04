@@ -69,6 +69,7 @@ async def test_job_skips_when_lock_held(
     async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
     spy = AsyncMock()
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
@@ -102,6 +103,7 @@ async def test_job_processes_due_event_when_lock_free(
     async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
     spy = AsyncMock()
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
@@ -115,3 +117,57 @@ async def test_job_processes_due_event_when_lock_free(
     async with maker() as s:
         n = await s.execute(sa.text("SELECT COUNT(*) FROM notification_log"))
         assert n.scalar() == 1
+
+
+async def _lock_is_free(engine: AsyncEngine) -> bool:
+    """Probe from a brand-new connection; release immediately if acquired."""
+    async with engine.connect() as probe:
+        got = await probe.execute(
+            sa.text("SELECT pg_try_advisory_lock(:k)"), {"k": scheduler._JOB_LOCK_KEY}
+        )
+        acquired = bool(got.scalar())
+        if acquired:
+            await probe.execute(
+                sa.text("SELECT pg_advisory_unlock(:k)"), {"k": scheduler._JOB_LOCK_KEY}
+            )
+        await probe.rollback()
+    return acquired
+
+
+@pytest.mark.asyncio
+async def test_lock_released_even_after_midjob_commit(
+    async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C2 regression: processing a due event commits mid-job; the unlock must
+    still land on the lock-holding connection. Before the fix the lock was
+    stranded on an idle pooled connection and later runs skipped forever."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+    spy = AsyncMock()
+    monkeypatch.setattr("app.services.notification.send_to_clan", spy)
+
+    await _seed_due_event(maker)
+    await scheduler.send_anniversary_notifications()  # sends + commits mid-job
+
+    assert spy.await_count == 1
+    assert await _lock_is_free(async_engine), "advisory lock stranded after mid-job commit"
+
+
+@pytest.mark.asyncio
+async def test_lock_released_and_error_propagates_after_failure(
+    async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C2 regression: a mid-job failure must roll back before unlocking, so the
+    ORIGINAL error propagates (not InFailedSqlTransaction) and the lock frees."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+    boom = RuntimeError("fcm exploded")
+    monkeypatch.setattr("app.services.notification.send_to_clan", AsyncMock(side_effect=boom))
+
+    await _seed_due_event(maker)
+    with pytest.raises(RuntimeError, match="fcm exploded"):
+        await scheduler.send_anniversary_notifications()
+
+    assert await _lock_is_free(async_engine), "advisory lock stranded after job failure"
