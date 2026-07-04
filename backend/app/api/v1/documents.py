@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
+from app.domain.document.entity import MAX_FILE_SIZE_BYTES
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
 
@@ -30,7 +31,13 @@ async def upload_document(
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Upload a document/photo to storage and save metadata."""
-    content = await file.read()
+    # Read at most MAX+1 bytes: bounds the in-RAM copy so an oversized body isn't
+    # pulled into one huge `bytes` before the size check (the +1 still trips
+    # Document.create's file_too_large at the boundary). NOTE: this does NOT stop an
+    # unbounded upload from being spooled to a temp file first — the multipart parser
+    # already streams the full body to disk. A hard total-body-size limit belongs at
+    # the proxy / ASGI layer (see review doc M7); this only closes the RAM vector.
+    content = await file.read(MAX_FILE_SIZE_BYTES + 1)
     result = await cmd_handler.upload(
         file_content=content,
         filename=file.filename,

@@ -64,3 +64,26 @@ def test_live_hit_retained() -> None:
     remaining = mw._prune(ip, now - mw._window)
     assert remaining == [now]
     assert mw._hits[ip] == [now]
+
+
+def test_sweep_evicts_stale_one_shot_buckets() -> None:
+    # Simulate a rotate-a-new-IP-per-request attacker: many one-shot IPs whose single
+    # hit has expired, plus one still-active IP. A sweep must drop only the stale ones.
+    mw = _mw(trust=False)
+    now = time.monotonic()
+    for i in range(50):
+        mw._hits[f"1.1.1.{i}"] = [now - 9999]  # expired, never returned
+    mw._hits["9.9.9.9"] = [now]  # fresh
+    mw._last_sweep = now - mw._window - 1  # a full window has elapsed → sweep runs
+    mw._maybe_sweep(now, now - mw._window)
+    assert list(mw._hits) == ["9.9.9.9"], mw._hits
+
+
+def test_sweep_is_noop_within_window() -> None:
+    # Bounded work: the O(n) sweep runs at most once per window, not every request.
+    mw = _mw(trust=False)
+    now = time.monotonic()
+    mw._hits["1.1.1.1"] = [now - 9999]  # stale, but too soon to sweep
+    mw._last_sweep = now
+    mw._maybe_sweep(now, now - mw._window)
+    assert "1.1.1.1" in mw._hits

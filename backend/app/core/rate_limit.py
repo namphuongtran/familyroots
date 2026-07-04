@@ -1,7 +1,9 @@
 """In-memory rate limiting middleware for auth endpoints.
 
 Sliding-window counter per client IP. Proxy-aware (opt-in via
-``trust_forwarded_for``) and memory-bounded (empty buckets are evicted).
+``trust_forwarded_for``) and memory-bounded: the current IP's bucket is pruned on
+every request, and a periodic global sweep evicts buckets for IPs that never return
+(so a rotate-a-new-IP-per-request attacker can't leak memory without bound).
 For multi-replica deployments, swap the in-memory store for Redis.
 """
 
@@ -43,8 +45,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._max = max_requests
         self._window = window_seconds
         self._trust_xff = trust_forwarded_for
-        # {client_ip: [timestamp, ...]}; empty buckets are evicted in _prune.
+        # {client_ip: [timestamp, ...]}; the active IP's bucket is evicted when empty
+        # in _prune, and stale buckets are swept globally every window (_maybe_sweep).
         self._hits: dict[str, list[float]] = defaultdict(list)
+        self._last_sweep = time.monotonic()
 
     def _client_ip(self, request: Request) -> str:
         """Resolve the client IP, honoring X-Forwarded-For only when trusted.
@@ -71,6 +75,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._hits.pop(client_ip, None)
         return bucket
 
+    def _maybe_sweep(self, now: float, cutoff: float) -> None:
+        """At most once per window, evict every bucket whose newest hit is expired.
+
+        _prune only touches the requesting IP, so a one-shot IP would otherwise leave
+        a permanent single-entry bucket and let an attacker rotating source IPs grow
+        ``_hits`` without bound. This caps it to roughly the IPs seen in the last window.
+        Runs only on rate-limited paths (the only ones that populate ``_hits``).
+
+        The peak between sweeps is still proportional to attack throughput (one bucket
+        per new IP per window); a hard ``len(_hits)`` cap would make the ceiling
+        rate-independent, but is unnecessary at auth-endpoint volumes.
+        """
+        if now - self._last_sweep < self._window:
+            return
+        stale = [ip for ip, ts in self._hits.items() if not ts or ts[-1] <= cutoff]
+        for ip in stale:
+            del self._hits[ip]
+        self._last_sweep = now
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not request.url.path.startswith(self._prefix):
             return await call_next(request)
@@ -78,6 +101,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = self._client_ip(request)
         now = time.monotonic()
         cutoff = now - self._window
+        self._maybe_sweep(now, cutoff)
         bucket = self._prune(client_ip, cutoff)
 
         if len(bucket) >= self._max:
