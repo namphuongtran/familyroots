@@ -1,14 +1,10 @@
 """Language middleware — extract Accept-Language header and set locale in request context."""
 
-from contextvars import ContextVar
-
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
-current_locale: ContextVar[str] = ContextVar("current_locale", default="vi")
-
-SUPPORTED_LOCALES = {"vi", "en", "zh", "fr"}
+from app.core.locale import SUPPORTED_LOCALES, current_locale
 
 
 class LanguageMiddleware(BaseHTTPMiddleware):

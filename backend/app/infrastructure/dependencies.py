@@ -41,6 +41,7 @@ from app.application.relationship.handlers import (
 )
 from app.application.tree.handlers import TreeQueryHandler
 from app.core.database import get_db
+from app.domain.auth.identity_provider import IdentityProvider
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.auth_repository import (
@@ -136,12 +137,25 @@ def get_platform_admin_query_handler(
 # ── Auth handlers ───────────────────────────────────────────────
 
 
-def get_auth_command_handler(db: AsyncSession = Depends(get_db)) -> AuthCommandHandler:
+def get_identity_provider() -> IdentityProvider:
+    """Provide the external identity provider behind its domain port.
+
+    A dedicated provider (rather than constructing the adapter inline in each
+    auth provider) so tests can substitute a stub via
+    ``app.dependency_overrides[get_identity_provider]`` without rebuilding the
+    handlers they exercise."""
+    return SupabaseIdentityProvider()
+
+
+def get_auth_command_handler(
+    db: AsyncSession = Depends(get_db),
+    identity: IdentityProvider = Depends(get_identity_provider),
+) -> AuthCommandHandler:
     uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
     return AuthCommandHandler(
         SqlAlchemyAuthRepository(db),
         uow,
-        SupabaseIdentityProvider(),
+        identity,
         SqlAlchemyAuthQueryPort(db),
     )
 
@@ -154,8 +168,10 @@ def get_fcm_token_handler(db: AsyncSession = Depends(get_db)) -> FCMTokenHandler
     return FCMTokenHandler(SqlAlchemyFCMTokenRepository(db))
 
 
-def get_auth_session_service() -> AuthSessionService:
-    return AuthSessionService(SupabaseIdentityProvider())
+def get_auth_session_service(
+    identity: IdentityProvider = Depends(get_identity_provider),
+) -> AuthSessionService:
+    return AuthSessionService(identity)
 
 
 # ── Relationship handlers ───────────────────────────────────────
