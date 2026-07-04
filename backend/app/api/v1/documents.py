@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
+from app.domain.document.entity import MAX_FILE_SIZE_BYTES
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
 
@@ -30,7 +31,10 @@ async def upload_document(
     _role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Upload a document/photo to storage and save metadata."""
-    content = await file.read()
+    # Read at most MAX+1 bytes so an oversized (or unbounded) upload can't exhaust
+    # server memory before the size check runs. The +1 makes a file at exactly the
+    # limit+1 boundary still trip Document.create's file_too_large validation.
+    content = await file.read(MAX_FILE_SIZE_BYTES + 1)
     result = await cmd_handler.upload(
         file_content=content,
         filename=file.filename,
