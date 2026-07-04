@@ -9,7 +9,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.infrastructure.persistence.invitation_repository import SqlAlchemyInvitationRepository
-from app.models.clan_invitation import ClanInvitation
 
 
 @pytest.fixture()
@@ -35,16 +34,14 @@ async def _clan(session: AsyncSession) -> uuid.UUID:
 async def test_create_and_fetch_by_token_and_pending(async_session: AsyncSession) -> None:
     repo = SqlAlchemyInvitationRepository(async_session)
     clan_id = await _clan(async_session)
-    inv = ClanInvitation(
+    await repo.create_invitation(
         clan_id=clan_id,
         email="a@example.com",
         role="viewer",
         invited_by=uuid.uuid4(),
         token="tok-123",
         expires_at=datetime.now(UTC) + timedelta(days=7),
-        status="pending",
     )
-    repo.add_invitation(inv)
     await async_session.commit()
 
     assert (await repo.get_by_token("tok-123")) is not None
@@ -57,17 +54,15 @@ async def test_create_and_fetch_by_token_and_pending(async_session: AsyncSession
 async def test_one_pending_per_email_enforced(async_session: AsyncSession) -> None:
     repo = SqlAlchemyInvitationRepository(async_session)
     clan_id = await _clan(async_session)
-    for _ in range(2):
-        repo.add_invitation(
-            ClanInvitation(
+    # create_invitation flushes each row, so the second (duplicate pending) trips the
+    # unique partial index uq_clan_invitations_pending inside the loop.
+    with pytest.raises(Exception):  # noqa: B017
+        for _ in range(2):
+            await repo.create_invitation(
                 clan_id=clan_id,
                 email="dup@example.com",
                 role="viewer",
                 invited_by=uuid.uuid4(),
                 token=f"t-{uuid.uuid4().hex}",
                 expires_at=datetime.now(UTC) + timedelta(days=7),
-                status="pending",
             )
-        )
-    with pytest.raises(Exception):  # unique partial index uq_clan_invitations_pending  # noqa: B017
-        await async_session.commit()

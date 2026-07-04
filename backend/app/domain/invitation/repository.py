@@ -16,8 +16,20 @@ class InvitationRepository(Protocol):
         """Return the invitation with this token, if any."""
         ...
 
-    def add_invitation(self, invitation: Any) -> None:
-        """Stage a new invitation row."""
+    async def create_invitation(
+        self,
+        *,
+        clan_id: uuid.UUID,
+        email: str,
+        role: str,
+        invited_by: uuid.UUID,
+        token: str,
+        expires_at: datetime,
+    ) -> uuid.UUID:
+        """Persist a new pending invitation and return its id.
+
+        Constructs the ORM row inside the adapter so the application layer never
+        imports ``app.models`` (CQRS write side goes through domain + ports)."""
         ...
 
     async def list_by_clan(self, clan_id: uuid.UUID) -> list[Any]:
@@ -34,8 +46,16 @@ class InvitationRepository(Protocol):
         """Existing membership for a user in a clan, if any."""
         ...
 
-    def add_user_role(self, role: Any) -> None:
-        """Stage a new user_clan_roles row."""
+    def add_membership(
+        self,
+        *,
+        clan_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+        approved_by: uuid.UUID,
+        approved_at: datetime,
+    ) -> None:
+        """Stage a new approved user_clan_roles row (ORM built inside the adapter)."""
         ...
 
     async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Any | None:
