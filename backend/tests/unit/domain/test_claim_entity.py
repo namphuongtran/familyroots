@@ -20,6 +20,7 @@ def test_claim_approve_success():
     assert claim.status == "APPROVED"
     assert claim.reviewed_by == admin_id
     assert claim.reviewer_note == "Verified."
+    assert claim.reviewed_at is not None  # entity is the source of truth for the timestamp
 
 
 def test_claim_approve_invalid_state():
@@ -41,6 +42,7 @@ def test_claim_reject_success():
     assert claim.status == "REJECTED"
     assert claim.reviewed_by == admin_id
     assert claim.reviewer_note == "Not matching records."
+    assert claim.reviewed_at is not None
 
 
 def test_claim_reject_invalid_state():
