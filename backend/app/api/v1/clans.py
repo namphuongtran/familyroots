@@ -33,7 +33,7 @@ async def get_own_clan(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     include: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get the current user's active clan info."""
@@ -56,13 +56,13 @@ async def update_own_clan(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClanCommandHandler = Depends(get_clan_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Update current clan info (admin only)."""
     clan = await handler.update_clan(
         UpdateClan(
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
             changes=body.model_dump(exclude_unset=True),
         )
     )
@@ -74,7 +74,7 @@ async def list_clan_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     cursor: str | None = None,
     limit: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
@@ -98,7 +98,7 @@ async def list_pending_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
     cursor: str | None = None,
     limit: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
@@ -122,14 +122,14 @@ async def approve_user(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClanCommandHandler = Depends(get_clan_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Approve a pending user (admin only)."""
     await handler.approve_user(
         ApproveUser(
             clan_id=clan_id,
             target_user_id=user_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
     return {"data": {"message": t("user.approved"), "user_id": str(user_id)}}
@@ -141,14 +141,14 @@ async def reject_user(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClanCommandHandler = Depends(get_clan_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Reject a pending user (admin only)."""
     await handler.reject_user(
         RejectUser(
             clan_id=clan_id,
             target_user_id=user_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
     return {"data": {"message": t("user.rejected"), "user_id": str(user_id)}}
@@ -161,7 +161,7 @@ async def change_user_role(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClanCommandHandler = Depends(get_clan_command_handler),
-    _role: ClanRole = RequireAdmin,
+    caller_role: ClanRole = RequireAdmin,  # distinct from the body `role` (the target role)
 ) -> dict[str, Any]:
     """Change a user's clan role (admin only)."""
     await handler.change_role(
@@ -169,7 +169,7 @@ async def change_user_role(
             clan_id=clan_id,
             target_user_id=user_id,
             new_role=role,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, caller_role.value),
         )
     )
     return {"data": {"message": t("user.role_changed"), "user_id": str(user_id), "role": role}}
@@ -181,14 +181,14 @@ async def remove_user(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClanCommandHandler = Depends(get_clan_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Remove a user from the clan (admin only)."""
     await handler.remove_user(
         RemoveUser(
             clan_id=clan_id,
             target_user_id=user_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
     return {"data": {"message": t("user.removed"), "user_id": str(user_id)}}

@@ -20,7 +20,7 @@ async def list_branches(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: BranchQueryHandler = Depends(get_branch_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List all branches for the current clan."""
@@ -38,12 +38,12 @@ async def create_branch(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: BranchCommandHandler = Depends(get_branch_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a new branch."""
     branch = await cmd_handler.create(
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "editor"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
         name=body.name,
         description=body.description,
         founder_person_id=body.founder_person_id,
@@ -59,7 +59,7 @@ async def get_branch(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: BranchQueryHandler = Depends(get_branch_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a single branch by ID."""
     branch = await query_handler.get(branch_id=branch_id, clan_id=clan_id)
@@ -73,13 +73,13 @@ async def update_branch(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: BranchCommandHandler = Depends(get_branch_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a branch."""
     branch = await cmd_handler.update(
         branch_id=branch_id,
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "editor"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
         changes=body.model_dump(exclude_unset=True),
     )
     return {"data": branch.model_dump()}
@@ -91,12 +91,12 @@ async def delete_branch(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: BranchCommandHandler = Depends(get_branch_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Delete a branch (admin only)."""
     await cmd_handler.delete(
         branch_id=branch_id,
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "admin"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
     )
     return {"data": {"message": "Branch deleted", "id": str(branch_id)}}
