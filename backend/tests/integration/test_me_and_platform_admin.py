@@ -279,13 +279,17 @@ async def test_clan_update_through_aggregate_persists_and_audits(
 
         name = await s.scalar(sa.text("SELECT name FROM clans WHERE id = :c"), {"c": clan_id})
         assert name == "Nguyễn Tộc"
-        audited = await s.scalar(
-            sa.text(
-                "SELECT count(*) FROM audit_logs WHERE clan_id = :c AND action = 'clan.update'"
-            ),
-            {"c": clan_id},
-        )
-        assert audited == 1
+        audit_rows = (
+            await s.execute(
+                sa.text(
+                    "SELECT new_value FROM audit_logs WHERE clan_id = :c AND action = 'clan.update'"
+                ),
+                {"c": clan_id},
+            )
+        ).all()
+        assert len(audit_rows) == 1
+        # the audit trail records WHAT changed (not just that an update happened)
+        assert audit_rows[0][0] == {"name": "Nguyễn Tộc", "motto": "Kính tổ"}
 
         # A field outside the whitelist is refused by the aggregate — the request
         # schema has no such field, so this is the domain-level backstop.

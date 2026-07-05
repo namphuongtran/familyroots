@@ -18,6 +18,14 @@ class ClanUpdated(AuditableEvent):
             object.__setattr__(self, "action", "clan.update")
         if not self.resource_type:
             object.__setattr__(self, "resource_type", "clan")
+        if self.new_value is None and self.changes:
+            # Serialize changes into the audit new_value column (mirrors PersonUpdated)
+            # so the audit trail records WHAT changed, not just that an update occurred.
+            serializable = {
+                k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                for k, v in self.changes.items()
+            }
+            object.__setattr__(self, "new_value", serializable)
 
 
 @dataclass(frozen=True)
