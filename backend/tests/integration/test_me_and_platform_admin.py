@@ -18,12 +18,26 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.application.me.handlers import MeQueryHandler
-from app.application.platform_admin.handlers import PlatformAdminCommandHandler
+from app.application.platform_admin.handlers import (
+    PlatformAdminCommandHandler,
+    PlatformAdminQueryHandler,
+)
 from app.core.exceptions import ForbiddenError
+from app.domain.platform_admin.query_port import (
+    AuditLogEntryView,
+    ClanDetailView,
+    ClanStatsView,
+    ClanSummaryView,
+    Page,
+    PlatformMetricsView,
+)
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
 from app.infrastructure.persistence.me_query_port import SqlAlchemyMeQueryPort
+from app.infrastructure.persistence.platform_admin_query_port import (
+    SqlAlchemyPlatformAdminQueryPort,
+)
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -97,6 +111,140 @@ async def test_me_lists_only_approved_and_blocks_non_member(async_engine: AsyncE
             await handler.select_clan(user_id=str(user_id), clan_id=other_clan)
         with pytest.raises(ForbiddenError):
             await handler.select_clan(user_id=str(user_id), clan_id=pending_clan)
+
+
+async def _audit(
+    s: AsyncSession, clan_id: uuid.UUID | None, actor_id: uuid.UUID, action: str
+) -> None:
+    await s.execute(
+        sa.text(
+            "INSERT INTO audit_logs (id, clan_id, actor_id, actor_role, action, resource_type) "
+            "VALUES (:id, :c, :a, 'admin', :act, 'clan')"
+        ),
+        {"id": uuid.uuid4(), "c": clan_id, "a": actor_id, "act": action},
+    )
+
+
+async def test_platform_admin_query_port_returns_typed_read_models(
+    async_engine: AsyncEngine,
+) -> None:
+    """L4: the read-side port returns typed frozen-dataclass views with REAL field
+    types (uuid.UUID/datetime), not str-ified dicts. Reverting the infra to the old
+    hand-built ``str(id)`` dicts fails every ``isinstance`` assertion below."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id, actor_id = uuid.uuid4(), uuid.uuid4()
+
+    async with maker() as s:
+        await _clan(s, clan_id)
+        await _profile(s, actor_id)
+        await _audit(s, clan_id, actor_id, "clan.suspend")
+        await s.commit()
+
+        port = SqlAlchemyPlatformAdminQueryPort(s)
+
+        detail = await port.get_clan_detail(clan_id)
+        assert isinstance(detail, ClanDetailView)
+        assert isinstance(detail.id, uuid.UUID)  # a real UUID, NOT str(clan.id)
+        assert detail.name == "C"
+        assert isinstance(detail.stats, ClanStatsView)
+        assert detail.stats.total_members >= 0
+
+        metrics = await port.get_metrics()
+        assert isinstance(metrics, PlatformMetricsView)
+        assert isinstance(metrics.total_clans, int)
+        assert metrics.total_clans >= 1
+        assert metrics.suspended_clans == metrics.total_clans - metrics.active_clans
+
+        clan_page = await port.list_clans(None, 20)
+        assert isinstance(clan_page, Page)
+        assert clan_page.meta.limit == 20
+        assert all(isinstance(c, ClanSummaryView) for c in clan_page.data)
+        assert all(isinstance(c.id, uuid.UUID) for c in clan_page.data)
+
+        audit_page = await port.get_audit_log(None, None, None, 20)
+        assert isinstance(audit_page, Page)
+        entries = [e for e in audit_page.data if e.actor_id == actor_id]
+        assert entries and isinstance(entries[0], AuditLogEntryView)
+        assert isinstance(entries[0].id, uuid.UUID)
+        assert entries[0].action == "clan.suspend"
+        assert entries[0].clan_id == clan_id
+
+
+async def test_platform_admin_handler_preserves_wire_contract(
+    async_engine: AsyncEngine,
+) -> None:
+    """The handler re-serializes the typed views into the SAME wire shape the API
+    emitted before L4 (string ids, nested meta) — so the client contract is unchanged.
+    Also proves the nullability fix: a NULL clan_id audit row serializes to JSON null,
+    not the literal string ``"None"`` the old ``str(e.clan_id)`` produced."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id, actor_id = uuid.uuid4(), uuid.uuid4()
+
+    async with maker() as s:
+        await _clan(s, clan_id)
+        await _profile(s, actor_id)
+        await _audit(s, clan_id, actor_id, "clan.suspend")
+        await _audit(s, None, actor_id, "platform.login")  # platform-level: clan_id NULL
+        await s.commit()
+
+        handler = PlatformAdminQueryHandler(SqlAlchemyPlatformAdminQueryPort(s))
+
+        detail = await handler.get_clan_detail(clan_id=clan_id)
+        assert detail["id"] == str(clan_id)  # wire id is a string
+        assert set(detail) >= {"id", "name", "slug", "is_active", "stats", "created_at"}
+        assert set(detail["stats"]) == {"total_members", "total_users"}
+
+        clans = await handler.list_clans(cursor=None, limit=20)
+        assert set(clans) == {"data", "meta"}
+        assert set(clans["meta"]) == {"cursor", "has_more", "limit"}
+        assert all(isinstance(c["id"], str) for c in clans["data"])
+
+        log = await handler.get_audit_log(clan_id=None, action=None, cursor=None, limit=20)
+        mine = [e for e in log["data"] if e["actor_id"] == str(actor_id)]
+        by_action = {e["action"]: e for e in mine}
+        assert by_action["clan.suspend"]["clan_id"] == str(clan_id)
+        assert by_action["platform.login"]["clan_id"] is None  # NOT the string "None"
+
+        metrics = await handler.get_metrics()
+        assert set(metrics) == {
+            "total_clans",
+            "active_clans",
+            "suspended_clans",
+            "total_members",
+            "total_users",
+        }
+        assert all(isinstance(v, int) for v in metrics.values())
+
+
+async def test_platform_admin_audit_log_paginates_across_cursor(
+    async_engine: AsyncEngine,
+) -> None:
+    """Exercise the one genuinely new control flow: the cursor is computed from the
+    ORM rows (via build_page) while the page data is mapped to typed views. Scoped
+    to a fresh clan_id so it is deterministic despite the session-scoped DB."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id, actor_id = uuid.uuid4(), uuid.uuid4()
+
+    async with maker() as s:
+        await _clan(s, clan_id)
+        await _profile(s, actor_id)
+        for i in range(3):
+            await _audit(s, clan_id, actor_id, f"clan.act{i}")
+        await s.commit()
+
+        port = SqlAlchemyPlatformAdminQueryPort(s)
+
+        page1 = await port.get_audit_log(clan_id, None, None, 2)
+        assert len(page1.data) == 2
+        assert page1.meta.has_more is True
+        assert page1.meta.cursor is not None  # cursor derived from the ORM row
+        assert all(isinstance(e, AuditLogEntryView) for e in page1.data)
+
+        page2 = await port.get_audit_log(clan_id, None, page1.meta.cursor, 2)
+        assert len(page2.data) == 1  # the remaining row
+        assert page2.meta.has_more is False
+        # the cursor genuinely advanced — no row appears on both pages
+        assert not ({e.id for e in page1.data} & {e.id for e in page2.data})
 
 
 async def test_platform_admin_suspend_and_reactivate(async_engine: AsyncEngine) -> None:
