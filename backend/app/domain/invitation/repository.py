@@ -6,27 +6,30 @@ import uuid
 from datetime import datetime
 from typing import Any, Protocol
 
+from app.domain.invitation.entity import Invitation
+
 
 class InvitationRepository(Protocol):
     async def get_pending_by_email(self, clan_id: uuid.UUID, email: str) -> Any | None:
         """Return a pending invitation for (clan_id, email), if any."""
         ...
 
-    async def get_by_token(self, token: str) -> Any | None:
-        """Return the invitation with this token, if any."""
+    async def get_by_token(self, token: str) -> Invitation | None:
+        """Load the Invitation aggregate for this token, if any."""
         ...
 
     async def create_invitation(
         self,
         *,
+        invitation_id: uuid.UUID,
         clan_id: uuid.UUID,
         email: str,
         role: str,
         invited_by: uuid.UUID,
         token: str,
         expires_at: datetime,
-    ) -> uuid.UUID:
-        """Persist a new pending invitation and return its id.
+    ) -> None:
+        """Persist a new pending invitation with the aggregate's id.
 
         Constructs the ORM row inside the adapter so the application layer never
         imports ``app.models`` (CQRS write side goes through domain + ports)."""
@@ -58,8 +61,8 @@ class InvitationRepository(Protocol):
         """Stage a new approved user_clan_roles row (ORM built inside the adapter)."""
         ...
 
-    async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Any | None:
-        """Return a clan-scoped invitation by its primary key, if any."""
+    async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Invitation | None:
+        """Load a clan-scoped Invitation aggregate by its primary key, if any."""
         ...
 
     async def transition_status(

@@ -34,7 +34,9 @@ async def _clan(session: AsyncSession) -> uuid.UUID:
 async def test_create_and_fetch_by_token_and_pending(async_session: AsyncSession) -> None:
     repo = SqlAlchemyInvitationRepository(async_session)
     clan_id = await _clan(async_session)
+    inv_id = uuid.uuid4()
     await repo.create_invitation(
+        invitation_id=inv_id,
         clan_id=clan_id,
         email="a@example.com",
         role="viewer",
@@ -44,7 +46,12 @@ async def test_create_and_fetch_by_token_and_pending(async_session: AsyncSession
     )
     await async_session.commit()
 
-    assert (await repo.get_by_token("tok-123")) is not None
+    # get_by_token now maps the ORM row to the Invitation aggregate.
+    loaded = await repo.get_by_token("tok-123")
+    assert loaded is not None
+    assert loaded.id == inv_id
+    assert loaded.email == "a@example.com"
+    assert loaded.status == "pending"
     assert (await repo.get_pending_by_email(clan_id, "a@example.com")) is not None
     assert (await repo.get_pending_by_email(clan_id, "other@example.com")) is None
     assert len(await repo.list_by_clan(clan_id)) == 1
@@ -59,6 +66,7 @@ async def test_one_pending_per_email_enforced(async_session: AsyncSession) -> No
     with pytest.raises(Exception):  # noqa: B017
         for _ in range(2):
             await repo.create_invitation(
+                invitation_id=uuid.uuid4(),
                 clan_id=clan_id,
                 email="dup@example.com",
                 role="viewer",

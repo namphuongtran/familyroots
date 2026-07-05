@@ -3,6 +3,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -12,18 +13,15 @@ from app.application.invitation.commands import (
     RevokeInvitation,
 )
 from app.application.invitation.handlers import InvitationCommandHandler
+from app.domain.invitation.entity import Invitation
+from app.domain.invitation.events import InvitationAccepted
 from app.domain.shared.exceptions import ConflictError, EntityNotFoundError, ForbiddenError
 from app.domain.shared.value_objects import ActorInfo
 
 
-class _Inv:
-    def __init__(self, **kw):
-        self.id = uuid.uuid4()
-        self.status = "pending"
-        self.accepted_by = None
-        self.accepted_at = None
-        for k, v in kw.items():
-            setattr(self, k, v)
+def _inv(**kw: Any) -> Invitation:
+    """A real Invitation aggregate (the handler calls its accept()/revoke())."""
+    return Invitation(**kw)
 
 
 class _ExistingRole:
@@ -58,10 +56,10 @@ class _FakeRepo:
     async def get_by_id(self, invitation_id, clan_id):
         return self._by_id
 
-    async def create_invitation(self, *, clan_id, email, role, invited_by, token, expires_at):
-        inv_id = uuid.uuid4()
-        self.added_invitations.append(inv_id)
-        return inv_id
+    async def create_invitation(
+        self, *, invitation_id, clan_id, email, role, invited_by, token, expires_at
+    ):
+        self.added_invitations.append(invitation_id)
 
     async def ensure_profile(self, user_id, email, display_name):
         self.call_order.append("ensure_profile")
@@ -109,9 +107,10 @@ class _FakeRepo:
 class _FakeUow:
     def __init__(self):
         self.commits = 0
+        self.tracked: list[Any] = []
 
     def track(self, agg):
-        pass
+        self.tracked.append(agg)
 
     async def flush(self):
         pass
@@ -126,7 +125,7 @@ def _actor():
 
 @pytest.mark.asyncio
 async def test_create_rejects_duplicate_pending():
-    repo = _FakeRepo(pending=_Inv())
+    repo = _FakeRepo(pending=_inv())
     handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(ConflictError):
         await handler.create(
@@ -150,7 +149,7 @@ async def test_create_returns_token_and_path():
 
 @pytest.mark.asyncio
 async def test_accept_email_mismatch_forbidden():
-    inv = _Inv(
+    inv = _inv(
         clan_id=uuid.uuid4(),
         email="invited@x.com",
         role="viewer",
@@ -169,7 +168,7 @@ async def test_accept_email_mismatch_forbidden():
 
 @pytest.mark.asyncio
 async def test_accept_expired_conflict():
-    inv = _Inv(
+    inv = _inv(
         clan_id=uuid.uuid4(),
         email="a@x.com",
         role="viewer",
@@ -188,7 +187,7 @@ async def test_accept_expired_conflict():
 
 @pytest.mark.asyncio
 async def test_accept_creates_approved_membership():
-    inv = _Inv(
+    inv = _inv(
         clan_id=uuid.uuid4(),
         email="a@x.com",
         role="editor",
@@ -206,13 +205,15 @@ async def test_accept_creates_approved_membership():
     assert len(repo.added_roles) == 1
     role = repo.added_roles[0]
     assert role.is_approved is True
-    assert role.approved_by == inv.invited_by and role.approved_at is not None  # type: ignore[attr-defined]
+    assert role.approved_by == inv.invited_by and role.approved_at is not None
     assert uow.commits == 1
+    # claim won → aggregate tracked so its InvitationAccepted event is dispatched
+    assert uow.tracked == [inv]
 
 
 @pytest.mark.asyncio
 async def test_accept_promotes_pending_membership():
-    inv = _Inv(
+    inv = _inv(
         clan_id=uuid.uuid4(),
         email="a@x.com",
         role="editor",
@@ -233,14 +234,14 @@ async def test_accept_promotes_pending_membership():
     assert repo.added_roles == []
     assert existing.role == "editor"
     assert existing.is_approved is True
-    assert existing.approved_by == inv.invited_by  # type: ignore[attr-defined]
+    assert existing.approved_by == inv.invited_by
     assert existing.approved_at is not None
     assert inv.status == "accepted"
 
 
 @pytest.mark.asyncio
 async def test_revoke_pending_sets_revoked():
-    inv = _Inv(status="pending")
+    inv = _inv(status="pending")
     repo = _FakeRepo(by_id=inv)
     uow = _FakeUow()
     handler = InvitationCommandHandler(repo, uow)  # type: ignore[arg-type]
@@ -253,7 +254,7 @@ async def test_revoke_pending_sets_revoked():
 
 @pytest.mark.asyncio
 async def test_revoke_nonpending_conflicts():
-    inv = _Inv(status="accepted")
+    inv = _inv(status="accepted")
     repo = _FakeRepo(by_id=inv)
     handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(ConflictError):
@@ -276,7 +277,7 @@ async def test_revoke_not_found():
 async def test_accept_conflicts_when_transition_loses_race():
     """A concurrent revoke wins the row: transition_status returns False,
     so accept must 409 and never grant a role."""
-    inv = _Inv(
+    inv = _inv(
         clan_id=uuid.uuid4(),
         email="a@x.com",
         role="editor",
@@ -284,7 +285,8 @@ async def test_accept_conflicts_when_transition_loses_race():
         expires_at=datetime.now(UTC) + timedelta(days=1),
     )
     repo = _FakeRepo(by_token=inv, transition_result=False)
-    handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
+    uow = _FakeUow()
+    handler = InvitationCommandHandler(repo, uow)  # type: ignore[arg-type]
     with pytest.raises(ConflictError, match=r"invitation\.not_pending"):
         await handler.accept(
             AcceptInvitation(
@@ -292,13 +294,18 @@ async def test_accept_conflicts_when_transition_loses_race():
             )
         )
     assert repo.added_roles == []
+    # The aggregate buffered an InvitationAccepted event in accept(), but the lost CAS
+    # means it is never tracked — so the event is discarded, never dispatched/committed.
+    assert uow.tracked == []
+    assert uow.commits == 0
+    assert any(isinstance(e, InvitationAccepted) for e in inv.collect_events())
 
 
 @pytest.mark.asyncio
 async def test_revoke_conflicts_when_transition_loses_race():
     """A concurrent accept wins the row: transition_status returns False,
     so revoke must 409."""
-    inv = _Inv(status="pending")
+    inv = _inv(status="pending")
     repo = _FakeRepo(by_id=inv, transition_result=False)
     handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     with pytest.raises(ConflictError, match=r"invitation\.not_pending"):
@@ -311,7 +318,7 @@ async def test_revoke_conflicts_when_transition_loses_race():
 async def test_accept_claims_before_granting_role():
     """transition_status must be called before add_membership, so a lost
     race can never leave a granted role behind."""
-    inv = _Inv(
+    inv = _inv(
         clan_id=uuid.uuid4(),
         email="a@x.com",
         role="editor",
