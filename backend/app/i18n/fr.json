@@ -82,6 +82,7 @@
   "error.claim.not_pending": "Cette demande n'est plus en attente",
   "error.clan_membership_required": "Vous n'avez pas d'adhésion approuvée dans ce clan",
   "error.clan_suspended": "Ce clan a été suspendu",
+  "error.account_deactivated": "Votre compte a été désactivé",
   "error.document_not_linked_to_person": "Le document n'est lié à aucun membre",
   "error.field_not_updatable": "Un ou plusieurs champs ne peuvent pas être modifiés",
   "error.http_error": "Échec de la requête",
