@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.application.person.claim_handlers import ClaimCommandHandler
+from app.core.exceptions import ForbiddenError
 
 
 class _Person:
@@ -35,9 +36,10 @@ class _UserProfile:
 class _FakeRepo:
     """Implements only the methods approve_claim/reject_claim call."""
 
-    def __init__(self, claim, clan_id):
+    def __init__(self, claim, clan_id, *, caller_role="admin"):
         self._claim = claim
         self._clan_id = clan_id
+        self._caller_role = caller_role
         self.added_audits = []
         self.added_roles = []
 
@@ -45,7 +47,7 @@ class _FakeRepo:
         return self._claim
 
     async def get_role(self, user_id, clan_id):
-        return "admin"  # caller is admin of the person's clan
+        return self._caller_role  # caller's role in the person's origin clan
 
     async def get_user_profile(self, user_id):
         return _UserProfile()
@@ -110,3 +112,37 @@ async def test_reject_claim_uses_uow_and_writes_audit():
     assert uow.commits == 1
     assert len(repo.added_audits) == 1
     assert result.status == "REJECTED"
+
+
+# ── M14: claim review is authorized by the person's ORIGIN clan (provenance) ──
+# These pin the deliberate authorization contract so it can't silently regress or be
+# accidentally switched to a membership-based model.
+
+
+@pytest.mark.parametrize("caller_role", ["viewer", "editor", None])
+@pytest.mark.parametrize("action", ["approve_claim", "reject_claim"])
+@pytest.mark.asyncio
+async def test_review_rejects_non_admin_of_origin_clan(action, caller_role):
+    """Only an ADMIN of the person's origin clan may review; anyone else is forbidden."""
+    clan_id = uuid.uuid4()
+    claim = _Claim(_Person(clan_id))
+    repo = _FakeRepo(claim, clan_id, caller_role=caller_role)
+    handler = ClaimCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
+
+    with pytest.raises(ForbiddenError, match="only_clan_admin_can_review_claims"):
+        await getattr(handler, action)(claim_id=claim.id, admin_id=uuid.uuid4(), reviewer_note="x")
+    assert claim.status == "PENDING"  # unchanged — the review never happened
+
+
+@pytest.mark.parametrize("action", ["approve_claim", "reject_claim"])
+@pytest.mark.asyncio
+async def test_review_rejects_orphaned_person(action):
+    """A person whose origin clan was cleared (created_by_clan_id is None) has no
+    controlling clan, so its claims cannot be reviewed by anyone."""
+    claim = _Claim(_Person(None))
+    repo = _FakeRepo(claim, None, caller_role="admin")
+    handler = ClaimCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
+
+    with pytest.raises(ForbiddenError, match="person_has_no_controlling_clan"):
+        await getattr(handler, action)(claim_id=claim.id, admin_id=uuid.uuid4(), reviewer_note="x")
+    assert claim.status == "PENDING"
