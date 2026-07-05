@@ -5,12 +5,22 @@ from __future__ import annotations
 import uuid
 from typing import Any, Protocol
 
+from app.domain.clan.entity import Clan
+
 
 class ClanRepository(Protocol):
     """Abstract persistence contract for Clan operations."""
 
     async def get_clan(self, clan_id: uuid.UUID) -> Any | None:
-        """Get clan ORM model by ID."""
+        """Get clan ORM model by ID (read side — feeds response serialization)."""
+        ...
+
+    async def get_clan_for_update(self, clan_id: uuid.UUID) -> Clan | None:
+        """Load the Clan aggregate for a write, or None if it does not exist."""
+        ...
+
+    async def save_clan(self, clan: Clan) -> Any:
+        """Persist a mutated Clan aggregate onto its ORM row; returns the ORM model."""
         ...
 
     async def get_user_clan_role(self, clan_id: uuid.UUID, user_id: uuid.UUID) -> Any | None:
@@ -33,10 +43,6 @@ class ClanRepository(Protocol):
 
     async def get_clan_stats(self, clan_id: uuid.UUID) -> dict[str, int]:
         """Get aggregate statistics for a clan."""
-        ...
-
-    async def update_clan(self, clan_id: uuid.UUID, changes: dict[str, object]) -> Any:
-        """Apply changes to a clan record."""
         ...
 
     async def approve_user(self, ucr: Any, approved_by: uuid.UUID) -> None:

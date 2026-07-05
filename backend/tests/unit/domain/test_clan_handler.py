@@ -39,7 +39,7 @@ def _actor() -> ActorInfo:
 class TestClanUpdate:
     @pytest.mark.asyncio
     async def test_update_clan_not_found(self) -> None:
-        h = _make_handler(get_clan=None)
+        h = _make_handler(get_clan_for_update=None)
         with pytest.raises(EntityNotFoundError):
             await h.update_clan(
                 UpdateClan(clan_id=uuid.uuid4(), actor=_actor(), changes={"name": "x"})
