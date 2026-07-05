@@ -30,8 +30,6 @@ from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRe
 from app.domain.shared.exceptions import AuthenticationError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
-from app.models.clan import Clan
-from app.models.user_clan_role import UserClanRole
 from app.schemas.auth import (
     LoginResponse,
     RegisterResponse,
@@ -116,34 +114,33 @@ class AuthCommandHandler:
             raise ValidationError("auth.clan_name_required_for_create")
 
         if clan_action == "create":
+            # Guaranteed non-None by the validation above; assert so the str-typed repo
+            # call is provably safe (auth.handlers currently has arg-type disabled).
+            assert clan_name is not None and clan_slug is not None
             existing = await self._repo.get_clan_by_slug(clan_slug)
             if existing:
                 raise ConflictError("auth.clan_slug_taken")
 
             await self._repo.ensure_profile(user_id, email, full_name)
 
-            clan = Clan(name=clan_name, slug=clan_slug)
-            self._repo.add_clan(clan)
-            await self._uow.flush()  # INSERT the clan first so the role FK resolves
-
-            role = UserClanRole(
-                clan_id=clan.id,
+            new_clan_id = await self._repo.create_clan(name=clan_name, slug=clan_slug)
+            self._repo.add_membership(
+                clan_id=new_clan_id,
                 user_id=user_id,
                 role="admin",
                 is_approved=True,
                 approved_by=user_id,
                 approved_at=datetime.now(UTC),
             )
-            self._repo.add_user_role(role)
             # Audit clan creation + self-granted admin (commits clan + role + audit
             # in one transaction).
             await emit_audit_event(
                 self._uow,
                 action="clan.create",
                 resource_type="clan",
-                resource_id=clan.id,
+                resource_id=new_clan_id,
                 actor=ActorInfo(user_id=user_id, role="admin"),
-                clan_id=clan.id,
+                clan_id=new_clan_id,
                 new_value={"clan_name": clan_name, "clan_slug": clan_slug, "role": "admin"},
             )
 
@@ -151,7 +148,7 @@ class AuthCommandHandler:
                 user_id=user_id,
                 email=email,
                 full_name=full_name,
-                clan_id=clan.id,
+                clan_id=new_clan_id,
                 is_approved=True,
                 message=t("auth.clan_created"),
             )
@@ -168,8 +165,9 @@ class AuthCommandHandler:
             raise ConflictError("auth.membership_already_pending")
 
         await self._repo.ensure_profile(user_id, email, full_name)
-        role = UserClanRole(clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False)
-        self._repo.add_user_role(role)
+        self._repo.add_membership(
+            clan_id=clan.id, user_id=user_id, role="viewer", is_approved=False
+        )
         # Audit the pending join request (role grant is not yet approved).
         await emit_audit_event(
             self._uow,
