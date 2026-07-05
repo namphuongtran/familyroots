@@ -3,12 +3,15 @@
 ## Status
 Accepted
 
-> **Update (2026-07-05):** Claim review is authorized by the person's **origin clan**
-> (`person.created_by_clan_id`, provenance) — an admin of the clan that entered the
-> person into its tree reviews claims on that record. This is a deliberate choice (a
-> membership-based model is a separate, unimplemented decision). A person whose origin
-> clan was cleared to `NULL` (see ADR-009 `SET NULL`) has no controlling clan, so its
-> claims cannot be reviewed. Documented and pinned on
+> **Update (2026-07-05, decided):** Claim review is authorized by the person's **origin
+> clan** (`person.created_by_clan_id`, provenance) — an admin of the clan that entered
+> the person into its tree reviews claims on that record. The owner evaluated a
+> membership-based alternative (any clan the person currently belongs to could review)
+> and **chose provenance** — a person shared across clans is still verified only by the
+> clan that authored the record. This is the settled M14 decision; membership-based
+> review is out of scope unless deliberately revisited. A person whose origin clan was
+> cleared to `NULL` (see ADR-009 `SET NULL`) has no controlling clan, so its claims
+> cannot be reviewed. Documented and pinned on
 > `ClaimCommandHandler._verify_admin_access` and its negative tests.
 
 ## Context

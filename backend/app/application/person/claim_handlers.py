@@ -337,8 +337,9 @@ class ClaimCommandHandler:
         DESIGN (M14): identity-claim review is authorized by the person's ORIGIN clan —
         ``person.created_by_clan_id`` (provenance) — not by whatever clans the person is
         currently a member of. The clan that entered a person into its tree is the one
-        that vets who may claim to be that person. This is a deliberate choice; a
-        membership-based model is a different product decision, not a bug. A person whose
+        that vets who may claim to be that person. This is the owner-confirmed decision
+        (2026-07-05): a membership-based alternative was evaluated and rejected, so
+        provenance is final unless deliberately revisited (see ADR-007). A person whose
         origin clan was cleared (created_by_clan_id → NULL, e.g. via clan delete's SET
         NULL) has no controlling clan, so its claims cannot be reviewed at all.
         """
