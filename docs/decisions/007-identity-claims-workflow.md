@@ -3,6 +3,14 @@
 ## Status
 Accepted
 
+> **Update (2026-07-05):** Claim review is authorized by the person's **origin clan**
+> (`person.created_by_clan_id`, provenance) — an admin of the clan that entered the
+> person into its tree reviews claims on that record. This is a deliberate choice (a
+> membership-based model is a separate, unimplemented decision). A person whose origin
+> clan was cleared to `NULL` (see ADR-009 `SET NULL`) has no controlling clan, so its
+> claims cannot be reviewed. Documented and pinned on
+> `ClaimCommandHandler._verify_admin_access` and its negative tests.
+
 ## Context
 `Person` records are genealogy nodes and are not the same entity as an
 authenticated `user` (the "person vs user" landmine in
