@@ -136,6 +136,12 @@ async def ensure_user_profile(
             profile.last_login_at = now
             await db.flush()
 
+    # A deactivated account is authenticated (its Supabase JWT is still valid) but must
+    # not be allowed to act — deactivation lives only in our DB, so it is enforced here,
+    # the single chokepoint that loads the local profile.
+    if not profile.is_active:
+        raise ForbiddenError("account_deactivated")
+
     return profile
 
 
@@ -144,9 +150,10 @@ async def get_super_admin(
 ) -> UserProfile:
     """Dependency that allows access only to the platform super admin.
 
-    Queries ``user_profiles.platform_role`` for an active super_admin.
+    Queries ``user_profiles.platform_role``; ``ensure_user_profile`` has already
+    rejected a deactivated account.
     """
-    if profile.platform_role != "super_admin" or not profile.is_active:
+    if profile.platform_role != "super_admin":
         raise ForbiddenError("super_admin_required")
     return profile
 
@@ -171,6 +178,16 @@ async def get_current_clan_id(
     from app.models.user_clan_role import UserClanRole
 
     user_id = uuid.UUID(current_user["sub"])
+
+    # Block a deactivated account up front — this path authenticates via the JWT and
+    # never loads the profile (unlike ensure_user_profile), so the is_active gate must
+    # be applied here for every clan-scoped request. An approved membership implies a
+    # user_profiles row (FK), so a missing row (None) is an anomaly → treat as blocked.
+    is_account_active = await db.scalar(
+        select(UserProfile.is_active).where(UserProfile.id == user_id)
+    )
+    if not is_account_active:
+        raise ForbiddenError("account_deactivated")
 
     # Fetch all approved clan memberships for this user
     result = await db.execute(

@@ -82,6 +82,7 @@
   "error.claim.not_pending": "This claim is no longer pending",
   "error.clan_membership_required": "You do not have approved membership in this clan",
   "error.clan_suspended": "This clan has been suspended",
+  "error.account_deactivated": "Your account has been deactivated",
   "error.document_not_linked_to_person": "Document is not linked to a member",
   "error.field_not_updatable": "One or more fields cannot be updated",
   "error.http_error": "Request failed",

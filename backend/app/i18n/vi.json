@@ -82,6 +82,7 @@
   "error.claim.not_pending": "Yêu cầu này không còn ở trạng thái chờ",
   "error.clan_membership_required": "Bạn không có quyền thành viên được duyệt trong dòng họ này",
   "error.clan_suspended": "Dòng họ này đã bị tạm ngưng",
+  "error.account_deactivated": "Tài khoản của bạn đã bị vô hiệu hóa",
   "error.document_not_linked_to_person": "Tài liệu không liên kết với thành viên",
   "error.field_not_updatable": "Một hoặc nhiều trường không thể cập nhật",
   "error.http_error": "Yêu cầu thất bại",
