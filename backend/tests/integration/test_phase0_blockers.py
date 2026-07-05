@@ -215,12 +215,20 @@ async def test_submit_claim_commits_without_crash(async_engine: AsyncEngine) -> 
             )
         ).first()
         assert claim is not None and claim.status == "PENDING"
+        # Assert the persisted audit COLUMNS (not just the count) so a dropped/changed
+        # field in the repo-built AuditLog row (M13 relocation) fails loudly.
         audit = (
             await verify.execute(
                 sa.text(
-                    "SELECT count(*) FROM audit_logs "
+                    "SELECT clan_id, actor_id, actor_role, new_value "
+                    "FROM audit_logs "
                     "WHERE action = 'claim.submit' AND resource_type = 'identity_claim'"
                 )
             )
-        ).scalar()
-        assert audit == 1
+        ).all()
+        assert len(audit) == 1
+        row = audit[0]
+        assert row.clan_id == clan_id
+        assert row.actor_id == claimant_id
+        assert row.actor_role == "viewer"
+        assert row.new_value == {"status": "PENDING", "person_id": str(person_id)}

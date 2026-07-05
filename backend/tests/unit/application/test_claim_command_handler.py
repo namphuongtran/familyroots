@@ -59,11 +59,11 @@ class _FakeRepo:
     async def auto_reject_other_pending_claims(self, **kwargs):
         return None
 
-    def add_role(self, role):
-        self.added_roles.append(role)
+    def add_role(self, **kwargs):
+        self.added_roles.append(kwargs)
 
-    def add_audit(self, audit):
-        self.added_audits.append(audit)
+    def add_audit(self, **kwargs):
+        self.added_audits.append(kwargs)
 
 
 class _FakeUow:

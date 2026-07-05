@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
+from app.models.audit_log import AuditLog
 from app.models.identity_claim import IdentityClaim as ClaimModel
 from app.models.person import Person
 from app.models.user_clan_role import UserClanRole
@@ -85,14 +86,78 @@ class SqlAlchemyClaimRepository(ClaimRepository):
         )
         return result.scalar_one_or_none()
 
-    def add_claim(self, claim: ClaimModel) -> None:
+    async def create_claim(
+        self,
+        *,
+        user_id: uuid.UUID,
+        person_id: uuid.UUID,
+        status: str,
+        requester_note: str | None = None,
+        reviewer_note: str | None = None,
+        reviewed_by: uuid.UUID | None = None,
+        reviewed_at: datetime | None = None,
+    ) -> ClaimModel:
+        claim = ClaimModel(
+            user_id=user_id,
+            person_id=person_id,
+            status=status,
+            requester_note=requester_note,
+            reviewer_note=reviewer_note,
+            reviewed_by=reviewed_by,
+            reviewed_at=reviewed_at,
+        )
         self._session.add(claim)
+        # Flush the INSERT within the request transaction (matches the prior
+        # add_claim + uow.flush() behavior). claim.id is already set (client-side
+        # uuid default), so this is about persisting the row, not populating the id.
+        await self._session.flush()
+        return claim
 
-    def add_audit(self, audit: Any) -> None:
-        self._session.add(audit)
+    def add_audit(
+        self,
+        *,
+        clan_id: uuid.UUID | None,
+        actor_id: uuid.UUID,
+        actor_role: str,
+        action: str,
+        resource_type: str,
+        resource_id: uuid.UUID | None,
+        old_value: dict[str, Any] | None = None,
+        new_value: dict[str, Any] | None = None,
+    ) -> None:
+        self._session.add(
+            AuditLog(
+                clan_id=clan_id,
+                actor_id=actor_id,
+                actor_role=actor_role,
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                old_value=old_value,
+                new_value=new_value,
+            )
+        )
 
-    def add_role(self, role: UserClanRole) -> None:
-        self._session.add(role)
+    def add_role(
+        self,
+        *,
+        user_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        role: str,
+        is_approved: bool,
+        approved_by: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+    ) -> None:
+        self._session.add(
+            UserClanRole(
+                user_id=user_id,
+                clan_id=clan_id,
+                role=role,
+                is_approved=is_approved,
+                approved_by=approved_by,
+                approved_at=approved_at,
+            )
+        )
 
     async def auto_reject_other_pending_claims(
         self,

@@ -137,16 +137,13 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Ratchet: application must not import ORM models (CQRS write side goes through domain + ports)"
+name = "Application must not import ORM models (CQRS write side goes through domain + ports)"
 type = "forbidden"
 source_modules = ["app.application"]
 forbidden_modules = ["app.models"]
 allow_indirect_imports = true
-ignore_imports = [
-    "app.application.person.claim_handlers -> app.models.audit_log",
-    "app.application.person.claim_handlers -> app.models.identity_claim",
-    "app.application.person.claim_handlers -> app.models.user_clan_role",
-]
+# Ratchet fully burned down (2026-07-05): no application handler constructs ORM models;
+# they all go through repository factory methods. No exceptions remain.
 
 [[tool.importlinter.contracts]]
 # app.core.exceptions subclasses HTTPException, so these imports leak the

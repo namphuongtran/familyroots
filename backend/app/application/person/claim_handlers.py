@@ -11,9 +11,6 @@ from typing import Any
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.domain.person.claim_entity import IdentityClaim as ClaimEntity
 from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
-from app.models.audit_log import AuditLog
-from app.models.identity_claim import IdentityClaim as ClaimModel
-from app.models.user_clan_role import UserClanRole
 from app.schemas.claim import IdentityClaimPaginatedResponse, IdentityClaimResponse
 
 
@@ -46,28 +43,22 @@ class ClaimCommandHandler:
         if not person:
             raise NotFoundError("person_not_found")
 
-        # Create
-        claim_model = ClaimModel(
-            user_id=user_id, person_id=person_id, requester_note=requester_note, status="PENDING"
+        # Create. create_claim builds + flushes the ORM row in the adapter (IdentityClaim
+        # is a plain ORM model, not an AggregateRoot, so it is NOT uow.track()ed — audit
+        # rows are recorded manually below, as the sibling review methods do).
+        claim_model = await self._repo.create_claim(
+            user_id=user_id, person_id=person_id, status="PENDING", requester_note=requester_note
         )
-        self._repo.add_claim(claim_model)
-        # NOTE: do not uow.track(claim_model) — IdentityClaim is a plain ORM model,
-        # not an AggregateRoot, so it has no collect_events() and would crash at
-        # commit. This context records audit rows manually via add_audit (as the
-        # sibling cancel/approve/reject/unlink methods do).
-        await self._uow.flush()
 
-        audit = AuditLog(
+        self._repo.add_audit(
             clan_id=person.created_by_clan_id,
             actor_id=user_id,
             actor_role="viewer",  # They are applying, so minimum role
             action="claim.submit",
             resource_type="identity_claim",
             resource_id=claim_model.id,
-            old_value=None,
             new_value={"status": "PENDING", "person_id": str(person_id)},
         )
-        self._repo.add_audit(audit)
 
         await self._uow.commit()
 
@@ -93,7 +84,7 @@ class ClaimCommandHandler:
         # Get the clan_id for the audit log
         person = await self._repo.get_person(claim.person_id)
         if person:
-            audit = AuditLog(
+            self._repo.add_audit(
                 clan_id=person.created_by_clan_id,
                 actor_id=user_id,
                 actor_role="viewer",
@@ -103,7 +94,6 @@ class ClaimCommandHandler:
                 old_value={"status": "PENDING"},
                 new_value={"status": "CANCELLED"},
             )
-            self._repo.add_audit(audit)
 
         await self._uow.commit()
 
@@ -161,17 +151,15 @@ class ClaimCommandHandler:
         existing_role = await self._repo.get_role(claim.user_id, claim.person.created_by_clan_id)
         if not existing_role:
             self._repo.add_role(
-                UserClanRole(
-                    user_id=claim.user_id,
-                    clan_id=claim.person.created_by_clan_id,
-                    role="viewer",
-                    is_approved=True,
-                    approved_by=admin_id,
-                    approved_at=datetime.now(UTC),
-                )
+                user_id=claim.user_id,
+                clan_id=claim.person.created_by_clan_id,
+                role="viewer",
+                is_approved=True,
+                approved_by=admin_id,
+                approved_at=datetime.now(UTC),
             )
 
-        audit = AuditLog(
+        self._repo.add_audit(
             clan_id=claim.person.created_by_clan_id,
             actor_id=admin_id,
             actor_role="admin",
@@ -181,7 +169,6 @@ class ClaimCommandHandler:
             old_value={"status": "PENDING"},
             new_value={"status": "APPROVED", "person_id": str(claim.person_id)},
         )
-        self._repo.add_audit(audit)
 
         await self._uow.commit()
         return IdentityClaimResponse.model_validate(claim)
@@ -210,7 +197,7 @@ class ClaimCommandHandler:
         claim.reviewer_note = entity.reviewer_note
         claim.reviewed_at = datetime.now(UTC)
 
-        audit = AuditLog(
+        self._repo.add_audit(
             clan_id=claim.person.created_by_clan_id,
             actor_id=admin_id,
             actor_role="admin",
@@ -220,7 +207,6 @@ class ClaimCommandHandler:
             old_value={"status": "PENDING"},
             new_value={"status": "REJECTED"},
         )
-        self._repo.add_audit(audit)
 
         await self._uow.commit()
         return IdentityClaimResponse.model_validate(claim)
@@ -255,7 +241,7 @@ class ClaimCommandHandler:
             claim.reviewed_by = admin_id
             claim.reviewed_at = datetime.now(UTC)
 
-        audit = AuditLog(
+        self._repo.add_audit(
             clan_id=clan_id,
             actor_id=admin_id,
             actor_role="admin",
@@ -265,7 +251,6 @@ class ClaimCommandHandler:
             old_value={"person_id": str(person_id)},
             new_value={"person_id": None, "reason": reason},
         )
-        self._repo.add_audit(audit)
 
         # 6. Auto-reject orphans (PENDING claims for this user or this person)
         await self._repo.auto_reject_all_pending_claims(
@@ -321,8 +306,9 @@ class ClaimCommandHandler:
             reviewer_note="Auto-rejected during Admin Pre-link.",
         )
 
-        # Create audit record
-        claim_model = ClaimModel(
+        # Create the approved claim record (see submit_claim: ORM model, not tracked on
+        # the UoW; the adapter builds + flushes it and audit is recorded manually below).
+        claim_model = await self._repo.create_claim(
             user_id=user_id_to_link,
             person_id=person_id,
             status="APPROVED",
@@ -331,22 +317,16 @@ class ClaimCommandHandler:
             reviewed_by=admin_id,
             reviewed_at=datetime.now(UTC),
         )
-        self._repo.add_claim(claim_model)
-        # See submit_claim: IdentityClaim is an ORM model, not an AggregateRoot;
-        # audit is recorded manually below, so it must not be tracked on the UoW.
-        await self._uow.flush()
 
-        audit = AuditLog(
+        self._repo.add_audit(
             clan_id=clan_id,
             actor_id=admin_id,
             actor_role="admin",
             action="claim.prelink",
             resource_type="identity_claim",
             resource_id=claim_model.id,
-            old_value=None,
             new_value={"person_id": str(person_id), "user_id": str(user_id_to_link)},
         )
-        self._repo.add_audit(audit)
 
         await self._uow.commit()
         return IdentityClaimResponse.model_validate(claim_model)
