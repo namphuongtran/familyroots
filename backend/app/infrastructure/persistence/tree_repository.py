@@ -94,7 +94,8 @@ class SqlAlchemyTreeRepository:
     ) -> list[dict[str, Any]]:
         result = await self._session.execute(
             text("""
-                SELECT p.person_id, p.full_name, p.gender, p.edge_type, per.avatar_url
+                SELECT p.person_id, p.full_name, p.gender, p.edge_type,
+                       per.avatar_url, per.birth_date
                 FROM public.find_relationship_path(:from_id, :to_id, :clan_id) p
                 LEFT JOIN public.persons per ON p.person_id = per.id
             """),
@@ -108,6 +109,9 @@ class SqlAlchemyTreeRepository:
                 "gender": row.get("gender", "unknown"),
                 "edge_type": row.get("edge_type"),
                 "avatar_url": row.get("avatar_url"),
+                # birth_date threads through so the kinship descriptor can pick
+                # age-specific terms (bác vs chú, anh/chị vs em); None → age-agnostic.
+                "birth_date": row.get("birth_date"),
             }
             for row in rows
         ]

@@ -1,17 +1,25 @@
 """Tests for tree path finder (relationship descriptor)."""
 
 import uuid
+from datetime import date
 
-from app.services.relationship_descriptor import KINSHIP_MAP, describe_relationship
+import pytest
+
+from app.services.relationship_descriptor import (
+    KINSHIP_MAP,
+    _specific_key,
+    describe_relationship,
+)
 
 
-def _path_step(person_id, full_name="Test", gender="male", edge_type=None):
+def _path_step(person_id, full_name="Test", gender="male", edge_type=None, birth_date=None):
     """Build a path step dict."""
     return {
         "person_id": str(person_id),
         "full_name": full_name,
         "gender": gender,
         "edge_type": edge_type,
+        "birth_date": birth_date,
     }
 
 
@@ -82,3 +90,134 @@ def test_kinship_map_coverage():
         assert isinstance(key, tuple)
         assert isinstance(value, str)
         assert len(value) > 0
+
+
+# ── M6: gender + paternal/maternal side + relative age resolution ──────────────
+# _specific_key is the deterministic core (returns the i18n key, no locale coupling).
+
+
+def _n(gender="unknown", birth_date=None):
+    return _path_step(uuid.uuid4(), gender=gender, birth_date=birth_date)
+
+
+@pytest.mark.parametrize(
+    ("gender", "expected"),
+    [("male", "kinship.father"), ("female", "kinship.mother"), ("unknown", None)],
+)
+def test_parent_gendered(gender, expected):
+    assert _specific_key(("parent",), [_n(), _n(gender)]) == expected
+
+
+@pytest.mark.parametrize(
+    ("gender", "expected"),
+    [("male", "kinship.son"), ("female", "kinship.daughter")],
+)
+def test_child_gendered(gender, expected):
+    assert _specific_key(("child",), [_n(), _n(gender)]) == expected
+
+
+def test_spouse_gendered():
+    assert _specific_key(("spouse",), [_n(), _n("male")]) == "kinship.husband"
+    assert _specific_key(("spouse",), [_n(), _n("female")]) == "kinship.wife"
+
+
+def test_sibling_uses_age_and_gender():
+    me = _n("male", date(1990, 1, 1))
+    older_bro = _n("male", date(1985, 1, 1))
+    older_sis = _n("female", date(1985, 1, 1))
+    younger_sis = _n("female", date(1995, 1, 1))
+    mid = _n("male")  # shared parent (side irrelevant for siblings)
+    assert _specific_key(("parent", "child"), [me, mid, older_bro]) == "kinship.older_brother"
+    assert _specific_key(("parent", "child"), [me, mid, older_sis]) == "kinship.older_sister"
+    assert _specific_key(("parent", "child"), [me, mid, younger_sis]) == "kinship.younger_sister"
+
+
+def test_sibling_without_birthdate_falls_back():
+    """Missing birth dates → no age term → None (caller uses generic 'Anh/Chị/Em')."""
+    me = _n("male")  # no birth_date
+    sib = _n("male")
+    assert _specific_key(("parent", "child"), [me, _n("male"), sib]) is None
+
+
+def test_grandparent_paternal_vs_maternal():
+    # side comes from the linking parent (path[1])
+    via_father = [_n("male"), _n("male"), _n("male")]  # → ông nội
+    via_mother = [_n("male"), _n("female"), _n("female")]  # → bà ngoại
+    assert _specific_key(("parent", "parent"), via_father) == "kinship.paternal_grandfather"
+    assert _specific_key(("parent", "parent"), via_mother) == "kinship.maternal_grandmother"
+    # unknown side → generic
+    assert _specific_key(("parent", "parent"), [_n("male"), _n("unknown"), _n("male")]) is None
+
+
+def test_uncle_aunt_paternal_uses_age():
+    father = _n("male", date(1960, 1, 1))
+    older_bro_of_father = _n("male", date(1955, 1, 1))  # Bác
+    younger_bro_of_father = _n("male", date(1965, 1, 1))  # Chú
+    younger_sis_of_father = _n("female", date(1966, 1, 1))  # Cô
+    gp = _n("male")
+    assert (
+        _specific_key(("parent", "parent", "child"), [_n(), father, gp, older_bro_of_father])
+        == "kinship.paternal_uncle_older"
+    )
+    assert (
+        _specific_key(("parent", "parent", "child"), [_n(), father, gp, younger_bro_of_father])
+        == "kinship.paternal_uncle_younger"
+    )
+    assert (
+        _specific_key(("parent", "parent", "child"), [_n(), father, gp, younger_sis_of_father])
+        == "kinship.paternal_aunt_younger"
+    )
+
+
+def test_uncle_aunt_maternal_is_age_agnostic():
+    mother = _n("female")  # via mother → maternal side, no birth_date needed
+    gp = _n("female")
+    assert (
+        _specific_key(("parent", "parent", "child"), [_n(), mother, gp, _n("male")])
+        == "kinship.maternal_uncle"  # Cậu
+    )
+    assert (
+        _specific_key(("parent", "parent", "child"), [_n(), mother, gp, _n("female")])
+        == "kinship.maternal_aunt"  # Dì
+    )
+
+
+def test_paternal_uncle_without_birthdate_falls_back():
+    father = _n("male")  # no birth_date → can't tell Bác vs Chú
+    assert (
+        _specific_key(("parent", "parent", "child"), [_n(), father, _n("male"), _n("male")]) is None
+    )
+
+
+def test_all_resolver_keys_have_vietnamese_translations():
+    """Every key _specific_key can emit must exist in vi.json (code↔i18n in sync)."""
+    from app.services.translator import _translations, load_translations
+
+    load_translations()
+    keys = {
+        "kinship.father",
+        "kinship.mother",
+        "kinship.husband",
+        "kinship.wife",
+        "kinship.son",
+        "kinship.daughter",
+        "kinship.older_brother",
+        "kinship.older_sister",
+        "kinship.younger_brother",
+        "kinship.younger_sister",
+        "kinship.paternal_grandfather",
+        "kinship.paternal_grandmother",
+        "kinship.maternal_grandfather",
+        "kinship.maternal_grandmother",
+        "kinship.grandson",
+        "kinship.granddaughter",
+        "kinship.paternal_uncle_older",
+        "kinship.paternal_uncle_younger",
+        "kinship.paternal_aunt_older",
+        "kinship.paternal_aunt_younger",
+        "kinship.maternal_uncle",
+        "kinship.maternal_aunt",
+    }
+    vi = _translations.get("vi", {})
+    missing = {k for k in keys if not vi.get(k)}
+    assert not missing, f"missing vi kinship translations: {missing}"
