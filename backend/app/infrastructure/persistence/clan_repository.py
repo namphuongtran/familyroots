@@ -10,6 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import build_page, paginate_query
+from app.domain.clan.entity import Clan as ClanEntity
+from app.infrastructure.persistence.clan_mapper import apply_to_orm, to_domain
 from app.models.clan import Clan
 from app.models.clan_membership import ClanMembership
 from app.models.user_clan_role import UserClanRole
@@ -89,11 +91,20 @@ class SqlAlchemyClanRepository:
             "total_members": total_members_result.scalar() or 0,
         }
 
-    async def update_clan(self, clan_id: uuid.UUID, changes: dict[str, object]) -> Clan:
-        clan = await self._session.get(Clan, clan_id)
-        for field, value in changes.items():
-            setattr(clan, field, value)
-        return clan
+    async def get_clan_for_update(self, clan_id: uuid.UUID) -> ClanEntity | None:
+        model = await self._session.get(Clan, clan_id)
+        return to_domain(model) if model else None
+
+    async def save_clan(self, clan: ClanEntity) -> Clan | None:
+        """Apply the mutated aggregate onto its (session-tracked) ORM row.
+
+        Event collection is the handler's job (it holds the UoW and tracks the
+        aggregate); this only maps state onto the ORM the session will flush.
+        """
+        model = await self._session.get(Clan, clan.id)
+        if model is not None:
+            apply_to_orm(clan, model)
+        return model
 
     async def approve_user(self, ucr: UserClanRole, approved_by: uuid.UUID) -> None:
         ucr.is_approved = True

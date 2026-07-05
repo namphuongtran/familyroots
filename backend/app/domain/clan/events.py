@@ -21,6 +21,24 @@ class ClanUpdated(AuditableEvent):
 
 
 @dataclass(frozen=True)
+class ClanSuspended(AuditableEvent):
+    def __post_init__(self) -> None:
+        if not self.action:
+            object.__setattr__(self, "action", "clan.suspend")
+        if not self.resource_type:
+            object.__setattr__(self, "resource_type", "clan")
+
+
+@dataclass(frozen=True)
+class ClanReactivated(AuditableEvent):
+    def __post_init__(self) -> None:
+        if not self.action:
+            object.__setattr__(self, "action", "clan.reactivate")
+        if not self.resource_type:
+            object.__setattr__(self, "resource_type", "clan")
+
+
+@dataclass(frozen=True)
 class UserApproved(AuditableEvent):
     target_user_id: uuid.UUID = field(default_factory=uuid.uuid4)
 

@@ -17,7 +17,6 @@ from app.application.clan.commands import (
     UpdateClan,
 )
 from app.domain.clan.events import (
-    ClanUpdated,
     UserApproved,
     UserRejected,
     UserRemoved,
@@ -42,25 +41,14 @@ class ClanCommandHandler:
         self._uow = uow
 
     async def update_clan(self, cmd: UpdateClan) -> Any:
-        """Update clan info and emit an audit event."""
-        clan = await self._repo.get_clan(cmd.clan_id)
-        if not clan:
+        """Update clan info through the Clan aggregate (whitelist + audit event)."""
+        clan = await self._repo.get_clan_for_update(cmd.clan_id)
+        if clan is None:
             raise EntityNotFoundError("clan_not_found")
 
-        result = await self._repo.update_clan(cmd.clan_id, cmd.changes)
-
-        # Emit audit event via a transient aggregate
-        agg = AggregateRoot()
-        agg.add_event(
-            ClanUpdated(
-                clan_id=cmd.clan_id,
-                actor_id=cmd.actor.user_id,
-                actor_role=cmd.actor.role,
-                resource_id=cmd.clan_id,
-                changes=cmd.changes,
-            )
-        )
-        self._uow.track(agg)
+        clan.update(cmd.changes, cmd.actor)  # enforces the updatable-field whitelist
+        self._uow.track(clan)  # UoW harvests the ClanUpdated event on commit
+        result = await self._repo.save_clan(clan)
         await self._uow.commit()
         return result
 

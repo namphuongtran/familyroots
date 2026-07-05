@@ -8,7 +8,6 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from app.application.shared.audit import emit_audit_event
 from app.core.exceptions import NotFoundError
 from app.domain.clan.repository import ClanRepository
 from app.domain.platform_admin.query_port import (
@@ -28,36 +27,24 @@ class PlatformAdminCommandHandler:
         self._uow = uow
 
     async def suspend_clan(self, *, clan_id: uuid.UUID, actor: ActorInfo) -> None:
-        clan = await self._repo.get_clan(clan_id)
-        if not clan:
+        clan = await self._repo.get_clan_for_update(clan_id)
+        if clan is None:
             raise NotFoundError("clan_not_found")
 
-        clan.is_active = False
-
-        await emit_audit_event(
-            self._uow,
-            action="clan.suspend",
-            resource_type="clan",
-            resource_id=clan_id,
-            actor=actor,
-            clan_id=clan_id,
-        )
+        clan.suspend(actor)  # flips is_active + emits ClanSuspended (audited)
+        self._uow.track(clan)
+        await self._repo.save_clan(clan)
+        await self._uow.commit()
 
     async def reactivate_clan(self, *, clan_id: uuid.UUID, actor: ActorInfo) -> None:
-        clan = await self._repo.get_clan(clan_id)
-        if not clan:
+        clan = await self._repo.get_clan_for_update(clan_id)
+        if clan is None:
             raise NotFoundError("clan_not_found")
 
-        clan.is_active = True
-
-        await emit_audit_event(
-            self._uow,
-            action="clan.reactivate",
-            resource_type="clan",
-            resource_id=clan_id,
-            actor=actor,
-            clan_id=clan_id,
-        )
+        clan.reactivate(actor)  # flips is_active + emits ClanReactivated (audited)
+        self._uow.track(clan)
+        await self._repo.save_clan(clan)
+        await self._uow.commit()
 
 
 class PlatformAdminQueryHandler:

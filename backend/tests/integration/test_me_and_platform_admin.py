@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.application.clan.commands import UpdateClan
+from app.application.clan.handlers import ClanCommandHandler
 from app.application.me.handlers import MeQueryHandler
 from app.application.platform_admin.handlers import (
     PlatformAdminCommandHandler,
@@ -31,6 +33,7 @@ from app.domain.platform_admin.query_port import (
     Page,
     PlatformMetricsView,
 )
+from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
@@ -245,6 +248,55 @@ async def test_platform_admin_audit_log_paginates_across_cursor(
         assert page2.meta.has_more is False
         # the cursor genuinely advanced — no row appears on both pages
         assert not ({e.id for e in page1.data} & {e.id for e in page2.data})
+
+
+async def test_clan_update_through_aggregate_persists_and_audits(
+    async_engine: AsyncEngine,
+) -> None:
+    """L12: clan updates flow through the Clan aggregate — the change persists, a
+    clan.update audit row is written, and a non-whitelisted field is rejected at the
+    domain (defense-in-depth beyond the request schema) without touching the DB."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id, admin_id = uuid.uuid4(), uuid.uuid4()
+
+    async with maker() as s:
+        await _clan(s, clan_id)
+        await s.commit()
+
+        handler = ClanCommandHandler(
+            # list_users return type differs from the port (a known pre-existing Minor
+            # mismatch, see the platform_admin test above) — not exercised here.
+            SqlAlchemyClanRepository(s),  # type: ignore[arg-type]
+            SqlAlchemyUnitOfWork(s, create_event_dispatcher(s)),
+        )
+        actor = ActorInfo.from_jwt({"sub": str(admin_id)}, "admin")
+
+        await handler.update_clan(
+            UpdateClan(
+                clan_id=clan_id, actor=actor, changes={"name": "Nguyễn Tộc", "motto": "Kính tổ"}
+            )
+        )
+
+        name = await s.scalar(sa.text("SELECT name FROM clans WHERE id = :c"), {"c": clan_id})
+        assert name == "Nguyễn Tộc"
+        audited = await s.scalar(
+            sa.text(
+                "SELECT count(*) FROM audit_logs WHERE clan_id = :c AND action = 'clan.update'"
+            ),
+            {"c": clan_id},
+        )
+        assert audited == 1
+
+        # A field outside the whitelist is refused by the aggregate — the request
+        # schema has no such field, so this is the domain-level backstop.
+        with pytest.raises(BusinessRuleViolation, match="field_not_updatable"):
+            await handler.update_clan(
+                UpdateClan(clan_id=clan_id, actor=actor, changes={"is_active": False})
+            )
+        still_active = await s.scalar(
+            sa.text("SELECT is_active FROM clans WHERE id = :c"), {"c": clan_id}
+        )
+        assert still_active is True  # the rejected write never reached the DB
 
 
 async def test_platform_admin_suspend_and_reactivate(async_engine: AsyncEngine) -> None:
