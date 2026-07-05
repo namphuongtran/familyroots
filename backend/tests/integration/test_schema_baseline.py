@@ -86,6 +86,47 @@ def test_edge_person_fks_are_restrict(sync_engine: sa.Engine) -> None:
     assert all(deltype == "r" for _, deltype in rows), rows
 
 
+def test_clan_fks_are_restrict(sync_engine: sa.Engine) -> None:
+    """M10: every clan-owned FK is RESTRICT; persons/audit_logs stay SET NULL.
+
+    The schema-drift gate does not compare FK ``ondelete`` rules, so this pins the
+    clan-delete policy directly against pg_constraint. Asserting the exact partition
+    also forces any FUTURE clan-referencing table to make a conscious RESTRICT-vs-
+    SET-NULL choice here rather than silently defaulting.
+    """
+    with sync_engine.connect() as conn:
+        rows = conn.execute(
+            sa.text(
+                "SELECT t.relname, c.confdeltype "
+                "FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid "
+                "WHERE c.contype = 'f' AND c.confrelid = 'clans'::regclass"
+            )
+        ).fetchall()
+    by_table: dict[str, str] = {row[0]: row[1] for row in rows}
+
+    restrict = {
+        "change_requests",
+        "clan_settings",
+        "marriages",
+        "user_clan_roles",
+        "clan_invitations",
+        "branches",
+        "clan_memberships",
+        "notification_log",
+        "parent_child",
+        "documents",
+        "events",
+    }
+    set_null = {"persons", "audit_logs"}  # de-provenanced / retained, not destroyed
+
+    # every clan-referencing table is accounted for — a new one forces a decision
+    assert set(by_table) == restrict | set_null, by_table
+    for t in restrict:
+        assert by_table[t] == "r", f"{t} clan FK must be RESTRICT, got {by_table[t]!r}"
+    for t in set_null:
+        assert by_table[t] == "n", f"{t} clan FK must be SET NULL, got {by_table[t]!r}"
+
+
 def test_invitation_has_status_and_accepted_by(sync_engine: sa.Engine) -> None:
     cols = {c["name"] for c in _inspector(sync_engine).get_columns("clan_invitations")}
     assert {"status", "accepted_by"} <= cols

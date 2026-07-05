@@ -44,7 +44,7 @@ class ParentChild(TimestampMixin, Base):
     # Clan that created/manages this record (for write RLS)
     created_by_clan_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("clans.id", ondelete="CASCADE"),
+        ForeignKey("clans.id", ondelete="RESTRICT"),
         index=True,
     )
 

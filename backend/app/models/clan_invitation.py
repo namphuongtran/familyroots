@@ -26,7 +26,7 @@ class ClanInvitation(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     clan_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("clans.id", ondelete="CASCADE"),
+        ForeignKey("clans.id", ondelete="RESTRICT"),
         index=True,
     )
     email: Mapped[str] = mapped_column(String(255))

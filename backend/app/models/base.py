@@ -50,7 +50,7 @@ class ClanScopedMixin(TimestampMixin):
 
     clan_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("clans.id", ondelete="CASCADE"),
+        ForeignKey("clans.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
