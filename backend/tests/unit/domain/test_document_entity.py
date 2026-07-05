@@ -82,6 +82,22 @@ class TestDocumentCreate:
                 file_size_bytes=100 * 1024 * 1024,  # 100 MB
             )
 
+    def test_create_honors_injected_max_size(self) -> None:
+        """The resolved limit is injected (from Settings.MAX_UPLOAD_SIZE_MB); a file that
+        fits the domain default but exceeds a smaller injected cap is rejected."""
+        actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
+        with pytest.raises(ValidationError, match="file_too_large"):
+            Document.create(
+                clan_id=uuid.uuid4(),
+                actor=actor,
+                title="Test",
+                document_type="photo",
+                storage_path="test.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=2 * 1024 * 1024,  # 2 MB — under the 50 MB default…
+                max_file_size_bytes=1 * 1024 * 1024,  # …but over this injected 1 MB cap
+            )
+
 
 # ── Document.set_avatar ──────────────────────────────────────────
 

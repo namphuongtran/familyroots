@@ -7,9 +7,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
+from app.core.config import settings
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.domain.document.entity import MAX_FILE_SIZE_BYTES
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
 
@@ -37,7 +37,8 @@ async def upload_document(
     # unbounded upload from being spooled to a temp file first — the multipart parser
     # already streams the full body to disk. A hard total-body-size limit belongs at
     # the proxy / ASGI layer (see review doc M7); this only closes the RAM vector.
-    content = await file.read(MAX_FILE_SIZE_BYTES + 1)
+    max_bytes = settings.max_upload_bytes
+    content = await file.read(max_bytes + 1)
     result = await cmd_handler.upload(
         file_content=content,
         filename=file.filename,
@@ -50,6 +51,7 @@ async def upload_document(
         description=description,
         taken_date=taken_date,
         taken_place=taken_place,
+        max_file_size_bytes=max_bytes,
     )
     return {"data": result.model_dump()}
 

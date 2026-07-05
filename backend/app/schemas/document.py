@@ -17,8 +17,6 @@ ALLOWED_MIME_TYPES = {
     "video/quicktime",
 }
 
-MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
-
 
 class DocumentUploadMeta(BaseModel):
     """Metadata fields sent alongside the file upload (form fields)."""

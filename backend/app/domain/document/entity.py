@@ -31,7 +31,11 @@ ALLOWED_MIME_TYPES = frozenset(
     }
 )
 
-MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+# The domain's default upload-size policy. It is the single source of the number:
+# Settings.MAX_UPLOAD_SIZE_MB derives its default from this, and the application
+# injects the (env-tunable) resolved limit into create() below. Kept in the domain
+# (not app.core) so the domain enforces the invariant without importing config.
+DEFAULT_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 @dataclass
@@ -82,14 +86,20 @@ class Document(AggregateRoot):
         description: str | None = None,
         taken_date: date | None = None,
         taken_place: str | None = None,
+        max_file_size_bytes: int = DEFAULT_MAX_FILE_SIZE_BYTES,
     ) -> Document:
-        """Factory method with upload validation."""
+        """Factory method with upload validation.
+
+        ``max_file_size_bytes`` is the resolved limit (the application injects the
+        env-tunable value); it defaults to the domain policy so direct domain use
+        stays safe.
+        """
         if document_type not in _VALID_DOC_TYPES:
             raise ValidationError("invalid_document_type")
         if mime_type and mime_type not in ALLOWED_MIME_TYPES:
             raise ValidationError("invalid_mime_type", {"allowed": list(ALLOWED_MIME_TYPES)})
-        if file_size_bytes and file_size_bytes > MAX_FILE_SIZE_BYTES:
-            raise ValidationError("file_too_large", {"max_bytes": MAX_FILE_SIZE_BYTES})
+        if file_size_bytes and file_size_bytes > max_file_size_bytes:
+            raise ValidationError("file_too_large", {"max_bytes": max_file_size_bytes})
 
         doc = cls(
             clan_id=clan_id,
