@@ -35,7 +35,10 @@ KINSHIP_MAP: dict[tuple[str, ...], str] = {
     ("parent",): "kinship.parent",
     ("spouse",): "kinship.spouse",
     ("parent", "child"): "kinship.sibling",
-    ("parent", "spouse"): "kinship.parent_in_law",
+    # my parent's spouse who is NOT my parent = a STEP-parent (a bio parent is reached
+    # via the direct ("parent",) edge, so a shortest ("parent","spouse") path is a
+    # step-parent, not a parent-in-law — that is ("spouse","parent")).
+    ("parent", "spouse"): "kinship.step_parent",
     ("spouse", "child"): "kinship.stepchild",
     ("child", "child"): "kinship.grandchild",
     ("parent", "parent"): "kinship.grandparent",
@@ -93,6 +96,8 @@ SPECIFIC_KINSHIP_KEYS: frozenset[str] = frozenset(
         "kinship.mother_in_law_husband",
         "kinship.father_in_law_wife",
         "kinship.mother_in_law_wife",
+        "kinship.step_father",
+        "kinship.step_mother",
     }
 )
 
@@ -250,6 +255,9 @@ def _specific_key(edges: tuple[str, ...], path: list[dict[str, Any]]) -> str | N
                 return "kinship.uncle_in_law"
             return None
         return None
+
+    if edges == ("parent", "spouse"):  # my parent's spouse (not my parent) — step-parent
+        return {_MALE: "kinship.step_father", _FEMALE: "kinship.step_mother"}.get(tg)
 
     if edges == ("child", "spouse"):  # my child's spouse — con dâu / con rể
         my_child = path[1]
