@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class PersonCreateRequest(BaseModel):
@@ -45,12 +45,10 @@ class PersonCreateRequest(BaseModel):
     # created_by_clan_id is provenance, not client-settable: the handler always
     # stamps it from the active clan (X-Current-Clan-Id). Accepting it from the
     # body let a caller assign a person to an arbitrary clan.
-
-    @model_validator(mode="after")
-    def validate_death_after_birth(self) -> PersonCreateRequest:
-        if self.birth_date and self.death_date and self.death_date < self.birth_date:
-            raise ValueError("death_date must not be earlier than birth_date")
-        return self
+    #
+    # The death_date >= birth_date cross-field invariant is enforced in the Person
+    # DOMAIN entity (single source of truth → consistent error and coverage of partial
+    # PATCH updates the schema can't see); the schema only validates individual fields.
 
 
 class PersonUpdateRequest(BaseModel):
@@ -90,12 +88,8 @@ class PersonUpdateRequest(BaseModel):
 
     # created_by_clan_id is provenance and is NOT updatable — reassigning it would
     # transfer claim-review control of the person to another clan.
-
-    @model_validator(mode="after")
-    def validate_death_after_birth(self) -> PersonUpdateRequest:
-        if self.birth_date and self.death_date and self.death_date < self.birth_date:
-            raise ValueError("death_date must not be earlier than birth_date")
-        return self
+    # (death_date >= birth_date is enforced in the Person domain entity — see the note
+    # on PersonCreateRequest.)
 
 
 class PersonBatchGetRequest(BaseModel):

@@ -3,6 +3,8 @@
 import uuid
 from datetime import date
 
+import pytest
+
 from app.domain.person.entity import Person
 from app.domain.person.events import (
     PersonCreated,
@@ -10,6 +12,7 @@ from app.domain.person.events import (
     PersonRestored,
     PersonUpdated,
 )
+from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
 
 # ── Person.create ────────────────────────────────────────────────
@@ -157,3 +160,57 @@ class TestPersonEvents:
         e = PersonRestored(person_id=pid, clan_id=uuid.uuid4(), actor_id=uuid.uuid4())
         assert e.action == "person.restore"
         assert e.resource_id == pid
+
+
+# ── death_date >= birth_date invariant (L5) ──────────────────────
+
+
+class TestPersonDateInvariant:
+    def _actor(self) -> ActorInfo:
+        return ActorInfo(user_id=uuid.uuid4(), role="editor")
+
+    def test_create_rejects_death_before_birth(self) -> None:
+        with pytest.raises(BusinessRuleViolation, match="death_before_birth"):
+            Person.create(
+                full_name="X",
+                actor=self._actor(),
+                clan_id=uuid.uuid4(),
+                birth_date=date(1990, 1, 1),
+                death_date=date(1980, 1, 1),
+            )
+
+    def test_create_allows_valid_equal_or_partial_dates(self) -> None:
+        actor, clan = self._actor(), uuid.uuid4()
+        # death after birth
+        Person.create(
+            full_name="A",
+            actor=actor,
+            clan_id=clan,
+            birth_date=date(1990, 1, 1),
+            death_date=date(2050, 1, 1),
+        )
+        # same day (boundary) is allowed
+        Person.create(
+            full_name="B",
+            actor=actor,
+            clan_id=clan,
+            birth_date=date(1990, 1, 1),
+            death_date=date(1990, 1, 1),
+        )
+        # only one date set → nothing to compare
+        Person.create(full_name="C", actor=actor, clan_id=clan, birth_date=date(1990, 1, 1))
+
+    def test_update_rejects_death_before_birth(self) -> None:
+        actor, clan = self._actor(), uuid.uuid4()
+        person = Person.create(
+            full_name="X", actor=actor, clan_id=clan, birth_date=date(1990, 1, 1)
+        )
+        with pytest.raises(BusinessRuleViolation, match="death_before_birth"):
+            person.update({"death_date": date(1980, 1, 1)}, actor, clan)
+
+    def test_reconstruction_does_not_validate(self) -> None:
+        # Reads must not raise on legacy bad rows: direct construction (what the
+        # persistence mapper does) bypasses the write-path _validate_dates check.
+        p = Person(full_name="Legacy", birth_date=date(1990, 1, 1), death_date=date(1980, 1, 1))
+        assert p.death_date is not None and p.birth_date is not None
+        assert p.death_date < p.birth_date  # constructed without raising

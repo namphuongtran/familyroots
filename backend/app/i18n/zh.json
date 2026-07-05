@@ -112,6 +112,7 @@
   "error.person_has_no_controlling_clan": "该人物没有归属宗族",
   "error.person_not_controlled_by_this_clan": "该人物不属于您的宗族管理",
   "error.person_not_found": "未找到人物",
+  "error.person.death_before_birth": "死亡日期不能早于出生日期",
   "error.rate_limited": "请求过多；请稍后再试",
   "error.relationship.duplicate_marriage": "该婚姻关系已存在",
   "error.relationship.duplicate_parent_child": "该亲子关系已存在",

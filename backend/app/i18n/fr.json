@@ -112,6 +112,7 @@
   "error.person_has_no_controlling_clan": "Cette personne n'a pas de clan responsable",
   "error.person_not_controlled_by_this_clan": "Cette personne n'est pas gérée par votre clan",
   "error.person_not_found": "Personne introuvable",
+  "error.person.death_before_birth": "La date de décès ne peut pas précéder la date de naissance",
   "error.rate_limited": "Trop de requêtes ; veuillez ralentir",
   "error.relationship.duplicate_marriage": "Ce mariage existe déjà",
   "error.relationship.duplicate_parent_child": "Cette relation parent-enfant existe déjà",
