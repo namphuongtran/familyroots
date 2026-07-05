@@ -8,6 +8,6 @@
 - [ADR-006: Selective Soft-Delete by Aggregate](006-soft-vs-hard-delete.md)
 - [ADR-007: Identity Claims Workflow](007-identity-claims-workflow.md)
 - [ADR-008: Row-Level Security as Defense-in-Depth Layer-2](008-rls-defense-in-depth.md)
-- [ADR-008: Row-Level Security as Defense-in-Depth Layer-2](008-rls-defense-in-depth.md)
+- [ADR-009: Clan Deletion Is RESTRICT-Guarded (No Cascade-Wipe of Clan Data)](009-clan-deletion-restrict.md)
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for Status updates.
