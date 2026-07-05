@@ -181,12 +181,14 @@ async def get_current_clan_id(
 
     # Block a deactivated account up front — this path authenticates via the JWT and
     # never loads the profile (unlike ensure_user_profile), so the is_active gate must
-    # be applied here for every clan-scoped request. An approved membership implies a
-    # user_profiles row (FK), so a missing row (None) is an anomaly → treat as blocked.
+    # be applied here for every clan-scoped request. Only an explicit False is a
+    # deactivation; a missing profile row (None) means "no account/membership yet" and
+    # falls through to the membership check below, which yields the accurate
+    # no_approved_clan_membership rather than a misleading account_deactivated.
     is_account_active = await db.scalar(
         select(UserProfile.is_active).where(UserProfile.id == user_id)
     )
-    if not is_account_active:
+    if is_account_active is False:
         raise ForbiddenError("account_deactivated")
 
     # Fetch all approved clan memberships for this user

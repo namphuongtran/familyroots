@@ -81,3 +81,15 @@ async def test_deactivated_user_blocked_at_ensure_profile(async_session: AsyncSe
     _, user_id = await _seed(async_session, active=False)
     with pytest.raises(ForbiddenError, match="account_deactivated"):
         await ensure_user_profile(current_user={"sub": str(user_id)}, db=async_session)
+
+
+async def test_no_profile_is_not_treated_as_deactivated(async_session: AsyncSession) -> None:
+    """A user with no profile row (is_active resolves to None) must NOT be reported as
+    deactivated — they fall through to the accurate no_approved_clan_membership. Only an
+    explicit is_active=False is a deactivation."""
+    with pytest.raises(ForbiddenError, match="no_approved_clan_membership"):
+        await get_current_clan_id(
+            current_user={"sub": str(uuid.uuid4())},  # never onboarded → no profile
+            db=async_session,
+            x_current_clan_id=None,
+        )
