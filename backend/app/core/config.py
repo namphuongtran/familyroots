@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES
+
 _CANONICAL_DB_DRIVER = "postgresql+psycopg"
 
 
@@ -44,6 +46,17 @@ class Settings(BaseSettings):
 
     # Rate limiting — only trust X-Forwarded-For when behind a trusted proxy/LB.
     RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
+
+    # Document upload — the platform-wide max upload size (MB), env-tunable without a
+    # code change. Defaults to the document domain's built-in policy so there is a
+    # single source for the number. (Per-clan overrides are a future clan_settings
+    # feature; the dead clan_settings.max_upload_size_mb column is NOT wired yet.)
+    MAX_UPLOAD_SIZE_MB: int = DEFAULT_MAX_FILE_SIZE_BYTES // (1024 * 1024)
+
+    @property
+    def max_upload_bytes(self) -> int:
+        """The resolved upload limit in bytes (the application injects this)."""
+        return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
     # Scheduler — the platform's authoritative timezone. The anniversary cron fires
     # at NOTIFICATION_CRON_HOUR in this zone AND all of the job's date math is computed

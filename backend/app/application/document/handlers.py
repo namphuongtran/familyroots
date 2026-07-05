@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.application.shared.audit import emit_audit_event
-from app.domain.document.entity import Document
+from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES, Document
 from app.domain.document.repository import DocumentRepository, StoragePort
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
@@ -67,6 +67,7 @@ class DocumentCommandHandler:
         description: str | None = None,
         taken_date: Any = None,
         taken_place: str | None = None,
+        max_file_size_bytes: int = DEFAULT_MAX_FILE_SIZE_BYTES,
     ) -> DocumentResponse:
         """Upload a document to storage and save metadata."""
         # A body-supplied person_id must belong to the acting clan, so a document
@@ -92,6 +93,7 @@ class DocumentCommandHandler:
             description=description,
             taken_date=taken_date,
             taken_place=taken_place,
+            max_file_size_bytes=max_file_size_bytes,
         )
 
         # Upload the blob first, then persist metadata. If persistence fails, the
