@@ -215,6 +215,14 @@ def _specific_key(edges: tuple[str, ...], path: list[dict[str, Any]]) -> str | N
         the_sibling = path[3]  # my parent's blood sibling; target (path[4]) is their spouse
         side = _side(my_parent)
         sg = _gender(the_sibling)
+        # The in-law terms are gendered by role: a male sibling's spouse is his WIFE
+        # (thím/bác gái/mợ), a female sibling's spouse is her HUSBAND (dượng). If the
+        # recorded spouse gender contradicts that (a same-sex spouse), don't emit a
+        # wrong gendered term — fall back to the generic (never wrong, only less specific).
+        if sg == _MALE and tg != _FEMALE:
+            return None
+        if sg == _FEMALE and tg != _MALE:
+            return None
         if side == "paternal":
             if sg == _MALE:  # father's brother's wife — thím (chú's) / bác gái (bác's), by age
                 rank = _age_rank(the_sibling, my_parent)

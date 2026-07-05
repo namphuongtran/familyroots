@@ -298,3 +298,23 @@ def test_uncle_in_law_missing_age_falls_back():
     e = ("parent", "parent", "child", "spouse")
     dad = _n("male")  # no birth_date → can't tell bác gái vs thím
     assert _specific_key(e, [_n(), dad, _n(), _n("male"), _n("female")]) is None
+
+
+def test_cousin_older_unknown_gender_falls_back():
+    """Older cousin but unknown gender → no anh/chị họ → None (generic)."""
+    e = ("parent", "parent", "child", "child")
+    me = _n("male", date(1990, 1, 1))
+    older_unknown = _n("unknown", date(1985, 1, 1))
+    assert _specific_key(e, [me, _n(), _n(), _n(), older_unknown]) is None
+
+
+def test_in_law_same_sex_spouse_falls_back():
+    """A same-sex recorded spouse must NOT get a gendered wife/husband term → generic."""
+    e = ("parent", "parent", "child", "spouse")
+    dad = _n("male", date(1960, 1, 1))
+    chu = _n("male", date(1965, 1, 1))  # father's brother
+    # his recorded spouse is male → 'thím' (a wife term) would be wrong → None
+    assert _specific_key(e, [_n(), dad, _n(), chu, _n("male")]) is None
+    co = _n("female")  # father's sister
+    # her recorded spouse is female → 'dượng' (a husband term) would be wrong → None
+    assert _specific_key(e, [_n(), dad, _n(), co, _n("female")]) is None
