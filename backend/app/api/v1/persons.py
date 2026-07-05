@@ -113,6 +113,9 @@ async def list_persons(
             limit=limit,
         )
     )
+    await handler.redact_pii(
+        persons, viewer_role=role.value, viewer_user_id=uuid.UUID(current_user["sub"])
+    )
 
     includes = parse_includes(include)
     include_set = set(includes)
@@ -257,6 +260,10 @@ async def batch_get_persons(
             raise result
         persons.append(result)
 
+    await handler.redact_pii(
+        persons, viewer_role=role.value, viewer_user_id=uuid.UUID(current_user["sub"])
+    )
+
     includes = parse_includes(body.include)
     includes_by_id = _parse_include_by_id(body.include_by_id)
     all_include_keys = set(includes)
@@ -322,6 +329,9 @@ async def get_person(
 ) -> dict[str, Any]:
     """Get a single person's full detail."""
     person = await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
+    await handler.redact_pii(
+        [person], viewer_role=role.value, viewer_user_id=uuid.UUID(current_user["sub"])
+    )
     p_dict = _serialize_person_by_profile(person, profile)
 
     includes = parse_includes(include)

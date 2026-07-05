@@ -162,6 +162,31 @@ class PersonQueryHandler:
             raise EntityNotFoundError("person_not_found")
         return PersonResponse.model_validate(person)
 
+    # Contact PII fields hidden from ordinary clan members (L11). Genealogy content
+    # (names, dates, places, lineage, bio, …) stays visible to every member.
+    _PII_FIELDS = ("phone", "email")
+
+    async def redact_pii(
+        self,
+        persons: list[PersonResponse],
+        *,
+        viewer_role: str,
+        viewer_user_id: uuid.UUID,
+    ) -> None:
+        """Null out contact PII in-place unless the viewer may see it.
+
+        Server-enforced field-level privacy: an admin sees everyone's contact details,
+        and any member sees their OWN linked person's; for everyone else phone/email are
+        nulled. Applied on the read path so it can't be bypassed via ?profile=full.
+        """
+        if viewer_role == "admin":
+            return
+        own_person_id = await self._repo.get_linked_person_id(viewer_user_id)
+        for person in persons:
+            if person.id != own_person_id:
+                for field in self._PII_FIELDS:
+                    setattr(person, field, None)
+
     async def search(self, query: SearchPersons) -> list[PersonSearchResult]:
         """Search persons by name."""
         return await self._repo.search(query.clan_id, query.query, query.limit)

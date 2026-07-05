@@ -56,6 +56,11 @@ class _FakePersonQueryHandler:
             raise EntityNotFoundError("person_not_found")
         return person
 
+    async def redact_pii(self, persons: Any, *, viewer_role: str, viewer_user_id: Any) -> None:
+        # PII redaction (L11) is covered in test_person_pii_visibility; not exercised
+        # here — this batch test targets profile/fields/stats behavior.
+        return None
+
     async def get_persons_stats(
         self, clan_id: uuid.UUID, person_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, dict[str, int]]:
