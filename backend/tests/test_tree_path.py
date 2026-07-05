@@ -7,12 +7,20 @@ import pytest
 
 from app.services.relationship_descriptor import (
     KINSHIP_MAP,
+    SPECIFIC_KINSHIP_KEYS,
     _specific_key,
     describe_relationship,
 )
 
 
-def _path_step(person_id, full_name="Test", gender="male", edge_type=None, birth_date=None):
+def _path_step(
+    person_id,
+    full_name="Test",
+    gender="male",
+    edge_type=None,
+    birth_date=None,
+    birth_date_approx=False,
+):
     """Build a path step dict."""
     return {
         "person_id": str(person_id),
@@ -20,13 +28,14 @@ def _path_step(person_id, full_name="Test", gender="male", edge_type=None, birth
         "gender": gender,
         "edge_type": edge_type,
         "birth_date": birth_date,
+        "birth_date_approx": birth_date_approx,
     }
 
 
 def test_same_person():
     """Single-element path returns 'same person'."""
     me = uuid.uuid4()
-    result = describe_relationship([_path_step(me)], "male", "male")
+    result = describe_relationship([_path_step(me)])
     assert result  # returns a non-empty string
 
 
@@ -38,7 +47,7 @@ def test_parent_relationship():
         _path_step(child, "Child"),
         _path_step(parent, "Parent", edge_type="parent"),
     ]
-    result = describe_relationship(path, "male", "male")
+    result = describe_relationship(path)
     # Should return the i18n value for kinship.parent
     assert result
 
@@ -53,7 +62,7 @@ def test_sibling_relationship():
         _path_step(shared_parent, "Parent", edge_type="parent"),
         _path_step(sibling, "Sibling", edge_type="child"),
     ]
-    result = describe_relationship(path, "male", "female")
+    result = describe_relationship(path)
     assert result
 
 
@@ -67,7 +76,7 @@ def test_grandparent_relationship():
         _path_step(parent, "Parent", edge_type="parent"),
         _path_step(grandparent, "Grandparent", edge_type="parent"),
     ]
-    result = describe_relationship(path, "male", "male")
+    result = describe_relationship(path)
     assert result
 
 
@@ -79,7 +88,7 @@ def test_distant_relative():
     for i, edge in enumerate(edges):
         path.append(_path_step(ids[i + 1], f"Person{i + 1}", edge_type=edge))
 
-    result = describe_relationship(path, "male", "male")
+    result = describe_relationship(path)
     # Sequence not in KINSHIP_MAP → distant relative
     assert result
 
@@ -96,8 +105,10 @@ def test_kinship_map_coverage():
 # _specific_key is the deterministic core (returns the i18n key, no locale coupling).
 
 
-def _n(gender="unknown", birth_date=None):
-    return _path_step(uuid.uuid4(), gender=gender, birth_date=birth_date)
+def _n(gender="unknown", birth_date=None, birth_date_approx=False):
+    return _path_step(
+        uuid.uuid4(), gender=gender, birth_date=birth_date, birth_date_approx=birth_date_approx
+    )
 
 
 @pytest.mark.parametrize(
@@ -137,6 +148,20 @@ def test_sibling_without_birthdate_falls_back():
     me = _n("male")  # no birth_date
     sib = _n("male")
     assert _specific_key(("parent", "child"), [me, _n("male"), sib]) is None
+
+
+def test_sibling_approximate_date_falls_back():
+    """An APPROXIMATE date must not become a hard Anh/Em claim → fall back to generic."""
+    me = _n("male", date(1990, 1, 1))
+    approx_sib = _n("male", date(1985, 1, 1), birth_date_approx=True)
+    assert _specific_key(("parent", "child"), [me, _n("male"), approx_sib]) is None
+
+
+def test_sibling_equal_dates_falls_back():
+    """Equal dates (twins / unknown-but-equal) must not silently pick 'younger'."""
+    me = _n("male", date(1990, 1, 1))
+    twin = _n("male", date(1990, 1, 1))
+    assert _specific_key(("parent", "child"), [me, _n("male"), twin]) is None
 
 
 def test_grandparent_paternal_vs_maternal():
@@ -189,35 +214,21 @@ def test_paternal_uncle_without_birthdate_falls_back():
     )
 
 
+def test_paternal_uncle_approximate_date_falls_back():
+    """Approximate father/uncle dates → can't assert Bác vs Chú → generic."""
+    father = _n("male", date(1960, 1, 1), birth_date_approx=True)
+    uncle = _n("male", date(1955, 1, 1))
+    assert _specific_key(("parent", "parent", "child"), [_n(), father, _n("male"), uncle]) is None
+
+
 def test_all_resolver_keys_have_vietnamese_translations():
-    """Every key _specific_key can emit must exist in vi.json (code↔i18n in sync)."""
+    """Every key _specific_key can emit must exist in vi.json (code↔i18n in sync).
+
+    Derives the key set from SPECIFIC_KINSHIP_KEYS (the resolver's own source of truth)
+    so a phase-2 key can't drift out of the locale files unnoticed."""
     from app.services.translator import _translations, load_translations
 
     load_translations()
-    keys = {
-        "kinship.father",
-        "kinship.mother",
-        "kinship.husband",
-        "kinship.wife",
-        "kinship.son",
-        "kinship.daughter",
-        "kinship.older_brother",
-        "kinship.older_sister",
-        "kinship.younger_brother",
-        "kinship.younger_sister",
-        "kinship.paternal_grandfather",
-        "kinship.paternal_grandmother",
-        "kinship.maternal_grandfather",
-        "kinship.maternal_grandmother",
-        "kinship.grandson",
-        "kinship.granddaughter",
-        "kinship.paternal_uncle_older",
-        "kinship.paternal_uncle_younger",
-        "kinship.paternal_aunt_older",
-        "kinship.paternal_aunt_younger",
-        "kinship.maternal_uncle",
-        "kinship.maternal_aunt",
-    }
     vi = _translations.get("vi", {})
-    missing = {k for k in keys if not vi.get(k)}
+    missing = {k for k in SPECIFIC_KINSHIP_KEYS if not vi.get(k)}
     assert not missing, f"missing vi kinship translations: {missing}"

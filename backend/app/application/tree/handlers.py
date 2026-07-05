@@ -78,9 +78,13 @@ class TreeQueryHandler:
         if not path:
             return {"path": [], "description": None, "found": False}
 
-        from_gender = path[0].get("gender", "unknown")
-        to_gender = path[-1].get("gender", "unknown")
-        description = describe_relationship(path, from_gender, to_gender)
+        description = describe_relationship(path)
+
+        # birth_date/_approx are carried only for the descriptor's age logic — strip
+        # them so the /path response shape is unchanged (they were never exposed).
+        for step in path:
+            step.pop("birth_date", None)
+            step.pop("birth_date_approx", None)
 
         return {"path": path, "description": description, "found": True}
 

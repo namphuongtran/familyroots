@@ -5,15 +5,20 @@ localized Vietnamese kinship term. Vietnamese kinship is specific: the right wor
 depends on **gender**, **paternal-vs-maternal side**, and **relative age**. This
 resolver uses:
 
-- each path node's ``gender`` (already carried by the path), and
-- ``birth_date`` (threaded through the path) for the older/younger distinctions
-  (bác vs chú; anh/chị vs em).
+- each path node's ``gender`` (already carried by the path),
+- the *intermediate* node's gender for side (through father → paternal/nội, through
+  mother → maternal/ngoại), via ``_side``, and
+- ``birth_date`` for the older/younger distinctions (bác vs chú; anh/chị vs em), via
+  ``_age_rank``.
 
-Paternal-vs-maternal side is derived from the *intermediate* node's gender (through
-the father → paternal/nội; through the mother → maternal/ngoại). When the data needed
-for a specific term is missing (unknown gender, unknown side, or missing birth dates)
-it falls back to the age/gender-agnostic generic term via ``KINSHIP_MAP`` — the label
-is always safe, never wrong.
+Correctness principle — "never wrong, only less specific": whenever the distinguishing
+data is missing OR unreliable, the resolver returns ``None`` and the caller falls back
+to the age/gender-agnostic generic term (``KINSHIP_MAP``). In particular an APPROXIMATE
+birth date, a missing date, or two EQUAL dates never produce a hard older/younger claim.
+
+Known limitation: the path is a single shortest path, so half-siblings and full siblings
+are both ``("parent","child")`` and share the base term (anh/chị/em) — the
+cùng-cha-khác-mẹ qualifier is out of scope.
 """
 
 from __future__ import annotations
@@ -42,6 +47,35 @@ KINSHIP_MAP: dict[tuple[str, ...], str] = {
     ("child", "child", "child"): "kinship.great_grandchild",
 }
 
+# Every specific key the resolver can emit — single source of truth shared with the
+# i18n-coverage test so a new term can't drift out of sync with the locale files.
+SPECIFIC_KINSHIP_KEYS: frozenset[str] = frozenset(
+    {
+        "kinship.father",
+        "kinship.mother",
+        "kinship.husband",
+        "kinship.wife",
+        "kinship.son",
+        "kinship.daughter",
+        "kinship.older_brother",
+        "kinship.older_sister",
+        "kinship.younger_brother",
+        "kinship.younger_sister",
+        "kinship.paternal_grandfather",
+        "kinship.paternal_grandmother",
+        "kinship.maternal_grandfather",
+        "kinship.maternal_grandmother",
+        "kinship.grandson",
+        "kinship.granddaughter",
+        "kinship.paternal_uncle_older",
+        "kinship.paternal_uncle_younger",
+        "kinship.paternal_aunt_older",
+        "kinship.paternal_aunt_younger",
+        "kinship.maternal_uncle",
+        "kinship.maternal_aunt",
+    }
+)
+
 _MALE = "male"
 _FEMALE = "female"
 
@@ -50,19 +84,39 @@ def _gender(node: dict[str, Any]) -> str:
     return node.get("gender") or "unknown"
 
 
-def _is_older(a: dict[str, Any], b: dict[str, Any]) -> bool | None:
-    """Is ``a`` older than ``b`` (earlier birth_date)? None if either date is unknown."""
+def _side(linking_parent: dict[str, Any]) -> str | None:
+    """Paternal (through father) / maternal (through mother) / None if unknown."""
+    g = _gender(linking_parent)
+    if g == _MALE:
+        return "paternal"
+    if g == _FEMALE:
+        return "maternal"
+    return None
+
+
+def _age_rank(a: dict[str, Any], b: dict[str, Any]) -> str | None:
+    """``"older"``/``"younger"`` of ``a`` relative to ``b``, or ``None`` when it cannot
+    be asserted safely.
+
+    Returns None if either birth_date is missing, either date is APPROXIMATE (an
+    estimate must not become a hard Bác/Chú or Anh/Em claim), or the dates are EQUAL
+    (twins / unknown-but-equal → do not guess).
+    """
     da, db = a.get("birth_date"), b.get("birth_date")
     if not isinstance(da, date) or not isinstance(db, date):
         return None
-    return da < db
+    if a.get("birth_date_approx") or b.get("birth_date_approx"):
+        return None
+    if da == db:
+        return None
+    return "older" if da < db else "younger"
 
 
 def _specific_key(edges: tuple[str, ...], path: list[dict[str, Any]]) -> str | None:
     """Resolve a gender/side/age-specific kinship key, or None to use the generic term.
 
     Returning None (rather than a wrong guess) is deliberate — the caller falls back to
-    the age/gender-agnostic term whenever the distinguishing data is absent.
+    the age/gender-agnostic term whenever the distinguishing data is absent or unreliable.
     """
     source, target = path[0], path[-1]
     tg = _gender(target)
@@ -77,24 +131,24 @@ def _specific_key(edges: tuple[str, ...], path: list[dict[str, Any]]) -> str | N
         return {_MALE: "kinship.husband", _FEMALE: "kinship.wife"}.get(tg)
 
     if edges == ("parent", "child"):  # sibling — older/younger vs me
-        older = _is_older(target, source)
-        if older is None:
-            return None
-        if older:
+        rank = _age_rank(target, source)
+        if rank == "older":
             return {_MALE: "kinship.older_brother", _FEMALE: "kinship.older_sister"}.get(tg)
-        return {_MALE: "kinship.younger_brother", _FEMALE: "kinship.younger_sister"}.get(tg)
+        if rank == "younger":
+            return {_MALE: "kinship.younger_brother", _FEMALE: "kinship.younger_sister"}.get(tg)
+        return None
 
     if edges == ("child", "child"):  # grandchild
         return {_MALE: "kinship.grandson", _FEMALE: "kinship.granddaughter"}.get(tg)
 
     if edges == ("parent", "parent"):  # grandparent — side from the linking parent
-        side = _gender(path[1])
-        if side == _MALE:  # through father → paternal (nội)
+        side = _side(path[1])
+        if side == "paternal":
             return {
                 _MALE: "kinship.paternal_grandfather",
                 _FEMALE: "kinship.paternal_grandmother",
             }.get(tg)
-        if side == _FEMALE:  # through mother → maternal (ngoại)
+        if side == "maternal":
             return {
                 _MALE: "kinship.maternal_grandfather",
                 _FEMALE: "kinship.maternal_grandmother",
@@ -103,35 +157,30 @@ def _specific_key(edges: tuple[str, ...], path: list[dict[str, Any]]) -> str | N
 
     if edges == ("parent", "parent", "child"):  # uncle/aunt — side from my linking parent
         my_parent = path[1]
-        side = _gender(my_parent)
-        if side == _MALE:  # father's sibling (paternal) — bác/chú/cô use age vs father
-            older = _is_older(target, my_parent)
-            if older is None:
+        side = _side(my_parent)
+        if side == "paternal":  # father's sibling — bác/chú/cô use age vs father
+            rank = _age_rank(target, my_parent)
+            if rank is None:
                 return None
+            older = rank == "older"
             if tg == _MALE:
                 return "kinship.paternal_uncle_older" if older else "kinship.paternal_uncle_younger"
             if tg == _FEMALE:
                 return "kinship.paternal_aunt_older" if older else "kinship.paternal_aunt_younger"
             return None
-        if side == _FEMALE:  # mother's sibling (maternal) — cậu/dì, age-agnostic
+        if side == "maternal":  # mother's sibling — cậu/dì, age-agnostic
             return {_MALE: "kinship.maternal_uncle", _FEMALE: "kinship.maternal_aunt"}.get(tg)
         return None
 
     return None
 
 
-def describe_relationship(
-    path: list[dict[str, Any]],
-    from_gender: str = "unknown",
-    to_gender: str = "unknown",
-    locale: str = "vi",
-) -> str:
+def describe_relationship(path: list[dict[str, Any]]) -> str:
     """Return a localized relationship description from a path of steps.
 
-    ``path`` is a list of dicts with at least ``edge_type``; steps also carry
-    ``gender`` and ``birth_date`` used to pick the specific Vietnamese term. The
-    ``from_gender``/``to_gender``/``locale`` parameters are retained for backward
-    compatibility but the description is derived from the path itself.
+    ``path`` is a list of dicts with ``edge_type`` (steps 1..N) and ``gender`` /
+    ``birth_date`` / ``birth_date_approx`` used to pick the specific Vietnamese term.
+    The localized string uses the request locale via ``t()``.
     """
     if not path or len(path) < 2:
         return t("kinship.same_person")
