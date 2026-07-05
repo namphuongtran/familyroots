@@ -10,12 +10,14 @@ must be IdentityUnavailableError (→ 503).
 from typing import Any
 
 import pytest
-from supabase_auth.errors import AuthApiError, AuthRetryableError
+from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
 from app.application.auth.handlers import AuthCommandHandler
+from app.core.exceptions import ValidationError
 from app.domain.auth.identity_provider import (
     IdentityAuthError,
     IdentityUnavailableError,
+    IdentityWeakPasswordError,
 )
 from app.infrastructure import supabase_identity_provider as sip
 
@@ -97,6 +99,24 @@ async def test_create_user_rate_limit_is_unavailable(monkeypatch: pytest.MonkeyP
         await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="x")
 
 
+@pytest.mark.asyncio
+async def test_create_user_weak_password_is_not_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A too-weak password is a client input error, not a 503 outage. AuthWeakPasswordError
+    extends CustomAuthError (not AuthApiError), so without explicit handling it fell through
+    _classify to the Unavailable catch-all."""
+    monkeypatch.setattr(
+        sip,
+        "get_service_client",
+        lambda: _RaisingServiceClient(
+            AuthWeakPasswordError("Password is too weak", 422, ["length"])
+        ),
+    )
+    with pytest.raises(IdentityWeakPasswordError):
+        await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="weak")
+
+
 class _UnavailableIdentity:
     async def create_user(self, *, email: str, password: str) -> str:
         raise IdentityUnavailableError("provider down")
@@ -121,3 +141,31 @@ async def test_register_does_not_swallow_unavailable_into_422() -> None:
             clan_name="C",
             clan_slug="c",
         )
+
+
+class _WeakPasswordIdentity:
+    async def create_user(self, *, email: str, password: str) -> str:
+        raise IdentityWeakPasswordError("Password is too weak")
+
+
+@pytest.mark.asyncio
+async def test_register_maps_weak_password_to_422() -> None:
+    """A provider weak-password rejection surfaces as a 422 with the specific
+    auth.password_too_weak code — not a 503, and not the generic registration_failed."""
+    handler = AuthCommandHandler(
+        repo=None,  # type: ignore[arg-type]
+        uow=None,  # type: ignore[arg-type]
+        identity=_WeakPasswordIdentity(),  # type: ignore[arg-type]  # stub: only create_user is used
+        query_port=None,  # type: ignore[arg-type]
+    )
+    with pytest.raises(ValidationError) as exc:
+        await handler.register(
+            email="a@b.c",
+            password="12345678",
+            full_name="T",
+            clan_action="create",
+            clan_name="C",
+            clan_slug="c",
+        )
+    detail = exc.value.detail
+    assert isinstance(detail, dict) and detail["code"] == "auth.password_too_weak"

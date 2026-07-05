@@ -25,6 +25,7 @@ from app.domain.auth.identity_provider import (
     IdentityProvider,
     IdentityUnavailableError,
     IdentityUserExistsError,
+    IdentityWeakPasswordError,
 )
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
 from app.domain.shared.exceptions import AuthenticationError
@@ -208,6 +209,10 @@ class AuthCommandHandler:
             # Provider outage/misconfiguration is not a validation failure — let the
             # dedicated 503 handler surface it truthfully.
             raise
+        except IdentityWeakPasswordError as e:
+            # Provider rejected the password as too weak — a client error (422) with a
+            # specific message, not the generic registration_failed.
+            raise ValidationError("auth.password_too_weak", {"detail": str(e)}) from e
         except IdentityError as e:
             raise ValidationError("auth.registration_failed", {"detail": str(e)}) from e
 

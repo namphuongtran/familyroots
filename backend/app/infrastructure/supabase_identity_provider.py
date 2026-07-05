@@ -11,7 +11,7 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import Any
 
-from supabase_auth.errors import AuthApiError, AuthRetryableError
+from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
 from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
@@ -20,6 +20,7 @@ from app.domain.auth.identity_provider import (
     IdentityError,
     IdentityUnavailableError,
     IdentityUserExistsError,
+    IdentityWeakPasswordError,
 )
 from app.infrastructure.supabase_client import get_anon_client, get_service_client
 
@@ -32,6 +33,11 @@ def _classify(exc: Exception) -> IdentityError:
     request never reached the provider), provider 5xx, or a rejected *API key*
     (our configuration) — becomes ``IdentityUnavailableError`` so callers surface
     503 instead of lying "invalid credentials"."""
+    if isinstance(exc, AuthWeakPasswordError):
+        # A too-weak password on registration is a client input error, not an outage
+        # and not "invalid credentials" — surface it as 422, not 503 (it extends
+        # CustomAuthError, so without this it would fall through to the 503 catch-all).
+        return IdentityWeakPasswordError(str(exc))
     if isinstance(exc, AuthRetryableError):
         return IdentityUnavailableError(str(exc))
     if isinstance(exc, AuthApiError):
@@ -63,7 +69,9 @@ class SupabaseIdentityProvider:
             if "already" in str(exc).lower():
                 raise IdentityUserExistsError() from exc
             classified = _classify(exc)
-            if isinstance(classified, IdentityUnavailableError):
+            # Preserve the specific verdict (503 outage / 422 weak password); only an
+            # otherwise-unclassified failure collapses to the generic IdentityError.
+            if isinstance(classified, IdentityUnavailableError | IdentityWeakPasswordError):
                 raise classified from exc
             raise IdentityError(str(exc)) from exc
         return str(resp.user.id)

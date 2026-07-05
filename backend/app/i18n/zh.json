@@ -73,6 +73,7 @@
   "error.auth.invalid_refresh_token": "刷新令牌无效或已过期",
   "error.auth.membership_already_pending": "您的加入申请正在等待审核",
   "error.auth.registration_failed": "注册失败",
+  "error.auth.password_too_weak": "密码强度不足",
   "error.bad_request": "请求无效",
   "error.branch_cannot_be_own_parent": "分支不能作为自己的父级",
   "error.branch_not_found": "未找到分支",

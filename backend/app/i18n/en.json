@@ -73,6 +73,7 @@
   "error.auth.invalid_refresh_token": "Invalid or expired refresh token",
   "error.auth.membership_already_pending": "Your membership request is already pending",
   "error.auth.registration_failed": "Registration failed",
+  "error.auth.password_too_weak": "Password is too weak",
   "error.bad_request": "Bad request",
   "error.branch_cannot_be_own_parent": "A branch cannot be its own parent",
   "error.branch_not_found": "Branch not found",

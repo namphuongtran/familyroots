@@ -51,6 +51,14 @@ class IdentityUnavailableError(IdentityError):
     paused project and a wrong service key as user error."""
 
 
+class IdentityWeakPasswordError(IdentityError):
+    """The provider rejected the chosen password as too weak (registration).
+
+    A client input error — surfaced as HTTP 422 "password too weak", never as a 503
+    outage (the provider's password policy can be stricter than the app's length check,
+    so this is reachable even after local validation)."""
+
+
 class IdentityProvider(Protocol):
     """What the auth use-cases need from the external identity provider."""
 
