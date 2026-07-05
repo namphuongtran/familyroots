@@ -73,6 +73,54 @@ class TestPersonCommandHandlerUpdate:
         mock_uow.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_update_response_redacts_pii_for_editor_editing_stranger(self) -> None:
+        """L11: the PATCH response must not leak a stranger's phone/email to an editor."""
+        person = _make_person("Before")
+        person.phone = "0900000000"
+        person.email = "a@example.com"
+        person.collect_events()
+
+        mock_repo = AsyncMock()
+        mock_repo.get_in_clan.return_value = person
+        mock_repo.get_linked_person_id.return_value = uuid.uuid4()  # editor linked elsewhere
+        mock_uow = AsyncMock()
+        mock_uow.track = lambda agg: None
+
+        handler = PersonCommandHandler(mock_repo, mock_uow)
+        result = await handler.update(
+            UpdatePerson(
+                person_id=person.id,
+                clan_id=uuid.uuid4(),
+                actor=ActorInfo(user_id=uuid.uuid4(), role="editor"),
+                changes={"full_name": "After"},
+            )
+        )
+        assert result.full_name == "After"
+        assert result.phone is None and result.email is None
+
+    @pytest.mark.asyncio
+    async def test_update_response_keeps_pii_for_admin(self) -> None:
+        person = _make_person("Before")
+        person.phone = "0900000000"
+        person.collect_events()
+
+        mock_repo = AsyncMock()
+        mock_repo.get_in_clan.return_value = person
+        mock_uow = AsyncMock()
+        mock_uow.track = lambda agg: None
+
+        handler = PersonCommandHandler(mock_repo, mock_uow)
+        result = await handler.update(
+            UpdatePerson(
+                person_id=person.id,
+                clan_id=uuid.uuid4(),
+                actor=ActorInfo(user_id=uuid.uuid4(), role="admin"),
+                changes={"full_name": "After"},
+            )
+        )
+        assert result.phone == "0900000000"
+
+    @pytest.mark.asyncio
     async def test_update_raises_not_found(self) -> None:
         """Update raises EntityNotFoundError when person not in clan."""
         mock_repo = AsyncMock()

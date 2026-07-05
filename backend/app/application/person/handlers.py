@@ -25,6 +25,33 @@ from app.domain.shared.exceptions import EntityNotFoundError, ForbiddenError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.schemas.person import PersonResponse
 
+# Contact PII hidden from ordinary clan members (L11). Genealogy content (names, dates,
+# places, lineage, bio, …) stays visible to every member.
+_PII_FIELDS = ("phone", "email")
+_ADMIN_ROLE = "admin"
+
+
+async def _redact_person_pii(
+    repo: PersonRepository,
+    persons: list[PersonResponse],
+    *,
+    viewer_role: str,
+    viewer_user_id: uuid.UUID,
+) -> None:
+    """Null contact PII in-place unless the viewer may see it.
+
+    An admin sees everyone's contact details, and any member sees their OWN linked
+    person's; for everyone else phone/email are nulled. Shared by the read path AND the
+    update-response path so PII can't leak through either surface.
+    """
+    if viewer_role == _ADMIN_ROLE:
+        return
+    own_person_id = await repo.get_linked_person_id(viewer_user_id)
+    for person in persons:
+        if person.id != own_person_id:
+            for field in _PII_FIELDS:
+                setattr(person, field, None)
+
 
 class PersonCommandHandler:
     """Handles Person write operations (create, update, delete, restore)."""
@@ -112,7 +139,13 @@ class PersonCommandHandler:
         person.update(cmd.changes, cmd.actor, cmd.clan_id)
         await self._repo.save(person)
         await self._uow.commit()
-        return PersonResponse.model_validate(person)
+        response = PersonResponse.model_validate(person)
+        # The PATCH response echoes the person's stored fields — redact contact PII so
+        # an editor editing a stranger's record can't read phone/email through it (L11).
+        await _redact_person_pii(
+            self._repo, [response], viewer_role=cmd.actor.role, viewer_user_id=cmd.actor.user_id
+        )
+        return response
 
     async def delete(self, cmd: DeletePerson) -> None:
         """Soft-delete a person."""
@@ -162,10 +195,6 @@ class PersonQueryHandler:
             raise EntityNotFoundError("person_not_found")
         return PersonResponse.model_validate(person)
 
-    # Contact PII fields hidden from ordinary clan members (L11). Genealogy content
-    # (names, dates, places, lineage, bio, …) stays visible to every member.
-    _PII_FIELDS = ("phone", "email")
-
     async def redact_pii(
         self,
         persons: list[PersonResponse],
@@ -173,19 +202,11 @@ class PersonQueryHandler:
         viewer_role: str,
         viewer_user_id: uuid.UUID,
     ) -> None:
-        """Null out contact PII in-place unless the viewer may see it.
-
-        Server-enforced field-level privacy: an admin sees everyone's contact details,
-        and any member sees their OWN linked person's; for everyone else phone/email are
-        nulled. Applied on the read path so it can't be bypassed via ?profile=full.
-        """
-        if viewer_role == "admin":
-            return
-        own_person_id = await self._repo.get_linked_person_id(viewer_user_id)
-        for person in persons:
-            if person.id != own_person_id:
-                for field in self._PII_FIELDS:
-                    setattr(person, field, None)
+        """Redact contact PII on the read path (see ``_redact_person_pii``), so it can't
+        be bypassed via ?profile=full."""
+        await _redact_person_pii(
+            self._repo, persons, viewer_role=viewer_role, viewer_user_id=viewer_user_id
+        )
 
     async def search(self, query: SearchPersons) -> list[PersonSearchResult]:
         """Search persons by name."""
