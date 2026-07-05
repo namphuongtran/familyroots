@@ -87,6 +87,7 @@ async def test_approve_claim_uses_uow_and_writes_audit():
     )
 
     assert claim.status == "APPROVED"
+    assert claim.reviewed_at is not None  # copied from the entity transition
     assert uow.commits == 1
     assert len(repo.added_audits) == 1
     assert result.status == "APPROVED"
@@ -105,6 +106,7 @@ async def test_reject_claim_uses_uow_and_writes_audit():
     )
 
     assert claim.status == "REJECTED"
+    assert claim.reviewed_at is not None  # copied from the entity transition
     assert uow.commits == 1
     assert len(repo.added_audits) == 1
     assert result.status == "REJECTED"

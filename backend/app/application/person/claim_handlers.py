@@ -131,11 +131,11 @@ class ClaimCommandHandler:
         )
         entity.approve(admin_id, reviewer_note)
 
-        # Apply state
+        # Apply state (entity is the single source of truth for the transition).
         claim.status = entity.status
         claim.reviewed_by = entity.reviewed_by
         claim.reviewer_note = entity.reviewer_note
-        claim.reviewed_at = datetime.now(UTC)
+        claim.reviewed_at = entity.reviewed_at
 
         user.person_id = claim.person_id
 
@@ -195,7 +195,7 @@ class ClaimCommandHandler:
         claim.status = entity.status
         claim.reviewed_by = entity.reviewed_by
         claim.reviewer_note = entity.reviewer_note
-        claim.reviewed_at = datetime.now(UTC)
+        claim.reviewed_at = entity.reviewed_at
 
         self._repo.add_audit(
             clan_id=claim.person.created_by_clan_id,

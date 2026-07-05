@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.domain.shared.exceptions import ConflictError, ForbiddenError
 
@@ -33,6 +33,7 @@ class IdentityClaim:
         self.status = "APPROVED"
         self.reviewed_by = admin_id
         self.reviewer_note = reviewer_note
+        self.reviewed_at = datetime.now(UTC)
 
     def reject(self, admin_id: uuid.UUID, reviewer_note: str | None = None) -> None:
         if self.status != "PENDING":
@@ -41,10 +42,4 @@ class IdentityClaim:
         self.status = "REJECTED"
         self.reviewed_by = admin_id
         self.reviewer_note = reviewer_note
-
-    def reject_as_duplicate(self) -> None:
-        if self.status != "PENDING":
-            return
-
-        self.status = "REJECTED"
-        self.reviewer_note = "Person verified by another user."
+        self.reviewed_at = datetime.now(UTC)
