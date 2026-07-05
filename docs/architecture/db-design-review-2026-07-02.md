@@ -251,8 +251,9 @@ Deferred to roadmap (need product/contract decision — see §5):
   **client-facing contract change** (web + mobile).
 - **F-5** `DELETE /events` requires only Editor, while person/branch/relationship
   deletes require Admin — confirm intended destructive-op policy.
-- **F-6** `notifications.py` is an empty stub still mounted at `/api/v1/notifications`
-  — unmount or build (ties to the notifications feature).
+- **F-6** ✅ DONE (2026-07-05, PR #37): the empty `notifications.py` stub mounted at
+  `/api/v1/notifications` was removed (unmounted). A real router can be built when the
+  notifications feature ships.
 
 **Verification (2026-07-02):** `ruff` + `mypy` + **180 unit tests pass** (incl. i18n
 coverage); integration pending Postgres.
