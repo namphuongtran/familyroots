@@ -45,13 +45,25 @@ _CLAN_FKS: tuple[tuple[str, str], ...] = (
 
 
 def _repoint(ondelete: str) -> None:
-    """Recreate each clan FK with the given ON DELETE rule, preserving its name."""
+    """Recreate each clan FK with the given ON DELETE rule, preserving its name.
+
+    Asserts each (table, col) pair matches exactly one clan FK, so a future rename
+    can't silently skip a pair and leave it on the old rule.
+    """
     insp = sa.inspect(op.get_bind())
     for table, col in _CLAN_FKS:
-        for fk in insp.get_foreign_keys(table):
-            if fk.get("referred_table") == "clans" and col in fk.get("constrained_columns", []):
-                op.drop_constraint(fk["name"], table, type_="foreignkey")
-                op.create_foreign_key(fk["name"], table, "clans", [col], ["id"], ondelete=ondelete)
+        matched = [
+            fk
+            for fk in insp.get_foreign_keys(table)
+            if fk.get("referred_table") == "clans" and col in fk.get("constrained_columns", [])
+        ]
+        if len(matched) != 1:
+            raise RuntimeError(
+                f"expected exactly one clan FK on {table}.{col}, found {len(matched)}"
+            )
+        fk = matched[0]
+        op.drop_constraint(fk["name"], table, type_="foreignkey")
+        op.create_foreign_key(fk["name"], table, "clans", [col], ["id"], ondelete=ondelete)
 
 
 def upgrade() -> None:
