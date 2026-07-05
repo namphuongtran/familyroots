@@ -86,6 +86,13 @@ SPECIFIC_KINSHIP_KEYS: frozenset[str] = frozenset(
         "kinship.aunt_in_law_paternal_younger",
         "kinship.aunt_in_law_maternal",
         "kinship.uncle_in_law",
+        # phase 3
+        "kinship.daughter_in_law",
+        "kinship.son_in_law",
+        "kinship.father_in_law_husband",
+        "kinship.mother_in_law_husband",
+        "kinship.father_in_law_wife",
+        "kinship.mother_in_law_wife",
     }
 )
 
@@ -242,6 +249,32 @@ def _specific_key(edges: tuple[str, ...], path: list[dict[str, Any]]) -> str | N
             if sg == _FEMALE:  # mother's sister's husband — dượng
                 return "kinship.uncle_in_law"
             return None
+        return None
+
+    if edges == ("child", "spouse"):  # my child's spouse — con dâu / con rể
+        my_child = path[1]
+        cg = _gender(my_child)
+        # con dâu = son's WIFE, con rể = daughter's HUSBAND. A same-sex in-law child
+        # (son's husband / daughter's wife) matches neither → generic.
+        if cg == _MALE and tg == _FEMALE:
+            return "kinship.daughter_in_law"
+        if cg == _FEMALE and tg == _MALE:
+            return "kinship.son_in_law"
+        return None
+
+    if edges == ("spouse", "parent"):  # my spouse's parent — bố/mẹ chồng | bố/mẹ vợ
+        my_spouse = path[1]
+        ss = _gender(my_spouse)  # side is my spouse's gender: husband → chồng, wife → vợ
+        if ss == _MALE:  # husband's parent
+            return {
+                _MALE: "kinship.father_in_law_husband",
+                _FEMALE: "kinship.mother_in_law_husband",
+            }.get(tg)
+        if ss == _FEMALE:  # wife's parent
+            return {
+                _MALE: "kinship.father_in_law_wife",
+                _FEMALE: "kinship.mother_in_law_wife",
+            }.get(tg)
         return None
 
     return None

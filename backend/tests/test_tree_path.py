@@ -318,3 +318,38 @@ def test_in_law_same_sex_spouse_falls_back():
     co = _n("female")  # father's sister
     # her recorded spouse is female → 'dượng' (a husband term) would be wrong → None
     assert _specific_key(e, [_n(), dad, _n(), co, _n("female")]) is None
+
+
+# ── M6 phase 3: child-in-law (con dâu/rể) and parent-in-law (bố/mẹ chồng-vợ) ──
+
+
+def test_child_in_law_by_gender():
+    e = ("child", "spouse")  # [me, my_child, child's spouse]
+    son, daughter = _n("male"), _n("female")
+    assert _specific_key(e, [_n(), son, _n("female")]) == "kinship.daughter_in_law"  # con dâu
+    assert _specific_key(e, [_n(), daughter, _n("male")]) == "kinship.son_in_law"  # con rể
+
+
+def test_child_in_law_same_sex_or_unknown_falls_back():
+    e = ("child", "spouse")
+    son = _n("male")
+    assert _specific_key(e, [_n(), son, _n("male")]) is None  # son's husband → generic
+    assert _specific_key(e, [_n(), _n("unknown"), _n("female")]) is None  # unknown child gender
+
+
+def test_parent_in_law_by_spouse_side_and_gender():
+    e = ("spouse", "parent")  # [me, my_spouse, spouse's parent]
+    husband, wife = _n("male"), _n("female")
+    assert (
+        _specific_key(e, [_n(), husband, _n("male")]) == "kinship.father_in_law_husband"
+    )  # bố chồng
+    assert (
+        _specific_key(e, [_n(), husband, _n("female")]) == "kinship.mother_in_law_husband"
+    )  # mẹ chồng
+    assert _specific_key(e, [_n(), wife, _n("male")]) == "kinship.father_in_law_wife"  # bố vợ
+    assert _specific_key(e, [_n(), wife, _n("female")]) == "kinship.mother_in_law_wife"  # mẹ vợ
+
+
+def test_parent_in_law_unknown_spouse_gender_falls_back():
+    e = ("spouse", "parent")
+    assert _specific_key(e, [_n(), _n("unknown"), _n("male")]) is None
