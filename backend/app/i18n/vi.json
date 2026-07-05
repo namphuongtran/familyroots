@@ -73,6 +73,7 @@
   "error.auth.invalid_refresh_token": "Token làm mới không hợp lệ hoặc đã hết hạn",
   "error.auth.membership_already_pending": "Yêu cầu tham gia của bạn đang chờ duyệt",
   "error.auth.registration_failed": "Đăng ký thất bại",
+  "error.auth.password_too_weak": "Mật khẩu quá yếu",
   "error.bad_request": "Yêu cầu không hợp lệ",
   "error.branch_cannot_be_own_parent": "Một chi không thể là chi cha của chính nó",
   "error.branch_not_found": "Không tìm thấy chi/nhánh",

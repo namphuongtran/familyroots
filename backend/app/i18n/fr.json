@@ -73,6 +73,7 @@
   "error.auth.invalid_refresh_token": "Jeton de rafraîchissement invalide ou expiré",
   "error.auth.membership_already_pending": "Votre demande d'adhésion est déjà en attente",
   "error.auth.registration_failed": "Échec de l'inscription",
+  "error.auth.password_too_weak": "Le mot de passe est trop faible",
   "error.bad_request": "Requête invalide",
   "error.branch_cannot_be_own_parent": "Une branche ne peut pas être son propre parent",
   "error.branch_not_found": "Branche introuvable",
