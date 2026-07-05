@@ -232,3 +232,69 @@ def test_all_resolver_keys_have_vietnamese_translations():
     vi = _translations.get("vi", {})
     missing = {k for k in SPECIFIC_KINSHIP_KEYS if not vi.get(k)}
     assert not missing, f"missing vi kinship translations: {missing}"
+
+
+# ── M6 phase 2: cousins, great-grandparents (by side), uncle/aunt-in-law ──────
+
+
+def test_cousin_by_age_and_gender():
+    e = ("parent", "parent", "child", "child")
+    me = _n("male", date(1990, 1, 1))
+    mid = [_n(), _n()]  # parent, grandparent (irrelevant to cousin resolution)
+    older_m = _n("male", date(1985, 1, 1))
+    older_f = _n("female", date(1985, 1, 1))
+    younger = _n("male", date(1995, 1, 1))
+    assert _specific_key(e, [me, *mid, _n(), older_m]) == "kinship.cousin_older_brother"
+    assert _specific_key(e, [me, *mid, _n(), older_f]) == "kinship.cousin_older_sister"
+    assert _specific_key(e, [me, *mid, _n(), younger]) == "kinship.cousin_younger"
+
+
+def test_cousin_missing_or_approx_age_falls_back():
+    e = ("parent", "parent", "child", "child")
+    me = _n("male")  # no birth_date
+    assert _specific_key(e, [me, _n(), _n(), _n(), _n("male")]) is None
+    me2 = _n("male", date(1990, 1, 1))
+    approx = _n("male", date(1985, 1, 1), birth_date_approx=True)
+    assert _specific_key(e, [me2, _n(), _n(), _n(), approx]) is None
+
+
+def test_great_grandparent_by_side_and_gender():
+    e = ("parent", "parent", "parent")
+    # side from the linking parent (path[1]); target is the great-grandparent
+    assert (
+        _specific_key(e, [_n(), _n("male"), _n(), _n("male")])
+        == "kinship.paternal_great_grandfather"
+    )
+    assert (
+        _specific_key(e, [_n(), _n("female"), _n(), _n("female")])
+        == "kinship.maternal_great_grandmother"
+    )
+    assert _specific_key(e, [_n(), _n("unknown"), _n(), _n("male")]) is None  # unknown side
+
+
+def test_uncle_aunt_in_law():
+    e = ("parent", "parent", "child", "spouse")  # [me, my_parent, gp, sibling, spouse]
+    dad = _n("male", date(1960, 1, 1))
+    chu = _n("male", date(1965, 1, 1))  # dad's younger brother → chú → wife = thím
+    bac = _n("male", date(1955, 1, 1))  # dad's older brother → bác → wife = bác gái
+    co = _n("female")  # dad's sister → husband = dượng
+    mom = _n("female")
+    cau = _n("male")  # mom's brother (cậu) → wife = mợ
+    di = _n("female")  # mom's sister (dì) → husband = dượng
+    assert (
+        _specific_key(e, [_n(), dad, _n(), chu, _n("female")])
+        == "kinship.aunt_in_law_paternal_younger"
+    )
+    assert (
+        _specific_key(e, [_n(), dad, _n(), bac, _n("female")])
+        == "kinship.aunt_in_law_paternal_older"
+    )
+    assert _specific_key(e, [_n(), dad, _n(), co, _n("male")]) == "kinship.uncle_in_law"
+    assert _specific_key(e, [_n(), mom, _n(), cau, _n("female")]) == "kinship.aunt_in_law_maternal"
+    assert _specific_key(e, [_n(), mom, _n(), di, _n("male")]) == "kinship.uncle_in_law"
+
+
+def test_uncle_in_law_missing_age_falls_back():
+    e = ("parent", "parent", "child", "spouse")
+    dad = _n("male")  # no birth_date → can't tell bác gái vs thím
+    assert _specific_key(e, [_n(), dad, _n(), _n("male"), _n("female")]) is None
