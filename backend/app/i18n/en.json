@@ -112,6 +112,7 @@
   "error.person_has_no_controlling_clan": "This person has no controlling clan",
   "error.person_not_controlled_by_this_clan": "This person is not controlled by your clan",
   "error.person_not_found": "Person not found",
+  "error.person.death_before_birth": "Death date cannot be before birth date",
   "error.rate_limited": "Too many requests; please slow down",
   "error.relationship.duplicate_marriage": "This marriage already exists",
   "error.relationship.duplicate_parent_child": "This parent-child relationship already exists",

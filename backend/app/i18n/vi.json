@@ -112,6 +112,7 @@
   "error.person_has_no_controlling_clan": "Người này không có dòng họ quản lý",
   "error.person_not_controlled_by_this_clan": "Người này không thuộc quyền quản lý của dòng họ bạn",
   "error.person_not_found": "Không tìm thấy nhân vật",
+  "error.person.death_before_birth": "Ngày mất không thể trước ngày sinh",
   "error.rate_limited": "Quá nhiều yêu cầu; vui lòng chậm lại",
   "error.relationship.duplicate_marriage": "Hôn nhân này đã tồn tại",
   "error.relationship.duplicate_parent_child": "Quan hệ cha/mẹ - con này đã tồn tại",

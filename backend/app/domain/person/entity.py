@@ -137,6 +137,7 @@ class Person(AggregateRoot):
             created_by=actor.user_id,
             **kwargs,
         )
+        person._validate_dates()
         person.add_event(
             PersonCreated(
                 person_id=person.id,
@@ -161,6 +162,7 @@ class Person(AggregateRoot):
             old_values[field_name] = getattr(self, field_name, None)
             setattr(self, field_name, new_value)
 
+        self._validate_dates()
         self.updated_by = actor.user_id
         self.updated_at = datetime.now(UTC)
 
@@ -174,6 +176,19 @@ class Person(AggregateRoot):
                 old_values=old_values,
             )
         )
+
+    def _validate_dates(self) -> None:
+        """Reject an impossible lifespan (death before birth).
+
+        Called from the write paths (create/update) ONLY — deliberately NOT in
+        __post_init__, because the persistence mapper reconstructs Person from every DB
+        row and must not raise on pre-existing rows that predate this rule.
+        """
+        if self.birth_date and self.death_date and self.death_date < self.birth_date:
+            raise BusinessRuleViolation(
+                "person.death_before_birth",
+                detail={"birth_date": str(self.birth_date), "death_date": str(self.death_date)},
+            )
 
     def soft_delete(self, actor: ActorInfo, clan_id: uuid.UUID) -> None:
         """Mark the person as soft-deleted."""
