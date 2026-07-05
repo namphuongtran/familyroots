@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any, Protocol
 
 
@@ -46,16 +47,49 @@ class ClaimRepository(Protocol):
         """Get the user's most recent approved claim for a person."""
         ...
 
-    def add_claim(self, claim: Any) -> None:
-        """Persist a new claim."""
+    async def create_claim(
+        self,
+        *,
+        user_id: uuid.UUID,
+        person_id: uuid.UUID,
+        status: str,
+        requester_note: str | None = None,
+        reviewer_note: str | None = None,
+        reviewed_by: uuid.UUID | None = None,
+        reviewed_at: datetime | None = None,
+    ) -> Any:
+        """Create an identity_claims row, flush, and return it (id populated).
+
+        Builds the ORM row inside the adapter so the application layer never imports
+        ``app.models``."""
         ...
 
-    def add_audit(self, audit: Any) -> None:
-        """Persist an audit log entry."""
+    def add_audit(
+        self,
+        *,
+        clan_id: uuid.UUID | None,
+        actor_id: uuid.UUID,
+        actor_role: str,
+        action: str,
+        resource_type: str,
+        resource_id: uuid.UUID | None,
+        old_value: dict[str, Any] | None = None,
+        new_value: dict[str, Any] | None = None,
+    ) -> None:
+        """Stage an audit_logs row (ORM built in the adapter)."""
         ...
 
-    def add_role(self, role: Any) -> None:
-        """Persist a new user clan role."""
+    def add_role(
+        self,
+        *,
+        user_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        role: str,
+        is_approved: bool,
+        approved_by: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+    ) -> None:
+        """Stage a user_clan_roles row (ORM built in the adapter)."""
         ...
 
     async def auto_reject_other_pending_claims(
