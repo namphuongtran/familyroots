@@ -45,6 +45,7 @@ KINSHIP_MAP: dict[tuple[str, ...], str] = {
     ("spouse", "parent"): "kinship.parent_in_law",
     ("parent", "parent", "parent"): "kinship.great_grandparent",
     ("child", "child", "child"): "kinship.great_grandchild",
+    ("parent", "parent", "child", "spouse"): "kinship.uncle_aunt_in_law",
 }
 
 # Every specific key the resolver can emit — single source of truth shared with the
@@ -73,6 +74,18 @@ SPECIFIC_KINSHIP_KEYS: frozenset[str] = frozenset(
         "kinship.paternal_aunt_younger",
         "kinship.maternal_uncle",
         "kinship.maternal_aunt",
+        # phase 2
+        "kinship.cousin_older_brother",
+        "kinship.cousin_older_sister",
+        "kinship.cousin_younger",
+        "kinship.paternal_great_grandfather",
+        "kinship.paternal_great_grandmother",
+        "kinship.maternal_great_grandfather",
+        "kinship.maternal_great_grandmother",
+        "kinship.aunt_in_law_paternal_older",
+        "kinship.aunt_in_law_paternal_younger",
+        "kinship.aunt_in_law_maternal",
+        "kinship.uncle_in_law",
     }
 )
 
@@ -170,6 +183,57 @@ def _specific_key(edges: tuple[str, ...], path: list[dict[str, Any]]) -> str | N
             return None
         if side == "maternal":  # mother's sibling — cậu/dì, age-agnostic
             return {_MALE: "kinship.maternal_uncle", _FEMALE: "kinship.maternal_aunt"}.get(tg)
+        return None
+
+    if edges == ("parent", "parent", "child", "child"):  # cousin — anh/chị/em họ, age vs me
+        rank = _age_rank(target, source)
+        if rank == "older":
+            return {
+                _MALE: "kinship.cousin_older_brother",
+                _FEMALE: "kinship.cousin_older_sister",
+            }.get(tg)
+        if rank == "younger":
+            return "kinship.cousin_younger"  # em họ — gender-neutral in common usage
+        return None
+
+    if edges == ("parent", "parent", "parent"):  # great-grandparent — cụ, side + gender
+        side = _side(path[1])
+        if side == "paternal":
+            return {
+                _MALE: "kinship.paternal_great_grandfather",
+                _FEMALE: "kinship.paternal_great_grandmother",
+            }.get(tg)
+        if side == "maternal":
+            return {
+                _MALE: "kinship.maternal_great_grandfather",
+                _FEMALE: "kinship.maternal_great_grandmother",
+            }.get(tg)
+        return None
+
+    if edges == ("parent", "parent", "child", "spouse"):  # spouse of a parent's sibling
+        my_parent = path[1]
+        the_sibling = path[3]  # my parent's blood sibling; target (path[4]) is their spouse
+        side = _side(my_parent)
+        sg = _gender(the_sibling)
+        if side == "paternal":
+            if sg == _MALE:  # father's brother's wife — thím (chú's) / bác gái (bác's), by age
+                rank = _age_rank(the_sibling, my_parent)
+                if rank is None:
+                    return None
+                return (
+                    "kinship.aunt_in_law_paternal_older"
+                    if rank == "older"
+                    else "kinship.aunt_in_law_paternal_younger"
+                )
+            if sg == _FEMALE:  # father's sister's husband — dượng
+                return "kinship.uncle_in_law"
+            return None
+        if side == "maternal":
+            if sg == _MALE:  # mother's brother's wife — mợ
+                return "kinship.aunt_in_law_maternal"
+            if sg == _FEMALE:  # mother's sister's husband — dượng
+                return "kinship.uncle_in_law"
+            return None
         return None
 
     return None
