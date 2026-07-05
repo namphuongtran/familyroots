@@ -153,6 +153,7 @@ async def test_platform_admin_query_port_returns_typed_read_models(
         assert isinstance(metrics, PlatformMetricsView)
         assert isinstance(metrics.total_clans, int)
         assert metrics.total_clans >= 1
+        assert metrics.suspended_clans == metrics.total_clans - metrics.active_clans
 
         clan_page = await port.list_clans(None, 20)
         assert isinstance(clan_page, Page)
@@ -203,6 +204,47 @@ async def test_platform_admin_handler_preserves_wire_contract(
         by_action = {e["action"]: e for e in mine}
         assert by_action["clan.suspend"]["clan_id"] == str(clan_id)
         assert by_action["platform.login"]["clan_id"] is None  # NOT the string "None"
+
+        metrics = await handler.get_metrics()
+        assert set(metrics) == {
+            "total_clans",
+            "active_clans",
+            "suspended_clans",
+            "total_members",
+            "total_users",
+        }
+        assert all(isinstance(v, int) for v in metrics.values())
+
+
+async def test_platform_admin_audit_log_paginates_across_cursor(
+    async_engine: AsyncEngine,
+) -> None:
+    """Exercise the one genuinely new control flow: the cursor is computed from the
+    ORM rows (via build_page) while the page data is mapped to typed views. Scoped
+    to a fresh clan_id so it is deterministic despite the session-scoped DB."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id, actor_id = uuid.uuid4(), uuid.uuid4()
+
+    async with maker() as s:
+        await _clan(s, clan_id)
+        await _profile(s, actor_id)
+        for i in range(3):
+            await _audit(s, clan_id, actor_id, f"clan.act{i}")
+        await s.commit()
+
+        port = SqlAlchemyPlatformAdminQueryPort(s)
+
+        page1 = await port.get_audit_log(clan_id, None, None, 2)
+        assert len(page1.data) == 2
+        assert page1.meta.has_more is True
+        assert page1.meta.cursor is not None  # cursor derived from the ORM row
+        assert all(isinstance(e, AuditLogEntryView) for e in page1.data)
+
+        page2 = await port.get_audit_log(clan_id, None, page1.meta.cursor, 2)
+        assert len(page2.data) == 1  # the remaining row
+        assert page2.meta.has_more is False
+        # the cursor genuinely advanced — no row appears on both pages
+        assert not ({e.id for e in page1.data} & {e.id for e in page2.data})
 
 
 async def test_platform_admin_suspend_and_reactivate(async_engine: AsyncEngine) -> None:
