@@ -76,7 +76,7 @@ async def list_clan_users(
     query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
     _role: ClanRole = RequireViewer,
     cursor: str | None = None,
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
     """List approved users in the current clan (paginated)."""
     page = await query_handler.list_users(clan_id, approved=True, cursor=cursor, limit=limit)
@@ -100,7 +100,7 @@ async def list_pending_users(
     query_handler: ClanQueryHandler = Depends(get_clan_query_handler),
     _role: ClanRole = RequireAdmin,
     cursor: str | None = None,
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
     """List users pending approval (admin only)."""
     page = await query_handler.list_users(clan_id, approved=False, cursor=cursor, limit=limit)
