@@ -16,6 +16,7 @@ import pytest
 from fastapi import UploadFile
 
 import app.api.v1.documents as documents_route
+from app.core.permissions import ClanRole
 
 pytestmark = [pytest.mark.unit]
 
@@ -44,7 +45,7 @@ async def _call_route(handler: _RecordingHandler, body: bytes) -> None:
         current_user={"sub": str(uuid.uuid4())},
         clan_id=uuid.uuid4(),
         cmd_handler=handler,  # type: ignore[arg-type]
-        _role=None,  # type: ignore[arg-type]
+        role=ClanRole.EDITOR,  # the route now records the caller's resolved role in the audit actor
     )
 
 

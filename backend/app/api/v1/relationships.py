@@ -52,7 +52,7 @@ async def create_marriage(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: MarriageCommandHandler = Depends(get_marriage_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a marriage between two persons with validation."""
     marriage = await handler.create(
@@ -60,7 +60,7 @@ async def create_marriage(
             person1_id=body.person1_id,
             person2_id=body.person2_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "editor"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
             marriage_date=body.marriage_date,
             divorce_date=body.divorce_date,
             marriage_place=body.marriage_place,
@@ -78,7 +78,7 @@ async def get_marriage(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: MarriageQueryHandler = Depends(get_marriage_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a marriage by ID."""
     marriage = await query_handler.get_by_id(marriage_id, clan_id)
@@ -94,14 +94,14 @@ async def update_marriage(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: MarriageCommandHandler = Depends(get_marriage_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a marriage record (only by managing clan)."""
     marriage = await handler.update(
         UpdateMarriage(
             marriage_id=marriage_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "editor"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
             changes=body.model_dump(exclude_unset=True),
         )
     )
@@ -114,14 +114,14 @@ async def delete_marriage(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: MarriageCommandHandler = Depends(get_marriage_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Soft-delete a marriage (admin of managing clan only)."""
     await handler.delete(
         DeleteMarriage(
             marriage_id=marriage_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
     return {"data": {"message": "Marriage deleted", "id": str(marriage_id)}}
@@ -136,7 +136,7 @@ async def create_parent_child(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ParentChildCommandHandler = Depends(get_parent_child_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a parent-child relationship with validation."""
     link, warning = await handler.create(
@@ -144,7 +144,7 @@ async def create_parent_child(
             parent_id=body.parent_id,
             child_id=body.child_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "editor"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
             relationship_type=body.relationship_type,
             birth_order=body.birth_order,
             notes=body.notes,
@@ -162,7 +162,7 @@ async def get_parent_child(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: ParentChildQueryHandler = Depends(get_parent_child_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get a parent-child relationship by ID."""
     link = await query_handler.get_by_id(link_id, clan_id)
@@ -178,14 +178,14 @@ async def update_parent_child(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ParentChildCommandHandler = Depends(get_parent_child_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a parent-child relationship (only by managing clan)."""
     link = await handler.update(
         UpdateParentChild(
             link_id=link_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "editor"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
             changes=body.model_dump(exclude_unset=True),
         )
     )
@@ -198,14 +198,14 @@ async def delete_parent_child(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ParentChildCommandHandler = Depends(get_parent_child_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Soft-delete a parent-child relationship (admin of managing clan only)."""
     await handler.delete(
         DeleteParentChild(
             link_id=link_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
     return {"data": {"message": "Parent-child link deleted", "id": str(link_id)}}

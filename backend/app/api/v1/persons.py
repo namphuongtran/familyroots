@@ -81,7 +81,7 @@ async def list_persons(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     cursor: str | None = None,
     limit: int = Query(default=20, ge=1, le=100),
     generation: int | None = None,
@@ -144,7 +144,7 @@ async def search_persons(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     limit: int = Query(default=20, ge=1, le=50),
 ) -> dict[str, Any]:
     """Fuzzy search persons in a clan by name."""
@@ -175,12 +175,12 @@ async def create_person(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonCommandHandler = Depends(get_person_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a new person and add a clan membership."""
     person = await handler.create(
         CreatePerson(
-            actor=ActorInfo.from_jwt(current_user, "editor"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
             clan_id=clan_id,
             # Provenance is always the active clan; never client-supplied.
             created_by_clan_id=clan_id,
@@ -226,7 +226,7 @@ async def batch_get_persons(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Fetch multiple persons in one request with optional include/fields/profile.
 
@@ -302,7 +302,7 @@ async def get_person(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     include: str | None = Query(
         None,
         description=(
@@ -364,14 +364,14 @@ async def delete_person(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonCommandHandler = Depends(get_person_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Soft-delete a person (admin only)."""
     await handler.delete(
         DeletePerson(
             person_id=person_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
     return {"data": {"message": t("person.deleted"), "id": str(person_id)}}
@@ -383,14 +383,14 @@ async def restore_person(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonCommandHandler = Depends(get_person_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Restore a soft-deleted person (admin only)."""
     await handler.restore(
         RestorePerson(
             person_id=person_id,
             clan_id=clan_id,
-            actor=ActorInfo.from_jwt(current_user, "admin"),
+            actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
     return {"data": {"message": t("person.restored"), "id": str(person_id)}}
@@ -402,7 +402,7 @@ async def submit_identity_claim(
     body: IdentityClaimSubmit,
     current_user: dict[str, Any] = Depends(get_current_user),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
 ) -> IdentityClaimResponse:
     """Submit a claim for linking a user profile to a person in the family tree."""
     user_id = uuid.UUID(current_user["sub"])
@@ -422,7 +422,7 @@ async def person_marriages(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all marriages for a person."""
@@ -437,7 +437,7 @@ async def person_parent_child(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all parent-child relationships for a person."""
@@ -452,7 +452,7 @@ async def person_documents(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all documents for a person."""
@@ -467,7 +467,7 @@ async def person_events(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get all events for a person."""
@@ -482,7 +482,7 @@ async def person_timeline(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Return a chronological timeline of life events for a person."""
     await handler.get(GetPerson(person_id=person_id, clan_id=clan_id))

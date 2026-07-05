@@ -27,12 +27,12 @@ async def create_event(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: EventCommandHandler = Depends(get_event_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a new event."""
     event = await cmd_handler.create(
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "editor"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
         person_id=body.person_id,
         event_type=body.event_type,
         title=body.title,
@@ -54,7 +54,7 @@ async def list_events(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: EventQueryHandler = Depends(get_event_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List events with optional filters."""
@@ -78,7 +78,7 @@ async def get_upcoming_events(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: EventQueryHandler = Depends(get_event_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     include: str | None = Query(None),
 ) -> dict[str, Any]:
     """Get upcoming events within the next N days."""
@@ -106,7 +106,7 @@ async def get_event(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: EventQueryHandler = Depends(get_event_query_handler),
     person_handler: PersonQueryHandler = Depends(get_person_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     include: str | None = Query(None),
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
@@ -145,12 +145,12 @@ async def update_event(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: EventCommandHandler = Depends(get_event_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     event = await cmd_handler.update(
         event_id=event_id,
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "editor"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
         changes=body.model_dump(exclude_unset=True),
     )
     return {"data": event.model_dump()}
@@ -162,11 +162,11 @@ async def delete_event(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: EventCommandHandler = Depends(get_event_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     await cmd_handler.delete(
         event_id=event_id,
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "editor"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
     )
     return {"data": {"message": "Event deleted", "id": str(event_id)}}

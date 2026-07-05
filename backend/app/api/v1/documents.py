@@ -28,7 +28,7 @@ async def upload_document(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: DocumentCommandHandler = Depends(get_document_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Upload a document/photo to storage and save metadata."""
     # Read at most MAX+1 bytes: bounds the in-RAM copy so an oversized body isn't
@@ -45,7 +45,7 @@ async def upload_document(
         title=title,
         document_type=document_type,
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "editor"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
         person_id=person_id,
         description=description,
         taken_date=taken_date,
@@ -63,7 +63,7 @@ async def list_documents(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: DocumentQueryHandler = Depends(get_document_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
     """List documents with optional filters, paginated."""
@@ -87,7 +87,7 @@ async def get_document(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: DocumentQueryHandler = Depends(get_document_query_handler),
-    _role: ClanRole = RequireViewer,
+    role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Get document metadata with a presigned download URL."""
     result = await query_handler.get(document_id=document_id, clan_id=clan_id)
@@ -100,13 +100,13 @@ async def delete_document(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: DocumentCommandHandler = Depends(get_document_command_handler),
-    _role: ClanRole = RequireAdmin,
+    role: ClanRole = RequireAdmin,
 ) -> dict[str, Any]:
     """Delete a document from storage and the database (admin only)."""
     await cmd_handler.delete(
         document_id=document_id,
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "admin"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
     )
     return {"data": {"message": "Document deleted", "id": str(document_id)}}
 
@@ -117,12 +117,12 @@ async def set_document_as_avatar(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     cmd_handler: DocumentCommandHandler = Depends(get_document_command_handler),
-    _role: ClanRole = RequireEditor,
+    role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Set a photo document as the person's avatar."""
     await cmd_handler.set_avatar(
         document_id=document_id,
         clan_id=clan_id,
-        actor=ActorInfo.from_jwt(current_user, "editor"),
+        actor=ActorInfo.from_jwt(current_user, role.value),
     )
     return {"data": {"message": "Avatar set", "document_id": str(document_id)}}
