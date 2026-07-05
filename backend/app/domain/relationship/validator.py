@@ -75,28 +75,31 @@ class RelationshipDomainValidator:
         if parent_id == child_id:
             raise BusinessRuleViolation("self_parent_not_allowed")
 
-        # Rule: max 2 biological parents. Scoped to the acting clan: edges are
-        # owned per-clan (created_by_clan_id), and persons are shared M:N across
-        # clans, so another clan's parent edges must neither count against this
-        # clan's limit nor be disclosed via the resulting error.
-        if relationship_type == "biological":
-            bio_count = await self._q.count_bio_parents(child_id, clan_id)
-            if bio_count >= 2:
-                raise ConflictError("relationship.too_many_biological_parents")
-
-        # Rule: age gap check
         dates = await self._q.get_birth_dates([parent_id, child_id])
         parent_bd = dates.get(parent_id)
         child_bd = dates.get(child_id)
-        if parent_bd and child_bd:
-            age_gap = (child_bd - parent_bd).days / 365.25
-            if age_gap < 12:
+        age_gap = (child_bd - parent_bd).days / 365.25 if parent_bd and child_bd else None
+
+        if relationship_type == "biological":
+            # Rule: max 2 biological parents. Scoped to the acting clan: edges are
+            # owned per-clan (created_by_clan_id), and persons are shared M:N across
+            # clans, so another clan's parent edges must neither count against this
+            # clan's limit nor be disclosed via the resulting error.
+            bio_count = await self._q.count_bio_parents(child_id, clan_id)
+            if bio_count >= 2:
+                raise ConflictError("relationship.too_many_biological_parents")
+            # Rule: a biological parent must be at least ~12 years older than the child.
+            # This is a BIOLOGICAL floor only — an adoptive/step/foster parent may be any
+            # age (e.g. an older sibling adopting), so it must not gate those types.
+            if age_gap is not None and age_gap < 12:
                 raise BusinessRuleViolation(
                     "relationship.parent_too_young",
                     detail={"min_age_gap": 12, "actual": round(age_gap, 1)},
                 )
-            if age_gap > 80:
-                return {"warning": f"Unusual age gap: {round(age_gap, 1)} years"}
+
+        # Advisory (any relationship type): flag an unusually large age gap.
+        if age_gap is not None and age_gap > 80:
+            return {"warning": f"Unusual age gap: {round(age_gap, 1)} years"}
 
         # Rule: cycle detection
         if await self._q.is_ancestor(parent_id, child_id, clan_id):

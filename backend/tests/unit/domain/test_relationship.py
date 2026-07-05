@@ -130,6 +130,20 @@ class TestRelationshipDomainValidator:
             await v.validate_parent_child(parent_id, child_id, "biological", uuid.uuid4())
 
     @pytest.mark.asyncio
+    async def test_young_parent_allowed_for_non_biological(self) -> None:
+        # The <12yr floor is a BIOLOGICAL constraint only — an adoptive/step/foster
+        # parent may be younger (e.g. an older sibling adopting). Before the fix this
+        # same young gap raised parent_too_young for every relationship type.
+        parent_id, child_id = uuid.uuid4(), uuid.uuid4()
+        v = self._make_validator(
+            get_birth_dates={parent_id: date(2000, 1, 1), child_id: date(2005, 1, 1)},
+        )
+        for rel_type in ("adopted", "step", "foster"):
+            assert (
+                await v.validate_parent_child(parent_id, child_id, rel_type, uuid.uuid4()) is None
+            )
+
+    @pytest.mark.asyncio
     async def test_cycle_detection_raises(self) -> None:
         v = self._make_validator(is_ancestor=True)
         with pytest.raises(BusinessRuleViolation, match="creates_cycle"):
