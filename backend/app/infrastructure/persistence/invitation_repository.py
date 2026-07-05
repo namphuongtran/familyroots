@@ -8,7 +8,9 @@ from datetime import datetime
 from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.invitation.entity import Invitation
 from app.domain.invitation.repository import InvitationRepository
+from app.infrastructure.persistence.invitation_mapper import to_domain
 from app.models.clan_invitation import ClanInvitation
 from app.models.user_clan_role import UserClanRole
 from app.models.user_profile import UserProfile
@@ -28,34 +30,37 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
         )
         return result.scalar_one_or_none()
 
-    async def get_by_token(self, token: str) -> ClanInvitation | None:
+    async def get_by_token(self, token: str) -> Invitation | None:
         result = await self._session.execute(
             select(ClanInvitation).where(ClanInvitation.token == token)
         )
-        return result.scalar_one_or_none()
+        model = result.scalar_one_or_none()
+        return to_domain(model) if model else None
 
     async def create_invitation(
         self,
         *,
+        invitation_id: uuid.UUID,
         clan_id: uuid.UUID,
         email: str,
         role: str,
         invited_by: uuid.UUID,
         token: str,
         expires_at: datetime,
-    ) -> uuid.UUID:
-        inv = ClanInvitation(
-            clan_id=clan_id,
-            email=email,
-            role=role,
-            invited_by=invited_by,
-            token=token,
-            expires_at=expires_at,
-            status="pending",
+    ) -> None:
+        self._session.add(
+            ClanInvitation(
+                id=invitation_id,
+                clan_id=clan_id,
+                email=email,
+                role=role,
+                invited_by=invited_by,
+                token=token,
+                expires_at=expires_at,
+                status="pending",
+            )
         )
-        self._session.add(inv)
-        await self._session.flush()  # populate inv.id for the event + response
-        return inv.id
+        await self._session.flush()  # surface unique-token / FK violations in-request
 
     async def list_by_clan(self, clan_id: uuid.UUID) -> list[ClanInvitation]:
         result = await self._session.execute(
@@ -127,13 +132,12 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
             )
         )
 
-    async def get_by_id(
-        self, invitation_id: uuid.UUID, clan_id: uuid.UUID
-    ) -> ClanInvitation | None:
+    async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Invitation | None:
         result = await self._session.execute(
             select(ClanInvitation).where(
                 ClanInvitation.id == invitation_id,
                 ClanInvitation.clan_id == clan_id,
             )
         )
-        return result.scalar_one_or_none()
+        model = result.scalar_one_or_none()
+        return to_domain(model) if model else None

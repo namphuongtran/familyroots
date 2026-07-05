@@ -13,14 +13,9 @@ from app.application.invitation.commands import (
     RevokeInvitation,
 )
 from app.core.config import settings
-from app.domain.invitation.events import (
-    InvitationAccepted,
-    InvitationCreated,
-    InvitationRevoked,
-)
+from app.domain.invitation.entity import Invitation
 from app.domain.invitation.repository import InvitationRepository
-from app.domain.shared.entity import AggregateRoot
-from app.domain.shared.exceptions import ConflictError, EntityNotFoundError, ForbiddenError
+from app.domain.shared.exceptions import ConflictError, EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
 
 
@@ -36,58 +31,57 @@ class InvitationCommandHandler:
 
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now(UTC) + timedelta(days=settings.INVITATION_TTL_DAYS)
-        invitation_id = await self._repo.create_invitation(
+        inv = Invitation.create(
             clan_id=cmd.clan_id,
             email=email,
             role=cmd.role,
             invited_by=cmd.actor.user_id,
             token=token,
             expires_at=expires_at,
+            actor=cmd.actor,
         )
-
-        agg = AggregateRoot()
-        agg.add_event(
-            InvitationCreated(
-                clan_id=cmd.clan_id,
-                actor_id=cmd.actor.user_id,
-                actor_role=cmd.actor.role,
-                resource_id=invitation_id,
-                email=email,
-                invited_role=cmd.role,
-            )
+        await self._repo.create_invitation(
+            invitation_id=inv.id,
+            clan_id=inv.clan_id,
+            email=inv.email,
+            role=inv.role,
+            invited_by=inv.invited_by,
+            token=token,
+            expires_at=expires_at,
         )
-        self._uow.track(agg)
+        self._uow.track(inv)
         await self._uow.commit()
         return {
-            "id": invitation_id,
-            "email": email,
-            "role": cmd.role,
-            "token": token,
+            "id": inv.id,
+            "email": inv.email,
+            "role": inv.role,
+            "token": inv.token,
             "expires_at": expires_at,
             "accept_path": f"/api/v1/invitations/{token}/accept",
         }
 
     async def accept(self, cmd: AcceptInvitation) -> dict[str, Any]:
         inv = await self._repo.get_by_token(cmd.token)
-        if not inv:
+        if inv is None:
             raise EntityNotFoundError("invitation.not_found")
-        if inv.status != "pending":
-            raise ConflictError("invitation.not_pending")
-        if inv.expires_at < datetime.now(UTC):
-            raise ConflictError("invitation.expired")
-        if inv.email.strip().lower() != cmd.user_email.strip().lower():
-            raise ForbiddenError("invitation.email_mismatch")
 
-        # Claim the invitation atomically BEFORE any membership work: if a
-        # concurrent revoke (or another accept) already moved it out of
-        # "pending", we stop here with the contract's 409 and the transaction
-        # never grants anything.
+        # Aggregate validates the domain preconditions (pending / not expired / email
+        # matches) and buffers the InvitationAccepted event. The buffer is only
+        # dispatched if we track the aggregate below — which we do ONLY after the
+        # atomic claim succeeds.
+        now = datetime.now(UTC)
+        inv.accept(user_id=cmd.user_id, user_email=cmd.user_email, now=now)
+
+        # The authoritative accept-vs-revoke race guard (C3): a conditional UPDATE
+        # that writes nothing if a concurrent revoke/accept already left "pending".
+        # A lost race raises here — the aggregate is never tracked, so its buffered
+        # event is discarded and the transaction grants nothing.
         claimed = await self._repo.transition_status(
             inv.id,
             expected="pending",
             to="accepted",
             accepted_by=cmd.user_id,
-            accepted_at=datetime.now(UTC),
+            accepted_at=now,
         )
         if not claimed:
             raise ConflictError("invitation.not_pending")
@@ -102,36 +96,29 @@ class InvitationCommandHandler:
             existing.role = inv.role
             existing.is_approved = True
             existing.approved_by = inv.invited_by
-            existing.approved_at = datetime.now(UTC)
+            existing.approved_at = now
         else:
             self._repo.add_membership(
                 clan_id=inv.clan_id,
                 user_id=cmd.user_id,
                 role=inv.role,
                 approved_by=inv.invited_by,
-                approved_at=datetime.now(UTC),
+                approved_at=now,
             )
 
-        agg = AggregateRoot()
-        agg.add_event(
-            InvitationAccepted(
-                clan_id=inv.clan_id,
-                actor_id=cmd.user_id,
-                actor_role=inv.role,
-                resource_id=inv.id,
-                email=inv.email,
-            )
-        )
-        self._uow.track(agg)
+        self._uow.track(inv)  # claim won → dispatch InvitationAccepted on commit
         await self._uow.commit()
         return {"clan_id": inv.clan_id, "role": inv.role}
 
     async def revoke(self, cmd: RevokeInvitation) -> None:
         inv = await self._repo.get_by_id(cmd.invitation_id, cmd.clan_id)
-        if not inv:
+        if inv is None:
             raise EntityNotFoundError("invitation.not_found")
-        if inv.status != "pending":
-            raise ConflictError("invitation.not_pending")
+
+        # Aggregate validates + buffers InvitationRevoked; dispatched only if the
+        # atomic claim below wins.
+        inv.revoke(cmd.actor)
+
         # Atomic guard: an accept that committed after our read wins the row;
         # per owner decision (2026-07-04) revoke-after-accept is a 409 and
         # membership removal stays in member management.
@@ -139,16 +126,7 @@ class InvitationCommandHandler:
         if not claimed:
             raise ConflictError("invitation.not_pending")
 
-        agg = AggregateRoot()
-        agg.add_event(
-            InvitationRevoked(
-                clan_id=cmd.clan_id,
-                actor_id=cmd.actor.user_id,
-                actor_role=cmd.actor.role,
-                resource_id=inv.id,
-            )
-        )
-        self._uow.track(agg)
+        self._uow.track(inv)  # claim won → dispatch InvitationRevoked on commit
         await self._uow.commit()
 
 
