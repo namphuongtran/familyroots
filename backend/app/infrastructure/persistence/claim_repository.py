@@ -107,7 +107,10 @@ class SqlAlchemyClaimRepository(ClaimRepository):
             reviewed_at=reviewed_at,
         )
         self._session.add(claim)
-        await self._session.flush()  # populate claim.id for the audit row + response
+        # Flush the INSERT within the request transaction (matches the prior
+        # add_claim + uow.flush() behavior). claim.id is already set (client-side
+        # uuid default), so this is about persisting the row, not populating the id.
+        await self._session.flush()
         return claim
 
     def add_audit(
