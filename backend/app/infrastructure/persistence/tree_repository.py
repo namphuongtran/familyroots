@@ -97,6 +97,7 @@ class SqlAlchemyTreeRepository:
                 SELECT p.person_id, p.full_name, p.gender, p.edge_type, per.avatar_url
                 FROM public.find_relationship_path(:from_id, :to_id, :clan_id) p
                 LEFT JOIN public.persons per ON p.person_id = per.id
+                ORDER BY p.step
             """),
             {"from_id": from_id, "to_id": to_id, "clan_id": clan_id},
         )
