@@ -72,10 +72,13 @@ RETURNS TABLE (
 ) AS $$
 {_BFS},
 winner AS (
+    -- One whole shortest path. Tie-break on path_ids, then path_edges, so the choice
+    -- is fully deterministic even when two rows share a node sequence but differ in
+    -- edge kind (a pair joined by BOTH a parent_child and a marriage edge).
     SELECT b.path_ids, b.path_edges
     FROM bfs b
     WHERE b.current_id = p_to_id
-    ORDER BY array_length(b.path_ids, 1), b.path_ids
+    ORDER BY array_length(b.path_ids, 1), b.path_ids, b.path_edges
     LIMIT 1
 )
 SELECT

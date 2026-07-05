@@ -80,3 +80,18 @@ async def test_two_tied_shortest_paths_return_one_coherent_path(
     assert ids[1] in {str(x), str(y)}, ids
     assert len(set(ids)) == 3, ids  # no duplicated node (the old bug duplicated A)
     assert edges == [None, "parent", "child"], edges
+
+
+async def test_unreachable_target_returns_empty(async_session: AsyncSession) -> None:
+    """No path (winner CTE empty) → empty result → handler reports not-found."""
+    clan_id, creator = uuid.uuid4(), uuid.uuid4()
+    await async_session.execute(
+        sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :s)"),
+        {"id": clan_id, "s": f"c{clan_id.hex[:8]}"},
+    )
+    a = await _person(async_session, clan_id, creator)
+    b = await _person(async_session, clan_id, creator)  # no edges between a and b
+    await async_session.commit()
+
+    path = await SqlAlchemyTreeRepository(async_session).find_path(a, b, clan_id)
+    assert path == []
