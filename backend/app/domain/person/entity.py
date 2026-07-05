@@ -182,7 +182,10 @@ class Person(AggregateRoot):
 
         Called from the write paths (create/update) ONLY — deliberately NOT in
         __post_init__, because the persistence mapper reconstructs Person from every DB
-        row and must not raise on pre-existing rows that predate this rule.
+        row and must not raise on pre-existing rows that predate this rule. This is the
+        single source of truth for the cross-field rule (the API schema does not
+        duplicate it), so it also covers partial PATCH updates. The *_approx flags are
+        intentionally ignored — death before birth is impossible regardless of estimation.
         """
         if self.birth_date and self.death_date and self.death_date < self.birth_date:
             raise BusinessRuleViolation(
