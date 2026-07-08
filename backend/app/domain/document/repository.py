@@ -50,6 +50,25 @@ class DocumentRepository(Protocol):
         ...
 
 
+DEFAULT_PRESIGN_TTL = 3600  # seconds — default presigned-URL lifetime
+
+
+class StorageError(Exception):
+    """Base class for storage-adapter failures (provider-agnostic)."""
+
+
+class StorageUnavailableError(StorageError):
+    """Storage backend unreachable or misconfigured — surfaced as HTTP 503.
+
+    Covers provider 5xx, transport failures (DNS/connection/TLS/timeout), and a
+    rejected API key (our configuration). Never conflate an outage with a code
+    bug (500) or with a missing object (404)."""
+
+
+class StorageNotFoundError(StorageError):
+    """The requested storage object does not exist — surfaced as HTTP 404."""
+
+
 class StoragePort(Protocol):
     """Abstract storage contract — decouples from Supabase."""
 
@@ -61,6 +80,8 @@ class StoragePort(Protocol):
         """Delete a file by path. Returns True on success."""
         ...
 
-    async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
+    async def get_presigned_url(
+        self, storage_path: str, expires_in: int = DEFAULT_PRESIGN_TTL
+    ) -> str:
         """Generate a time-limited presigned URL."""
         ...
