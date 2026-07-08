@@ -11,6 +11,7 @@ from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -107,6 +108,11 @@ async def ensure_user_profile(
 
     On first login the row is created from JWT claims.  On subsequent
     requests ``last_login_at`` is refreshed (throttled to once per 5 min).
+
+    Both branches COMMIT rather than flush: this dependency provisions/refreshes
+    the profile independently of the route's own business operation, so it must
+    not be rolled back if that unrelated later operation fails (and on
+    read-only requests there is no other commit in the request to carry it).
     """
     user_id = uuid.UUID(current_user["sub"])
 
@@ -118,14 +124,28 @@ async def ensure_user_profile(
         user_metadata: dict[str, Any] = current_user.get("user_metadata", {})
         display_name = user_metadata.get("full_name") or email.split("@")[0]
 
-        profile = UserProfile(
-            id=user_id,
-            email=email,
-            display_name=display_name,
-            last_login_at=datetime.now(UTC),
+        # ON CONFLICT DO NOTHING + re-select makes this idempotent and race-safe:
+        # if a concurrent first-login request already inserted the row, this
+        # request's INSERT is a no-op and the re-select still finds a row —
+        # the "loser" of the race no longer raises IntegrityError/500.
+        # The conflict guard covers the PK `id` only: a same-email/different-id
+        # collision can't happen since Supabase sub<->email is 1:1.
+        stmt = (
+            pg_insert(UserProfile)
+            .values(
+                id=user_id,
+                email=email,
+                display_name=display_name,
+                last_login_at=datetime.now(UTC),
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
         )
-        db.add(profile)
-        await db.flush()
+        await db.execute(stmt)
+        await db.commit()
+
+        profile = (
+            await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+        ).scalar_one()
     else:
         # Throttle: only update last_login_at if stale
         now = datetime.now(UTC)
@@ -134,7 +154,7 @@ async def ensure_user_profile(
             or (now - profile.last_login_at).total_seconds() > _LOGIN_UPDATE_INTERVAL
         ):
             profile.last_login_at = now
-            await db.flush()
+            await db.commit()
 
     # A deactivated account is authenticated (its Supabase JWT is still valid) but must
     # not be allowed to act — deactivation lives only in our DB, so it is enforced here,
