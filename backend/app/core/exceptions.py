@@ -137,6 +137,29 @@ async def identity_unavailable_handler(request: Request, exc: Exception) -> JSON
     )
 
 
+async def storage_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Surface storage-backend outages/misconfiguration as 503, in one place."""
+    from app.services.translator import t
+
+    logger.error("Storage unavailable on %s %s: %s", request.method, request.url.path, exc)
+    code = "storage_unavailable"
+    return JSONResponse(
+        status_code=503,
+        content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+    )
+
+
+async def storage_not_found_handler(request: Request, exc: Exception) -> JSONResponse:
+    """A referenced storage object does not exist — surface as 404, not 500."""
+    from app.services.translator import t
+
+    code = "storage_not_found"
+    return JSONResponse(
+        status_code=404,
+        content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+    )
+
+
 _STATUS_CODE_TO_ERROR_CODE = {
     400: "bad_request",
     401: "unauthorized",
