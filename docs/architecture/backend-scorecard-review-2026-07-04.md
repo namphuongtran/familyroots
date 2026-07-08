@@ -118,8 +118,9 @@ structured JSON logging + Sentry + real `/health` readiness.
   called inline in async, freezing the event loop per upload/push. → `asyncio.to_thread` or async
   clients.
 - 🟠 **No `Annotated[T, Depends(...)]`** (B008 silenced instead of adopting the idiom).
-- 🟠 **66/77 routes return `dict[str,Any]` with no `response_model`** → OpenAPI describes most of
-  the API as opaque dicts.
+- 🟠 **Most routes return untyped dicts with no `response_model`** (~65 of 77 handlers annotated
+  `-> dict[str, Any]`; ~71 of 77 have no `response_model` at all) → OpenAPI describes most of the
+  API as opaque dicts.
 - 🟡 In-memory rate limiter is single-replica-only (needs a startup guard or Redis before scale-out).
 
 ## 5. Auth / Supabase — 7.0/10
