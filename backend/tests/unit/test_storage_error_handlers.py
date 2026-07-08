@@ -20,7 +20,7 @@ async def test_unavailable_handler_returns_503_envelope() -> None:
     load_translations()
     resp = await storage_unavailable_handler(_req(), StorageUnavailableError("down"))
     assert resp.status_code == 503
-    body = json.loads(resp.body)
+    body = json.loads(bytes(resp.body))
     assert body["error"]["code"] == "storage_unavailable"
     assert body["error"]["message"] and body["error"]["message"] != "error.storage_unavailable"
 
@@ -30,7 +30,7 @@ async def test_not_found_handler_returns_404_envelope() -> None:
     load_translations()
     resp = await storage_not_found_handler(_req(), StorageNotFoundError("missing"))
     assert resp.status_code == 404
-    body = json.loads(resp.body)
+    body = json.loads(bytes(resp.body))
     assert body["error"]["code"] == "storage_not_found"
     assert body["error"]["message"] and body["error"]["message"] != "error.storage_not_found"
 
