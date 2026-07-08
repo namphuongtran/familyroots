@@ -60,12 +60,17 @@ async def test_new_profile_persists_across_sessions(engine: AsyncEngine) -> None
 
     async with maker() as db:  # fresh session: only committed rows are visible
         row = await db.execute(
-            sa.text("SELECT last_login_at FROM user_profiles WHERE id = :id"), {"id": user_id}
+            sa.text("SELECT last_login_at, is_active FROM user_profiles WHERE id = :id"),
+            {"id": user_id},
         )
         result = row.first()
 
     assert result is not None, "profile INSERT was rolled back at session close (A1 regression)"
     assert result.last_login_at is not None, "last_login_at was not persisted"
+    # Lock the Core-default invariant: the pg_insert omits is_active, so a fresh
+    # profile must still get is_active=True — otherwise ensure_user_profile's
+    # deactivation gate would spuriously reject brand-new users.
+    assert result.is_active is True, "is_active default (True) was not applied on insert"
 
 
 @pytest.mark.asyncio
