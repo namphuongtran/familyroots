@@ -128,6 +128,8 @@ async def ensure_user_profile(
         # if a concurrent first-login request already inserted the row, this
         # request's INSERT is a no-op and the re-select still finds a row —
         # the "loser" of the race no longer raises IntegrityError/500.
+        # The conflict guard covers the PK `id` only: a same-email/different-id
+        # collision can't happen since Supabase sub<->email is 1:1.
         stmt = (
             pg_insert(UserProfile)
             .values(

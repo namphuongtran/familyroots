@@ -14,6 +14,7 @@ taking `current_user` and `db`) against a real Postgres session, mirroring
 the pattern in test_fcm_token_persistence.py (C1, same bug class).
 """
 
+import asyncio
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
@@ -98,10 +99,12 @@ async def test_stale_last_login_update_persists_across_sessions(engine: AsyncEng
 
 
 @pytest.mark.asyncio
-async def test_idempotent_and_race_safe(engine: AsyncEngine) -> None:
-    """Calling twice for the same sub (from different sessions) yields exactly one row,
-    with no IntegrityError — the concurrent-first-login race is closed by
-    ON CONFLICT (id) DO NOTHING."""
+async def test_idempotent_across_sequential_calls(engine: AsyncEngine) -> None:
+    """Calling twice for the same sub (from different sessions, sequentially) yields
+    exactly one row. Note: the second call's opening SELECT finds the row committed
+    by the first call, so this only exercises the else/UPDATE branch — it does NOT
+    drive the ON CONFLICT DO NOTHING path. See test_concurrent_first_login_is_race_safe
+    below for that."""
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     user_id = uuid.uuid4()
     email = f"a1-race-{user_id.hex[:8]}@example.com"
@@ -111,6 +114,49 @@ async def test_idempotent_and_race_safe(engine: AsyncEngine) -> None:
 
     async with maker() as db2:
         await ensure_user_profile(_current_user(user_id, email), db2)
+
+    async with maker() as db:
+        n = await db.scalar(
+            sa.text("SELECT COUNT(*) FROM user_profiles WHERE id = :id"), {"id": user_id}
+        )
+    assert n == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_login_is_race_safe(engine: AsyncEngine) -> None:
+    """Two concurrent first-logins for the same brand-new sub must not 500 on a
+    duplicate PK.
+
+    Unlike the sequential test above, both calls here start from separate sessions
+    and are driven with asyncio.gather so their opening SELECTs can interleave.
+    Under READ COMMITTED, both coroutines' opening SELECT (line ~119 in
+    ensure_user_profile) can run — and find no row — before either has committed
+    its INSERT. Both therefore reach the `if profile is None:` branch and issue the
+    `pg_insert(...).on_conflict_do_nothing(index_elements=["id"])` statement
+    concurrently: whichever commits second hits a real PK conflict at the database
+    level, and ON CONFLICT DO NOTHING is what turns that into a silent no-op instead
+    of a raised IntegrityError.
+
+    The outcome (no exception, exactly one row) is invariant under interleaving —
+    ON CONFLICT DO NOTHING guarantees it regardless of which coroutine's INSERT
+    commits first — so this test is not flaky despite exercising a race.
+
+    Discrimination check: replacing `.on_conflict_do_nothing(index_elements=["id"])`
+    with a plain `pg_insert(UserProfile).values(...)` (no ON CONFLICT clause) makes
+    this test fail with a duplicate-key IntegrityError from asyncio.gather, because
+    the loser's plain INSERT is no longer a no-op.
+    """
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    user_id = uuid.uuid4()
+    email = f"a1-concurrent-{user_id.hex[:8]}@example.com"
+    current_user = _current_user(user_id, email)
+
+    async def _call() -> None:
+        async with maker() as db:
+            await ensure_user_profile(current_user, db)
+
+    # No exception (in particular, no IntegrityError) must escape here.
+    await asyncio.gather(_call(), _call())
 
     async with maker() as db:
         n = await db.scalar(
