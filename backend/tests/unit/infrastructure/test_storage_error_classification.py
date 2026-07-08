@@ -60,3 +60,20 @@ async def test_upload_raises_unavailable_on_5xx(monkeypatch: pytest.MonkeyPatch)
 
     with pytest.raises(StorageUnavailableError):
         await mod.SupabaseStorageAdapter().upload("p", b"data", "image/jpeg")
+
+
+@pytest.mark.asyncio
+async def test_delete_swallows_error_and_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    # delete() runs post-commit as best-effort compensation, so it must never
+    # raise — any SDK/transport failure must be swallowed and reported as False.
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.remove.side_effect = StorageApiError("boom", "internal_error", 500)
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
+    result = await mod.SupabaseStorageAdapter().delete("clans/x/documents/y.jpg")
+
+    assert result is False
