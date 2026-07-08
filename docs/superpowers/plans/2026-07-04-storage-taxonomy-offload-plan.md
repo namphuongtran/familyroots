@@ -489,7 +489,10 @@ async def test_upload_expiry_is_now_plus_ttl(document_repo_fake: Any) -> None:
         clan_id=document_repo_fake.clan_id,
         actor=ActorInfo(user_id=document_repo_fake.actor_id, role="editor"),
     )
-    delta = datetime.fromisoformat(resp.presigned_url_expires_at) - datetime.now(UTC)
+    # DocumentResponse.presigned_url_expires_at is typed `datetime | None`, so Pydantic
+    # has already coerced the handler's isoformat string into a tz-aware datetime —
+    # read it directly (do NOT call datetime.fromisoformat on it).
+    delta = resp.presigned_url_expires_at - datetime.now(UTC)
     assert DEFAULT_PRESIGN_TTL - 60 <= delta.total_seconds() <= DEFAULT_PRESIGN_TTL + 60
 
 
