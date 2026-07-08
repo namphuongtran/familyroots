@@ -368,3 +368,12 @@ def test_child_in_law_daughters_wife_falls_back():
 def test_parent_in_law_unknown_target_gender_falls_back():
     e = ("spouse", "parent")
     assert _specific_key(e, [_n(), _n("male"), _n("unknown")]) is None
+
+
+def test_step_parent_by_gender():
+    """('parent','spouse') = my parent's spouse (not my parent) → step-parent, by gender."""
+    e = ("parent", "spouse")  # [me, my_parent, parent's_spouse=target]
+    assert _specific_key(e, [_n(), _n("male"), _n("male")]) == "kinship.step_father"
+    assert _specific_key(e, [_n(), _n("male"), _n("female")]) == "kinship.step_mother"
+    # unknown target gender → generic (kinship.step_parent)
+    assert _specific_key(e, [_n(), _n("male"), _n("unknown")]) is None
