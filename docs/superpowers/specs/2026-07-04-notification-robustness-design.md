@@ -121,6 +121,12 @@ run), and `continue`. One bad event no longer abandons the rest of the run. The 
 - Lunar→solar conversion / structured lunar dates (data-model round 2).
 - S2-10 missed-run window widening (needs per-occurrence dedup redesign).
 - Durable/queued delivery (ADR-004 Redis bus).
+- **Populating `user_profiles.language`** — the per-recipient locale plumbing (S2-2b) is
+  wired here, but the column is never written today (the login/profile flow stores the
+  chosen locale only in Supabase user metadata). Until the **Auth PR** writes
+  `user_profiles.language` (alongside the `preferred_locale` round-trip, S7-4), pushes
+  default to `vi` — valid localized text, just not per-user language yet. Whole-branch
+  review flagged this; deferred to the Auth work rather than pull auth-flow changes here.
 
 ## Files touched
 `app/services/scheduler.py` · `app/services/notification.py` · `app/services/translator.py` ·
