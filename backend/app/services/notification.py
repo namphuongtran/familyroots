@@ -1,11 +1,13 @@
 """FCM push notification sender service."""
 
+import asyncio as asyncio
 import logging
 import uuid
 from typing import Any
 
 import firebase_admin
-from firebase_admin import credentials, messaging
+from firebase_admin import credentials
+from firebase_admin import messaging as messaging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,14 +31,15 @@ def init_firebase() -> None:
 
 
 async def _remove_invalid_token(fcm_token: str, db: AsyncSession | None = None) -> None:
-    """Remove an unregistered FCM token from the database."""
+    """Stage removal of an unregistered FCM token. Does NOT commit — the caller's
+    transaction (the scheduler's per-event commit) persists it, so this never commits
+    a shared broadcast session mid-flight."""
     if db is None:
         return
     await db.execute(
         text("DELETE FROM public.user_fcm_tokens WHERE token = :token"),
         {"token": fcm_token},
     )
-    await db.commit()
 
 
 async def send_push_notification(
@@ -56,8 +59,8 @@ async def send_push_notification(
     try:
         message = messaging.Message(
             notification=messaging.Notification(
-                title=t(title_key, **kwargs),
-                body=t(body_key, **kwargs),
+                title=t(title_key, locale=locale, **kwargs),
+                body=t(body_key, locale=locale, **kwargs),
             ),
             data={k: str(v) for k, v in (data or {}).items()},
             token=fcm_token,
@@ -68,7 +71,7 @@ async def send_push_notification(
                 ),
             ),
         )
-        messaging.send(message)
+        await asyncio.to_thread(messaging.send, message)
         return True
 
     except messaging.UnregisteredError:
@@ -87,31 +90,37 @@ async def send_to_clan(
     db: AsyncSession,
     exclude_user_id: uuid.UUID | None = None,
     **kwargs: Any,
-) -> None:
-    """Broadcast a notification to all approved members of a clan.
+) -> tuple[int, int]:
+    """Broadcast to all approved clan members in each member's language.
 
-    Fetches each user's preferred_locale for localized messages.
-    """
+    Returns (sent, failed) delivery counts. Locale comes from user_profiles.language
+    (never auth.users — that schema is Supabase-only and absent locally/in CI).
+
+    NOTE (follow-up, tracked in the Auth PR): nothing populates
+    ``user_profiles.language`` yet — the login/profile flow writes the chosen
+    locale only to Supabase user metadata — so this currently defaults everyone to
+    'vi'. The per-recipient locale plumbing is correct and activates as soon as that
+    column is written; until then pushes render in Vietnamese (valid text, not the
+    raw i18n keys they showed before this PR)."""
     result = await db.execute(
         text("""
             SELECT ucr.user_id, t.token, t.device_platform,
-                   COALESCE(
-                       au.raw_user_meta_data->>'preferred_locale',
-                       'vi'
-                   ) AS locale
+                   COALESCE(up.language, 'vi') AS locale
             FROM public.user_clan_roles ucr
             JOIN public.user_fcm_tokens t ON t.user_id = ucr.user_id
-            LEFT JOIN auth.users au ON au.id = ucr.user_id
+            LEFT JOIN public.user_profiles up ON up.id = ucr.user_id
             WHERE ucr.clan_id = :clan_id
               AND ucr.is_approved = true
-              AND (:exclude IS NULL OR ucr.user_id != :exclude)
+              AND (CAST(:exclude AS uuid) IS NULL OR ucr.user_id != CAST(:exclude AS uuid))
         """),
         {"clan_id": clan_id, "exclude": exclude_user_id},
     )
     rows = result.mappings().all()
 
+    sent = 0
+    failed = 0
     for row in rows:
-        await send_push_notification(
+        ok = await send_push_notification(
             fcm_token=row["token"],
             title_key=title_key,
             body_key=body_key,
@@ -119,3 +128,6 @@ async def send_to_clan(
             db=db,
             **kwargs,
         )
+        sent += 1 if ok else 0
+        failed += 0 if ok else 1
+    return sent, failed

@@ -16,18 +16,19 @@ def load_translations() -> None:
         _translations[lang] = json.loads(f.read_text(encoding="utf-8"))
 
 
-def t(key: str, **kwargs: object) -> str:
-    """Translate a key using the current request locale.
+def t(key: str, *, locale: str | None = None, **kwargs: object) -> str:
+    """Translate a key. Uses ``locale`` when given, else the current request locale.
 
-    Falls back to Vietnamese (vi) if the key is not found in the
-    current locale, and returns the raw key if not found in any locale.
+    Falls back to Vietnamese (vi) if the key is missing in the chosen locale, and
+    returns the raw key if missing everywhere. The explicit ``locale`` override exists
+    for contexts with no request contextvar (e.g. the notification job sending in each
+    recipient's ``user_profiles.language``).
 
     Usage::
 
-        from app.services.translator import t
-        raise HTTPException(status_code=404, detail=t("error.member_not_found"))
-        body = t("notification.death_anniversary", name="Nguyễn Văn A", days=3)
+        t("error.member_not_found")                        # request locale
+        t("notification.body", locale="en", name="An")      # explicit locale
     """
-    locale = current_locale.get()
-    text = _translations.get(locale, {}).get(key) or _translations.get("vi", {}).get(key, key)
+    loc = locale or current_locale.get()
+    text = _translations.get(loc, {}).get(key) or _translations.get("vi", {}).get(key, key)
     return text.format(**kwargs) if kwargs else text

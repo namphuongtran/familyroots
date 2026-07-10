@@ -77,7 +77,7 @@ async def test_job_matches_on_injected_today_not_db_clock(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     # Fixed "today" decades from the real date, so a residual CURRENT_DATE would pick a
@@ -104,7 +104,7 @@ async def test_job_does_not_match_when_not_due(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     fixed_today = date(2075, 6, 1)
@@ -127,7 +127,7 @@ async def test_job_is_idempotent_within_a_day(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     today = datetime.now(ZoneInfo(settings.SCHEDULER_TIMEZONE)).date()
@@ -152,7 +152,7 @@ async def test_job_handles_year_wrap(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     fixed_today = date(2075, 12, 28)

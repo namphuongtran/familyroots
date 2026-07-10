@@ -53,7 +53,7 @@ Never bypass these checks for convenience.
 
 ### App startup
 
-`app/main.py::create_app` wires: custom exception handlers (`AppError`, `DomainError` → structured envelopes via `app/core/exceptions.py`), CORS, `LanguageMiddleware` (Accept-Language → locale context for i18n), optional `SentryMiddleware`, and a `RateLimitMiddleware` scoped to `/api/v1/auth` (20 req/min/IP). Lifespan initializes Sentry, loads translations, inits Firebase Admin, and starts APScheduler (used for anniversary notification jobs — see `NOTIFICATION_CRON_HOUR` / `NOTIFICATION_DAYS_BEFORE` in `Settings`).
+`app/main.py::create_app` wires: custom exception handlers (`AppError`, `DomainError` → structured envelopes via `app/core/exceptions.py`), CORS, `LanguageMiddleware` (Accept-Language → locale context for i18n), optional `SentryMiddleware`, and a `RateLimitMiddleware` scoped to `/api/v1/auth` (20 req/min/IP). Lifespan initializes Sentry, loads translations, inits Firebase Admin, and starts APScheduler (used for anniversary notification jobs — see `NOTIFICATION_CRON_HOUR` in `Settings`).
 
 Docs (`/docs`, `/redoc`) are only mounted when `APP_DEBUG=true`.
 
