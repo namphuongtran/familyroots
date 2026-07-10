@@ -20,8 +20,16 @@ def test_explicit_locale_overrides_contextvar() -> None:
     try:
         # Explicit en wins over the vi contextvar.
         assert t(_KEY, locale="en") == _translations["en"][_KEY]
-        # Omitting locale still uses the contextvar (vi).
-        assert t(_KEY) == _translations["vi"][_KEY]
+    finally:
+        current_locale.reset(token)
+
+    # Omitting locale falls back to the contextvar. Use a NON-default locale
+    # (en, since current_locale's default is "vi") so this genuinely exercises
+    # current_locale.get(): a broken `t()` that hardcodes `locale or "vi"`
+    # would return the vi text here and fail.
+    token = current_locale.set("en")
+    try:
+        assert t(_KEY) == _translations["en"][_KEY]
     finally:
         current_locale.reset(token)
 
