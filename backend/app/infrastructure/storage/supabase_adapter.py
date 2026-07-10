@@ -1,16 +1,60 @@
 """Supabase implementation of the StoragePort protocol.
 
-Keeps the application/domain layers free of Supabase SDK imports.
+Keeps the application/domain layers free of Supabase SDK imports. The blocking
+storage3 SDK is synchronous, so every call is off-loaded with asyncio.to_thread
+to avoid freezing the event loop; failures are classified into the domain
+StorageError taxonomy (mirroring the identity provider).
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
+from collections.abc import Mapping
+
+from storage3.exceptions import StorageApiError
 
 from app.core.config import settings
+from app.domain.document.repository import (
+    DEFAULT_PRESIGN_TTL,
+    StorageError,
+    StorageNotFoundError,
+    StorageUnavailableError,
+)
 from app.infrastructure.supabase_client import get_service_client
 
 logger = logging.getLogger(__name__)
+
+
+def _classify_storage(exc: Exception) -> Exception:
+    """Map a storage SDK/transport failure to a domain StorageError.
+
+    Missing object → StorageNotFoundError (404); provider 5xx / rejected key /
+    transport failure → StorageUnavailableError (503); a genuinely unexpected
+    error is returned unchanged so ``raise _classify_storage(e)`` keeps it a
+    loud 500 rather than silently downgrading a code bug."""
+    if isinstance(exc, StorageError):
+        return exc
+    if isinstance(exc, StorageApiError):
+        info: Mapping[str, object] = {}
+        with contextlib.suppress(Exception):  # defensive: never let classification raise
+            info = exc.to_dict()
+        status = str(info.get("status") or "")
+        code = str(info.get("code") or "").lower()
+        msg = str(info.get("message") or exc).lower()
+        if status == "404" or "not_found" in code or "not found" in msg:
+            return StorageNotFoundError(str(exc))
+        if (
+            status.startswith("5")
+            or "api key" in msg
+            or "apikey" in code
+            or "invalid_api_key" in code
+            or "unauthorized" in code + msg
+        ):
+            return StorageUnavailableError(str(exc))
+        return exc  # unexpected 4xx (e.g. duplicate) — stay loud (500)
+    return StorageUnavailableError(str(exc))  # transport / non-HTTP failure
 
 
 class SupabaseStorageAdapter:
@@ -18,28 +62,43 @@ class SupabaseStorageAdapter:
 
     async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
         client = get_service_client()
-        client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload(
-            path=path,
-            file=content,
-            file_options={
-                "content-type": content_type or "application/octet-stream",
-                "upsert": "false",
-            },
-        )
+        try:
+            await asyncio.to_thread(
+                client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload,
+                path=path,
+                file=content,
+                file_options={
+                    "content-type": content_type or "application/octet-stream",
+                    "upsert": "false",
+                },
+            )
+        except Exception as e:
+            raise _classify_storage(e) from e
         return path
 
     async def delete(self, storage_path: str) -> bool:
+        # Best-effort: called post-commit as compensation, so it must never raise
+        # (a 503 here would be for an already-committed DB delete). Swallow + log.
         try:
             client = get_service_client()
-            client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove([storage_path])
+            await asyncio.to_thread(
+                client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove, [storage_path]
+            )
             return True
-        except Exception as e:
+        except Exception as e:  # best-effort compensation — never raise here
             logger.error("Storage delete failed: %s (path=%s)", e, storage_path)
             return False
 
-    async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
+    async def get_presigned_url(
+        self, storage_path: str, expires_in: int = DEFAULT_PRESIGN_TTL
+    ) -> str:
         client = get_service_client()
-        result = client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).create_signed_url(
-            storage_path, expires_in
-        )
+        try:
+            result = await asyncio.to_thread(
+                client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).create_signed_url,
+                storage_path,
+                expires_in,
+            )
+        except Exception as e:
+            raise _classify_storage(e) from e
         return result["signedURL"]

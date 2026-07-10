@@ -25,12 +25,15 @@ from app.core.exceptions import (
     http_exception_handler,
     identity_unavailable_handler,
     integrity_error_handler,
+    storage_not_found_handler,
+    storage_unavailable_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
 from app.core.logging import configure_logging
 from app.core.readiness import MIGRATIONS_CURRENT, migration_status
 from app.domain.auth.identity_provider import IdentityUnavailableError
+from app.domain.document.repository import StorageNotFoundError, StorageUnavailableError
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
@@ -123,6 +126,8 @@ def create_app() -> FastAPI:
     application.add_exception_handler(AppError, app_exception_handler)
     application.add_exception_handler(DomainError, domain_exception_handler)
     application.add_exception_handler(IdentityUnavailableError, identity_unavailable_handler)
+    application.add_exception_handler(StorageUnavailableError, storage_unavailable_handler)
+    application.add_exception_handler(StorageNotFoundError, storage_not_found_handler)
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
     application.add_exception_handler(StarletteHTTPException, http_exception_handler)
     # More specific than the catch-all Exception handler: a DB constraint violation

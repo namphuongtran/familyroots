@@ -10,12 +10,17 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.application.shared.audit import emit_audit_event
 from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES, Document
-from app.domain.document.repository import DocumentRepository, StoragePort
+from app.domain.document.repository import (
+    DEFAULT_PRESIGN_TTL,
+    DocumentRepository,
+    StorageError,
+    StoragePort,
+)
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
@@ -124,7 +129,9 @@ class DocumentCommandHandler:
             description=doc.description,
             storage_path=doc.storage_path,
             presigned_url=presigned,
-            presigned_url_expires_at=datetime.now(UTC).isoformat(),
+            presigned_url_expires_at=(
+                datetime.now(UTC) + timedelta(seconds=DEFAULT_PRESIGN_TTL)
+            ).isoformat(),
             file_size_bytes=doc.file_size_bytes,
             mime_type=doc.mime_type,
             original_filename=doc.original_filename,
@@ -182,9 +189,9 @@ class DocumentCommandHandler:
 
         await self._repo.save(doc)
 
-        presigned = await self._storage.get_presigned_url(doc.storage_path, expires_in=86400 * 30)
-        # Emit an audit row for the avatar change (the entity mutation itself carries
-        # no domain event) and commit doc + old-avatar clears in the same transaction.
+        # Commit the avatar change (audit + doc + old-avatar clears) FIRST — a
+        # pure-DB write must not be gated on a read-side storage call. Then fetch
+        # the presigned URL best-effort; a storage outage returns None, not a 503.
         await emit_audit_event(
             self._uow,
             action="document.set_avatar",
@@ -194,7 +201,11 @@ class DocumentCommandHandler:
             clan_id=clan_id,
             new_value={"is_avatar": True, "person_id": str(doc.person_id)},
         )
-        return presigned
+        try:
+            return await self._storage.get_presigned_url(doc.storage_path, expires_in=86400 * 30)
+        except StorageError:
+            logger.warning("Avatar set but presign failed for %s", doc.storage_path)
+            return None
 
     async def _get_or_raise(self, doc_id: uuid.UUID, clan_id: uuid.UUID) -> Document:
         doc = await self._repo.get_by_id(doc_id, clan_id)
