@@ -81,7 +81,7 @@ async def test_job_skips_when_lock_held(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     today = _platform_today()
@@ -116,7 +116,7 @@ async def test_job_processes_due_event_when_lock_free(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     today = _platform_today()
@@ -168,7 +168,7 @@ async def test_lock_released_even_after_midjob_commit(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     today = _platform_today()
@@ -188,12 +188,21 @@ async def test_lock_released_and_error_propagates_after_failure(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    boom = RuntimeError("fcm exploded")
-    monkeypatch.setattr("app.services.notification.send_to_clan", AsyncMock(side_effect=boom))
+    # Inject a JOB-FATAL error (not a per-event send_to_clan failure, which S2-3 now
+    # isolates and swallows): corrupt the SQL fragment that next_anniversary_sql feeds
+    # into the events-fetch query. next_anniversary_sql runs BEFORE engine.connect(), so
+    # we must RETURN invalid SQL (not raise) — the raise would then land in the fetch
+    # db.execute() INSIDE the outer try, AFTER the lock is acquired, exercising the
+    # rollback→unlock release path in the finally block.
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.sql_dates.next_anniversary_sql",
+        lambda *a, **k: "(this_is_not_valid_sql",
+    )
 
     today = _platform_today()
     await _seed_due_event(maker, today=today)
-    with pytest.raises(RuntimeError, match="fcm exploded"):
+    with pytest.raises(Exception):  # noqa: B017 — DB error type is driver-specific; the
+        # point is that a job-fatal error propagates out at all (C2 guarantee).
         await scheduler.send_anniversary_notifications(today=today)
 
     assert await _lock_is_free(async_engine), "advisory lock stranded after job failure"
@@ -227,7 +236,7 @@ async def test_lock_and_unlock_run_on_one_dedicated_connection(
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
-    spy = AsyncMock()
+    spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
 
     today = _platform_today()

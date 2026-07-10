@@ -110,66 +110,87 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.is_recurring = true
+                      AND e.is_lunar_calendar = false
+                      AND (e.person_id IS NULL OR p.is_deleted = false)
                 """),
                 {"today": today},
             )
             events = result.mappings().all()
 
+            lunar_count = await db.scalar(
+                text(
+                    "SELECT COUNT(*) FROM public.events "
+                    "WHERE is_recurring = true AND is_lunar_calendar = true"
+                )
+            )
+            if lunar_count:
+                logger.info(
+                    "%s lunar recurring events skipped — lunar support deferred to "
+                    "data-model round 2",
+                    lunar_count,
+                )
+
             for event in events:
-                next_occ = event["next_occurrence"]
-                days_until = (next_occ - today).days
+                try:
+                    next_occ = event["next_occurrence"]
+                    days_until = (next_occ - today).days
+                    if days_until != event["notify_days_before"]:
+                        continue
 
-                if days_until != event["notify_days_before"]:
+                    dedup = await db.execute(
+                        text("""
+                            SELECT 1 FROM public.notification_log
+                            WHERE event_id = :event_id
+                              AND notification_type = :ntype
+                              AND DATE(created_at AT TIME ZONE :tz) = :today
+                            LIMIT 1
+                        """),
+                        {
+                            "event_id": event["event_id"],
+                            "ntype": event["event_type"],
+                            "tz": tz_name,
+                            "today": today,
+                        },
+                    )
+                    if dedup.first():
+                        continue
+
+                    sent, failed = await send_to_clan(
+                        clan_id=event["clan_id"],
+                        title_key=f"notification.{event['event_type']}.title",
+                        body_key=f"notification.{event['event_type']}.body",
+                        db=db,
+                        name=event["person_name"] or event["title"],
+                        days=event["notify_days_before"],
+                    )
+                    status = "sent" if sent > 0 else "failed"
+                    error_message = None if sent > 0 else f"0/{sent + failed} delivered"
+
+                    await db.execute(
+                        text("""
+                            INSERT INTO public.notification_log
+                                (clan_id, event_id, user_id, notification_type,
+                                 title, body, status, sent_at, error_message)
+                            VALUES (:clan_id, :event_id,
+                                    '00000000-0000-0000-0000-000000000000',
+                                    :ntype, :title, '', :status, NOW(), :error_message)
+                        """),
+                        {
+                            "clan_id": event["clan_id"],
+                            "event_id": event["event_id"],
+                            "ntype": event["event_type"],
+                            "title": event["title"],
+                            "status": status,
+                            "error_message": error_message,
+                        },
+                    )
+                    await db.commit()
+                except Exception:
+                    # One bad event must not abort the rest of the run. Roll back the
+                    # aborted per-event tx so the next event's statements can run.
+                    logger.exception("Notification failed for event %s", event.get("event_id"))
+                    await db.rollback()
                     continue
-
-                # Dedup: skip if this event was already logged for today. created_at is
-                # a timestamptz; DATE(created_at AT TIME ZONE :tz) is its calendar day in
-                # the platform zone, which equals :today for a same-day run (the `today`
-                # contract in the docstring). Sound for production's daily/misfire re-run;
-                # see the docstring for the backfill caveat.
-                dedup = await db.execute(
-                    text("""
-                        SELECT 1 FROM public.notification_log
-                        WHERE event_id = :event_id
-                          AND notification_type = :ntype
-                          AND DATE(created_at AT TIME ZONE :tz) = :today
-                        LIMIT 1
-                    """),
-                    {
-                        "event_id": event["event_id"],
-                        "ntype": event["event_type"],
-                        "tz": tz_name,
-                        "today": today,
-                    },
-                )
-                if dedup.first():
-                    continue
-
-                await send_to_clan(
-                    clan_id=event["clan_id"],
-                    title_key=f"notification.{event['event_type']}.title",
-                    body_key=f"notification.{event['event_type']}.body",
-                    db=db,
-                    name=event["person_name"] or event["title"],
-                    days=event["notify_days_before"],
-                )
-
-                await db.execute(
-                    text("""
-                        INSERT INTO public.notification_log
-                            (clan_id, event_id, user_id,
-                             notification_type, title, body, status, sent_at)
-                        VALUES (:clan_id, :event_id, '00000000-0000-0000-0000-000000000000',
-                                :ntype, :title, '', 'sent', NOW())
-                    """),
-                    {
-                        "clan_id": event["clan_id"],
-                        "event_id": event["event_id"],
-                        "ntype": event["event_type"],
-                        "title": event["title"],
-                    },
-                )
-                await db.commit()
         finally:
             # Roll back any open/aborted transaction BEFORE unlocking: the
             # session-level advisory lock survives rollback, and unlocking on
