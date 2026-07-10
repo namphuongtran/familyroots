@@ -56,8 +56,8 @@ async def send_push_notification(
     try:
         message = messaging.Message(
             notification=messaging.Notification(
-                title=t(title_key, **kwargs),
-                body=t(body_key, **kwargs),
+                title=t(title_key, locale=locale, **kwargs),
+                body=t(body_key, locale=locale, **kwargs),
             ),
             data={k: str(v) for k, v in (data or {}).items()},
             token=fcm_token,
