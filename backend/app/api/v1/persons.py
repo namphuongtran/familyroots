@@ -213,9 +213,14 @@ async def _fetch_included_data(
         return {}
 
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-    res_dict = {}
+    res_dict: dict[str, list[Any]] = {}
     for key, res in zip(tasks.keys(), results, strict=False):
-        res_dict[key] = res if isinstance(res, list) else []
+        # A failing include sub-query must surface as an error (handled by the app's
+        # exception handlers), never be masked as empty data. Re-raise the original
+        # exception, preserving its type so the same envelope is produced.
+        if isinstance(res, BaseException):
+            raise res
+        res_dict[key] = res
     return res_dict
 
 
@@ -276,7 +281,7 @@ async def batch_get_persons(
     if "stats" in all_include_keys and persons:
         stats_map = await handler.get_persons_stats(clan_id, [person.id for person in persons])
 
-    included_results: list[dict[str, list[Any]]] = await asyncio.gather(
+    raw_included = await asyncio.gather(
         *[
             _fetch_included_data(
                 handler,
@@ -285,8 +290,18 @@ async def batch_get_persons(
                 list(dict.fromkeys([*includes, *includes_by_id.get(person.id, [])])),
             )
             for person in persons
-        ]
+        ],
+        return_exceptions=True,
     )
+    included_results: list[dict[str, list[Any]]] = []
+    for inc_result in raw_included:
+        # An include sub-query error is unexpected (DB fault / bug), not a per-item
+        # condition like not-found — propagate it (consistent with the person-fetch
+        # gather above), but only after every coroutine has been awaited so none is
+        # left orphaned.
+        if isinstance(inc_result, BaseException):
+            raise inc_result
+        included_results.append(inc_result)
 
     data = []
     for idx, person in enumerate(persons):

@@ -60,16 +60,31 @@ class SqlAlchemyPlatformAdminQueryPort(PlatformAdminQueryPort):
         if not clan:
             raise NotFoundError("clan_not_found")
 
-        stats_result = await self._session.execute(
-            select(
-                func.count(func.distinct(ClanMembership.id)).label("total_members"),
-                func.count(func.distinct(UserClanRole.id)).label("total_users"),
+        # total_members and total_users are counted INDEPENDENTLY (not via one joined
+        # query): the two are unrelated entities, and coupling them made total_users read
+        # 0 until a clan had its first person. total_members counts non-soft-deleted
+        # persons (intentional — matches get_metrics); total_users counts distinct
+        # role-holding users regardless of approval.
+        total_members = (
+            await self._session.scalar(
+                select(func.count(func.distinct(Person.id)))
+                .select_from(ClanMembership)
+                .join(Person, Person.id == ClanMembership.person_id)
+                .where(
+                    ClanMembership.clan_id == clan_id,
+                    Person.is_deleted.is_(False),
+                )
             )
-            .select_from(ClanMembership)
-            .outerjoin(UserClanRole, UserClanRole.clan_id == ClanMembership.clan_id)
-            .where(ClanMembership.clan_id == clan_id)
+            or 0
         )
-        stats = stats_result.one()
+        total_users = (
+            await self._session.scalar(
+                select(func.count(func.distinct(UserClanRole.user_id))).where(
+                    UserClanRole.clan_id == clan_id
+                )
+            )
+            or 0
+        )
 
         return ClanDetailView(
             id=clan.id,
@@ -80,8 +95,8 @@ class SqlAlchemyPlatformAdminQueryPort(PlatformAdminQueryPort):
             origin_place=clan.origin_place,
             created_at=clan.created_at,
             stats=ClanStatsView(
-                total_members=stats.total_members or 0,
-                total_users=stats.total_users or 0,
+                total_members=total_members,
+                total_users=total_users,
             ),
         )
 

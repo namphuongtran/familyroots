@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.api.v1.persons import router as persons_router
 from app.application.person.commands import GetPerson
 from app.core.database import get_db
+from app.core.exceptions import unhandled_exception_handler
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.infrastructure.dependencies import get_person_query_handler
@@ -47,8 +48,11 @@ class _FakeDbSession:
 
 
 class _FakePersonQueryHandler:
-    def __init__(self, persons: dict[uuid.UUID, _FakePerson]) -> None:
+    def __init__(
+        self, persons: dict[uuid.UUID, _FakePerson], *, timeline_raises: bool = False
+    ) -> None:
         self._persons = persons
+        self._timeline_raises = timeline_raises
 
     async def get(self, query: GetPerson) -> _FakePerson:
         person = self._persons.get(query.person_id)
@@ -75,15 +79,25 @@ class _FakePersonQueryHandler:
         return [{"relation_id": f"pc-{person_id}"}]
 
     async def get_timeline(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
+        if self._timeline_raises:
+            raise RuntimeError("timeline query blew up")
         return [{"event_type": "birth", "person_id": str(person_id), "clan_id": str(clan_id)}]
 
     async def get_documents(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         return [{"document_id": f"doc-{person_id}", "clan_id": str(clan_id)}]
 
 
-def _build_client(persons: dict[uuid.UUID, _FakePerson], clan_id: uuid.UUID) -> TestClient:
+def _build_client(
+    persons: dict[uuid.UUID, _FakePerson],
+    clan_id: uuid.UUID,
+    *,
+    timeline_raises: bool = False,
+) -> TestClient:
     app = FastAPI()
     app.include_router(persons_router, prefix="/api/v1/persons")
+    # Mirror app.main's registration so an unhandled exception surfaces via the
+    # same structured 500 envelope the real app produces, not a raw traceback.
+    app.add_exception_handler(Exception, unhandled_exception_handler)
 
     async def _override_user() -> dict[str, Any]:
         return {"sub": str(uuid.uuid4())}
@@ -95,14 +109,18 @@ def _build_client(persons: dict[uuid.UUID, _FakePerson], clan_id: uuid.UUID) -> 
         yield _FakeDbSession()
 
     def _override_handler() -> _FakePersonQueryHandler:
-        return _FakePersonQueryHandler(persons)
+        return _FakePersonQueryHandler(persons, timeline_raises=timeline_raises)
 
     app.dependency_overrides[get_current_user] = _override_user
     app.dependency_overrides[get_current_clan_id] = _override_clan_id
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_person_query_handler] = _override_handler
 
-    return TestClient(app)
+    # raise_server_exceptions=False: let an unhandled exception ride through the
+    # real middleware stack (ServerErrorMiddleware re-raises by default so bare
+    # test clients can surface bugs) and come back as the 500 response the real
+    # app.main exception handler produces, instead of blowing up the test itself.
+    return TestClient(app, raise_server_exceptions=False)
 
 
 def test_batch_endpoint_returns_sparse_profile_with_stats() -> None:
@@ -241,3 +259,39 @@ def test_batch_endpoint_ignores_unsupported_include_tokens() -> None:
     assert body["errors"] == []
     assert len(body["data"]) == 1
     assert "unknown_token" not in body["data"][0]
+
+
+def test_batch_endpoint_propagates_include_subquery_error_for_one_of_several() -> None:
+    # Regression test for PR-J: with several persons in the batch, one include
+    # sub-query (get_timeline) raises for every person. The include gather must
+    # await *all* the coroutines (no orphaned tasks) before surfacing the error,
+    # and the failure must propagate as a real error — never come back as a
+    # 200 with the include silently degraded to [] for that person.
+    clan_id = uuid.uuid4()
+    id1 = uuid.uuid4()
+    id2 = uuid.uuid4()
+    client = _build_client(
+        {
+            id1: _FakePerson(id=id1, full_name="Nguyen H", gender="male"),
+            id2: _FakePerson(id=id2, full_name="Nguyen I", gender="female"),
+        },
+        clan_id,
+        timeline_raises=True,
+    )
+
+    response = client.post(
+        "/api/v1/persons/batch",
+        json={
+            "ids": [str(id1), str(id2)],
+            "profile": "summary",
+            "include": "timeline",
+        },
+    )
+
+    assert response.status_code == 500
+    body = response.json()
+    # The generic 500 envelope — not the batch response shape (no top-level
+    # "data"/"errors"), confirming the failure was never folded into a per-item
+    # error or degraded to an empty include.
+    assert body["error"]["code"] == "internal_error"
+    assert "data" not in body
