@@ -106,6 +106,7 @@
   "auth.fcm_token_registered": "Push notification token registered",
   "auth.fcm_token_removed": "Push notification token removed",
   "auth.password_reset_sent": "If that email is registered, we've sent a password-reset link.",
+  "auth.verification_email_sent": "If this email is unverified, we've sent a verification link.",
   "user.approved": "User approved",
   "user.rejected": "User rejected",
   "user.role_changed": "Role changed",

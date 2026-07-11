@@ -85,6 +85,7 @@ class StubIdentityProvider:
     def __init__(self, private_pem: str) -> None:
         self._private_pem = private_pem
         self._users: dict[str, dict[str, str]] = {}  # email -> {id, password, full_name}
+        self.verification_emails: list[str] = []
 
     def _mint(self, user_id: str, email: str, full_name: str) -> str:
         now = datetime.now(UTC)
@@ -133,6 +134,9 @@ class StubIdentityProvider:
         self, *, user_id: str, full_name: str | None, preferred_locale: str | None
     ) -> None:
         return None
+
+    async def send_verification_email(self, *, email: str) -> None:
+        self.verification_emails.append(email)
 
 
 @pytest.fixture(scope="module")
@@ -244,6 +248,27 @@ def test_register_login_me_clans_create_person(client: TestClient) -> None:
     # And the explicit clan header must also be honoured.
     resp = client.get("/api/v1/me/clans", headers={**auth, "X-Current-Clan-Id": clan_id})
     assert resp.status_code == 200
+
+
+def test_register_sends_verification_email(
+    client: TestClient, stub_identity: StubIdentityProvider
+) -> None:
+    """A successful registration triggers exactly one verification email for that address."""
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "newuser@ex.com",
+            "password": "secret123",
+            "full_name": "New User",
+            "clan_action": "create",
+            "clan_name": "Nguyen",
+            "clan_slug": "nguyen-test",
+        },
+    )
+    assert resp.status_code == 201
+    # stub_identity is module-scoped and shared with the other registration tests in
+    # this file, so assert on this address specifically rather than list equality.
+    assert stub_identity.verification_emails.count("newuser@ex.com") == 1
 
 
 # ── Negative controls: envelope + status codes stay truthful ─────

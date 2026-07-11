@@ -29,6 +29,7 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     RegisterResponse,
+    ResendVerificationRequest,
     UserUpdateRequest,
 )
 from app.services.translator import t
@@ -114,6 +115,21 @@ async def forgot_password(
     except Exception as e:
         logger.warning("forgot-password: provider call failed (swallowed): %s", e)
     return {"data": {"message": t("auth.password_reset_sent")}}
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    body: ResendVerificationRequest,
+    svc: AuthSessionService = Depends(get_auth_session_service),
+) -> dict[str, Any]:
+    """Resend the email-verification link. ALWAYS returns 200 with the same message
+    regardless of whether the email exists or the provider is reachable — never leak
+    account existence or provider state."""
+    try:
+        await svc.send_verification_email(email=body.email)
+    except Exception as e:
+        logger.warning("resend-verification: provider call failed (swallowed): %s", e)
+    return {"data": {"message": t("auth.verification_email_sent")}}
 
 
 @router.get("/me")

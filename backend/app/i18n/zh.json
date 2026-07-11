@@ -106,6 +106,7 @@
   "auth.fcm_token_registered": "推送通知令牌已注册",
   "auth.fcm_token_removed": "推送通知令牌已移除",
   "auth.password_reset_sent": "如果该邮箱已注册，我们已发送密码重置链接。",
+  "auth.verification_email_sent": "如果该邮箱尚未验证，我们已发送验证链接。",
   "user.approved": "用户已批准",
   "user.rejected": "用户已拒绝",
   "user.role_changed": "角色已更改",

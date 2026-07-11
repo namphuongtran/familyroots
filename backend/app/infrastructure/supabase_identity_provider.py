@@ -151,3 +151,14 @@ class SupabaseIdentityProvider:
             email,
             opts,  # type: ignore[arg-type]
         )
+
+    async def send_verification_email(self, *, email: str) -> None:
+        # Anon client; off-loaded (blocking SDK). `resend` type=signup re-sends the
+        # confirmation email for an unconfirmed account. redirect only when configured.
+        options: dict[str, Any] = {}
+        if settings.EMAIL_VERIFY_REDIRECT_URL:
+            options["email_redirect_to"] = settings.EMAIL_VERIFY_REDIRECT_URL
+        await asyncio.to_thread(
+            get_anon_client().auth.resend,
+            {"type": "signup", "email": email, "options": options},  # type: ignore[typeddict-item]
+        )
