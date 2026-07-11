@@ -16,7 +16,7 @@ This folder is the canonical home for public API and event contract documentatio
 - [rest-persons-api.md](rest-persons-api.md)
 - [rest-relationships-api.md](rest-relationships-api.md)
 - [rest-tree-api.md](rest-tree-api.md)
-- [Tree Focus view](tree-focus.md) — `GET /tree/focus/{person_id}` (breadcrumb + focus + descendant window, computed đời)
+- [tree-focus.md](tree-focus.md)
 - [rest-documents-api.md](rest-documents-api.md)
 - [rest-events-api.md](rest-events-api.md)
 - [rest-claims-api.md](rest-claims-api.md)
