@@ -237,3 +237,25 @@ class SqlAlchemyClaimQueryPort(ClaimQueryPort):
         claims = list(result.scalars().all())
 
         return claims, total
+
+    async def list_user_claims(
+        self,
+        user_id: uuid.UUID,
+        status: str | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[ClaimModel], int]:
+        query = select(ClaimModel).where(ClaimModel.user_id == user_id)
+        if status:
+            query = query.where(ClaimModel.status == status)
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total = await self._session.scalar(count_query) or 0
+
+        query = (
+            query.order_by(ClaimModel.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        result = await self._session.execute(query)
+        return list(result.scalars().all()), total
