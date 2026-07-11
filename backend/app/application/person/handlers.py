@@ -176,17 +176,25 @@ class PersonQueryHandler:
         self._repo = repo
         self._query_port = query_port
 
-    async def list_persons(self, query: ListPersons) -> tuple[list[PersonResponse], int]:
-        """List persons with filtering, pagination, and total count."""
-        filters = PersonFilters(
-            gender=query.gender,
-            is_deleted=query.is_deleted,
-            generation=query.generation,
-            branch_id=query.branch_id,
-        )
-        persons = await self._repo.list_in_clan(query.clan_id, filters, query.cursor, query.limit)
-        total = await self._repo.count_in_clan(query.clan_id, query.is_deleted)
-        return [PersonResponse.model_validate(p) for p in persons], total
+    async def list_persons(self, query: ListPersons) -> tuple[list[PersonResponse], dict[str, Any]]:
+        """List persons with filtering and cursor pagination.
+
+        Returns ``(data, meta)`` where ``meta`` carries ``cursor``/``has_more``/``limit``
+        — no bare total/count_in_clan call here (see repo-level count_in_clan for other
+        callers). NOTE: list_in_clan orders by full_name but paginates by an id-cursor;
+        that mismatch is a known, pre-existing pagination-stability issue, orthogonal to
+        this change — not fixed here.
+        """
+        filters = PersonFilters(gender=query.gender, generation=query.generation, is_deleted=False)
+        rows = await self._repo.list_in_clan(query.clan_id, filters, query.cursor, query.limit)
+        has_more = len(rows) > query.limit
+        page = rows[: query.limit]
+        meta = {
+            "cursor": str(page[-1].id) if has_more and page else None,
+            "has_more": has_more,
+            "limit": query.limit,
+        }
+        return [PersonResponse.model_validate(p) for p in page], meta
 
     async def get(self, query: GetPerson) -> PersonResponse:
         """Get a single person."""

@@ -5,7 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.application.person.commands import CreatePerson, DeletePerson, GetPerson, UpdatePerson
+from app.application.person.commands import (
+    CreatePerson,
+    DeletePerson,
+    GetPerson,
+    ListPersons,
+    UpdatePerson,
+)
 from app.application.person.handlers import PersonCommandHandler, PersonQueryHandler
 from app.domain.person.entity import Person
 from app.domain.shared.exceptions import EntityNotFoundError
@@ -181,3 +187,39 @@ class TestPersonQueryHandlerGet:
         handler = PersonQueryHandler(mock_repo)
         with pytest.raises(EntityNotFoundError):
             await handler.get(GetPerson(person_id=uuid.uuid4(), clan_id=uuid.uuid4()))
+
+
+class TestPersonQueryHandlerList:
+    """F-1 5a: list_persons returns (data, meta) — no more bare total/count_in_clan."""
+
+    @pytest.mark.asyncio
+    async def test_list_persons_reports_has_more_and_cursor_from_extra_row(self) -> None:
+        """Repo returns limit+1 rows; handler must truncate to limit and set cursor
+        to the last row of the *truncated* page (not the extra lookahead row)."""
+        limit = 2
+        rows = [_make_person(f"P{i}") for i in range(limit + 1)]
+        mock_repo = AsyncMock()
+        mock_repo.list_in_clan.return_value = rows
+
+        handler = PersonQueryHandler(mock_repo)
+        data, meta = await handler.list_persons(ListPersons(clan_id=uuid.uuid4(), limit=limit))
+
+        assert len(data) == limit
+        assert [p.id for p in data] == [rows[0].id, rows[1].id]
+        assert meta == {"cursor": str(rows[limit - 1].id), "has_more": True, "limit": limit}
+        mock_repo.count_in_clan.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_list_persons_no_more_pages_has_no_cursor(self) -> None:
+        """Repo returns <= limit rows: has_more False, no cursor, nothing truncated."""
+        limit = 5
+        rows = [_make_person(f"P{i}") for i in range(2)]
+        mock_repo = AsyncMock()
+        mock_repo.list_in_clan.return_value = rows
+
+        handler = PersonQueryHandler(mock_repo)
+        data, meta = await handler.list_persons(ListPersons(clan_id=uuid.uuid4(), limit=limit))
+
+        assert len(data) == 2
+        assert meta == {"cursor": None, "has_more": False, "limit": limit}
+        mock_repo.count_in_clan.assert_not_awaited()

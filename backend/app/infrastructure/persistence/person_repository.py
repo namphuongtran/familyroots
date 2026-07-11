@@ -111,7 +111,8 @@ class SqlAlchemyPersonRepository:
         if cursor:
             stmt = stmt.where(PersonModel.id > uuid.UUID(cursor))
 
-        stmt = stmt.order_by(PersonModel.full_name).limit(limit)
+        # Fetch one extra row so the caller can detect has_more without a COUNT query.
+        stmt = stmt.order_by(PersonModel.full_name).limit(limit + 1)
 
         result = await self._session.execute(stmt)
         models = result.scalars().all()
