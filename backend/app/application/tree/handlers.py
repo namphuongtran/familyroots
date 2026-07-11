@@ -5,6 +5,7 @@ Orchestrate tree repository and relationship descriptor service.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from app.application.tree.queries import (
@@ -25,6 +26,19 @@ class TreeQueryHandler:
     def __init__(self, repo: TreeRepository) -> None:
         self._repo = repo
 
+    async def _base_generation(self, root_id: uuid.UUID, clan_id: uuid.UUID) -> int | None:
+        """đời of ``root_id`` (thủy tổ = 1) = founder distance + 1, or None if the root
+        is not descended from a founder / the clan has no founder."""
+        chain = await self._repo.get_ancestors_flat(root_id, clan_id, 50)
+        founder_id = await self._repo.find_clan_founder(clan_id)
+        if founder_id is None:
+            return None
+        founder_str = str(founder_id)
+        for row in chain:
+            if row["id"] == founder_str:
+                return int(row["depth"]) + 1
+        return None
+
     async def get_full_tree(self, query: GetFullTree) -> dict[str, Any]:
         """Return the full family tree."""
         root_id = query.root_person_id
@@ -36,8 +50,9 @@ class TreeQueryHandler:
             if not await self._repo.person_in_clan(root_id, query.clan_id):
                 raise EntityNotFoundError("person_not_found")
 
+        base = await self._base_generation(root_id, query.clan_id)
         tree = await self._repo.build_descendants_tree(
-            root_id, query.clan_id, query.max_generations
+            root_id, query.clan_id, query.max_generations, base_generation=base
         )
         if not tree:
             raise EntityNotFoundError("tree_empty")
@@ -53,8 +68,9 @@ class TreeQueryHandler:
         if not await self._repo.person_in_clan(query.person_id, query.clan_id):
             raise EntityNotFoundError("person_not_found")
 
+        base = await self._base_generation(query.person_id, query.clan_id)
         tree = await self._repo.build_descendants_tree(
-            query.person_id, query.clan_id, query.max_generations
+            query.person_id, query.clan_id, query.max_generations, base_generation=base
         )
         if not tree:
             raise EntityNotFoundError("tree_empty")
@@ -89,12 +105,7 @@ class TreeQueryHandler:
         founder_id = await self._repo.find_clan_founder(query.clan_id)
         founder_str = str(founder_id) if founder_id is not None else None
 
-        base_generation: int | None = None
-        if founder_str is not None:
-            for row in chain:
-                if row["id"] == founder_str:
-                    base_generation = row["depth"] + 1
-                    break
+        base_generation = await self._base_generation(query.person_id, query.clan_id)
 
         seen: set[str] = set()
         deduped: list[dict[str, Any]] = []

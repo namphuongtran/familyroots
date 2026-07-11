@@ -346,6 +346,36 @@ async def test_focus_view_dedupes_breadcrumb_on_pedigree_collapse(
     assert str(gp) in ids
 
 
+async def test_full_tree_generation_is_graph_computed(async_session: AsyncSession) -> None:
+    """GET /tree computes đời from the graph (thủy tổ=1), ignoring a wrong hand-entered
+    clan_memberships.generation."""
+    from app.application.tree.handlers import TreeQueryHandler
+    from app.application.tree.queries import GetFullTree
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    to = await _person(async_session, clan_id, creator, "To")
+    son = await _person(async_session, clan_id, creator, "Con")
+    grand = await _person(async_session, clan_id, creator, "Chau")
+    await _member(async_session, to, clan_id, is_founder=True)
+    # Seed a WRONG hand-entered generation to prove it's ignored.
+    await async_session.execute(
+        sa.text("UPDATE clan_memberships SET generation = 99 WHERE person_id = :p"), {"p": son}
+    )
+    await _member(async_session, son, clan_id)
+    await _member(async_session, grand, clan_id)
+    await _pc(async_session, to, son, clan_id, creator)
+    await _pc(async_session, son, grand, clan_id, creator)
+    await async_session.commit()
+
+    handler = TreeQueryHandler(SqlAlchemyTreeRepository(async_session))
+    result = await handler.get_full_tree(GetFullTree(clan_id=clan_id))
+    tree = result["tree"]
+    assert tree["generation"] == 1  # thủy tổ
+    assert tree["children"][0]["generation"] == 2  # not 99
+    assert tree["children"][0]["children"][0]["generation"] == 3
+
+
 async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     async_session: AsyncSession,
 ) -> None:

@@ -77,6 +77,7 @@ async def build_descendants_tree(
     root_id: uuid.UUID,
     clan_id: uuid.UUID,
     max_generations: int = 10,
+    base_generation: int | None = None,
 ) -> dict[str, Any]:
     """Call get_family_tree_flat() SQL function, fetch spouses for each node,
     then assemble into nested dict for JSON response.
@@ -203,7 +204,7 @@ async def build_descendants_tree(
             "death_date": node.death_date,
             "death_date_approx": node.death_date_approx,
             "birth_place": node.birth_place,
-            "generation": node.generation,
+            "generation": (base_generation + node.depth if base_generation is not None else None),
             "avatar_url": node.avatar_url,
             "membership_role": node.membership_role,
             "is_founder": node.is_founder,
@@ -310,7 +311,7 @@ async def build_focus_view(
 ) -> dict[str, Any]:
     """Focus subtree (focus + ``descendant_depth`` generations below), enriched with computed
     đời, chi/branch, birth_order sibling order, and a has-more-descendants drill flag."""
-    subtree = await build_descendants_tree(db, focus_id, clan_id, descendant_depth)
+    subtree = await build_descendants_tree(db, focus_id, clan_id, descendant_depth, base_generation)
     if not subtree:
         return {}
 
@@ -320,9 +321,6 @@ async def build_focus_view(
     def collect(node: dict[str, Any]) -> None:
         pid = uuid.UUID(node["id"])
         node_ids.append(pid)
-        node["generation"] = (
-            base_generation + node["depth"] if base_generation is not None else None
-        )
         if node["depth"] == descendant_depth:
             boundary_ids.append(pid)
         for child in node["children"]:

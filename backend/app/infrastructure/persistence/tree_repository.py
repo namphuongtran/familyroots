@@ -39,8 +39,11 @@ class SqlAlchemyTreeRepository:
         root_id: uuid.UUID,
         clan_id: uuid.UUID,
         max_generations: int,
+        base_generation: int | None = None,
     ) -> dict[str, Any] | None:
-        return await build_descendants_tree(self._session, root_id, clan_id, max_generations)
+        return await build_descendants_tree(
+            self._session, root_id, clan_id, max_generations, base_generation
+        )
 
     async def get_ancestors_flat(
         self, person_id: uuid.UUID, clan_id: uuid.UUID, max_generations: int = 50
