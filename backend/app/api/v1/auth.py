@@ -25,10 +25,8 @@ from app.schemas.auth import (
     FCMTokenRequest,
     ForgotPasswordRequest,
     LoginRequest,
-    LoginResponse,
     RefreshRequest,
     RegisterRequest,
-    RegisterResponse,
     ResendVerificationRequest,
     UserUpdateRequest,
 )
@@ -42,9 +40,9 @@ router = APIRouter()
 @router.post("/register", status_code=201)
 async def register(
     body: RegisterRequest, handler: AuthCommandHandler = Depends(get_auth_command_handler)
-) -> RegisterResponse:
+) -> dict[str, Any]:
     """Register a new user — either create a new clan or join an existing one."""
-    return await handler.register(
+    result = await handler.register(
         email=body.email,
         password=body.password,
         full_name=body.full_name,
@@ -53,6 +51,7 @@ async def register(
         clan_name=body.clan_name,
         clan_slug=body.clan_slug,
     )
+    return {"data": result.model_dump()}
 
 
 @router.post("/onboard", status_code=201)
@@ -60,9 +59,9 @@ async def onboard_authenticated_user(
     body: AuthenticatedOnboardingRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
     handler: AuthCommandHandler = Depends(get_auth_command_handler),
-) -> RegisterResponse:
+) -> dict[str, Any]:
     """Attach the current authenticated user to a clan after OAuth login."""
-    return await handler.onboard_authenticated_user(
+    result = await handler.onboard_authenticated_user(
         user_id=uuid.UUID(current_user["sub"]),
         email=current_user.get("email", ""),
         full_name=current_user.get("user_metadata", {}).get("full_name", ""),
@@ -71,14 +70,16 @@ async def onboard_authenticated_user(
         clan_name=body.clan_name,
         clan_slug=body.clan_slug,
     )
+    return {"data": result.model_dump()}
 
 
 @router.post("/login")
 async def login(
     body: LoginRequest, handler: AuthCommandHandler = Depends(get_auth_command_handler)
-) -> LoginResponse:
+) -> dict[str, Any]:
     """Authenticate a user via Supabase Auth."""
-    return await handler.login(email=body.email, password=body.password)
+    result = await handler.login(email=body.email, password=body.password)
+    return {"data": result.model_dump()}
 
 
 @router.post("/logout")
@@ -89,7 +90,7 @@ async def logout(
 ) -> dict[str, Any]:
     """Invalidate the current session (revoke refresh tokens)."""
     await svc.logout(access_token=credentials.credentials)
-    return {"message": t("auth.logged_out")}
+    return {"data": {"message": t("auth.logged_out")}}
 
 
 @router.post("/refresh")
@@ -98,7 +99,8 @@ async def refresh_token(
     svc: AuthSessionService = Depends(get_auth_session_service),
 ) -> dict[str, Any]:
     """Exchange a refresh token for a new access token."""
-    return await svc.refresh_token(refresh_token=body.refresh_token)
+    result = await svc.refresh_token(refresh_token=body.refresh_token)
+    return {"data": result}
 
 
 @router.post("/forgot-password")

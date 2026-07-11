@@ -162,7 +162,7 @@ def client(
     # must stay out of scope — this suite tests the request path only.
     #
     # Budget note: RateLimitMiddleware allows 20 req/min/IP on /api/v1/auth and
-    # this app instance is shared module-wide — currently ~9 auth-path requests.
+    # this app instance is shared module-wide — currently ~15 auth-path requests.
     # Hitting mysterious 429s after adding tests? You've spent the budget.
     yield TestClient(app)
     engine.sync_engine.dispose()
@@ -181,7 +181,9 @@ def _register(client: TestClient, email: str, password: str, slug: str) -> dict[
         },
     )
     assert resp.status_code == 201, resp.text
-    result: dict[str, Any] = resp.json()
+    body = resp.json()
+    assert set(body.keys()) == {"data"}  # enveloped
+    result: dict[str, Any] = body["data"]
     return result
 
 
@@ -213,7 +215,9 @@ def test_register_login_me_clans_create_person(client: TestClient) -> None:
     # Login — exercises the CQRS login-profile read model (the seam of #13).
     resp = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
-    login = resp.json()
+    body = resp.json()
+    assert set(body.keys()) == {"data"}  # enveloped
+    login = body["data"]
     token = login["access_token"]
     assert login["user"]["clan_id"] == clan_id
     assert login["user"]["role"] == "admin"
@@ -249,6 +253,32 @@ def test_register_login_me_clans_create_person(client: TestClient) -> None:
     # And the explicit clan header must also be honoured.
     resp = client.get("/api/v1/me/clans", headers={**auth, "X-Current-Clan-Id": clan_id})
     assert resp.status_code == 200
+
+
+def test_refresh_and_logout_are_enveloped(client: TestClient, founder: dict[str, Any]) -> None:
+    """Both refresh and logout responses must carry the ``{"data": ...}`` envelope.
+
+    Reuses the shared ``founder`` fixture (rather than a fresh registration) to stay
+    within the module's shared rate-limit budget — see the ``client`` fixture note.
+    """
+    resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": founder["email"], "password": founder["password"]},
+    )
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["data"]["access_token"]
+
+    r = client.post("/api/v1/auth/refresh", json={"refresh_token": "stub-refresh"})
+    assert r.status_code == 200, r.text
+    r_body = r.json()
+    assert set(r_body.keys()) == {"data"}
+    assert "access_token" in r_body["data"]
+
+    lo = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
+    assert lo.status_code == 200, lo.text
+    lo_body = lo.json()
+    assert set(lo_body.keys()) == {"data"}
+    assert "message" in lo_body["data"]
 
 
 def test_register_sends_verification_email(
