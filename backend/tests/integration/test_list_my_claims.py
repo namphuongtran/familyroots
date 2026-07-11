@@ -1,4 +1,4 @@
-"""ClaimQueryHandler.list_my_claims returns the caller's own claims, filtered + paged."""
+"""ClaimQueryHandler.list_my_claims returns the caller's own claims, filtered + cursor-paged."""
 
 from __future__ import annotations
 
@@ -86,19 +86,50 @@ async def test_list_my_claims_returns_only_callers_claims(async_session: AsyncSe
     handler = ClaimQueryHandler(SqlAlchemyClaimQueryPort(async_session))
 
     result = await handler.list_my_claims(user_id=user_a)
-    assert result.total == 2
-    assert {str(i.user_id) for i in result.items} == {str(user_a)}  # never user_b's
+    assert set(result.keys()) == {"data", "meta"}
+    assert {c["user_id"] for c in result["data"]} == {user_a}  # never user_b's
+    assert result["meta"]["has_more"] is False and result["meta"]["limit"] == 20
 
     result_b = await handler.list_my_claims(user_id=user_b)
-    assert result_b.total == 1
+    assert len(result_b["data"]) == 1
 
 
-async def test_list_my_claims_status_filter_and_paging(async_session: AsyncSession) -> None:
+async def test_list_my_claims_status_filter(async_session: AsyncSession) -> None:
     user_a, _ = await _seed(async_session)
     handler = ClaimQueryHandler(SqlAlchemyClaimQueryPort(async_session))
 
     pending = await handler.list_my_claims(user_id=user_a, status="PENDING")
-    assert pending.total == 1 and pending.items[0].status == "PENDING"
+    assert len(pending["data"]) == 1
+    assert pending["data"][0]["status"] == "PENDING"
 
-    page1 = await handler.list_my_claims(user_id=user_a, page=1, page_size=1)
-    assert page1.total == 2 and len(page1.items) == 1  # total counts all, page returns 1
+
+async def test_list_my_claims_cursor_paging_advances(async_session: AsyncSession) -> None:
+    """Seed 3 claims (> limit=2) for one user: page1 has_more True + cursor, page2 advances."""
+    clan = await _clan(async_session)
+    creator = uuid.uuid4()
+    user = await _user(async_session)
+    persons = [await _person(async_session, clan, creator) for _ in range(3)]
+    # Only one PENDING claim per user is allowed (uq_identity_claim_user_pending); vary
+    # status across the 3 seeded claims so the insert doesn't violate that constraint.
+    statuses = ["PENDING", "APPROVED", "REJECTED"]
+    for p, st in zip(persons, statuses, strict=True):
+        await _claim(async_session, user, p, st)
+    await async_session.commit()
+
+    handler = ClaimQueryHandler(SqlAlchemyClaimQueryPort(async_session))
+
+    page1 = await handler.list_my_claims(user_id=user, limit=2)
+    assert len(page1["data"]) == 2
+    assert page1["meta"]["has_more"] is True
+    assert page1["meta"]["cursor"] is not None
+
+    page2 = await handler.list_my_claims(user_id=user, limit=2, cursor=page1["meta"]["cursor"])
+    assert len(page2["data"]) == 1
+    assert page2["meta"]["has_more"] is False
+    assert page2["meta"]["cursor"] is None
+
+    # No overlap between pages, and all 3 claims are covered exactly once.
+    ids_page1 = {c["id"] for c in page1["data"]}
+    ids_page2 = {c["id"] for c in page2["data"]}
+    assert ids_page1.isdisjoint(ids_page2)
+    assert len(ids_page1 | ids_page2) == 3

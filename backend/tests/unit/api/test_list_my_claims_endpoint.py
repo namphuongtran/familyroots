@@ -1,4 +1,4 @@
-"""GET /api/v1/claims returns the caller's claims in the {data:...} envelope."""
+"""GET /api/v1/claims returns the caller's claims in the {data, meta} cursor envelope."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 from app.api.v1.claims import user_claims_router
 from app.core.permissions import require_active_user
 from app.infrastructure.dependencies import get_claim_query_handler
-from app.schemas.claim import IdentityClaimPaginatedResponse
 
 
 class _FakeClaimQueryHandler:
@@ -20,10 +19,15 @@ class _FakeClaimQueryHandler:
         self.last: dict[str, Any] = {}
 
     async def list_my_claims(
-        self, *, user_id: uuid.UUID, status: str | None = None, page: int = 1, page_size: int = 20
-    ) -> IdentityClaimPaginatedResponse:
-        self.last = {"user_id": user_id, "status": status, "page": page, "page_size": page_size}
-        return IdentityClaimPaginatedResponse(items=[], total=0, page=page, page_size=page_size)
+        self,
+        *,
+        user_id: uuid.UUID,
+        status: str | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        self.last = {"user_id": user_id, "status": status, "cursor": cursor, "limit": limit}
+        return {"data": [], "meta": {"cursor": None, "has_more": False, "limit": limit}}
 
 
 def _client(handler: _FakeClaimQueryHandler) -> TestClient:
@@ -36,14 +40,16 @@ def _client(handler: _FakeClaimQueryHandler) -> TestClient:
 
 def test_list_my_claims_envelope_and_params() -> None:
     handler = _FakeClaimQueryHandler()
-    resp = _client(handler).get("/api/v1/claims?status=PENDING&page=2&page_size=5")
+    resp = _client(handler).get("/api/v1/claims?status=PENDING&cursor=abc&limit=5")
     assert resp.status_code == 200
     body = resp.json()
-    assert "data" in body and body["data"]["total"] == 0  # {"data": {...}} envelope
+    assert set(body.keys()) == {"data", "meta"}  # {"data": [...], "meta": {...}} envelope
+    assert body["data"] == []
+    assert body["meta"] == {"cursor": None, "has_more": False, "limit": 5}
     assert handler.last["status"] == "PENDING"
-    assert handler.last["page"] == 2 and handler.last["page_size"] == 5
+    assert handler.last["cursor"] == "abc" and handler.last["limit"] == 5
 
 
-def test_list_my_claims_rejects_bad_page() -> None:
-    resp = _client(_FakeClaimQueryHandler()).get("/api/v1/claims?page=0")
-    assert resp.status_code == 422
+def test_list_my_claims_rejects_bad_limit() -> None:
+    assert _client(_FakeClaimQueryHandler()).get("/api/v1/claims?limit=0").status_code == 422
+    assert _client(_FakeClaimQueryHandler()).get("/api/v1/claims?limit=101").status_code == 422

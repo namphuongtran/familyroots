@@ -40,10 +40,3 @@ class IdentityClaimResponse(IdentityClaimBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class IdentityClaimPaginatedResponse(BaseModel):
-    items: list[IdentityClaimResponse]
-    total: int
-    page: int
-    page_size: int

@@ -7,16 +7,12 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
 from app.core.exceptions import ForbiddenError
+from app.core.fieldsets import filter_list, parse_field_set
 from app.core.permissions import RequireClanRole, require_active_user
 from app.core.security import get_current_clan_id
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
 from app.schemas.auth import UserProfile
-from app.schemas.claim import (
-    IdentityClaimPrelink,
-    IdentityClaimResponse,
-    IdentityClaimReview,
-    IdentityClaimUnlink,
-)
+from app.schemas.claim import IdentityClaimPrelink, IdentityClaimReview, IdentityClaimUnlink
 
 # Router for /m/claims
 user_claims_router = APIRouter()
@@ -31,16 +27,13 @@ admin_claims_router = APIRouter()
 )
 async def list_my_claims(
     status: str | None = Query(None, description="Filter by status (e.g., PENDING)"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    cursor: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
     user: UserProfile = Depends(require_active_user),
     handler: ClaimQueryHandler = Depends(get_claim_query_handler),
 ) -> dict[str, Any]:
     """List identity claims submitted by the current user, across all clans."""
-    paginated = await handler.list_my_claims(
-        user_id=user.id, status=status, page=page, page_size=page_size
-    )
-    return {"data": paginated.model_dump()}
+    return await handler.list_my_claims(user_id=user.id, status=status, cursor=cursor, limit=limit)
 
 
 @user_claims_router.delete(
@@ -64,30 +57,26 @@ async def cancel_claim(
 async def list_clan_claims(
     clan_id: uuid.UUID,
     status: str | None = Query(None, description="Filter by status (e.g., PENDING)"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    cursor: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
     user: UserProfile = Depends(RequireClanRole(["admin", "editor"])),
     active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimQueryHandler = Depends(get_claim_query_handler),
     fields: str | None = Query(None),
 ) -> dict[str, Any]:
-    """List paginated identity claims for persons created by this clan."""
+    """List cursor-paginated identity claims for persons created by this clan."""
     if clan_id != active_clan_id:
         raise ForbiddenError("clan_context_mismatch")
-    paginated = await handler.list_clan_claims(
-        clan_id=clan_id, status=status, page=page, page_size=page_size
+    result = await handler.list_clan_claims(
+        clan_id=clan_id, status=status, cursor=cursor, limit=limit
     )
-    res_dict = paginated.model_dump()
     if fields:
-        from app.core.fieldsets import filter_list, parse_field_set
-
-        res_dict["claims"] = filter_list(res_dict["claims"], parse_field_set(fields))
-    return res_dict
+        result["data"] = filter_list(result["data"], parse_field_set(fields))
+    return result
 
 
 @admin_claims_router.post(
     "/{claim_id}/approve",
-    response_model=IdentityClaimResponse,
     summary="Approve an identity claim",
 )
 async def approve_claim(
@@ -97,20 +86,20 @@ async def approve_claim(
     user: UserProfile = Depends(RequireClanRole(["admin"])),
     active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
-) -> IdentityClaimResponse:
+) -> dict[str, Any]:
     """Approve a pending identity claim. Marks the user profile and rejects duplicate claims."""
     if clan_id != active_clan_id:
         raise ForbiddenError("clan_context_mismatch")
-    return await handler.approve_claim(
+    result = await handler.approve_claim(
         claim_id=claim_id,
         admin_id=user.id,
         reviewer_note=body.reviewer_note,
     )
+    return {"data": result.model_dump()}
 
 
 @admin_claims_router.post(
     "/{claim_id}/reject",
-    response_model=IdentityClaimResponse,
     summary="Reject an identity claim",
 )
 async def reject_claim(
@@ -120,14 +109,15 @@ async def reject_claim(
     user: UserProfile = Depends(RequireClanRole(["admin"])),
     active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
-) -> IdentityClaimResponse:
+) -> dict[str, Any]:
     if clan_id != active_clan_id:
         raise ForbiddenError("clan_context_mismatch")
-    return await handler.reject_claim(
+    result = await handler.reject_claim(
         claim_id=claim_id,
         admin_id=user.id,
         reviewer_note=body.reviewer_note,
     )
+    return {"data": result.model_dump()}
 
 
 @admin_claims_router.post(
@@ -156,7 +146,6 @@ async def unlink_identity(
 
 @admin_claims_router.post(
     "/members/{user_id}/prelink",
-    response_model=IdentityClaimResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Admin Pre-link an identity",
 )
@@ -167,13 +156,14 @@ async def prelink_identity(
     user: UserProfile = Depends(RequireClanRole(["admin"])),
     active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
-) -> IdentityClaimResponse:
+) -> dict[str, Any]:
     """Administratively link a clan member to a person in the tree."""
     if clan_id != active_clan_id:
         raise ForbiddenError("clan_context_mismatch")
-    return await handler.prelink_identity(
+    result = await handler.prelink_identity(
         clan_id=clan_id,
         user_id_to_link=user_id,
         person_id=body.person_id,
         admin_id=user.id,
     )
+    return {"data": result.model_dump()}
