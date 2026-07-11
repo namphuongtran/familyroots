@@ -23,6 +23,7 @@ from app.core.exceptions import (
     app_exception_handler,
     domain_exception_handler,
     http_exception_handler,
+    identity_email_not_verified_handler,
     identity_unavailable_handler,
     integrity_error_handler,
     storage_not_found_handler,
@@ -32,7 +33,10 @@ from app.core.exceptions import (
 )
 from app.core.logging import configure_logging
 from app.core.readiness import MIGRATIONS_CURRENT, migration_status
-from app.domain.auth.identity_provider import IdentityUnavailableError
+from app.domain.auth.identity_provider import (
+    IdentityEmailNotVerifiedError,
+    IdentityUnavailableError,
+)
 from app.domain.document.repository import StorageNotFoundError, StorageUnavailableError
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
@@ -126,6 +130,9 @@ def create_app() -> FastAPI:
     application.add_exception_handler(AppError, app_exception_handler)
     application.add_exception_handler(DomainError, domain_exception_handler)
     application.add_exception_handler(IdentityUnavailableError, identity_unavailable_handler)
+    application.add_exception_handler(
+        IdentityEmailNotVerifiedError, identity_email_not_verified_handler
+    )
     application.add_exception_handler(StorageUnavailableError, storage_unavailable_handler)
     application.add_exception_handler(StorageNotFoundError, storage_not_found_handler)
     application.add_exception_handler(RequestValidationError, validation_exception_handler)

@@ -19,6 +19,7 @@ from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
     AuthTokens,
     IdentityAuthError,
+    IdentityEmailNotVerifiedError,
     IdentityError,
     IdentityUnavailableError,
     IdentityUserExistsError,
@@ -43,6 +44,9 @@ def _classify(exc: Exception) -> IdentityError:
     if isinstance(exc, AuthRetryableError):
         return IdentityUnavailableError(str(exc))
     if isinstance(exc, AuthApiError):
+        if exc.code == "email_not_confirmed":
+            # Account exists but unverified — a 403 "verify your email", NOT a 401.
+            return IdentityEmailNotVerifiedError(str(exc))
         if "api key" in str(exc).lower():
             return IdentityUnavailableError(str(exc))
         # Provider 5xx, plus 429 (rate limited) and 408 (request timeout), are
@@ -65,7 +69,7 @@ class SupabaseIdentityProvider:
         sb = get_service_client()
         try:
             resp = sb.auth.admin.create_user(
-                {"email": email, "password": password, "email_confirm": True}
+                {"email": email, "password": password, "email_confirm": False}
             )
         except Exception as exc:
             if "already" in str(exc).lower():

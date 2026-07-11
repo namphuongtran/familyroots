@@ -142,6 +142,7 @@
   "error.missing_token": "Jeton d'authentification manquant",
   "error.auth.invalid_credentials": "E-mail ou mot de passe invalide",
   "error.auth_provider_unavailable": "Le service d'authentification est temporairement indisponible, veuillez réessayer plus tard",
+  "error.email_not_verified": "Veuillez vérifier votre adresse e-mail avant de vous connecter.",
   "error.storage_unavailable": "Stockage temporairement indisponible",
   "error.storage_not_found": "Fichier introuvable",
   "error.invitation.already_member": "Cet utilisateur est déjà membre du clan",

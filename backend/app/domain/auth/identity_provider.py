@@ -42,6 +42,14 @@ class IdentityAuthError(IdentityError):
     """Raised when credentials / a refresh token are invalid or rejected."""
 
 
+class IdentityEmailNotVerifiedError(IdentityError):
+    """The account exists but its email has not been confirmed yet.
+
+    A distinct sibling of IdentityAuthError (NOT a subclass) so a caller catching
+    IdentityAuthError does not swallow it — it propagates to a dedicated 403 handler,
+    the same way IdentityUnavailableError propagates to its 503 handler."""
+
+
 class IdentityUnavailableError(IdentityError):
     """The identity provider could not be reached or is misconfigured.
 

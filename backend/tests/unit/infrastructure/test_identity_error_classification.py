@@ -143,6 +143,26 @@ async def test_register_does_not_swallow_unavailable_into_422() -> None:
         )
 
 
+def test_email_not_confirmed_maps_to_email_not_verified() -> None:
+    from supabase_auth.errors import AuthApiError
+
+    from app.domain.auth.identity_provider import IdentityEmailNotVerifiedError
+    from app.infrastructure.supabase_identity_provider import _classify
+
+    exc = AuthApiError("Email not confirmed", 400, "email_not_confirmed")
+    assert isinstance(_classify(exc), IdentityEmailNotVerifiedError)
+
+
+def test_generic_400_still_maps_to_auth_error() -> None:
+    from supabase_auth.errors import AuthApiError
+
+    from app.domain.auth.identity_provider import IdentityAuthError
+    from app.infrastructure.supabase_identity_provider import _classify
+
+    exc = AuthApiError("Invalid login credentials", 400, "invalid_credentials")
+    assert isinstance(_classify(exc), IdentityAuthError)
+
+
 class _WeakPasswordIdentity:
     async def create_user(self, *, email: str, password: str) -> str:
         raise IdentityWeakPasswordError("Password is too weak")

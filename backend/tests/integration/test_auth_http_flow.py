@@ -32,6 +32,7 @@ from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
     AuthTokens,
     IdentityAuthError,
+    IdentityEmailNotVerifiedError,
     IdentityUserExistsError,
 )
 from app.infrastructure.dependencies import get_identity_provider
@@ -287,6 +288,36 @@ def test_duplicate_email_registration_is_409(client: TestClient, founder: dict[s
     )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "auth.email_already_exists"
+
+
+class _UnverifiedIdentityProvider:
+    """Minimal stub: only sign_in is exercised by the login route."""
+
+    async def sign_in(self, *, email: str, password: str) -> AuthenticatedIdentity:
+        raise IdentityEmailNotVerifiedError("Email not confirmed")
+
+
+def test_login_unverified_email_returns_403(client: TestClient) -> None:
+    """An unconfirmed email must surface as 403 email_not_verified, not 401."""
+    from app.infrastructure.dependencies import get_identity_provider
+
+    original_override = client.app.dependency_overrides.get(get_identity_provider)  # type: ignore[attr-defined]
+    client.app.dependency_overrides[get_identity_provider] = (  # type: ignore[attr-defined]
+        lambda: _UnverifiedIdentityProvider()
+    )
+    try:
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={"email": "unverified@example.com", "password": "secret123"},
+        )
+    finally:
+        if original_override is not None:
+            client.app.dependency_overrides[get_identity_provider] = original_override  # type: ignore[attr-defined]
+        else:
+            client.app.dependency_overrides.pop(get_identity_provider, None)  # type: ignore[attr-defined]
+
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "email_not_verified"
 
 
 def test_expired_token_is_rejected(client: TestClient, rsa_keys: dict[str, Any]) -> None:
