@@ -35,6 +35,51 @@ Request/response expectations:
   SDK `verify_otp({type:'recovery', token_hash})` then `update_user({password})`.
   The backend has no `reset-password` endpoint by design.
 
+Response shapes (all 2xx bodies are `{"data": ...}` — see
+[Response envelope](README.md#response-envelope)):
+
+`POST /register` (201) / `POST /onboard` (201):
+```json
+{
+  "data": {
+    "user_id": "...", "email": "...", "full_name": "...",
+    "clan_id": "...", "is_approved": false, "message": "..."
+  }
+}
+```
+
+`POST /login` — tokens plus a **nested** `user` profile object:
+```json
+{
+  "data": {
+    "access_token": "...", "refresh_token": "...", "expires_in": 3600,
+    "user": {
+      "id": "...", "email": "...", "full_name": "...",
+      "clan_id": "...", "clan_name": "...", "role": "...",
+      "is_approved": true, "has_pending_membership": false,
+      "person_id": "...", "preferred_locale": "vi"
+    }
+  }
+}
+```
+
+`POST /refresh` — **tokens only**, no `user`:
+```json
+{ "data": { "access_token": "...", "refresh_token": "...", "expires_in": 3600 } }
+```
+
+`POST /logout`, `PATCH /me`, `POST /me/fcm-token`, `DELETE /me/fcm-token`,
+`POST /forgot-password`, `POST /resend-verification` — a message envelope:
+```json
+{ "data": { "message": "..." } }
+```
+
+`GET /me` — the profile object directly under `data` (same shape as `login`'s
+nested `user`):
+```json
+{ "data": { "id": "...", "email": "...", "full_name": "...", "...": "..." } }
+```
+
 ## Versioning & Compatibility Rules
 - Adding optional auth/profile fields is non-breaking.
 - Changing login/register payload requirements is breaking.

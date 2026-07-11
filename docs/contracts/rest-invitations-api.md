@@ -47,6 +47,26 @@ Headers:
   (`invitation.not_pending` / `invitation.expired` / `invitation.already_member`).
 - Invitation create/accept/revoke emit auditable domain events → `audit_logs` rows.
 
+Response shapes (see [Response envelope](README.md#response-envelope)):
+
+`POST /clans/{clan_id}/invitations` (201):
+```json
+{ "data": { "id": "...", "email": "...", "role": "...", "token": "...", "expires_at": "...", "accept_path": "..." } }
+```
+
+`GET /clans/{clan_id}/invitations` — plain array under `data` (no `meta` — not
+cursor-paginated):
+```json
+{ "data": [ { "id": "...", "email": "...", "role": "...", "status": "...", "...": "..." } ] }
+```
+
+`POST /invitations/{token}/accept`:
+```json
+{ "data": { "clan_id": "...", "role": "...", "message": "..." } }
+```
+
+`DELETE /clans/{clan_id}/invitations/{id}` — 204 No Content, no body.
+
 Error envelope: standard `{ "error": { "code", "message", "detail" } }`.
 
 ## Versioning & Compatibility Rules

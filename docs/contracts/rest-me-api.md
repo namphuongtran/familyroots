@@ -25,6 +25,28 @@ Behavior:
   clan-scoped requests; `get_current_clan_id` re-validates membership (and clan `is_active`)
   on every such request.
 
+Response shapes (see [Response envelope](README.md#response-envelope)):
+
+`GET /clans` — a plain array under `data`, with a `meta.count` (not cursor-paginated):
+```json
+{
+  "data": [
+    { "clan_id": "...", "clan_name": "...", "clan_slug": "...", "role": "...", "joined_at": "..." }
+  ],
+  "meta": { "count": 2 }
+}
+```
+
+`POST /clans/{clan_id}/select`:
+```json
+{
+  "data": {
+    "clan_id": "...", "clan_name": "...", "clan_slug": "...", "role": "...",
+    "message": "Clan selected. Set X-Current-Clan-Id header to this clan_id on subsequent requests."
+  }
+}
+```
+
 ## Versioning & Compatibility Rules
 - Adding new membership metadata is non-breaking.
 - Changing the clan-switch flow requires coordinated client updates.
