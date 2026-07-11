@@ -25,6 +25,24 @@ user_claims_router = APIRouter()
 admin_claims_router = APIRouter()
 
 
+@user_claims_router.get(
+    "",
+    summary="List my identity claims",
+)
+async def list_my_claims(
+    status: str | None = Query(None, description="Filter by status (e.g., PENDING)"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    user: UserProfile = Depends(require_active_user),
+    handler: ClaimQueryHandler = Depends(get_claim_query_handler),
+) -> dict[str, Any]:
+    """List identity claims submitted by the current user, across all clans."""
+    paginated = await handler.list_my_claims(
+        user_id=user.id, status=status, page=page, page_size=page_size
+    )
+    return {"data": paginated.model_dump()}
+
+
 @user_claims_router.delete(
     "/{claim_id}",
     status_code=status.HTTP_204_NO_CONTENT,

@@ -125,3 +125,13 @@ class ClaimQueryPort(Protocol):
     ) -> tuple[list[Any], int]:
         """List claims linked to persons created by the given clan."""
         ...
+
+    async def list_user_claims(
+        self,
+        user_id: uuid.UUID,
+        status: str | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[Any], int]:
+        """List claims submitted by the given user, across all clans."""
+        ...
