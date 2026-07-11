@@ -137,6 +137,17 @@ async def identity_unavailable_handler(request: Request, exc: Exception) -> JSON
     )
 
 
+async def identity_email_not_verified_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Surface an unverified-email login as 403 in one place (never 401)."""
+    from app.services.translator import t
+
+    code = "email_not_verified"
+    return JSONResponse(
+        status_code=403,
+        content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+    )
+
+
 async def storage_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
     """Surface storage-backend outages/misconfiguration as 503, in one place."""
     from app.services.translator import t

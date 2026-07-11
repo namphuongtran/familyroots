@@ -77,6 +77,10 @@ class AuthSessionService:
         """Trigger a provider password-reset email (best-effort)."""
         await self._identity.send_password_reset(email=email)
 
+    async def send_verification_email(self, *, email: str) -> None:
+        """Trigger a provider email-verification (best-effort)."""
+        await self._identity.send_verification_email(email=email)
+
 
 # ── DB-bound handlers ───────────────────────────────────────────
 
@@ -222,7 +226,7 @@ class AuthCommandHandler:
 
         user_id = uuid.UUID(user_id_str)
         try:
-            return await self._assign_clan_membership(
+            response = await self._assign_clan_membership(
                 user_id=user_id,
                 email=email,
                 full_name=full_name,
@@ -232,13 +236,18 @@ class AuthCommandHandler:
                 clan_slug=clan_slug,
             )
         except Exception:
-            # Compensate: the Supabase auth user exists but the DB membership
-            # failed — delete the orphan so the email can be reused.
-            # Registration is all-or-nothing: any failure rolls back the just-created
-            # auth user so the email can be reused on retry.
+            # Compensate: the auth user exists but DB membership failed — delete the
+            # orphan so the email can be reused. No verification email was sent.
             with suppress(Exception):
                 await self._identity.delete_user(str(user_id))
             raise
+
+        # Registration succeeded — send the email-verification link best-effort. A
+        # transient SMTP failure must not fail the registration; the user can
+        # re-trigger via POST /auth/resend-verification.
+        with suppress(Exception):
+            await self._identity.send_verification_email(email=email)
+        return response
 
     async def onboard_authenticated_user(
         self,

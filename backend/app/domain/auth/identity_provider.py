@@ -42,6 +42,14 @@ class IdentityAuthError(IdentityError):
     """Raised when credentials / a refresh token are invalid or rejected."""
 
 
+class IdentityEmailNotVerifiedError(IdentityError):
+    """The account exists but its email has not been confirmed yet.
+
+    A distinct sibling of IdentityAuthError (NOT a subclass) so a caller catching
+    IdentityAuthError does not swallow it — it propagates to a dedicated 403 handler,
+    the same way IdentityUnavailableError propagates to its 503 handler."""
+
+
 class IdentityUnavailableError(IdentityError):
     """The identity provider could not be reached or is misconfigured.
 
@@ -94,4 +102,11 @@ class IdentityProvider(Protocol):
 
         Completion (verifying the recovery token + setting the new password) happens
         client-side via the provider SDK — this only triggers the email."""
+        ...
+
+    async def send_verification_email(self, *, email: str) -> None:
+        """Best-effort: (re)send the signup email-verification link via the provider.
+
+        Confirmation completes via the provider's hosted flow + the configured
+        redirect target — this only triggers the email."""
         ...

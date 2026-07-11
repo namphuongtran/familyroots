@@ -73,3 +73,7 @@ class RefreshRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
