@@ -10,10 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.invitation.entity import Invitation
 from app.domain.invitation.repository import InvitationRepository
+from app.infrastructure.persistence._profile import ensure_profile_row
 from app.infrastructure.persistence.invitation_mapper import to_domain
 from app.models.clan_invitation import ClanInvitation
 from app.models.user_clan_role import UserClanRole
-from app.models.user_profile import UserProfile
 
 
 class SqlAlchemyInvitationRepository(InvitationRepository):
@@ -73,13 +73,7 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
     async def ensure_profile(
         self, user_id: uuid.UUID, email: str, display_name: str | None
     ) -> None:
-        existing = await self._session.get(UserProfile, user_id)
-        if existing is not None:
-            return
-        self._session.add(
-            UserProfile(id=user_id, email=email, display_name=display_name or email.split("@")[0])
-        )
-        await self._session.flush()
+        await ensure_profile_row(self._session, user_id, email, display_name)
 
     async def get_user_role(self, user_id: uuid.UUID, clan_id: uuid.UUID) -> UserClanRole | None:
         result = await self._session.execute(

@@ -15,6 +15,7 @@ from app.domain.auth.repository import (
     AuthRepository,
     FCMTokenRepository,
 )
+from app.infrastructure.persistence._profile import ensure_profile_row
 from app.models.clan import Clan
 from app.models.user_clan_role import UserClanRole
 from app.models.user_profile import UserProfile as UserProfileModel
@@ -89,17 +90,7 @@ class SqlAlchemyAuthRepository(AuthRepository):
     async def ensure_profile(
         self, user_id: uuid.UUID, email: str, display_name: str | None
     ) -> None:
-        existing = await self._session.get(UserProfileModel, user_id)
-        if existing is not None:
-            return
-        self._session.add(
-            UserProfileModel(
-                id=user_id,
-                email=email,
-                display_name=display_name or email.split("@")[0],
-            )
-        )
-        await self._session.flush()
+        await ensure_profile_row(self._session, user_id, email, display_name)
 
 
 class SqlAlchemyAuthQueryPort(AuthQueryPort):
