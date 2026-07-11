@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person
-from app.services.tree_builder import build_descendants_tree, find_clan_founder
+from app.services.tree_builder import build_descendants_tree, build_focus_view, find_clan_founder
 
 
 class SqlAlchemyTreeRepository:
@@ -42,52 +42,67 @@ class SqlAlchemyTreeRepository:
     ) -> dict[str, Any] | None:
         return await build_descendants_tree(self._session, root_id, clan_id, max_generations)
 
-    async def get_ancestors(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_ancestors_flat(
+        self, person_id: uuid.UUID, clan_id: uuid.UUID, max_generations: int = 50
+    ) -> list[dict[str, Any]]:
+        """Ancestor chain via the cycle-guarded, clan-scoped SQL function (no fan-out dup).
+
+        Rows are ordered by depth ASC (the person itself is depth 0). Includes ``child_id``
+        and raw ``generation`` for callers that need them (the focus handler)."""
         result = await self._session.execute(
             text(
-                "WITH RECURSIVE ancestors AS ("
-                "  SELECT p.id, p.full_name, p.gender, p.birth_date, p.death_date, "
-                "         p.avatar_url, cm.generation, pc.parent_id, 0 AS depth "
-                "  FROM public.persons p "
-                "  LEFT JOIN public.clan_memberships cm "
-                "    ON cm.person_id = p.id AND cm.clan_id = :clan_id "
-                "  LEFT JOIN public.parent_child pc "
-                "    ON pc.child_id = p.id AND pc.is_deleted = false "
-                "       AND pc.created_by_clan_id = :clan_id "
-                "  WHERE p.id = :person_id AND p.is_deleted = false "
-                "  UNION ALL "
-                "  SELECT p.id, p.full_name, p.gender, p.birth_date, p.death_date, "
-                "         p.avatar_url, cm.generation, pc.parent_id, a.depth + 1 "
-                "  FROM ancestors a "
-                "  JOIN public.persons p ON p.id = a.parent_id "
-                "  LEFT JOIN public.clan_memberships cm "
-                "    ON cm.person_id = p.id AND cm.clan_id = :clan_id "
-                "  LEFT JOIN public.parent_child pc "
-                "    ON pc.child_id = p.id AND pc.is_deleted = false "
-                "       AND pc.created_by_clan_id = :clan_id "
-                "  WHERE p.is_deleted = false "
-                "    AND a.depth < 50 "
-                ") "
-                "SELECT id, full_name, gender, birth_date, death_date, "
-                "       avatar_url, generation, parent_id, depth "
-                "FROM ancestors ORDER BY depth ASC"
+                "SELECT person_id, full_name, gender, birth_date, death_date, "
+                "       generation, avatar_url, child_id, depth "
+                "FROM public.get_ancestors_flat(:person_id, :clan_id, :max_generations) "
+                "ORDER BY depth ASC"
             ),
-            {"person_id": person_id, "clan_id": clan_id},
+            {"person_id": person_id, "clan_id": clan_id, "max_generations": max_generations},
         )
-        rows = result.mappings().all()
         return [
             {
-                "id": str(row["id"]),
+                "id": str(row["person_id"]),
                 "full_name": row["full_name"],
                 "gender": row["gender"],
                 "birth_date": row["birth_date"].isoformat() if row["birth_date"] else None,
                 "death_date": row["death_date"].isoformat() if row["death_date"] else None,
                 "avatar_url": row["avatar_url"],
                 "generation": row["generation"],
+                "child_id": str(row["child_id"]) if row["child_id"] else None,
                 "depth": row["depth"],
             }
-            for row in rows
+            for row in result.mappings().all()
         ]
+
+    async def get_ancestors(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> list[dict[str, Any]]:
+        """Public ancestor list for /tree/ancestors. Delegates to the flat walk and drops
+        the internal ``child_id`` so the endpoint contract is unchanged.
+
+        ``get_ancestors_flat`` returns one row per *lineage edge*: a shared ancestor
+        reached through two different children (pedigree collapse, e.g. two parents
+        with a common parent) legitimately appears once per lineage there, since each
+        row also carries the ``child_id`` needed to draw that edge. This public list
+        has no per-edge concept, so it dedupes by person id, keeping the first
+        occurrence — rows are already ``depth ASC`` so that is the shallowest depth."""
+        rows = await self.get_ancestors_flat(person_id, clan_id)
+        seen: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for row in rows:
+            if row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            deduped.append({k: v for k, v in row.items() if k != "child_id"})
+        return deduped
+
+    async def build_focus_view(
+        self,
+        focus_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        descendant_depth: int,
+        base_generation: int | None,
+    ) -> dict[str, Any]:
+        return await build_focus_view(
+            self._session, focus_id, clan_id, descendant_depth, base_generation
+        )
 
     async def find_path(
         self, from_id: uuid.UUID, to_id: uuid.UUID, clan_id: uuid.UUID

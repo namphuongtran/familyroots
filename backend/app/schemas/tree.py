@@ -101,3 +101,58 @@ class TreeNodeDetail(TreeNodeSummary):
 
 
 TreeNodeDetail.model_rebuild()
+
+
+class FocusAncestor(BaseModel):
+    """One breadcrumb ancestor above the focus person (thủy-tổ-first)."""
+
+    id: str
+    full_name: str
+    gender: str
+    birth_date: date | None = None
+    death_date: date | None = None
+    avatar_url: str | None = None
+    generation: int | None = None
+    is_founder: bool = False
+
+
+class FocusTreeNode(BaseModel):
+    """A node in the focus subtree, with focus-only enrichment fields."""
+
+    id: str
+    full_name: str
+    gender: str
+    birth_name: str | None = None
+    posthumous_name: str | None = None
+    birth_date: date | None = None
+    birth_date_approx: bool = False
+    death_date: date | None = None
+    death_date_approx: bool = False
+    birth_place: str | None = None
+    avatar_url: str | None = None
+    membership_role: str | None = None
+    is_founder: bool = False
+    generation: int | None = None
+    depth: int = 0
+    branch_id: str | None = None
+    branch_name: str | None = None
+    branch_order: int | None = None
+    has_more_descendants: bool = False
+    spouses: list[SpouseNode] = []
+    children: list[FocusTreeNode] = []
+
+    model_config = {"from_attributes": True}
+
+
+FocusTreeNode.model_rebuild()
+
+
+class FocusView(BaseModel):
+    """Consolidated payload for the interactive focus-tree screen."""
+
+    focus_person_id: str
+    generation_of_focus: int | None = None
+    ancestors: list[FocusAncestor] = []
+    focus_subtree: FocusTreeNode | None = None
+
+    model_config = {"from_attributes": True}

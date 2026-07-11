@@ -6,11 +6,17 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from app.application.tree.handlers import TreeQueryHandler
-from app.application.tree.queries import FindPath, GetAncestors, GetFullTree, GetSubtree
+from app.application.tree.queries import (
+    FindPath,
+    GetAncestors,
+    GetFocusView,
+    GetFullTree,
+    GetSubtree,
+)
 from app.core.permissions import ClanRole, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.infrastructure.dependencies import get_tree_query_handler
-from app.schemas.tree import TreeNodeDetail, TreeNodeSummary
+from app.schemas.tree import FocusView, TreeNodeDetail, TreeNodeSummary
 
 router = APIRouter()
 
@@ -95,6 +101,29 @@ async def get_ancestors(
         ]
 
     return {"data": ancestors}
+
+
+@router.get("/focus/{person_id}")
+async def get_focus(
+    person_id: uuid.UUID,
+    descendants: int = Query(2, ge=1, le=6),
+    ancestors: int = Query(50, ge=0, le=50),
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    handler: TreeQueryHandler = Depends(get_tree_query_handler),
+    _role: ClanRole = RequireViewer,
+) -> dict[str, Any]:
+    """Focus view: breadcrumb ancestors + focus + descendant window, with computed đời."""
+    result = await handler.get_focus_view(
+        GetFocusView(
+            person_id=person_id,
+            clan_id=clan_id,
+            ancestor_depth=ancestors,
+            descendant_depth=descendants,
+        )
+    )
+    # Validate/normalize the handler output against the published contract before returning.
+    return {"data": FocusView.model_validate(result).model_dump()}
 
 
 @router.get("/path")
