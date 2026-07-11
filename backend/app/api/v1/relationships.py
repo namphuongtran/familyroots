@@ -97,12 +97,27 @@ async def update_marriage(
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a marriage record (only by managing clan)."""
+    # TEMPORARY shim (mirrors create_person in persons.py): precision/display
+    # fields are accepted on the request schema (HistoricalDate contract,
+    # Task 2) but the Marriage aggregate's update() whitelist doesn't know
+    # them yet, so passing them through would raise a spurious 422
+    # (field_not_updatable). Dropped here until the write path is wired in the
+    # approx→precision task (Task 5), which must REMOVE this exclude.
+    changes = body.model_dump(
+        exclude_unset=True,
+        exclude={
+            "marriage_date_precision",
+            "marriage_date_display",
+            "divorce_date_precision",
+            "divorce_date_display",
+        },
+    )
     marriage = await handler.update(
         UpdateMarriage(
             marriage_id=marriage_id,
             clan_id=clan_id,
             actor=ActorInfo.from_jwt(current_user, role.value),
-            changes=body.model_dump(exclude_unset=True),
+            changes=changes,
         )
     )
     return {"data": marriage.model_dump()}

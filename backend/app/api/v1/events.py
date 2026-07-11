@@ -147,11 +147,21 @@ async def update_event(
     cmd_handler: EventCommandHandler = Depends(get_event_command_handler),
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
+    # TEMPORARY shim (mirrors create_person in persons.py): precision/display
+    # fields are accepted on the request schema (HistoricalDate contract,
+    # Task 2) but the Event aggregate's update() whitelist doesn't know them
+    # yet, so passing them through would raise a spurious 422
+    # (field_not_updatable). Dropped here until the write path is wired in the
+    # approx→precision task (Task 5), which must REMOVE this exclude.
+    changes = body.model_dump(
+        exclude_unset=True,
+        exclude={"event_date_precision", "event_date_display"},
+    )
     event = await cmd_handler.update(
         event_id=event_id,
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
-        changes=body.model_dump(exclude_unset=True),
+        changes=changes,
     )
     return {"data": event.model_dump()}
 
