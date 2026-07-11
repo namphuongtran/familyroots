@@ -14,7 +14,11 @@ class MarriageCreateRequest(BaseModel):
     person1_id: uuid.UUID
     person2_id: uuid.UUID
     marriage_date: date | None = None
+    marriage_date_precision: str = Field("exact", pattern="^(exact|year|month|circa|unknown)$")
+    marriage_date_display: str | None = None
     divorce_date: date | None = None
+    divorce_date_precision: str = Field("exact", pattern="^(exact|year|month|circa|unknown)$")
+    divorce_date_display: str | None = None
     marriage_place: str | None = Field(None, max_length=255)
     status: str = Field("married", pattern="^(married|divorced|widowed|separated)$")
     spouse_order: int | None = Field(None, gt=0)
@@ -33,7 +37,11 @@ class MarriageUpdateRequest(BaseModel):
     """Request body for updating a marriage record."""
 
     marriage_date: date | None = None
+    marriage_date_precision: str | None = Field(None, pattern="^(exact|year|month|circa|unknown)$")
+    marriage_date_display: str | None = None
     divorce_date: date | None = None
+    divorce_date_precision: str | None = Field(None, pattern="^(exact|year|month|circa|unknown)$")
+    divorce_date_display: str | None = None
     marriage_place: str | None = Field(None, max_length=255)
     status: str | None = Field(None, pattern="^(married|divorced|widowed|separated)$")
     spouse_order: int | None = Field(None, gt=0)

@@ -15,6 +15,8 @@ class EventCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     event_date: date
+    event_date_precision: str = Field("exact", pattern="^(exact|year|month|circa|unknown)$")
+    event_date_display: str | None = None
     is_lunar_calendar: bool = False
     is_recurring: bool = True
     notify_days_before: int = Field(default=7, ge=0, le=30)
@@ -28,6 +30,8 @@ class EventUpdateRequest(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     event_date: date | None = None
+    event_date_precision: str | None = Field(None, pattern="^(exact|year|month|circa|unknown)$")
+    event_date_display: str | None = None
     is_lunar_calendar: bool | None = None
     is_recurring: bool | None = None
     notify_days_before: int | None = Field(None, ge=0, le=30)

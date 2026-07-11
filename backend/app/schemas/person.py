@@ -19,8 +19,12 @@ class PersonCreateRequest(BaseModel):
 
     birth_date: date | None = None
     birth_date_approx: bool = False
+    birth_date_precision: str = Field("exact", pattern="^(exact|year|month|circa|unknown)$")
+    birth_date_display: str | None = None
     death_date: date | None = None
     death_date_approx: bool = False
+    death_date_precision: str = Field("exact", pattern="^(exact|year|month|circa|unknown)$")
+    death_date_display: str | None = None
     lunar_birth_date: str | None = Field(None, max_length=30)
     lunar_death_date: str | None = Field(None, max_length=30)
 
@@ -63,8 +67,12 @@ class PersonUpdateRequest(BaseModel):
 
     birth_date: date | None = None
     birth_date_approx: bool | None = None
+    birth_date_precision: str | None = Field(None, pattern="^(exact|year|month|circa|unknown)$")
+    birth_date_display: str | None = None
     death_date: date | None = None
     death_date_approx: bool | None = None
+    death_date_precision: str | None = Field(None, pattern="^(exact|year|month|circa|unknown)$")
+    death_date_display: str | None = None
     lunar_birth_date: str | None = Field(None, max_length=30)
     lunar_death_date: str | None = Field(None, max_length=30)
 
