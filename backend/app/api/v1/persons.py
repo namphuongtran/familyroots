@@ -281,7 +281,7 @@ async def batch_get_persons(
     if "stats" in all_include_keys and persons:
         stats_map = await handler.get_persons_stats(clan_id, [person.id for person in persons])
 
-    included_results: list[dict[str, list[Any]]] = await asyncio.gather(
+    raw_included = await asyncio.gather(
         *[
             _fetch_included_data(
                 handler,
@@ -290,8 +290,18 @@ async def batch_get_persons(
                 list(dict.fromkeys([*includes, *includes_by_id.get(person.id, [])])),
             )
             for person in persons
-        ]
+        ],
+        return_exceptions=True,
     )
+    included_results: list[dict[str, list[Any]]] = []
+    for inc_result in raw_included:
+        # An include sub-query error is unexpected (DB fault / bug), not a per-item
+        # condition like not-found — propagate it (consistent with the person-fetch
+        # gather above), but only after every coroutine has been awaited so none is
+        # left orphaned.
+        if isinstance(inc_result, BaseException):
+            raise inc_result
+        included_results.append(inc_result)
 
     data = []
     for idx, person in enumerate(persons):
