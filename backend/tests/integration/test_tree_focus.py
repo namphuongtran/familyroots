@@ -9,6 +9,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.application.tree.handlers import TreeQueryHandler
 from app.infrastructure.persistence.tree_repository import SqlAlchemyTreeRepository
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -198,3 +199,113 @@ async def test_build_focus_view_null_base_generation(async_session: AsyncSession
     assert tree["generation"] is None  # unknown đời stays null
     assert tree["has_more_descendants"] is False
     assert tree["children"] == []
+
+
+async def _handler(session: AsyncSession) -> TreeQueryHandler:
+    return TreeQueryHandler(SqlAlchemyTreeRepository(session))
+
+
+async def test_focus_view_at_founder(async_session: AsyncSession) -> None:
+    from app.application.tree.queries import GetFocusView
+    from app.domain.shared.exceptions import EntityNotFoundError
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    to = await _person(async_session, clan_id, creator, "Thủy Tổ")
+    son = await _person(async_session, clan_id, creator, "Con")
+    grand = await _person(async_session, clan_id, creator, "Cháu")
+    await _member(async_session, to, clan_id, is_founder=True)
+    await _member(async_session, son, clan_id)
+    await _member(async_session, grand, clan_id)
+    await _pc(async_session, to, son, clan_id, creator)
+    await _pc(async_session, son, grand, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    view = await handler.get_focus_view(
+        GetFocusView(person_id=to, clan_id=clan_id, descendant_depth=2)
+    )
+
+    assert view["focus_person_id"] == str(to)
+    assert view["generation_of_focus"] == 1
+    assert view["ancestors"] == []  # founder has no breadcrumb
+    assert view["focus_subtree"]["generation"] == 1
+    assert view["focus_subtree"]["children"][0]["generation"] == 2
+
+    # focus at the grandchild → breadcrumb thủy-tổ-first with correct đời
+    view2 = await handler.get_focus_view(GetFocusView(person_id=grand, clan_id=clan_id))
+    assert view2["generation_of_focus"] == 3
+    crumbs = view2["ancestors"]
+    assert [c["full_name"] for c in crumbs] == ["Thủy Tổ", "Con"]
+    assert [c["generation"] for c in crumbs] == [1, 2]
+    assert crumbs[0]["is_founder"] is True and crumbs[1]["is_founder"] is False
+
+    with pytest.raises(EntityNotFoundError):
+        await handler.get_focus_view(GetFocusView(person_id=uuid.uuid4(), clan_id=clan_id))
+
+
+async def test_focus_view_no_founder_null_generation(async_session: AsyncSession) -> None:
+    from app.application.tree.queries import GetFocusView
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    a = await _person(async_session, clan_id, creator, "A")
+    b = await _person(async_session, clan_id, creator, "B")
+    await _member(async_session, a, clan_id)  # no is_founder anywhere
+    await _member(async_session, b, clan_id)
+    await _pc(async_session, a, b, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    view = await handler.get_focus_view(GetFocusView(person_id=b, clan_id=clan_id))
+    assert view["generation_of_focus"] is None
+    assert view["focus_subtree"]["generation"] is None
+    assert all(c["generation"] is None for c in view["ancestors"])  # view still returned
+
+
+async def test_focus_view_clan_isolation(async_session: AsyncSession) -> None:
+    """A person of clan A must be invisible through clan B (404), both directions."""
+    from app.application.tree.queries import GetFocusView
+    from app.domain.shared.exceptions import EntityNotFoundError
+
+    creator = uuid.uuid4()
+    clan_a = await _clan(async_session)
+    clan_b = await _clan(async_session)
+    pa = await _person(async_session, clan_a, creator, "A-only")
+    await _member(async_session, pa, clan_a)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    with pytest.raises(EntityNotFoundError):
+        await handler.get_focus_view(GetFocusView(person_id=pa, clan_id=clan_b))
+
+
+async def test_focus_view_dedupes_breadcrumb_on_pedigree_collapse(
+    async_session: AsyncSession,
+) -> None:
+    """A grandparent reachable via two parents of the focus person must appear once
+    in the breadcrumb (get_ancestors_flat is per-lineage-edge, not deduplicated)."""
+    from app.application.tree.queries import GetFocusView
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    gp = await _person(async_session, clan_id, creator, "GP")  # shared grandparent
+    dad = await _person(async_session, clan_id, creator, "Dad")
+    mom = await _person(async_session, clan_id, creator, "Mom")
+    child = await _person(async_session, clan_id, creator, "Child")
+    for p in (gp, dad, mom, child):
+        await _member(async_session, p, clan_id)
+    # gp is the parent of BOTH dad and mom → fan-out at the grandparent level,
+    # so gp is reachable via two distinct lineage edges in get_ancestors_flat.
+    await _pc(async_session, gp, dad, clan_id, creator)
+    await _pc(async_session, gp, mom, clan_id, creator)
+    await _pc(async_session, dad, child, clan_id, creator)
+    await _pc(async_session, mom, child, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    view = await handler.get_focus_view(GetFocusView(person_id=child, clan_id=clan_id))
+
+    ids = [c["id"] for c in view["ancestors"]]
+    assert len(ids) == len(set(ids)), ids  # gp must not appear twice
+    assert str(gp) in ids

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person
-from app.services.tree_builder import build_descendants_tree, find_clan_founder
+from app.services.tree_builder import build_descendants_tree, build_focus_view, find_clan_founder
 
 
 class SqlAlchemyTreeRepository:
@@ -92,6 +92,17 @@ class SqlAlchemyTreeRepository:
             seen.add(row["id"])
             deduped.append({k: v for k, v in row.items() if k != "child_id"})
         return deduped
+
+    async def build_focus_view(
+        self,
+        focus_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        descendant_depth: int,
+        base_generation: int | None,
+    ) -> dict[str, Any]:
+        return await build_focus_view(
+            self._session, focus_id, clan_id, descendant_depth, base_generation
+        )
 
     async def find_path(
         self, from_id: uuid.UUID, to_id: uuid.UUID, clan_id: uuid.UUID

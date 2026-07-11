@@ -31,3 +31,11 @@ class FindPath:
     from_id: uuid.UUID
     to_id: uuid.UUID
     clan_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class GetFocusView:
+    person_id: uuid.UUID
+    clan_id: uuid.UUID
+    ancestor_depth: int = 50
+    descendant_depth: int = 2

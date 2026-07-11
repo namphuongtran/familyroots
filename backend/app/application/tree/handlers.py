@@ -7,7 +7,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.tree.queries import FindPath, GetAncestors, GetFullTree, GetSubtree
+from app.application.tree.queries import (
+    FindPath,
+    GetAncestors,
+    GetFocusView,
+    GetFullTree,
+    GetSubtree,
+)
 from app.domain.shared.exceptions import BusinessRuleViolation, EntityNotFoundError
 from app.domain.tree.repository import TreeRepository
 from app.services.relationship_descriptor import describe_relationship
@@ -64,6 +70,66 @@ class TreeQueryHandler:
         if not await self._repo.person_in_clan(query.person_id, query.clan_id):
             raise EntityNotFoundError("person_not_found")
         return await self._repo.get_ancestors(query.person_id, query.clan_id)
+
+    async def get_focus_view(self, query: GetFocusView) -> dict[str, Any]:
+        """Assemble the focus view: breadcrumb ancestors + focus + descendant window,
+        with đời computed from the graph (thủy tổ = đời 1).
+
+        ``get_ancestors_flat`` is per-lineage-edge, not deduplicated: under pedigree
+        collapse (an ancestor reachable via two different parents of the focus person)
+        the same person can appear more than once, at one or more depths. The
+        breadcrumb dedupes by person id, keeping the shallowest (minimum-depth)
+        occurrence — rows arrive depth ASC, so the first-seen id is that occurrence."""
+        if not await self._repo.person_in_clan(query.person_id, query.clan_id):
+            raise EntityNotFoundError("person_not_found")
+
+        chain = await self._repo.get_ancestors_flat(
+            query.person_id, query.clan_id, query.ancestor_depth
+        )
+        founder_id = await self._repo.find_clan_founder(query.clan_id)
+        founder_str = str(founder_id) if founder_id is not None else None
+
+        base_generation: int | None = None
+        if founder_str is not None:
+            for row in chain:
+                if row["id"] == founder_str:
+                    base_generation = row["depth"] + 1
+                    break
+
+        seen: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for row in chain:
+            if row["depth"] < 1 or row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            deduped.append(row)
+
+        ancestors: list[dict[str, Any]] = []
+        for row in sorted(deduped, key=lambda r: -r["depth"]):
+            gen = base_generation - row["depth"] if base_generation is not None else None
+            ancestors.append(
+                {
+                    "id": row["id"],
+                    "full_name": row["full_name"],
+                    "gender": row["gender"],
+                    "birth_date": row["birth_date"],
+                    "death_date": row["death_date"],
+                    "avatar_url": row["avatar_url"],
+                    "generation": gen,
+                    "is_founder": row["id"] == founder_str,
+                }
+            )
+
+        focus_subtree = await self._repo.build_focus_view(
+            query.person_id, query.clan_id, query.descendant_depth, base_generation
+        )
+
+        return {
+            "focus_person_id": str(query.person_id),
+            "generation_of_focus": base_generation,
+            "ancestors": ancestors,
+            "focus_subtree": focus_subtree,
+        }
 
     async def find_path(self, query: FindPath) -> dict[str, Any]:
         """Find the relationship path between two persons."""

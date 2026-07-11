@@ -46,3 +46,13 @@ class TreeRepository(Protocol):
     ) -> list[dict[str, Any]]:
         """Find the relationship path between two persons."""
         ...
+
+    async def build_focus_view(
+        self,
+        focus_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        descendant_depth: int,
+        base_generation: int | None,
+    ) -> dict[str, Any]:
+        """Enriched focus subtree (computed đời, branch, birth_order sort, has_more)."""
+        ...
