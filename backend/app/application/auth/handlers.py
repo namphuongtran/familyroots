@@ -73,6 +73,10 @@ class AuthSessionService:
             user_id=user_sub, full_name=full_name, preferred_locale=preferred_locale
         )
 
+    async def send_password_reset(self, *, email: str) -> None:
+        """Trigger a provider password-reset email (best-effort)."""
+        await self._identity.send_password_reset(email=email)
+
 
 # ── DB-bound handlers ───────────────────────────────────────────
 

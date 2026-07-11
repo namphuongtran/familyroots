@@ -105,6 +105,7 @@
   "auth.profile_updated": "Profil mis à jour",
   "auth.fcm_token_registered": "Token de notification enregistré",
   "auth.fcm_token_removed": "Token de notification supprimé",
+  "auth.password_reset_sent": "Si cet e-mail est enregistré, nous avons envoyé un lien de réinitialisation.",
   "user.approved": "Utilisateur approuvé",
   "user.rejected": "Utilisateur rejeté",
   "user.role_changed": "Rôle modifié",

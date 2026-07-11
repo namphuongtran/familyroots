@@ -18,6 +18,7 @@ Core operations:
 - POST /login
 - POST /logout
 - POST /refresh
+- POST /forgot-password
 - GET /me
 - PATCH /me
 - POST /me/fcm-token
@@ -28,6 +29,11 @@ Request/response expectations:
 - Register can either join an existing clan or create a new clan.
 - Login returns authenticated session/profile data for client bootstrap.
 - FCM token endpoints are used by mobile and any push-enabled clients.
+- `POST /forgot-password` is 200 always (non-enumerating); triggers a Supabase
+  recovery email. Reset **completion is client-side**: the email link opens the
+  web/mobile app with a `token_hash`/`type=recovery`; the client calls the Supabase
+  SDK `verify_otp({type:'recovery', token_hash})` then `update_user({password})`.
+  The backend has no `reset-password` endpoint by design.
 
 ## Versioning & Compatibility Rules
 - Adding optional auth/profile fields is non-breaking.
