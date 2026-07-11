@@ -213,9 +213,14 @@ async def _fetch_included_data(
         return {}
 
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-    res_dict = {}
+    res_dict: dict[str, list[Any]] = {}
     for key, res in zip(tasks.keys(), results, strict=False):
-        res_dict[key] = res if isinstance(res, list) else []
+        # A failing include sub-query must surface as an error (handled by the app's
+        # exception handlers), never be masked as empty data. Re-raise the original
+        # exception, preserving its type so the same envelope is produced.
+        if isinstance(res, BaseException):
+            raise res
+        res_dict[key] = res
     return res_dict
 
 

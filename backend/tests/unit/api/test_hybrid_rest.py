@@ -110,12 +110,12 @@ class TestFetchIncludedData:
         assert "timeline" in result
 
     @pytest.mark.asyncio
-    async def test_exception_in_include_returns_empty_list(self) -> None:
+    async def test_exception_in_include_is_propagated(self) -> None:
         handler = AsyncMock()
         handler.get_marriages.side_effect = Exception("DB error")
 
-        result = await _fetch_included_data(handler, uuid.uuid4(), uuid.uuid4(), ["marriages"])
-        assert result["marriages"] == []
+        with pytest.raises(Exception, match="DB error"):
+            await _fetch_included_data(handler, uuid.uuid4(), uuid.uuid4(), ["marriages"])
 
     @pytest.mark.asyncio
     async def test_unknown_include_is_ignored(self) -> None:
