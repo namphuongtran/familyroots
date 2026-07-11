@@ -248,7 +248,7 @@ async def _branch_map(
         text(
             "SELECT cm.person_id, b.id AS branch_id, b.name, b.branch_order "
             "FROM public.clan_memberships cm "
-            "JOIN public.branches b ON b.id = cm.branch_id "
+            "JOIN public.branches b ON b.id = cm.branch_id AND b.clan_id = :clan_id "
             "WHERE cm.person_id = ANY(:ids) AND cm.clan_id = :clan_id"
         ),
         {"ids": person_ids, "clan_id": clan_id},

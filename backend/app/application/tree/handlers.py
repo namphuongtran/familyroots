@@ -107,6 +107,10 @@ class TreeQueryHandler:
         ancestors: list[dict[str, Any]] = []
         for row in sorted(deduped, key=lambda r: -r["depth"]):
             gen = base_generation - row["depth"] if base_generation is not None else None
+            if gen is not None and gen < 1:
+                # Guard against degenerate data with ancestors recorded above the thủy tổ —
+                # đời must never be ≤ 0.
+                gen = None
             ancestors.append(
                 {
                     "id": row["id"],
@@ -123,6 +127,13 @@ class TreeQueryHandler:
         focus_subtree = await self._repo.build_focus_view(
             query.person_id, query.clan_id, query.descendant_depth, base_generation
         )
+        if not focus_subtree:
+            # Soft-delete TOCTOU: the membership gate above passed, but the focus person
+            # (or the whole subtree) vanished by the time build_focus_view ran, so it
+            # returned {}. Surface this as a normal 404 instead of a 500 in
+            # FocusView.model_validate. A focus person WITH no descendants still yields a
+            # populated lone-node dict (truthy), so this only catches the empty case.
+            raise EntityNotFoundError("person_not_found")
 
         return {
             "focus_person_id": str(query.person_id),

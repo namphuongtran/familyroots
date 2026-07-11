@@ -16,4 +16,4 @@ Consolidated read model for the interactive focus-tree UI (web/mobile). One roun
 
 **Errors:** focus person not in the clan (or soft-deleted / unknown) → 404 `person_not_found` (envelope). Never reveals cross-clan existence.
 
-**Notes:** đời is derived on read from the graph; `clan_memberships.generation` is not the source here. `branch_*`/`has_more_descendants` are focus-only — the older `/tree` and `/tree/subtree` responses are unchanged.
+**Notes:** đời is derived on read from the graph; `clan_memberships.generation` is not the source here. `branch_*`/`has_more_descendants` are focus-only — the older `/tree` and `/tree/subtree` responses are unchanged. `generation_of_focus` (and every node's `generation`) only compute when the `ancestors` window reaches the thủy tổ; the default `ancestors=50` covers realistic trees, but a caller passing a small `ancestors` for a very deep person may receive null generations instead of computed đời.

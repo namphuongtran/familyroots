@@ -239,6 +239,8 @@ async def test_focus_view_at_founder(async_session: AsyncSession) -> None:
     assert [c["full_name"] for c in crumbs] == ["Thủy Tổ", "Con"]
     assert [c["generation"] for c in crumbs] == [1, 2]
     assert crumbs[0]["is_founder"] is True and crumbs[1]["is_founder"] is False
+    # grand has no children → childless focus still returns a populated lone node
+    assert view2["focus_subtree"]["children"] == []
 
     with pytest.raises(EntityNotFoundError):
         await handler.get_focus_view(GetFocusView(person_id=uuid.uuid4(), clan_id=clan_id))
@@ -264,7 +266,10 @@ async def test_focus_view_no_founder_null_generation(async_session: AsyncSession
 
 
 async def test_focus_view_clan_isolation(async_session: AsyncSession) -> None:
-    """A person of clan A must be invisible through clan B (404), both directions."""
+    """A person of clan A must be invisible through clan B: querying it with the
+    clan-B header 404s. The other leak direction — foreign-clan edges/spouses never
+    surfacing inside a *valid* clan-A focus view — is covered by
+    ``test_focus_view_no_cross_clan_leak`` below."""
     from app.application.tree.queries import GetFocusView
     from app.domain.shared.exceptions import EntityNotFoundError
 
@@ -278,6 +283,36 @@ async def test_focus_view_clan_isolation(async_session: AsyncSession) -> None:
     handler = await _handler(async_session)
     with pytest.raises(EntityNotFoundError):
         await handler.get_focus_view(GetFocusView(person_id=pa, clan_id=clan_b))
+
+
+async def test_focus_view_no_cross_clan_leak(async_session: AsyncSession) -> None:
+    """The other isolation direction: a clan-A focus person's view must never surface
+    edges/spouses recorded by a DIFFERENT clan, even though those edges reference the
+    same (clan-A) focus person. A child linked via a clan-B-owned parent_child edge,
+    and a spouse linked via a clan-B-owned marriage, must both be absent from a
+    clan-A focus view of that person."""
+    from app.application.tree.queries import GetFocusView
+
+    creator = uuid.uuid4()
+    clan_a = await _clan(async_session)
+    clan_b = await _clan(async_session)
+    focus = await _person(async_session, clan_a, creator, "Focus")
+    await _member(async_session, focus, clan_a)  # focus person is a clan-A member
+
+    # Child reachable from focus only via an edge OWNED by clan B.
+    child_b = await _person(async_session, clan_b, creator, "ChildOfClanB")
+    await _pc(async_session, focus, child_b, clan_b, creator)
+
+    # Spouse recorded only by clan B.
+    spouse_b = await _person(async_session, clan_b, creator, "SpouseOfClanB")
+    await _marriage(async_session, focus, spouse_b, clan_b, creator, spouse_order=1)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    view = await handler.get_focus_view(GetFocusView(person_id=focus, clan_id=clan_a))
+
+    assert view["focus_subtree"]["children"] == []  # clan-B-owned child never surfaces
+    assert view["focus_subtree"]["spouses"] == []  # clan-B-recorded spouse never surfaces
 
 
 async def test_focus_view_dedupes_breadcrumb_on_pedigree_collapse(
@@ -309,3 +344,44 @@ async def test_focus_view_dedupes_breadcrumb_on_pedigree_collapse(
     ids = [c["id"] for c in view["ancestors"]]
     assert len(ids) == len(set(ids)), ids  # gp must not appear twice
     assert str(gp) in ids
+
+
+async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
+    async_session: AsyncSession,
+) -> None:
+    """The SAME ancestor reachable at two different depths — once as a direct parent
+    (depth 1) and once as a grandparent via a different lineage (depth 2) — must be
+    deduped to exactly one breadcrumb entry, and that entry must be the SHALLOWEST
+    occurrence (its computed đời reflects depth 1, not depth 2). This distinguishes
+    "keep shallowest" from a dedup that merely keeps "any" occurrence."""
+    from app.application.tree.queries import GetFocusView
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    to = await _person(async_session, clan_id, creator, "To")  # thủy tổ, further back
+    x = await _person(async_session, clan_id, creator, "X")  # reachable at depth 1 AND 2
+    y = await _person(async_session, clan_id, creator, "Y")  # focus's other parent
+    f = await _person(async_session, clan_id, creator, "F")  # focus person
+    for p in (x, y, f):
+        await _member(async_session, p, clan_id)
+    await _member(async_session, to, clan_id, is_founder=True)
+
+    # to -> x -> f: X is a direct parent of F (depth 1).
+    # x -> y -> f: X is also a grandparent of F via Y (depth 2, a different lineage).
+    await _pc(async_session, to, x, clan_id, creator)
+    await _pc(async_session, x, f, clan_id, creator)
+    await _pc(async_session, x, y, clan_id, creator)
+    await _pc(async_session, y, f, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    view = await handler.get_focus_view(GetFocusView(person_id=f, clan_id=clan_id))
+
+    ids = [c["id"] for c in view["ancestors"]]
+    assert ids.count(str(x)) == 1  # X must not appear twice
+
+    base_generation = view["generation_of_focus"]
+    assert base_generation is not None
+    x_entry = next(c for c in view["ancestors"] if c["id"] == str(x))
+    # Kept the depth-1 occurrence, not the depth-2 one.
+    assert x_entry["generation"] == base_generation - 1
