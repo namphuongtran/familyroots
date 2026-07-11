@@ -34,6 +34,7 @@ async def test_single_person():
     db = make_mock_db(
         MockMappingResult(rows),  # get_family_tree_flat result
         MockMappingResult(spouse_rows),  # spouse query result
+        MockMappingResult([]),  # mother-map query result
     )
 
     result = await build_descendants_tree(db, root_id, CLAN_ID)
@@ -69,6 +70,7 @@ async def test_person_with_spouse():
     db = make_mock_db(
         MockMappingResult(rows),
         MockMappingResult(spouse_rows),
+        MockMappingResult([]),  # mother-map query result
     )
 
     result = await build_descendants_tree(db, root_id, CLAN_ID)
@@ -112,6 +114,7 @@ async def test_person_with_children():
     db = make_mock_db(
         MockMappingResult(rows),
         MockMappingResult([]),  # no spouses
+        MockMappingResult([]),  # mother-map query result
     )
 
     result = await build_descendants_tree(db, root_id, CLAN_ID)
@@ -161,6 +164,7 @@ async def test_three_generation_tree():
     db = make_mock_db(
         MockMappingResult(rows),
         MockMappingResult([]),
+        MockMappingResult([]),  # mother-map query result
     )
 
     result = await build_descendants_tree(db, grandparent, CLAN_ID)
@@ -221,6 +225,7 @@ async def test_remarriage_multiple_spouses():
     db = make_mock_db(
         MockMappingResult(rows),
         MockMappingResult(spouse_rows),
+        MockMappingResult([]),  # mother-map query result
     )
 
     result = await build_descendants_tree(db, root_id, CLAN_ID)
@@ -272,6 +277,7 @@ async def test_adopted_children_in_tree():
     db = make_mock_db(
         MockMappingResult(rows),
         MockMappingResult([]),
+        MockMappingResult([]),  # mother-map query result
     )
 
     result = await build_descendants_tree(db, root_id, CLAN_ID)

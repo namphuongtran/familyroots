@@ -123,6 +123,7 @@ async def build_descendants_tree(
 
     # Step 3: Fetch spouses for all nodes in one query (avoid N+1)
     person_ids = list(nodes.keys())
+    spouse_order_map: dict[tuple[uuid.UUID, uuid.UUID], int | None] = {}
     spouse_result = await db.execute(
         text(
             "SELECT "
@@ -171,6 +172,10 @@ async def build_descendants_tree(
                     "membership_role": row["membership_role"],
                 }
             )
+            spouse_order_map[(for_id, row["spouse_id"])] = row["spouse_order"]
+
+    # Step 3b: Derive each child's mother (đa thê "con của bà nào") — clan-scoped.
+    mothers = await _mother_map(db, list(nodes.keys()), clan_id)
 
     # Step 4: Wire children into parent nodes
     root_node = None
@@ -209,6 +214,12 @@ async def build_descendants_tree(
             "membership_role": node.membership_role,
             "is_founder": node.is_founder,
             "depth": node.depth,
+            "mother_id": (str(mothers[node.id]) if node.id in mothers else None),
+            "mother_spouse_order": (
+                spouse_order_map.get((node.parent_id, mothers[node.id]))
+                if node.id in mothers and node.parent_id is not None
+                else None
+            ),
             "spouses": node.spouses,
             "children": [node_to_dict(c) for c in node.children],
         }
@@ -237,6 +248,28 @@ async def find_clan_founder(
 
 
 _BIRTH_ORDER_LAST = 32767  # SmallInteger max — NULL birth_order sorts after all set values
+
+
+async def _mother_map(
+    db: AsyncSession, child_ids: list[uuid.UUID], clan_id: uuid.UUID
+) -> dict[uuid.UUID, uuid.UUID]:
+    """child_id → female-parent (mother) id, via this clan's parent_child edges."""
+    if not child_ids:
+        return {}
+    result = await db.execute(
+        text(
+            "SELECT pc.child_id, p.id AS mother_id "
+            "FROM public.parent_child pc "
+            "JOIN public.persons p ON p.id = pc.parent_id "
+            "  AND p.gender = 'female' AND p.is_deleted = false "
+            "WHERE pc.child_id = ANY(:ids) AND pc.created_by_clan_id = :clan_id "
+            "  AND pc.is_deleted = false"
+        ),
+        {"ids": child_ids, "clan_id": clan_id},
+    )
+    # One mother per child (a child has at most one female parent in practice); if data
+    # records more than one, the last row wins — acceptable for this read-model.
+    return {row["child_id"]: row["mother_id"] for row in result.mappings().all()}
 
 
 async def _branch_map(
