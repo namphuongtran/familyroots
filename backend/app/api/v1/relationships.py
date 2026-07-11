@@ -152,7 +152,7 @@ async def create_parent_child(
     )
     response: dict[str, Any] = {"data": link.model_dump()}
     if warning:
-        response["meta"] = {"warning": warning}
+        response["meta"] = {"warning": warning["warning"]}
     return response
 
 

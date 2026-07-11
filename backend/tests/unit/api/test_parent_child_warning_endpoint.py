@@ -99,7 +99,7 @@ def test_parent_child_create_reports_warning_under_meta_when_present() -> None:
     assert response.status_code == 201
     body = response.json()
     assert body["data"]["id"] == str(link.id)
-    assert body["meta"] == {"warning": warning}
+    assert body["meta"] == {"warning": "Unusual age gap: 90.0 years"}
 
 
 def test_parent_child_create_omits_meta_when_no_warning() -> None:
