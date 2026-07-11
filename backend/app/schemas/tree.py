@@ -4,6 +4,8 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
+from app.schemas.historical_date import HistoricalDate
+
 
 class SpouseNode(BaseModel):
     """Spouse info attached to a tree node."""
@@ -11,8 +13,8 @@ class SpouseNode(BaseModel):
     id: str
     full_name: str
     gender: str
-    birth_date: date | None = None
-    death_date: date | None = None
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
     avatar_url: str | None = None
     posthumous_name: str | None = None
     status: str  # 'married','divorced','widowed','separated'
@@ -30,10 +32,8 @@ class TreeNode(BaseModel):
     birth_name: str | None = None
     posthumous_name: str | None = None
     gender: str
-    birth_date: date | None = None
-    birth_date_approx: bool = False
-    death_date: date | None = None
-    death_date_approx: bool = False
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
     birth_place: str | None = None
     generation: int | None = None
     avatar_url: str | None = None
@@ -73,8 +73,8 @@ class TreeNodeSummary(BaseModel):
     id: str
     full_name: str
     gender: str
-    birth_date: date | None = None
-    death_date: date | None = None
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
     generation: int | None = None
     avatar_url: str | None = None
     is_founder: bool = False
@@ -95,8 +95,6 @@ class TreeNodeDetail(TreeNodeSummary):
 
     birth_name: str | None = None
     posthumous_name: str | None = None
-    birth_date_approx: bool = False
-    death_date_approx: bool = False
     birth_place: str | None = None
     membership_role: str | None = None  # blood, spouse, adopted
     children: list[TreeNodeDetail] = []  # type: ignore[assignment]
@@ -113,8 +111,8 @@ class FocusAncestor(BaseModel):
     id: str
     full_name: str
     gender: str
-    birth_date: date | None = None
-    death_date: date | None = None
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
     avatar_url: str | None = None
     generation: int | None = None
     is_founder: bool = False
@@ -128,10 +126,8 @@ class FocusTreeNode(BaseModel):
     gender: str
     birth_name: str | None = None
     posthumous_name: str | None = None
-    birth_date: date | None = None
-    birth_date_approx: bool = False
-    death_date: date | None = None
-    death_date_approx: bool = False
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
     birth_place: str | None = None
     avatar_url: str | None = None
     membership_role: str | None = None

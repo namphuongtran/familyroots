@@ -45,6 +45,13 @@ async def test_single_person():
     assert result["spouses"] == []
     assert result["children"] == []
     assert result["depth"] == 0
+    # HistoricalDate contract: birth_date/death_date are nested {date, precision,
+    # display, lunar} objects, and the old top-level *_approx flags are gone.
+    empty_date = {"date": None, "precision": "exact", "display": None, "lunar": None}
+    assert result["birth_date"] == empty_date
+    assert result["death_date"] == empty_date
+    assert "birth_date_approx" not in result
+    assert "death_date_approx" not in result
 
 
 # ── Test 2: Person with spouse ──
@@ -64,6 +71,10 @@ async def test_person_with_spouse():
             gender="female",
             status="married",
             marriage_date=date(1945, 2, 10),
+            birth_date=date(1925, 4, 3),
+            birth_date_precision="circa",
+            birth_date_display="khoảng 1925",
+            lunar_birth_date="03/03 Ất Sửu",
         )
     ]
 
@@ -78,8 +89,23 @@ async def test_person_with_spouse():
     assert len(result["spouses"]) == 1
     assert result["spouses"][0]["full_name"] == "Trần Thị B"
     assert result["spouses"][0]["status"] == "married"
+    # marriage_date/divorce_date stay plain ISO strings (unaffected by this contract).
     assert result["spouses"][0]["marriage_date"] == "1945-02-10"
     assert result["spouses"][0]["id"] == str(spouse_id)
+    # Spouse birth_date/death_date become nested HistoricalDate objects, with lunar
+    # threaded through from lunar_birth_date/lunar_death_date.
+    assert result["spouses"][0]["birth_date"] == {
+        "date": date(1925, 4, 3),
+        "precision": "circa",
+        "display": "khoảng 1925",
+        "lunar": "03/03 Ất Sửu",
+    }
+    assert result["spouses"][0]["death_date"] == {
+        "date": None,
+        "precision": "exact",
+        "display": None,
+        "lunar": None,
+    }
 
 
 # ── Test 3: Person with children ──
@@ -124,6 +150,48 @@ async def test_person_with_children():
     assert result["children"][0]["full_name"] == "Child A"
     assert result["children"][1]["full_name"] == "Child B"
     assert result["children"][0]["depth"] == 1
+    # Sort key is derived from the nested HistoricalDate's `date`, not a flat string.
+    assert result["children"][0]["birth_date"]["date"] == date(1965, 3, 10)
+    assert result["children"][1]["birth_date"]["date"] == date(1970, 6, 15)
+
+
+@pytest.mark.asyncio
+async def test_person_precision_and_display_pass_through():
+    """A non-exact date (circa/unknown) and its display string flow from the SQL row
+    into the node's HistoricalDate untouched."""
+    root_id = uuid.uuid4()
+    rows = [
+        make_person_row(
+            person_id=root_id,
+            full_name="Cụ Tổ",
+            depth=0,
+            birth_date=None,
+            birth_date_precision="unknown",
+            death_date=date(1900, 1, 1),
+            death_date_precision="circa",
+            death_date_display="khoảng năm Canh Tý",
+        )
+    ]
+    db = make_mock_db(
+        MockMappingResult(rows),
+        MockMappingResult([]),
+        MockMappingResult([]),
+    )
+
+    result = await build_descendants_tree(db, root_id, CLAN_ID)
+
+    assert result["birth_date"] == {
+        "date": None,
+        "precision": "unknown",
+        "display": None,
+        "lunar": None,
+    }
+    assert result["death_date"] == {
+        "date": date(1900, 1, 1),
+        "precision": "circa",
+        "display": "khoảng năm Canh Tý",
+        "lunar": None,
+    }
 
 
 # ── Test 4: Three-generation tree ──

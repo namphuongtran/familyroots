@@ -20,9 +20,11 @@ def make_person_row(
     posthumous_name: str | None = None,
     gender: str = "male",
     birth_date: date | None = None,
-    birth_date_approx: bool = False,
+    birth_date_precision: str = "exact",
+    birth_date_display: str | None = None,
     death_date: date | None = None,
-    death_date_approx: bool = False,
+    death_date_precision: str = "exact",
+    death_date_display: str | None = None,
     birth_place: str | None = None,
     generation: int | None = 1,
     avatar_url: str | None = None,
@@ -31,7 +33,8 @@ def make_person_row(
     parent_id: uuid.UUID | None = None,
     depth: int = 0,
 ) -> dict[str, Any]:
-    """Create a dict mimicking a row from get_family_tree_flat()."""
+    """Create a dict mimicking a row from get_family_tree_flat() (migration 013: the
+    function returns `*_precision`/`*_display`, not the retired `*_approx` flags)."""
     return {
         "person_id": person_id or uuid.uuid4(),
         "full_name": full_name,
@@ -39,9 +42,11 @@ def make_person_row(
         "posthumous_name": posthumous_name,
         "gender": gender,
         "birth_date": birth_date,
-        "birth_date_approx": birth_date_approx,
+        "birth_date_precision": birth_date_precision,
+        "birth_date_display": birth_date_display,
         "death_date": death_date,
-        "death_date_approx": death_date_approx,
+        "death_date_precision": death_date_precision,
+        "death_date_display": death_date_display,
         "birth_place": birth_place,
         "generation": generation,
         "avatar_url": avatar_url,
@@ -60,7 +65,13 @@ def make_spouse_row(
     full_name: str = "Spouse",
     gender: str = "female",
     birth_date: date | None = None,
+    birth_date_precision: str = "exact",
+    birth_date_display: str | None = None,
     death_date: date | None = None,
+    death_date_precision: str = "exact",
+    death_date_display: str | None = None,
+    lunar_birth_date: str | None = None,
+    lunar_death_date: str | None = None,
     avatar_url: str | None = None,
     posthumous_name: str | None = None,
     status: str = "married",
@@ -69,14 +80,21 @@ def make_spouse_row(
     spouse_order: int = 1,
     membership_role: str | None = None,
 ) -> dict[str, Any]:
-    """Create a dict mimicking a spouse join row."""
+    """Create a dict mimicking a spouse join row (the inline spouse query, which also
+    selects precision/display + lunar so SpouseNode dates become HistoricalDate)."""
     return {
         "for_person_id": for_person_id,
         "spouse_id": spouse_id or uuid.uuid4(),
         "full_name": full_name,
         "gender": gender,
         "birth_date": birth_date,
+        "birth_date_precision": birth_date_precision,
+        "birth_date_display": birth_date_display,
         "death_date": death_date,
+        "death_date_precision": death_date_precision,
+        "death_date_display": death_date_display,
+        "lunar_birth_date": lunar_birth_date,
+        "lunar_death_date": lunar_death_date,
         "avatar_url": avatar_url,
         "posthumous_name": posthumous_name,
         "status": status,
