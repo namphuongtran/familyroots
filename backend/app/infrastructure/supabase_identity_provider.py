@@ -8,11 +8,13 @@ the SDK. The Supabase client is synchronous; these async methods wrap it directl
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from typing import Any
 
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
+from app.core.config import settings
 from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
     AuthTokens,
@@ -130,3 +132,18 @@ class SupabaseIdentityProvider:
             # The SDK types this as AdminUserAttributes but accepts a dict at runtime
             # (matches the prior implementation).
             get_service_client().auth.admin.update_user_by_id(user_id, update_data)  # type: ignore[arg-type]
+
+    async def send_password_reset(self, *, email: str) -> None:
+        # Anon client (no service role needed); off-loaded — the SDK call is blocking.
+        # Pass redirect_to only when configured; otherwise Supabase uses the project
+        # Site URL. Completion is client-side (verify_otp recovery + update_user).
+        opts: dict[str, Any] = {}
+        if settings.PASSWORD_RESET_REDIRECT_URL:
+            opts["redirect_to"] = settings.PASSWORD_RESET_REDIRECT_URL
+        # The SDK types `options` as its `Options` TypedDict but accepts a plain dict
+        # at runtime (same pattern as update_user_by_id above).
+        await asyncio.to_thread(
+            get_anon_client().auth.reset_password_email,
+            email,
+            opts,  # type: ignore[arg-type]
+        )

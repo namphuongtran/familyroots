@@ -1,5 +1,6 @@
 """Auth API routes — thin controller delegating to Auth handlers."""
 
+import logging
 import uuid
 from typing import Any
 
@@ -22,6 +23,7 @@ from app.infrastructure.dependencies import (
 from app.schemas.auth import (
     AuthenticatedOnboardingRequest,
     FCMTokenRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
     RefreshRequest,
@@ -30,6 +32,8 @@ from app.schemas.auth import (
     UserUpdateRequest,
 )
 from app.services.translator import t
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -94,6 +98,22 @@ async def refresh_token(
 ) -> dict[str, Any]:
     """Exchange a refresh token for a new access token."""
     return await svc.refresh_token(refresh_token=body.refresh_token)
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    svc: AuthSessionService = Depends(get_auth_session_service),
+) -> dict[str, Any]:
+    """Trigger a password-reset email. ALWAYS returns 200 with the same message,
+    regardless of whether the email exists or the provider is reachable — never leak
+    account existence or provider state. Reset completion happens client-side via the
+    Supabase SDK (verify recovery token + update password)."""
+    try:
+        await svc.send_password_reset(email=body.email)
+    except Exception as e:
+        logger.warning("forgot-password: provider call failed (swallowed): %s", e)
+    return {"data": {"message": t("auth.password_reset_sent")}}
 
 
 @router.get("/me")

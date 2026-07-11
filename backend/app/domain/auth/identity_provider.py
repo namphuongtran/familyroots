@@ -88,3 +88,10 @@ class IdentityProvider(Protocol):
     ) -> None:
         """Update provider-side user metadata (full_name / preferred_locale)."""
         ...
+
+    async def send_password_reset(self, *, email: str) -> None:
+        """Best-effort: send a password-reset (recovery) email via the provider.
+
+        Completion (verifying the recovery token + setting the new password) happens
+        client-side via the provider SDK — this only triggers the email."""
+        ...
