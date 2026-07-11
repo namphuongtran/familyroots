@@ -104,13 +104,18 @@ Reshaping the dynamic person reads to fit a static model; changing any runtime b
 
 Full gate: `uv run pytest`, `uvx ruff check .`, `uvx ruff format --check .`, `uv run mypy app/ tests/`, `uv run lint-imports`.
 
-## Build decomposition (suggested — each its own PR)
+## Build decomposition (owner-decided 2026-07-11)
 
-The date item is by far the largest (migration + ~13 files + response reshaping); the others are smaller. Suggest sequencing as separate PRs so each is reviewable and the frontend can start against whichever contracts land first:
-1. **Envelope[T]/Page[T]** (mechanical, unblocks TS codegen) — smallest, do first.
-2. **đời-everywhere** (extract + apply the focus đời helper) — small.
-3. **mother_id attribution** (read-model derive) — small.
-4. **Historical date** (migration + precision-replaces-approx + HistoricalDate everywhere) — largest, its own PR.
+Reordered after deeper exploration: `response_model` **cannot statically type the dynamic core reads**
+(`GET /persons` + `/persons/{id}` with `profile`/`fields`/`include`; most tree endpoints via `profile`),
+so Envelope[T] would mainly type the write/action side — broad churn, limited codegen value for the reads
+the frontend uses most, and the codegen decision isn't made. So **Envelope[T] (Item 4) is DEFERRED** until
+the frontend actually commits to OpenAPI→TS codegen (revisit then; runtime contract is already stable +
+documented in `docs/contracts`). The 3 DATA contracts (what the frontend renders and can't work around later)
+go first, as **2 PRs**:
+1. **Tree read-model** — Items 3 + 2 combined (both touch `tree_builder`/tree schemas/tree tests):
+   đời graph-computed on `/tree` + `/tree/subtree` + derived `mother_id`/`mother_spouse_order` on child nodes.
+2. **Historical date** — Item 1 (migration + precision-replaces-approx + `HistoricalDate` everywhere) — largest.
 
 ## Explicitly NOT in this pass
 Date ranges / structured lunar; `parent_role`/`via_spouse_id` storage; dropping `cm.generation`; sources/citations, person-merge, and the other grade-A/roadmap items (they land additively after, alongside frontend); RLS layer-2.
