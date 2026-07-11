@@ -415,3 +415,77 @@ async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     x_entry = next(c for c in view["ancestors"] if c["id"] == str(x))
     # Kept the depth-1 occurrence, not the depth-2 one.
     assert x_entry["generation"] == base_generation - 1
+
+
+async def test_focus_view_generation_independent_of_breadcrumb_depth(
+    async_session: AsyncSession,
+) -> None:
+    """PINS the đời contract: đời is an intrinsic graph property computed from a FULL
+    ancestor lookup (fixed max 50), deliberately independent of the request's
+    ``ancestor_depth``. A short breadcrumb request must not truncate or null the đời
+    labels, even when the founder sits deeper than the requested breadcrumb window.
+
+    Discriminating: if ``_base_generation`` regressed to derive đời from the
+    depth-capped breadcrumb ``chain`` (the old inline-loop behavior) instead of a
+    fixed full-depth lookup, the founder (at depth 4 from the focus person) would
+    never appear in an ancestor_depth=2 chain, and generation_of_focus would come
+    back None instead of 5."""
+    from app.application.tree.queries import GetFocusView
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    to = await _person(async_session, clan_id, creator, "ThuyTo")
+    g2 = await _person(async_session, clan_id, creator, "G2")
+    g3 = await _person(async_session, clan_id, creator, "G3")
+    g4 = await _person(async_session, clan_id, creator, "G4")
+    focus = await _person(async_session, clan_id, creator, "Focus")
+    await _member(async_session, to, clan_id, is_founder=True)
+    for p in (g2, g3, g4, focus):
+        await _member(async_session, p, clan_id)
+    await _pc(async_session, to, g2, clan_id, creator)
+    await _pc(async_session, g2, g3, clan_id, creator)
+    await _pc(async_session, g3, g4, clan_id, creator)
+    await _pc(async_session, g4, focus, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    view = await handler.get_focus_view(
+        GetFocusView(person_id=focus, clan_id=clan_id, ancestor_depth=2)
+    )
+
+    # ThuyTo(1) -> G2(2) -> G3(3) -> G4(4) -> Focus(5): full founder distance, NOT null.
+    assert view["generation_of_focus"] == 5
+    assert len(view["ancestors"]) == 2  # breadcrumb itself still honors the requested depth
+
+
+async def test_get_ancestors_handler_generation_graph_computed(
+    async_session: AsyncSession,
+) -> None:
+    """GET /tree/ancestors computes đời from the graph (thủy tổ=1), the same
+    graph-computed contract as every other tree endpoint — ignoring a wrong
+    hand-entered clan_memberships.generation."""
+    from app.application.tree.queries import GetAncestors
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    founder = await _person(async_session, clan_id, creator, "ThuyTo")
+    son = await _person(async_session, clan_id, creator, "Con")
+    grand = await _person(async_session, clan_id, creator, "Chau")
+    await _member(async_session, founder, clan_id, is_founder=True)
+    await _member(async_session, son, clan_id)
+    await _member(async_session, grand, clan_id)
+    # Seed a WRONG hand-entered generation to prove it's ignored.
+    await async_session.execute(
+        sa.text("UPDATE clan_memberships SET generation = 99 WHERE person_id = :p"), {"p": grand}
+    )
+    await _pc(async_session, founder, son, clan_id, creator)
+    await _pc(async_session, son, grand, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    ancestors = await handler.get_ancestors(GetAncestors(person_id=grand, clan_id=clan_id))
+
+    by_id = {a["id"]: a for a in ancestors}
+    assert by_id[str(grand)]["generation"] == 3  # not the seeded 99
+    assert by_id[str(son)]["generation"] == 2
+    assert by_id[str(founder)]["generation"] == 1

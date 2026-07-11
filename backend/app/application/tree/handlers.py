@@ -28,7 +28,11 @@ class TreeQueryHandler:
 
     async def _base_generation(self, root_id: uuid.UUID, clan_id: uuid.UUID) -> int | None:
         """đời of ``root_id`` (thủy tổ = 1) = founder distance + 1, or None if the root
-        is not descended from a founder / the clan has no founder."""
+        is not descended from a founder / the clan has no founder.
+
+        đời is computed from a full ancestor lookup (fixed max 50), deliberately
+        independent of the caller's requested ``ancestor_depth`` — đời is an intrinsic
+        graph property, so a short breadcrumb request must never truncate or null it."""
         chain = await self._repo.get_ancestors_flat(root_id, clan_id, 50)
         founder_id = await self._repo.find_clan_founder(clan_id)
         if founder_id is None:
@@ -82,10 +86,24 @@ class TreeQueryHandler:
         }
 
     async def get_ancestors(self, query: GetAncestors) -> list[dict[str, Any]]:
-        """Return the ancestor chain."""
+        """Return the ancestor chain, with đời computed from the graph (thủy tổ = đời
+        1) — the same graph-computed contract enforced on every other tree endpoint,
+        rather than the raw hand-entered ``clan_memberships.generation``."""
         if not await self._repo.person_in_clan(query.person_id, query.clan_id):
             raise EntityNotFoundError("person_not_found")
-        return await self._repo.get_ancestors(query.person_id, query.clan_id)
+
+        base = await self._base_generation(query.person_id, query.clan_id)
+        rows = await self._repo.get_ancestors(query.person_id, query.clan_id)
+
+        stamped: list[dict[str, Any]] = []
+        for row in rows:
+            gen = base - row["depth"] if base is not None else None
+            if gen is not None and gen < 1:
+                # Guard against degenerate data with ancestors recorded above the thủy
+                # tổ — đời must never be ≤ 0.
+                gen = None
+            stamped.append({**row, "generation": gen})
+        return stamped
 
     async def get_focus_view(self, query: GetFocusView) -> dict[str, Any]:
         """Assemble the focus view: breadcrumb ancestors + focus + descendant window,
