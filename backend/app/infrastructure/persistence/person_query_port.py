@@ -18,6 +18,7 @@ from app.models.parent_child import ParentChild
 from app.models.person import Person
 from app.schemas.document import DocumentSummary
 from app.schemas.event import EventResponse, TimelineEvent
+from app.schemas.historical_date import to_historical_date
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
 from app.services.translator import t
@@ -88,8 +89,12 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         if person and person.birth_date:
             timeline.append(
                 TimelineEvent(
-                    event_date=person.birth_date,
-                    date_approx=person.birth_date_approx,
+                    event_date=to_historical_date(
+                        person.birth_date,
+                        person.birth_date_precision,
+                        person.birth_date_display,
+                        person.lunar_birth_date,
+                    ),
                     event_type="birth",
                     title=t("timeline.birth"),
                 ).model_dump()
@@ -97,8 +102,12 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         if person and person.death_date:
             timeline.append(
                 TimelineEvent(
-                    event_date=person.death_date,
-                    date_approx=person.death_date_approx,
+                    event_date=to_historical_date(
+                        person.death_date,
+                        person.death_date_precision,
+                        person.death_date_display,
+                        person.lunar_death_date,
+                    ),
                     event_type="death",
                     title=t("timeline.death"),
                 ).model_dump()
@@ -107,7 +116,8 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         # Fetch marriages — scoped to the caller's clan to prevent cross-clan leaks
         spouse_result = await self._session.execute(
             text("""
-                SELECT m.marriage_date, m.divorce_date, m.status,
+                SELECT m.marriage_date, m.marriage_date_precision, m.marriage_date_display,
+                       m.status,
                        CASE WHEN m.person1_id = :pid THEN m.person2_id
                             ELSE m.person1_id END AS spouse_id,
                        p.full_name AS spouse_name
@@ -125,8 +135,12 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
             if row["marriage_date"]:
                 timeline.append(
                     TimelineEvent(
-                        event_date=row["marriage_date"],
-                        date_approx=False,
+                        event_date=to_historical_date(
+                            row["marriage_date"],
+                            row["marriage_date_precision"],
+                            row["marriage_date_display"],
+                            None,
+                        ),
                         event_type="marriage",
                         title=t("timeline.marriage"),
                         related_person_id=row["spouse_id"],
@@ -141,13 +155,14 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         for ev in events_result.scalars().all():
             timeline.append(
                 TimelineEvent(
-                    event_date=ev.event_date,
-                    date_approx=False,
+                    event_date=to_historical_date(
+                        ev.event_date, ev.event_date_precision, ev.event_date_display, None
+                    ),
                     event_type=ev.event_type,
                     title=ev.title,
                     description=ev.description,
                 ).model_dump()
             )
 
-        timeline.sort(key=lambda e: e.get("event_date") or date.max)
+        timeline.sort(key=lambda e: (e.get("event_date") or {}).get("date") or date.max)
         return timeline

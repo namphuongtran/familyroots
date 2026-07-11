@@ -9,8 +9,8 @@ Output format::
       "id": "uuid",
       "full_name": "Nguyễn Văn A",
       "gender": "male",
-      "birth_date": "1920-01-15",
-      "death_date": "1985-03-20",
+      "birth_date": {"date": "1920-01-15", "precision": "exact", "display": null, "lunar": null},
+      "death_date": {"date": "1985-03-20", "precision": "exact", "display": null, "lunar": null},
       "generation": 1,
       "avatar_url": "https://...",
       "is_founder": true,
@@ -38,6 +38,7 @@ Output format::
     }
 """
 
+import datetime
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -46,8 +47,34 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationError
+from app.schemas.historical_date import to_historical_date
 
 _MAX_TREE_NODES = 50_000
+
+
+def _historical_date_dict(
+    row: Any, field_name: str, *, lunar_field: str | None = None
+) -> dict[str, Any]:
+    """Build a `HistoricalDate.model_dump()` dict from a flat SQL row's
+    ``<field_name>``/``<field_name>_precision``/``<field_name>_display`` (+ optional
+    lunar) columns."""
+    lunar = row.get(lunar_field) if lunar_field else None
+    return to_historical_date(
+        row[field_name],
+        row.get(f"{field_name}_precision"),
+        row.get(f"{field_name}_display"),
+        lunar,
+    ).model_dump()
+
+
+def _sortable_date(historical_date: dict[str, Any] | None) -> str:
+    """Sort key for a nested HistoricalDate dict: the underlying date (ISO string) if
+    set, else a sentinel that sorts after every real date (mirrors the pre-HistoricalDate
+    behavior where a missing birth_date sorted last)."""
+    value = historical_date.get("date") if historical_date else None
+    if isinstance(value, datetime.date):
+        return value.isoformat()
+    return "9999"
 
 
 @dataclass
@@ -57,10 +84,8 @@ class TreeNode:
     birth_name: str | None
     posthumous_name: str | None
     gender: str
-    birth_date: str | None
-    birth_date_approx: bool
-    death_date: str | None
-    death_date_approx: bool
+    birth_date: dict[str, Any]
+    death_date: dict[str, Any]
     birth_place: str | None
     generation: int | None
     avatar_url: str | None
@@ -107,10 +132,8 @@ async def build_descendants_tree(
             birth_name=row.get("birth_name"),
             posthumous_name=row.get("posthumous_name"),
             gender=row["gender"],
-            birth_date=row["birth_date"].isoformat() if row["birth_date"] else None,
-            birth_date_approx=row.get("birth_date_approx", False),
-            death_date=row["death_date"].isoformat() if row["death_date"] else None,
-            death_date_approx=row.get("death_date_approx", False),
+            birth_date=_historical_date_dict(row, "birth_date"),
+            death_date=_historical_date_dict(row, "death_date"),
             birth_place=row.get("birth_place"),
             generation=row.get("generation"),
             avatar_url=row.get("avatar_url"),
@@ -131,7 +154,9 @@ async def build_descendants_tree(
             "     ELSE m.person2_id END AS for_person_id, "
             "CASE WHEN m.person1_id = ANY(:ids) THEN m.person2_id "
             "     ELSE m.person1_id END AS spouse_id, "
-            "p.full_name, p.gender, p.birth_date, p.death_date, p.avatar_url, "
+            "p.full_name, p.gender, p.birth_date, p.birth_date_precision, p.birth_date_display, "
+            "p.death_date, p.death_date_precision, p.death_date_display, "
+            "p.lunar_birth_date, p.lunar_death_date, p.avatar_url, "
             "p.posthumous_name, "
             "m.status, m.marriage_date, m.divorce_date, m.spouse_order, "
             "cm.role AS membership_role "
@@ -157,8 +182,12 @@ async def build_descendants_tree(
                     "id": str(row["spouse_id"]),
                     "full_name": row["full_name"],
                     "gender": row["gender"],
-                    "birth_date": (row["birth_date"].isoformat() if row["birth_date"] else None),
-                    "death_date": (row["death_date"].isoformat() if row["death_date"] else None),
+                    "birth_date": _historical_date_dict(
+                        row, "birth_date", lunar_field="lunar_birth_date"
+                    ),
+                    "death_date": _historical_date_dict(
+                        row, "death_date", lunar_field="lunar_death_date"
+                    ),
                     "avatar_url": row["avatar_url"],
                     "posthumous_name": row["posthumous_name"],
                     "status": row["status"],
@@ -190,7 +219,7 @@ async def build_descendants_tree(
 
     # Step 5: Sort children by birth_date, then name
     def sort_children(node: TreeNode) -> None:
-        node.children.sort(key=lambda c: (c.birth_date or "9999", c.full_name))
+        node.children.sort(key=lambda c: (_sortable_date(c.birth_date), c.full_name))
         for child in node.children:
             sort_children(child)
 
@@ -205,9 +234,7 @@ async def build_descendants_tree(
             "posthumous_name": node.posthumous_name,
             "gender": node.gender,
             "birth_date": node.birth_date,
-            "birth_date_approx": node.birth_date_approx,
             "death_date": node.death_date,
-            "death_date_approx": node.death_date_approx,
             "birth_place": node.birth_place,
             "generation": (base_generation + node.depth if base_generation is not None else None),
             "avatar_url": node.avatar_url,
@@ -375,7 +402,7 @@ async def build_focus_view(
         node["children"].sort(
             key=lambda c: (
                 birth_orders.get(uuid.UUID(c["id"]), _BIRTH_ORDER_LAST),
-                c["birth_date"] or "9999",
+                _sortable_date(c["birth_date"]),
                 c["full_name"],
             )
         )

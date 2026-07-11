@@ -37,6 +37,12 @@ class Marriage(TimestampMixin, Base):
 
     marriage_date: Mapped[date | None] = mapped_column(Date, default=None)
     divorce_date: Mapped[date | None] = mapped_column(Date, default=None)
+    # HistoricalDate foundation: backfilled by migration 012 ('exact' when the date
+    # is present, else 'unknown' — there is no `approx` flag for marriages/divorces).
+    marriage_date_precision: Mapped[str] = mapped_column(String(10), default="exact")
+    marriage_date_display: Mapped[str | None] = mapped_column(String(100), default=None)
+    divorce_date_precision: Mapped[str] = mapped_column(String(10), default="exact")
+    divorce_date_display: Mapped[str | None] = mapped_column(String(100), default=None)
     marriage_place: Mapped[str | None] = mapped_column(String(255), default=None)
     status: Mapped[str] = mapped_column(
         String(20), default="married"

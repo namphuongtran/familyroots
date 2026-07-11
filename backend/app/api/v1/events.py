@@ -38,6 +38,8 @@ async def create_event(
         title=body.title,
         description=body.description,
         event_date=body.event_date,
+        event_date_precision=body.event_date_precision,
+        event_date_display=body.event_date_display,
         is_lunar_calendar=body.is_lunar_calendar,
         is_recurring=body.is_recurring,
         notify_days_before=body.notify_days_before,
@@ -147,11 +149,12 @@ async def update_event(
     cmd_handler: EventCommandHandler = Depends(get_event_command_handler),
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
+    changes = body.model_dump(exclude_unset=True)
     event = await cmd_handler.update(
         event_id=event_id,
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
-        changes=body.model_dump(exclude_unset=True),
+        changes=changes,
     )
     return {"data": event.model_dump()}
 

@@ -30,9 +30,11 @@ class CreatePerson:
     alias_name: str | None = None
 
     birth_date: date | None = None
-    birth_date_approx: bool = False
+    birth_date_precision: str = "exact"
+    birth_date_display: str | None = None
     death_date: date | None = None
-    death_date_approx: bool = False
+    death_date_precision: str = "exact"
+    death_date_display: str | None = None
     lunar_birth_date: str | None = None
     lunar_death_date: str | None = None
 

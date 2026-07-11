@@ -181,13 +181,14 @@ async def create_person(
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a new person and add a clan membership."""
+    dumped = body.model_dump()
     person = await handler.create(
         CreatePerson(
             actor=ActorInfo.from_jwt(current_user, role.value),
             clan_id=clan_id,
             # Provenance is always the active clan; never client-supplied.
             created_by_clan_id=clan_id,
-            **body.model_dump(),
+            **dumped,
         )
     )
     return {"data": person.model_dump()}
@@ -372,12 +373,13 @@ async def update_person(
     user_role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Update a person's details."""
+    changes = body.model_dump(exclude_unset=True)
     person = await handler.update(
         UpdatePerson(
             person_id=person_id,
             clan_id=clan_id,
             actor=ActorInfo.from_jwt(current_user, user_role.value),
-            changes=body.model_dump(exclude_unset=True),
+            changes=changes,
         )
     )
     return {"data": person.model_dump()}

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person
+from app.schemas.historical_date import to_historical_date
 from app.services.tree_builder import build_descendants_tree, build_focus_view, find_clan_founder
 
 
@@ -54,7 +55,9 @@ class SqlAlchemyTreeRepository:
         and raw ``generation`` for callers that need them (the focus handler)."""
         result = await self._session.execute(
             text(
-                "SELECT person_id, full_name, gender, birth_date, death_date, "
+                "SELECT person_id, full_name, gender, birth_date, "
+                "       birth_date_precision, birth_date_display, "
+                "       death_date, death_date_precision, death_date_display, "
                 "       generation, avatar_url, child_id, depth "
                 "FROM public.get_ancestors_flat(:person_id, :clan_id, :max_generations) "
                 "ORDER BY depth ASC"
@@ -66,8 +69,12 @@ class SqlAlchemyTreeRepository:
                 "id": str(row["person_id"]),
                 "full_name": row["full_name"],
                 "gender": row["gender"],
-                "birth_date": row["birth_date"].isoformat() if row["birth_date"] else None,
-                "death_date": row["death_date"].isoformat() if row["death_date"] else None,
+                "birth_date": to_historical_date(
+                    row["birth_date"], row["birth_date_precision"], row["birth_date_display"], None
+                ).model_dump(),
+                "death_date": to_historical_date(
+                    row["death_date"], row["death_date_precision"], row["death_date_display"], None
+                ).model_dump(),
                 "avatar_url": row["avatar_url"],
                 "generation": row["generation"],
                 "child_id": str(row["child_id"]) if row["child_id"] else None,
@@ -113,7 +120,7 @@ class SqlAlchemyTreeRepository:
         result = await self._session.execute(
             text("""
                 SELECT p.person_id, p.full_name, p.gender, p.edge_type,
-                       per.avatar_url, per.birth_date, per.birth_date_approx
+                       per.avatar_url, per.birth_date, per.birth_date_precision
                 FROM public.find_relationship_path(:from_id, :to_id, :clan_id) p
                 LEFT JOIN public.persons per ON p.person_id = per.id
                 ORDER BY p.step
@@ -128,11 +135,12 @@ class SqlAlchemyTreeRepository:
                 "gender": row.get("gender", "unknown"),
                 "edge_type": row.get("edge_type"),
                 "avatar_url": row.get("avatar_url"),
-                # birth_date (+ _approx) thread through so the kinship descriptor can pick
-                # age-specific terms (bác vs chú, anh/chị vs em). An APPROXIMATE date must
-                # not yield a hard older/younger claim, so the flag travels with it.
+                # birth_date (+ precision) thread through so the kinship descriptor can
+                # pick age-specific terms (bác vs chú, anh/chị vs em). Any non-`exact`
+                # precision must not yield a hard older/younger claim, so it travels
+                # alongside the date.
                 "birth_date": row.get("birth_date"),
-                "birth_date_approx": row.get("birth_date_approx", False),
+                "birth_date_precision": row.get("birth_date_precision", "exact"),
             }
             for row in rows
         ]

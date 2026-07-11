@@ -69,6 +69,32 @@ async def _seed_clan_with_feb29_event(
     return clan_id
 
 
+async def _seed_clan_with_circa_event(
+    maker: async_sessionmaker[AsyncSession],
+) -> uuid.UUID:
+    """A non-recurring event whose recorded date has a non-'exact' precision + display,
+    to prove /events/upcoming's `event_date` carries the real stored precision/display
+    instead of silently defaulting to 'exact' (historical-date review, task 5)."""
+    clan_id = uuid.uuid4()
+    async with maker() as s:
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :sg)"),
+            {"id": clan_id, "sg": f"c{clan_id.hex[:6]}"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO events (id, clan_id, event_type, title, event_date, "
+                "event_date_precision, event_date_display, "
+                "is_recurring, notify_days_before, created_by) "
+                "VALUES (:id, :clan, 'custom', 'Circa event', :d, "
+                "'circa', 'khoảng năm 1950', true, 7, :cb)"
+            ),
+            {"id": uuid.uuid4(), "clan": clan_id, "d": date(1950, 6, 15), "cb": uuid.uuid4()},
+        )
+        await s.commit()
+    return clan_id
+
+
 @pytest.mark.asyncio
 async def test_get_upcoming_survives_feb29_and_clamps(engine: AsyncEngine) -> None:
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -83,3 +109,36 @@ async def test_get_upcoming_survives_feb29_and_clamps(engine: AsyncEngine) -> No
     # get_upcoming serializes dates to ISO strings (API response shape).
     occurrences = {r["next_occurrence"] for r in rows}
     assert date(2026, 2, 28).isoformat() in occurrences
+
+
+@pytest.mark.asyncio
+async def test_get_upcoming_event_date_is_historical_date_object(engine: AsyncEngine) -> None:
+    """/events/upcoming (task 5, historical-date review): `event_date` must be a nested
+    HistoricalDate object carrying the real stored precision + display — not a scalar
+    ISO string, and not silently defaulted to 'exact'. `next_occurrence` (the derived
+    recurrence date) stays a scalar ISO string."""
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    clan_id = await _seed_clan_with_circa_event(maker)
+
+    async with maker() as s:
+        uow = SqlAlchemyUnitOfWork(s, create_event_dispatcher(s))
+        repo = SqlAlchemyEventRepository(uow)
+        rows = await repo.get_upcoming(clan_id, today=date(2026, 6, 1), end_date=date(2026, 7, 1))
+
+    assert len(rows) == 1
+    row = rows[0]
+
+    # RED (pre-fix) behavior would be: row["event_date"] == "1950-06-15" (a str).
+    # GREEN (post-fix): a nested HistoricalDate dict with the real precision/display.
+    # (`date` stays a python `date` object here, same as tree_builder/person_query_port's
+    # plain `.model_dump()`; FastAPI's jsonable_encoder ISO-formats it at the HTTP layer.)
+    event_date = row["event_date"]
+    assert isinstance(event_date, dict), f"event_date must be an object, got {event_date!r}"
+    assert event_date == {
+        "date": date(1950, 6, 15),
+        "precision": "circa",
+        "display": "khoảng năm 1950",
+        "lunar": None,
+    }
+    # next_occurrence is the derived recurrence date — remains a scalar ISO string.
+    assert row["next_occurrence"] == date(2026, 6, 15).isoformat()

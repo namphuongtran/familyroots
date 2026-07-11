@@ -13,8 +13,9 @@ resolver uses:
 
 Correctness principle — "never wrong, only less specific": whenever the distinguishing
 data is missing OR unreliable, the resolver returns ``None`` and the caller falls back
-to the age/gender-agnostic generic term (``KINSHIP_MAP``). In particular an APPROXIMATE
-birth date, a missing date, or two EQUAL dates never produce a hard older/younger claim.
+to the age/gender-agnostic generic term (``KINSHIP_MAP``). In particular a birth date
+whose precision is anything other than ``exact`` (circa/year/month/unknown), a missing
+date, or two EQUAL dates never produce a hard older/younger claim.
 
 Known limitation: the path is a single shortest path, so half-siblings and full siblings
 are both ``("parent","child")`` and share the base term (anh/chị/em) — the
@@ -123,14 +124,17 @@ def _age_rank(a: dict[str, Any], b: dict[str, Any]) -> str | None:
     """``"older"``/``"younger"`` of ``a`` relative to ``b``, or ``None`` when it cannot
     be asserted safely.
 
-    Returns None if either birth_date is missing, either date is APPROXIMATE (an
-    estimate must not become a hard Bác/Chú or Anh/Em claim), or the dates are EQUAL
-    (twins / unknown-but-equal → do not guess).
+    Returns None if either birth_date is missing, either date's precision is anything
+    other than ``exact`` (an estimated/circa/year-only/month-only/unknown date must not
+    become a hard Bác/Chú or Anh/Em claim), or the dates are EQUAL (twins /
+    unknown-but-equal → do not guess).
     """
     da, db = a.get("birth_date"), b.get("birth_date")
     if not isinstance(da, date) or not isinstance(db, date):
         return None
-    if a.get("birth_date_approx") or b.get("birth_date_approx"):
+    if a.get("birth_date_precision", "exact") != "exact":
+        return None
+    if b.get("birth_date_precision", "exact") != "exact":
         return None
     if da == db:
         return None
@@ -292,7 +296,7 @@ def describe_relationship(path: list[dict[str, Any]]) -> str:
     """Return a localized relationship description from a path of steps.
 
     ``path`` is a list of dicts with ``edge_type`` (steps 1..N) and ``gender`` /
-    ``birth_date`` / ``birth_date_approx`` used to pick the specific Vietnamese term.
+    ``birth_date`` / ``birth_date_precision`` used to pick the specific Vietnamese term.
     The localized string uses the request locale via ``t()``.
     """
     if not path or len(path) < 2:

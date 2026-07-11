@@ -62,7 +62,11 @@ async def create_marriage(
             clan_id=clan_id,
             actor=ActorInfo.from_jwt(current_user, role.value),
             marriage_date=body.marriage_date,
+            marriage_date_precision=body.marriage_date_precision,
+            marriage_date_display=body.marriage_date_display,
             divorce_date=body.divorce_date,
+            divorce_date_precision=body.divorce_date_precision,
+            divorce_date_display=body.divorce_date_display,
             marriage_place=body.marriage_place,
             status=body.status,
             spouse_order=body.spouse_order,
@@ -97,12 +101,13 @@ async def update_marriage(
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a marriage record (only by managing clan)."""
+    changes = body.model_dump(exclude_unset=True)
     marriage = await handler.update(
         UpdateMarriage(
             marriage_id=marriage_id,
             clan_id=clan_id,
             actor=ActorInfo.from_jwt(current_user, role.value),
-            changes=body.model_dump(exclude_unset=True),
+            changes=changes,
         )
     )
     return {"data": marriage.model_dump()}

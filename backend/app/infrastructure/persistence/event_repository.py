@@ -18,6 +18,7 @@ from app.infrastructure.persistence.sql_dates import next_anniversary_sql
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
+from app.schemas.historical_date import to_historical_date
 
 
 class SqlAlchemyEventRepository:
@@ -80,7 +81,8 @@ class SqlAlchemyEventRepository:
                 WITH next_dates AS (
                     SELECT
                         e.id, e.person_id, e.event_type, e.title,
-                        e.event_date, e.is_lunar_calendar, e.is_recurring,
+                        e.event_date, e.event_date_precision, e.event_date_display,
+                        e.is_lunar_calendar, e.is_recurring,
                         p.full_name AS person_name,
                         p.avatar_url AS person_avatar_url,
                         CASE
@@ -116,7 +118,16 @@ class SqlAlchemyEventRepository:
                     "person_avatar_url": row["person_avatar_url"],
                     "event_type": row["event_type"],
                     "title": row["title"],
-                    "event_date": row["event_date"].isoformat(),
+                    # event_date is the recorded HistoricalDate (precision/display carried
+                    # from the events table; events have no lunar column, so lunar=None).
+                    "event_date": to_historical_date(
+                        row["event_date"],
+                        row["event_date_precision"],
+                        row["event_date_display"],
+                        None,
+                    ).model_dump(),
+                    # next_occurrence is a DERIVED recurrence date (computed anniversary),
+                    # not a recorded historical date — stays a scalar ISO string.
                     "next_occurrence": next_occ.isoformat() if next_occ else None,
                     "days_until": (next_occ - today).days if next_occ else None,
                     "is_lunar_calendar": row["is_lunar_calendar"],
