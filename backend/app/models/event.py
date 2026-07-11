@@ -27,6 +27,10 @@ class Event(ClanScopedMixin, Base):
 
     # Date handling for lunar/solar calendar
     event_date: Mapped[date] = mapped_column(Date)
+    # HistoricalDate foundation: backfilled 'exact' by migration 012 (event_date is
+    # NOT NULL, so precision is always 'exact' today).
+    event_date_precision: Mapped[str] = mapped_column(String(10), default="exact")
+    event_date_display: Mapped[str | None] = mapped_column(String(100), default=None)
     is_lunar_calendar: Mapped[bool] = mapped_column(Boolean, default=False)
     is_recurring: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_days_before: Mapped[int] = mapped_column(SmallInteger, default=7)

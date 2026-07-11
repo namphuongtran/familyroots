@@ -40,6 +40,14 @@ class Person(TimestampMixin, Base):
     death_date: Mapped[date | None] = mapped_column(Date, default=None)
     death_date_approx: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # ── Date precision/display (HistoricalDate foundation) ────
+    # `approx` above is kept for now (dropped in a later task); these columns are
+    # backfilled from it by migration 012 and will become the canonical source.
+    birth_date_precision: Mapped[str] = mapped_column(String(10), default="exact")
+    birth_date_display: Mapped[str | None] = mapped_column(String(100), default=None)
+    death_date_precision: Mapped[str] = mapped_column(String(10), default="exact")
+    death_date_display: Mapped[str | None] = mapped_column(String(100), default=None)
+
     # ── Dates (lunar — display only, e.g. "15/08 Nhâm Tý") ──
     lunar_birth_date: Mapped[str | None] = mapped_column(String(30), default=None)
     lunar_death_date: Mapped[str | None] = mapped_column(String(30), default=None)
