@@ -233,3 +233,123 @@ async def find_clan_founder(
     )
     row = result.first()
     return row[0] if row else None
+
+
+_BIRTH_ORDER_LAST = 32767  # SmallInteger max — NULL birth_order sorts after all set values
+
+
+async def _branch_map(
+    db: AsyncSession, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+) -> dict[uuid.UUID, dict[str, Any]]:
+    """Chi/branch per member (clan-scoped). Members with no branch are simply absent."""
+    if not person_ids:
+        return {}
+    result = await db.execute(
+        text(
+            "SELECT cm.person_id, b.id AS branch_id, b.name, b.branch_order "
+            "FROM public.clan_memberships cm "
+            "JOIN public.branches b ON b.id = cm.branch_id "
+            "WHERE cm.person_id = ANY(:ids) AND cm.clan_id = :clan_id"
+        ),
+        {"ids": person_ids, "clan_id": clan_id},
+    )
+    return {
+        row["person_id"]: {
+            "id": str(row["branch_id"]),
+            "name": row["name"],
+            "order": row["branch_order"],
+        }
+        for row in result.mappings().all()
+    }
+
+
+async def _birth_order_map(
+    db: AsyncSession, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+) -> dict[uuid.UUID, int]:
+    """Smallest set birth_order per child among this clan's blood edges (NULLs ignored)."""
+    if not person_ids:
+        return {}
+    result = await db.execute(
+        text(
+            "SELECT pc.child_id, MIN(pc.birth_order) AS birth_order "
+            "FROM public.parent_child pc "
+            "WHERE pc.child_id = ANY(:ids) AND pc.created_by_clan_id = :clan_id "
+            "  AND pc.is_deleted = false AND pc.birth_order IS NOT NULL "
+            "GROUP BY pc.child_id"
+        ),
+        {"ids": person_ids, "clan_id": clan_id},
+    )
+    return {row["child_id"]: row["birth_order"] for row in result.mappings().all()}
+
+
+async def _persons_with_children(
+    db: AsyncSession, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Subset of ``person_ids`` that have at least one non-deleted child via a clan-owned edge."""
+    if not person_ids:
+        return set()
+    result = await db.execute(
+        text(
+            "SELECT DISTINCT pc.parent_id "
+            "FROM public.parent_child pc "
+            "JOIN public.persons ch ON ch.id = pc.child_id AND ch.is_deleted = false "
+            "WHERE pc.parent_id = ANY(:ids) AND pc.created_by_clan_id = :clan_id "
+            "  AND pc.is_deleted = false"
+        ),
+        {"ids": person_ids, "clan_id": clan_id},
+    )
+    return {row["parent_id"] for row in result.mappings().all()}
+
+
+async def build_focus_view(
+    db: AsyncSession,
+    focus_id: uuid.UUID,
+    clan_id: uuid.UUID,
+    descendant_depth: int,
+    base_generation: int | None,
+) -> dict[str, Any]:
+    """Focus subtree (focus + ``descendant_depth`` generations below), enriched with computed
+    đời, chi/branch, birth_order sibling order, and a has-more-descendants drill flag."""
+    subtree = await build_descendants_tree(db, focus_id, clan_id, descendant_depth)
+    if not subtree:
+        return {}
+
+    node_ids: list[uuid.UUID] = []
+    boundary_ids: list[uuid.UUID] = []
+
+    def collect(node: dict[str, Any]) -> None:
+        pid = uuid.UUID(node["id"])
+        node_ids.append(pid)
+        node["generation"] = (
+            base_generation + node["depth"] if base_generation is not None else None
+        )
+        if node["depth"] == descendant_depth:
+            boundary_ids.append(pid)
+        for child in node["children"]:
+            collect(child)
+
+    collect(subtree)
+
+    branches = await _branch_map(db, node_ids, clan_id)
+    birth_orders = await _birth_order_map(db, node_ids, clan_id)
+    have_children = await _persons_with_children(db, boundary_ids, clan_id)
+
+    def enrich(node: dict[str, Any]) -> None:
+        pid = uuid.UUID(node["id"])
+        branch = branches.get(pid)
+        node["branch_id"] = branch["id"] if branch else None
+        node["branch_name"] = branch["name"] if branch else None
+        node["branch_order"] = branch["order"] if branch else None
+        node["has_more_descendants"] = pid in have_children
+        node["children"].sort(
+            key=lambda c: (
+                birth_orders.get(uuid.UUID(c["id"]), _BIRTH_ORDER_LAST),
+                c["birth_date"] or "9999",
+                c["full_name"],
+            )
+        )
+        for child in node["children"]:
+            enrich(child)
+
+    enrich(subtree)
+    return subtree

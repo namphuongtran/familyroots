@@ -114,3 +114,87 @@ async def test_get_ancestors_no_duplicates_on_fan_out(async_session: AsyncSessio
     assert str(gp) in ids and str(child) in ids
     # shape preserved: no child_id key leaked into the public /tree/ancestors output
     assert "child_id" not in ancestors[0]
+
+
+async def _marriage(
+    s: AsyncSession,
+    p1: uuid.UUID,
+    p2: uuid.UUID,
+    clan_id: uuid.UUID,
+    creator: uuid.UUID,
+    *,
+    spouse_order: int,
+) -> None:
+    await s.execute(
+        sa.text(
+            "INSERT INTO marriages "
+            "(id, person1_id, person2_id, created_by_clan_id, status, spouse_order, created_by) "
+            "VALUES (:id, :p1, :p2, :c, 'married', :so, :cb)"
+        ),
+        {"id": uuid.uuid4(), "p1": p1, "p2": p2, "c": clan_id, "so": spouse_order, "cb": creator},
+    )
+
+
+async def _branch(s: AsyncSession, clan_id: uuid.UUID, name: str, order: int) -> uuid.UUID:
+    bid = uuid.uuid4()
+    await s.execute(
+        sa.text("INSERT INTO branches (id, clan_id, name, branch_order) VALUES (:id,:c,:n,:o)"),
+        {"id": bid, "c": clan_id, "n": name, "o": order},
+    )
+    return bid
+
+
+async def test_build_focus_view_enriches_generation_branch_sort_hasmore(
+    async_session: AsyncSession,
+) -> None:
+    from app.services.tree_builder import build_focus_view
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    chi1 = await _branch(async_session, clan_id, "Chi Nhất", 1)
+    chi2 = await _branch(async_session, clan_id, "Chi Hai", 2)
+
+    root = await _person(async_session, clan_id, creator, "Root")  # focus, đời anchor = 3
+    son_b = await _person(async_session, clan_id, creator, "Bình")  # birth_order 2
+    son_a = await _person(async_session, clan_id, creator, "An")  # birth_order 1
+    grand = await _person(async_session, clan_id, creator, "Cháu")  # under An
+    ggrand = await _person(async_session, clan_id, creator, "Chắt")  # under Cháu (cut off)
+    for p in (root, grand, ggrand):
+        await _member(async_session, p, clan_id)
+    await _member(async_session, son_a, clan_id, branch_id=chi1)
+    await _member(async_session, son_b, clan_id, branch_id=chi2)
+    await _pc(async_session, root, son_b, clan_id, creator, birth_order=2)
+    await _pc(async_session, root, son_a, clan_id, creator, birth_order=1)
+    await _pc(async_session, son_a, grand, clan_id, creator)
+    await _pc(async_session, grand, ggrand, clan_id, creator)  # depth 2 → cut when descendants=2
+    await async_session.commit()
+
+    tree = await build_focus_view(
+        async_session, root, clan_id, descendant_depth=2, base_generation=3
+    )
+
+    assert tree["generation"] == 3  # focus stamped with base
+    # children sorted by birth_order → An (1) before Bình (2), not alphabetical/birth_date
+    assert [c["full_name"] for c in tree["children"]] == ["An", "Bình"]
+    an = tree["children"][0]
+    assert an["generation"] == 4  # base + depth 1
+    assert an["branch_name"] == "Chi Nhất" and an["branch_order"] == 1
+    chau = an["children"][0]
+    assert chau["generation"] == 5 and chau["depth"] == 2
+    assert chau["has_more_descendants"] is True  # Chắt exists below the cutoff
+    assert tree["children"][1]["has_more_descendants"] is False  # Bình is childless
+
+
+async def test_build_focus_view_null_base_generation(async_session: AsyncSession) -> None:
+    from app.services.tree_builder import build_focus_view
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    root = await _person(async_session, clan_id, creator, "Root")
+    await _member(async_session, root, clan_id)
+    await async_session.commit()
+
+    tree = await build_focus_view(async_session, root, clan_id, 2, None)
+    assert tree["generation"] is None  # unknown đời stays null
+    assert tree["has_more_descendants"] is False
+    assert tree["children"] == []
