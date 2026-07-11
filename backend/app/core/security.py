@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.exceptions import AppError, AuthenticationError, ForbiddenError
+from app.core.locale import SUPPORTED_LOCALES
 from app.models.user_profile import UserProfile
 
 # auto_error=False so a MISSING/malformed Authorization header raises our own
@@ -100,6 +101,12 @@ async def get_current_user(
 _LOGIN_UPDATE_INTERVAL = 300  # seconds
 
 
+def _jwt_language(current_user: dict[str, Any]) -> str:
+    """The recipient's chosen locale from the JWT metadata, validated (unknown → 'vi')."""
+    loc = current_user.get("user_metadata", {}).get("preferred_locale")
+    return loc if loc in SUPPORTED_LOCALES else "vi"
+
+
 async def ensure_user_profile(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -136,6 +143,7 @@ async def ensure_user_profile(
                 id=user_id,
                 email=email,
                 display_name=display_name,
+                language=_jwt_language(current_user),
                 last_login_at=datetime.now(UTC),
             )
             .on_conflict_do_nothing(index_elements=["id"])
@@ -147,13 +155,19 @@ async def ensure_user_profile(
             await db.execute(select(UserProfile).where(UserProfile.id == user_id))
         ).scalar_one()
     else:
-        # Throttle: only update last_login_at if stale
         now = datetime.now(UTC)
+        changed = False
+        desired_language = _jwt_language(current_user)
+        if profile.language != desired_language:
+            profile.language = desired_language
+            changed = True
         if (
             profile.last_login_at is None
             or (now - profile.last_login_at).total_seconds() > _LOGIN_UPDATE_INTERVAL
         ):
             profile.last_login_at = now
+            changed = True
+        if changed:
             await db.commit()
 
     # A deactivated account is authenticated (its Supabase JWT is still valid) but must
