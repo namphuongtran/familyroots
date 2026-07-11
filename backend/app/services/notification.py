@@ -94,14 +94,10 @@ async def send_to_clan(
     """Broadcast to all approved clan members in each member's language.
 
     Returns (sent, failed) delivery counts. Locale comes from user_profiles.language
-    (never auth.users — that schema is Supabase-only and absent locally/in CI).
-
-    NOTE (follow-up, tracked in the Auth PR): nothing populates
-    ``user_profiles.language`` yet — the login/profile flow writes the chosen
-    locale only to Supabase user metadata — so this currently defaults everyone to
-    'vi'. The per-recipient locale plumbing is correct and activates as soon as that
-    column is written; until then pushes render in Vietnamese (valid text, not the
-    raw i18n keys they showed before this PR)."""
+    (never auth.users — that schema is Supabase-only and absent locally/in CI). That
+    column is populated by ``ensure_user_profile`` (app/core/security.py), which syncs
+    it from the JWT's ``user_metadata.preferred_locale`` on each authenticated request;
+    it defaults to 'vi' for members who haven't set a locale."""
     result = await db.execute(
         text("""
             SELECT ucr.user_id, t.token, t.device_platform,
