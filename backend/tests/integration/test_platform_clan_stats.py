@@ -85,6 +85,29 @@ async def test_total_users_counted_when_clan_has_no_persons(async_session: Async
     assert detail.stats.total_members == 0
 
 
+async def test_total_users_counts_unapproved_roles(async_session: AsyncSession) -> None:
+    """total_users is is_approved-agnostic: a pending (unapproved) role still counts."""
+    clan_id = uuid.uuid4()
+    await _clan(async_session, clan_id)
+    approved, pending = uuid.uuid4(), uuid.uuid4()
+    await _profile(async_session, approved)
+    await _profile(async_session, pending)
+    await _role(async_session, approved, clan_id)  # is_approved=true
+    # Unapproved role: the approval-consistency CHECK requires approved_by/approved_at NULL.
+    await async_session.execute(
+        sa.text(
+            "INSERT INTO user_clan_roles "
+            "(user_id, clan_id, role, is_approved, approved_by, approved_at) "
+            "VALUES (:u, :c, 'viewer', false, NULL, NULL)"
+        ),
+        {"u": pending, "c": clan_id},
+    )
+    await async_session.commit()
+
+    detail = await SqlAlchemyPlatformAdminQueryPort(async_session).get_clan_detail(clan_id)
+    assert detail.stats.total_users == 2  # both the approved and the pending user count
+
+
 async def test_members_exclude_soft_deleted_and_users_independent(
     async_session: AsyncSession,
 ) -> None:
