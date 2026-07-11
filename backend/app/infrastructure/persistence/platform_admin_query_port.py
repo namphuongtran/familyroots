@@ -60,6 +60,11 @@ class SqlAlchemyPlatformAdminQueryPort(PlatformAdminQueryPort):
         if not clan:
             raise NotFoundError("clan_not_found")
 
+        # total_members and total_users are counted INDEPENDENTLY (not via one joined
+        # query): the two are unrelated entities, and coupling them made total_users read
+        # 0 until a clan had its first person. total_members counts non-soft-deleted
+        # persons (intentional — matches get_metrics); total_users counts distinct
+        # role-holding users regardless of approval.
         total_members = (
             await self._session.scalar(
                 select(func.count(func.distinct(Person.id)))
