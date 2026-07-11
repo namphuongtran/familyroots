@@ -232,13 +232,13 @@ def test_register_login_me_clans_create_person(client: TestClient) -> None:
     assert me["email"] == email
     assert me["clan_id"] == clan_id
 
-    # /me/clans — membership projection.
+    # /me/clans — membership projection, enveloped as {"data": [...], "meta": {"count": n}}.
     resp = client.get("/api/v1/me/clans", headers=auth)
     assert resp.status_code == 200, resp.text
     clans = resp.json()
-    assert clans["count"] == 1
-    assert clans["clans"][0]["clan_id"] == clan_id
-    assert clans["clans"][0]["role"] == "admin"
+    assert clans["meta"]["count"] == 1
+    assert clans["data"][0]["clan_id"] == clan_id
+    assert clans["data"][0]["role"] == "admin"
 
     # Create a person — clan auto-selection + RBAC + UoW write path.
     resp = client.post(
