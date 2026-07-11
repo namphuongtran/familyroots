@@ -34,15 +34,20 @@ async def _clan(s: AsyncSession) -> uuid.UUID:
 
 
 async def _person(
-    s: AsyncSession, clan_id: uuid.UUID, creator: uuid.UUID, name: str = "P"
+    s: AsyncSession,
+    clan_id: uuid.UUID,
+    creator: uuid.UUID,
+    name: str = "P",
+    *,
+    gender: str = "male",
 ) -> uuid.UUID:
     pid = uuid.uuid4()
     await s.execute(
         sa.text(
             "INSERT INTO persons (id, full_name, gender, created_by_clan_id, created_by) "
-            "VALUES (:id, :n, 'male', :c, :cb)"
+            "VALUES (:id, :n, :g, :c, :cb)"
         ),
-        {"id": pid, "n": name, "c": clan_id, "cb": creator},
+        {"id": pid, "n": name, "g": gender, "c": clan_id, "cb": creator},
     )
     return pid
 
@@ -346,6 +351,36 @@ async def test_focus_view_dedupes_breadcrumb_on_pedigree_collapse(
     assert str(gp) in ids
 
 
+async def test_full_tree_generation_is_graph_computed(async_session: AsyncSession) -> None:
+    """GET /tree computes đời from the graph (thủy tổ=1), ignoring a wrong hand-entered
+    clan_memberships.generation."""
+    from app.application.tree.handlers import TreeQueryHandler
+    from app.application.tree.queries import GetFullTree
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    to = await _person(async_session, clan_id, creator, "To")
+    son = await _person(async_session, clan_id, creator, "Con")
+    grand = await _person(async_session, clan_id, creator, "Chau")
+    await _member(async_session, to, clan_id, is_founder=True)
+    # Seed a WRONG hand-entered generation to prove it's ignored.
+    await async_session.execute(
+        sa.text("UPDATE clan_memberships SET generation = 99 WHERE person_id = :p"), {"p": son}
+    )
+    await _member(async_session, son, clan_id)
+    await _member(async_session, grand, clan_id)
+    await _pc(async_session, to, son, clan_id, creator)
+    await _pc(async_session, son, grand, clan_id, creator)
+    await async_session.commit()
+
+    handler = TreeQueryHandler(SqlAlchemyTreeRepository(async_session))
+    result = await handler.get_full_tree(GetFullTree(clan_id=clan_id))
+    tree = result["tree"]
+    assert tree["generation"] == 1  # thủy tổ
+    assert tree["children"][0]["generation"] == 2  # not 99
+    assert tree["children"][0]["children"][0]["generation"] == 3
+
+
 async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     async_session: AsyncSession,
 ) -> None:
@@ -385,3 +420,128 @@ async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     x_entry = next(c for c in view["ancestors"] if c["id"] == str(x))
     # Kept the depth-1 occurrence, not the depth-2 one.
     assert x_entry["generation"] == base_generation - 1
+
+
+async def test_focus_view_generation_independent_of_breadcrumb_depth(
+    async_session: AsyncSession,
+) -> None:
+    """PINS the đời contract: đời is an intrinsic graph property computed from a FULL
+    ancestor lookup (fixed max 50), deliberately independent of the request's
+    ``ancestor_depth``. A short breadcrumb request must not truncate or null the đời
+    labels, even when the founder sits deeper than the requested breadcrumb window.
+
+    Discriminating: if ``_base_generation`` regressed to derive đời from the
+    depth-capped breadcrumb ``chain`` (the old inline-loop behavior) instead of a
+    fixed full-depth lookup, the founder (at depth 4 from the focus person) would
+    never appear in an ancestor_depth=2 chain, and generation_of_focus would come
+    back None instead of 5."""
+    from app.application.tree.queries import GetFocusView
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    to = await _person(async_session, clan_id, creator, "ThuyTo")
+    g2 = await _person(async_session, clan_id, creator, "G2")
+    g3 = await _person(async_session, clan_id, creator, "G3")
+    g4 = await _person(async_session, clan_id, creator, "G4")
+    focus = await _person(async_session, clan_id, creator, "Focus")
+    await _member(async_session, to, clan_id, is_founder=True)
+    for p in (g2, g3, g4, focus):
+        await _member(async_session, p, clan_id)
+    await _pc(async_session, to, g2, clan_id, creator)
+    await _pc(async_session, g2, g3, clan_id, creator)
+    await _pc(async_session, g3, g4, clan_id, creator)
+    await _pc(async_session, g4, focus, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    view = await handler.get_focus_view(
+        GetFocusView(person_id=focus, clan_id=clan_id, ancestor_depth=2)
+    )
+
+    # ThuyTo(1) -> G2(2) -> G3(3) -> G4(4) -> Focus(5): full founder distance, NOT null.
+    assert view["generation_of_focus"] == 5
+    assert len(view["ancestors"]) == 2  # breadcrumb itself still honors the requested depth
+
+
+async def test_get_ancestors_handler_generation_graph_computed(
+    async_session: AsyncSession,
+) -> None:
+    """GET /tree/ancestors computes đời from the graph (thủy tổ=1), the same
+    graph-computed contract as every other tree endpoint — ignoring a wrong
+    hand-entered clan_memberships.generation."""
+    from app.application.tree.queries import GetAncestors
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    founder = await _person(async_session, clan_id, creator, "ThuyTo")
+    son = await _person(async_session, clan_id, creator, "Con")
+    grand = await _person(async_session, clan_id, creator, "Chau")
+    await _member(async_session, founder, clan_id, is_founder=True)
+    await _member(async_session, son, clan_id)
+    await _member(async_session, grand, clan_id)
+    # Seed a WRONG hand-entered generation to prove it's ignored.
+    await async_session.execute(
+        sa.text("UPDATE clan_memberships SET generation = 99 WHERE person_id = :p"), {"p": grand}
+    )
+    await _pc(async_session, founder, son, clan_id, creator)
+    await _pc(async_session, son, grand, clan_id, creator)
+    await async_session.commit()
+
+    handler = await _handler(async_session)
+    ancestors = await handler.get_ancestors(GetAncestors(person_id=grand, clan_id=clan_id))
+
+    by_id = {a["id"]: a for a in ancestors}
+    assert by_id[str(grand)]["generation"] == 3  # not the seeded 99
+    assert by_id[str(son)]["generation"] == 2
+    assert by_id[str(founder)]["generation"] == 1
+
+
+async def test_child_nodes_carry_mother_attribution(async_session: AsyncSession) -> None:
+    """đa thê: each child node names its mother (which wife) + her spouse_order."""
+    from app.application.tree.handlers import TreeQueryHandler
+    from app.application.tree.queries import GetSubtree
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    father = await _person(async_session, clan_id, creator, "Cha")
+    w1 = await _person(async_session, clan_id, creator, "Vo Ca", gender="female")
+    w2 = await _person(async_session, clan_id, creator, "Vo Hai", gender="female")
+    c1 = await _person(async_session, clan_id, creator, "Con Ba Ca")
+    c2 = await _person(async_session, clan_id, creator, "Con Ba Hai")
+    for p in (father, w1, w2, c1, c2):
+        await _member(async_session, p, clan_id)
+    await _marriage(async_session, father, w1, clan_id, creator, spouse_order=1)
+    await _marriage(async_session, father, w2, clan_id, creator, spouse_order=2)
+    # father→child (paternal descent) AND mother→child (attribution edge)
+    await _pc(async_session, father, c1, clan_id, creator)
+    await _pc(async_session, w1, c1, clan_id, creator)
+    await _pc(async_session, father, c2, clan_id, creator)
+    await _pc(async_session, w2, c2, clan_id, creator)
+    await async_session.commit()
+
+    handler = TreeQueryHandler(SqlAlchemyTreeRepository(async_session))
+    result = await handler.get_subtree(GetSubtree(person_id=father, clan_id=clan_id))
+    kids = {c["full_name"]: c for c in result["tree"]["children"]}
+    assert kids["Con Ba Ca"]["mother_id"] == str(w1)
+    assert kids["Con Ba Ca"]["mother_spouse_order"] == 1
+    assert kids["Con Ba Hai"]["mother_id"] == str(w2)
+    assert kids["Con Ba Hai"]["mother_spouse_order"] == 2
+
+
+async def test_child_without_mother_edge_has_null_mother(async_session: AsyncSession) -> None:
+    from app.application.tree.handlers import TreeQueryHandler
+    from app.application.tree.queries import GetSubtree
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    father = await _person(async_session, clan_id, creator, "Cha")
+    child = await _person(async_session, clan_id, creator, "Con")
+    await _member(async_session, father, clan_id)
+    await _member(async_session, child, clan_id)
+    await _pc(async_session, father, child, clan_id, creator)  # no mother edge
+    await async_session.commit()
+
+    handler = TreeQueryHandler(SqlAlchemyTreeRepository(async_session))
+    result = await handler.get_subtree(GetSubtree(person_id=father, clan_id=clan_id))
+    kid = result["tree"]["children"][0]
+    assert kid["mother_id"] is None and kid["mother_spouse_order"] is None

@@ -40,6 +40,8 @@ class TreeNode(BaseModel):
     membership_role: str | None = None  # blood, spouse, adopted
     is_founder: bool = False
     depth: int = 0
+    mother_id: str | None = None
+    mother_spouse_order: int | None = None
     spouses: list[SpouseNode] = []
     children: list[TreeNode] = []  # recursive
 
@@ -77,6 +79,8 @@ class TreeNodeSummary(BaseModel):
     avatar_url: str | None = None
     is_founder: bool = False
     depth: int = 0
+    mother_id: str | None = None
+    mother_spouse_order: int | None = None
     spouses: list[SpouseNode] = []
     children: list[TreeNodeSummary] = []
 
@@ -138,6 +142,8 @@ class FocusTreeNode(BaseModel):
     branch_name: str | None = None
     branch_order: int | None = None
     has_more_descendants: bool = False
+    mother_id: str | None = None
+    mother_spouse_order: int | None = None
     spouses: list[SpouseNode] = []
     children: list[FocusTreeNode] = []
 

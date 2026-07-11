@@ -22,6 +22,7 @@ class TreeRepository(Protocol):
         root_id: uuid.UUID,
         clan_id: uuid.UUID,
         max_generations: int,
+        base_generation: int | None = None,
     ) -> dict[str, Any] | None:
         """Build a hierarchical tree dict rooted at root_id."""
         ...
