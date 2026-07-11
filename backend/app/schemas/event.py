@@ -2,8 +2,13 @@
 
 import uuid
 from datetime import date, datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.schemas.historical_date import HistoricalDate, coerce_response_dates
+
+_EVENT_DATE_FIELDS: dict[str, str | None] = {"event_date": None}
 
 
 class EventCreateRequest(BaseModel):
@@ -44,7 +49,7 @@ class EventResponse(BaseModel):
     event_type: str
     title: str
     description: str | None = None
-    event_date: date
+    event_date: HistoricalDate = Field(default_factory=HistoricalDate)
     is_lunar_calendar: bool
     is_recurring: bool
     notify_days_before: int
@@ -53,6 +58,11 @@ class EventResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _nest_dates(cls, data: Any) -> Any:
+        return coerce_response_dates(cls, data, _EVENT_DATE_FIELDS)
 
 
 class EventPersonSummary(BaseModel):
@@ -71,17 +81,27 @@ class UpcomingEvent(BaseModel):
     person: EventPersonSummary | None = None
     event_type: str
     title: str
-    event_date: date
+    event_date: HistoricalDate = Field(default_factory=HistoricalDate)
     next_occurrence: date
     days_until: int
     is_lunar_calendar: bool
 
+    @model_validator(mode="before")
+    @classmethod
+    def _nest_dates(cls, data: Any) -> Any:
+        return coerce_response_dates(cls, data, _EVENT_DATE_FIELDS)
+
 
 class TimelineEvent(BaseModel):
-    event_date: date | None = None
+    event_date: HistoricalDate = Field(default_factory=HistoricalDate)
     date_approx: bool = False
     event_type: str
     title: str
     description: str | None = None
     related_person_id: uuid.UUID | None = None
     related_person_name: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _nest_dates(cls, data: Any) -> Any:
+        return coerce_response_dates(cls, data, _EVENT_DATE_FIELDS)

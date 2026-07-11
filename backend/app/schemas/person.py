@@ -4,7 +4,11 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.schemas.historical_date import HistoricalDate, coerce_response_dates
+
+_PERSON_DATE_FIELDS = {"birth_date": "lunar_birth_date", "death_date": "lunar_death_date"}
 
 
 class PersonCreateRequest(BaseModel):
@@ -157,12 +161,8 @@ class PersonResponse(BaseModel):
     alias_name: str | None = None
     gender: str
 
-    birth_date: date | None = None
-    birth_date_approx: bool
-    death_date: date | None = None
-    death_date_approx: bool
-    lunar_birth_date: str | None = None
-    lunar_death_date: str | None = None
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
 
     birth_place: str | None = None
     death_place: str | None = None
@@ -190,6 +190,11 @@ class PersonResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @model_validator(mode="before")
+    @classmethod
+    def _nest_dates(cls, data: Any) -> Any:
+        return coerce_response_dates(cls, data, _PERSON_DATE_FIELDS)
+
 
 class PersonMini(BaseModel):
     """Minimal representation of a person for embedded relationships."""
@@ -198,10 +203,15 @@ class PersonMini(BaseModel):
     full_name: str
     gender: str
     avatar_url: str | None = None
-    birth_date: date | None = None
-    death_date: date | None = None
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _nest_dates(cls, data: Any) -> Any:
+        return coerce_response_dates(cls, data, _PERSON_DATE_FIELDS)
 
 
 class PersonSummary(BaseModel):
@@ -211,13 +221,18 @@ class PersonSummary(BaseModel):
     full_name: str
     gender: str
     avatar_url: str | None = None
-    birth_date: date | None = None
-    death_date: date | None = None
+    birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
+    death_date: HistoricalDate = Field(default_factory=HistoricalDate)
     generation: int | None = None
     is_founder: bool | None = None
     membership_role: str | None = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _nest_dates(cls, data: Any) -> Any:
+        return coerce_response_dates(cls, data, _PERSON_DATE_FIELDS)
 
 
 class PersonDetail(PersonSummary):
