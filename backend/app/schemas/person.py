@@ -183,15 +183,6 @@ class PersonResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PersonListResponse(BaseModel):
-    """Paginated response for person listings."""
-
-    persons: list[PersonResponse]
-    total: int
-    page: int = 1
-    page_size: int = 50
-
-
 class PersonMini(BaseModel):
     """Minimal representation of a person for embedded relationships."""
 

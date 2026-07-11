@@ -18,7 +18,8 @@ async def list_my_clans(
     handler: MeQueryHandler = Depends(get_me_query_handler),
 ) -> dict[str, Any]:
     """List all clans the authenticated user belongs to."""
-    return await handler.list_clans(user_id=current_user["sub"])
+    result = await handler.list_clans(user_id=current_user["sub"])
+    return {"data": result["clans"], "meta": {"count": result["count"]}}
 
 
 @router.post("/clans/{clan_id}/select")
@@ -28,4 +29,5 @@ async def select_clan(
     handler: MeQueryHandler = Depends(get_me_query_handler),
 ) -> dict[str, Any]:
     """Select a clan as the active context."""
-    return await handler.select_clan(user_id=current_user["sub"], clan_id=clan_id)
+    result = await handler.select_clan(user_id=current_user["sub"], clan_id=clan_id)
+    return {"data": result}

@@ -20,22 +20,52 @@ Headers:
 
 Core operations:
 - GET /persons
-  - Query params: cursor, limit, gender, alive, profile, fields, include
+  - Query params: cursor, limit, generation, gender, profile, fields, include
+- GET /persons/search
 - POST /persons
+- POST /persons/batch
 - GET /persons/{id}
 - PATCH /persons/{id}
 - DELETE /persons/{id}
 - POST /persons/{id}/restore
+- POST /persons/{id}/claim
+- GET /persons/{id}/marriages
+- GET /persons/{id}/parent-child
+- GET /persons/{id}/documents
+- GET /persons/{id}/events
 - GET /persons/{id}/timeline
 
-Example response shape (list):
+Response shapes (see [Response envelope](README.md#response-envelope)):
+
+`GET /persons` — cursor-paginated list. **No `total`** — `meta` carries the
+cursor triplet only:
+```json
 {
-  "data": [...],
-  "total": 123
+  "data": [ { "id": "...", "full_name": "...", "...": "..." } ],
+  "meta": { "cursor": "opaque-string-or-null", "has_more": false, "limit": 20 }
 }
-- The persons list returns a `total` count (not a cursor envelope). `cursor`/`limit`
-  query params drive which page of rows is fetched, but the response exposes `data`
-  + `total`, not `next_cursor`/`has_more`.
+```
+
+`POST /persons/batch` — always 200 even on partial failure; unresolved ids are
+reported under `meta.errors`, never mixed into `data`:
+```json
+{
+  "data": [ { "id": "...", "full_name": "...", "...": "..." } ],
+  "meta": { "errors": [ { "id": "...", "code": "person_not_found" } ] }
+}
+```
+
+`POST /persons/{id}/claim` (201):
+```json
+{ "data": { "id": "...", "status": "PENDING", "...": "..." } }
+```
+
+`POST /persons`, `GET /persons/{id}`, `PATCH /persons/{id}` — single resource
+under `data`. `DELETE /persons/{id}`, `POST /persons/{id}/restore` — a message
+envelope (`{"data": {"message": "...", "id": "..."}}`). `GET
+/persons/{id}/{marriages,parent-child,documents,events,timeline}` — a plain
+array under `data` (no `meta` — these are not cursor-paginated).
+
 - NOTE: `created_by_clan_id` is **not** accepted on create/update — it is provenance,
   always stamped from the active clan (see the 2026-06-28 design review, C5).
 

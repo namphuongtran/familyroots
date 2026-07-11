@@ -6,10 +6,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.pagination import paginate_query
 from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
 from app.models.audit_log import AuditLog
 from app.models.identity_claim import IdentityClaim as ClaimModel
@@ -210,52 +211,25 @@ class SqlAlchemyClaimQueryPort(ClaimQueryPort):
         self._session = session
 
     async def list_clan_claims(
-        self,
-        clan_id: uuid.UUID,
-        status: str | None,
-        page: int,
-        page_size: int,
-    ) -> tuple[list[ClaimModel], int]:
+        self, clan_id: uuid.UUID, status: str | None, cursor: str | None, limit: int
+    ) -> list[ClaimModel]:
         query = (
             select(ClaimModel)
             .join(Person, ClaimModel.person_id == Person.id)
             .where(Person.created_by_clan_id == clan_id)
         )
-
         if status:
             query = query.where(ClaimModel.status == status)
-
-        count_query = select(func.count()).select_from(query.subquery())
-        total = await self._session.scalar(count_query) or 0
-
-        query = (
-            query.order_by(ClaimModel.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+        query = paginate_query(query, ClaimModel, cursor, limit)
         result = await self._session.execute(query)
-        claims = list(result.scalars().all())
-
-        return claims, total
+        return list(result.scalars().all())
 
     async def list_user_claims(
-        self,
-        user_id: uuid.UUID,
-        status: str | None,
-        page: int,
-        page_size: int,
-    ) -> tuple[list[ClaimModel], int]:
+        self, user_id: uuid.UUID, status: str | None, cursor: str | None, limit: int
+    ) -> list[ClaimModel]:
         query = select(ClaimModel).where(ClaimModel.user_id == user_id)
         if status:
             query = query.where(ClaimModel.status == status)
-
-        count_query = select(func.count()).select_from(query.subquery())
-        total = await self._session.scalar(count_query) or 0
-
-        query = (
-            query.order_by(ClaimModel.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+        query = paginate_query(query, ClaimModel, cursor, limit)
         result = await self._session.execute(query)
-        return list(result.scalars().all()), total
+        return list(result.scalars().all())

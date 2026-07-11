@@ -147,7 +147,7 @@ def test_batch_endpoint_returns_sparse_profile_with_stats() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["errors"] == []
+    assert body["meta"]["errors"] == []
     assert len(body["data"]) == 2
     assert set(body["data"][0].keys()) == {"id", "full_name", "stats"}
     assert body["data"][0]["stats"] == {"spouse_count": 1, "child_count": 2}
@@ -176,7 +176,7 @@ def test_batch_endpoint_supports_per_id_includes() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["errors"] == []
+    assert body["meta"]["errors"] == []
 
     first = body["data"][0]
     second = body["data"][1]
@@ -210,7 +210,7 @@ def test_batch_endpoint_reports_not_found_without_failing_whole_request() -> Non
     body = response.json()
     assert len(body["data"]) == 1
     assert body["data"][0]["id"] == str(existing_id)
-    assert body["errors"] == [{"id": str(missing_id), "code": "person_not_found"}]
+    assert body["meta"]["errors"] == [{"id": str(missing_id), "code": "person_not_found"}]
 
 
 def test_batch_endpoint_rejects_malformed_include_by_id_keys() -> None:
@@ -256,7 +256,7 @@ def test_batch_endpoint_ignores_unsupported_include_tokens() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["errors"] == []
+    assert body["meta"]["errors"] == []
     assert len(body["data"]) == 1
     assert "unknown_token" not in body["data"][0]
 
@@ -291,7 +291,7 @@ def test_batch_endpoint_propagates_include_subquery_error_for_one_of_several() -
     assert response.status_code == 500
     body = response.json()
     # The generic 500 envelope — not the batch response shape (no top-level
-    # "data"/"errors"), confirming the failure was never folded into a per-item
-    # error or degraded to an empty include.
+    # "data"/"meta.errors"), confirming the failure was never folded into a
+    # per-item error or degraded to an empty include.
     assert body["error"]["code"] == "internal_error"
     assert "data" not in body

@@ -120,9 +120,9 @@ class ClaimQueryPort(Protocol):
         self,
         clan_id: uuid.UUID,
         status: str | None,
-        page: int,
-        page_size: int,
-    ) -> tuple[list[Any], int]:
+        cursor: str | None,
+        limit: int,
+    ) -> list[Any]:
         """List claims linked to persons created by the given clan."""
         ...
 
@@ -130,8 +130,8 @@ class ClaimQueryPort(Protocol):
         self,
         user_id: uuid.UUID,
         status: str | None,
-        page: int,
-        page_size: int,
-    ) -> tuple[list[Any], int]:
+        cursor: str | None,
+        limit: int,
+    ) -> list[Any]:
         """List claims submitted by the given user, across all clans."""
         ...

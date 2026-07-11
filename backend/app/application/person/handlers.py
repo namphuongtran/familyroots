@@ -18,6 +18,7 @@ from app.application.person.commands import (
     SearchPersons,
     UpdatePerson,
 )
+from app.core.pagination import encode_fields_cursor
 from app.domain.person.entity import Person
 from app.domain.person.query_port import PersonQueryPort
 from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
@@ -176,17 +177,34 @@ class PersonQueryHandler:
         self._repo = repo
         self._query_port = query_port
 
-    async def list_persons(self, query: ListPersons) -> tuple[list[PersonResponse], int]:
-        """List persons with filtering, pagination, and total count."""
+    async def list_persons(self, query: ListPersons) -> tuple[list[PersonResponse], dict[str, Any]]:
+        """List persons with filtering and cursor pagination.
+
+        Returns ``(data, meta)`` where ``meta`` carries ``cursor``/``has_more``/``limit``
+        — no bare total/count_in_clan call here (see repo-level count_in_clan for other
+        callers). The list is ordered by ``(full_name, id)``, so the cursor encodes both
+        fields (see ``list_in_clan``) — an id-only cursor would skip/duplicate rows
+        whenever id-order and full_name-order disagree.
+        """
         filters = PersonFilters(
             gender=query.gender,
-            is_deleted=query.is_deleted,
             generation=query.generation,
+            is_deleted=query.is_deleted,
             branch_id=query.branch_id,
         )
-        persons = await self._repo.list_in_clan(query.clan_id, filters, query.cursor, query.limit)
-        total = await self._repo.count_in_clan(query.clan_id, query.is_deleted)
-        return [PersonResponse.model_validate(p) for p in persons], total
+        rows = await self._repo.list_in_clan(query.clan_id, filters, query.cursor, query.limit)
+        has_more = len(rows) > query.limit
+        page = rows[: query.limit]
+        cursor = None
+        if has_more and page:
+            last = page[-1]
+            cursor = encode_fields_cursor({"full_name": last.full_name, "id": str(last.id)})
+        meta = {
+            "cursor": cursor,
+            "has_more": has_more,
+            "limit": query.limit,
+        }
+        return [PersonResponse.model_validate(p) for p in page], meta
 
     async def get(self, query: GetPerson) -> PersonResponse:
         """Get a single person."""

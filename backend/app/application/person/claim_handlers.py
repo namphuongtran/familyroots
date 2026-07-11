@@ -9,9 +9,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.core.pagination import build_page
 from app.domain.person.claim_entity import IdentityClaim as ClaimEntity
 from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
-from app.schemas.claim import IdentityClaimPaginatedResponse, IdentityClaimResponse
+from app.schemas.claim import IdentityClaimResponse
 
 
 class ClaimCommandHandler:
@@ -356,31 +357,33 @@ class ClaimQueryHandler:
         self._query_port = query_port
 
     async def list_clan_claims(
-        self, *, clan_id: uuid.UUID, status: str | None = None, page: int = 1, page_size: int = 20
-    ) -> IdentityClaimPaginatedResponse:
+        self,
+        *,
+        clan_id: uuid.UUID,
+        status: str | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
         """List claims linked to persons created by the given clan."""
-        claims, total = await self._query_port.list_clan_claims(clan_id, status, page, page_size)
-
-        return IdentityClaimPaginatedResponse(
-            items=[IdentityClaimResponse.model_validate(c) for c in claims],
-            total=total,
-            page=page,
-            page_size=page_size,
-        )
+        claims = await self._query_port.list_clan_claims(clan_id, status, cursor, limit)
+        page = build_page(claims, limit)
+        return {
+            "data": [IdentityClaimResponse.model_validate(c).model_dump() for c in page["data"]],
+            "meta": page["meta"],
+        }
 
     async def list_my_claims(
         self,
         *,
         user_id: uuid.UUID,
         status: str | None = None,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> IdentityClaimPaginatedResponse:
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
         """List the caller's own identity claims (across all clans)."""
-        claims, total = await self._query_port.list_user_claims(user_id, status, page, page_size)
-        return IdentityClaimPaginatedResponse(
-            items=[IdentityClaimResponse.model_validate(c) for c in claims],
-            total=total,
-            page=page,
-            page_size=page_size,
-        )
+        claims = await self._query_port.list_user_claims(user_id, status, cursor, limit)
+        page = build_page(claims, limit)
+        return {
+            "data": [IdentityClaimResponse.model_validate(c).model_dump() for c in page["data"]],
+            "meta": page["meta"],
+        }

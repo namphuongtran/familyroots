@@ -32,7 +32,7 @@ from app.infrastructure.dependencies import (
     get_person_command_handler,
     get_person_query_handler,
 )
-from app.schemas.claim import IdentityClaimResponse, IdentityClaimSubmit
+from app.schemas.claim import IdentityClaimSubmit
 from app.schemas.person import (
     PersonBatchGetRequest,
     PersonCreateRequest,
@@ -104,7 +104,7 @@ async def list_persons(
     ),
 ) -> dict[str, Any]:
     """List persons belonging to a clan with pagination."""
-    persons, total = await handler.list_persons(
+    persons, meta = await handler.list_persons(
         ListPersons(
             clan_id=clan_id,
             gender=gender,
@@ -137,7 +137,7 @@ async def list_persons(
 
     return {
         "data": res_data,
-        "total": total,
+        "meta": meta,
     }
 
 
@@ -315,7 +315,7 @@ async def batch_get_persons(
 
         data.append(filter_dict(p_dict, field_set))
 
-    return {"data": data, "errors": errors}
+    return {"data": data, "meta": {"errors": errors}}
 
 
 @router.get("/{person_id}")
@@ -421,21 +421,22 @@ async def restore_person(
     return {"data": {"message": t("person.restored"), "id": str(person_id)}}
 
 
-@router.post("/{person_id}/claim", response_model=IdentityClaimResponse, status_code=201)
+@router.post("/{person_id}/claim", status_code=201)
 async def submit_identity_claim(
     person_id: uuid.UUID,
     body: IdentityClaimSubmit,
     current_user: dict[str, Any] = Depends(get_current_user),
     handler: ClaimCommandHandler = Depends(get_claim_command_handler),
     role: ClanRole = RequireViewer,
-) -> IdentityClaimResponse:
+) -> dict[str, Any]:
     """Submit a claim for linking a user profile to a person in the family tree."""
     user_id = uuid.UUID(current_user["sub"])
-    return await handler.submit_claim(
+    result = await handler.submit_claim(
         user_id=user_id,
         person_id=person_id,
         requester_note=body.requester_note,
     )
+    return {"data": result.model_dump()}
 
 
 # ── Sub-resources  ────────────────────────────────────────────────

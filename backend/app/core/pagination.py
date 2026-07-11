@@ -42,6 +42,23 @@ def paginate_query(query: Any, model: Any, cursor: str | None, limit: int = 20) 
     return query.order_by(asc(model.created_at), asc(model.id)).limit(limit + 1)
 
 
+def encode_fields_cursor(fields: dict[str, Any]) -> str:
+    """Encode an arbitrary JSON-serializable field mapping into a base64 cursor string.
+
+    Generic counterpart to ``encode_cursor``/``decode_cursor`` for callers whose stable
+    sort key isn't (created_at, id) — e.g. the persons list, which orders by
+    (full_name, id). Callers are responsible for converting non-JSON-native values
+    (UUID, datetime, ...) to strings before passing them in.
+    """
+    return base64.urlsafe_b64encode(json.dumps(fields).encode()).decode()
+
+
+def decode_fields_cursor(cursor: str) -> dict[str, Any]:
+    """Decode a cursor produced by ``encode_fields_cursor`` back into its field mapping."""
+    payload: dict[str, Any] = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+    return payload
+
+
 def build_page(items: list[Any], limit: int) -> dict[str, Any]:
     """Build a paginated response envelope from a list of ORM objects.
 

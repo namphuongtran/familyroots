@@ -32,14 +32,14 @@ admin_invitations_router = APIRouter()
 user_invitations_router = APIRouter()
 
 
-@admin_invitations_router.post("", response_model=InvitationCreatedResponse, status_code=201)
+@admin_invitations_router.post("", status_code=201)
 async def create_invitation(
     clan_id: uuid.UUID,
     body: InvitationCreateRequest,
     user: UserProfile = Depends(RequireClanRole(["admin"])),
     active_clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: InvitationCommandHandler = Depends(get_invitation_command_handler),
-) -> Any:
+) -> dict[str, Any]:
     if clan_id != active_clan_id:
         raise ForbiddenError("clan_context_mismatch")
     out = await handler.create(
@@ -50,7 +50,7 @@ async def create_invitation(
             actor=ActorInfo(user_id=user.id, role="admin"),
         )
     )
-    return out
+    return {"data": InvitationCreatedResponse.model_validate(out).model_dump()}
 
 
 @admin_invitations_router.get("")
@@ -85,12 +85,12 @@ async def revoke_invitation(
     )
 
 
-@user_invitations_router.post("/{token}/accept", response_model=InvitationAcceptedResponse)
+@user_invitations_router.post("/{token}/accept")
 async def accept_invitation(
     token: str,
     current_user: dict[str, Any] = Depends(get_current_user),
     handler: InvitationCommandHandler = Depends(get_invitation_command_handler),
-) -> Any:
+) -> dict[str, Any]:
     out = await handler.accept(
         AcceptInvitation(
             token=token,
@@ -99,6 +99,8 @@ async def accept_invitation(
             user_full_name=current_user.get("user_metadata", {}).get("full_name", ""),
         )
     )
-    return InvitationAcceptedResponse(
-        clan_id=out["clan_id"], role=out["role"], message=t("invitation.accepted")
-    )
+    return {
+        "data": InvitationAcceptedResponse(
+            clan_id=out["clan_id"], role=out["role"], message=t("invitation.accepted")
+        ).model_dump()
+    }
