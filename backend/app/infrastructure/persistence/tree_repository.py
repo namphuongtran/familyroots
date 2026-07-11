@@ -120,7 +120,7 @@ class SqlAlchemyTreeRepository:
         result = await self._session.execute(
             text("""
                 SELECT p.person_id, p.full_name, p.gender, p.edge_type,
-                       per.avatar_url, per.birth_date, per.birth_date_approx
+                       per.avatar_url, per.birth_date, per.birth_date_precision
                 FROM public.find_relationship_path(:from_id, :to_id, :clan_id) p
                 LEFT JOIN public.persons per ON p.person_id = per.id
                 ORDER BY p.step
@@ -135,11 +135,12 @@ class SqlAlchemyTreeRepository:
                 "gender": row.get("gender", "unknown"),
                 "edge_type": row.get("edge_type"),
                 "avatar_url": row.get("avatar_url"),
-                # birth_date (+ _approx) thread through so the kinship descriptor can pick
-                # age-specific terms (bác vs chú, anh/chị vs em). An APPROXIMATE date must
-                # not yield a hard older/younger claim, so the flag travels with it.
+                # birth_date (+ precision) thread through so the kinship descriptor can
+                # pick age-specific terms (bác vs chú, anh/chị vs em). Any non-`exact`
+                # precision must not yield a hard older/younger claim, so it travels
+                # alongside the date.
                 "birth_date": row.get("birth_date"),
-                "birth_date_approx": row.get("birth_date_approx", False),
+                "birth_date_precision": row.get("birth_date_precision", "exact"),
             }
             for row in rows
         ]

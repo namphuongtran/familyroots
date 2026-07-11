@@ -94,7 +94,6 @@ class UpcomingEvent(BaseModel):
 
 class TimelineEvent(BaseModel):
     event_date: HistoricalDate = Field(default_factory=HistoricalDate)
-    date_approx: bool = False
     event_type: str
     title: str
     description: str | None = None

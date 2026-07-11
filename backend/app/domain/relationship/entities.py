@@ -27,7 +27,18 @@ from app.domain.shared.value_objects import ActorInfo
 # created_by_clan_id (edge ownership / isolation basis), and audit/soft-delete
 # columns — those are set only by create()/soft_delete(), never a blind setattr.
 _MARRIAGE_UPDATABLE_FIELDS = frozenset(
-    {"marriage_date", "divorce_date", "marriage_place", "status", "spouse_order", "notes"}
+    {
+        "marriage_date",
+        "marriage_date_precision",
+        "marriage_date_display",
+        "divorce_date",
+        "divorce_date_precision",
+        "divorce_date_display",
+        "marriage_place",
+        "status",
+        "spouse_order",
+        "notes",
+    }
 )
 _PARENT_CHILD_UPDATABLE_FIELDS = frozenset({"relationship_type", "birth_order", "notes"})
 
@@ -41,7 +52,11 @@ class Marriage(AggregateRoot):
     created_by_clan_id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     marriage_date: date | None = None
+    marriage_date_precision: str = "exact"
+    marriage_date_display: str | None = None
     divorce_date: date | None = None
+    divorce_date_precision: str = "exact"
+    divorce_date_display: str | None = None
     marriage_place: str | None = None
     status: str = "married"
     spouse_order: int | None = None

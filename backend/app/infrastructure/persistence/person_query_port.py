@@ -95,7 +95,6 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                         person.birth_date_display,
                         person.lunar_birth_date,
                     ),
-                    date_approx=person.birth_date_approx,
                     event_type="birth",
                     title=t("timeline.birth"),
                 ).model_dump()
@@ -109,7 +108,6 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                         person.death_date_display,
                         person.lunar_death_date,
                     ),
-                    date_approx=person.death_date_approx,
                     event_type="death",
                     title=t("timeline.death"),
                 ).model_dump()
@@ -143,7 +141,6 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                             row["marriage_date_display"],
                             None,
                         ),
-                        date_approx=False,
                         event_type="marriage",
                         title=t("timeline.marriage"),
                         related_person_id=row["spouse_id"],
@@ -161,7 +158,6 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                     event_date=to_historical_date(
                         ev.event_date, ev.event_date_precision, ev.event_date_display, None
                     ),
-                    date_approx=False,
                     event_type=ev.event_type,
                     title=ev.title,
                     description=ev.description,

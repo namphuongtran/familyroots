@@ -1,19 +1,17 @@
-"""Regression test for the update-handler precision/display shim.
+"""Regression test for the update-handler precision/display write path.
 
 Task 2 added write-DTO fields (birth_date_precision/display, death_date_precision/
 display on person; event_date_precision/display on event; marriage_date_precision/
-display and divorce_date_precision/display on marriage). create_person already
-excluded the 4 person fields from its model_dump(); the 3 PATCH handlers
-(update_person, update_event, update_marriage) did not, so the aggregates'
-_UPDATABLE_FIELDS whitelist raised BusinessRuleViolation("field_not_updatable")
-(HTTP 422) whenever a client PATCHed with any of these new fields.
+display and divorce_date_precision/display on marriage), but the aggregates didn't
+know these fields yet, so the 3 PATCH routes (update_person, update_event,
+update_marriage) temporarily excluded them from `changes` to avoid a spurious 422
+(field_not_updatable).
 
-These tests pin that a PATCH carrying a precision/display field now succeeds
-(the field is silently dropped) instead of 422ing, while a normal field in the
-same request still reaches the handler's `changes` dict and gets applied.
-
-TEMPORARY: once the write path is wired (Task 5), the handler-side excludes go
-away and these tests should be updated to assert the fields DO reach `changes`.
+Task 5 wired precision/display onto every aggregate's `_UPDATABLE_FIELDS` whitelist
+and removed those excludes. These tests now pin the OPPOSITE of the old shim
+behavior: a PATCH carrying a precision/display field must reach the handler's
+`changes` dict (and therefore persist), alongside any ordinary field in the same
+request.
 """
 
 from __future__ import annotations
@@ -140,7 +138,7 @@ def _build_client() -> tuple[TestClient, dict[str, Any]]:
     return TestClient(app, raise_server_exceptions=False), handlers
 
 
-def test_update_person_with_precision_field_does_not_422() -> None:
+def test_update_person_with_precision_field_persists() -> None:
     client, handlers = _build_client()
     person_id = uuid.uuid4()
 
@@ -151,11 +149,14 @@ def test_update_person_with_precision_field_does_not_422() -> None:
 
     assert response.status_code == 200, response.text
     assert response.json()["data"]["full_name"] == "Updated Name"
-    # The precision field must never reach the aggregate's changes dict.
-    assert handlers["person"].received_changes == {"full_name": "Updated Name"}
+    # The precision field must now reach the aggregate's changes dict (shim removed).
+    assert handlers["person"].received_changes == {
+        "birth_date_precision": "circa",
+        "full_name": "Updated Name",
+    }
 
 
-def test_update_person_with_only_precision_fields_is_a_noop_200() -> None:
+def test_update_person_with_only_precision_fields_reaches_changes() -> None:
     client, handlers = _build_client()
     person_id = uuid.uuid4()
 
@@ -170,10 +171,15 @@ def test_update_person_with_only_precision_fields_is_a_noop_200() -> None:
     )
 
     assert response.status_code == 200, response.text
-    assert handlers["person"].received_changes == {}
+    assert handlers["person"].received_changes == {
+        "birth_date_precision": "circa",
+        "birth_date_display": "circa 1900",
+        "death_date_precision": "year",
+        "death_date_display": "1975",
+    }
 
 
-def test_update_event_with_precision_field_does_not_422() -> None:
+def test_update_event_with_precision_field_persists() -> None:
     client, handlers = _build_client()
     event_id = uuid.uuid4()
 
@@ -187,10 +193,14 @@ def test_update_event_with_precision_field_does_not_422() -> None:
     )
 
     assert response.status_code == 200, response.text
-    assert handlers["event"].received_changes == {"title": "New title"}
+    assert handlers["event"].received_changes == {
+        "event_date_precision": "month",
+        "event_date_display": "Jan 1975",
+        "title": "New title",
+    }
 
 
-def test_update_marriage_with_precision_field_does_not_422() -> None:
+def test_update_marriage_with_precision_field_persists() -> None:
     client, handlers = _build_client()
     marriage_id = uuid.uuid4()
 
@@ -204,4 +214,8 @@ def test_update_marriage_with_precision_field_does_not_422() -> None:
     )
 
     assert response.status_code == 200, response.text
-    assert handlers["marriage"].received_changes == {"notes": "updated notes"}
+    assert handlers["marriage"].received_changes == {
+        "marriage_date_precision": "circa",
+        "divorce_date_display": "unknown",
+        "notes": "updated notes",
+    }

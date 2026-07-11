@@ -36,13 +36,11 @@ class Person(TimestampMixin, Base):
 
     # ── Dates (solar — canonical for sorting/computing) ───────
     birth_date: Mapped[date | None] = mapped_column(Date, default=None)
-    birth_date_approx: Mapped[bool] = mapped_column(Boolean, default=False)
     death_date: Mapped[date | None] = mapped_column(Date, default=None)
-    death_date_approx: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # ── Date precision/display (HistoricalDate foundation) ────
-    # `approx` above is kept for now (dropped in a later task); these columns are
-    # backfilled from it by migration 012 and will become the canonical source.
+    # ── Date precision/display (HistoricalDate — canonical source; the legacy
+    # boolean "estimated date" flags were backfilled into these by migration 012
+    # and dropped by migration 014) ────────────────────────────
     birth_date_precision: Mapped[str] = mapped_column(String(10), default="exact")
     birth_date_display: Mapped[str | None] = mapped_column(String(100), default=None)
     death_date_precision: Mapped[str] = mapped_column(String(10), default="exact")

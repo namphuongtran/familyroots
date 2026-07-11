@@ -34,9 +34,11 @@ _UPDATABLE_FIELDS = frozenset(
         "alias_name",
         "gender",
         "birth_date",
-        "birth_date_approx",
+        "birth_date_precision",
+        "birth_date_display",
         "death_date",
-        "death_date_approx",
+        "death_date_precision",
+        "death_date_display",
         "lunar_birth_date",
         "lunar_death_date",
         "birth_place",
@@ -77,9 +79,11 @@ class Person(AggregateRoot):
 
     # ── Dates (solar) ─────────────────────────────────────────
     birth_date: date | None = None
-    birth_date_approx: bool = False
+    birth_date_precision: str = "exact"
+    birth_date_display: str | None = None
     death_date: date | None = None
-    death_date_approx: bool = False
+    death_date_precision: str = "exact"
+    death_date_display: str | None = None
 
     # ── Dates (lunar — display only) ──────────────────────────
     lunar_birth_date: str | None = None
@@ -184,8 +188,9 @@ class Person(AggregateRoot):
         __post_init__, because the persistence mapper reconstructs Person from every DB
         row and must not raise on pre-existing rows that predate this rule. This is the
         single source of truth for the cross-field rule (the API schema does not
-        duplicate it), so it also covers partial PATCH updates. The *_approx flags are
-        intentionally ignored — death before birth is impossible regardless of estimation.
+        duplicate it), so it also covers partial PATCH updates. Date precision is
+        intentionally ignored — death before birth is impossible regardless of how
+        precisely either date is known.
         """
         if self.birth_date and self.death_date and self.death_date < self.birth_date:
             raise BusinessRuleViolation(

@@ -186,11 +186,11 @@ class TreeQueryHandler:
 
         description = describe_relationship(path)
 
-        # birth_date/_approx are carried only for the descriptor's age logic — strip
+        # birth_date/precision are carried only for the descriptor's age logic — strip
         # them so the /path response shape is unchanged (they were never exposed).
         for step in path:
             step.pop("birth_date", None)
-            step.pop("birth_date_approx", None)
+            step.pop("birth_date_precision", None)
 
         return {"path": path, "description": description, "found": True}
 

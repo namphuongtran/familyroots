@@ -31,6 +31,8 @@ _UPDATABLE_FIELDS = frozenset(
         "title",
         "description",
         "event_date",
+        "event_date_precision",
+        "event_date_display",
         "is_lunar_calendar",
         "is_recurring",
         "notify_days_before",
@@ -54,6 +56,8 @@ class Event(AggregateRoot):
 
     # ── Date handling ─────────────────────────────────────────
     event_date: date = field(default_factory=date.today)
+    event_date_precision: str = "exact"
+    event_date_display: str | None = None
     is_lunar_calendar: bool = False
     is_recurring: bool = True
     notify_days_before: int = 7
@@ -76,6 +80,8 @@ class Event(AggregateRoot):
         event_date: date,
         person_id: uuid.UUID | None = None,
         description: str | None = None,
+        event_date_precision: str = "exact",
+        event_date_display: str | None = None,
         is_lunar_calendar: bool = False,
         is_recurring: bool = True,
         notify_days_before: int = 7,
@@ -91,6 +97,8 @@ class Event(AggregateRoot):
             title=title,
             description=description,
             event_date=event_date,
+            event_date_precision=event_date_precision,
+            event_date_display=event_date_display,
             is_lunar_calendar=is_lunar_calendar,
             is_recurring=is_recurring,
             notify_days_before=notify_days_before,

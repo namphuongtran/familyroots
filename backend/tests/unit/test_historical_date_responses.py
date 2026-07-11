@@ -46,7 +46,8 @@ def _person() -> Person:
         full_name="Nguyễn Văn A",
         gender="male",
         birth_date=date(1950, 3, 1),
-        birth_date_approx=True,
+        birth_date_precision="circa",
+        birth_date_display="khoảng 1950",
         lunar_birth_date="15/2 Canh Dần",
         death_date=None,
         nationality="VN",
@@ -62,10 +63,10 @@ def test_person_response_nests_birth_and_death_date() -> None:
     assert isinstance(resp.birth_date, HistoricalDate)
     assert resp.birth_date.date == date(1950, 3, 1)
     assert resp.birth_date.lunar == "15/2 Canh Dần"
-    # The domain entity doesn't carry precision/display yet (Task 5 wires it) —
-    # defaults to "exact"/None rather than erroring.
-    assert resp.birth_date.precision == "exact"
-    assert resp.birth_date.display is None
+    # Task 5 wired precision/display onto the domain entity — the response must
+    # carry the entity's real values through, not default them to "exact"/None.
+    assert resp.birth_date.precision == "circa"
+    assert resp.birth_date.display == "khoảng 1950"
 
     assert resp.death_date == HistoricalDate(date=None, precision="exact", display=None, lunar=None)
 
@@ -83,8 +84,8 @@ def test_person_response_drops_top_level_approx_and_lunar_fields() -> None:
         assert legacy_field not in PersonResponse.model_fields
     assert dumped["birth_date"] == {
         "date": date(1950, 3, 1),
-        "precision": "exact",
-        "display": None,
+        "precision": "circa",
+        "display": "khoảng 1950",
         "lunar": "15/2 Canh Dần",
     }
 
@@ -233,15 +234,15 @@ def test_upcoming_event_nests_event_date_next_occurrence_stays_scalar() -> None:
     assert upcoming.next_occurrence == date(2026, 5, 5)
 
 
-def test_timeline_event_nests_event_date_keeps_date_approx_separate() -> None:
-    entry = TimelineEvent(
-        event_date=date(1950, 3, 1), date_approx=True, event_type="birth", title="x"
-    )
+def test_timeline_event_nests_event_date_and_has_no_legacy_approx_field() -> None:
+    """Task 5 retired the redundant `date_approx` boolean — precision (nested inside
+    `event_date`) is now the single source of truth for "how well is this date known"."""
+    entry = TimelineEvent(event_date=date(1950, 3, 1), event_type="birth", title="x")
 
     assert entry.event_date == HistoricalDate(
         date=date(1950, 3, 1), precision="exact", display=None, lunar=None
     )
-    assert entry.date_approx is True
+    assert "date_approx" not in TimelineEvent.model_fields
 
 
 def test_timeline_event_accepts_an_already_built_historical_date() -> None:

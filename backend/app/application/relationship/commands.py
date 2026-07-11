@@ -18,7 +18,11 @@ class CreateMarriage:
     clan_id: uuid.UUID
     actor: ActorInfo
     marriage_date: date | None = None
+    marriage_date_precision: str = "exact"
+    marriage_date_display: str | None = None
     divorce_date: date | None = None
+    divorce_date_precision: str = "exact"
+    divorce_date_display: str | None = None
     marriage_place: str | None = None
     status: str = "married"
     spouse_order: int | None = None

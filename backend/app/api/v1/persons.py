@@ -181,17 +181,7 @@ async def create_person(
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Create a new person and add a clan membership."""
-    # NOTE: precision/display fields are accepted on the request schema (HistoricalDate
-    # contract, Task 2) but not yet consumed by CreatePerson — excluded here so the new
-    # fields don't crash the kwarg unpacking below. Wiring lands in a later task.
-    dumped = body.model_dump(
-        exclude={
-            "birth_date_precision",
-            "birth_date_display",
-            "death_date_precision",
-            "death_date_display",
-        }
-    )
+    dumped = body.model_dump()
     person = await handler.create(
         CreatePerson(
             actor=ActorInfo.from_jwt(current_user, role.value),
@@ -383,21 +373,7 @@ async def update_person(
     user_role: ClanRole = RequireViewer,
 ) -> dict[str, Any]:
     """Update a person's details."""
-    # TEMPORARY shim (mirrors create_person above): precision/display fields are
-    # accepted on the request schema (HistoricalDate contract, Task 2) but the
-    # Person aggregate's update() whitelist doesn't know them yet, so passing
-    # them through would raise a spurious 422 (field_not_updatable). Dropped
-    # here until the write path is wired in the approx→precision task (Task 5),
-    # which must REMOVE this exclude.
-    changes = body.model_dump(
-        exclude_unset=True,
-        exclude={
-            "birth_date_precision",
-            "birth_date_display",
-            "death_date_precision",
-            "death_date_display",
-        },
-    )
+    changes = body.model_dump(exclude_unset=True)
     person = await handler.update(
         UpdatePerson(
             person_id=person_id,

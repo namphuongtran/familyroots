@@ -8,6 +8,7 @@ import pytest
 from app.services.relationship_descriptor import (
     KINSHIP_MAP,
     SPECIFIC_KINSHIP_KEYS,
+    _age_rank,
     _specific_key,
     describe_relationship,
 )
@@ -19,7 +20,7 @@ def _path_step(
     gender="male",
     edge_type=None,
     birth_date=None,
-    birth_date_approx=False,
+    birth_date_precision="exact",
 ):
     """Build a path step dict."""
     return {
@@ -28,7 +29,7 @@ def _path_step(
         "gender": gender,
         "edge_type": edge_type,
         "birth_date": birth_date,
-        "birth_date_approx": birth_date_approx,
+        "birth_date_precision": birth_date_precision,
     }
 
 
@@ -105,9 +106,12 @@ def test_kinship_map_coverage():
 # _specific_key is the deterministic core (returns the i18n key, no locale coupling).
 
 
-def _n(gender="unknown", birth_date=None, birth_date_approx=False):
+def _n(gender="unknown", birth_date=None, birth_date_precision="exact"):
     return _path_step(
-        uuid.uuid4(), gender=gender, birth_date=birth_date, birth_date_approx=birth_date_approx
+        uuid.uuid4(),
+        gender=gender,
+        birth_date=birth_date,
+        birth_date_precision=birth_date_precision,
     )
 
 
@@ -150,11 +154,30 @@ def test_sibling_without_birthdate_falls_back():
     assert _specific_key(("parent", "child"), [me, _n("male"), sib]) is None
 
 
-def test_sibling_approximate_date_falls_back():
-    """An APPROXIMATE date must not become a hard Anh/Em claim → fall back to generic."""
+@pytest.mark.parametrize("precision", ["circa", "year", "month", "unknown"])
+def test_sibling_non_exact_date_falls_back(precision):
+    """A non-`exact` precision date must not become a hard Anh/Em claim → generic."""
     me = _n("male", date(1990, 1, 1))
-    approx_sib = _n("male", date(1985, 1, 1), birth_date_approx=True)
+    approx_sib = _n("male", date(1985, 1, 1), birth_date_precision=precision)
     assert _specific_key(("parent", "child"), [me, _n("male"), approx_sib]) is None
+
+
+def test_age_rank_requires_both_sides_exact():
+    """`_age_rank` must refuse a claim unless BOTH birth dates are `exact` — an
+    asymmetric pairing (one exact, one estimated) is just as unsafe as both being
+    estimated, since either side alone could hide the true ordering."""
+    exact_older = _n("male", date(1985, 1, 1))
+    exact_younger = _n("male", date(1995, 1, 1))
+    non_exact = _n("male", date(1985, 1, 1), birth_date_precision="year")
+
+    # both exact → a real ranking
+    assert _age_rank(exact_older, exact_younger) == "older"
+    assert _age_rank(exact_younger, exact_older) == "younger"
+    # only one side exact (either position) → refuse
+    assert _age_rank(exact_older, non_exact) is None
+    assert _age_rank(non_exact, exact_older) is None
+    # neither side exact → refuse
+    assert _age_rank(non_exact, non_exact) is None
 
 
 def test_sibling_equal_dates_falls_back():
@@ -214,9 +237,9 @@ def test_paternal_uncle_without_birthdate_falls_back():
     )
 
 
-def test_paternal_uncle_approximate_date_falls_back():
-    """Approximate father/uncle dates → can't assert Bác vs Chú → generic."""
-    father = _n("male", date(1960, 1, 1), birth_date_approx=True)
+def test_paternal_uncle_non_exact_date_falls_back():
+    """Non-exact father/uncle dates → can't assert Bác vs Chú → generic."""
+    father = _n("male", date(1960, 1, 1), birth_date_precision="circa")
     uncle = _n("male", date(1955, 1, 1))
     assert _specific_key(("parent", "parent", "child"), [_n(), father, _n("male"), uncle]) is None
 
@@ -251,12 +274,12 @@ def test_cousin_by_age_and_gender():
     assert _specific_key(e, [me, *mid, _n(), younger]) == "kinship.cousin_younger"
 
 
-def test_cousin_missing_or_approx_age_falls_back():
+def test_cousin_missing_or_non_exact_age_falls_back():
     e = ("parent", "parent", "child", "child")
     me = _n("male")  # no birth_date
     assert _specific_key(e, [me, _n(), _n(), _n(), _n("male")]) is None
     me2 = _n("male", date(1990, 1, 1))
-    approx = _n("male", date(1985, 1, 1), birth_date_approx=True)
+    approx = _n("male", date(1985, 1, 1), birth_date_precision="circa")
     assert _specific_key(e, [me2, _n(), _n(), _n(), approx]) is None
 
 
