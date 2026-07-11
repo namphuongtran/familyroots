@@ -36,8 +36,19 @@ def test_resend_verification_ok() -> None:
 
 
 def test_resend_verification_swallows_provider_error() -> None:
-    """Provider failure must NOT leak (still 200, same message) — non-enumerating."""
-    resp = _client(_Svc(boom=True)).post(
+    """Provider failure must NOT leak (still 200, identical body) — non-enumerating.
+
+    Compares against the ok-path response body directly rather than hardcoding the
+    translated message string, so the assertion doesn't depend on translation
+    loading — but still proves a caller cannot distinguish a real send from a
+    swallowed provider error by inspecting the response.
+    """
+    ok_resp = _client(_Svc(boom=False)).post(
         "/api/v1/auth/resend-verification", json={"email": "x@ex.com"}
     )
-    assert resp.status_code == 200
+    boom_resp = _client(_Svc(boom=True)).post(
+        "/api/v1/auth/resend-verification", json={"email": "x@ex.com"}
+    )
+    assert ok_resp.status_code == 200
+    assert boom_resp.status_code == 200
+    assert boom_resp.json() == ok_resp.json()

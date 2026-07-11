@@ -193,8 +193,9 @@ def founder(client: TestClient) -> dict[str, Any]:
     shared with other integration modules."""
     email = f"smoke-founder-{uuid.uuid4().hex[:8]}@example.com"
     password = "s3cret-pass"
-    reg = _register(client, email, password, f"smoke-clan-{uuid.uuid4().hex[:8]}")
-    return {"email": email, "password": password, "clan_id": reg["clan_id"]}
+    slug = f"smoke-clan-{uuid.uuid4().hex[:8]}"
+    reg = _register(client, email, password, slug)
+    return {"email": email, "password": password, "clan_id": reg["clan_id"], "clan_slug": slug}
 
 
 # ── Happy path: the full flow that hid #12/#13 ────────────────────
@@ -269,6 +270,52 @@ def test_register_sends_verification_email(
     # stub_identity is module-scoped and shared with the other registration tests in
     # this file, so assert on this address specifically rather than list equality.
     assert stub_identity.verification_emails.count("newuser@ex.com") == 1
+
+
+def test_register_compensation_sends_no_email_and_deletes_auth_user(
+    client: TestClient, stub_identity: StubIdentityProvider, founder: dict[str, Any]
+) -> None:
+    """If clan-membership assignment fails AFTER the Supabase user is created, the
+    handler must compensate (delete the orphaned auth user) and must NOT send a
+    verification email for that registrant.
+
+    Trigger: register a *different* email reusing ``founder``'s already-claimed
+    clan slug. Reusing the shared ``founder`` fixture (rather than performing a
+    fresh clan-creating registration here) avoids adding another audit-log row to
+    the session-scoped DB — this suite runs alongside other integration modules
+    that assert on audit-log pagination, so gratuitous extra rows are avoided.
+
+    The slug-uniqueness check (``get_clan_by_slug``) runs inside
+    ``_assign_clan_membership`` — which is only reached after
+    ``identity.create_user`` has already succeeded for the new email — so the
+    resulting ``ConflictError("auth.clan_slug_taken")`` genuinely exercises the
+    handler's compensation ``except`` block, not a pre-create validation path.
+    """
+    second_email = f"second-{uuid.uuid4().hex[:8]}@example.com"
+
+    # Registration with a different email, same slug as `founder`'s clan:
+    # create_user succeeds (the email is unique), but _assign_clan_membership then
+    # finds the slug taken and raises — reached only *after* the auth user for
+    # second_email already exists.
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": second_email,
+            "password": "s3cret-pass",
+            "full_name": "Slug Squatter",
+            "clan_action": "create",
+            "clan_name": "Duplicate Clan",
+            "clan_slug": founder["clan_slug"],
+        },
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["error"]["code"] == "auth.clan_slug_taken"
+
+    # No verification email was ever sent for the failed/rolled-back registrant.
+    assert stub_identity.verification_emails.count(second_email) == 0
+    # And the orphaned auth user was compensated away (deleted), proving the
+    # compensation branch actually ran rather than merely failing silently.
+    assert second_email not in stub_identity._users
 
 
 # ── Negative controls: envelope + status codes stay truthful ─────
