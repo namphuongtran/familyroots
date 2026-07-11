@@ -164,6 +164,7 @@ ignore_imports = [
     "app.application.me.handlers -> app.core.exceptions",
     "app.application.person.claim_handlers -> app.core.exceptions",
     "app.application.person.claim_handlers -> app.core.pagination",
+    "app.application.person.handlers -> app.core.pagination",
     "app.application.platform_admin.handlers -> app.core.exceptions",
     "app.application.tree.handlers -> app.services.relationship_descriptor",
 ]

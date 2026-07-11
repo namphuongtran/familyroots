@@ -13,6 +13,7 @@ from app.application.person.commands import (
     UpdatePerson,
 )
 from app.application.person.handlers import PersonCommandHandler, PersonQueryHandler
+from app.core.pagination import encode_fields_cursor
 from app.domain.person.entity import Person
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
@@ -206,7 +207,9 @@ class TestPersonQueryHandlerList:
 
         assert len(data) == limit
         assert [p.id for p in data] == [rows[0].id, rows[1].id]
-        assert meta == {"cursor": str(rows[limit - 1].id), "has_more": True, "limit": limit}
+        last = rows[limit - 1]
+        expected_cursor = encode_fields_cursor({"full_name": last.full_name, "id": str(last.id)})
+        assert meta == {"cursor": expected_cursor, "has_more": True, "limit": limit}
         mock_repo.count_in_clan.assert_not_awaited()
 
     @pytest.mark.asyncio

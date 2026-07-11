@@ -18,6 +18,7 @@ from app.application.person.commands import (
     SearchPersons,
     UpdatePerson,
 )
+from app.core.pagination import encode_fields_cursor
 from app.domain.person.entity import Person
 from app.domain.person.query_port import PersonQueryPort
 from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
@@ -181,16 +182,25 @@ class PersonQueryHandler:
 
         Returns ``(data, meta)`` where ``meta`` carries ``cursor``/``has_more``/``limit``
         — no bare total/count_in_clan call here (see repo-level count_in_clan for other
-        callers). NOTE: list_in_clan orders by full_name but paginates by an id-cursor;
-        that mismatch is a known, pre-existing pagination-stability issue, orthogonal to
-        this change — not fixed here.
+        callers). The list is ordered by ``(full_name, id)``, so the cursor encodes both
+        fields (see ``list_in_clan``) — an id-only cursor would skip/duplicate rows
+        whenever id-order and full_name-order disagree.
         """
-        filters = PersonFilters(gender=query.gender, generation=query.generation, is_deleted=False)
+        filters = PersonFilters(
+            gender=query.gender,
+            generation=query.generation,
+            is_deleted=query.is_deleted,
+            branch_id=query.branch_id,
+        )
         rows = await self._repo.list_in_clan(query.clan_id, filters, query.cursor, query.limit)
         has_more = len(rows) > query.limit
         page = rows[: query.limit]
+        cursor = None
+        if has_more and page:
+            last = page[-1]
+            cursor = encode_fields_cursor({"full_name": last.full_name, "id": str(last.id)})
         meta = {
-            "cursor": str(page[-1].id) if has_more and page else None,
+            "cursor": cursor,
             "has_more": has_more,
             "limit": query.limit,
         }

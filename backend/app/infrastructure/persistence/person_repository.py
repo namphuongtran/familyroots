@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 
+from app.core.pagination import decode_fields_cursor
 from app.domain.person.entity import Person as PersonEntity
 from app.domain.person.repository import PersonFilters, PersonSearchResult
 from app.infrastructure.persistence.person_mapper import apply_to_orm, to_domain, to_orm
@@ -107,12 +108,25 @@ class SqlAlchemyPersonRepository:
         if filters.branch_id is not None:
             stmt = stmt.where(ClanMembership.branch_id == filters.branch_id)
 
-        # Cursor-based pagination (by created_at or ID)
+        # Cursor-based pagination: the list is ordered by (full_name, id), so the
+        # cursor must carry both — an id-only cursor would skip/duplicate rows
+        # whenever id-order and full_name-order disagree.
         if cursor:
-            stmt = stmt.where(PersonModel.id > uuid.UUID(cursor))
+            decoded = decode_fields_cursor(cursor)
+            cursor_name = decoded["full_name"]
+            cursor_id = uuid.UUID(decoded["id"])
+            stmt = stmt.where(
+                or_(
+                    PersonModel.full_name > cursor_name,
+                    and_(
+                        PersonModel.full_name == cursor_name,
+                        PersonModel.id > cursor_id,
+                    ),
+                )
+            )
 
         # Fetch one extra row so the caller can detect has_more without a COUNT query.
-        stmt = stmt.order_by(PersonModel.full_name).limit(limit + 1)
+        stmt = stmt.order_by(PersonModel.full_name, PersonModel.id).limit(limit + 1)
 
         result = await self._session.execute(stmt)
         models = result.scalars().all()
