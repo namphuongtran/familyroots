@@ -201,9 +201,15 @@ rành gia phả lẫn lập trình viên hiểu đúng. Tên trường lấy t�
   xác, vd "khoảng 1750"). Cờ `*_approx` cũ đã bị thay thế (migrations 012→014,
   ADR-011); API serialize thành object HistoricalDate `{date, precision, display, lunar}`.
 - `lunar_birth_date` / `lunar_death_date` — ngày **âm lịch**, chỉ dùng để *hiển thị*
-  (display-only), không dùng cho tính toán.
-- Sự kiện (`Event`) có cờ `is_lunar_calendar` để đánh dấu ngày theo âm lịch —
-  quan trọng với ngày giỗ.
+  (display-only) trên `Person`; đây vẫn là text người dùng tự nhập, không được engine
+  nào tự sinh ra.
+- Sự kiện (`Event`) có cờ `is_lunar_calendar` để đánh dấu ngày theo âm lịch — quan
+  trọng với ngày giỗ. Kể từ [ADR-018](../decisions/018-vietnamese-lunar-calendar.md),
+  với sự kiện `is_recurring=true, is_lunar_calendar=true`, backend **có tính toán**
+  ngày giỗ âm lịch kế tiếp (quy đổi sang dương lịch qua thuật toán Hồ Ngọc Đức, UTC+7,
+  `app/services/lunar_calendar.py`) để phục vụ scheduler nhắc nhở và `/events/upcoming`
+  — phạm vi tính toán chỉ là ngày lặp lại (recurrence), không sinh ra chuỗi hiển thị
+  `HistoricalDate.lunar` ở trên.
 - **Kinship theo tuổi**: các từ xưng hô phụ thuộc tuổi (bác/chú, cậu/dì…) chỉ được
   suy ra khi **cả hai** ngày sinh có `precision == "exact"` — không khẳng định vai
   vế dựa trên ngày ước lượng (`relationship_descriptor`).

@@ -41,12 +41,17 @@ There is exactly **one** send path in the backend: the daily anniversary cron
 A push is sent for an event when **all** of:
 
 - `events.is_recurring = true`
-- `events.is_lunar_calendar = false` — **⚠️ LUNAR events are currently skipped by the
-  scheduler** (solar-calendar events only; the job merely logs a count of skipped
-  lunar events — "lunar support deferred to data-model round 2")
+- days until the next anniversary of `event_date` **equals** `notify_days_before`
+  (0–30, default 7). For `events.is_lunar_calendar = false` the anniversary is the
+  next solar month/day match; for `events.is_lunar_calendar = true` it is the next
+  lunar anniversary converted to a solar date via the in-house Vietnamese lunar
+  calendar engine (`app/services/lunar_calendar.py`, UTC+7 — see
+  [ADR-018](../decisions/018-vietnamese-lunar-calendar.md)), applying the giỗ
+  conventions (a leap-month death is observed in the regular month; lunar day 30
+  clamps to day 29 in a short month). Both event sources are merged and fed
+  through the same notify/dedup/commit loop — see
+  `docs/architecture/notifications-scheduler.md`.
 - the linked person (if any) is not soft-deleted
-- days until the next solar anniversary of `event_date` **equals**
-  `notify_days_before` (0–30, default 7)
 - no notification for the same event + type was already logged today (dedup via
   `notification_log`)
 

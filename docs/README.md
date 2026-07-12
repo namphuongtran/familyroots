@@ -46,7 +46,7 @@ System-wide design that touches more than one service.
 - [Auth Flow](architecture/auth-flow.md) — JWT/JWKS pipeline, email verification, authorization gates
 - [Tree Read-Model](architecture/tree-read-model.md) — computed đời, đa thê mother attribution, SQL tree functions
 - [Backend i18n](architecture/i18n.md) — locale resolution, `t()` fallback chain, key namespaces, coverage guard
-- [Notifications & Scheduler](architecture/notifications-scheduler.md) — anniversary cron, advisory lock, FCM delivery (⚠️ lunar events skipped)
+- [Notifications & Scheduler](architecture/notifications-scheduler.md) — anniversary cron, advisory lock, FCM delivery (solar + lunar giỗ, see ADR-018)
 - [File Storage](architecture/storage.md) — bucket layout, presigned URLs, upload limits, hard-delete semantics
 
 ## Contracts
