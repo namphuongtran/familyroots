@@ -7,6 +7,7 @@ shape changes need `../docs/contracts/`, schema changes need
 `../docs/architecture/data-model.md` + `../docs/ops/migrations.md`, tree/auth work
 needs `../docs/architecture/{tree-read-model,auth-flow}.md`, and architectural or
 breaking changes need an ADR (`../docs/decisions/README.md`) in the same PR.
+Architecture changes or new aggregates → `../docs/architecture/backend-developer-guide.md`.
 
 ## Commands
 

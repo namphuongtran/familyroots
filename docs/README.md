@@ -36,6 +36,7 @@ Before starting a task, read the docs that own the surface you're touching:
 System-wide design that touches more than one service.
 
 - [Overview](architecture/overview.md) — communication flows, failure assumptions, system map
+- [Backend Developer Guide](architecture/backend-developer-guide.md) — detail design: how to build an aggregate (Person is the canonical reference)
 - [Bounded Contexts](architecture/bounded-contexts.md) — domain context map, aggregates, cross-context relationships
 - [Domain Rules](architecture/domain-rules.md) — genealogy invariants and error codes enforced in the domain layer
 - [API Design](architecture/api-design.md) — REST conventions, endpoint inventory, pagination, sparse fields, includes
@@ -44,6 +45,9 @@ System-wide design that touches more than one service.
 - [Multi-Tenancy](architecture/multi-tenancy.md) — clan-scoped isolation (`X-Current-Clan-Id`; RLS inert pilot)
 - [Auth Flow](architecture/auth-flow.md) — JWT/JWKS pipeline, email verification, authorization gates
 - [Tree Read-Model](architecture/tree-read-model.md) — computed đời, đa thê mother attribution, SQL tree functions
+- [Backend i18n](architecture/i18n.md) — locale resolution, `t()` fallback chain, key namespaces, coverage guard
+- [Notifications & Scheduler](architecture/notifications-scheduler.md) — anniversary cron, advisory lock, FCM delivery (⚠️ lunar events skipped)
+- [File Storage](architecture/storage.md) — bucket layout, presigned URLs, upload limits, hard-delete semantics
 
 ## Contracts
 
