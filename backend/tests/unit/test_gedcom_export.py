@@ -116,7 +116,124 @@ def test_header_and_trailer_structure() -> None:
     assert "2 VERS 5.5.1" in lines
     assert "1 CHAR UTF-8" in lines
     assert "1 SOUR FamilyRoots" in lines
+    assert "1 SUBM @SUB1@" in lines
     assert lines[-1] == "0 TRLR"
+
+
+def test_subm_record_present_before_trailer() -> None:
+    """FIX 3: GEDCOM 5.5.1 requires a SUBM record when HEAD references one via
+    `1 SUBM @SUB1@` — a minimal submitter record must be emitted."""
+    gedcom = build_gedcom(_clan(), [], [], [], [], {})
+    lines = gedcom.split("\n")
+    assert "0 @SUB1@ SUBM" in lines
+    assert "1 NAME FamilyRoots Export" in lines
+    subm_idx = lines.index("0 @SUB1@ SUBM")
+    name_idx = lines.index("1 NAME FamilyRoots Export")
+    trlr_idx = lines.index("0 TRLR")
+    assert subm_idx < name_idx < trlr_idx
+
+
+_LINE_RE = re.compile(r"^\d+ (@[^@]+@ )?[A-Z0-9_]+( .*)?$")
+
+
+def test_multiline_biography_uses_cont_for_embedded_newlines() -> None:
+    """FIX 1: `_fold` used to ignore literal newlines, emitting raw unnumbered
+    lines that corrupt the GEDCOM level structure. A multi-line biography
+    must split on `\\n`, with the first segment on the tag line and each
+    subsequent segment as a `{level+1} CONT` line."""
+    person = _person(full_name="Multi", biography="Line one.\nLine two.")
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    lines = gedcom.split("\n")
+
+    assert lines.count("1 NOTE Line one.") == 1
+    assert lines.count("2 CONT Line two.") == 1
+
+    for line in lines:
+        assert _LINE_RE.match(line), f"malformed GEDCOM line: {line!r}"
+
+
+def test_multiline_biography_also_folds_long_segments_with_conc() -> None:
+    """FIX 1: within each newline-delimited segment, length-based CONC
+    folding must still apply (CONT lines nest their own CONC folds one level
+    deeper)."""
+    long_a = "A" * 300
+    long_b = "B" * 300
+    person = _person(full_name="LongMulti", biography=f"{long_a}\n{long_b}")
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    lines = gedcom.split("\n")
+
+    note_idx = lines.index("1 NOTE " + "A" * 193)
+    conc_a_idx = lines.index("2 CONC " + "A" * 107)
+    cont_idx = lines.index("2 CONT " + "B" * 193)
+    conc_b_idx = lines.index("3 CONC " + "B" * 107)
+    assert note_idx < conc_a_idx < cont_idx < conc_b_idx
+
+    for line in lines:
+        assert _LINE_RE.match(line), f"malformed GEDCOM line: {line!r}"
+        assert len(line.encode("utf-8")) <= 255
+
+
+def test_approximate_only_birth_date_falls_back_to_note() -> None:
+    """FIX 2: when `birth_date` is NULL but `birth_date_display` is set (an
+    approximate-only date), the event tag must still be emitted with a NOTE
+    fallback instead of being silently dropped."""
+    person = _person(
+        full_name="Circa Only",
+        birth_date=None,
+        birth_date_precision="circa",
+        birth_date_display="khoảng 1975",
+    )
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    blocks = _indi_blocks(gedcom)
+    block = blocks["Circa Only"]
+
+    assert "1 BIRT\n2 NOTE khoảng 1975" in block
+    assert "2 DATE" not in block
+
+
+def test_approximate_only_death_date_falls_back_to_note() -> None:
+    person = _person(
+        full_name="Circa Death",
+        death_date=None,
+        death_date_precision="circa",
+        death_date_display="khoảng 2001",
+    )
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    blocks = _indi_blocks(gedcom)
+    block = blocks["Circa Death"]
+
+    assert "1 DEAT\n2 NOTE khoảng 2001" in block
+    assert "2 DATE" not in block
+
+
+def test_at_sign_escaped_in_values_but_xrefs_stay_unescaped() -> None:
+    """FIX 4: literal `@` in emitted values must be escaped as `@@` per
+    GEDCOM 5.5.1, but xref pointers (`@I1@` etc.) must remain unescaped."""
+    person = _person(full_name="Escape Test", biography="foo@bar.com")
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    assert "foo@@bar.com" in gedcom
+
+    xrefs = _indi_xrefs(gedcom)
+    xref = xrefs["Escape Test"]
+    assert xref == "@I1@"
+    assert "@@I1@@" not in gedcom
+
+
+def test_byte_safe_conc_folding_never_splits_multibyte_chars() -> None:
+    """FIX 5: CONC folding must operate on UTF-8 byte length, not char count,
+    and must never split inside a multi-byte character — otherwise a
+    diacritic-heavy Vietnamese string could fold mid-character and corrupt
+    the line (and the encoded byte length could exceed 255)."""
+    diacritic_text = "Nguyễn Văn Ẩn Cư Tại Đà Lạt, Việt Nam. " * 8  # ~320 chars
+    person = _person(full_name="Diacritic", biography=diacritic_text)
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    lines = gedcom.split("\n")
+
+    assert any(line.startswith("2 CONC ") for line in lines)
+    for line in lines:
+        assert len(line.encode("utf-8")) <= 255
+        # every char must round-trip cleanly (no split surrogate/partial byte)
+        line.encode("utf-8").decode("utf-8")
 
 
 def test_indi_one_per_live_person_name_and_soft_deleted_excluded() -> None:

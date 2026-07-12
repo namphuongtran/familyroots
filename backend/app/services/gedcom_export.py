@@ -20,7 +20,9 @@ from collections import defaultdict
 from datetime import date
 from typing import Any
 
-_MAX_LINE_LEN = 240  # binding constraint: fold well under the 255-char hard limit
+_MAX_LINE_BYTES = 255  # GEDCOM 5.5.1 hard limit per physical line, in bytes
+_FOLD_BUDGET_BYTES = 200  # fold threshold: comfortably under the 255-byte hard
+# limit even after a short prefix (`N CONC `/`N CONT `) is added back
 
 _MONTHS = {
     1: "JAN",
@@ -97,6 +99,7 @@ def build_gedcom(
         )
     for fam in families:
         lines.extend(_fam_lines(fam, indi_xref))
+    lines.extend(_SUBMITTER_LINES)
     lines.append("0 TRLR")
     return "\n".join(lines)
 
@@ -104,10 +107,16 @@ def build_gedcom(
 _HEADER_LINES = (
     "0 HEAD",
     "1 SOUR FamilyRoots",
+    "1 SUBM @SUB1@",
     "1 GEDC",
     "2 VERS 5.5.1",
     "2 FORM LINEAGE-LINKED",
     "1 CHAR UTF-8",
+)
+
+_SUBMITTER_LINES = (
+    "0 @SUB1@ SUBM",
+    "1 NAME FamilyRoots Export",
 )
 
 
@@ -244,17 +253,8 @@ def _indi_lines(
     lines.extend(_fold(1, "NAME", person["full_name"]))
     lines.append(f"1 SEX {_sex(person.get('gender'))}")
 
-    if person.get("birth_date") is not None:
-        lines.append("1 BIRT")
-        date_str = _format_date(person["birth_date"], person.get("birth_date_precision"))
-        if date_str:
-            lines.extend(_fold(2, "DATE", date_str))
-
-    if person.get("death_date") is not None:
-        lines.append("1 DEAT")
-        date_str = _format_date(person["death_date"], person.get("death_date_precision"))
-        if date_str:
-            lines.extend(_fold(2, "DATE", date_str))
+    lines.extend(_event_lines("BIRT", person.get("birth_date"), person, "birth_date"))
+    lines.extend(_event_lines("DEAT", person.get("death_date"), person, "death_date"))
 
     meta_pairs: list[tuple[str, str]] = []
     if person.get("birth_name"):
@@ -316,6 +316,25 @@ def _sex(gender: str | None) -> str:
     return "U"
 
 
+def _event_lines(
+    tag: str, value: date | None, person: dict[str, Any], field_prefix: str
+) -> list[str]:
+    """Emit `1 {tag}` plus its date detail — or, when the exact date is NULL
+    but an approximate `*_display` string is present, a `2 NOTE` fallback so
+    approximate-only dates aren't silently dropped from the export."""
+    precision = person.get(f"{field_prefix}_precision")
+    display = person.get(f"{field_prefix}_display")
+    if value is not None:
+        lines = [f"1 {tag}"]
+        date_str = _format_date(value, precision)
+        if date_str:
+            lines.extend(_fold(2, "DATE", date_str))
+        return lines
+    if display:
+        return [f"1 {tag}", *_fold(2, "NOTE", display)]
+    return []
+
+
 def _format_date(value: date | None, precision: str | None) -> str | None:
     if value is None or precision in (None, "unknown"):
         return None
@@ -331,19 +350,77 @@ def _format_date(value: date | None, precision: str | None) -> str | None:
 
 
 def _fold(level: int, tag: str, value: str) -> list[str]:
-    """Emit a `LEVEL TAG value` line, folding with CONC continuations when
-    the line would exceed `_MAX_LINE_LEN` chars (binding constraint: fold at
-    240, comfortably under the 255-char GEDCOM line limit)."""
-    prefix = f"{level} {tag} "
-    if len(prefix) + len(value) <= _MAX_LINE_LEN:
-        return [prefix + value]
+    """Emit `LEVEL TAG value` line(s) for an arbitrary text value, handling
+    three GEDCOM 5.5.1 concerns uniformly (this is the single value-emission
+    helper — NAME/NOTE/DATE all funnel through it):
 
-    first_len = _MAX_LINE_LEN - len(prefix)
-    lines = [prefix + value[:first_len]]
-    remaining = value[first_len:]
-    conc_prefix = f"{level + 1} CONC "
-    chunk_len = _MAX_LINE_LEN - len(conc_prefix)
-    while remaining:
-        lines.append(conc_prefix + remaining[:chunk_len])
-        remaining = remaining[chunk_len:]
+    - **`@` escaping**: literal `@` in values must be doubled to `@@` (xref
+      pointers like `@I1@` are emitted separately via f-strings and never
+      pass through here, so they stay unescaped).
+    - **Embedded newlines**: `\\r\\n`/`\\r` are normalized to `\\n`, then the
+      value is split on `\\n`. The first segment is emitted on the tag line
+      itself; each subsequent segment becomes its own `{level + 1} CONT`
+      line — GEDCOM's line-break continuation. Emitting raw unnumbered lines
+      for embedded newlines (the old behavior) corrupts the level structure.
+    - **Byte-safe CONC folding**: within each segment, long text is folded
+      into `CONC` continuations based on *UTF-8 byte length* (never char
+      count — a naive char-count fold can split a multi-byte character and
+      both corrupt the line and blow the 255-byte hard limit for
+      diacritic-heavy text). Folding triggers at `_FOLD_BUDGET_BYTES` so the
+      physical line (prefix + chunk) stays a safe margin under the 255-byte
+      hard limit.
+    """
+    value = _escape_at(value)
+    segments = value.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    first_prefix = f"{level} {tag} "
+    lines = _fold_segment(first_prefix, segments[0], level + 1)
+    for segment in segments[1:]:
+        cont_prefix = f"{level + 1} CONT "
+        lines.extend(_fold_segment(cont_prefix, segment, level + 2))
     return lines
+
+
+def _escape_at(value: str) -> str:
+    """GEDCOM 5.5.1: a literal `@` in a value must be written as `@@` so
+    parsers don't mistake it for the start of an xref pointer."""
+    return value.replace("@", "@@")
+
+
+def _fold_segment(prefix: str, text: str, conc_level: int) -> list[str]:
+    """Emit `prefix + text` as one line, or — if that would exceed the fold
+    budget — `prefix + <first chunk>` followed by `{conc_level} CONC <chunk>`
+    continuations, splitting only on whole UTF-8 characters."""
+    if _utf8_len(prefix) + _utf8_len(text) <= _FOLD_BUDGET_BYTES:
+        return [prefix + text]
+
+    conc_prefix = f"{conc_level} CONC "
+    first_chunk, remaining = _byte_safe_take(text, _FOLD_BUDGET_BYTES - _utf8_len(prefix))
+    lines = [prefix + first_chunk]
+    conc_budget = _FOLD_BUDGET_BYTES - _utf8_len(conc_prefix)
+    while remaining:
+        chunk, remaining = _byte_safe_take(remaining, conc_budget)
+        lines.append(conc_prefix + chunk)
+    return lines
+
+
+def _utf8_len(text: str) -> int:
+    return len(text.encode("utf-8"))
+
+
+def _byte_safe_take(text: str, budget: int) -> tuple[str, str]:
+    """Split `text` into a leading chunk whose UTF-8 byte length is `<=
+    budget` (never splitting inside a multi-byte character) and the rest.
+    Always takes at least one character, so a pathologically small budget
+    still makes progress rather than looping forever."""
+    taken_chars: list[str] = []
+    taken_bytes = 0
+    split_at = 0
+    for i, ch in enumerate(text):
+        ch_bytes = _utf8_len(ch)
+        if taken_chars and taken_bytes + ch_bytes > budget:
+            break
+        taken_chars.append(ch)
+        taken_bytes += ch_bytes
+        split_at = i + 1
+    return "".join(taken_chars), text[split_at:]

@@ -5,13 +5,17 @@ GET `?format=gedcom` must return 200 with a `.ged` attachment.
 
 This is a self-contained copy of `test_clan_export_json.py`'s rich-clan
 fixture (per repo convention: integration test files are self-contained,
-not import-sharing fixtures across files), with one deliberate divergence:
-Cháu A carries an actual `birth_date` (not `None`) alongside
-`birth_date_precision="circa"`, so the GEDCOM's `circa -> ABT <year>`
-mapping has a real year to render — the JSON archive's rich-clan fixture
-doesn't need that (its `circa` bullet only exercises `birth_date_display`),
-but GEDCOM's `ABT` mapping is year-derived (see `app.services.gedcom_export`
-unit tests), so this copy sets `birth_date` explicitly to expose it here.
+not import-sharing fixtures across files). Cháu A is display-only —
+`birth_date IS NULL`, `birth_date_precision="circa"`,
+`birth_date_display="khoảng 1975"` — matching the JSON archive's rich-clan
+fixture exactly. This exercises the approximate-only-date NOTE fallback
+(task 5 review, FIX 2): a `birth_date`-less person with a display string
+must still emit `1 BIRT` + `2 NOTE <display>` rather than being silently
+dropped from the export. (An earlier revision of this fixture instead gave
+Cháu A a real `birth_date` to exercise the `circa -> ABT <year>` mapping;
+that mapping is already covered directly by
+`app.services.gedcom_export`'s unit tests, so restoring the display-only
+shape here lets this test cover the NOTE fallback end-to-end instead.)
 
 Two-sided clan isolation is already covered for the export use case by
 `test_clan_export_json.py::test_export_isolation_two_sided` (same port/query
@@ -236,10 +240,10 @@ async def rich_clan(
                 "id": chau_a,
                 "full_name": "Cháu A",
                 "gender": "female",
-                # Divergence from the JSON fixture (see module docstring):
-                # a real `birth_date` so GEDCOM's `circa -> ABT <year>`
-                # mapping has a year to render.
-                "birth_date": date(1975, 6, 15),
+                # Display-only approximate date (see module docstring):
+                # `birth_date` is NULL, matching the JSON fixture exactly —
+                # exercises FIX 2's NOTE fallback end-to-end.
+                "birth_date": None,
                 "birth_date_precision": "circa",
                 "birth_date_display": "khoảng 1975",
                 "lunar_birth_date": None,
@@ -408,8 +412,9 @@ async def test_gedcom_export_body_shape(client, admin_headers, rich_clan):
     assert len(re.findall(r"^0 @I\d+@ INDI$", text, flags=re.MULTILINE)) == 6
     assert "Người Đã Xóa" not in text
 
-    # Cháu A's circa 1975 birth renders as a year-level ABT date.
-    assert "2 DATE ABT 1975" in text
+    # Cháu A's `birth_date` is NULL with only a display string set (FIX 2):
+    # the export must still emit BIRT with a NOTE fallback, not drop it.
+    assert "1 BIRT\n2 NOTE khoảng 1975" in text
 
     # Cháu A carries `doi=` (generation) in her Vietnamese metadata NOTE.
     assert re.search(r"1 NOTE FamilyRoots:.*doi=3", text)
