@@ -94,6 +94,11 @@ class PersonUpdateRequest(BaseModel):
     avatar_url: str | None = Field(None, max_length=500)
     notes: str | None = None
 
+    # Optimistic concurrency (ADR-017): required so a stale client can't silently
+    # clobber a concurrent edit. The route pops this out of `changes` before it
+    # reaches the aggregate — it is never itself a client-updatable field.
+    expected_version: int = Field(..., ge=1)
+
     # created_by_clan_id is provenance and is NOT updatable — reassigning it would
     # transfer claim-review control of the person to another clan.
     # (death_date >= birth_date is enforced in the Person domain entity — see the note
@@ -183,6 +188,9 @@ class PersonResponse(BaseModel):
     updated_by: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+    # Optimistic concurrency (ADR-017). Default shields legacy dict read-paths;
+    # entity/ORM-backed responses always carry the real stored value.
+    version: int = 1
 
     model_config = {"from_attributes": True}
 
@@ -222,6 +230,8 @@ class PersonSummary(BaseModel):
     generation: int | None = None
     is_founder: bool | None = None
     membership_role: str | None = None
+    # Optimistic concurrency (ADR-017); see PersonResponse.version.
+    version: int = 1
 
     model_config = {"from_attributes": True}
 

@@ -102,12 +102,14 @@ async def update_marriage(
 ) -> dict[str, Any]:
     """Update a marriage record (only by managing clan)."""
     changes = body.model_dump(exclude_unset=True)
+    expected_version = changes.pop("expected_version")
     marriage = await handler.update(
         UpdateMarriage(
             marriage_id=marriage_id,
             clan_id=clan_id,
             actor=ActorInfo.from_jwt(current_user, role.value),
             changes=changes,
+            expected_version=expected_version,
         )
     )
     return {"data": marriage.model_dump()}
@@ -186,12 +188,15 @@ async def update_parent_child(
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     """Update a parent-child relationship (only by managing clan)."""
+    changes = body.model_dump(exclude_unset=True)
+    expected_version = changes.pop("expected_version")
     link = await handler.update(
         UpdateParentChild(
             link_id=link_id,
             clan_id=clan_id,
             actor=ActorInfo.from_jwt(current_user, role.value),
-            changes=body.model_dump(exclude_unset=True),
+            changes=changes,
+            expected_version=expected_version,
         )
     )
     return {"data": link.model_dump()}

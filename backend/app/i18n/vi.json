@@ -95,6 +95,7 @@
   "error.auth.email_already_exists": "Email đã được sử dụng",
   "error.auth.clan_slug_taken": "Đường dẫn dòng họ đã được sử dụng",
   "error.clan.last_admin_cannot_demote": "Không thể hạ quyền quản trị viên cuối cùng",
+  "error.clan.last_admin_cannot_remove": "Không thể xóa quản trị viên cuối cùng của dòng họ.",
   "error.clan.cannot_remove_self": "Không thể tự xóa chính mình khỏi dòng họ",
   "error.user.already_approved": "Người dùng đã được phê duyệt",
   "auth.clan_created": "Tạo dòng họ thành công",
@@ -168,6 +169,7 @@
   "error.rate_limited": "Quá nhiều yêu cầu; vui lòng chậm lại",
   "error.relationship.duplicate_marriage": "Hôn nhân này đã tồn tại",
   "error.relationship.duplicate_parent_child": "Quan hệ cha/mẹ - con này đã tồn tại",
+  "error.relationship.duplicate_spouse_order": "Thứ tự hôn nhân này đã tồn tại cho người này.",
   "error.same_person_path": "Không thể tìm đường đến chính mình",
   "error.self_marriage_not_allowed": "Một người không thể kết hôn với chính mình",
   "error.self_parent_not_allowed": "Một người không thể là cha/mẹ của chính mình",
@@ -178,5 +180,6 @@
   "error.user_already_linked_to_person": "Tài khoản này đã liên kết với một nhân vật",
   "error.user_not_in_clan": "Người dùng này không phải thành viên dòng họ",
   "error.user_not_linked_to_person": "Tài khoản này chưa liên kết với nhân vật nào",
-  "error.validation_error": "Xác thực thất bại"
+  "error.validation_error": "Xác thực thất bại",
+  "error.stale_write": "Bản ghi đã được người khác sửa. Vui lòng tải lại và thử lại."
 }

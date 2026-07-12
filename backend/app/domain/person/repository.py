@@ -79,8 +79,13 @@ class PersonRepository(Protocol):
         """Full-text / trigram search for persons in a clan."""
         ...
 
-    async def save(self, person: Person) -> None:
-        """Insert or update a Person entity."""
+    async def save(self, person: Person, *, expected_version: int | None = None) -> None:
+        """Insert, or update with an optimistic-concurrency check (ADR-017).
+
+        ``expected_version=None`` (delete/restore/claim paths) updates
+        unconditionally but still bumps ``version``; an int enforces that the
+        stored version matches, raising ``ConflictError("stale_write")`` otherwise.
+        """
         ...
 
     async def save_with_membership(

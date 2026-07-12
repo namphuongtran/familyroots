@@ -75,6 +75,10 @@ class Marriage(AggregateRoot):
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
+    # Optimistic concurrency (ADR-017). Not client-updatable; the repository
+    # bumps it on every successful UPDATE.
+    version: int = 1
+
     def __post_init__(self) -> None:
         if self.person1_id == self.person2_id:
             raise BusinessRuleViolation("self_marriage_not_allowed")
@@ -170,6 +174,10 @@ class ParentChild(AggregateRoot):
     # Timestamps
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    # Optimistic concurrency (ADR-017). Not client-updatable; the repository
+    # bumps it on every successful UPDATE.
+    version: int = 1
 
     def __post_init__(self) -> None:
         if self.parent_id == self.child_id:

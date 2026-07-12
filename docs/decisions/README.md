@@ -18,6 +18,7 @@
 | [014](014-uow-in-transaction-domain-events.md) | UoW In-Transaction Domain-Event Dispatch (Audit) | Accepted, shipped |
 | [015](015-email-verification-flow.md) | Email Verification Flow | Accepted, shipped |
 | [016](016-real-postgres-test-harness.md) | Real-Postgres Integration Test Harness | Accepted, shipped |
+| [017](017-optimistic-concurrency.md) | Required Optimistic Concurrency Control on Genealogy Writes | Accepted, shipped |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural

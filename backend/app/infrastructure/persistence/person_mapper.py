@@ -51,6 +51,7 @@ def to_domain(model: PersonModel) -> PersonEntity:
         updated_by=model.updated_by,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        version=model.version,
     )
 
 
@@ -96,6 +97,7 @@ def to_orm(entity: PersonEntity) -> PersonModel:
         deleted_by=entity.deleted_by,
         created_by=entity.created_by,
         updated_by=entity.updated_by,
+        version=entity.version,
     )
 
 

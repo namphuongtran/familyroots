@@ -95,6 +95,7 @@
   "error.auth.email_already_exists": "Email is already in use",
   "error.auth.clan_slug_taken": "Clan slug is already taken",
   "error.clan.last_admin_cannot_demote": "Cannot demote the last admin",
+  "error.clan.last_admin_cannot_remove": "Cannot remove the clan's last admin.",
   "error.clan.cannot_remove_self": "Cannot remove yourself from the clan",
   "error.user.already_approved": "User is already approved",
   "auth.clan_created": "Clan created successfully",
@@ -168,6 +169,7 @@
   "error.rate_limited": "Too many requests; please slow down",
   "error.relationship.duplicate_marriage": "This marriage already exists",
   "error.relationship.duplicate_parent_child": "This parent-child relationship already exists",
+  "error.relationship.duplicate_spouse_order": "This spouse order already exists for this person.",
   "error.same_person_path": "Cannot find a path to the same person",
   "error.self_marriage_not_allowed": "A person cannot marry themselves",
   "error.self_parent_not_allowed": "A person cannot be their own parent",
@@ -178,5 +180,6 @@
   "error.user_already_linked_to_person": "This user is already linked to a person",
   "error.user_not_in_clan": "This user is not a member of the clan",
   "error.user_not_linked_to_person": "This user is not linked to a person",
-  "error.validation_error": "Validation failed"
+  "error.validation_error": "Validation failed",
+  "error.stale_write": "This record was modified by someone else. Reload and try again."
 }

@@ -22,9 +22,18 @@ class RelationshipQueryPort(Protocol):
     """Minimal query port for relationship validation — implemented
     by the infrastructure repository."""
 
-    async def count_bio_parents(self, child_id: uuid.UUID, clan_id: uuid.UUID) -> int: ...
+    async def count_bio_parents(
+        self,
+        child_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        exclude_link_id: uuid.UUID | None = None,
+    ) -> int: ...
     async def has_active_marriage(
-        self, person1_id: uuid.UUID, person2_id: uuid.UUID, clan_id: uuid.UUID
+        self,
+        person1_id: uuid.UUID,
+        person2_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        exclude_marriage_id: uuid.UUID | None = None,
     ) -> bool: ...
     async def has_parent_child_link(
         self, parent_id: uuid.UUID, child_id: uuid.UUID, clan_id: uuid.UUID
@@ -38,6 +47,13 @@ class RelationshipQueryPort(Protocol):
     async def persons_in_clan(
         self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
     ) -> set[uuid.UUID]: ...
+    async def has_spouse_order_conflict(
+        self,
+        person1_id: uuid.UUID,
+        spouse_order: int,
+        clan_id: uuid.UUID,
+        exclude_marriage_id: uuid.UUID | None = None,
+    ) -> bool: ...
 
 
 class RelationshipDomainValidator:
@@ -69,6 +85,9 @@ class RelationshipDomainValidator:
         child_id: uuid.UUID,
         relationship_type: str,
         clan_id: uuid.UUID,
+        *,
+        exclude_link_id: uuid.UUID | None = None,
+        check_cycle: bool = True,
     ) -> dict[str, object] | None:
         """Validate parent-child rules. Returns warning dict or None."""
         # Rule: no self-referencing
@@ -85,7 +104,7 @@ class RelationshipDomainValidator:
             # owned per-clan (created_by_clan_id), and persons are shared M:N across
             # clans, so another clan's parent edges must neither count against this
             # clan's limit nor be disclosed via the resulting error.
-            bio_count = await self._q.count_bio_parents(child_id, clan_id)
+            bio_count = await self._q.count_bio_parents(child_id, clan_id, exclude_link_id)
             if bio_count >= 2:
                 raise ConflictError("relationship.too_many_biological_parents")
             # Rule: a biological parent must be at least ~12 years older than the child.
@@ -101,8 +120,9 @@ class RelationshipDomainValidator:
         if age_gap is not None and age_gap > 80:
             return {"warning": f"Unusual age gap: {round(age_gap, 1)} years"}
 
-        # Rule: cycle detection
-        if await self._q.is_ancestor(parent_id, child_id, clan_id):
+        # Rule: cycle detection. Skipped on update — parent_id/child_id are immutable
+        # once created, so a type-only change cannot introduce a new cycle.
+        if check_cycle and await self._q.is_ancestor(parent_id, child_id, clan_id):
             raise BusinessRuleViolation("relationship.creates_cycle")
 
         return None
@@ -117,7 +137,34 @@ class RelationshipDomainValidator:
             raise ConflictError("relationship.duplicate_parent_child")
 
     async def check_duplicate_marriage(
-        self, person1_id: uuid.UUID, person2_id: uuid.UUID, clan_id: uuid.UUID
+        self,
+        person1_id: uuid.UUID,
+        person2_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        *,
+        exclude_marriage_id: uuid.UUID | None = None,
     ) -> None:
-        if await self._q.has_active_marriage(person1_id, person2_id, clan_id):
+        if await self._q.has_active_marriage(person1_id, person2_id, clan_id, exclude_marriage_id):
             raise ConflictError("relationship.duplicate_marriage")
+
+    async def check_spouse_order(
+        self,
+        person1_id: uuid.UUID,
+        spouse_order: int | None,
+        clan_id: uuid.UUID,
+        *,
+        exclude_marriage_id: uuid.UUID | None = None,
+    ) -> None:
+        """Active marriages of person1 must have distinct spouse_order (vợ cả/hai/ba).
+
+        "Active" = non-divorced (status <> 'divorced'): married, widowed, and
+        separated marriages all participate in the uniqueness check; only
+        divorced marriages are exempt, matching ``has_active_marriage``'s
+        definition of active.
+        """
+        if spouse_order is None:
+            return
+        if await self._q.has_spouse_order_conflict(
+            person1_id, spouse_order, clan_id, exclude_marriage_id
+        ):
+            raise ConflictError("relationship.duplicate_spouse_order")

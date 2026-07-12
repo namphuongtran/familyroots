@@ -71,6 +71,27 @@ array under `data` (no `meta` — these are not cursor-paginated).
 - NOTE: `created_by_clan_id` is **not** accepted on create/update — it is provenance,
   always stamped from the active clan (see the 2026-06-28 design review, C5).
 
+### Optimistic concurrency (ADR-017)
+
+- Every person response (`GET /persons/{id}`, list/search/batch items, and the
+  `PATCH` response) carries `"version": <int>` (≥1), bumped by 1 on every successful
+  write to that row — including `DELETE`/`restore`.
+- `PATCH /persons/{id}` requires a **required** body field
+  `expected_version: int (>=1)` — the `version` value read from a prior
+  `GET`/create/PATCH response for this same person. Missing it → standard 422
+  Pydantic validation error (`validation_error`).
+- If `expected_version` no longer matches the row's current `version` (someone else
+  updated/deleted/restored it since your last read) → **409** with code
+  `stale_write` and `detail: {"current_version": <int>}`. Client flow: reload the
+  person, re-apply the edit on top of the fresh data, resubmit with the new version.
+  See [error-codes.md](error-codes.md) and
+  [frontend-integration-guide.md §6.1](frontend-integration-guide.md#61-handling-409-stale_write-optimistic-concurrency-adr-017).
+- `DELETE /persons/{id}` and `POST /persons/{id}/restore` do **not** require
+  `expected_version` (delete/restore are role-gated, soft, and restorable — not the
+  same lost-update risk as a field-level PATCH) — but they still bump `version`, so
+  a PATCH racing against a delete/restore correctly gets `stale_write` instead of
+  silently reverting it.
+
 Example error shape:
 {
   "error": {

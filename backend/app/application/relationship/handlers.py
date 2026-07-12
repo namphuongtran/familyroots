@@ -6,7 +6,7 @@ Orchestrate domain entities, repository, validator, and UoW.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from app.application.relationship.commands import (
     CreateMarriage,
@@ -39,6 +39,8 @@ class MarriageCommandHandler:
     async def create(self, cmd: CreateMarriage) -> MarriageResponse:
         await self._validator.ensure_persons_in_clan([cmd.person1_id, cmd.person2_id], cmd.clan_id)
         await self._validator.check_duplicate_marriage(cmd.person1_id, cmd.person2_id, cmd.clan_id)
+        if cmd.status != "divorced":
+            await self._validator.check_spouse_order(cmd.person1_id, cmd.spouse_order, cmd.clan_id)
 
         marriage = Marriage.create(
             person1_id=cmd.person1_id,
@@ -65,8 +67,31 @@ class MarriageCommandHandler:
         if not marriage:
             raise EntityNotFoundError("marriage_not_found")
 
+        # H2: re-validate create-time rules before applying an update — a PATCH
+        # must not be able to bypass what CREATE would have blocked.
+        new_status = cast(str, cmd.changes.get("status", marriage.status))
+        new_order = cast("int | None", cmd.changes.get("spouse_order", marriage.spouse_order))
+        # Re-check duplicate_marriage only when the pair transitions from divorced
+        # to any active (non-divorced) status — has_active_marriage already
+        # excludes divorced rows, so a flip between two non-divorced statuses
+        # (e.g. married -> widowed) can't newly create an active-marriage clash.
+        if "status" in cmd.changes and new_status != "divorced" and marriage.status == "divorced":
+            await self._validator.check_duplicate_marriage(
+                marriage.person1_id,
+                marriage.person2_id,
+                cmd.clan_id,
+                exclude_marriage_id=marriage.id,
+            )
+        if new_status != "divorced" and ("spouse_order" in cmd.changes or "status" in cmd.changes):
+            await self._validator.check_spouse_order(
+                marriage.person1_id,
+                new_order,
+                cmd.clan_id,
+                exclude_marriage_id=marriage.id,
+            )
+
         marriage.update(cmd.changes, cmd.actor, cmd.clan_id)
-        await self._repo.save(marriage)
+        await self._repo.save(marriage, expected_version=cmd.expected_version)
         await self._uow.commit()
         return MarriageResponse.model_validate(marriage)
 
@@ -119,8 +144,24 @@ class ParentChildCommandHandler:
         if not link:
             raise EntityNotFoundError("parent_child_not_found")
 
+        # H2: re-validate create-time rules before applying a relationship_type
+        # change — e.g. adopted -> biological must still respect the bio-parent
+        # limit and the minimum parent/child age gap.
+        new_type = cast(str, cmd.changes.get("relationship_type", link.relationship_type))
+        if new_type != link.relationship_type:
+            # Same rules as create; exclude this edge from the bio count; cycle
+            # check skipped — parent/child ids are immutable on update.
+            await self._validator.validate_parent_child(
+                link.parent_id,
+                link.child_id,
+                new_type,
+                cmd.clan_id,
+                exclude_link_id=link.id,
+                check_cycle=False,
+            )
+
         link.update(cmd.changes, cmd.actor, cmd.clan_id)
-        await self._repo.save(link)
+        await self._repo.save(link, expected_version=cmd.expected_version)
         await self._uow.commit()
         return ParentChildResponse.model_validate(link)
 

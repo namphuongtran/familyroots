@@ -3,7 +3,16 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, SmallInteger, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import ForeignKey
@@ -50,6 +59,10 @@ class Marriage(TimestampMixin, Base):
     spouse_order: Mapped[int | None] = mapped_column(
         SmallInteger, default=None
     )  # vợ cả=1, vợ hai=2... (from person1's perspective)
+
+    # Optimistic concurrency (ADR-017): bumped by every repository UPDATE;
+    # PATCH requests must present the matching expected_version.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))

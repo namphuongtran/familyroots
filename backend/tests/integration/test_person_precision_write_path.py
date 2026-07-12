@@ -118,6 +118,7 @@ async def test_update_person_persists_precision_and_display(
                 person_id=created.id,
                 clan_id=clan_id,
                 actor=actor,
+                expected_version=1,
                 changes={
                     "death_date_precision": "unknown",
                     "death_date_display": "chưa rõ",

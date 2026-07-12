@@ -144,7 +144,11 @@ def test_update_person_with_precision_field_persists() -> None:
 
     response = client.patch(
         f"/api/v1/persons/{person_id}",
-        json={"birth_date_precision": "circa", "full_name": "Updated Name"},
+        json={
+            "birth_date_precision": "circa",
+            "full_name": "Updated Name",
+            "expected_version": 1,
+        },
     )
 
     assert response.status_code == 200, response.text
@@ -167,6 +171,7 @@ def test_update_person_with_only_precision_fields_reaches_changes() -> None:
             "birth_date_display": "circa 1900",
             "death_date_precision": "year",
             "death_date_display": "1975",
+            "expected_version": 1,
         },
     )
 
@@ -210,10 +215,12 @@ def test_update_marriage_with_precision_field_persists() -> None:
             "marriage_date_precision": "circa",
             "divorce_date_display": "unknown",
             "notes": "updated notes",
+            "expected_version": 1,
         },
     )
 
     assert response.status_code == 200, response.text
+    # expected_version is popped by the route (OCC, ADR-017) — never part of changes.
     assert handlers["marriage"].received_changes == {
         "marriage_date_precision": "circa",
         "divorce_date_display": "unknown",

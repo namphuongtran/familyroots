@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Integer,
     SmallInteger,
     String,
     Text,
@@ -53,6 +54,10 @@ class ParentChild(TimestampMixin, Base):
 
     # Birth order among siblings under same parent (con cả=1, con thứ=2...)
     birth_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
+
+    # Optimistic concurrency (ADR-017): bumped by every repository UPDATE;
+    # PATCH requests must present the matching expected_version.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))

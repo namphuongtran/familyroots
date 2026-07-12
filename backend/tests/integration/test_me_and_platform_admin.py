@@ -164,7 +164,9 @@ async def test_platform_admin_query_port_returns_typed_read_models(
         assert all(isinstance(c, ClanSummaryView) for c in clan_page.data)
         assert all(isinstance(c.id, uuid.UUID) for c in clan_page.data)
 
-        audit_page = await port.get_audit_log(None, None, None, 20)
+        # Scoped to this test's own clan_id so it is deterministic despite the
+        # session-scoped DB accumulating audit_log rows across the whole suite.
+        audit_page = await port.get_audit_log(clan_id, None, None, 20)
         assert isinstance(audit_page, Page)
         entries = [e for e in audit_page.data if e.actor_id == actor_id]
         assert entries and isinstance(entries[0], AuditLogEntryView)
@@ -202,11 +204,23 @@ async def test_platform_admin_handler_preserves_wire_contract(
         assert set(clans["meta"]) == {"cursor", "has_more", "limit"}
         assert all(isinstance(c["id"], str) for c in clans["data"])
 
-        log = await handler.get_audit_log(clan_id=None, action=None, cursor=None, limit=20)
-        mine = [e for e in log["data"] if e["actor_id"] == str(actor_id)]
-        by_action = {e["action"]: e for e in mine}
-        assert by_action["clan.suspend"]["clan_id"] == str(clan_id)
-        assert by_action["platform.login"]["clan_id"] is None  # NOT the string "None"
+        # Two deterministic, scoped queries instead of one global (clan_id=None)
+        # query -- the global query's ASC (created_at, id) pagination window
+        # would otherwise miss this test's own rows once the session-scoped
+        # DB accumulates >= `limit` audit_log rows from earlier-run tests.
+        clan_log = await handler.get_audit_log(clan_id=clan_id, action=None, cursor=None, limit=20)
+        clan_by_action = {
+            e["action"]: e for e in clan_log["data"] if e["actor_id"] == str(actor_id)
+        }
+        assert clan_by_action["clan.suspend"]["clan_id"] == str(clan_id)
+
+        platform_log = await handler.get_audit_log(
+            clan_id=None, action="platform.login", cursor=None, limit=20
+        )
+        platform_by_action = {
+            e["action"]: e for e in platform_log["data"] if e["actor_id"] == str(actor_id)
+        }
+        assert platform_by_action["platform.login"]["clan_id"] is None  # NOT the string "None"
 
         metrics = await handler.get_metrics()
         assert set(metrics) == {

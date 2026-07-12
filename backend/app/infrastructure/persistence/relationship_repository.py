@@ -6,10 +6,12 @@ import uuid
 from datetime import date
 
 from sqlalchemy import select, text
+from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.relationship.entities import Marriage as MarriageEntity
 from app.domain.relationship.entities import ParentChild as ParentChildEntity
+from app.domain.shared.exceptions import ConflictError
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.marriage import Marriage as MarriageModel
@@ -42,6 +44,7 @@ def _marriage_to_domain(m: MarriageModel) -> MarriageEntity:
         deleted_by=m.deleted_by,
         created_at=m.created_at,
         updated_at=m.updated_at,
+        version=m.version,
     )
 
 
@@ -66,6 +69,7 @@ def _marriage_to_orm(e: MarriageEntity) -> MarriageModel:
         is_deleted=e.is_deleted,
         deleted_at=e.deleted_at,
         deleted_by=e.deleted_by,
+        version=e.version,
     )
 
 
@@ -103,6 +107,7 @@ def _pc_to_domain(m: ParentChildModel) -> ParentChildEntity:
         deleted_by=m.deleted_by,
         created_at=m.created_at,
         updated_at=m.updated_at,
+        version=m.version,
     )
 
 
@@ -120,6 +125,7 @@ def _pc_to_orm(e: ParentChildEntity) -> ParentChildModel:
         is_deleted=e.is_deleted,
         deleted_at=e.deleted_at,
         deleted_by=e.deleted_by,
+        version=e.version,
     )
 
 
@@ -153,14 +159,28 @@ class SqlAlchemyMarriageRepository:
         model = result.scalar_one_or_none()
         return _marriage_to_domain(model) if model else None
 
-    async def save(self, marriage: MarriageEntity) -> None:
+    async def save(self, marriage: MarriageEntity, *, expected_version: int | None = None) -> None:
         self._uow.track(marriage)
         existing = await self._session.get(MarriageModel, marriage.id)
-        if existing:
-            for f in _MARRIAGE_UPDATABLE:
-                setattr(existing, f, getattr(marriage, f))
-        else:
+        if existing is None:
             self._session.add(_marriage_to_orm(marriage))
+            return
+        values = {f: getattr(marriage, f) for f in _MARRIAGE_UPDATABLE}
+        stmt = (
+            sql_update(MarriageModel)
+            .where(MarriageModel.id == marriage.id)
+            .values(**values, version=MarriageModel.version + 1)
+        )
+        if expected_version is not None:
+            stmt = stmt.where(MarriageModel.version == expected_version)
+        result = await self._session.execute(stmt)
+        if result.rowcount == 0:
+            current = await self._session.scalar(
+                select(MarriageModel.version).where(MarriageModel.id == marriage.id)
+            )
+            raise ConflictError("stale_write", detail={"current_version": current})
+        await self._session.refresh(existing)
+        marriage.version = existing.version
 
 
 class SqlAlchemyParentChildRepository:
@@ -179,14 +199,28 @@ class SqlAlchemyParentChildRepository:
         model = result.scalar_one_or_none()
         return _pc_to_domain(model) if model else None
 
-    async def save(self, link: ParentChildEntity) -> None:
+    async def save(self, link: ParentChildEntity, *, expected_version: int | None = None) -> None:
         self._uow.track(link)
         existing = await self._session.get(ParentChildModel, link.id)
-        if existing:
-            for f in _PC_UPDATABLE:
-                setattr(existing, f, getattr(link, f))
-        else:
+        if existing is None:
             self._session.add(_pc_to_orm(link))
+            return
+        values = {f: getattr(link, f) for f in _PC_UPDATABLE}
+        stmt = (
+            sql_update(ParentChildModel)
+            .where(ParentChildModel.id == link.id)
+            .values(**values, version=ParentChildModel.version + 1)
+        )
+        if expected_version is not None:
+            stmt = stmt.where(ParentChildModel.version == expected_version)
+        result = await self._session.execute(stmt)
+        if result.rowcount == 0:
+            current = await self._session.scalar(
+                select(ParentChildModel.version).where(ParentChildModel.id == link.id)
+            )
+            raise ConflictError("stale_write", detail={"current_version": current})
+        await self._session.refresh(existing)
+        link.version = existing.version
 
 
 # ── Query Port (for validator) ───────────────────────────────────
@@ -198,7 +232,12 @@ class SqlAlchemyRelationshipQueryPort:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def count_bio_parents(self, child_id: uuid.UUID, clan_id: uuid.UUID) -> int:
+    async def count_bio_parents(
+        self,
+        child_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        exclude_link_id: uuid.UUID | None = None,
+    ) -> int:
         result = await self._session.execute(
             text("""
                 SELECT COUNT(*) FROM public.parent_child
@@ -206,13 +245,18 @@ class SqlAlchemyRelationshipQueryPort:
                   AND created_by_clan_id = :clan_id
                   AND relationship_type = 'biological'
                   AND is_deleted = false
+                  AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
             """),
-            {"child_id": child_id, "clan_id": clan_id},
+            {"child_id": child_id, "clan_id": clan_id, "exclude_id": exclude_link_id},
         )
         return int(result.scalar() or 0)
 
     async def has_active_marriage(
-        self, person1_id: uuid.UUID, person2_id: uuid.UUID, clan_id: uuid.UUID
+        self,
+        person1_id: uuid.UUID,
+        person2_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        exclude_marriage_id: uuid.UUID | None = None,
     ) -> bool:
         result = await self._session.execute(
             text("""
@@ -224,9 +268,40 @@ class SqlAlchemyRelationshipQueryPort:
                 AND created_by_clan_id = :clan_id
                 AND status NOT IN ('divorced')
                 AND is_deleted = false
+                AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
                 LIMIT 1
             """),
-            {"p1": person1_id, "p2": person2_id, "clan_id": clan_id},
+            {
+                "p1": person1_id,
+                "p2": person2_id,
+                "clan_id": clan_id,
+                "exclude_id": exclude_marriage_id,
+            },
+        )
+        return result.first() is not None
+
+    async def has_spouse_order_conflict(
+        self,
+        person1_id: uuid.UUID,
+        spouse_order: int,
+        clan_id: uuid.UUID,
+        exclude_marriage_id: uuid.UUID | None = None,
+    ) -> bool:
+        result = await self._session.execute(
+            text("""
+                SELECT 1 FROM public.marriages
+                WHERE person1_id = :p1 AND spouse_order = :so
+                  AND created_by_clan_id = :clan_id
+                  AND status <> 'divorced' AND is_deleted = false
+                  AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
+                LIMIT 1
+            """),
+            {
+                "p1": person1_id,
+                "so": spouse_order,
+                "clan_id": clan_id,
+                "exclude_id": exclude_marriage_id,
+            },
         )
         return result.first() is not None
 
@@ -249,12 +324,35 @@ class SqlAlchemyRelationshipQueryPort:
     async def is_ancestor(
         self, descendant_id: uuid.UUID, ancestor_id: uuid.UUID, clan_id: uuid.UUID
     ) -> bool:
-        ancestors = await self._session.execute(
-            text("SELECT person_id FROM public.get_ancestors_flat(:id, :clan_id, 20)"),
-            {"id": descendant_id, "clan_id": clan_id},
+        """Unbounded ancestor walk for cycle detection (M1).
+
+        Deliberately NOT get_ancestors_flat: that is a display function with a
+        depth cap. Cycle detection must see the whole chain — deep gia phả
+        (>20 đời) previously slipped through. The path-array guard terminates
+        traversal even on already-corrupt (cyclic) data.
+        """
+        result = await self._session.execute(
+            text("""
+                WITH RECURSIVE ancestors AS (
+                    SELECT pc.parent_id AS person_id,
+                           ARRAY[pc.child_id, pc.parent_id] AS path
+                    FROM public.parent_child pc
+                    WHERE pc.child_id = :descendant_id
+                      AND pc.created_by_clan_id = :clan_id
+                      AND pc.is_deleted = false
+                    UNION ALL
+                    SELECT pc.parent_id, a.path || pc.parent_id
+                    FROM public.parent_child pc
+                    JOIN ancestors a ON pc.child_id = a.person_id
+                    WHERE pc.created_by_clan_id = :clan_id
+                      AND pc.is_deleted = false
+                      AND NOT pc.parent_id = ANY(a.path)
+                )
+                SELECT 1 FROM ancestors WHERE person_id = :ancestor_id LIMIT 1
+            """),
+            {"descendant_id": descendant_id, "ancestor_id": ancestor_id, "clan_id": clan_id},
         )
-        ancestor_ids = {row[0] for row in ancestors}
-        return ancestor_id in ancestor_ids
+        return result.first() is not None
 
     async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, date | None]:
         if not person_ids:
