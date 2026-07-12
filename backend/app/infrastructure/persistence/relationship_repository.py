@@ -324,12 +324,35 @@ class SqlAlchemyRelationshipQueryPort:
     async def is_ancestor(
         self, descendant_id: uuid.UUID, ancestor_id: uuid.UUID, clan_id: uuid.UUID
     ) -> bool:
-        ancestors = await self._session.execute(
-            text("SELECT person_id FROM public.get_ancestors_flat(:id, :clan_id, 20)"),
-            {"id": descendant_id, "clan_id": clan_id},
+        """Unbounded ancestor walk for cycle detection (M1).
+
+        Deliberately NOT get_ancestors_flat: that is a display function with a
+        depth cap. Cycle detection must see the whole chain — deep gia phả
+        (>20 đời) previously slipped through. The path-array guard terminates
+        traversal even on already-corrupt (cyclic) data.
+        """
+        result = await self._session.execute(
+            text("""
+                WITH RECURSIVE ancestors AS (
+                    SELECT pc.parent_id AS person_id,
+                           ARRAY[pc.child_id, pc.parent_id] AS path
+                    FROM public.parent_child pc
+                    WHERE pc.child_id = :descendant_id
+                      AND pc.created_by_clan_id = :clan_id
+                      AND pc.is_deleted = false
+                    UNION ALL
+                    SELECT pc.parent_id, a.path || pc.parent_id
+                    FROM public.parent_child pc
+                    JOIN ancestors a ON pc.child_id = a.person_id
+                    WHERE pc.created_by_clan_id = :clan_id
+                      AND pc.is_deleted = false
+                      AND NOT pc.parent_id = ANY(a.path)
+                )
+                SELECT 1 FROM ancestors WHERE person_id = :ancestor_id LIMIT 1
+            """),
+            {"descendant_id": descendant_id, "ancestor_id": ancestor_id, "clan_id": clan_id},
         )
-        ancestor_ids = {row[0] for row in ancestors}
-        return ancestor_id in ancestor_ids
+        return result.first() is not None
 
     async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, date | None]:
         if not person_ids:
