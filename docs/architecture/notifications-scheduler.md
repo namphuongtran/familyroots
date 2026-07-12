@@ -1,13 +1,8 @@
 # Notifications & Scheduler
 
 How anniversary push notifications work: an in-process APScheduler cron finds
-upcoming recurring events and broadcasts FCM pushes to approved clan members.
-
-> ⚠️ **Lunar events do not fire.** The job hard-filters `is_lunar_calendar = false`,
-> so **giỗ âm lịch (lunar-calendar) reminders are currently never sent** — arguably
-> the platform's most important notification. There is **no lunar↔solar conversion
-> anywhere in the codebase**; support is explicitly deferred ("data-model round 2").
-> Each run counts and logs the skipped lunar events so the gap stays visible.
+upcoming recurring events (both solar and lunar) and broadcasts FCM pushes to
+approved clan members.
 
 ## Scheduler topology
 
@@ -34,18 +29,38 @@ Every replica runs the scheduler, so the job itself elects a single runner:
   rollback, and unlocking on an aborted transaction would raise
   `InFailedSqlTransaction` and mask the job's real error.
 
-## The anniversary flow
+## The anniversary flow — two sources, merged in Python
 
-1. Select recurring **solar** events (`is_recurring = true AND is_lunar_calendar =
-   false`, linked person not soft-deleted), computing each event's next occurrence
-   (this year or next) via `next_anniversary_sql`.
-2. Gate: send only when `next_occurrence - today == notify_days_before`.
-3. **Dedup**: skip if a `notification_log` row for (`event_id`, `notification_type`)
+The job pulls events from **two sources** and feeds both through the same
+per-event loop (see [ADR-018](../decisions/018-vietnamese-lunar-calendar.md)):
+
+1. **Solar SQL query**: recurring solar events (`is_recurring = true AND
+   is_lunar_calendar = false`, linked person not soft-deleted). Each row already
+   carries a precomputed `next_occurrence` (this year or next), calculated in SQL
+   via `next_anniversary_sql` — cheap date arithmetic that cannot raise.
+2. **Lunar raw-row query**: recurring lunar events (`is_recurring = true AND
+   is_lunar_calendar = true`, same person join). This query selects only
+   `event_date` — no `next_occurrence` in SQL, because a lunar anniversary cannot
+   be expressed as solar date arithmetic.
+3. The two row sets are concatenated (`[*events, *lunar_events]`) into one loop.
+   For each event:
+   - If the row already has `next_occurrence` (a solar row), use it directly.
+   - Otherwise (a lunar row) compute it **lazily, inside this per-event
+     `try`**, by calling `next_lunar_anniversary(event_date, today)`
+     (`app/services/lunar_calendar.py`, Hồ Ngọc Đức's algorithm at UTC+7). This
+     call is deliberately made inside the per-event error boundary rather than
+     up front: the lunar conversion is the one piece of math in this flow that
+     can raise on a pathological date, so a bad lunar row hits the
+     rollback-and-continue path below instead of aborting the whole run before
+     any event (solar or lunar) is processed.
+4. Gate: send only when `next_occurrence - today == notify_days_before`.
+5. **Dedup**: skip if a `notification_log` row for (`event_id`, `notification_type`)
    was already created "today" in the platform zone. Dedup keys on the row's creation
    day, so replaying the job with a *past* `today` is NOT dedup-protected — the
    injectable `today` parameter is for deterministic tests only.
-4. Broadcast via `send_to_clan`, log the outcome, `commit()` **per event**; a failing
-   event is rolled back and skipped so one bad row can't abort the run.
+6. Broadcast via `send_to_clan`, log the outcome, `commit()` **per event**; a failing
+   event (solar or lunar) is rolled back and skipped so one bad row can't abort the
+   run.
 
 ## FCM delivery (`backend/app/services/notification.py`)
 
@@ -80,6 +95,9 @@ Every replica runs the scheduler, so the job itself elects a single runner:
 
 ## Related
 
+- [ADR-018](../decisions/018-vietnamese-lunar-calendar.md) — Vietnamese lunar
+  calendar engine, giỗ conventions, why the conversion is in-house and computed
+  lazily in Python
 - [Backend i18n](i18n.md) — per-recipient locale resolution for push text
 - [Overview](overview.md) — in-process (non-durable) eventing caveats
-- [ops/monitoring.md](../ops/monitoring.md) — where the skip/failure logs surface
+- [ops/monitoring.md](../ops/monitoring.md) — where failure logs surface

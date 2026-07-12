@@ -1,13 +1,16 @@
 """Events API routes — thin controller delegating to Event handlers."""
 
 import uuid
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 
 from app.application.event.handlers import EventCommandHandler, EventQueryHandler
 from app.application.person.commands import GetPerson
 from app.application.person.handlers import PersonQueryHandler
+from app.core.config import settings
 from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
@@ -83,8 +86,15 @@ async def get_upcoming_events(
     role: ClanRole = RequireViewer,
     include: str | None = Query(None),
 ) -> dict[str, Any]:
-    """Get upcoming events within the next N days."""
-    upcoming = await query_handler.get_upcoming(clan_id=clan_id, days=days)
+    """Get upcoming events within the next N days.
+
+    ``today`` is computed HERE, in the platform timezone (Finding 3, pre-merge
+    review) — not left to the handler's server-local ``date.today()`` fallback —
+    so the "is it N days away" gate can't disagree with the platform's actual
+    calendar day just because the container runs in a different system timezone.
+    """
+    today = datetime.now(ZoneInfo(settings.SCHEDULER_TIMEZONE)).date()
+    upcoming = await query_handler.get_upcoming(clan_id=clan_id, days=days, today=today)
 
     includes = {item.strip() for item in include.split(",")} if include else set()
     if "person" in includes:

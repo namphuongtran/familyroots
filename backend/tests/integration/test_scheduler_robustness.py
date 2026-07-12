@@ -1,5 +1,5 @@
-"""Scheduler: lunar events excluded, soft-deleted persons skipped, per-event isolation,
-truthful log status."""
+"""Scheduler: lunar events fire via the VN lunar engine (Task 2, lunar-gio), soft-deleted
+persons skipped, per-event isolation, truthful log status."""
 
 import uuid
 from datetime import date, timedelta
@@ -130,7 +130,11 @@ async def test_one_bad_event_does_not_abort_run(async_engine, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_lunar_event_is_excluded(async_engine, monkeypatch):
+async def test_lunar_event_is_included(async_engine, monkeypatch):
+    """Lunar-gio (Task 2): is_lunar_calendar=true recurring events are now processed
+    through next_lunar_anniversary just like solar ones — the round-2-deferral this
+    test used to pin is gone. See test_lunar_anniversary_job.py for the dedicated
+    lunar-engine coverage (giỗ-date pinning, dedup, wrong-day exclusion)."""
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
@@ -138,7 +142,7 @@ async def test_lunar_event_is_excluded(async_engine, monkeypatch):
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
     await _seed_event(maker, lunar=True)
     await scheduler.send_anniversary_notifications()
-    assert spy.await_count == 0  # lunar event not broadcast
+    assert spy.await_count == 1  # lunar event now broadcast (fires via lunar engine)
 
 
 @pytest.mark.asyncio
@@ -149,6 +153,22 @@ async def test_soft_deleted_person_is_skipped(async_engine, monkeypatch):
     spy = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr("app.services.notification.send_to_clan", spy)
     await _seed_event(maker, person_deleted=True)
+    await scheduler.send_anniversary_notifications()
+    assert spy.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_lunar_soft_deleted_person_is_skipped(async_engine, monkeypatch):
+    """Lunar variant of test_soft_deleted_person_is_skipped: a lunar recurring event
+    whose person is soft-deleted must be excluded by the same
+    ``p.is_deleted = false`` join filter the lunar query shares with the solar one —
+    the event never reaches next_lunar_anniversary or the notification path."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+    spy = AsyncMock(return_value=(1, 0))
+    monkeypatch.setattr("app.services.notification.send_to_clan", spy)
+    await _seed_event(maker, lunar=True, person_deleted=True)
     await scheduler.send_anniversary_notifications()
     assert spy.await_count == 0
 

@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.services.lunar_calendar import next_lunar_anniversary
 
 logger = logging.getLogger(__name__)
 
@@ -117,22 +118,39 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
             )
             events = result.mappings().all()
 
-            lunar_count = await db.scalar(
-                text(
-                    "SELECT COUNT(*) FROM public.events "
-                    "WHERE is_recurring = true AND is_lunar_calendar = true"
-                )
+            lunar_result = await db.execute(
+                text("""
+                    SELECT
+                        e.id AS event_id,
+                        e.clan_id,
+                        e.event_type,
+                        e.title,
+                        e.person_id,
+                        p.full_name AS person_name,
+                        e.notify_days_before,
+                        e.event_date
+                    FROM public.events e
+                    LEFT JOIN public.persons p ON p.id = e.person_id
+                    WHERE e.is_recurring = true
+                      AND e.is_lunar_calendar = true
+                      AND (e.person_id IS NULL OR p.is_deleted = false)
+                """)
             )
-            if lunar_count:
-                logger.info(
-                    "%s lunar recurring events skipped — lunar support deferred to "
-                    "data-model round 2",
-                    lunar_count,
-                )
+            lunar_events = lunar_result.mappings().all()
 
-            for event in events:
+            for event in [*events, *lunar_events]:
                 try:
-                    next_occ = event["next_occurrence"]
+                    # Solar rows already carry a precomputed next_occurrence (cheap SQL
+                    # date math that cannot raise). Lunar rows carry only event_date —
+                    # next_lunar_anniversary runs the lunar-conversion algorithm, which
+                    # CAN raise on a pathological date. Computing it lazily HERE, inside
+                    # this per-event try, means one bad lunar row hits the
+                    # rollback-and-continue path below instead of aborting the whole
+                    # run before any event (solar or lunar) is processed.
+                    if "next_occurrence" in event:
+                        next_occ = event["next_occurrence"]
+                    else:
+                        next_occ = next_lunar_anniversary(event["event_date"], today)
                     days_until = (next_occ - today).days
                     if days_until != event["notify_days_before"]:
                         continue

@@ -203,8 +203,19 @@ class EventQueryHandler:
         ]
         return responses, page["meta"]
 
-    async def get_upcoming(self, *, clan_id: uuid.UUID, days: int = 30) -> list[dict[str, Any]]:
-        """Get upcoming events within the next N days with recurring logic."""
-        today = date.today()
+    async def get_upcoming(
+        self, *, clan_id: uuid.UUID, days: int = 30, today: date | None = None
+    ) -> list[dict[str, Any]]:
+        """Get upcoming events within the next N days with recurring logic.
+
+        ``today`` (pre-merge review, Finding 3): callers that need the platform
+        timezone's date (not the server-local one) compute it and pass it in — the
+        API route does this via ``settings.SCHEDULER_TIMEZONE``. This layer stays
+        DIP-compliant (no ``app.core`` import) by accepting the value rather than
+        computing it; the ``date.today()`` fallback preserves the old behavior for
+        any other caller that doesn't pass one.
+        """
+        if today is None:
+            today = date.today()
         end_date = today + timedelta(days=days)
         return await self._repo.get_upcoming(clan_id, today=today, end_date=end_date)

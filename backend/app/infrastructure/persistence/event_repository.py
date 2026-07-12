@@ -6,6 +6,7 @@ query with recurring logic (optimized as a CTE).
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
 from typing import Any
@@ -19,6 +20,9 @@ from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
 from app.schemas.historical_date import to_historical_date
+from app.services.lunar_calendar import next_lunar_anniversary
+
+logger = logging.getLogger(__name__)
 
 
 class SqlAlchemyEventRepository:
@@ -97,6 +101,7 @@ class SqlAlchemyEventRepository:
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.clan_id = :clan_id
                         AND (e.is_recurring = true OR e.event_date >= :today)
+                        AND NOT (e.is_recurring = true AND e.is_lunar_calendar = true)
                 )
                 SELECT * FROM next_dates
                 WHERE next_occurrence BETWEEN :today AND :end_date
@@ -107,8 +112,50 @@ class SqlAlchemyEventRepository:
         )
         rows = result.mappings().all()
 
+        # Lunar recurring events cannot be expressed as a solar-date-arithmetic CTE
+        # (see next_anniversary_sql) — the anniversary must go through the VN lunar
+        # conversion engine. Query them separately, compute next_occurrence in
+        # Python, then merge with the solar rows before sorting/limiting.
+        lunar_result = await self._session.execute(
+            text("""
+                SELECT e.id, e.person_id, e.event_type, e.title,
+                       e.event_date, e.event_date_precision, e.event_date_display,
+                       e.is_lunar_calendar, e.is_recurring,
+                       p.full_name AS person_name,
+                       p.avatar_url AS person_avatar_url
+                FROM public.events e
+                LEFT JOIN public.persons p ON p.id = e.person_id
+                WHERE e.clan_id = :clan_id
+                  AND e.is_recurring = true
+                  AND e.is_lunar_calendar = true
+            """),
+            {"clan_id": clan_id},
+        )
+        lunar_rows: list[dict[str, Any]] = []
+        for lunar_row in lunar_result.mappings().all():
+            try:
+                occ = next_lunar_anniversary(lunar_row["event_date"], today)
+            except ValueError:
+                # A pathological event_date (e.g. outside the lunar engine's
+                # supported year range, Finding 1) must not 500 the whole
+                # /events/upcoming response — skip just this row.
+                logger.warning(
+                    "Skipping lunar event %s in get_upcoming: event_date=%s "
+                    "cannot be converted by the lunar engine",
+                    lunar_row["id"],
+                    lunar_row["event_date"],
+                    exc_info=True,
+                )
+                continue
+            if today <= occ <= end_date:
+                lunar_rows.append({**lunar_row, "next_occurrence": occ})
+
+        merged: list[dict[str, Any]] = [dict(r) for r in rows]
+        merged.extend(lunar_rows)
+        all_rows = sorted(merged, key=lambda r: r["next_occurrence"])[:limit]
+
         upcoming = []
-        for row in rows:
+        for row in all_rows:
             next_occ = row["next_occurrence"]
             upcoming.append(
                 {
