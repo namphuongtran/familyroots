@@ -20,6 +20,8 @@
 | [016](016-real-postgres-test-harness.md) | Real-Postgres Integration Test Harness | Accepted, shipped |
 | [017](017-optimistic-concurrency.md) | Required Optimistic Concurrency Control on Genealogy Writes | Accepted, shipped |
 | [018](018-vietnamese-lunar-calendar.md) | In-House Vietnamese Lunar Calendar Engine for Giỗ Recurrence | Accepted, shipped |
+| [019](019-document-soft-delete-purge.md) | Document Soft-Delete + Retention Purge | Accepted, shipped (supersedes ADR-006's documents row) |
+| [020](020-clan-export-formats.md) | Clan Export Formats — Lossless JSON Archive + GEDCOM Interop | Accepted, shipped |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural

@@ -25,6 +25,7 @@ from app.application.branch.handlers import BranchCommandHandler, BranchQueryHan
 from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
 from app.application.event.handlers import EventCommandHandler, EventQueryHandler
+from app.application.export.handlers import ExportQueryHandler
 from app.application.invitation.handlers import InvitationCommandHandler, InvitationQueryHandler
 from app.application.me.handlers import MeQueryHandler
 from app.application.person.claim_handlers import ClaimCommandHandler, ClaimQueryHandler
@@ -57,6 +58,7 @@ from app.infrastructure.persistence.claim_repository import (
 from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
+from app.infrastructure.persistence.export_query_port import SqlAlchemyExportQueryPort
 from app.infrastructure.persistence.invitation_repository import SqlAlchemyInvitationRepository
 from app.infrastructure.persistence.me_query_port import SqlAlchemyMeQueryPort
 from app.infrastructure.persistence.person_query_port import SqlAlchemyPersonQueryPort
@@ -73,6 +75,8 @@ from app.infrastructure.persistence.tree_repository import SqlAlchemyTreeReposit
 from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
 from app.infrastructure.supabase_identity_provider import SupabaseIdentityProvider
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.services.clan_export import build_clan_export, to_json_bytes
+from app.services.gedcom_export import build_gedcom
 
 
 def get_unit_of_work(db: AsyncSession = Depends(get_db)) -> SqlAlchemyUnitOfWork:
@@ -260,6 +264,25 @@ def get_event_command_handler(db: AsyncSession = Depends(get_db)) -> EventComman
 
 def get_event_query_handler(db: AsyncSession = Depends(get_db)) -> EventQueryHandler:
     return EventQueryHandler(SqlAlchemyEventRepository(_repo_uow(db)))
+
+
+# ── Export handlers ─────────────────────────────────────────────
+#
+# ExportQueryHandler cannot import app.services.clan_export/gedcom_export
+# directly (the "application must not import core/services" import-linter
+# ratchet forbids it) — the composition root injects the pure
+# build_clan_export/to_json_bytes/build_gedcom callables here instead,
+# keeping the handler DIP-compliant.
+
+
+def get_export_query_handler(db: AsyncSession = Depends(get_db)) -> ExportQueryHandler:
+    return ExportQueryHandler(
+        SqlAlchemyExportQueryPort(db),
+        SupabaseStorageAdapter(),
+        build_clan_export,
+        to_json_bytes,
+        build_gedcom,
+    )
 
 
 # ── Invitation handlers ─────────────────────────────────────────

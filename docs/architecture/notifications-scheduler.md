@@ -2,15 +2,25 @@
 
 How anniversary push notifications work: an in-process APScheduler cron finds
 upcoming recurring events (both solar and lunar) and broadcasts FCM pushes to
-approved clan members.
+approved clan members. The same scheduler process also runs the document
+retention purge job (ADR-019).
 
 ## Scheduler topology
 
 `backend/app/services/scheduler.py` runs an **in-process `AsyncIOScheduler`** started in
 the FastAPI lifespan (`app/main.py`) — no separate worker, no Redis, no durable queue.
 
-- Job `anniversary_notifications`: `CronTrigger(hour=NOTIFICATION_CRON_HOUR, minute=0)`
-  with an explicit timezone, `misfire_grace_time=3600`.
+| Job | Trigger | Lock key | Purpose |
+|---|---|---|---|
+| `anniversary_notifications` | `CronTrigger(hour=NOTIFICATION_CRON_HOUR, minute=0, timezone=SCHEDULER_TIMEZONE)`, `misfire_grace_time=3600` | `728_115_001` | Solar + lunar giỗ/anniversary FCM pushes (see below) |
+| `document_purge` | `CronTrigger(hour=NOTIFICATION_CRON_HOUR, minute=30, timezone=SCHEDULER_TIMEZONE)`, `misfire_grace_time=3600` | `728_115_002` | Permanently remove soft-deleted documents past `DOCUMENT_RETENTION_DAYS` (ADR-019) |
+
+Both jobs share `NOTIFICATION_CRON_HOUR` and `SCHEDULER_TIMEZONE` — the purge
+job is offset 30 minutes after the anniversary job (same hour, `minute=30`) so
+the two never race each other on the same replica, and each has its own
+advisory lock key so the two jobs also never contend with each other, only
+with concurrent runs of themselves.
+
 - **Single clock**: `SCHEDULER_TIMEZONE` (default `Asia/Ho_Chi_Minh`) governs both when
   the cron fires *and* the job's date math — `today` is computed once in that zone and
   threaded into the SQL as `:today` (no `CURRENT_DATE`), so container/DB timezone drift
@@ -19,15 +29,23 @@ the FastAPI lifespan (`app/main.py`) — no separate worker, no Redis, no durabl
 
 ## Multi-replica safety — Postgres advisory lock
 
-Every replica runs the scheduler, so the job itself elects a single runner:
+Every replica runs the scheduler, so each job elects a single runner via its
+own advisory lock (see the table above for lock keys):
 
-- Fixed lock key `_JOB_LOCK_KEY = 728_115_001`; `pg_try_advisory_lock` on a **dedicated
-  connection held for the whole job**. If not acquired → log and skip the run.
+- `pg_try_advisory_lock` on a **dedicated connection held for the whole job**. If not
+  acquired → log and skip the run.
 - The working `AsyncSession` is **bound to that same connection**, so mid-job commits
   can't return the connection to the pool and strand the session-level lock.
 - The `finally` block **rolls back before unlocking**: the advisory lock survives
   rollback, and unlocking on an aborted transaction would raise
   `InFailedSqlTransaction` and mask the job's real error.
+
+This topology is shared verbatim by `document_purge`
+(`app/services/document_purge.py`) — see
+[ADR-019](../decisions/019-document-soft-delete-purge.md) for that job's
+per-item claim-row → delete-blob → commit ordering, which is a second,
+independent safety property layered on top of this same lock/connection
+pattern.
 
 ## The anniversary flow — two sources, merged in Python
 
@@ -89,9 +107,10 @@ per-event loop (see [ADR-018](../decisions/018-vietnamese-lunar-calendar.md)):
 
 | Setting | Default | Notes |
 |---|---|---|
-| `NOTIFICATION_CRON_HOUR` | `7` | Hour-of-day in the platform zone |
+| `NOTIFICATION_CRON_HOUR` | `7` | Hour-of-day in the platform zone (both `anniversary_notifications` and `document_purge` key off it) |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Validated as IANA name at boot (fail-fast) |
 | `FIREBASE_CREDENTIALS_PATH` | `./firebase-credentials.json` | Absent → pushes disabled, app still boots |
+| `DOCUMENT_RETENTION_DAYS` | `30` | `document_purge` job's retention window (ADR-019) |
 
 ## Related
 

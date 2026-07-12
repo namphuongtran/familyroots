@@ -140,9 +140,10 @@ Branches are **hard-deleted** (no soft-delete flag) — see [ADR-006](../decisio
 | Avatar needs a person | `set_avatar()` requires `person_id` | `document_not_linked_to_person` |
 | Only photos as avatar | `document_type == "photo"` | `only_photo_can_be_avatar` |
 
-Documents are **hard-deleted**; the storage object is removed via `StoragePort`
-(`app/infrastructure/storage/supabase_adapter.py`). Storage layout is path-isolated
-per clan: `clans/{clan_id}/...`.
+Documents are **soft-deleted** (ADR-019): the row is flagged and the storage blob
+survives; an admin can `POST /documents/{id}/restore` until the daily purge job
+permanently removes blob + row after `DOCUMENT_RETENTION_DAYS` (default 30).
+Storage layout is path-isolated per clan: `clans/{clan_id}/...`.
 
 ## Event rules
 
@@ -174,10 +175,12 @@ default 7). Anniversary reminders are driven by APScheduler — see `backend/CLA
 |-----------|-----------------|
 | Person | Soft (`is_deleted`, restorable) |
 | Marriage, ParentChild | Soft |
-| Document, Event, Branch | Hard |
+| Document | Soft + retention purge (ADR-019) |
+| Event, Branch | Hard |
 
 Rationale and the consistency concern are recorded in
-[ADR-006](../decisions/006-soft-vs-hard-delete.md).
+[ADR-006](../decisions/006-soft-vs-hard-delete.md) (documents row superseded by
+[ADR-019](../decisions/019-document-soft-delete-purge.md)).
 
 ## 🇻🇳 Thuật ngữ gia phả Việt Nam (glossary)
 

@@ -63,9 +63,12 @@ async def test_upload_raises_unavailable_on_5xx(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
-async def test_delete_swallows_error_and_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
-    # delete() runs post-commit as best-effort compensation, so it must never
-    # raise — any SDK/transport failure must be swallowed and reported as False.
+async def test_delete_raises_unavailable_on_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    # delete()'s contract (task 3 review FIX 2): True on success OR confirmed
+    # not-found; anything else (transport/provider failure, here a 5xx) must
+    # raise the classified StorageError rather than being swallowed — a
+    # caller (notably the retention purge job) must be able to tell "gone"
+    # apart from "we don't know".
     from app.infrastructure.storage import supabase_adapter as mod
 
     bucket = MagicMock()
@@ -74,6 +77,37 @@ async def test_delete_swallows_error_and_returns_false(monkeypatch: pytest.Monke
     client.storage.from_.return_value = bucket
     monkeypatch.setattr(mod, "get_service_client", lambda: client)
 
+    with pytest.raises(StorageUnavailableError):
+        await mod.SupabaseStorageAdapter().delete("clans/x/documents/y.jpg")
+
+
+@pytest.mark.asyncio
+async def test_delete_returns_true_on_confirmed_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A 404/not_found response is not a failure — the object is confirmed
+    # already absent, which is the same success outcome as actually deleting it.
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.remove.side_effect = StorageApiError("Object not found", "not_found", 404)
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
     result = await mod.SupabaseStorageAdapter().delete("clans/x/documents/y.jpg")
 
-    assert result is False
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_delete_returns_true_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.remove.return_value = [{"name": "y.jpg"}]
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
+    result = await mod.SupabaseStorageAdapter().delete("clans/x/documents/y.jpg")
+
+    assert result is True

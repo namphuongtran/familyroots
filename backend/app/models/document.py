@@ -1,9 +1,9 @@
 """Document ORM model — photos, certificates, audio/video attached to a person."""
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, Date, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import ForeignKey
@@ -37,6 +37,12 @@ class Document(ClanScopedMixin, Base):
     taken_place: Mapped[str | None] = mapped_column(String(255), default=None)
 
     is_avatar: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Soft delete (ADR-019): rows are recoverable until the retention purge job
+    # removes blob + row after DOCUMENT_RETENTION_DAYS.
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
 
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
 

@@ -23,7 +23,23 @@ class SqlAlchemyDocumentRepository:
     async def get_by_id(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> DocumentEntity | None:
         result = await self._session.execute(
             select(DocumentModel).where(
-                DocumentModel.id == document_id, DocumentModel.clan_id == clan_id
+                DocumentModel.id == document_id,
+                DocumentModel.clan_id == clan_id,
+                DocumentModel.is_deleted.is_(False),
+            )
+        )
+        model = result.scalar_one_or_none()
+        return to_domain(model) if model else None
+
+    async def get_deleted(
+        self, document_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> DocumentEntity | None:
+        """Fetch a soft-deleted document by ID within a clan (for restore)."""
+        result = await self._session.execute(
+            select(DocumentModel).where(
+                DocumentModel.id == document_id,
+                DocumentModel.clan_id == clan_id,
+                DocumentModel.is_deleted.is_(True),
             )
         )
         model = result.scalar_one_or_none()
@@ -40,7 +56,9 @@ class SqlAlchemyDocumentRepository:
     ) -> list[DocumentEntity]:
         from app.core.pagination import paginate_query
 
-        query = select(DocumentModel).where(DocumentModel.clan_id == clan_id)
+        query = select(DocumentModel).where(
+            DocumentModel.clan_id == clan_id, DocumentModel.is_deleted.is_(False)
+        )
         if person_id:
             query = query.where(DocumentModel.person_id == person_id)
         if document_type:
@@ -63,6 +81,7 @@ class SqlAlchemyDocumentRepository:
                 DocumentModel.person_id == person_id,
                 DocumentModel.is_avatar.is_(True),
                 DocumentModel.id != exclude_id,
+                DocumentModel.is_deleted.is_(False),
             )
         )
         return [to_domain(m) for m in result.scalars().all()]
@@ -87,13 +106,3 @@ class SqlAlchemyDocumentRepository:
             apply_to_orm(doc, model)
         else:
             self._session.add(to_orm(doc))
-
-    async def delete(self, doc: DocumentEntity) -> None:
-        """Hard-delete a document."""
-        self._uow.track(doc)
-        result = await self._session.execute(
-            select(DocumentModel).where(DocumentModel.id == doc.id)
-        )
-        model = result.scalar_one_or_none()
-        if model:
-            await self._session.delete(model)

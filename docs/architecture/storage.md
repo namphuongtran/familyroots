@@ -1,13 +1,34 @@
 # File Storage
 
 How document/photo blobs are stored in Supabase Storage: one shared bucket,
-path-based clan isolation, presigned reads, and hard deletes.
+path-based clan isolation, presigned reads, and a soft-delete → retention →
+purge lifecycle.
 
-> ⚠️ **Deletion is permanent.** `DELETE /documents/{id}` hard-deletes the DB row and
-> permanently removes the blob — there is **no trash, no soft delete, no versioning**.
-> And the "orphan sweep" referenced in code comments **does not exist yet**: orphaned
-> blobs (from failed compensations) are only logged, never reclaimed. Both are
-> data-safety gaps — see [ops/backup-restore.md](../ops/backup-restore.md).
+## Delete lifecycle (ADR-019)
+
+`DELETE /documents/{id}` (admin) is a **soft-delete**: the row is flagged
+(`is_deleted=true`, `deleted_at`/`deleted_by` stamped) and the blob is left
+completely untouched. Reads/lists filter `is_deleted = false`, so the document
+disappears from the app immediately while its blob remains downloadable via
+presign for up to `DOCUMENT_RETENTION_DAYS` (default 30) days. `POST
+/documents/{id}/restore` (admin) reverses this — a pure metadata flip, no
+storage round-trip, since the blob was never removed.
+
+A daily retention purge job (`app/services/document_purge.py`, see
+[notifications-scheduler.md](notifications-scheduler.md)) permanently removes
+documents whose `deleted_at` is older than the retention window: **claim the
+row (guarded `DELETE ... WHERE is_deleted=true AND deleted_at<cutoff`) →
+delete the blob → commit**, in that order, so a crash anywhere rolls back the
+claim and the row survives to retry — never a silent partial purge, never an
+orphan blob left by *this* code path. Full crash-safety analysis and the
+per-item error-isolation guarantees are in
+[ADR-019](../decisions/019-document-soft-delete-purge.md).
+
+> ⚠️ **Still deferred**: orphan-blob reconciliation for blobs that predate this
+> lifecycle or come from a failed upload compensation (see the upload-flow
+> note below) — those are only logged, never reclaimed; needs bucket-listing
+> pagination, tracked as a follow-up. See
+> [ops/backup-restore.md](../ops/backup-restore.md).
 
 ## Bucket layout & isolation
 
@@ -64,12 +85,27 @@ person can be an avatar; previous avatars for that person are cleared in the sam
 transaction. The DB commit happens **before** the presign — a storage outage yields
 `presigned_url: null`, never a 503 on a pure-DB write.
 
-## Delete flow
+## Delete flow (`DELETE /documents/{id}`, admin only)
 
-`DELETE /documents/{id}` (admin only) is **DB-first**: commit the row removal, then
-remove the blob. If the storage delete then fails, the blob is merely orphaned
-(logged; reclaimable only by the not-yet-built sweep) — the reverse order could roll
-back the row after the blob was already gone.
+As of ADR-019, `DELETE` is a metadata-only soft-delete (see "Delete lifecycle"
+above) — it never touches the blob. The blob is only ever removed by the
+retention purge job, well after the row is claimed inside its own transaction
+(claim → delete blob → commit). There is no more DB-first-then-blob ordering
+in the request path at all; that ordering question moved entirely into the
+purge job.
+
+## `StoragePort.delete()` contract (changed under ADR-019)
+
+`StoragePort.delete()` (`app/domain/document/repository.py`) returns `True`
+when the object was deleted **or is confirmed already absent** (idempotent —
+a missing object is not a failure), and **raises** the classified
+`StorageError` for anything where deletion could not be confirmed either way.
+This is stricter than delete's old "never raises, best-effort compensation"
+behavior: the purge job's row-claim commit is gated on this call succeeding,
+so an unconfirmed failure must surface as an exception — a swallowed
+`False`/`True` could let a row be purged while its blob deletion is genuinely
+unconfirmed. `SupabaseStorageAdapter.delete()` implements this by classifying
+`StorageNotFoundError` as success (`True`) and re-raising everything else.
 
 ## StorageError taxonomy → HTTP
 
@@ -84,10 +120,17 @@ every SDK/transport failure into the domain taxonomy
 | unexpected 4xx (e.g. duplicate key) | Code bug — stays loud | 500 |
 
 The blocking `storage3` SDK is offloaded with `asyncio.to_thread` so it never freezes
-the event loop. `delete()` alone never raises (it runs post-commit as compensation).
+the event loop.
 
 ## Related
 
+- [ADR-019](../decisions/019-document-soft-delete-purge.md) — soft-delete +
+  retention purge decision, crash-safety analysis, deferred orphan
+  reconciliation
+- [notifications-scheduler.md](notifications-scheduler.md) — `document_purge`
+  job schedule and lock topology
+- [ops/configuration.md](../ops/configuration.md) — `MAX_UPLOAD_SIZE_MB`,
+  `DOCUMENT_RETENTION_DAYS`, bucket name
 - [Multi-Tenancy](multi-tenancy.md) — path prefix as the storage tenancy boundary
-- [ops/configuration.md](../ops/configuration.md) — `MAX_UPLOAD_SIZE_MB`, bucket name
-- [ops/backup-restore.md](../ops/backup-restore.md) — blob backup + hard-delete gap
+- [ops/backup-restore.md](../ops/backup-restore.md) — blob backup gap (orphan
+  reconciliation still deferred)

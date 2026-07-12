@@ -8,6 +8,7 @@ from app.api.v1.claims import admin_claims_router, user_claims_router
 from app.api.v1.clans import router as clans_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.events import router as events_router
+from app.api.v1.exports import router as exports_router
 from app.api.v1.invitations import admin_invitations_router, user_invitations_router
 from app.api.v1.me import router as me_router
 from app.api.v1.persons import router as persons_router
@@ -26,6 +27,7 @@ api_v1_router.include_router(relationships_router, prefix="/relationships", tags
 api_v1_router.include_router(documents_router, prefix="/documents", tags=["documents"])
 api_v1_router.include_router(events_router, prefix="/events", tags=["events"])
 api_v1_router.include_router(tree_router, prefix="/tree", tags=["tree"])
+api_v1_router.include_router(exports_router, prefix="/exports", tags=["exports"])
 
 # Claims
 api_v1_router.include_router(user_claims_router, prefix="/claims", tags=["claims"])

@@ -12,7 +12,11 @@ class DocumentRepository(Protocol):
     """Abstract persistence contract for Document entities."""
 
     async def get_by_id(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
-        """Fetch a document by ID within a clan."""
+        """Fetch a non-deleted document by ID within a clan."""
+        ...
+
+    async def get_deleted(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
+        """Fetch a soft-deleted document by ID within a clan (for restore)."""
         ...
 
     async def list_in_clan(
@@ -42,11 +46,13 @@ class DocumentRepository(Protocol):
         ...
 
     async def save(self, doc: Document) -> None:
-        """Insert or update a Document entity."""
-        ...
+        """Insert or update a Document entity.
 
-    async def delete(self, doc: Document) -> None:
-        """Hard-delete a document."""
+        Soft-delete (ADR-019) also flows through ``save``: callers call
+        ``doc.mark_deleted(actor)`` then ``save(doc)`` — there is no separate
+        ``delete`` method. The row and blob both survive until the retention
+        purge job (``app.services.document_purge``) removes them.
+        """
         ...
 
 
@@ -77,7 +83,17 @@ class StoragePort(Protocol):
         ...
 
     async def delete(self, storage_path: str) -> bool:
-        """Delete a file by path. Returns True on success."""
+        """Delete a file by path.
+
+        Returns True when the object was deleted OR is confirmed already
+        absent (idempotent — a missing object is not a failure). Raises the
+        appropriate ``StorageError`` subclass for transport/provider failures
+        where deletion could not be confirmed either way — callers (notably
+        the retention purge job, which commits its row-claim only after this
+        call succeeds) must not treat a swallowed exception as "not found";
+        that would risk purging a row whose blob deletion is actually
+        unconfirmed.
+        """
         ...
 
     async def get_presigned_url(

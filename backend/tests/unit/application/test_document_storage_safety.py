@@ -1,9 +1,9 @@
 """Storage-safety guarantees for DocumentCommandHandler (review H2 + H3).
 
 H2 — transaction/blob ordering:
-  * delete is DB-first: the row is committed before the blob is removed, so a
-    storage failure can only orphan a blob (reclaimable), never leave a row
-    pointing at a missing object;
+  * delete is a soft-delete (ADR-019): mark_deleted + repo.save flags the row
+    and commits; the blob is never touched by delete at all — it survives
+    until the retention purge job (Task 3), reclaimable/recoverable via restore;
   * upload compensates: if metadata persistence fails after the blob is written,
     the just-uploaded blob is deleted so no orphan is leaked.
 H3 — the storage key extension is sanitized so a crafted filename cannot escape
@@ -52,7 +52,6 @@ class FakeRepo:
     def __init__(self, rec: Recorder, existing: Document | None = None) -> None:
         self._rec = rec
         self.saved: list[Document] = []
-        self.deleted: list[Document] = []
         self._existing = existing
 
     async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
@@ -60,12 +59,12 @@ class FakeRepo:
 
     async def save(self, doc: Document) -> None:
         self.saved.append(doc)
-
-    async def delete(self, doc: Document) -> None:
-        self.deleted.append(doc)
-        self._rec.calls.append("repo.delete")
+        self._rec.calls.append("repo.save")
 
     async def get_by_id(self, doc_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
+        return self._existing
+
+    async def get_deleted(self, doc_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
         return self._existing
 
     async def list_in_clan(self, *args: object, **kwargs: object) -> list[Document]:
@@ -182,8 +181,11 @@ async def test_upload_deletes_blob_when_commit_fails() -> None:
     assert len(storage.deleted) == 1
 
 
-# ── H2: delete is DB-first ────────────────────────────────────────────────────
-async def test_delete_commits_before_touching_storage() -> None:
+# ── ADR-019: delete is a soft-delete that never touches storage ──────────────
+async def test_delete_soft_deletes_and_never_touches_storage() -> None:
+    """Re-pointed (was H2 DB-first-then-storage): delete now flags the row
+    (mark_deleted + repo.save) and commits; the blob is left for the retention
+    purge job, so storage.delete must not be called at all."""
     rec = Recorder()
     clan_id = uuid.uuid4()
     doc = _doc(clan_id)
@@ -193,12 +195,17 @@ async def test_delete_commits_before_touching_storage() -> None:
 
     await handler.delete(document_id=doc.id, clan_id=clan_id, actor=_actor())
 
-    # DB row removed and committed strictly before the blob is deleted.
-    assert rec.calls == ["repo.delete", "commit", "storage.delete"]
-    assert storage.deleted == [doc.storage_path]
+    assert rec.calls == ["repo.save", "commit"]
+    assert storage.deleted == []
+    assert repo.saved == [doc]
+    assert doc.is_deleted is True
+    assert doc.deleted_at is not None
 
 
-async def test_delete_succeeds_even_if_storage_delete_fails() -> None:
+async def test_delete_succeeds_even_if_storage_would_have_failed() -> None:
+    """Re-pointed (was: delete tolerates a failing storage.delete). Since delete
+    no longer calls storage at all, a storage outage (fail_delete=True) can no
+    longer affect it — this asserts storage genuinely stays untouched."""
     rec = Recorder()
     clan_id = uuid.uuid4()
     doc = _doc(clan_id)
@@ -207,10 +214,8 @@ async def test_delete_succeeds_even_if_storage_delete_fails() -> None:
     storage = FakeStorage(rec, fail_delete=True)
     handler = DocumentCommandHandler(repo, storage, uow)
 
-    # A failing storage delete must NOT raise or roll back: the DB row removal is
-    # already durable, and the blob failure is swallowed (logged as an orphan).
     await handler.delete(document_id=doc.id, clan_id=clan_id, actor=_actor())
 
-    assert repo.deleted == [doc] and uow.committed == 1
-    assert storage.deleted == [doc.storage_path]  # deletion was attempted, after commit
-    assert rec.calls == ["repo.delete", "commit", "storage.delete"]
+    assert repo.saved == [doc] and uow.committed == 1
+    assert storage.deleted == []  # never attempted — blob survives until purge
+    assert rec.calls == ["repo.save", "commit"]

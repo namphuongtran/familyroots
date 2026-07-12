@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 from app.domain.document.entity import Document
-from app.domain.document.events import DocumentCreated, DocumentDeleted
+from app.domain.document.events import DocumentCreated, DocumentDeleted, DocumentRestored
 from app.domain.shared.exceptions import BusinessRuleViolation, ValidationError
 from app.domain.shared.value_objects import ActorInfo
 
@@ -178,4 +178,47 @@ class TestDocumentDelete:
         assert len(events) == 1
         assert isinstance(events[0], DocumentDeleted)
         assert events[0].action == "document.delete"
+        assert events[0].resource_id == doc.id
+
+    def test_mark_deleted_sets_soft_delete_state(self) -> None:
+        """ADR-019: mark_deleted flags the row instead of the repository hard-deleting it."""
+        actor = ActorInfo(user_id=uuid.uuid4(), role="admin")
+        doc = Document.create(
+            clan_id=uuid.uuid4(),
+            actor=actor,
+            title="Test",
+            document_type="photo",
+            storage_path="test.jpg",
+        )
+        assert doc.is_deleted is False
+        assert doc.deleted_at is None
+        assert doc.deleted_by is None
+
+        doc.mark_deleted(actor)
+
+        assert doc.is_deleted is True
+        assert doc.deleted_at is not None
+        assert doc.deleted_by == actor.user_id
+
+    def test_restore_clears_soft_delete_state_and_emits_event(self) -> None:
+        actor = ActorInfo(user_id=uuid.uuid4(), role="admin")
+        doc = Document.create(
+            clan_id=uuid.uuid4(),
+            actor=actor,
+            title="Test",
+            document_type="photo",
+            storage_path="test.jpg",
+        )
+        doc.mark_deleted(actor)
+        doc.collect_events()
+
+        doc.restore(actor)
+
+        assert doc.is_deleted is False
+        assert doc.deleted_at is None
+        assert doc.deleted_by is None
+        events = doc.collect_events()
+        assert len(events) == 1
+        assert isinstance(events[0], DocumentRestored)
+        assert events[0].action == "document.restore"
         assert events[0].resource_id == doc.id

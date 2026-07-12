@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     # Invitations
     INVITATION_TTL_DAYS: int = 7
 
+    # Document retention (ADR-019): soft-deleted documents are recoverable for this
+    # many days after deleted_at, after which the daily purge job removes the blob
+    # and row permanently.
+    DOCUMENT_RETENTION_DAYS: int = 30
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:

@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.services.document_purge import purge_expired_documents
 from app.services.lunar_calendar import next_lunar_anniversary
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,13 @@ def start_scheduler() -> None:
         # container's system timezone.
         trigger=CronTrigger(hour=settings.NOTIFICATION_CRON_HOUR, minute=0, timezone=_TZ),
         id="anniversary_notifications",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        func=purge_expired_documents,
+        trigger=CronTrigger(hour=settings.NOTIFICATION_CRON_HOUR, minute=30, timezone=_TZ),
+        id="document_purge",
         replace_existing=True,
         misfire_grace_time=3600,
     )

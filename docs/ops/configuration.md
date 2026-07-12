@@ -24,7 +24,8 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | Trust `X-Forwarded-For` for rate-limit IPs | Enable only behind a trusted proxy/LB |
 | `MAX_UPLOAD_SIZE_MB` | `50` (derived from domain policy) | Platform-wide upload cap; `max_upload_bytes` property is what handlers use | Tune as needed |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Single platform clock for the cron **and** its date math | **Boot fails** on a non-IANA name (any env) |
-| `NOTIFICATION_CRON_HOUR` | `7` | Daily anniversary-job hour in the platform zone | — |
+| `NOTIFICATION_CRON_HOUR` | `7` | Daily anniversary-job hour in the platform zone (the `document_purge` job also keys off this hour, at `minute=30`) | — |
+| `DOCUMENT_RETENTION_DAYS` | `30` | Days a soft-deleted document's row+blob survive before the daily `document_purge` job permanently removes them ([ADR-019](../decisions/019-document-soft-delete-purge.md)) | Tune per data-retention policy |
 | `PASSWORD_RESET_REDIRECT_URL` | `""` | Recovery-email landing page | Empty → Supabase Site URL fallback |
 | `EMAIL_VERIFY_REDIRECT_URL` | `""` | Signup-confirmation landing page | Empty → Supabase Site URL fallback |
 | `INVITATION_TTL_DAYS` | `7` | Invitation link lifetime | — |
@@ -70,3 +71,4 @@ Notes:
 - [secrets.md](secrets.md) — where each secret lives and how to rotate it
 - [deployment.md](deployment.md) — Render blueprint, pre-deploy migrations
 - [../architecture/notifications-scheduler.md](../architecture/notifications-scheduler.md) — scheduler knobs in context
+- [../architecture/storage.md](../architecture/storage.md) — `DOCUMENT_RETENTION_DAYS` in the delete/purge lifecycle
