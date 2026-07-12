@@ -39,7 +39,7 @@ class MarriageCommandHandler:
     async def create(self, cmd: CreateMarriage) -> MarriageResponse:
         await self._validator.ensure_persons_in_clan([cmd.person1_id, cmd.person2_id], cmd.clan_id)
         await self._validator.check_duplicate_marriage(cmd.person1_id, cmd.person2_id, cmd.clan_id)
-        if cmd.status == "married":
+        if cmd.status != "divorced":
             await self._validator.check_spouse_order(cmd.person1_id, cmd.spouse_order, cmd.clan_id)
 
         marriage = Marriage.create(
@@ -71,14 +71,18 @@ class MarriageCommandHandler:
         # must not be able to bypass what CREATE would have blocked.
         new_status = cast(str, cmd.changes.get("status", marriage.status))
         new_order = cast("int | None", cmd.changes.get("spouse_order", marriage.spouse_order))
-        if "status" in cmd.changes and new_status == "married" and marriage.status != "married":
+        # Re-check duplicate_marriage only when the pair transitions from divorced
+        # to any active (non-divorced) status — has_active_marriage already
+        # excludes divorced rows, so a flip between two non-divorced statuses
+        # (e.g. married -> widowed) can't newly create an active-marriage clash.
+        if "status" in cmd.changes and new_status != "divorced" and marriage.status == "divorced":
             await self._validator.check_duplicate_marriage(
                 marriage.person1_id,
                 marriage.person2_id,
                 cmd.clan_id,
                 exclude_marriage_id=marriage.id,
             )
-        if new_status == "married" and ("spouse_order" in cmd.changes or "status" in cmd.changes):
+        if new_status != "divorced" and ("spouse_order" in cmd.changes or "status" in cmd.changes):
             await self._validator.check_spouse_order(
                 marriage.person1_id,
                 new_order,

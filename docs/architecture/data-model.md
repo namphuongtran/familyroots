@@ -544,10 +544,12 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 
 > **💡 Note (VN) - `spouse_order` uniqueness per person1 (migration `015_data_integrity`):**
 > Partial unique index `uq_marriages_spouse_order (created_by_clan_id, person1_id,
-> spouse_order) WHERE spouse_order IS NOT NULL AND is_deleted = false AND status =
-> 'married'` đảm bảo thứ tự vợ cả/vợ hai/vợ ba của **cùng một `person1`** không bao
-> giờ trùng nhau trong số các cuộc hôn nhân đang active (`married`) — đã ly dị/xóa
-> mềm thì không tính. Validator (`check_spouse_order`) chặn trước ở tầng domain (409
+> spouse_order) WHERE spouse_order IS NOT NULL AND is_deleted = false AND status <>
+> 'divorced'` đảm bảo thứ tự vợ cả/vợ hai/vợ ba của **cùng một `person1`** không bao
+> giờ trùng nhau trong số các cuộc hôn nhân đang active — active nghĩa là **bất kỳ
+> status nào khác `divorced`** (married, widowed/góa, separated/ly thân đều tính),
+> khớp với định nghĩa active của `has_active_marriage`; chỉ ly dị/xóa mềm thì không
+> tính. Validator (`check_spouse_order`) chặn trước ở tầng domain (409
 > `relationship.duplicate_spouse_order`); index này là lớp chặn cuối cho race
 > condition (raw SQL bypass → `23505` → 409). Migration có bước pre-check: nếu dữ
 > liệu hiện có đã vi phạm, migration **fail rõ ràng** và liệt kê các dòng vi phạm —
@@ -798,9 +800,9 @@ CREATE INDEX idx_marriages_person2 ON marriages(person2_id);
 CREATE INDEX idx_marriages_clan ON marriages(created_by_clan_id);
 CREATE INDEX idx_marriages_is_deleted ON marriages(is_deleted) WHERE is_deleted = false;
 
--- spouse_order uniqueness per person1, active marriages only (migration 015_data_integrity, ADR-017 sibling fix)
+-- spouse_order uniqueness per person1, active (non-divorced) marriages only (migration 015_data_integrity, ADR-017 sibling fix)
 CREATE UNIQUE INDEX uq_marriages_spouse_order ON marriages (created_by_clan_id, person1_id, spouse_order)
-    WHERE spouse_order IS NOT NULL AND is_deleted = false AND status = 'married';
+    WHERE spouse_order IS NOT NULL AND is_deleted = false AND status <> 'divorced';
 
 -- Branches
 CREATE INDEX idx_branches_clan ON branches(clan_id);

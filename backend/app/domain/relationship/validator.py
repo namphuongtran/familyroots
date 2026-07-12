@@ -155,7 +155,13 @@ class RelationshipDomainValidator:
         *,
         exclude_marriage_id: uuid.UUID | None = None,
     ) -> None:
-        """Active marriages of person1 must have distinct spouse_order (vợ cả/hai/ba)."""
+        """Active marriages of person1 must have distinct spouse_order (vợ cả/hai/ba).
+
+        "Active" = non-divorced (status <> 'divorced'): married, widowed, and
+        separated marriages all participate in the uniqueness check; only
+        divorced marriages are exempt, matching ``has_active_marriage``'s
+        definition of active.
+        """
         if spouse_order is None:
             return
         if await self._q.has_spouse_order_conflict(

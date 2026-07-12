@@ -292,7 +292,7 @@ class SqlAlchemyRelationshipQueryPort:
                 SELECT 1 FROM public.marriages
                 WHERE person1_id = :p1 AND spouse_order = :so
                   AND created_by_clan_id = :clan_id
-                  AND status = 'married' AND is_deleted = false
+                  AND status <> 'divorced' AND is_deleted = false
                   AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
                 LIMIT 1
             """),

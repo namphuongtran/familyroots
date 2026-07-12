@@ -55,10 +55,13 @@ def test_version_columns_exist_default_1(sync_engine: sa.Engine) -> None:
 def test_spouse_order_unique_index_blocks_duplicates(
     sync_engine: sa.Engine, seeded_clan_and_persons: tuple[uuid.UUID, ...]
 ) -> None:
-    """Two active marriages of the same person1 with the same spouse_order must
-    violate uq_marriages_spouse_order. Divorced rows and soft-deleted rows must NOT
-    collide with an active married row at the same spouse_order (the partial index
-    predicate is ``WHERE ... AND is_deleted = false AND status = 'married'``)."""
+    """Two non-divorced marriages of the same person1 with the same spouse_order
+    must violate uq_marriages_spouse_order — "active" here means any status other
+    than divorced (married, widowed, separated all collide), matching
+    ``has_active_marriage``'s definition of active. Only a divorced row or a
+    soft-deleted row may share a spouse_order with a live non-divorced row (the
+    partial index predicate is
+    ``WHERE ... AND is_deleted = false AND status <> 'divorced'``)."""
     clan_id, p1, p2, p3 = seeded_clan_and_persons
     ins = sa.text(
         """INSERT INTO marriages
@@ -95,7 +98,22 @@ def test_spouse_order_unique_index_blocks_duplicates(
                 "actor": actor,
             },
         )
-    # divorced row with same order is allowed
+    # widowed row with same order collides too — widowed is "active" (non-divorced)
+    with pytest.raises(sa.exc.IntegrityError), sync_engine.begin() as conn:
+        conn.execute(
+            ins,
+            {
+                "id": str(uuid.uuid4()),
+                "p1": p1,
+                "p2": p3,
+                "clan": clan_id,
+                "status": "widowed",
+                "so": 1,
+                "deleted": False,
+                "actor": actor,
+            },
+        )
+    # divorced row with same order is allowed — divorced is exempt
     with sync_engine.begin() as conn:
         conn.execute(
             ins,

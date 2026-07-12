@@ -270,6 +270,55 @@ async def father_two_wives_orders_1_2(
     return data2["id"], data2["version"]
 
 
+@pytest.fixture()
+async def father_with_widowed_wife_order_1(
+    client: AsyncClient, editor_headers: dict[str, str]
+) -> tuple[str, str]:
+    """A father with a WIDOWED marriage at spouse_order=1, plus a spare wife id.
+    Widowed counts as "active" (non-divorced) under the widened spouse_order rule,
+    so a new married marriage at the same order must collide with it too."""
+    father = await _make_person(client, editor_headers, "Father G", "male")
+    wife1 = await _make_person(client, editor_headers, "Wife G1", "female")
+    other_wife = await _make_person(client, editor_headers, "Wife G2", "female")
+
+    resp = await client.post(
+        "/api/v1/relationships/marriages",
+        headers=editor_headers,
+        json={"person1_id": father, "person2_id": wife1, "status": "widowed", "spouse_order": 1},
+    )
+    assert resp.status_code == 201, resp.text
+    return father, other_wife
+
+
+@pytest.fixture()
+async def father_married_and_divorced_same_order(
+    client: AsyncClient, editor_headers: dict[str, str]
+) -> tuple[str, int]:
+    """Marriage A: (father, wife1), married, spouse_order=1. Marriage B: (father,
+    wife2), divorced, spouse_order=1 — allowed at create time because divorced is
+    exempt from the spouse_order check (create guard only runs it for non-divorced
+    statuses). Returns B's (id, version) so a status-flip PATCH can be attempted."""
+    father = await _make_person(client, editor_headers, "Father H", "male")
+    wife1 = await _make_person(client, editor_headers, "Wife H1", "female")
+    wife2 = await _make_person(client, editor_headers, "Wife H2", "female")
+
+    r1 = await client.post(
+        "/api/v1/relationships/marriages",
+        headers=editor_headers,
+        json={"person1_id": father, "person2_id": wife1, "status": "married", "spouse_order": 1},
+    )
+    assert r1.status_code == 201, r1.text
+
+    r2 = await client.post(
+        "/api/v1/relationships/marriages",
+        headers=editor_headers,
+        json={"person1_id": father, "person2_id": wife2, "status": "divorced", "spouse_order": 1},
+    )
+    assert r2.status_code == 201, r2.text
+    data2 = r2.json()["data"]
+    return data2["id"], data2["version"]
+
+
 # ── Tests ─────────────────────────────────────────────────────────────────
 
 
@@ -357,6 +406,48 @@ async def test_spouse_order_update_collision_is_409(
     resp = await client.patch(
         f"/api/v1/relationships/marriages/{marriage2_id}",
         json={"spouse_order": 1, "expected_version": v2},
+        headers=editor_headers,
+    )
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "relationship.duplicate_spouse_order"
+
+
+async def test_duplicate_spouse_order_with_widowed_marriage_is_409(
+    client: AsyncClient,
+    editor_headers: dict[str, str],
+    father_with_widowed_wife_order_1: tuple[str, str],
+) -> None:
+    """A WIDOWED marriage at spouse_order=1 must block a new married marriage at
+    the same spouse_order — widowed counts as active (non-divorced) under the
+    widened rule, not just 'married'."""
+    father_id, other_wife_id = father_with_widowed_wife_order_1
+    resp = await client.post(
+        "/api/v1/relationships/marriages",
+        json={
+            "person1_id": father_id,
+            "person2_id": other_wife_id,
+            "status": "married",
+            "spouse_order": 1,
+        },
+        headers=editor_headers,
+    )
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "relationship.duplicate_spouse_order"
+
+
+async def test_status_flip_to_married_collides_with_existing_spouse_order(
+    client: AsyncClient,
+    editor_headers: dict[str, str],
+    father_married_and_divorced_same_order: tuple[str, int],
+) -> None:
+    """Marriage B was created divorced at spouse_order=1 alongside married Marriage
+    A at the same order (allowed — divorced is exempt at create time). Flipping B's
+    status to 'married' via PATCH must now collide with A through the
+    effective-value spouse_order re-check (final review Minor-4)."""
+    marriage_b_id, v = father_married_and_divorced_same_order
+    resp = await client.patch(
+        f"/api/v1/relationships/marriages/{marriage_b_id}",
+        json={"status": "married", "expected_version": v},
         headers=editor_headers,
     )
     assert resp.status_code == 409

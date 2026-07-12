@@ -3,7 +3,9 @@
 - persons / marriages / parent_child gain `version INTEGER NOT NULL DEFAULT 1`
   (optimistic concurrency; PATCH requires expected_version, see ADR-017).
 - Partial unique index guarantees a person1's ACTIVE marriages have distinct
-  spouse_order (vợ cả/hai/ba ordering is deterministic).
+  spouse_order (vợ cả/hai/ba ordering is deterministic). "Active" means any
+  status other than divorced (married, widowed, separated) — matching
+  ``has_active_marriage``'s definition of active.
 - Pre-check: if existing data already violates spouse_order uniqueness, FAIL
   with the offending rows listed — the operator must resolve history manually;
   we never silently renumber a gia phả.
@@ -32,7 +34,7 @@ def upgrade() -> None:
             """SELECT created_by_clan_id, person1_id, spouse_order, COUNT(*)
                FROM marriages
                WHERE spouse_order IS NOT NULL AND is_deleted = false
-                 AND status = 'married'
+                 AND status <> 'divorced'
                GROUP BY created_by_clan_id, person1_id, spouse_order
                HAVING COUNT(*) > 1"""
         )
@@ -53,7 +55,7 @@ def upgrade() -> None:
         """CREATE UNIQUE INDEX uq_marriages_spouse_order
            ON marriages (created_by_clan_id, person1_id, spouse_order)
            WHERE spouse_order IS NOT NULL AND is_deleted = false
-             AND status = 'married'"""
+             AND status <> 'divorced'"""
     )
 
 

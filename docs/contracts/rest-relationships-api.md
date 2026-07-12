@@ -30,13 +30,15 @@ Validation rules (current behavior):
 - prevent duplicate active marriage relationships
 - max biological parent constraints
 - age-gap and cycle checks for parent-child edges
-- `spouse_order` uniqueness per `person1` among their active (`status = married`)
-  marriages (`relationship.duplicate_spouse_order`, 409) — checked on create, and on
-  update when `spouse_order` is set or `status` flips to `married`; backstopped by
-  the partial unique index `uq_marriages_spouse_order` for concurrent races
+- `spouse_order` uniqueness per `person1` among their active (`status <> divorced` —
+  married, widowed, or separated) marriages (`relationship.duplicate_spouse_order`,
+  409) — checked on create, and on update when `spouse_order` is set or the
+  effective `status` is non-divorced; backstopped by the partial unique index
+  `uq_marriages_spouse_order` for concurrent races
 - re-validation on update (ADR spec 2026-07-12, H2): a `PATCH` that changes
-  `relationship_type` (parent-child) or flips `status` to `married` (marriage)
-  re-runs the same rules `create` enforces, excluding the edge being updated itself
+  `relationship_type` (parent-child) or flips `status` away from `divorced`
+  (marriage) re-runs the same rules `create` enforces, excluding the edge being
+  updated itself
 
 Response shapes (see [Response envelope](README.md#response-envelope)):
 - All endpoints return the resource under `data`
