@@ -178,5 +178,6 @@
   "error.user_already_linked_to_person": "Tài khoản này đã liên kết với một nhân vật",
   "error.user_not_in_clan": "Người dùng này không phải thành viên dòng họ",
   "error.user_not_linked_to_person": "Tài khoản này chưa liên kết với nhân vật nào",
-  "error.validation_error": "Xác thực thất bại"
+  "error.validation_error": "Xác thực thất bại",
+  "error.stale_write": "Bản ghi đã được người khác sửa. Vui lòng tải lại và thử lại."
 }

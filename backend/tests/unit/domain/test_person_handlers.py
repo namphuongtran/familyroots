@@ -71,6 +71,7 @@ class TestPersonCommandHandlerUpdate:
             person_id=person.id,
             clan_id=uuid.uuid4(),
             actor=_make_actor(),
+            expected_version=1,
             changes={"full_name": "After"},
         )
         result = await handler.update(cmd)
@@ -99,6 +100,7 @@ class TestPersonCommandHandlerUpdate:
                 person_id=person.id,
                 clan_id=uuid.uuid4(),
                 actor=ActorInfo(user_id=uuid.uuid4(), role="editor"),
+                expected_version=1,
                 changes={"full_name": "After"},
             )
         )
@@ -122,6 +124,7 @@ class TestPersonCommandHandlerUpdate:
                 person_id=person.id,
                 clan_id=uuid.uuid4(),
                 actor=ActorInfo(user_id=uuid.uuid4(), role="admin"),
+                expected_version=1,
                 changes={"full_name": "After"},
             )
         )
@@ -139,6 +142,7 @@ class TestPersonCommandHandlerUpdate:
             person_id=uuid.uuid4(),
             clan_id=uuid.uuid4(),
             actor=_make_actor(),
+            expected_version=1,
             changes={"full_name": "X"},
         )
         with pytest.raises(EntityNotFoundError):

@@ -9,11 +9,13 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import update as sql_update
 
 from app.core.pagination import decode_fields_cursor
 from app.domain.person.entity import Person as PersonEntity
 from app.domain.person.repository import PersonFilters, PersonSearchResult
-from app.infrastructure.persistence.person_mapper import apply_to_orm, to_domain, to_orm
+from app.domain.shared.exceptions import ConflictError
+from app.infrastructure.persistence.person_mapper import UPDATABLE_FIELDS, to_domain, to_orm
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person as PersonModel
@@ -158,15 +160,34 @@ class SqlAlchemyPersonRepository:
             for row in rows
         ]
 
-    async def save(self, person: PersonEntity) -> None:
-        """Insert or update a Person."""
+    async def save(self, person: PersonEntity, *, expected_version: int | None = None) -> None:
+        """Insert, or update with an optimistic-concurrency check (ADR-017).
+
+        expected_version=None (delete/restore/claim paths) updates unconditionally
+        but still bumps version so any concurrent PATCH sees a stale_write.
+        """
         self._uow.track(person)
         existing = await self._session.get(PersonModel, person.id)
-        if existing:
-            apply_to_orm(person, existing)
-        else:
-            model = to_orm(person)
-            self._session.add(model)
+        if existing is None:
+            self._session.add(to_orm(person))
+            return
+
+        values = {f: getattr(person, f) for f in UPDATABLE_FIELDS}
+        stmt = (
+            sql_update(PersonModel)
+            .where(PersonModel.id == person.id)
+            .values(**values, version=PersonModel.version + 1)
+        )
+        if expected_version is not None:
+            stmt = stmt.where(PersonModel.version == expected_version)
+        result = await self._session.execute(stmt)
+        if result.rowcount == 0:
+            current = await self._session.scalar(
+                select(PersonModel.version).where(PersonModel.id == person.id)
+            )
+            raise ConflictError("stale_write", detail={"current_version": current})
+        await self._session.refresh(existing)  # sync identity map with the core UPDATE
+        person.version = existing.version
 
     async def save_with_membership(
         self,

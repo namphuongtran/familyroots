@@ -124,6 +124,10 @@ class Person(AggregateRoot):
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
+    # Optimistic concurrency (ADR-017). Not client-updatable; the repository
+    # bumps it on every successful UPDATE.
+    version: int = 1
+
     # ── Domain methods ────────────────────────────────────────
 
     @classmethod

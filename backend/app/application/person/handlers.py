@@ -140,7 +140,7 @@ class PersonCommandHandler:
                 raise ForbiddenError("field_not_updatable", {"fields": sorted(invalid_fields)})
 
         person.update(cmd.changes, cmd.actor, cmd.clan_id)
-        await self._repo.save(person)
+        await self._repo.save(person, expected_version=cmd.expected_version)
         await self._uow.commit()
         response = PersonResponse.model_validate(person)
         # The PATCH response echoes the person's stored fields — redact contact PII so

@@ -178,5 +178,6 @@
   "error.user_already_linked_to_person": "该用户已关联到某人物",
   "error.user_not_in_clan": "该用户不是宗族成员",
   "error.user_not_linked_to_person": "该用户未关联到任何人物",
-  "error.validation_error": "校验失败"
+  "error.validation_error": "校验失败",
+  "error.stale_write": "该记录已被他人修改。请重新加载后再试。"
 }

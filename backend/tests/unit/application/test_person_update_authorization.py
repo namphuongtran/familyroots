@@ -81,7 +81,7 @@ class _FakeRepo:
     async def get_linked_person_id(self, user_id):
         return self._linked_person_id
 
-    async def save(self, person):
+    async def save(self, person, *, expected_version=None):
         pass
 
 
@@ -99,6 +99,7 @@ async def test_viewer_can_edit_own_whitelisted_field():
         person_id=person.id,
         clan_id=uuid.uuid4(),
         actor=_actor("viewer", uid),
+        expected_version=1,
         changes={"phone": "0900000000"},
     )
     await handler.update(cmd)
@@ -115,6 +116,7 @@ async def test_viewer_cannot_edit_other_person():
         person_id=person.id,
         clan_id=uuid.uuid4(),
         actor=_actor("viewer", uid),
+        expected_version=1,
         changes={"phone": "x"},
     )
     with pytest.raises(ForbiddenError):
@@ -130,6 +132,7 @@ async def test_viewer_cannot_edit_nonwhitelisted_field():
         person_id=person.id,
         clan_id=uuid.uuid4(),
         actor=_actor("viewer", uid),
+        expected_version=1,
         changes={"full_name": "Hacked"},
     )
     with pytest.raises(ForbiddenError):
@@ -144,6 +147,7 @@ async def test_editor_can_edit_any_field():
         person_id=person.id,
         clan_id=uuid.uuid4(),
         actor=_actor("editor", uuid.uuid4()),
+        expected_version=1,
         changes={"full_name": "New Name"},
     )
     await handler.update(cmd)

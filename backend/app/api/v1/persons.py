@@ -374,12 +374,14 @@ async def update_person(
 ) -> dict[str, Any]:
     """Update a person's details."""
     changes = body.model_dump(exclude_unset=True)
+    expected_version = changes.pop("expected_version")
     person = await handler.update(
         UpdatePerson(
             person_id=person_id,
             clan_id=clan_id,
             actor=ActorInfo.from_jwt(current_user, user_role.value),
             changes=changes,
+            expected_version=expected_version,
         )
     )
     return {"data": person.model_dump()}
