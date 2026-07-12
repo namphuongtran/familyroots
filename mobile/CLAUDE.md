@@ -86,7 +86,7 @@ When the Dio client is wired up, every clan-scoped request must send:
 - `Accept-Language` (current locale)
 - `X-Current-Clan-Id` (active clan from session/local storage)
 
-Match query semantics with backend + web: cursor pagination (`next_cursor`, `has_more`), `profile=summary|detail|full`, `include`, sparse `fields` (and merge `include_by_id` keys into `fields`).
+Match query semantics with backend + web: every 2xx body is enveloped as `{"data": ...}` (lists: `{"data": [...], "meta": {"cursor", "has_more", "limit"}}` — cursor pagination), `profile=summary|detail|full`, `include`, sparse `fields` (and merge `include_by_id` keys into `fields`). Date fields are `HistoricalDate` objects `{date, precision, display, lunar}` — render `date` when `precision == "exact"`, else `display`. `docs/contracts/*` at the repo root is the authoritative spec.
 
 ### Known scaffold state (Prompt 2 TODOs)
 

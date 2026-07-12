@@ -2,9 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Pre-task reading**: consult the map in `../docs/README.md` before starting — API
+shape changes need `../docs/contracts/`, schema changes need
+`../docs/architecture/data-model.md` + `../docs/ops/migrations.md`, tree/auth work
+needs `../docs/architecture/{tree-read-model,auth-flow}.md`, and architectural or
+breaking changes need an ADR (`../docs/decisions/README.md`) in the same PR.
+
 ## Commands
 
-Dependencies are `uv`-managed (Python 3.14+). Lint/format/typecheck are run via `uvx`; the test runner needs `uv run` so the project's virtualenv is used.
+Dependencies are `uv`-managed (Python 3.14+). Only ruff runs via `uvx`; pytest, mypy, lint-imports, and alembic need `uv run` so the project's virtualenv (with the pydantic mypy plugin and app imports) is used — bare `uvx mypy` fails.
 
 ```bash
 uv sync                                                # install / sync deps
@@ -14,16 +20,23 @@ uv run pytest tests/test_persons.py                    # single file
 uv run pytest tests/test_persons.py::test_name -xvs    # single test, fail-fast, verbose
 uv run pytest -m unit                                  # by marker: unit | integration | slow
 uvx ruff check . && uvx ruff format .                  # lint + format (line length 100)
-uvx mypy app/                                          # strict typing (see pyproject overrides)
-uvx alembic revision --autogenerate -m "desc"          # new migration
-uvx alembic upgrade head                               # apply migrations
+uv run mypy app/ tests/                                # strict typing (see pyproject overrides)
+uv run lint-imports                                    # hexagonal-boundary contracts (import-linter)
+uv run alembic revision --autogenerate -m "desc"       # new migration
+uv run alembic upgrade head                            # apply migrations
+```
+
+Full quality gate — run all five before claiming any change done:
+
+```bash
+uv run pytest -q && uvx ruff check . && uvx ruff format --check . && uv run mypy app/ tests/ && uv run lint-imports
 ```
 
 Alembic reads `DATABASE_URL` from `.env` via `app.core.config.settings` and strips `+asyncpg` for the sync migration driver (see `migrations/env.py`).
 
 ## Architecture
 
-The backend follows **DDD + CQRS + hexagonal** layering. Layer rules are enforced by convention (and reinforced in the repo-root `CLAUDE.md`):
+The backend follows **DDD + CQRS + hexagonal** layering. Layer rules are **machine-enforced** by import-linter contracts in `pyproject.toml` (`uv run lint-imports`); the "ratchet" contracts pin today's known debt via `ignore_imports` lists that may shrink but never grow — don't add entries.
 
 - `app/domain/<aggregate>/` — pure Python aggregates, value objects, repository **ports**, domain events. **No FastAPI / SQLAlchemy / Pydantic imports allowed here.**
 - `app/application/<aggregate>/` — command/query handlers (`commands.py`, `handlers.py`). Orchestrates repositories + UoW; depends only on domain.
@@ -51,6 +64,13 @@ Auth is Supabase JWT validated against the project's JWKS (cached 1h, asyncio-Lo
 
 Never bypass these checks for convenience.
 
+### API response contracts (frozen — the frontend binds these; `docs/contracts/` is the spec)
+
+- **Success envelope**: every 2xx body is `{"data": ...}`; list endpoints add `"meta": {"cursor", "has_more", "limit"}` (single cursor-pagination scheme, ASC, opaque cursors); 204 has no body; `/health` is exempt. Adjunct info goes in `meta` (e.g. `meta.errors`, `meta.warning`), never beside `data`.
+- **HistoricalDate**: every date field in responses (persons birth/death, events event_date, marriages marriage/divorce, all tree nodes) is `{"date": ISO|null, "precision": "exact|year|month|circa|unknown", "display": str|null, "lunar": str|null}` — built by `app/schemas/historical_date.py`. Clients render `date` when precision is `exact`, else `display`. Write DTOs accept `*_precision`/`*_display`. Storage has matching `*_precision`/`*_display` columns; the old `*_approx` booleans are gone.
+- **đời (generation)**: always graph-computed (thủy tổ = 1, founder distance + 1) on every tree endpoint; `clan_memberships.generation` is deprecated as a display source. Child tree nodes carry derived `mother_id`/`mother_spouse_order` for đa thê grouping.
+- Kinship age-based terms (`relationship_descriptor.py`) are only emitted when **both** birth dates have `precision == "exact"`.
+
 ### App startup
 
 `app/main.py::create_app` wires: custom exception handlers (`AppError`, `DomainError` → structured envelopes via `app/core/exceptions.py`), CORS, `LanguageMiddleware` (Accept-Language → locale context for i18n), optional `SentryMiddleware`, and a `RateLimitMiddleware` scoped to `/api/v1/auth` (20 req/min/IP). Lifespan initializes Sentry, loads translations, inits Firebase Admin, and starts APScheduler (used for anniversary notification jobs — see `NOTIFICATION_CRON_HOUR` in `Settings`).
@@ -59,11 +79,13 @@ Docs (`/docs`, `/redoc`) are only mounted when `APP_DEBUG=true`.
 
 ### Migrations
 
-Single-schema Alembic. `migrations/env.py` imports the full `app.models` package so autogenerate sees every table. The script_location is `migrations` (not the default `alembic/`).
+Single-schema Alembic, one linear chain (no branches). `migrations/env.py` imports the full `app.models` package so autogenerate sees every table. The script_location is `migrations` (not the default `alembic/`). Keep revision ids ≤32 characters (the `alembic_version` column limit) — the convention is `NNN_short_slug` matching the filename.
 
 ### Testing
 
 `pytest-asyncio` in `auto` mode with function-scoped loops. Markers `unit`, `integration`, `slow` are registered in `pyproject.toml`. `tests/conftest.py` provides factories for mock DB rows (`make_person_row`, etc.) used by tree-builder unit tests. Layout mirrors the app: `tests/unit/{api,domain,infrastructure}/` plus top-level integration-style `test_*.py`.
+
+`tests/integration/` runs against a **real Postgres**: `tests/integration/conftest.py` drops/creates a throwaway `family_roots_schema_test` database and applies the full Alembic chain (session-scoped `migrated_db_url` fixture). It needs `docker compose up -d pgdb` running; override the admin DSN with `TEST_PG_ADMIN_URL` if your local Postgres differs. Prefer these real-DB tests for anything touching migrations, SQL functions, or clan isolation — and test isolation **two-sided** (clan A sees its rows; clan B does not).
 
 ### mypy specifics
 

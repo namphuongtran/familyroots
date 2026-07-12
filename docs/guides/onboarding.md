@@ -32,7 +32,7 @@ cp .env.example .env
 uv sync
 
 # Start database
-docker compose up db -d
+docker compose up pgdb -d
 
 # Run migrations
 uv run alembic upgrade head
@@ -42,6 +42,20 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 Verify: Open http://localhost:8000/docs to see the Swagger UI.
+
+### Running backend integration tests
+
+Integration tests require a local Postgres (`docker compose up -d pgdb`).
+`tests/integration/conftest.py` drops/creates a throwaway database
+`family_roots_schema_test` and applies the full Alembic chain. Override the
+admin DSN via `TEST_PG_ADMIN_URL` (default
+`postgresql+psycopg://postgres:postgres@localhost:5432/postgres`).
+
+```bash
+cd backend
+uv run pytest -m integration   # integration tests only
+uv run pytest                  # full suite
+```
 
 ## 3. Mobile App Setup
 
@@ -109,7 +123,7 @@ make backend-dev       # Start backend dev server
 make backend-test      # Run backend tests
 make backend-lint      # Lint backend code
 make mobile-run        # Run mobile app
-make web-run           # Run web app
+make web-dev           # Run web app
 make docker-up         # Start Docker services
 make docker-down       # Stop Docker services
 ```
@@ -176,7 +190,7 @@ uv run python ../scripts/bootstrap_super_admin.py
 
 ## Getting Help
 
-- Check the [Architecture docs](architecture.md) for system overview
-- Review [API Design](api-design.md) for endpoint specs
-- See [Data Isolation Design](tenant-design.md) for clan_id + RLS approach
-- Read [RBAC](rbac.md) for permissions model
+- Check the [Architecture docs](../architecture/overview.md) for system overview
+- Review [API Design](../architecture/api-design.md) for endpoint specs
+- See [Data Isolation Design](../architecture/multi-tenancy.md) for clan_id + RLS approach
+- Read [RBAC](../architecture/rbac.md) for permissions model

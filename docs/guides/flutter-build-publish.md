@@ -82,11 +82,10 @@ brew install cocoapods
 # Navigate to the mobile project
 cd mobile
 flutter pub get
-
-# Do the same for the web project
-cd ../web
-flutter pub get
 ```
+
+> **Note:** `web/` is a Next.js project, not Flutter — its dependencies are
+> installed with `pnpm install` (see the onboarding guide).
 
 ### Step 2.2 — Create a .env File
 
@@ -589,4 +588,3 @@ base64 -i family-roots-release.keystore | pbcopy
 - [ ] Privacy Manifest (`PrivacyInfo.xcprivacy`) declared (required since 2024)
 - [ ] Screenshots are the correct size (6.5" is mandatory)
 - [ ] App icon is 1024×1024 PNG with no alpha channel
-annel

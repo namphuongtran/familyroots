@@ -57,11 +57,14 @@ The shared Axios client `src/lib/api/axios.ts` attaches all three via intercepto
 
 Query semantics that must be preserved when touching list/detail endpoints:
 
-- Cursor pagination via `next_cursor` / `has_more`
+- Every 2xx response is wrapped in the canonical envelope: `{"data": ...}`; lists are `{"data": [...], "meta": {"cursor", "has_more", "limit"}}` (cursor pagination, opaque cursors)
+- Date fields arrive as `HistoricalDate` objects `{date, precision, display, lunar}` — render `date` when `precision === "exact"`, else `display`
 - `profile=summary|detail|full`
 - `include` for compound documents
 - `fields` for sparse fieldsets
 - **Batch include gotcha**: keys from `include_by_id` must be merged into the sparse `fields` set, or compound includes will be dropped.
+
+⚠️ The existing clients (`src/lib/api/auth.ts`, `src/infrastructure/**`, member/tree types and forms) were scaffolded against the **pre-envelope** shapes (unwrapped bodies, `next_cursor`, scalar dates, `*_approx` flags) and have not yet been adapted — adopting the frozen contracts in `docs/contracts/*` is a pending, deliberate migration. Write new code against the envelope shapes above.
 
 ### State management split
 

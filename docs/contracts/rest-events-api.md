@@ -16,8 +16,8 @@ Base route: /api/v1/events
 Core operations (create/update/delete require editor):
 - POST /  (editor)
 - GET /  (cursor-paginated; query params: cursor, limit, person_id, event_type, fields)
-- GET /upcoming?days=N
-- GET /{id}
+- GET /upcoming?days=N  (also accepts include=person)
+- GET /{id}  (also accepts include, fields)
 - PATCH /{id}  (editor)
 - DELETE /{id}  (editor)
 

@@ -77,7 +77,7 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 | View pending users             | ✅           | ✅     | ❌      | ❌      |
 | Approve user registration      | ✅           | ✅     | ❌      | ❌      |
 | Assign editor/viewer role      | ✅           | ✅     | ❌      | ❌      |
-| Promote user to admin          | ✅           | ❌     | ❌      | ❌      |
+| Promote user to admin (`PATCH /me/users/{id}/role`) | ✅ | ✅ | ❌ | ❌ |
 | Remove user from clan          | ✅           | ✅     | ❌      | ❌      |
 | **AUDIT LOGS**                 |             |       |        |        |
 | View clan audit log            | ✅           | ✅     | ❌      | ❌      |
@@ -143,7 +143,10 @@ Super admin access is handled separately via `get_super_admin()` in `backend/app
 | POST   | `/api/v1/platform/clans/{id}/reactivate`     | Reactivate a clan            |
 | GET    | `/api/v1/platform/metrics`                   | Platform-wide usage metrics  |
 | GET    | `/api/v1/platform/audit-log`                 | Cross-clan audit log         |
-| POST   | `/api/v1/platform/clans/{id}/admin/promote`  | Promote user to clan admin   |
+
+(There is **no** platform endpoint to promote clan admins — clan-role changes happen
+inside the clan via `PATCH /api/v1/clans/me/users/{user_id}/role`, admin-only, with
+last-admin-cannot-demote protection.)
 
 ### Security Rules
 
@@ -152,3 +155,12 @@ Super admin access is handled separately via `get_super_admin()` in `backend/app
 - Super admin cannot be deleted via API — only via Supabase Dashboard
 - Super admin status stored in `user_profiles.platform_role` (queried from DB, not JWT metadata)
 - User profiles created lazily on first login via `ensure_user_profile()` (no Supabase webhook needed)
+
+### Additional authorization gates (before role checks)
+
+- **Deactivated account** — `user_profiles.is_active = false` → 403 `account_deactivated`
+  on any authenticated route.
+- **Suspended clan** — clan status suspended → 403 `clan_suspended` on clan-scoped routes.
+- **Unverified email** — login itself fails 403 `email_not_verified` until the Supabase
+  email is confirmed.
+- Roles only apply after membership `is_approved = true`; pending members cannot act.

@@ -28,8 +28,9 @@ requires a connection-model change and per-request context injection — the
 highest-risk change in the production-hardening effort, because a mistake can
 make every query return zero rows or error.
 
-The full mechanism, policy SQL, risks, and test plan are in
-[the RLS layer-2 design](../superpowers/specs/2026-06-28-rls-layer2-design.md).
+The mechanism, policy SQL, risks, and test plan are summarized in the Decision
+section below; the shipped pilot lives in migration `002_rls_documents_pilot`
+and `test_rls_documents`.
 
 > 🇻🇳 **Tóm tắt:** Cô lập dòng họ hiện do **tầng ứng dụng** đảm bảo (mọi truy vấn
 > clan-scoped đều lọc `clan_id`, đã test hai chiều). Ta thêm **lớp 2 ở tầng CSDL**
@@ -90,7 +91,6 @@ Harder:
   RLS (else the whole layer is silently inert).
 
 ## Related
-- [RLS Layer-2 Design / Spike](../superpowers/specs/2026-06-28-rls-layer2-design.md)
 - [ADR-002: Single Schema Clan-Scoped Multitenancy](002-clan-scoped-multitenancy.md)
-- [Backend Production Hardening Design](../superpowers/specs/2026-06-27-backend-production-hardening-design.md)
-  (SP-2B — application-layer isolation; SP-3C — this RLS layer)
+- Backend production-hardening effort: application-layer isolation (SP-2B) is the
+  primary mechanism; this RLS layer is SP-3C.

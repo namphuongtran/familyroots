@@ -1,5 +1,11 @@
 # Infrastructure as Code Guide
 
+> **⚠️ Status: Pulumi resources are NOT yet implemented.**
+> `infra/pulumi/__main__.py` and the `resources/*.py` modules are stubs, so
+> `pulumi preview` / `pulumi up` are currently **no-ops** (the program only
+> exports `environment`). The commands documented below describe the **target
+> workflow**, not what runs today.
+
 ## Overview
 
 FamilyRoots uses **Pulumi** (Python SDK) for managing cloud infrastructure and **Render** native config-as-code for backend deployment.

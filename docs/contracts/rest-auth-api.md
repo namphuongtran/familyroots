@@ -15,12 +15,14 @@ Base route: /api/v1/auth
 
 Core operations:
 - POST /register
+- POST /onboard (201 — create clan + first admin for an already-authenticated user)
 - POST /login
 - POST /logout
 - POST /refresh
 - POST /forgot-password
+- POST /resend-verification
 - GET /me
-- PATCH /me
+- PATCH /me (updates full_name and preferred_locale)
 - POST /me/fcm-token
 - DELETE /me/fcm-token
 
@@ -28,6 +30,12 @@ Request/response expectations:
 - Bearer JWT is required after login.
 - Register can either join an existing clan or create a new clan.
 - Login returns authenticated session/profile data for client bootstrap.
+- **Email verification**: register creates the identity unconfirmed and sends a
+  verification email best-effort. Login with an unconfirmed email fails with
+  **403 `email_not_verified`** (not 401 — credentials were correct). Clients should
+  offer "resend verification" on that error.
+- `POST /resend-verification` is 200 always (non-enumerating — same message whether
+  or not the email exists); body `{"email": ...}`.
 - FCM token endpoints are used by mobile and any push-enabled clients.
 - `POST /forgot-password` is 200 always (non-enumerating); triggers a Supabase
   recovery email. Reset **completion is client-side**: the email link opens the

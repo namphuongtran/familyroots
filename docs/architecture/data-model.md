@@ -65,9 +65,11 @@ erDiagram
         varchar alias_name
         varchar gender
         date birth_date
-        boolean birth_date_approx
+        varchar birth_date_precision
+        varchar birth_date_display
         date death_date
-        boolean death_date_approx
+        varchar death_date_precision
+        varchar death_date_display
         varchar lunar_birth_date
         varchar lunar_death_date
         varchar birth_place
@@ -418,12 +420,21 @@ Global person entity — independent of any clan. A person exists once and can a
 | `posthumous_name` | VARCHAR(255) | | Tên huý / Tên thụy (dùng trong cúng giỗ) |
 | `alias_name` | VARCHAR(255) | | Biệt danh / Tên thường gọi |
 | `gender` | VARCHAR(20) | NOT NULL, DEFAULT 'unknown' | Giới tính (male, female, unknown) |
-| `birth_date` | DATE | | Ngày sinh (Dương lịch - canonical) |
-| `birth_date_approx` | BOOLEAN | DEFAULT false | Ngày sinh là ước lượng / khoảng chừng |
+| `birth_date` | DATE | | Ngày sinh (Dương lịch - canonical, điểm mốc tốt nhất) |
+| `birth_date_precision` | VARCHAR(10) | NOT NULL, DEFAULT 'exact' | Độ chính xác: exact \| year \| month \| circa \| unknown |
+| `birth_date_display` | VARCHAR(100) | | Text hiển thị khi precision != exact (vd "khoảng 1750") |
 | `death_date` | DATE | | Ngày mất (Dương lịch) |
-| `death_date_approx` | BOOLEAN | DEFAULT false | Ngày mất là ước lượng / khoảng chừng |
+| `death_date_precision` | VARCHAR(10) | NOT NULL, DEFAULT 'exact' | Như trên |
+| `death_date_display` | VARCHAR(100) | | Như trên |
 | `lunar_birth_date` | VARCHAR(30) | | Ngày sinh Âm lịch (chỉ để display/lưu text) |
 | `lunar_death_date` | VARCHAR(30) | | Ngày mất Âm lịch (chỉ để display/lưu text) |
+
+> **💡 HistoricalDate (2026-07-11, migrations 012→014):** các cột `*_date_approx`
+> (boolean) đã bị **DROP** — `precision` thay thế (backfill: approx→`circa`,
+> có date→`exact`, null→`unknown`). API serialize mỗi ngày thành object
+> `{date, precision, display, lunar}` (xem `docs/contracts/README.md` và ADR-011).
+> `events` có `event_date_precision/_display`; `marriages` có
+> `marriage_date_precision/_display` + `divorce_date_precision/_display` (migration 012).
 | `birth_place` | VARCHAR(255) | | Nơi sinh |
 | `death_place` | VARCHAR(255) | | Nơi mất |
 | `burial_place` | VARCHAR(255) | | Nơi an táng |
@@ -479,7 +490,11 @@ Global edge linking two persons. Supports polygamy, divorce, remarriage.
 | `person2_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Dâu / Rể |
 | `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
 | `marriage_date` | DATE | | Ngày cưới |
+| `marriage_date_precision` | VARCHAR(10) | NOT NULL, DEFAULT 'exact' | exact \| year \| month \| circa \| unknown (migration 012) |
+| `marriage_date_display` | VARCHAR(100) | | Text hiển thị khi precision != exact |
 | `divorce_date` | DATE | | Ngày ly dị |
+| `divorce_date_precision` | VARCHAR(10) | NOT NULL, DEFAULT 'exact' | Như trên |
+| `divorce_date_display` | VARCHAR(100) | | Như trên |
 | `marriage_place` | VARCHAR(255) | | Nơi tổ chức lễ cưới |
 | `status` | VARCHAR(20) | DEFAULT 'married' | Tình trạng: married, divorced, widowed (góa), separated (ly thân) |
 | `spouse_order` | SMALLINT | | Thứ tự hôn nhân (Vợ cả=1, vợ hai=2...) |
@@ -512,8 +527,14 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-> **💡 Note (VN) - Global Edge Monopoly (Độc quyền Liên kết):**
-> Các table `marriages` và `parent_child` bị giới hạn tạo bởi constraint Unique trên `(person1, person2, status)` hoặc `(parent_id, child_id, relationship_type)`. Điều này có nghĩa nếu Họ Nguyễn đã cấp liên kết "A là con B", thì Họ Lê không thể tạo thêm 1 liên kết "A là con B" thứ 2. Việc này giảm rác, nhưng yêu cầu việc Edit liên kết phải thông qua Clan gốc ở `created_by_clan_id` hoặc theo cơ chế Cross-Clan Change Request.
+> **💡 Note (VN) - Edge uniqueness là PER-CLAN (migration 007):**
+> Unique index của `marriages` và `parent_child` bao gồm `created_by_clan_id`:
+> `(created_by_clan_id, LEAST/GREATEST(person1,person2), status)` và
+> `(created_by_clan_id, parent_id, child_id, relationship_type)` (partial, chỉ trên
+> rows chưa xóa). Nghĩa là **mỗi clan được ghi cạnh của riêng mình** cho person dùng
+> chung — Họ Nguyễn đã ghi "A là con B" thì Họ Lê **vẫn** ghi được bản của họ; chống
+> trùng chỉ áp dụng bên trong một clan. Đây là nền của cơ chế clan-scoped edges
+> (mỗi cây chỉ đọc cạnh do clan mình tạo).
 
 > **💡 Note (VN) - Xóa person & cạnh mồ côi (`ON DELETE RESTRICT`):**
 > FK `person1_id/person2_id` (marriages) và `parent_id/child_id` (parent_child) dùng
@@ -559,8 +580,8 @@ Configurable cross-approval workflow. Uses `clan_settings.approval_config`.
 
 > ⚠️ **Status (2026-07-02) — dormant / not implemented.** The table + ORM model +
 > Pydantic schema exist, but **no runtime code** references them (no domain context,
-> handler, or route). This is a planned feature (cross-clan propose-and-approve) —
-> see the roadmap in [db-design-review-2026-07-02.md](db-design-review-2026-07-02.md) (D1).
+> handler, or route). This is a planned feature (cross-clan propose-and-approve)
+> on the roadmap (D1).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -600,8 +621,7 @@ Per-clan configuration. Auto-created with new clans.
 > (default 10) is **not** applied — the document domain hard-codes a **50 MB** limit,
 > so the two disagree and must be reconciled when this is built. `privacy_level`,
 > `allow_public_tree`, `tree_display_mode`, `approval_config`,
-> `notification_defaults` are also inert. See roadmap D3 in
-> [db-design-review-2026-07-02.md](db-design-review-2026-07-02.md).
+> `notification_defaults` are also inert. Roadmap item D3.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -670,7 +690,9 @@ Family events and milestones. Clan-scoped.
 | `title` | VARCHAR(255) | NOT NULL | Tiêu đề sự kiện |
 | `description` | TEXT | | Nội dung |
 | `event_date` | DATE | NOT NULL | Ngày diễn ra |
-| `is_lunar_calendar` | BOOLEAN | DEFAULT false | Tính theo âm lịch không? |
+| `event_date_precision` | VARCHAR(10) | NOT NULL, DEFAULT 'exact' | exact \| year \| month \| circa \| unknown (migration 012) |
+| `event_date_display` | VARCHAR(100) | | Text hiển thị khi precision != exact |
+| `is_lunar_calendar` | BOOLEAN | DEFAULT false | Tính theo âm lịch không? (điều khiển scheduler giỗ) |
 | `is_recurring` | BOOLEAN | DEFAULT true | Lặp lại hằng năm? |
 | `notify_days_before` | SMALLINT | DEFAULT 7 | Báo trước bao nhiêu ngày |
 | `created_by` | UUID | NOT NULL | Người tạo |
@@ -810,7 +832,7 @@ CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 > a single `documents` pilot policy (`ENABLE`d, not `FORCE`d) under a non-bypass
 > `familyroots_app` role, while the app still connects as a bypass role — so these
 > reads/writes are gated by the **application/repository layer**, not RLS. See
-> `multi-tenancy.md` and `backend-design-review-2026-06-28.md`. Treat the SQL below
+> `multi-tenancy.md` and ADR-008. Treat the SQL below
 > as the spec for a future activation phase, not a description of current behavior.
 
 **Read Access** *(target design — not active)*

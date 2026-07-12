@@ -9,7 +9,6 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > **deferred defense-in-depth layer-2** (ADR-008): a single-table pilot exists on
 > `documents` (`ENABLE`d, not `FORCE`d) but the app still connects as a
 > privileged/bypass role, so **RLS is currently inert for application traffic**.
-> See `docs/architecture/backend-design-review-2026-06-28.md` for the full picture.
 > The sections below describe the application-layer mechanism that actually runs.
 
 ## Why not separate schemas?

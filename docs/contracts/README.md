@@ -40,6 +40,27 @@ across all routers):
   { "error": { "code": "...", "message": "...", "detail": { ... } } }
   ```
 
+## HistoricalDate (canonical date shape)
+
+Every genealogical date in a response (persons `birth_date`/`death_date`, events
+`event_date`, marriages `marriage_date`/`divorce_date`, all tree nodes) is an object,
+never a bare string:
+
+```json
+{
+  "date": "1750-01-01",              // ISO date or null — best-known point (sorting, anniversaries)
+  "precision": "circa",              // exact | year | month | circa | unknown
+  "display": "khoảng 1750",          // human text; render this when precision != "exact"
+  "lunar": "15/08 Nhâm Tý"           // display-only lunar string or null
+}
+```
+
+Clients render `date` when `precision == "exact"`, otherwise `display` (falling back
+to `date`). Write DTOs accept the scalar `*_date` plus optional `*_precision`
+(default `"exact"`) and `*_display`. Exceptions that stay scalar dates: document
+`taken_date`, tree `SpouseNode.marriage_date`/`divorce_date`, `/events/upcoming`
+`next_occurrence` (derived). See ADR-011.
+
 ## Rules
 - One file per public contract surface.
 - Every contract file must state owner, consumers, schema, and versioning rules.
@@ -53,16 +74,18 @@ across all routers):
 - [rest-clans-api.md](rest-clans-api.md)
 - [rest-persons-api.md](rest-persons-api.md)
 - [rest-relationships-api.md](rest-relationships-api.md)
+- [rest-branches-api.md](rest-branches-api.md)
 - [rest-tree-api.md](rest-tree-api.md)
 - [tree-focus.md](tree-focus.md)
 - [rest-documents-api.md](rest-documents-api.md)
 - [rest-events-api.md](rest-events-api.md)
 - [rest-claims-api.md](rest-claims-api.md)
+- [rest-invitations-api.md](rest-invitations-api.md)
 - [rest-platform-admin-api.md](rest-platform-admin-api.md)
 - [rest-notifications-api.md](rest-notifications-api.md)
 - [domain-events-audit.md](domain-events-audit.md)
 - [domain-events-catalog.md](domain-events-catalog.md)
-- [redis-domain-events.md](redis-domain-events.md)
+- [redis-domain-events.md](redis-domain-events.md) — ⚠️ design target only, nothing implemented (see ADR-004)
 
 ## Maintenance Notes
 - Keep route names consistent with backend router prefixes.
