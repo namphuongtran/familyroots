@@ -14,13 +14,18 @@ backend
 Base route: /api/v1/platform
 
 Core operations:
-- GET /clans
+- GET /clans — cursor-paginated clan list (`{"data", "meta"}`)
 - GET /clans/{clan_id}
-- other super-admin operations exposed by router
+- POST /clans/{clan_id}/suspend
+- POST /clans/{clan_id}/reactivate
+- GET /metrics — platform-wide counts (independent totals, not derived from page size)
+- GET /audit-log — cursor-paginated; filters: `clan_id`, `action`, `cursor`, `limit`
 
 Behavior:
-- Restricted to super-admin identity checks.
+- Every route is gated by the super-admin check (`user_profiles.platform_role`,
+  resolved server-side — not a JWT claim and not clan-scoped).
 - Used for platform-wide oversight rather than clan-scoped business workflows.
+- Suspended clans reject clan-scoped requests with 403 `clan_suspended`.
 
 ## Versioning & Compatibility Rules
 - Any change to super-admin authorization is high risk and should be treated as breaking.

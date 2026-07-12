@@ -23,9 +23,11 @@ Accept-Language: vi | en | fr | zh
 
 | Method | Path      | Auth | Description       |
 |--------|-----------|------|-------------------|
-| GET    | `/health` | No   | Liveness check    |
+| GET    | `/health` | No   | Liveness + readiness |
 
-Returns `{"status": "ok"}`.
+Returns `{"status": "ok", "database": "connected", "migrations": "current"}`; degrades
+to 503 when the DB is unreachable **or** migrations are behind head. Exempt from the
+response envelope.
 
 ---
 
@@ -33,14 +35,22 @@ Returns `{"status": "ok"}`.
 
 | Method | Path               | Auth | Role | Description                     |
 |--------|--------------------|------|------|---------------------------------|
-| POST   | `/register`        | No   | —    | Register + join/create clan     |
+| POST   | `/register`        | No   | —    | Register + join/create clan (email starts unverified) |
+| POST   | `/onboard`         | Yes  | —    | Create clan + first admin for an authenticated user (201) |
 | POST   | `/login`           | No   | —    | Login via Supabase, get profile |
-| POST   | `/logout`          | Yes  | —    | Sign out                        |
+| POST   | `/logout`          | Yes  | —    | Sign out (revokes Supabase session) |
 | POST   | `/refresh`         | No   | —    | Refresh access token            |
+| POST   | `/forgot-password` | No   | —    | Send recovery email — always 200, non-enumerating |
+| POST   | `/resend-verification` | No | —   | Resend verification email — always 200, non-enumerating |
 | GET    | `/me`              | Yes  | —    | Get current user profile        |
-| PATCH  | `/me`              | Yes  | —    | Update display name             |
+| PATCH  | `/me`              | Yes  | —    | Update `full_name` + `preferred_locale` |
 | POST   | `/me/fcm-token`    | Yes  | —    | Upsert FCM device token         |
 | DELETE | `/me/fcm-token`    | Yes  | —    | Remove FCM device token         |
+
+Login with correct credentials but an unverified email fails with **403
+`email_not_verified`** (distinct from 401 bad-credentials). All `/api/v1/auth`
+routes are rate-limited (in-memory sliding window, 20 req/min/IP — the only
+rate-limited scope).
 
 ### POST `/register`
 
@@ -91,6 +101,8 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 | GET    | `/`                           | Yes  | viewer | List persons (paginated, filters) |
 | GET    | `/search?q=...`               | Yes  | viewer | Trigram+unaccent full-text search |
 | POST   | `/`                           | Yes  | editor | Create a person                 |
+| POST   | `/batch`                      | Yes  | viewer | Batch-get up to 100 persons (per-item includes; partial failures in `meta.errors`) |
+| POST   | `/{id}/claim`                 | Yes  | viewer | Claim a person profile as one's own (201, identity-claims workflow) |
 | GET    | `/{id}`                       | Yes  | viewer | Get person detail               |
 | PATCH  | `/{id}`                       | Yes  | editor | Update person                   |
 | DELETE | `/{id}`                       | Yes  | admin  | Soft-delete person              |
@@ -103,12 +115,18 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 
 ### Query Parameters (GET `/`)
 
-| Param    | Type   | Description                         |
-|----------|--------|-------------------------------------|
-| gender   | string | Filter by gender                    |
-| alive    | bool   | Filter living/deceased              |
-| cursor   | string | Pagination cursor                   |
-| limit    | int    | Items per page (1–100, default 20)  |
+| Param      | Type   | Description                         |
+|------------|--------|-------------------------------------|
+| gender     | string | Filter by gender                    |
+| generation | int    | Filter by đời                       |
+| profile    | string | summary \| detail \| full           |
+| include    | string | Comma-separated embeds: stats,marriages,parent_child,timeline,documents |
+| fields     | string | Sparse fieldsets (comma-separated)  |
+| cursor     | string | Pagination cursor                   |
+| limit      | int    | Items per page (1–100, default 20)  |
+
+All person date fields (`birth_date`, `death_date`) are **HistoricalDate objects**
+`{date, precision, display, lunar}` — see `docs/contracts/README.md#historicaldate-canonical-date-shape`.
 
 ---
 
@@ -173,8 +191,9 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 | Method | Path                        | Auth | Role   | Description                    |
 |--------|-----------------------------|------|--------|--------------------------------|
 | GET    | `/`                         | Yes  | viewer | Full tree from founder/root    |
-| GET    | `/subtree/{person_id}`      | Yes  | viewer | Subtree rooted at person       |
+| GET    | `/subtree/{person_id}`      | Yes  | viewer | Subtree rooted at person (max_generations default 5) |
 | GET    | `/ancestors/{person_id}`    | Yes  | viewer | Ancestor chain up to root      |
+| GET    | `/focus/{person_id}`        | Yes  | viewer | Focus view: breadcrumb ancestors + bounded subtree (see `docs/contracts/tree-focus.md`) |
 | GET    | `/path?from_id=&to_id=`     | Yes  | viewer | Find relationship path + description |
 
 ### Query Parameters (GET `/`)
@@ -183,6 +202,10 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 |-----------------|------|--------------------------------------|
 | root_person_id  | uuid | Root person (default: clan founder)  |
 | max_generations | int  | Max depth 1–50 (default: 10)         |
+
+Tree nodes carry graph-computed `generation` (đời, thủy tổ = 1) and derived
+`mother_id`/`mother_spouse_order` for đa thê grouping; node dates are HistoricalDate
+objects. See `docs/architecture/tree-read-model.md` and `docs/contracts/rest-tree-api.md`.
 
 ### GET `/path` Response
 
@@ -198,6 +221,44 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
   }
 }
 ```
+
+---
+
+## Branches (`/api/v1/branches/`)
+
+| Method | Path        | Auth | Role   | Description                       |
+|--------|-------------|------|--------|-----------------------------------|
+| GET    | `/`         | Yes  | viewer | List branches (chi/phái), non-paginated |
+| POST   | `/`         | Yes  | editor | Create branch (201)               |
+| GET    | `/{id}`     | Yes  | viewer | Get branch                        |
+| PATCH  | `/{id}`     | Yes  | editor | Update branch                     |
+| DELETE | `/{id}`     | Yes  | admin  | Delete branch                     |
+
+## Claims (`/api/v1/claims` + `/api/v1/clans/{clan_id}/claims`)
+
+Identity-claims workflow (ADR-007): users claim a person profile; admins of the
+person's **origin clan** (`created_by_clan_id`) review. Full contract:
+`docs/contracts/rest-claims-api.md`.
+
+| Method | Path                                              | Role          |
+|--------|---------------------------------------------------|---------------|
+| GET    | `/claims`                                         | any active user (list my claims) |
+| DELETE | `/claims/{id}`                                    | owner (cancel, 204) |
+| GET    | `/clans/{clan_id}/claims`                         | admin\|editor |
+| POST   | `/clans/{clan_id}/claims/{id}/approve` / `reject` | admin         |
+| DELETE | `/clans/{clan_id}/members/{user_id}/unlink`       | admin (204)   |
+| POST   | `/clans/{clan_id}/members/{user_id}/prelink`      | admin (201)   |
+
+## Invitations (`/api/v1/clans/{clan_id}/invitations` + `/api/v1/invitations`)
+
+Full contract: `docs/contracts/rest-invitations-api.md`.
+
+| Method | Path                                | Role  |
+|--------|-------------------------------------|-------|
+| POST   | `/clans/{clan_id}/invitations`      | admin (201) |
+| GET    | `/clans/{clan_id}/invitations`      | admin |
+| DELETE | `/clans/{clan_id}/invitations/{id}` | admin (204) |
+| POST   | `/invitations/{token}/accept`       | any authenticated user |
 
 ---
 
@@ -247,6 +308,9 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 ### Event Types
 
 `death_anniversary`, `birthday`, `wedding_anniversary`, `clan_ceremony`, `custom`
+
+`event_date` in responses is a HistoricalDate object; `/upcoming`'s `next_occurrence`
+stays a scalar date (derived recurrence).
 
 ---
 

@@ -1,5 +1,11 @@
 # Contract: Redis Domain Events
 
+> ⚠️ **DESIGN TARGET — NOT IMPLEMENTED.** There is no Redis anywhere in the codebase
+> (no dependency, no docker service, no publisher/consumer). Domain events today are
+> dispatched in-process inside the Unit of Work transaction (see
+> [domain-events-catalog.md](domain-events-catalog.md) and ADR-004, which is
+> explicitly deferred). Treat this file as the future integration contract only.
+
 ## Type
 Redis Pub/Sub / Queue
 

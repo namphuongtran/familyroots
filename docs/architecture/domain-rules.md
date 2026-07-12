@@ -196,11 +196,17 @@ rành gia phả lẫn lập trình viên hiểu đúng. Tên trường lấy t�
 | `title_rank` | Chức tước / phẩm hàm | Tước vị, học vị, chức quan |
 
 ### Lịch âm và ngày tháng
-- `birth_date` / `death_date` — ngày **dương lịch** (có cờ `*_approx` cho ngày ước lượng).
+- `birth_date` / `death_date` — ngày **dương lịch**, kèm `*_precision`
+  (`exact|year|month|circa|unknown`) và `*_display` (text hiển thị khi không chính
+  xác, vd "khoảng 1750"). Cờ `*_approx` cũ đã bị thay thế (migrations 012→014,
+  ADR-011); API serialize thành object HistoricalDate `{date, precision, display, lunar}`.
 - `lunar_birth_date` / `lunar_death_date` — ngày **âm lịch**, chỉ dùng để *hiển thị*
   (display-only), không dùng cho tính toán.
 - Sự kiện (`Event`) có cờ `is_lunar_calendar` để đánh dấu ngày theo âm lịch —
   quan trọng với ngày giỗ.
+- **Kinship theo tuổi**: các từ xưng hô phụ thuộc tuổi (bác/chú, cậu/dì…) chỉ được
+  suy ra khi **cả hai** ngày sinh có `precision == "exact"` — không khẳng định vai
+  vế dựa trên ngày ước lượng (`relationship_descriptor`).
 
 ### Loại sự kiện (`event_type`)
 | Mã | Tiếng Việt |

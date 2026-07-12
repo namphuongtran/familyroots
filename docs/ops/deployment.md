@@ -11,6 +11,11 @@ resources remain scaffolded.
 |-----------|---------|-----------|
 | backend | push to `main` (after `lint-and-test` passes) | `deploy` job posts `curl -f -s -S "$RENDER_DEPLOY_HOOK"` (`backend-ci.yml`); the job fails fast if the secret is missing |
 | web | push to `main` (after build/test) | `npx vercel deploy --prod --token=$VERCEL_TOKEN` (`web-ci.yml`) |
+| mobile | push to `[main, develop]` | Flutter build + test (`mobile-ci.yml`); **no deploy step** |
+| infra | push to `[main, develop]` | `pulumi preview` on PR / `pulumi up` on `main` (`infra-ci.yml`) — currently a **no-op** because the Pulumi resources are stubs |
+| repo hygiene | push to `[main, develop]` | gitleaks secret scan + no-committed-`.env` gate (`pr-checks.yml`) |
+
+All five workflows trigger on push to `[main, develop]`.
 
 **There is no staging gate today — `main` → production directly.** `develop` runs
 CI (lint/test) but does not deploy. A dev → staging → prod promotion path is not yet

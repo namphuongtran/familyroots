@@ -22,8 +22,10 @@ Core operations:
 - GET /persons
   - Query params: cursor, limit, generation, gender, profile, fields, include
 - GET /persons/search
+  - Query params: q (required, min length 1), limit
 - POST /persons
 - POST /persons/batch
+  - Body: ids (1–100), profile, include, fields, include_by_id (per-person include map)
 - GET /persons/{id}
 - PATCH /persons/{id}
 - DELETE /persons/{id}

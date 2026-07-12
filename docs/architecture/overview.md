@@ -30,8 +30,13 @@ flowchart TD
 
 ### Sync Paths
 - Web and mobile communicate with backend via REST under `/api/v1`.
-- Auth uses Supabase-issued bearer JWT validated by backend JWKS flow.
-- Clan context is selected via `X-Current-Clan-Id` and enforced at API and DB layers.
+- Auth uses Supabase-issued bearer JWT validated by backend JWKS flow; registration
+  requires email verification (403 `email_not_verified` until confirmed) — see
+  [auth-flow.md](auth-flow.md).
+- `/api/v1/auth` routes are rate-limited (in-memory, 20 req/min/IP).
+- Clan context is selected via `X-Current-Clan-Id` and enforced in the
+  application/repository layer (RLS is an inert pilot — see
+  [multi-tenancy.md](multi-tenancy.md)).
 
 ### Event / Async Paths
 - On Unit-of-Work commit, the backend collects domain events from tracked aggregates

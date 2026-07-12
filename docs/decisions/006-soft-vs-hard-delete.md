@@ -8,8 +8,8 @@ Accepted.
 > live (they are hidden from the clan-scoped tree, which filters `is_deleted=false`,
 > but the edge rows remain). **Decision:** soft-deleting a person will also
 > soft-delete its edges; `restore` re-activates only the edges hidden by that same
-> delete. Behavior change is scheduled — see
-> [db-design-review-2026-07-02.md](../architecture/db-design-review-2026-07-02.md) (E3).
+> delete. Behavior change is scheduled (roadmap item E3 from the 2026-07-02 DB
+> design review).
 
 ## Context
 Genealogy records carry historical value and are often referenced by other

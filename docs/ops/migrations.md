@@ -37,8 +37,25 @@ uv run pytest tests/integration/test_schema_baseline.py       # round-trip + no-
   `002_rls_documents_pilot`).
 
 ## Current chain
+Single linear chain:
 `001_initial` → `002_rls_documents_pilot` → `003_tree_functions` →
-`004_fcm_tokens` → `005_tree_functions_clan_scoped`.
+`004_fcm_tokens` → `005_tree_functions_clan_scoped` →
+`006_softdelete_unique_indexes` → `007_clan_scoped_edge_unique` →
+`008_drop_change_req_trigger` → `009_person_birthname_index` →
+`010_clan_fk_restrict` → `011_path_tiebreak` →
+`012_historical_date_precision` → `013_tree_date_precision` →
+`014_drop_date_approx`.
+
+Head = `014`; verify with `cd backend && uv run alembic history`.
+
+New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
+
+## Boot-time migration gate
+`backend/app/main.py` checks migration status in the lifespan handler — in
+production the app **refuses to boot** if the DB is not at head. `/health`
+reports a `migrations` field and degrades on mismatch. As a dev bootstrap, the
+docker-compose `api` service runs `python -m alembic upgrade head` before
+starting uvicorn.
 
 ## Known risks
 - A parallel hand-written SQL set exists under `infra/supabase/migrations/`; the

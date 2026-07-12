@@ -14,9 +14,22 @@ docs/
 ├── decisions/          # ADRs (architecture decision records, numbered)
 ├── ops/                # deployment, migrations, monitoring, incident response, secrets
 ├── guides/             # how-to guides: onboarding, IaC, Flutter build & lessons
-├── plans/              # dated design + plan pairs for in-flight initiatives
-└── prompts/            # paste-into-Gemini prompt templates (workflow tooling)
+└── prompts/            # LEGACY Gemini-era prompt templates (live tooling: .claude/commands/)
 ```
+
+## Read this first (required pre-task reading)
+
+Before starting a task, read the docs that own the surface you're touching:
+
+| Task touches… | Read first |
+|---|---|
+| Any public API request/response shape | [contracts/README.md](contracts/README.md) (envelope + HistoricalDate) + the matching `contracts/rest-*.md` |
+| Database schema / migrations | [architecture/data-model.md](architecture/data-model.md) + [ops/migrations.md](ops/migrations.md) |
+| Tree / đời / kinship / đa thê | [architecture/tree-read-model.md](architecture/tree-read-model.md) + [architecture/domain-rules.md](architecture/domain-rules.md) |
+| Auth / login / roles / clan context | [architecture/auth-flow.md](architecture/auth-flow.md) + [architecture/rbac.md](architecture/rbac.md) + [architecture/multi-tenancy.md](architecture/multi-tenancy.md) |
+| Genealogy business rules | [architecture/domain-rules.md](architecture/domain-rules.md) |
+| An architectural choice (or breaking change) | [decisions/README.md](decisions/README.md) — and add an ADR in the same PR |
+| Deploy / infra / incidents | [ops/README.md](ops/README.md) |
 
 ## Architecture
 
@@ -25,10 +38,12 @@ System-wide design that touches more than one service.
 - [Overview](architecture/overview.md) — communication flows, failure assumptions, system map
 - [Bounded Contexts](architecture/bounded-contexts.md) — domain context map, aggregates, cross-context relationships
 - [Domain Rules](architecture/domain-rules.md) — genealogy invariants and error codes enforced in the domain layer
-- [API Design](architecture/api-design.md) — REST conventions, pagination, sparse fields, includes
+- [API Design](architecture/api-design.md) — REST conventions, endpoint inventory, pagination, sparse fields, includes
 - [Data Model](architecture/data-model.md) — database schema reference
 - [RBAC](architecture/rbac.md) — clan roles, permission model, hierarchy
-- [Multi-Tenancy](architecture/multi-tenancy.md) — clan-scoped isolation (`X-Current-Clan-Id` + RLS)
+- [Multi-Tenancy](architecture/multi-tenancy.md) — clan-scoped isolation (`X-Current-Clan-Id`; RLS inert pilot)
+- [Auth Flow](architecture/auth-flow.md) — JWT/JWKS pipeline, email verification, authorization gates
+- [Tree Read-Model](architecture/tree-read-model.md) — computed đời, đa thê mother attribution, SQL tree functions
 
 ## Contracts
 
@@ -49,13 +64,11 @@ Runbooks for production operations. Start at [ops/README.md](ops/README.md).
 - [Flutter Build & Publish](guides/flutter-build-publish.md)
 - [Flutter Lessons](guides/flutter-lessons.md)
 
-## Plans
-
-Dated in-flight initiatives. Each initiative is a `YYYY-MM-DD-<slug>-design.md` + `YYYY-MM-DD-<slug>-plan.md` pair.
-
 ## Prompts
 
-Prompt templates for off-Claude tooling (e.g. pasting into Gemini). Not reference documentation — these are workflow scripts.
+**Legacy** Gemini-era prompt templates (reference `GEMINI.md`/`services/` paths that
+no longer exist). The live workflow tooling is `.claude/commands/` + `CLAUDE.md`;
+prefer those. Kept only as historical templates — candidates for deletion.
 
 ## Conventions
 

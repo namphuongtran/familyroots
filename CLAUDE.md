@@ -22,6 +22,7 @@ Growing, with strong architectural foundations and active scaffold-to-build work
 - All write operations should flow through Unit of Work and domain events.
 - Clan-scoped APIs must enforce X-Current-Clan-Id context and role checks.
 - Public API errors should keep stable structured envelope semantics.
+- Public API successes use the canonical envelope: every 2xx body is {"data": ...}; lists add "meta": {cursor, has_more, limit}. Date fields are HistoricalDate objects {date, precision, display, lunar}. docs/contracts/ is the spec.
 - Mobile UI must follow Arbor Heritage design mandates and localization rules.
 - Dart business entities live in mobile/lib/domain.
 
@@ -49,19 +50,30 @@ Growing, with strong architectural foundations and active scaffold-to-build work
 - GitHub Actions CI/CD workflows
 - Pulumi IaC skeleton (partially implemented)
 
+## Required Reading Before Each Task
+Start every task by reading the docs that own the surface being touched (full map in docs/README.md):
+- Any API request/response change → docs/contracts/README.md (envelope + HistoricalDate rules) + the matching docs/contracts/rest-*.md. Update the contract file in the same PR.
+- DB schema or migration → docs/architecture/data-model.md + docs/ops/migrations.md.
+- Tree / đời / kinship / đa thê → docs/architecture/tree-read-model.md + docs/architecture/domain-rules.md.
+- Auth / login / roles / clan context → docs/architecture/auth-flow.md + docs/architecture/rbac.md + docs/architecture/multi-tenancy.md.
+- Any architectural choice or breaking change → docs/decisions/README.md (ADR index); add a new ADR in the same PR.
+- Deploy / infra / incident → docs/ops/README.md.
+When code and docs disagree, the code is the truth — fix the doc in the same PR.
+
 ## Knowledge Indexes
+- Documentation Index (start here): docs/README.md
 - Contracts: docs/contracts/README.md
+- Decisions (ADRs): docs/decisions/README.md
 - Operations: docs/ops/README.md
-- Decisions: docs/decisions/README.md
-- Flutter Lessons: docs/guides/flutter-lessons.md
 - Architecture Overview: docs/architecture/overview.md
-- Documentation Index: docs/README.md
+- Flutter Lessons: docs/guides/flutter-lessons.md
 
 ## Key Global Commands
 - Local infra: docker compose up -d pgdb pgadmin
-- Backend dev: cd backend && .venv/bin/uvicorn app.main:app --reload
-- Backend test: cd backend && .venv/bin/pytest
-- Backend migrate: cd backend && .venv/bin/alembic upgrade head
+- Backend dev: cd backend && uv run uvicorn app.main:app --reload
+- Backend test: cd backend && uv run pytest
+- Backend migrate: cd backend && uv run alembic upgrade head
+- Backend full quality gate (run before claiming done): cd backend && uv run pytest -q && uvx ruff check . && uvx ruff format --check . && uv run mypy app/ tests/ && uv run lint-imports
 - Web dev: cd web && pnpm dev
 - Web quality: cd web && pnpm type-check && pnpm lint
 - Mobile dev: cd mobile && flutter run

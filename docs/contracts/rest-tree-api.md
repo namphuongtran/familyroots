@@ -18,13 +18,14 @@ Core operations:
 - GET /subtree/{person_id}
 - GET /ancestors/{person_id}
 - GET /path?from_id=&to_id=
+- GET /focus/{person_id} — documented separately in [tree-focus.md](tree-focus.md)
 
 Query parameters:
-- root_person_id
-- max_generations
-- profile
-- fields
-- include
+- root_person_id — GET / only
+- max_generations — GET / and GET /subtree/{person_id} (subtree default 5)
+- profile (summary|detail|full) — all node-returning endpoints
+
+Tree endpoints do NOT accept `fields` or `include` (those are person-list semantics).
 
 Behavior:
 - Returns graph-oriented responses for family tree exploration.

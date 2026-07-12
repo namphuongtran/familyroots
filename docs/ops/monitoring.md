@@ -15,9 +15,12 @@ Error/performance monitoring via Sentry; liveness via the `/health` endpoint.
   clients** (asserted by `tests/unit/test_exception_envelope.py`).
 
 ## Health check
-- `GET /health` runs `SELECT 1`; returns `{"status":"ok","database":"connected"}` or
-  503 `{"status":"degraded","database":"unreachable"}`. Render uses it as the
-  `healthCheckPath`.
+- `GET /health` runs `SELECT 1` and checks Alembic migration status; the healthy
+  payload is `{"status":"ok","database":"connected","migrations":"current"}`.
+- Returns a 503 `degraded` response when the DB is unreachable
+  (`{"status":"degraded","database":"unreachable"}`) **or** when migrations are
+  not at head (the `migrations` field reports the mismatch). Render uses it as
+  the `healthCheckPath`.
 
 ## What to watch
 - 5xx rate and the `internal_error` code (unhandled exceptions).
