@@ -113,6 +113,23 @@ async def delete_document(
     return {"data": {"message": "Document deleted", "id": str(document_id)}}
 
 
+@router.post("/{document_id}/restore")
+async def restore_document(
+    document_id: uuid.UUID,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    cmd_handler: DocumentCommandHandler = Depends(get_document_command_handler),
+    role: ClanRole = RequireAdmin,
+) -> dict[str, Any]:
+    """Restore a soft-deleted document (admin only)."""
+    result = await cmd_handler.restore(
+        document_id=document_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, role.value),
+    )
+    return {"data": result.model_dump()}
+
+
 @router.patch("/{document_id}/set-avatar")
 async def set_document_as_avatar(
     document_id: uuid.UUID,

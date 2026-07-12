@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from app.domain.document.events import DocumentCreated, DocumentDeleted
+from app.domain.document.events import DocumentCreated, DocumentDeleted, DocumentRestored
 from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.exceptions import BusinessRuleViolation, ValidationError
 from app.domain.shared.value_objects import ActorInfo
@@ -67,6 +67,11 @@ class Document(AggregateRoot):
     created_by: uuid.UUID = field(default_factory=uuid.uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    # ── Soft delete (ADR-019) ─────────────────────────────────
+    is_deleted: bool = False
+    deleted_at: datetime | None = None
+    deleted_by: uuid.UUID | None = None
 
     # ── Domain methods ────────────────────────────────────────
 
@@ -140,9 +145,27 @@ class Document(AggregateRoot):
         self.is_avatar = False
 
     def mark_deleted(self, actor: ActorInfo) -> None:
-        """Emit a deletion event (hard delete handled by repository)."""
+        """Soft-delete: the repository persists this state; the blob stays until
+        the retention purge job (ADR-019)."""
+        self.is_deleted = True
+        self.deleted_at = datetime.now(UTC)
+        self.deleted_by = actor.user_id
         self.add_event(
             DocumentDeleted(
+                document_id=self.id,
+                clan_id=self.clan_id,
+                actor_id=actor.user_id,
+                actor_role=actor.role,
+            )
+        )
+
+    def restore(self, actor: ActorInfo) -> None:
+        """Restore a soft-deleted document."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.add_event(
+            DocumentRestored(
                 document_id=self.id,
                 clan_id=self.clan_id,
                 actor_id=actor.user_id,

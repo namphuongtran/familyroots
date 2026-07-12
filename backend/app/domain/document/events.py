@@ -38,3 +38,18 @@ class DocumentDeleted(AuditableEvent):
             object.__setattr__(self, "resource_type", "document")
         if self.resource_id is None:
             object.__setattr__(self, "resource_id", self.document_id)
+
+
+@dataclass(frozen=True)
+class DocumentRestored(AuditableEvent):
+    """Emitted when a soft-deleted document is restored (ADR-019)."""
+
+    document_id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+    def __post_init__(self) -> None:
+        if not self.action:
+            object.__setattr__(self, "action", "document.restore")
+        if not self.resource_type:
+            object.__setattr__(self, "resource_type", "document")
+        if self.resource_id is None:
+            object.__setattr__(self, "resource_id", self.document_id)

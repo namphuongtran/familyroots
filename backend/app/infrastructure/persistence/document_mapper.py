@@ -19,6 +19,9 @@ _MAPPED_FIELDS = (
     "taken_place",
     "is_avatar",
     "created_by",
+    "is_deleted",
+    "deleted_at",
+    "deleted_by",
 )
 
 
@@ -41,6 +44,9 @@ def to_domain(model: DocumentModel) -> DocumentEntity:
         created_by=model.created_by,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        is_deleted=model.is_deleted,
+        deleted_at=model.deleted_at,
+        deleted_by=model.deleted_by,
     )
 
 
@@ -61,6 +67,9 @@ def to_orm(entity: DocumentEntity) -> DocumentModel:
         taken_place=entity.taken_place,
         is_avatar=entity.is_avatar,
         created_by=entity.created_by,
+        is_deleted=entity.is_deleted,
+        deleted_at=entity.deleted_at,
+        deleted_by=entity.deleted_by,
     )
 
 

@@ -150,21 +150,49 @@ class DocumentCommandHandler:
         clan_id: uuid.UUID,
         actor: ActorInfo,
     ) -> None:
-        """Delete a document from the database, then from storage.
-
-        DB-first: commit the row removal before touching storage. If storage
-        deletion fails afterwards the blob is merely orphaned (reclaimable by a
-        sweep) — the reverse order risks the transaction rolling back after the
-        blob is already gone, leaving a row whose object no longer exists.
-        """
+        """Soft-delete a document (ADR-019): the row is flagged, the blob is left
+        untouched, and both survive until the retention purge job."""
         doc = await self._get_or_raise(document_id, clan_id)
-        storage_path = doc.storage_path
         doc.mark_deleted(actor)
-        await self._repo.delete(doc)
+        await self._repo.save(doc)
         await self._uow.commit()
 
-        if not await self._storage.delete(storage_path):
-            logger.warning("Orphaned blob after document delete: %s", storage_path)
+    async def restore(
+        self,
+        *,
+        document_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        actor: ActorInfo,
+    ) -> DocumentResponse:
+        """Restore a soft-deleted document."""
+        doc = await self._repo.get_deleted(document_id, clan_id)
+        if not doc:
+            raise EntityNotFoundError("document_not_found")
+
+        doc.restore(actor)
+        await self._repo.save(doc)
+        await self._uow.commit()
+
+        presigned = await self._storage.get_presigned_url(doc.storage_path)
+        return DocumentResponse(
+            id=doc.id,
+            clan_id=doc.clan_id,
+            person_id=doc.person_id,
+            title=doc.title,
+            document_type=doc.document_type,
+            description=doc.description,
+            storage_path=doc.storage_path,
+            presigned_url=presigned,
+            file_size_bytes=doc.file_size_bytes,
+            mime_type=doc.mime_type,
+            original_filename=doc.original_filename,
+            taken_date=doc.taken_date,
+            taken_place=doc.taken_place,
+            is_avatar=doc.is_avatar,
+            created_by=doc.created_by,
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+        )
 
     async def set_avatar(
         self,

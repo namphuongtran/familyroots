@@ -12,7 +12,11 @@ class DocumentRepository(Protocol):
     """Abstract persistence contract for Document entities."""
 
     async def get_by_id(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
-        """Fetch a document by ID within a clan."""
+        """Fetch a non-deleted document by ID within a clan."""
+        ...
+
+    async def get_deleted(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
+        """Fetch a soft-deleted document by ID within a clan (for restore)."""
         ...
 
     async def list_in_clan(
@@ -46,7 +50,11 @@ class DocumentRepository(Protocol):
         ...
 
     async def delete(self, doc: Document) -> None:
-        """Hard-delete a document."""
+        """Persist a soft-deleted document's state (UPDATE, not a row removal).
+
+        The blob and row both survive until the retention purge job (ADR-019);
+        callers must have already called ``doc.mark_deleted(actor)``.
+        """
         ...
 
 
