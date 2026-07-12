@@ -18,11 +18,13 @@ from app.application.export.ports import ExportQueryPort
 from app.domain.document.repository import DEFAULT_PRESIGN_TTL, StoragePort
 from app.domain.shared.exceptions import EntityNotFoundError
 
-# Plain-callable seams for the pure serializer (`app.services.clan_export`),
-# injected by the composition root (`app.infrastructure.dependencies`) rather
-# than imported here — see this module's docstring.
+# Plain-callable seams for the pure serializers (`app.services.clan_export`,
+# `app.services.gedcom_export`), injected by the composition root
+# (`app.infrastructure.dependencies`) rather than imported here — see this
+# module's docstring.
 BuildClanExportFn = Callable[..., dict[str, Any]]
 ToJsonBytesFn = Callable[[dict[str, Any]], bytes]
+BuildGedcomFn = Callable[..., str]
 
 
 class ExportQueryHandler:
@@ -34,35 +36,51 @@ class ExportQueryHandler:
         storage: StoragePort,
         build_clan_export: BuildClanExportFn,
         to_json_bytes: ToJsonBytesFn,
+        build_gedcom: BuildGedcomFn,
     ) -> None:
         self._port = port
         self._storage = storage
         self._build_clan_export = build_clan_export
         self._to_json_bytes = to_json_bytes
+        self._build_gedcom = build_gedcom
 
     async def export_clan(self, clan_id: uuid.UUID, fmt: str) -> tuple[str, str, bytes]:
         """Build the full clan archive. Returns (filename, media_type, body).
 
-        Only ``fmt="json"`` is implemented today; ``fmt="gedcom"`` is accepted
-        by the route's query pattern for forward compatibility but is not yet
-        wired to a serializer.
+        ``fmt="json"`` (lossless archive, keeps soft-deleted rows flagged)
+        and ``fmt="gedcom"`` (GEDCOM 5.5.1 interop view, drops soft-deleted
+        rows) are both implemented; anything else 500s (the route's query
+        pattern already rejects other values with a 422 before reaching
+        here).
         """
         clan = await self._port.clan(clan_id)
         if not clan:
             raise EntityNotFoundError("clan_not_found", {"clan_id": str(clan_id)})
 
-        if fmt != "json":
-            raise NotImplementedError(f"export format '{fmt}' is not yet supported")
-
-        now = datetime.now(UTC)
         persons = await self._port.persons(clan_id)
         branches = await self._port.branches(clan_id)
         marriages = await self._port.marriages(clan_id)
         parent_child = await self._port.parent_child(clan_id)
-        events = await self._port.events(clan_id)
-        documents = await self._port.documents(clan_id)
         generation_map = await self._port.generation_map(clan_id)
 
+        if fmt == "gedcom":
+            gedcom_text = self._build_gedcom(
+                clan=clan,
+                persons=persons,
+                marriages=marriages,
+                parent_child=parent_child,
+                branches=branches,
+                generation_map=generation_map,
+            )
+            filename = f"{clan['slug']}-gia-pha-{date.today().isoformat()}.ged"
+            return filename, "text/x-gedcom", gedcom_text.encode("utf-8")
+
+        if fmt != "json":
+            raise NotImplementedError(f"export format '{fmt}' is not yet supported")
+
+        now = datetime.now(UTC)
+        events = await self._port.events(clan_id)
+        documents = await self._port.documents(clan_id)
         documents_manifest = await self._presign_manifest(documents, now)
 
         payload = self._build_clan_export(

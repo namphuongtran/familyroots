@@ -76,6 +76,7 @@ from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
 from app.infrastructure.supabase_identity_provider import SupabaseIdentityProvider
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.services.clan_export import build_clan_export, to_json_bytes
+from app.services.gedcom_export import build_gedcom
 
 
 def get_unit_of_work(db: AsyncSession = Depends(get_db)) -> SqlAlchemyUnitOfWork:
@@ -267,10 +268,11 @@ def get_event_query_handler(db: AsyncSession = Depends(get_db)) -> EventQueryHan
 
 # ── Export handlers ─────────────────────────────────────────────
 #
-# ExportQueryHandler cannot import app.services.clan_export directly (the
-# "application must not import core/services" import-linter ratchet forbids
-# it) — the composition root injects the pure build_clan_export/to_json_bytes
-# callables here instead, keeping the handler DIP-compliant.
+# ExportQueryHandler cannot import app.services.clan_export/gedcom_export
+# directly (the "application must not import core/services" import-linter
+# ratchet forbids it) — the composition root injects the pure
+# build_clan_export/to_json_bytes/build_gedcom callables here instead,
+# keeping the handler DIP-compliant.
 
 
 def get_export_query_handler(db: AsyncSession = Depends(get_db)) -> ExportQueryHandler:
@@ -279,6 +281,7 @@ def get_export_query_handler(db: AsyncSession = Depends(get_db)) -> ExportQueryH
         SupabaseStorageAdapter(),
         build_clan_export,
         to_json_bytes,
+        build_gedcom,
     )
 
 

@@ -1,16 +1,26 @@
-"""Lossless JSON archive: everything a clan needs to survive outside the SaaS.
+"""GEDCOM 5.5.1 clan export integration test — real Postgres, real RBAC.
 
-Real Postgres (migrated_db_url), real RBAC. Only JWT *verification* is stubbed
-(mirrors tests/integration/test_document_soft_delete.py) — the Authorization
-header carries the user id directly instead of a signed token. The storage
-adapter is swapped for the same in-memory FakeStorage used by the document
-soft-delete tests (via dependency_overrides), both for the real multipart
-document upload and for the export's presigning, so these tests never hit real
-Supabase Storage and the manifest's `download_url` is deterministic.
+Closes the `fmt="gedcom"` stub (previously `NotImplementedError` -> 500):
+GET `?format=gedcom` must return 200 with a `.ged` attachment.
+
+This is a self-contained copy of `test_clan_export_json.py`'s rich-clan
+fixture (per repo convention: integration test files are self-contained,
+not import-sharing fixtures across files), with one deliberate divergence:
+Cháu A carries an actual `birth_date` (not `None`) alongside
+`birth_date_precision="circa"`, so the GEDCOM's `circa -> ABT <year>`
+mapping has a real year to render — the JSON archive's rich-clan fixture
+doesn't need that (its `circa` bullet only exercises `birth_date_display`),
+but GEDCOM's `ABT` mapping is year-derived (see `app.services.gedcom_export`
+unit tests), so this copy sets `birth_date` explicitly to expose it here.
+
+Two-sided clan isolation is already covered for the export use case by
+`test_clan_export_json.py::test_export_isolation_two_sided` (same port/query
+layer underneath both formats) — not repeated here.
 """
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, date, datetime
@@ -43,9 +53,10 @@ async def _override_current_user(
 
 
 class FakeStorage:
-    """In-memory StoragePort double — mirrors test_document_soft_delete.FakeStorage
-    so both the upload path and the export's presigning are deterministic and
-    never touch real Supabase Storage."""
+    """In-memory StoragePort double — mirrors test_clan_export_json.FakeStorage
+    so the upload path never touches real Supabase Storage. GEDCOM export
+    itself doesn't presign documents, but DocumentCommandHandler still needs
+    a StoragePort for the seeded upload."""
 
     def __init__(self) -> None:
         self.uploaded: list[str] = []
@@ -126,9 +137,9 @@ async def rich_clan(
     client: AsyncClient,
 ) -> dict[str, Any]:
     """ "clan đủ gia vị": thủy tổ + polygamous con trưởng + 2 cháu (1 adopted) +
-    1 soft-deleted person, 1 soft-deleted marriage, 1 branch, 1 lunar recurring
-    event, plus a real uploaded document. Also seeds a second clan (minimal)
-    for the isolation test."""
+    1 soft-deleted person, 1 soft-deleted marriage, 1 branch, plus a real
+    uploaded document. Also seeds a second (minimal) clan for the DI wiring
+    sanity of the fixture (isolation itself is asserted in the JSON test)."""
     clan_a = uuid.uuid4()
     clan_b = uuid.uuid4()
     admin_a = uuid.uuid4()
@@ -225,7 +236,10 @@ async def rich_clan(
                 "id": chau_a,
                 "full_name": "Cháu A",
                 "gender": "female",
-                "birth_date": None,
+                # Divergence from the JSON fixture (see module docstring):
+                # a real `birth_date` so GEDCOM's `circa -> ABT <year>`
+                # mapping has a year to render.
+                "birth_date": date(1975, 6, 15),
                 "birth_date_precision": "circa",
                 "birth_date_display": "khoảng 1975",
                 "lunar_birth_date": None,
@@ -265,9 +279,6 @@ async def rich_clan(
                 {**p, "cid": clan_a, "cid_actor": admin_a},
             )
 
-        # joined_at set explicitly (not left NULL) — the export's
-        # clan_memberships archive must be lossless, and generation_map's
-        # founder-ordering tiebreak depends on it being populated.
         joined_at = datetime(2024, 1, 1, tzinfo=UTC)
         memberships = [
             {"person_id": founder, "is_founder": True, "branch_id": None},
@@ -288,8 +299,6 @@ async def rich_clan(
                 {**m, "cid": clan_a, "joined_at": joined_at},
             )
 
-        # Marriages: đa thê (con_truong + vợ cả spouse_order=1, + vợ hai
-        # spouse_order=2), plus one soft-deleted marriage.
         marriages = [
             {
                 "id": uuid.uuid4(),
@@ -328,8 +337,6 @@ async def rich_clan(
                 {**mm, "cid": clan_a, "cid_actor": admin_a},
             )
 
-        # Parent-child: founder -> con_truong -> {cháu A (bio, mẹ = vợ cả), cháu
-        # B (adopted)}.
         parent_child_edges = [
             {"parent_id": founder, "child_id": con_truong, "relationship_type": "biological"},
             {"parent_id": con_truong, "child_id": chau_a, "relationship_type": "biological"},
@@ -346,24 +353,6 @@ async def rich_clan(
                 {**pc, "id": uuid.uuid4(), "cid": clan_a, "cid_actor": admin_a},
             )
 
-        # Event: giỗ (lunar, recurring).
-        await s.execute(
-            sa.text(
-                "INSERT INTO events "
-                "(id, clan_id, person_id, event_type, title, event_date, "
-                "is_lunar_calendar, is_recurring, created_by) "
-                "VALUES (:id, :cid, :pid, 'death_anniversary', 'Giỗ Cụ Thủy Tổ', "
-                ":event_date, true, true, :cid_actor)"
-            ),
-            {
-                "id": uuid.uuid4(),
-                "cid": clan_a,
-                "pid": founder,
-                "event_date": date(1990, 6, 1),
-                "cid_actor": admin_a,
-            },
-        )
-
         await s.commit()
 
     admin_headers = {
@@ -371,8 +360,6 @@ async def rich_clan(
         "X-Current-Clan-Id": str(clan_a),
     }
 
-    # A real document, uploaded via the API multipart endpoint (so the export's
-    # manifest presigns a real storage_path).
     resp = await client.post(
         "/api/v1/documents",
         headers=admin_headers,
@@ -398,237 +385,31 @@ def admin_headers(rich_clan: dict[str, Any]) -> dict[str, str]:
     }
 
 
-@pytest.fixture()
-def editor_headers(rich_clan: dict[str, Any]) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {rich_clan['editor_a']}",
-        "X-Current-Clan-Id": str(rich_clan["clan_a"]),
-    }
-
-
-@pytest.fixture()
-def clan_b_admin_headers(rich_clan: dict[str, Any]) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {rich_clan['admin_b']}",
-        "X-Current-Clan-Id": str(rich_clan["clan_b"]),
-    }
-
-
-# ── Tests (verbatim per the task-4 brief) ────────────────────────────────────
-
-
-async def test_json_export_contains_everything(client, admin_headers, rich_clan):
-    resp = await client.get("/api/v1/exports/clan?format=json", headers=admin_headers)
+async def test_gedcom_export_closes_the_501_stub(client, admin_headers, rich_clan):
+    """The core regression test: `fmt="gedcom"` used to raise
+    `NotImplementedError` (500). It must now return 200."""
+    resp = await client.get("/api/v1/exports/clan?format=gedcom", headers=admin_headers)
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("application/json")
-    assert 'attachment; filename="' in resp.headers["content-disposition"]
-    data = resp.json()  # the archive itself, NOT {"data": ...} — envelope-exempt
-    assert data["format"] == "familyroots-clan-export" and data["format_version"] == 1
-    persons = {p["full_name"]: p for p in data["persons"]}
-    assert persons["Cụ Thủy Tổ"]["generation"] == 1
-    assert persons["Cháu A"]["generation"] == 3
-    assert persons["Cháu A"]["birth_date_precision"] == "circa"
-    assert persons["Cháu A"]["birth_date_display"] == "khoảng 1975"
-    assert persons["Cụ Thủy Tổ"]["lunar_birth_date"] == "15/08 Canh Thân"
-    deleted = [p for p in data["persons"] if p["is_deleted"]]
-    assert len(deleted) == 1  # archive keeps history, flagged
-    orders = sorted(
-        m["spouse_order"] for m in data["marriages"] if m["spouse_order"] and not m["is_deleted"]
-    )
-    assert orders == [1, 2]
-    assert any(pc["relationship_type"] == "adopted" for pc in data["parent_child"])
-    assert any(m["is_deleted"] for m in data["marriages"])
-    assert any(e["is_lunar_calendar"] for e in data["events"])
-    assert data["branches"][0]["name"] == "Chi Hai"
-    manifest = data["documents_manifest"]
-    assert len(manifest) == 1 and manifest[0]["download_url"].startswith("http")
+    assert resp.headers["content-type"].startswith("text/x-gedcom")
+    content_disposition = resp.headers["content-disposition"]
+    assert 'attachment; filename="' in content_disposition
+    assert content_disposition.rstrip('"').endswith(".ged")
 
 
-async def test_export_isolation_two_sided(client, admin_headers, clan_b_admin_headers, rich_clan):
-    a = (await client.get("/api/v1/exports/clan?format=json", headers=admin_headers)).json()
-    b = (await client.get("/api/v1/exports/clan?format=json", headers=clan_b_admin_headers)).json()
-    a_ids = {p["id"] for p in a["persons"]}
-    b_ids = {p["id"] for p in b["persons"]}
-    assert a_ids and not (a_ids & b_ids)
-
-
-async def test_export_requires_admin(client, editor_headers, rich_clan):
-    resp = await client.get("/api/v1/exports/clan?format=json", headers=editor_headers)
-    assert resp.status_code == 403
-
-
-async def test_export_invalid_format_422(client, admin_headers, rich_clan):
-    resp = await client.get("/api/v1/exports/clan?format=xml", headers=admin_headers)
-    assert resp.status_code == 422
-
-
-# ── Task-4 review fixes ──────────────────────────────────────────────────────
-
-
-async def test_json_export_clan_memberships_lossless_and_complete(client, admin_headers, rich_clan):
-    """FIX 2/3 (task-4 review): clan_memberships must be lossless (carry
-    membership_id/joined_at/created_at/updated_at, not just role/generation/
-    founder/branch) and every archived person must have exactly one
-    membership row, with the thủy tổ correctly flagged as founder."""
-    resp = await client.get("/api/v1/exports/clan?format=json", headers=admin_headers)
+async def test_gedcom_export_body_shape(client, admin_headers, rich_clan):
+    resp = await client.get("/api/v1/exports/clan?format=gedcom", headers=admin_headers)
     assert resp.status_code == 200
-    data = resp.json()
+    text = resp.text
+    assert text.startswith("0 HEAD")
+    assert text.rstrip().endswith("0 TRLR")
 
-    persons_by_name = {p["full_name"]: p for p in data["persons"]}
-    memberships_by_person = {m["person_id"]: m for m in data["clan_memberships"]}
+    # Exactly 6 live persons (thủy tổ, con trưởng, vợ cả, vợ hai, cháu A,
+    # cháu B) — the soft-deleted person is excluded from GEDCOM entirely.
+    assert len(re.findall(r"^0 @I\d+@ INDI$", text, flags=re.MULTILINE)) == 6
+    assert "Người Đã Xóa" not in text
 
-    # Every person id appears in memberships exactly once.
-    person_ids = [p["id"] for p in data["persons"]]
-    assert len(person_ids) == len(set(person_ids))
-    assert set(person_ids) == set(memberships_by_person.keys())
-    assert len(data["clan_memberships"]) == len(data["persons"])
+    # Cháu A's circa 1975 birth renders as a year-level ABT date.
+    assert "2 DATE ABT 1975" in text
 
-    founder_membership = memberships_by_person[persons_by_name["Cụ Thủy Tổ"]["id"]]
-    assert founder_membership["is_founder"] is True
-    assert founder_membership["role"] == "blood"
-
-    for membership in data["clan_memberships"]:
-        assert set(membership.keys()) == {
-            "membership_id",
-            "person_id",
-            "role",
-            "stored_generation",
-            "is_founder",
-            "branch_id",
-            "joined_at",
-            "created_at",
-            "updated_at",
-        }
-        assert membership["membership_id"] is not None
-        # Seeded explicitly in the rich_clan fixture — must survive the export.
-        assert membership["joined_at"] is not None
-        assert membership["created_at"] is not None
-        assert membership["updated_at"] is not None
-
-
-async def test_generation_map_deterministic_with_multiple_founders(
-    session_factory,
-):
-    """FIX 1 (task-4 review): with two founders whose descent trees overlap,
-    the founder that "wins" a shared descendant (via dict.setdefault) must be
-    determined by a total order (joined_at ASC, then person_id) — not by
-    whatever order Postgres happens to return `is_founder = true` rows in.
-
-    founder_1 joins the clan BEFORE founder_2 (earlier joined_at) but its
-    clan_memberships row is inserted SECOND (after founder_2's) — physical
-    insertion order is deliberately the opposite of joined_at order, so a
-    query without an ORDER BY would very likely process founder_2 first.
-
-    founder_1 -> shared_descendant directly (depth 1, generation 2).
-    founder_2 -> mid -> shared_descendant (depth 2, generation 3).
-
-    Correct (deterministic) behavior: founder_1 (earlier joined_at) is
-    processed first, so shared_descendant's generation is 2 — every run,
-    not just "by luck" of row order.
-    """
-    import sqlalchemy as sa
-
-    from app.infrastructure.persistence.export_query_port import SqlAlchemyExportQueryPort
-
-    clan_id = uuid.uuid4()
-    admin_id = uuid.uuid4()
-    founder_1 = uuid.uuid4()
-    founder_2 = uuid.uuid4()
-    mid = uuid.uuid4()
-    shared_descendant = uuid.uuid4()
-
-    async with session_factory() as s:
-        await s.execute(
-            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'Họ Đa Tổ', :slug)"),
-            {"id": clan_id, "slug": f"ho-da-to-{clan_id.hex[:8]}"},
-        )
-        await s.execute(
-            sa.text(
-                "INSERT INTO user_profiles (id, email, display_name) VALUES (:id, :email, 'admin')"
-            ),
-            {"id": admin_id, "email": f"{admin_id.hex[:8]}@example.com"},
-        )
-        for pid, name in (
-            (founder_1, "Thủy Tổ Một"),
-            (founder_2, "Thủy Tổ Hai"),
-            (mid, "Đời Giữa"),
-            (shared_descendant, "Hậu Duệ Chung"),
-        ):
-            await s.execute(
-                sa.text(
-                    "INSERT INTO persons "
-                    "(id, full_name, gender, birth_date, birth_date_precision, "
-                    "birth_date_display, lunar_birth_date, is_deleted, "
-                    "created_by_clan_id, created_by) "
-                    "VALUES (:id, :full_name, 'unknown', NULL, 'unknown', "
-                    "NULL, NULL, false, :cid, :cid_actor)"
-                ),
-                {"id": pid, "full_name": name, "cid": clan_id, "cid_actor": admin_id},
-            )
-
-        # Deliberately inserted founder_2 THEN founder_1 (reversed vs.
-        # joined_at) to prove the ordering comes from the ORDER BY, not from
-        # physical/insertion order.
-        await s.execute(
-            sa.text(
-                "INSERT INTO clan_memberships (person_id, clan_id, is_founder, joined_at) "
-                "VALUES (:pid, :cid, true, :joined_at)"
-            ),
-            {
-                "pid": founder_2,
-                "cid": clan_id,
-                "joined_at": datetime(2000, 1, 2, tzinfo=UTC),
-            },
-        )
-        await s.execute(
-            sa.text(
-                "INSERT INTO clan_memberships (person_id, clan_id, is_founder, joined_at) "
-                "VALUES (:pid, :cid, true, :joined_at)"
-            ),
-            {
-                "pid": founder_1,
-                "cid": clan_id,
-                "joined_at": datetime(2000, 1, 1, tzinfo=UTC),
-            },
-        )
-        for pid in (mid, shared_descendant):
-            await s.execute(
-                sa.text(
-                    "INSERT INTO clan_memberships (person_id, clan_id, is_founder) "
-                    "VALUES (:pid, :cid, false)"
-                ),
-                {"pid": pid, "cid": clan_id},
-            )
-
-        for parent_id, child_id in (
-            (founder_1, shared_descendant),
-            (founder_2, mid),
-            (mid, shared_descendant),
-        ):
-            await s.execute(
-                sa.text(
-                    "INSERT INTO parent_child "
-                    "(id, parent_id, child_id, created_by_clan_id, relationship_type, created_by) "
-                    "VALUES (:id, :parent_id, :child_id, :cid, 'biological', :cid_actor)"
-                ),
-                {
-                    "id": uuid.uuid4(),
-                    "parent_id": parent_id,
-                    "child_id": child_id,
-                    "cid": clan_id,
-                    "cid_actor": admin_id,
-                },
-            )
-        await s.commit()
-
-    async with session_factory() as s:
-        port = SqlAlchemyExportQueryPort(s)
-        first_run = await port.generation_map(clan_id)
-    async with session_factory() as s:
-        port = SqlAlchemyExportQueryPort(s)
-        second_run = await port.generation_map(clan_id)
-
-    assert first_run == second_run
-    # founder_1's earlier joined_at must win: depth 1 -> generation 2 (NOT
-    # founder_2's depth-2 path, which would give generation 3).
-    assert first_run[shared_descendant] == 2
+    # Cháu A carries `doi=` (generation) in her Vietnamese metadata NOTE.
+    assert re.search(r"1 NOTE FamilyRoots:.*doi=3", text)
