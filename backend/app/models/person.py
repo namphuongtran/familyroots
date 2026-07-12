@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import ForeignKey
@@ -82,6 +82,10 @@ class Person(TimestampMixin, Base):
     # ── Audit ─────────────────────────────────────────────────
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
     updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+
+    # Optimistic concurrency (ADR-017): bumped by every repository UPDATE;
+    # PATCH requests must present the matching expected_version.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
 
     # ── ORM Relationships ─────────────────────────────────────
     origin_clan = relationship("Clan", back_populates="origin_persons")
