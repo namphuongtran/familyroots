@@ -71,6 +71,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
     """
     from app.core.database import engine
     from app.infrastructure.persistence.sql_dates import next_anniversary_sql
+    from app.services.lunar_calendar import next_lunar_anniversary
     from app.services.notification import send_to_clan
 
     if today is None:
@@ -117,20 +118,30 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
             )
             events = result.mappings().all()
 
-            lunar_count = await db.scalar(
-                text(
-                    "SELECT COUNT(*) FROM public.events "
-                    "WHERE is_recurring = true AND is_lunar_calendar = true"
-                )
+            lunar_result = await db.execute(
+                text("""
+                    SELECT
+                        e.id AS event_id,
+                        e.clan_id,
+                        e.event_type,
+                        e.title,
+                        e.person_id,
+                        p.full_name AS person_name,
+                        e.notify_days_before,
+                        e.event_date
+                    FROM public.events e
+                    LEFT JOIN public.persons p ON p.id = e.person_id
+                    WHERE e.is_recurring = true
+                      AND e.is_lunar_calendar = true
+                      AND (e.person_id IS NULL OR p.is_deleted = false)
+                """)
             )
-            if lunar_count:
-                logger.info(
-                    "%s lunar recurring events skipped — lunar support deferred to "
-                    "data-model round 2",
-                    lunar_count,
-                )
+            lunar_events = [
+                {**row, "next_occurrence": next_lunar_anniversary(row["event_date"], today)}
+                for row in lunar_result.mappings().all()
+            ]
 
-            for event in events:
+            for event in [*events, *lunar_events]:
                 try:
                     next_occ = event["next_occurrence"]
                     days_until = (next_occ - today).days
