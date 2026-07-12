@@ -52,6 +52,11 @@ class MarriageUpdateRequest(BaseModel):
     spouse_order: int | None = Field(None, gt=0)
     notes: str | None = None
 
+    # Optimistic concurrency (ADR-017): required so a stale client can't silently
+    # clobber a concurrent edit. The route pops this out of `changes` before it
+    # reaches the aggregate — it is never itself a client-updatable field.
+    expected_version: int = Field(..., ge=1)
+
 
 class MarriageResponse(BaseModel):
     """Response schema for a marriage record."""
@@ -73,6 +78,9 @@ class MarriageResponse(BaseModel):
     deleted_by: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+    # Optimistic concurrency (ADR-017). Default shields legacy dict read-paths;
+    # entity/ORM-backed responses always carry the real stored value.
+    version: int = 1
 
     model_config = {"from_attributes": True}
 

@@ -34,6 +34,7 @@ class UpdateMarriage:
     marriage_id: uuid.UUID
     clan_id: uuid.UUID
     actor: ActorInfo
+    expected_version: int
     changes: dict[str, object] = field(default_factory=dict)
 
 
@@ -63,6 +64,7 @@ class UpdateParentChild:
     link_id: uuid.UUID
     clan_id: uuid.UUID
     actor: ActorInfo
+    expected_version: int
     changes: dict[str, object] = field(default_factory=dict)
 
 

@@ -215,10 +215,12 @@ def test_update_marriage_with_precision_field_persists() -> None:
             "marriage_date_precision": "circa",
             "divorce_date_display": "unknown",
             "notes": "updated notes",
+            "expected_version": 1,
         },
     )
 
     assert response.status_code == 200, response.text
+    # expected_version is popped by the route (OCC, ADR-017) — never part of changes.
     assert handlers["marriage"].received_changes == {
         "marriage_date_precision": "circa",
         "divorce_date_display": "unknown",

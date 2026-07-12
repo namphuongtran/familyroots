@@ -66,7 +66,7 @@ class MarriageCommandHandler:
             raise EntityNotFoundError("marriage_not_found")
 
         marriage.update(cmd.changes, cmd.actor, cmd.clan_id)
-        await self._repo.save(marriage)
+        await self._repo.save(marriage, expected_version=cmd.expected_version)
         await self._uow.commit()
         return MarriageResponse.model_validate(marriage)
 
@@ -120,7 +120,7 @@ class ParentChildCommandHandler:
             raise EntityNotFoundError("parent_child_not_found")
 
         link.update(cmd.changes, cmd.actor, cmd.clan_id)
-        await self._repo.save(link)
+        await self._repo.save(link, expected_version=cmd.expected_version)
         await self._uow.commit()
         return ParentChildResponse.model_validate(link)
 

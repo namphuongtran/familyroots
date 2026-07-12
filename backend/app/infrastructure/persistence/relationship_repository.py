@@ -6,10 +6,12 @@ import uuid
 from datetime import date
 
 from sqlalchemy import select, text
+from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.relationship.entities import Marriage as MarriageEntity
 from app.domain.relationship.entities import ParentChild as ParentChildEntity
+from app.domain.shared.exceptions import ConflictError
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.marriage import Marriage as MarriageModel
@@ -42,6 +44,7 @@ def _marriage_to_domain(m: MarriageModel) -> MarriageEntity:
         deleted_by=m.deleted_by,
         created_at=m.created_at,
         updated_at=m.updated_at,
+        version=m.version,
     )
 
 
@@ -66,6 +69,7 @@ def _marriage_to_orm(e: MarriageEntity) -> MarriageModel:
         is_deleted=e.is_deleted,
         deleted_at=e.deleted_at,
         deleted_by=e.deleted_by,
+        version=e.version,
     )
 
 
@@ -103,6 +107,7 @@ def _pc_to_domain(m: ParentChildModel) -> ParentChildEntity:
         deleted_by=m.deleted_by,
         created_at=m.created_at,
         updated_at=m.updated_at,
+        version=m.version,
     )
 
 
@@ -120,6 +125,7 @@ def _pc_to_orm(e: ParentChildEntity) -> ParentChildModel:
         is_deleted=e.is_deleted,
         deleted_at=e.deleted_at,
         deleted_by=e.deleted_by,
+        version=e.version,
     )
 
 
@@ -153,14 +159,28 @@ class SqlAlchemyMarriageRepository:
         model = result.scalar_one_or_none()
         return _marriage_to_domain(model) if model else None
 
-    async def save(self, marriage: MarriageEntity) -> None:
+    async def save(self, marriage: MarriageEntity, *, expected_version: int | None = None) -> None:
         self._uow.track(marriage)
         existing = await self._session.get(MarriageModel, marriage.id)
-        if existing:
-            for f in _MARRIAGE_UPDATABLE:
-                setattr(existing, f, getattr(marriage, f))
-        else:
+        if existing is None:
             self._session.add(_marriage_to_orm(marriage))
+            return
+        values = {f: getattr(marriage, f) for f in _MARRIAGE_UPDATABLE}
+        stmt = (
+            sql_update(MarriageModel)
+            .where(MarriageModel.id == marriage.id)
+            .values(**values, version=MarriageModel.version + 1)
+        )
+        if expected_version is not None:
+            stmt = stmt.where(MarriageModel.version == expected_version)
+        result = await self._session.execute(stmt)
+        if result.rowcount == 0:
+            current = await self._session.scalar(
+                select(MarriageModel.version).where(MarriageModel.id == marriage.id)
+            )
+            raise ConflictError("stale_write", detail={"current_version": current})
+        await self._session.refresh(existing)
+        marriage.version = existing.version
 
 
 class SqlAlchemyParentChildRepository:
@@ -179,14 +199,28 @@ class SqlAlchemyParentChildRepository:
         model = result.scalar_one_or_none()
         return _pc_to_domain(model) if model else None
 
-    async def save(self, link: ParentChildEntity) -> None:
+    async def save(self, link: ParentChildEntity, *, expected_version: int | None = None) -> None:
         self._uow.track(link)
         existing = await self._session.get(ParentChildModel, link.id)
-        if existing:
-            for f in _PC_UPDATABLE:
-                setattr(existing, f, getattr(link, f))
-        else:
+        if existing is None:
             self._session.add(_pc_to_orm(link))
+            return
+        values = {f: getattr(link, f) for f in _PC_UPDATABLE}
+        stmt = (
+            sql_update(ParentChildModel)
+            .where(ParentChildModel.id == link.id)
+            .values(**values, version=ParentChildModel.version + 1)
+        )
+        if expected_version is not None:
+            stmt = stmt.where(ParentChildModel.version == expected_version)
+        result = await self._session.execute(stmt)
+        if result.rowcount == 0:
+            current = await self._session.scalar(
+                select(ParentChildModel.version).where(ParentChildModel.id == link.id)
+            )
+            raise ConflictError("stale_write", detail={"current_version": current})
+        await self._session.refresh(existing)
+        link.version = existing.version
 
 
 # ── Query Port (for validator) ───────────────────────────────────
