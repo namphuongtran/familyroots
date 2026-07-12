@@ -94,6 +94,7 @@ erDiagram
         uuid updated_by
         timestamptz created_at
         timestamptz updated_at
+        integer version "OCC (ADR-017), default 1"
     }
 
     user_profiles {
@@ -151,6 +152,7 @@ erDiagram
         uuid deleted_by
         timestamptz created_at
         timestamptz updated_at
+        integer version "OCC (ADR-017), default 1"
     }
 
     parent_child {
@@ -168,6 +170,7 @@ erDiagram
         uuid deleted_by
         timestamptz created_at
         timestamptz updated_at
+        integer version "OCC (ADR-017), default 1"
     }
 
     user_clan_roles {
@@ -457,6 +460,7 @@ Global person entity — independent of any clan. A person exists once and can a
 | `updated_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `version` | INTEGER | NOT NULL, DEFAULT 1 | Optimistic concurrency (ADR-017, migration `015_data_integrity`) — bumped by 1 on every write (including delete/restore); `PATCH` must send the matching `expected_version` or gets 409 `stale_write` |
 
 > **💡 Note (VN) - Data Ownership:**
 > Cột `created_by_clan_id` giúp xác định ai là "Chủ Thực Sự" (Owner) của bản ghi này. Dòng họ Owner có quyển Edit lớn nhất, trong khi các dòng họ khác chỉ có thể link (tạo Reference) hoặc Submit các Change Request xuyên dòng họ.
@@ -506,6 +510,7 @@ Global edge linking two persons. Supports polygamy, divorce, remarriage.
 | `deleted_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `version` | INTEGER | NOT NULL, DEFAULT 1 | Optimistic concurrency (ADR-017, migration `015_data_integrity`) — bumped by 1 on every write (including soft-delete); `PATCH` must send the matching `expected_version` or gets 409 `stale_write` |
 
 ### `parent_child`
 Global edge linking parent to child. Supports biological, adopted, step, foster.
@@ -526,6 +531,7 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 | `deleted_by` | UUID | | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `version` | INTEGER | NOT NULL, DEFAULT 1 | Optimistic concurrency (ADR-017, migration `015_data_integrity`) — bumped by 1 on every write (including soft-delete); `PATCH` must send the matching `expected_version` or gets 409 `stale_write` |
 
 > **💡 Note (VN) - Edge uniqueness là PER-CLAN (migration 007):**
 > Unique index của `marriages` và `parent_child` bao gồm `created_by_clan_id`:
@@ -535,6 +541,17 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 > chung — Họ Nguyễn đã ghi "A là con B" thì Họ Lê **vẫn** ghi được bản của họ; chống
 > trùng chỉ áp dụng bên trong một clan. Đây là nền của cơ chế clan-scoped edges
 > (mỗi cây chỉ đọc cạnh do clan mình tạo).
+
+> **💡 Note (VN) - `spouse_order` uniqueness per person1 (migration `015_data_integrity`):**
+> Partial unique index `uq_marriages_spouse_order (created_by_clan_id, person1_id,
+> spouse_order) WHERE spouse_order IS NOT NULL AND is_deleted = false AND status =
+> 'married'` đảm bảo thứ tự vợ cả/vợ hai/vợ ba của **cùng một `person1`** không bao
+> giờ trùng nhau trong số các cuộc hôn nhân đang active (`married`) — đã ly dị/xóa
+> mềm thì không tính. Validator (`check_spouse_order`) chặn trước ở tầng domain (409
+> `relationship.duplicate_spouse_order`); index này là lớp chặn cuối cho race
+> condition (raw SQL bypass → `23505` → 409). Migration có bước pre-check: nếu dữ
+> liệu hiện có đã vi phạm, migration **fail rõ ràng** và liệt kê các dòng vi phạm —
+> không tự động renumber lịch sử.
 
 > **💡 Note (VN) - Xóa person & cạnh mồ côi (`ON DELETE RESTRICT`):**
 > FK `person1_id/person2_id` (marriages) và `parent_id/child_id` (parent_child) dùng
@@ -780,6 +797,10 @@ CREATE INDEX idx_marriages_person1 ON marriages(person1_id);
 CREATE INDEX idx_marriages_person2 ON marriages(person2_id);
 CREATE INDEX idx_marriages_clan ON marriages(created_by_clan_id);
 CREATE INDEX idx_marriages_is_deleted ON marriages(is_deleted) WHERE is_deleted = false;
+
+-- spouse_order uniqueness per person1, active marriages only (migration 015_data_integrity, ADR-017 sibling fix)
+CREATE UNIQUE INDEX uq_marriages_spouse_order ON marriages (created_by_clan_id, person1_id, spouse_order)
+    WHERE spouse_order IS NOT NULL AND is_deleted = false AND status = 'married';
 
 -- Branches
 CREATE INDEX idx_branches_clan ON branches(clan_id);
