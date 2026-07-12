@@ -36,16 +36,6 @@ class SqlAlchemyClanRepository:
         )
         return result.scalar_one_or_none()
 
-    async def count_admins(self, clan_id: uuid.UUID) -> int:
-        result = await self._session.execute(
-            select(func.count()).where(
-                UserClanRole.clan_id == clan_id,
-                UserClanRole.role == "admin",
-                UserClanRole.is_approved.is_(True),
-            )
-        )
-        return result.scalar() or 0
-
     async def lock_admin_count(self, clan_id: uuid.UUID) -> int:
         """Lock the clan's approved-admin rows and return their count.
 
@@ -59,6 +49,9 @@ class SqlAlchemyClanRepository:
                 UserClanRole.role == "admin",
                 UserClanRole.is_approved.is_(True),
             )
+            # Deterministic lock order: concurrent reducers acquire the row locks
+            # in the same sequence, so they serialize but can never deadlock.
+            .order_by(UserClanRole.id)
             .with_for_update()
         )
         return len(result.scalars().all())
