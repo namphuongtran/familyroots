@@ -24,7 +24,10 @@ class ExportQueryPort(Protocol):
         """All persons with a membership in this clan — INCLUDES soft-deleted
         persons. Each row carries the person's own columns plus the joined
         membership fields ``membership_role``/``stored_generation``/
-        ``is_founder``/``branch_id``."""
+        ``is_founder``/``branch_id``/``membership_id``/``joined_at``/
+        ``membership_created_at``/``membership_updated_at`` (the latter two are
+        aliased off ``cm.created_at``/``cm.updated_at`` so they don't collide
+        with the person row's own ``created_at``/``updated_at``)."""
         ...
 
     async def branches(self, clan_id: uuid.UUID) -> list[dict[str, Any]]:

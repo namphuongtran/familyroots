@@ -28,6 +28,10 @@ def _person_row(person_id: uuid.UUID, **overrides: object) -> dict[str, object]:
         "stored_generation": 1,
         "is_founder": True,
         "branch_id": None,
+        "membership_id": uuid.uuid4(),
+        "joined_at": datetime(2020, 1, 1),
+        "membership_created_at": datetime(2020, 1, 1),
+        "membership_updated_at": datetime(2020, 1, 2),
     }
     row.update(overrides)
     return row
@@ -86,12 +90,34 @@ def test_build_clan_export_injects_generation_and_splits_membership() -> None:
     assert persons["Cụ Thủy Tổ"]["generation"] == 1
     assert persons["Không Rõ Đời"]["generation"] is None
     # Membership fields must NOT leak onto the person record...
-    for key in ("membership_role", "stored_generation", "is_founder", "branch_id"):
+    for key in (
+        "membership_role",
+        "stored_generation",
+        "is_founder",
+        "branch_id",
+        "membership_id",
+        "joined_at",
+        "membership_created_at",
+        "membership_updated_at",
+    ):
         assert key not in persons["Cụ Thủy Tổ"]
-    # ...but must be present, split out, on clan_memberships.
+    # ...but must be present, split out, on clan_memberships — lossless: id,
+    # joined_at, and both timestamps travel with the membership, not just
+    # role/generation/founder/branch.
     membership = next(m for m in payload["clan_memberships"] if m["person_id"] == person_id)
     assert membership["role"] == "blood"
     assert membership["is_founder"] is True
+    assert set(membership.keys()) == {
+        "membership_id",
+        "person_id",
+        "role",
+        "stored_generation",
+        "is_founder",
+        "branch_id",
+        "joined_at",
+        "created_at",
+        "updated_at",
+    }
 
 
 def test_to_json_bytes_round_trips_and_serializes_non_json_native_types() -> None:

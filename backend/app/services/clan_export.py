@@ -25,7 +25,16 @@ FORMAT_VERSION = 1
 # Columns injected into `persons()` port rows by the JOIN with clan_memberships
 # (see ExportQueryPort.persons docstring) — these belong on the split-out
 # `clan_memberships` archive, not on the `persons` one.
-_MEMBERSHIP_FIELDS = ("membership_role", "stored_generation", "is_founder", "branch_id")
+_MEMBERSHIP_FIELDS = (
+    "membership_role",
+    "stored_generation",
+    "is_founder",
+    "branch_id",
+    "membership_id",
+    "joined_at",
+    "membership_created_at",
+    "membership_updated_at",
+)
 
 
 def build_clan_export(
@@ -44,11 +53,14 @@ def build_clan_export(
 
     ``persons`` rows are the denormalized JOIN result produced by
     ``ExportQueryPort.persons()`` (person columns plus ``membership_role``/
-    ``stored_generation``/``is_founder``/``branch_id``). This function is the
-    seam that (a) injects the graph-computed đời (generation) onto each person
-    from ``generation_map`` — ``None`` when the person is unreachable from any
-    founder — and (b) splits the denormalized row back into separate
-    ``persons`` and ``clan_memberships`` archives.
+    ``stored_generation``/``is_founder``/``branch_id``/``membership_id``/
+    ``joined_at``/``membership_created_at``/``membership_updated_at``). This
+    function is the seam that (a) injects the graph-computed đời (generation)
+    onto each person from ``generation_map`` — ``None`` when the person is
+    unreachable from any founder — and (b) splits the denormalized row back
+    into separate ``persons`` and ``clan_memberships`` archives, the latter
+    lossless: ``{membership_id, person_id, role, stored_generation,
+    is_founder, branch_id, joined_at, created_at, updated_at}``.
     """
     out_persons: list[dict[str, Any]] = []
     out_memberships: list[dict[str, Any]] = []
@@ -58,11 +70,15 @@ def build_clan_export(
         out_persons.append(person)
         out_memberships.append(
             {
+                "membership_id": row.get("membership_id"),
                 "person_id": row["id"],
                 "role": row.get("membership_role"),
                 "stored_generation": row.get("stored_generation"),
                 "is_founder": row.get("is_founder"),
                 "branch_id": row.get("branch_id"),
+                "joined_at": row.get("joined_at"),
+                "created_at": row.get("membership_created_at"),
+                "updated_at": row.get("membership_updated_at"),
             }
         )
 

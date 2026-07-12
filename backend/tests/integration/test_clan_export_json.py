@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -260,6 +260,10 @@ async def rich_clan(
                 {**p, "cid": clan_a, "cid_actor": admin_a},
             )
 
+        # joined_at set explicitly (not left NULL) — the export's
+        # clan_memberships archive must be lossless, and generation_map's
+        # founder-ordering tiebreak depends on it being populated.
+        joined_at = datetime(2024, 1, 1, tzinfo=UTC)
         memberships = [
             {"person_id": founder, "is_founder": True, "branch_id": None},
             {"person_id": con_truong, "is_founder": False, "branch_id": None},
@@ -272,10 +276,11 @@ async def rich_clan(
         for m in memberships:
             await s.execute(
                 sa.text(
-                    "INSERT INTO clan_memberships (person_id, clan_id, is_founder, branch_id) "
-                    "VALUES (:person_id, :cid, :is_founder, :branch_id)"
+                    "INSERT INTO clan_memberships "
+                    "(person_id, clan_id, is_founder, branch_id, joined_at) "
+                    "VALUES (:person_id, :cid, :is_founder, :branch_id, :joined_at)"
                 ),
-                {**m, "cid": clan_a},
+                {**m, "cid": clan_a, "joined_at": joined_at},
             )
 
         # Marriages: đa thê (con_truong + vợ cả spouse_order=1, + vợ hai
@@ -450,3 +455,175 @@ async def test_export_requires_admin(client, editor_headers, rich_clan):
 async def test_export_invalid_format_422(client, admin_headers, rich_clan):
     resp = await client.get("/api/v1/exports/clan?format=xml", headers=admin_headers)
     assert resp.status_code == 422
+
+
+# ── Task-4 review fixes ──────────────────────────────────────────────────────
+
+
+async def test_json_export_clan_memberships_lossless_and_complete(client, admin_headers, rich_clan):
+    """FIX 2/3 (task-4 review): clan_memberships must be lossless (carry
+    membership_id/joined_at/created_at/updated_at, not just role/generation/
+    founder/branch) and every archived person must have exactly one
+    membership row, with the thủy tổ correctly flagged as founder."""
+    resp = await client.get("/api/v1/exports/clan?format=json", headers=admin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+
+    persons_by_name = {p["full_name"]: p for p in data["persons"]}
+    memberships_by_person = {m["person_id"]: m for m in data["clan_memberships"]}
+
+    # Every person id appears in memberships exactly once.
+    person_ids = [p["id"] for p in data["persons"]]
+    assert len(person_ids) == len(set(person_ids))
+    assert set(person_ids) == set(memberships_by_person.keys())
+    assert len(data["clan_memberships"]) == len(data["persons"])
+
+    founder_membership = memberships_by_person[persons_by_name["Cụ Thủy Tổ"]["id"]]
+    assert founder_membership["is_founder"] is True
+    assert founder_membership["role"] == "blood"
+
+    for membership in data["clan_memberships"]:
+        assert set(membership.keys()) == {
+            "membership_id",
+            "person_id",
+            "role",
+            "stored_generation",
+            "is_founder",
+            "branch_id",
+            "joined_at",
+            "created_at",
+            "updated_at",
+        }
+        assert membership["membership_id"] is not None
+        # Seeded explicitly in the rich_clan fixture — must survive the export.
+        assert membership["joined_at"] is not None
+        assert membership["created_at"] is not None
+        assert membership["updated_at"] is not None
+
+
+async def test_generation_map_deterministic_with_multiple_founders(
+    session_factory,
+):
+    """FIX 1 (task-4 review): with two founders whose descent trees overlap,
+    the founder that "wins" a shared descendant (via dict.setdefault) must be
+    determined by a total order (joined_at ASC, then person_id) — not by
+    whatever order Postgres happens to return `is_founder = true` rows in.
+
+    founder_1 joins the clan BEFORE founder_2 (earlier joined_at) but its
+    clan_memberships row is inserted SECOND (after founder_2's) — physical
+    insertion order is deliberately the opposite of joined_at order, so a
+    query without an ORDER BY would very likely process founder_2 first.
+
+    founder_1 -> shared_descendant directly (depth 1, generation 2).
+    founder_2 -> mid -> shared_descendant (depth 2, generation 3).
+
+    Correct (deterministic) behavior: founder_1 (earlier joined_at) is
+    processed first, so shared_descendant's generation is 2 — every run,
+    not just "by luck" of row order.
+    """
+    import sqlalchemy as sa
+
+    from app.infrastructure.persistence.export_query_port import SqlAlchemyExportQueryPort
+
+    clan_id = uuid.uuid4()
+    admin_id = uuid.uuid4()
+    founder_1 = uuid.uuid4()
+    founder_2 = uuid.uuid4()
+    mid = uuid.uuid4()
+    shared_descendant = uuid.uuid4()
+
+    async with session_factory() as s:
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'Họ Đa Tổ', :slug)"),
+            {"id": clan_id, "slug": f"ho-da-to-{clan_id.hex[:8]}"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO user_profiles (id, email, display_name) VALUES (:id, :email, 'admin')"
+            ),
+            {"id": admin_id, "email": f"{admin_id.hex[:8]}@example.com"},
+        )
+        for pid, name in (
+            (founder_1, "Thủy Tổ Một"),
+            (founder_2, "Thủy Tổ Hai"),
+            (mid, "Đời Giữa"),
+            (shared_descendant, "Hậu Duệ Chung"),
+        ):
+            await s.execute(
+                sa.text(
+                    "INSERT INTO persons "
+                    "(id, full_name, gender, birth_date, birth_date_precision, "
+                    "birth_date_display, lunar_birth_date, is_deleted, "
+                    "created_by_clan_id, created_by) "
+                    "VALUES (:id, :full_name, 'unknown', NULL, 'unknown', "
+                    "NULL, NULL, false, :cid, :cid_actor)"
+                ),
+                {"id": pid, "full_name": name, "cid": clan_id, "cid_actor": admin_id},
+            )
+
+        # Deliberately inserted founder_2 THEN founder_1 (reversed vs.
+        # joined_at) to prove the ordering comes from the ORDER BY, not from
+        # physical/insertion order.
+        await s.execute(
+            sa.text(
+                "INSERT INTO clan_memberships (person_id, clan_id, is_founder, joined_at) "
+                "VALUES (:pid, :cid, true, :joined_at)"
+            ),
+            {
+                "pid": founder_2,
+                "cid": clan_id,
+                "joined_at": datetime(2000, 1, 2, tzinfo=UTC),
+            },
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO clan_memberships (person_id, clan_id, is_founder, joined_at) "
+                "VALUES (:pid, :cid, true, :joined_at)"
+            ),
+            {
+                "pid": founder_1,
+                "cid": clan_id,
+                "joined_at": datetime(2000, 1, 1, tzinfo=UTC),
+            },
+        )
+        for pid in (mid, shared_descendant):
+            await s.execute(
+                sa.text(
+                    "INSERT INTO clan_memberships (person_id, clan_id, is_founder) "
+                    "VALUES (:pid, :cid, false)"
+                ),
+                {"pid": pid, "cid": clan_id},
+            )
+
+        for parent_id, child_id in (
+            (founder_1, shared_descendant),
+            (founder_2, mid),
+            (mid, shared_descendant),
+        ):
+            await s.execute(
+                sa.text(
+                    "INSERT INTO parent_child "
+                    "(id, parent_id, child_id, created_by_clan_id, relationship_type, created_by) "
+                    "VALUES (:id, :parent_id, :child_id, :cid, 'biological', :cid_actor)"
+                ),
+                {
+                    "id": uuid.uuid4(),
+                    "parent_id": parent_id,
+                    "child_id": child_id,
+                    "cid": clan_id,
+                    "cid_actor": admin_id,
+                },
+            )
+        await s.commit()
+
+    async with session_factory() as s:
+        port = SqlAlchemyExportQueryPort(s)
+        first_run = await port.generation_map(clan_id)
+    async with session_factory() as s:
+        port = SqlAlchemyExportQueryPort(s)
+        second_run = await port.generation_map(clan_id)
+
+    assert first_run == second_run
+    # founder_1's earlier joined_at must win: depth 1 -> generation 2 (NOT
+    # founder_2's depth-2 path, which would give generation 3).
+    assert first_run[shared_descendant] == 2

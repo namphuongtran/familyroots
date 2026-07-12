@@ -37,7 +37,8 @@ class SqlAlchemyExportQueryPort(ExportQueryPort):
         result = await self._session.execute(
             text(
                 "SELECT p.*, cm.role AS membership_role, cm.generation AS stored_generation, "
-                "cm.is_founder, cm.branch_id "
+                "cm.is_founder, cm.branch_id, cm.id AS membership_id, cm.joined_at, "
+                "cm.created_at AS membership_created_at, cm.updated_at AS membership_updated_at "
                 "FROM persons p "
                 "JOIN clan_memberships cm ON cm.person_id = p.id "
                 "WHERE cm.clan_id = :clan"
@@ -82,10 +83,15 @@ class SqlAlchemyExportQueryPort(ExportQueryPort):
         """Graph-computed đời per person: for each clan founder, walk
         `get_family_tree_flat` and record `depth + 1` (thủy tổ = 1). The first
         founder processed wins for any person reachable from more than one
-        founder (`dict.setdefault`)."""
+        founder (`dict.setdefault`) — founders are processed in a fixed,
+        deterministic order (`joined_at` ascending, `person_id` tiebreak) so
+        which founder "wins" a shared descendant does not depend on
+        unspecified row order from Postgres."""
         founders_result = await self._session.execute(
             text(
-                "SELECT person_id FROM clan_memberships WHERE clan_id = :clan AND is_founder = true"
+                "SELECT cm.person_id FROM clan_memberships cm "
+                "WHERE cm.clan_id = :clan AND cm.is_founder = true "
+                "ORDER BY cm.joined_at NULLS LAST, cm.person_id"
             ),
             {"clan": clan_id},
         )
