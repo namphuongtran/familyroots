@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.services.lunar_calendar import next_lunar_anniversary
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,6 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
     """
     from app.core.database import engine
     from app.infrastructure.persistence.sql_dates import next_anniversary_sql
-    from app.services.lunar_calendar import next_lunar_anniversary
     from app.services.notification import send_to_clan
 
     if today is None:
@@ -136,14 +136,21 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                       AND (e.person_id IS NULL OR p.is_deleted = false)
                 """)
             )
-            lunar_events = [
-                {**row, "next_occurrence": next_lunar_anniversary(row["event_date"], today)}
-                for row in lunar_result.mappings().all()
-            ]
+            lunar_events = lunar_result.mappings().all()
 
             for event in [*events, *lunar_events]:
                 try:
-                    next_occ = event["next_occurrence"]
+                    # Solar rows already carry a precomputed next_occurrence (cheap SQL
+                    # date math that cannot raise). Lunar rows carry only event_date —
+                    # next_lunar_anniversary runs the lunar-conversion algorithm, which
+                    # CAN raise on a pathological date. Computing it lazily HERE, inside
+                    # this per-event try, means one bad lunar row hits the
+                    # rollback-and-continue path below instead of aborting the whole
+                    # run before any event (solar or lunar) is processed.
+                    if "next_occurrence" in event:
+                        next_occ = event["next_occurrence"]
+                    else:
+                        next_occ = next_lunar_anniversary(event["event_date"], today)
                     days_until = (next_occ - today).days
                     if days_until != event["notify_days_before"]:
                         continue

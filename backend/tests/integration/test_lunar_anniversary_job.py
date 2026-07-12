@@ -121,6 +121,105 @@ async def test_lunar_gio_dedup_second_run_same_day(
 
 
 @pytest.mark.asyncio
+async def test_one_bad_lunar_event_does_not_abort_solar_notifications(
+    async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (Task 2 review, Finding 1): before the fix, next_occurrence for
+    lunar events was precomputed in a list comprehension BEFORE the per-event loop,
+    outside any try/except. One pathological event_date that makes
+    next_lunar_anniversary raise therefore aborted the run before the loop even
+    started — losing solar notifications for a totally unrelated clan too. The fix
+    computes next_occurrence lazily INSIDE the loop's existing per-event try, so the
+    bad lunar row hits the rollback-and-continue path and the solar event still
+    fires."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+
+    bad_date = date(1900, 1, 1)  # sentinel event_date matched by the raiser below
+    real_next_lunar_anniversary = next_lunar_anniversary
+
+    def _raising_next_lunar_anniversary(event_date: date, today_: date) -> date:
+        if event_date == bad_date:
+            raise ValueError("boom: pathological lunar date")
+        return real_next_lunar_anniversary(event_date, today_)
+
+    monkeypatch.setattr(
+        "app.services.scheduler.next_lunar_anniversary", _raising_next_lunar_anniversary
+    )
+
+    today = date(2025, 6, 1)  # arbitrary, away from year-boundary edge cases
+    solar_clan_id = uuid.uuid4()
+    solar_person_id = uuid.uuid4()
+    solar_due_date = today + timedelta(days=7)
+    lunar_clan_id = uuid.uuid4()
+
+    async with maker() as s:
+        await s.execute(sa.text("DELETE FROM notification_log"))
+        await s.execute(sa.text("DELETE FROM events"))
+        await s.commit()
+
+        # Bad lunar event, own clan — next_lunar_anniversary raises for its event_date.
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :sg)"),
+            {"id": lunar_clan_id, "sg": f"c{lunar_clan_id.hex[:6]}"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO events (id, clan_id, event_type, title, event_date, "
+                "is_recurring, is_lunar_calendar, notify_days_before, created_by) "
+                "VALUES (:id, :clan, 'death_anniversary', 'Giỗ xấu', :d, true, true, "
+                "7, :cb)"
+            ),
+            {"id": uuid.uuid4(), "clan": lunar_clan_id, "d": bad_date, "cb": uuid.uuid4()},
+        )
+
+        # Due solar event, unrelated clan — must still fire.
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :sg)"),
+            {"id": solar_clan_id, "sg": f"c{solar_clan_id.hex[:6]}"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO persons (id, full_name, created_by, is_deleted) "
+                "VALUES (:id, 'P', :cb, false)"
+            ),
+            {"id": solar_person_id, "cb": uuid.uuid4()},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO events (id, clan_id, event_type, title, event_date, "
+                "is_recurring, is_lunar_calendar, notify_days_before, person_id, "
+                "created_by) "
+                "VALUES (:id, :clan, 'death_anniversary', 'Giỗ tốt', :d, true, false, "
+                "7, :p, :cb)"
+            ),
+            {
+                "id": uuid.uuid4(),
+                "clan": solar_clan_id,
+                "d": solar_due_date,
+                "p": solar_person_id,
+                "cb": uuid.uuid4(),
+            },
+        )
+        await s.commit()
+
+    await send_anniversary_notifications(today=today)  # must not raise/lose the solar event
+
+    async with maker() as s:
+        solar_count = await s.scalar(
+            sa.text("SELECT COUNT(*) FROM notification_log WHERE clan_id = :c"),
+            {"c": solar_clan_id},
+        )
+        lunar_count = await s.scalar(
+            sa.text("SELECT COUNT(*) FROM notification_log WHERE clan_id = :c"),
+            {"c": lunar_clan_id},
+        )
+    assert solar_count == 1  # solar notification survives the bad lunar row
+    assert lunar_count == 0  # bad lunar row itself was skipped, not silently "sent"
+
+
+@pytest.mark.asyncio
 async def test_lunar_gio_not_fired_on_wrong_day(
     async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:

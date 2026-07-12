@@ -158,6 +158,22 @@ async def test_soft_deleted_person_is_skipped(async_engine, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_lunar_soft_deleted_person_is_skipped(async_engine, monkeypatch):
+    """Lunar variant of test_soft_deleted_person_is_skipped: a lunar recurring event
+    whose person is soft-deleted must be excluded by the same
+    ``p.is_deleted = false`` join filter the lunar query shares with the solar one —
+    the event never reaches next_lunar_anniversary or the notification path."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+    spy = AsyncMock(return_value=(1, 0))
+    monkeypatch.setattr("app.services.notification.send_to_clan", spy)
+    await _seed_event(maker, lunar=True, person_deleted=True)
+    await scheduler.send_anniversary_notifications()
+    assert spy.await_count == 0
+
+
+@pytest.mark.asyncio
 async def test_failed_delivery_logs_failed_status(async_engine, monkeypatch):
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.core.database.engine", async_engine)
