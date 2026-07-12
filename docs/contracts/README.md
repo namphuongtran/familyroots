@@ -83,6 +83,7 @@ to `date`). Write DTOs accept the scalar `*_date` plus optional `*_precision`
 - [rest-invitations-api.md](rest-invitations-api.md)
 - [rest-platform-admin-api.md](rest-platform-admin-api.md)
 - [rest-notifications-api.md](rest-notifications-api.md)
+- [push-notifications.md](push-notifications.md) — FCM token lifecycle, notification types actually sent, payload shapes
 - [error-codes.md](error-codes.md) — machine-readable error-code catalog
 - [frontend-integration-guide.md](frontend-integration-guide.md) — cross-cutting client integration behavior
 - [domain-events-audit.md](domain-events-audit.md)
