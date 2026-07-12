@@ -52,7 +52,6 @@ class FakeRepo:
     def __init__(self, rec: Recorder, existing: Document | None = None) -> None:
         self._rec = rec
         self.saved: list[Document] = []
-        self.deleted: list[Document] = []
         self._existing = existing
 
     async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
@@ -61,10 +60,6 @@ class FakeRepo:
     async def save(self, doc: Document) -> None:
         self.saved.append(doc)
         self._rec.calls.append("repo.save")
-
-    async def delete(self, doc: Document) -> None:
-        self.deleted.append(doc)
-        self._rec.calls.append("repo.delete")
 
     async def get_by_id(self, doc_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
         return self._existing

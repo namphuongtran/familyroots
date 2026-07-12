@@ -74,9 +74,6 @@ class _FakeDocumentRepo:
     async def save(self, doc: Document) -> None:
         self.saved.append(doc)
 
-    async def delete(self, doc: Document) -> None:
-        pass
-
     async def get_by_id(self, document_id: uuid.UUID, clan_id: uuid.UUID) -> Document | None:
         if document_id == self._existing_photo.id:
             return self._existing_photo

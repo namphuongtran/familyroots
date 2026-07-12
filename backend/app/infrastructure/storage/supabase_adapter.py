@@ -77,17 +77,24 @@ class SupabaseStorageAdapter:
         return path
 
     async def delete(self, storage_path: str) -> bool:
-        # Best-effort: called post-commit as compensation, so it must never raise
-        # (a 503 here would be for an already-committed DB delete). Swallow + log.
+        # Contract (StoragePort.delete): True on success OR confirmed
+        # not-found; raise the classified StorageError for anything else. The
+        # retention purge job (app.services.document_purge) claims a document's
+        # row before calling this and only commits the claim once this
+        # returns — so "not found" and "we don't know" must never be conflated
+        # (the latter has to raise, or a row could be purged while its blob
+        # deletion is genuinely unconfirmed).
+        client = get_service_client()
         try:
-            client = get_service_client()
             await asyncio.to_thread(
                 client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove, [storage_path]
             )
-            return True
-        except Exception as e:  # best-effort compensation — never raise here
-            logger.error("Storage delete failed: %s (path=%s)", e, storage_path)
-            return False
+        except Exception as e:
+            classified = _classify_storage(e)
+            if isinstance(classified, StorageNotFoundError):
+                return True
+            raise classified from e
+        return True
 
     async def get_presigned_url(
         self, storage_path: str, expires_in: int = DEFAULT_PRESIGN_TTL

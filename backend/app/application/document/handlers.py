@@ -112,10 +112,12 @@ class DocumentCommandHandler:
         except Exception:
             # Best-effort compensation — never let a cleanup failure mask the
             # original persistence error (which is what the caller must see).
+            # storage.delete() now raises StorageError instead of returning
+            # False on failure (FIX 2, task 3 review) — catch it so
+            # compensation never raises.
             try:
-                if not await self._storage.delete(storage_path):
-                    logger.warning("Orphaned blob after failed upload commit: %s", storage_path)
-            except Exception:
+                await self._storage.delete(storage_path)
+            except StorageError:
                 logger.warning("Orphaned blob after failed upload commit: %s", storage_path)
             raise
 

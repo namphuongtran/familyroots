@@ -83,7 +83,17 @@ class StoragePort(Protocol):
         ...
 
     async def delete(self, storage_path: str) -> bool:
-        """Delete a file by path. Returns True on success."""
+        """Delete a file by path.
+
+        Returns True when the object was deleted OR is confirmed already
+        absent (idempotent — a missing object is not a failure). Raises the
+        appropriate ``StorageError`` subclass for transport/provider failures
+        where deletion could not be confirmed either way — callers (notably
+        the retention purge job, which commits its row-claim only after this
+        call succeeds) must not treat a swallowed exception as "not found";
+        that would risk purging a row whose blob deletion is actually
+        unconfirmed.
+        """
         ...
 
     async def get_presigned_url(
