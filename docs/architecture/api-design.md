@@ -269,7 +269,8 @@ Full contract: `docs/contracts/rest-invitations-api.md`.
 | POST   | `/`                        | Yes  | editor | Upload file (multipart/form)   |
 | GET    | `/`                        | Yes  | viewer | List documents (paginated)     |
 | GET    | `/{id}`                    | Yes  | viewer | Get document with presigned URL |
-| DELETE | `/{id}`                    | Yes  | admin  | Delete from storage + DB       |
+| DELETE | `/{id}`                    | Yes  | admin  | Soft-delete (blob kept; see ADR-019) |
+| POST   | `/{id}/restore`            | Yes  | admin  | Restore a soft-deleted document |
 | PATCH  | `/{id}/set-avatar`         | Yes  | editor | Set photo as person avatar     |
 
 ### Allowed MIME Types
@@ -291,6 +292,28 @@ Full contract: `docs/contracts/rest-invitations-api.md`.
 | description    | string | No       | Description              |
 | taken_date     | date   | No       | When photo was taken     |
 | taken_place    | string | No       | Where photo was taken    |
+
+---
+
+## Exports (`/api/v1/exports/`)
+
+| Method | Path                | Auth | Role  | Description                              |
+|--------|---------------------|------|-------|-------------------------------------------|
+| GET    | `/clan?format=json\|gedcom` | Yes | admin | Download the full clan archive — **envelope-exempt** (returns the raw file, `Content-Disposition: attachment`) |
+
+- `format` defaults to `json`; an unrecognized value is a 422 (Pydantic query
+  pattern), not a handler-level error.
+- `format=json` — lossless archive (`familyroots-clan-export`,
+  `format_version: 1`): every business column, soft-deleted persons/marriages/
+  parent-child edges included and flagged, graph-computed đời, a
+  `documents_manifest` with presigned download URLs (no blob zipping).
+- `format=gedcom` — GEDCOM 5.5.1 interop view: soft-deleted records excluded;
+  Vietnamese-only concepts (tên húy, tên thụy, đời, chi, lunar dates) carried
+  in structured `NOTE` lines.
+- Filename: `{clan_slug}-gia-pha-{YYYY-MM-DD}.{json|ged}`.
+- See [rest-exports-api.md](../contracts/rest-exports-api.md) for the full
+  schema/mapping table and [ADR-020](../decisions/020-clan-export-formats.md)
+  for the format/delivery rationale.
 
 ---
 

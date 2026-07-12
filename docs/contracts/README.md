@@ -35,6 +35,9 @@ across all routers):
   - `meta.count` — a simple count alongside a non-cursor list.
 - **`GET /health` is exempt** — it's an ops/liveness probe, not a data endpoint,
   and returns a bare status dict, not an envelope.
+- **`GET /exports/clan` is exempt** — it returns the raw archive/GEDCOM file as
+  an attachment (`Content-Disposition`), not `{"data": ...}`; see
+  [rest-exports-api.md](rest-exports-api.md).
 - **Error envelope** (unchanged, already standard): every non-2xx JSON body is
   ```json
   { "error": { "code": "...", "message": "...", "detail": { ... } } }
@@ -78,6 +81,7 @@ to `date`). Write DTOs accept the scalar `*_date` plus optional `*_precision`
 - [rest-tree-api.md](rest-tree-api.md)
 - [tree-focus.md](tree-focus.md)
 - [rest-documents-api.md](rest-documents-api.md)
+- [rest-exports-api.md](rest-exports-api.md) — clan JSON archive + GEDCOM export, envelope-exempt
 - [rest-events-api.md](rest-events-api.md)
 - [rest-claims-api.md](rest-claims-api.md)
 - [rest-invitations-api.md](rest-invitations-api.md)

@@ -736,9 +736,16 @@ Uploaded files (photos, certificates, audio/video). Clan-scoped.
 | `taken_date` | DATE | | Ngày tháng của tài liệu (ví dụ: ngày chụp ảnh) |
 | `taken_place` | VARCHAR(255) | | Địa điểm của tài liệu (ví dụ: nơi chụp ảnh) |
 | `is_avatar` | BOOLEAN | DEFAULT false | Có dùng làm avatar không |
+| `is_deleted` | BOOLEAN | NOT NULL, DEFAULT false | Soft-delete flag (migration 016, ADR-019) — `DELETE` sets this instead of removing the row; blob untouched until purge |
+| `deleted_at` | TIMESTAMPTZ | | When soft-deleted; retention purge job removes row+blob once older than `DOCUMENT_RETENTION_DAYS` |
+| `deleted_by` | UUID | | Actor who soft-deleted |
 | `created_by` | UUID | NOT NULL | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+Partial index `idx_documents_is_deleted ON documents (is_deleted) WHERE
+is_deleted = false` backs the live-only read path. See
+[ADR-019](../decisions/019-document-soft-delete-purge.md).
 
 ### `audit_logs`
 Immutable log of all write actions. Not clan-scoped.

@@ -3,6 +3,14 @@
 ## Status
 Accepted.
 
+> **Update (2026-07-12):** The `documents` row of the table below is
+> **superseded by [ADR-019](019-document-soft-delete-purge.md)**: documents
+> now soft-delete (`is_deleted`/`deleted_at`/`deleted_by`, migration
+> `016_document_soft_delete`) with a `restore` endpoint and a
+> `DOCUMENT_RETENTION_DAYS` purge job, instead of hard-deleting on `DELETE`.
+> `Event` and `Branch` remain hard-deleted as described here; only `Document`
+> moved.
+
 > **Update (2026-07-02):** Person/Marriage/ParentChild FKs use `ON DELETE RESTRICT`
 > (persons are never hard-deleted). Soft-deleting a person currently leaves its edges
 > live (they are hidden from the clan-scoped tree, which filters `is_deleted=false`,
