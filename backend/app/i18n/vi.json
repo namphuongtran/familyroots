@@ -169,6 +169,7 @@
   "error.rate_limited": "Quá nhiều yêu cầu; vui lòng chậm lại",
   "error.relationship.duplicate_marriage": "Hôn nhân này đã tồn tại",
   "error.relationship.duplicate_parent_child": "Quan hệ cha/mẹ - con này đã tồn tại",
+  "error.relationship.duplicate_spouse_order": "Thứ tự hôn nhân này đã tồn tại cho người này.",
   "error.same_person_path": "Không thể tìm đường đến chính mình",
   "error.self_marriage_not_allowed": "Một người không thể kết hôn với chính mình",
   "error.self_parent_not_allowed": "Một người không thể là cha/mẹ của chính mình",

@@ -169,6 +169,7 @@
   "error.rate_limited": "Trop de requêtes ; veuillez ralentir",
   "error.relationship.duplicate_marriage": "Ce mariage existe déjà",
   "error.relationship.duplicate_parent_child": "Cette relation parent-enfant existe déjà",
+  "error.relationship.duplicate_spouse_order": "Cet ordre de mariage existe déjà pour cette personne.",
   "error.same_person_path": "Impossible de trouver un chemin vers la même personne",
   "error.self_marriage_not_allowed": "Une personne ne peut pas s'épouser elle-même",
   "error.self_parent_not_allowed": "Une personne ne peut pas être son propre parent",

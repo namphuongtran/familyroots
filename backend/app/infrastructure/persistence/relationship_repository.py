@@ -232,7 +232,12 @@ class SqlAlchemyRelationshipQueryPort:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def count_bio_parents(self, child_id: uuid.UUID, clan_id: uuid.UUID) -> int:
+    async def count_bio_parents(
+        self,
+        child_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        exclude_link_id: uuid.UUID | None = None,
+    ) -> int:
         result = await self._session.execute(
             text("""
                 SELECT COUNT(*) FROM public.parent_child
@@ -240,13 +245,18 @@ class SqlAlchemyRelationshipQueryPort:
                   AND created_by_clan_id = :clan_id
                   AND relationship_type = 'biological'
                   AND is_deleted = false
+                  AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
             """),
-            {"child_id": child_id, "clan_id": clan_id},
+            {"child_id": child_id, "clan_id": clan_id, "exclude_id": exclude_link_id},
         )
         return int(result.scalar() or 0)
 
     async def has_active_marriage(
-        self, person1_id: uuid.UUID, person2_id: uuid.UUID, clan_id: uuid.UUID
+        self,
+        person1_id: uuid.UUID,
+        person2_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        exclude_marriage_id: uuid.UUID | None = None,
     ) -> bool:
         result = await self._session.execute(
             text("""
@@ -258,9 +268,40 @@ class SqlAlchemyRelationshipQueryPort:
                 AND created_by_clan_id = :clan_id
                 AND status NOT IN ('divorced')
                 AND is_deleted = false
+                AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
                 LIMIT 1
             """),
-            {"p1": person1_id, "p2": person2_id, "clan_id": clan_id},
+            {
+                "p1": person1_id,
+                "p2": person2_id,
+                "clan_id": clan_id,
+                "exclude_id": exclude_marriage_id,
+            },
+        )
+        return result.first() is not None
+
+    async def has_spouse_order_conflict(
+        self,
+        person1_id: uuid.UUID,
+        spouse_order: int,
+        clan_id: uuid.UUID,
+        exclude_marriage_id: uuid.UUID | None = None,
+    ) -> bool:
+        result = await self._session.execute(
+            text("""
+                SELECT 1 FROM public.marriages
+                WHERE person1_id = :p1 AND spouse_order = :so
+                  AND created_by_clan_id = :clan_id
+                  AND status = 'married' AND is_deleted = false
+                  AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
+                LIMIT 1
+            """),
+            {
+                "p1": person1_id,
+                "so": spouse_order,
+                "clan_id": clan_id,
+                "exclude_id": exclude_marriage_id,
+            },
         )
         return result.first() is not None
 

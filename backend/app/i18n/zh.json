@@ -169,6 +169,7 @@
   "error.rate_limited": "请求过多；请稍后再试",
   "error.relationship.duplicate_marriage": "该婚姻关系已存在",
   "error.relationship.duplicate_parent_child": "该亲子关系已存在",
+  "error.relationship.duplicate_spouse_order": "此人已存在该婚姻顺序。",
   "error.same_person_path": "无法查找到自身的路径",
   "error.self_marriage_not_allowed": "一个人不能与自己结婚",
   "error.self_parent_not_allowed": "一个人不能作为自己的父母",
