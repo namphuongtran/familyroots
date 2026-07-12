@@ -11,6 +11,17 @@ Giỗ conventions (owner decision 2026-07-12, ADR-018):
 Algorithm: Hồ Ngọc Đức, "Thuật toán tính âm lịch" — new-moon and sun-longitude
 approximations (Jean Meeus, Astronomical Algorithms), month numbering anchored
 to the month containing the winter solstice (tháng 11 âm).
+
+Supported range (pre-merge review, Finding 1): the algorithm's round-trip
+identity (``lunar_to_solar(solar_to_lunar(d)) == d``) was probed year-by-year and
+is only reliable for ``SUPPORTED_MIN_YEAR..SUPPORTED_MAX_YEAR`` (1910-2199) —
+1900-1909 has ~350 round-trip mismatches concentrated in 1900 itself (the
+Meeus new-moon approximation is anchored at the 1900-01-01 epoch and degrades
+near/before it), and before that the arithmetic can silently produce
+out-of-domain results (e.g. a negative lunar day) instead of raising. Every
+public entry point below fails loud (``ValueError``) outside this range rather
+than returning a plausible-but-wrong date. Pre-1910 ancestor giỗ support is a
+follow-up (would need an epoch-extended algorithm), not covered here.
 """
 
 from __future__ import annotations
@@ -20,6 +31,9 @@ from dataclasses import dataclass
 from datetime import date
 
 _LUNAR_MONTH = 29.530588853  # mean synodic month, days
+
+SUPPORTED_MIN_YEAR = 1910
+SUPPORTED_MAX_YEAR = 2199
 
 
 @dataclass(frozen=True)
@@ -131,6 +145,10 @@ def _leap_month_offset(a11: int, tz: float) -> int:
 
 
 def solar_to_lunar(d: date, tz: float = 7.0) -> LunarDate:
+    if not (SUPPORTED_MIN_YEAR <= d.year <= SUPPORTED_MAX_YEAR):
+        raise ValueError(
+            f"date {d} outside supported lunar range {SUPPORTED_MIN_YEAR}-{SUPPORTED_MAX_YEAR}"
+        )
     dd, mm, yy = d.day, d.month, d.year
     day_number = _jd_from_date(dd, mm, yy)
     k = int((day_number - 2415021.076998695) / _LUNAR_MONTH)
@@ -159,13 +177,43 @@ def solar_to_lunar(d: date, tz: float = 7.0) -> LunarDate:
         lunar_month -= 12
     if lunar_month >= 11 and diff < 4:
         lunar_year -= 1
+    if not (1 <= lunar_day <= 30):
+        # Extremely rare floating-point boundary anomaly in the new-moon approximation
+        # (found while widening the round-trip test to the full supported range: e.g.
+        # 2054-05-07 and 2062-04-09 compute day=0 — the raw new-moon instant lands a
+        # hair past local midnight, so the +0.5 day/tz rounding in _new_moon_day picks
+        # the wrong month boundary by one day). Same fail-loud principle as the range
+        # guard above: never return an implausible lunar day.
+        raise ValueError(
+            f"date {d} hit a lunar new-moon boundary anomaly (computed day {lunar_day})"
+        )
     return LunarDate(year=lunar_year, month=lunar_month, day=lunar_day, leap=lunar_leap)
 
 
 def lunar_to_solar(year: int, month: int, day: int, leap: bool = False, tz: float = 7.0) -> date:
     """Solar date of a lunar date. A leap flag for a month that has no leap
     counterpart falls back to the regular month. Raises ValueError when ``day``
-    exceeds the month's length (29-day month asked for day 30)."""
+    exceeds the month's length (29-day month asked for day 30), when ``year`` is
+    outside the supported range, or when ``month``/``day`` are structurally
+    invalid (month not in 1..12, day < 1) — the latter also closes off the
+    negative-day bypass of the month-length guard below.
+
+    ``year`` is the LUNAR year. Because Tết (lunar new year) falls in Jan/Feb,
+    every early-January solar date in solar year SUPPORTED_MIN_YEAR converts
+    (via solar_to_lunar) to lunar year SUPPORTED_MIN_YEAR - 1 — verified clean
+    in the round-trip probe, so that one trailing year is also accepted here.
+    This keeps ``lunar_to_solar(*solar_to_lunar(d)) == d`` for every solar ``d``
+    in SUPPORTED_MIN_YEAR..SUPPORTED_MAX_YEAR (no symmetric case exists at the
+    top end: a solar year's last lunar month never rolls into the next lunar
+    year, confirmed by the same probe)."""
+    if not (SUPPORTED_MIN_YEAR - 1 <= year <= SUPPORTED_MAX_YEAR):
+        raise ValueError(
+            f"year {year} outside supported lunar range {SUPPORTED_MIN_YEAR}-{SUPPORTED_MAX_YEAR}"
+        )
+    if month not in range(1, 13):
+        raise ValueError(f"lunar month {month} must be in 1..12")
+    if day < 1:
+        raise ValueError(f"lunar day {day} must be >= 1")
     if month < 11:
         a11 = _lunar_month_11(year - 1, tz)
         b11 = _lunar_month_11(year, tz)

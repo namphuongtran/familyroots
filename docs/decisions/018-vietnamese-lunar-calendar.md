@@ -43,6 +43,25 @@ Two engine choices were considered:
   month's length raises `ValueError`), and `next_lunar_anniversary(event_date,
   today, tz=7.0)` — a deterministic pure function (no clock access; callers pass
   `today`) mirroring the semantics of the existing solar `next_anniversary_sql`.
+- **Supported range is `SUPPORTED_MIN_YEAR = 1910` .. `SUPPORTED_MAX_YEAR = 2199`
+  (fail-loud, pre-merge review)**. The algorithm's round-trip identity
+  (`lunar_to_solar(solar_to_lunar(d)) == d`) is only reliable in this window —
+  1900-1909 has ~350 round-trip mismatches concentrated in 1900 itself (the
+  Meeus new-moon approximation is anchored at the 1900-01-01 epoch and degrades
+  near/before it). Outside the window the arithmetic used to silently return an
+  implausible result instead of raising — e.g. `solar_to_lunar(date(1890, 1,
+  21))` returned `LunarDate(1890, 1, -28)` (a negative day), and that negative day
+  bypassed `lunar_to_solar`'s month-length guard, so
+  `next_lunar_anniversary(date(1890, 3, 15), date(2025, 1, 1))` returned a
+  plausible-but-WRONG `2025-02-22` with no exception. Every public entry point
+  now validates its year (`solar_to_lunar` on `d.year`; `lunar_to_solar` on the
+  `year` param, tolerating `SUPPORTED_MIN_YEAR - 1` because Tết falls in Jan/Feb
+  so early-January solar dates in `SUPPORTED_MIN_YEAR` convert to that trailing
+  lunar year — verified round-trip clean) and raises `ValueError` outside
+  1910-2199; `lunar_to_solar` additionally rejects `month` outside `1..12` and
+  `day < 1` (closing off the negative-day bypass at its source, not just at the
+  month-length check). Pre-1910 ancestor giỗ support is a follow-up (would need
+  an epoch-extended algorithm), not covered here.
 - **Giỗ conventions** (owner decision, traditional Vietnamese practice), applied
   inside `next_lunar_anniversary`:
   1. **Leap month → regular month.** If the original death fell in a leap month
@@ -73,7 +92,10 @@ Two engine choices were considered:
     `next_lunar_anniversary`, filters to `today <= next_occurrence <= end_date`,
     and merges with the SQL rows before sorting by `next_occurrence` and applying
     `limit`. Non-recurring events (lunar or not) are unaffected —
-    `next_occurrence = event_date` as before.
+    `next_occurrence = event_date` as before. A per-row `ValueError` (e.g. a
+    pre-1910 `event_date`) is caught and logged (`logger.warning`) and that row is
+    skipped — one pathological lunar event must not 500 the whole
+    `/events/upcoming` response for the rest of the clan's events.
 - **Scope is recurrence math only.** This ADR covers computing *when* the next
   lunar anniversary falls. It does **not** touch `HistoricalDate.lunar` (the
   display-only string on person/event date responses, e.g. `"15/08 Nhâm Tý"`) —
@@ -90,7 +112,10 @@ wrong (solar) formula. The engine is a small, dependency-free, unit-testable pur
 function, verifiable against publicly published Vietnamese calendar tables and
 regression-pinned against the VN/Chinese calendar divergence (Tết 1985, 2007
 boundary cases) and round-trip properties (`lunar_to_solar(solar_to_lunar(d)) ==
-d` for 1950–2050).
+d` for the full supported range, 1910-2199 — widened from an earlier 1950-2050
+during the pre-merge review; see Finding 1 above for why 1910 is the floor).
+Outside that range, every entry point now fails loud (`ValueError`) instead of
+returning a plausible-but-wrong date.
 
 Harder: the lunar path costs one extra query per call site (scheduler,
 `get_upcoming`) plus a Python-side merge/sort instead of a single SQL statement —

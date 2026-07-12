@@ -6,6 +6,7 @@ query with recurring logic (optimized as a CTE).
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
 from typing import Any
@@ -20,6 +21,8 @@ from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
 from app.schemas.historical_date import to_historical_date
 from app.services.lunar_calendar import next_lunar_anniversary
+
+logger = logging.getLogger(__name__)
 
 
 class SqlAlchemyEventRepository:
@@ -130,7 +133,20 @@ class SqlAlchemyEventRepository:
         )
         lunar_rows: list[dict[str, Any]] = []
         for lunar_row in lunar_result.mappings().all():
-            occ = next_lunar_anniversary(lunar_row["event_date"], today)
+            try:
+                occ = next_lunar_anniversary(lunar_row["event_date"], today)
+            except ValueError:
+                # A pathological event_date (e.g. outside the lunar engine's
+                # supported year range, Finding 1) must not 500 the whole
+                # /events/upcoming response — skip just this row.
+                logger.warning(
+                    "Skipping lunar event %s in get_upcoming: event_date=%s "
+                    "cannot be converted by the lunar engine",
+                    lunar_row["id"],
+                    lunar_row["event_date"],
+                    exc_info=True,
+                )
+                continue
             if today <= occ <= end_date:
                 lunar_rows.append({**lunar_row, "next_occurrence": occ})
 

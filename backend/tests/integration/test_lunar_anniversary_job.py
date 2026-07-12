@@ -220,6 +220,91 @@ async def test_one_bad_lunar_event_does_not_abort_solar_notifications(
 
 
 @pytest.mark.asyncio
+async def test_one_real_pre_1910_lunar_event_does_not_abort_solar_notifications(
+    async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pre-merge review Finding 2: same isolation guarantee as
+    test_one_bad_lunar_event_does_not_abort_solar_notifications, but with a REAL
+    pre-1910 event_date (no monkeypatched raiser) — proves next_lunar_anniversary's
+    own ValueError (SUPPORTED_MIN_YEAR guard, Finding 1) is caught by the scheduler's
+    existing per-event try/except, not just a test-injected exception."""
+    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.core.database.engine", async_engine)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
+
+    pre_1910_date = date(1890, 3, 15)
+    today = date(2025, 6, 1)
+    solar_clan_id = uuid.uuid4()
+    solar_person_id = uuid.uuid4()
+    solar_due_date = today + timedelta(days=7)
+    lunar_clan_id = uuid.uuid4()
+
+    async with maker() as s:
+        await s.execute(sa.text("DELETE FROM notification_log"))
+        await s.execute(sa.text("DELETE FROM events"))
+        await s.commit()
+
+        # Real pre-1910 lunar event — next_lunar_anniversary raises ValueError for real.
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :sg)"),
+            {"id": lunar_clan_id, "sg": f"c{lunar_clan_id.hex[:6]}"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO events (id, clan_id, event_type, title, event_date, "
+                "is_recurring, is_lunar_calendar, notify_days_before, created_by) "
+                "VALUES (:id, :clan, 'death_anniversary', 'Giỗ cụ tổ xa xưa', :d, true, "
+                "true, 7, :cb)"
+            ),
+            {"id": uuid.uuid4(), "clan": lunar_clan_id, "d": pre_1910_date, "cb": uuid.uuid4()},
+        )
+
+        # Due solar event, unrelated clan — must still fire.
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :sg)"),
+            {"id": solar_clan_id, "sg": f"c{solar_clan_id.hex[:6]}"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO persons (id, full_name, created_by, is_deleted) "
+                "VALUES (:id, 'P', :cb, false)"
+            ),
+            {"id": solar_person_id, "cb": uuid.uuid4()},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO events (id, clan_id, event_type, title, event_date, "
+                "is_recurring, is_lunar_calendar, notify_days_before, person_id, "
+                "created_by) "
+                "VALUES (:id, :clan, 'death_anniversary', 'Giỗ tốt', :d, true, false, "
+                "7, :p, :cb)"
+            ),
+            {
+                "id": uuid.uuid4(),
+                "clan": solar_clan_id,
+                "d": solar_due_date,
+                "p": solar_person_id,
+                "cb": uuid.uuid4(),
+            },
+        )
+        await s.commit()
+
+    await send_anniversary_notifications(today=today)  # must not raise/lose the solar event
+
+    async with maker() as s:
+        solar_count = await s.scalar(
+            sa.text("SELECT COUNT(*) FROM notification_log WHERE clan_id = :c"),
+            {"c": solar_clan_id},
+        )
+        lunar_count = await s.scalar(
+            sa.text("SELECT COUNT(*) FROM notification_log WHERE clan_id = :c"),
+            {"c": lunar_clan_id},
+        )
+    assert solar_count == 1  # solar notification survives the real out-of-range lunar row
+    assert lunar_count == 0  # bad lunar row itself was skipped, not silently "sent"
+
+
+@pytest.mark.asyncio
 async def test_lunar_gio_not_fired_on_wrong_day(
     async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
