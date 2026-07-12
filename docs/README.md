@@ -47,7 +47,7 @@ System-wide design that touches more than one service.
 - [Tree Read-Model](architecture/tree-read-model.md) — computed đời, đa thê mother attribution, SQL tree functions
 - [Backend i18n](architecture/i18n.md) — locale resolution, `t()` fallback chain, key namespaces, coverage guard
 - [Notifications & Scheduler](architecture/notifications-scheduler.md) — anniversary cron, advisory lock, FCM delivery (solar + lunar giỗ, see ADR-018)
-- [File Storage](architecture/storage.md) — bucket layout, presigned URLs, upload limits, hard-delete semantics
+- [File Storage](architecture/storage.md) — bucket layout, presigned URLs, upload limits, soft-delete + retention purge lifecycle (ADR-019)
 
 ## Contracts
 
