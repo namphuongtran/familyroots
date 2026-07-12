@@ -42,7 +42,7 @@ Content-Disposition: attachment; filename="{clan_slug}-gia-pha-{YYYY-MM-DD}.{jso
 ```
 
 `{clan_slug}` is the clan's `slug` column; `{YYYY-MM-DD}` is today's date
-(server clock, UTC date) at request time — not `exported_at` from the payload,
+(server-local calendar date at request time — informational, not a timezone guarantee) — not `exported_at` from the payload,
 though in practice they're the same calendar day.
 
 ### PII note
@@ -158,7 +158,7 @@ the same PR.
 | Parent-child edges | Children attach via `1 FAMC @Fn@` on the child; edges are grouped per child and paired up (sorted, deterministic) against an existing marriage FAM when both parents match a married couple, otherwise a synthetic single-parent (or unmarried-couple) FAM is created for the leftover parent(s) |
 | `relationship_type != "biological"` (e.g. `adopted`) | `2 PEDI <relationship_type>` under that child's `FAMC` line — no separate `ADOP` tag |
 | Spouse back-references | `1 FAMS @Fn@` on each spouse, one line per FAM they belong to |
-| Long/multiline text (`NAME`, `NOTE`, `DATE`) | `\r\n`/`\r` normalized to `\n`; each `\n`-delimited segment becomes its own `CONT` line at `level+1`; within a segment, UTF-8 byte length over `_FOLD_BUDGET_BYTES` (200) folds into `CONC` continuations at `level+1` (never splitting a multi-byte character), keeping every physical line ≤ 255 bytes (GEDCOM 5.5.1's hard limit) |
+| Long/multiline text (`NAME`, `NOTE`, `DATE`) | `\r\n`/`\r` normalized to `\n`; each `\n`-delimited segment becomes its own `CONT` line at `level+1`; within a segment, UTF-8 byte length over `_FOLD_BUDGET_BYTES` (200) folds into `CONC` continuations one level below the line being continued (i.e. `level+2` when continuing a `CONT` segment; never splitting a multi-byte character), keeping every physical line ≤ 255 bytes (GEDCOM 5.5.1's hard limit) |
 | Literal `@` in any emitted value | Escaped as `@@` (xref pointers like `@I1@` are emitted separately via f-strings and are never escaped) |
 | Soft-deleted persons/marriages/parent_child | **Excluded entirely** — not present anywhere in the output |
 

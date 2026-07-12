@@ -65,12 +65,15 @@ docker compose down -v && docker compose up -d pgdb && \
 
 ## Related data-safety gaps
 
-- **Clan data export**: planned (ADR-005, tree PDF/export pipeline) but **not
-  implemented** — users currently have no self-service copy of their own data.
-- **Document deletion is a hard delete** with permanent blob removal and no trash or
-  versioning; the orphan-blob sweep mentioned in code comments does not exist. A
-  mistaken admin delete is only recoverable from these backups — which is another
-  reason this runbook is a gate. See
+- **Clan data export**: shipped — clan admins can self-serve a lossless JSON archive
+  + GEDCOM via `GET /api/v1/exports/clan` (ADR-020,
+  [rest-exports-api.md](../contracts/rest-exports-api.md)); the exported blobs still
+  need downloading via the manifest URLs. The PDF gia phả book (ADR-005) remains
+  deferred.
+- **Document deletion is soft** (ADR-019): the blob survives a delete and admins can
+  restore for `DOCUMENT_RETENTION_DAYS` (30) before the purge job permanently removes
+  blob + row. Backups remain the only recovery AFTER purge; orphan-blob
+  reconciliation (blobs with no row from old compensation paths) is still deferred. See
   [../architecture/storage.md](../architecture/storage.md).
 - **Admin succession**: no runbook exists for a clan whose only admin dies or leaves
   — TBD, related to the same "family data must outlive individuals" principle.
