@@ -46,14 +46,12 @@ class DocumentRepository(Protocol):
         ...
 
     async def save(self, doc: Document) -> None:
-        """Insert or update a Document entity."""
-        ...
+        """Insert or update a Document entity.
 
-    async def delete(self, doc: Document) -> None:
-        """Persist a soft-deleted document's state (UPDATE, not a row removal).
-
-        The blob and row both survive until the retention purge job (ADR-019);
-        callers must have already called ``doc.mark_deleted(actor)``.
+        Soft-delete (ADR-019) also flows through ``save``: callers call
+        ``doc.mark_deleted(actor)`` then ``save(doc)`` — there is no separate
+        ``delete`` method. The row and blob both survive until the retention
+        purge job (``app.services.document_purge``) removes them.
         """
         ...
 

@@ -106,17 +106,3 @@ class SqlAlchemyDocumentRepository:
             apply_to_orm(doc, model)
         else:
             self._session.add(to_orm(doc))
-
-    async def delete(self, doc: DocumentEntity) -> None:
-        """Persist a soft-deleted document's state (UPDATE, not a row removal).
-
-        ``doc`` must already have ``mark_deleted(actor)`` applied; the row (and
-        its blob) survive until the retention purge job (ADR-019).
-        """
-        self._uow.track(doc)
-        result = await self._session.execute(
-            select(DocumentModel).where(DocumentModel.id == doc.id)
-        )
-        model = result.scalar_one_or_none()
-        if model:
-            apply_to_orm(doc, model)
