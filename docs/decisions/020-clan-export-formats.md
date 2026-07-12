@@ -25,7 +25,12 @@ serves two deliberately different views of the same clan data:
   `HistoricalDate` nesting — this is a dump, not the API contract), and a
   `documents_manifest` (metadata + short-lived presigned `download_url`s, not
   the blobs themselves). `exported_at` is UTC. Built by the pure serializer
-  `app/services/clan_export.py`.
+  `app/services/clan_export.py`. "Lossless" applies to the **gia phả itself**
+  (persons, memberships, edges, branches, events, document metadata) — the
+  archive deliberately does NOT contain operational/platform data: audit logs,
+  clan settings, invitations, identity claims, change requests, or user/role
+  accounts. Soft-deleted documents (mid-retention) are also excluded — their
+  blobs are scheduled to disappear, so a manifest URL would be dishonest.
 - **GEDCOM 5.5.1** — the interop view. Purpose: import into other genealogy
   software (Gramps, Ancestry, etc.), which speaks GEDCOM, not FamilyRoots JSON.
   Soft-deleted persons/marriages/parent-child edges are **excluded entirely** —
