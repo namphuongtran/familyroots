@@ -46,6 +46,23 @@ class SqlAlchemyClanRepository:
         )
         return result.scalar() or 0
 
+    async def lock_admin_count(self, clan_id: uuid.UUID) -> int:
+        """Lock the clan's approved-admin rows and return their count.
+
+        FOR UPDATE serializes every operation that could reduce the admin set;
+        the second concurrent reducer re-reads post-commit state and sees the
+        true remaining count (C1 last-admin race, ADR spec 2026-07-12)."""
+        result = await self._session.execute(
+            select(UserClanRole.id)
+            .where(
+                UserClanRole.clan_id == clan_id,
+                UserClanRole.role == "admin",
+                UserClanRole.is_approved.is_(True),
+            )
+            .with_for_update()
+        )
+        return len(result.scalars().all())
+
     async def list_users(
         self,
         clan_id: uuid.UUID,

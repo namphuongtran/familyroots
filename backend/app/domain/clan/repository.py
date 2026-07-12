@@ -31,6 +31,10 @@ class ClanRepository(Protocol):
         """Count approved admins in a clan."""
         ...
 
+    async def lock_admin_count(self, clan_id: uuid.UUID) -> int:
+        """Lock the clan's approved-admin rows FOR UPDATE and return their count."""
+        ...
+
     async def list_users(
         self,
         clan_id: uuid.UUID,

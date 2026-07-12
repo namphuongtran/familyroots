@@ -95,6 +95,7 @@
   "error.auth.email_already_exists": "Email đã được sử dụng",
   "error.auth.clan_slug_taken": "Đường dẫn dòng họ đã được sử dụng",
   "error.clan.last_admin_cannot_demote": "Không thể hạ quyền quản trị viên cuối cùng",
+  "error.clan.last_admin_cannot_remove": "Không thể xóa quản trị viên cuối cùng của dòng họ.",
   "error.clan.cannot_remove_self": "Không thể tự xóa chính mình khỏi dòng họ",
   "error.user.already_approved": "Người dùng đã được phê duyệt",
   "auth.clan_created": "Tạo dòng họ thành công",

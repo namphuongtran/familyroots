@@ -83,7 +83,7 @@ class TestChangeRole:
     async def test_last_admin_cannot_demote_self(self) -> None:
         actor = _actor()
         ucr = MagicMock(role="admin", id=uuid.uuid4())
-        h = _make_handler(get_user_clan_role=ucr, count_admins=1)
+        h = _make_handler(get_user_clan_role=ucr, lock_admin_count=1)
         with pytest.raises(ForbiddenError, match="last_admin"):
             await h.change_role(
                 ChangeUserRole(

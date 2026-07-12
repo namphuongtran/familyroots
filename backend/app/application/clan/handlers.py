@@ -110,9 +110,11 @@ class ClanCommandHandler:
         if not ucr:
             raise EntityNotFoundError("user_not_found")
 
-        # Guard: prevent last admin from demoting themselves
-        if cmd.target_user_id == cmd.actor.user_id and cmd.new_role != "admin":
-            admin_count = await self._repo.count_admins(cmd.clan_id)
+        # Invariant: a clan always keeps >= 1 approved admin (any target, not
+        # just self-demotion). lock_admin_count takes FOR UPDATE row locks so
+        # concurrent demotions serialize instead of both passing the count.
+        if ucr.role == "admin" and cmd.new_role != "admin":
+            admin_count = await self._repo.lock_admin_count(cmd.clan_id)
             if admin_count <= 1:
                 raise ForbiddenError("clan.last_admin_cannot_demote")
 
@@ -142,6 +144,11 @@ class ClanCommandHandler:
         ucr = await self._repo.get_user_clan_role(cmd.clan_id, cmd.target_user_id)
         if not ucr:
             raise EntityNotFoundError("user_not_found")
+
+        if ucr.role == "admin":
+            admin_count = await self._repo.lock_admin_count(cmd.clan_id)
+            if admin_count <= 1:
+                raise ForbiddenError("clan.last_admin_cannot_remove")
 
         await self._repo.delete_user_role(ucr)
 

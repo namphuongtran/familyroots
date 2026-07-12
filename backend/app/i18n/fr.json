@@ -95,6 +95,7 @@
   "error.auth.email_already_exists": "Cet email est déjà utilisé",
   "error.auth.clan_slug_taken": "Ce slug de clan est déjà pris",
   "error.clan.last_admin_cannot_demote": "Impossible de rétrograder le dernier administrateur",
+  "error.clan.last_admin_cannot_remove": "Impossible de supprimer le dernier administrateur du clan.",
   "error.clan.cannot_remove_self": "Impossible de se retirer soi-même du clan",
   "error.user.already_approved": "L'utilisateur est déjà approuvé",
   "auth.clan_created": "Clan créé avec succès",
