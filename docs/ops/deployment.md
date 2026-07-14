@@ -14,8 +14,10 @@ resources remain scaffolded.
 | mobile | push to `[main, develop]` | Flutter build + test (`mobile-ci.yml`); **no deploy step** |
 | infra | push to `[main, develop]` | `pulumi preview` on PR / `pulumi up` on `main` (`infra-ci.yml`) — currently a **no-op** because the Pulumi resources are stubs |
 | repo hygiene | push to `[main, develop]` | gitleaks secret scan + no-committed-`.env` gate (`pr-checks.yml`) |
+| db-backup | **schedule** (`cron "15 17 * * *"` = 00:15 Asia/Ho_Chi_Minh) + `workflow_dispatch` — not push | `pg_dump` → gzip → upload to Supabase Storage `backups` bucket + rotation (`db-backup.yml`); skips green with a `::notice::` if the 3 backup secrets aren't set — see [backup-restore.md](backup-restore.md) |
 
-All five workflows trigger on push to `[main, develop]`.
+The first five workflows trigger on push to `[main, develop]`; `db-backup` is
+schedule/dispatch-only and never runs on push.
 
 **There is no staging gate today — `main` → production directly.** `develop` runs
 CI (lint/test) but does not deploy. A dev → staging → prod promotion path is not yet
