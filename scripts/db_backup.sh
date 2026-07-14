@@ -28,11 +28,15 @@ TODAY="$(TZ=Asia/Ho_Chi_Minh date +%F)"
 DOW="$(TZ=Asia/Ho_Chi_Minh date +%u)"   # 7 = Sunday
 NAME="familyroots-${TODAY}.dump.gz"
 TMPDIR_LOCAL="${BACKUP_TMPDIR:-$(mktemp -d)}"
+if [ -n "${BACKUP_TMPDIR:-}" ]; then
+  mkdir -p "$TMPDIR_LOCAL"
+fi
 DUMP_PATH="${TMPDIR_LOCAL}/${NAME}"
 
 echo "==> pg_dump (custom format) -> ${DUMP_PATH}"
-# Strip a SQLAlchemy-style +psycopg driver suffix if present; pg_dump wants plain postgresql://
-CLEAN_URL="${DATABASE_URL/postgresql+psycopg:\/\//postgresql:\/\/}"
+# Strip any SQLAlchemy-style +driver suffix (e.g. +psycopg, +asyncpg) if present;
+# pg_dump wants a plain postgresql:// scheme (equivalent of scheme.split("+", 1)[0]).
+CLEAN_URL="$(printf '%s' "$DATABASE_URL" | sed -E 's#^([a-z]+)\+[a-z0-9]+://#\1://#')"
 pg_dump --format=custom --no-owner --no-privileges "$CLEAN_URL" | gzip > "$DUMP_PATH"
 SIZE_BYTES=$(wc -c < "$DUMP_PATH" | tr -d ' ')
 echo "==> dump size: ${SIZE_BYTES} bytes"
