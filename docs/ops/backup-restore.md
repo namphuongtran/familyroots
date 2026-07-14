@@ -166,6 +166,15 @@ docker compose down -v && docker compose up -d pgdb && \
 - [ ] Add three GitHub Actions secrets (repo settings): `PROD_DATABASE_URL`,
   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — see
   [secrets.md](secrets.md) for what each one is and where it comes from.
+- [ ] **⚠️ `SUPABASE_SERVICE_ROLE_KEY` is a project-wide admin credential, not
+  a bucket-scoped one** — it bypasses RLS on every table and grants full
+  access to every Storage bucket (including the live `documents` bucket) plus
+  the auth admin API. Putting it in this GitHub Actions workflow means a CI
+  leak compromises the *entire* Supabase project, not just backups, and would
+  require rotating all Supabase project keys. Prefer provisioning a scoped
+  Storage-only credential (Supabase S3 access keys, restricted to the
+  `backups` bucket) for the backup job when available, and keep the
+  service-role key out of CI. See [secrets.md](secrets.md) for details.
 - [ ] Run `workflow_dispatch` once by hand and confirm the job goes green with
   an actual upload (not the `::notice::` skip line) and an object appears
   under `backups/db/daily/`.

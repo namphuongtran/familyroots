@@ -59,6 +59,9 @@ storage_upload() {  # $1 = object path (e.g. db/daily/NAME)
 }
 
 storage_list_names() {  # $1 = prefix (db/daily). Prints one object name per line, oldest first.
+  # limit:1000 with no pagination loop: rotation (keep 7 daily / 4 weekly) means
+  # this prefix never holds more than a handful of objects, so the bucket never
+  # approaches the 1000-object page size — no pagination is needed here.
   curl -sSf -X POST \
     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
     -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
@@ -82,6 +85,10 @@ rotate() {  # $1 = prefix (db/daily) ; $2 = keep count
   count_to_delete=$(( $(echo "$names" | grep -c . || true) - $2 ))
   if [ "$count_to_delete" -gt 0 ]; then
     echo "$names" | head -n "$count_to_delete" | while read -r n; do
+      # Supabase Storage's list response shape (leaf name vs. full "$1/name"
+      # path) is unverified until go-live; strip any leading prefix so both
+      # shapes rebuild the same correct delete key instead of double-prefixing.
+      n="${n#"$1"/}"
       storage_delete "$1/$n"
     done
   fi

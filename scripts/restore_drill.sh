@@ -46,6 +46,9 @@ if [ -n "${BACKUP_TMPDIR:-}" ]; then
 fi
 
 storage_list_names() {  # $1 = prefix (db/daily). Prints one object name per line, oldest first.
+  # limit:1000 with no pagination loop: db_backup.sh's rotation (keep 7 daily /
+  # 4 weekly) bounds this prefix to a handful of objects, so the bucket never
+  # approaches the 1000-object page size — no pagination is needed here.
   curl -sSf -X POST \
     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
     -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
@@ -73,6 +76,10 @@ if [ "$LATEST" = true ]; then
     echo "::error::no objects found under db/daily/ in bucket ${BUCKET}" >&2
     exit 1
   fi
+  # Supabase Storage's list response shape (leaf name vs. full "db/daily/name"
+  # path) is unverified until go-live; strip any leading prefix so both shapes
+  # rebuild the same correct download key instead of double-prefixing.
+  latest_name="${latest_name#"db/daily"/}"
   DUMP_ARG="${TMPDIR_LOCAL}/${latest_name}"
   storage_download "db/daily/${latest_name}" "$DUMP_ARG"
 fi
