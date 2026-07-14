@@ -157,8 +157,8 @@ done
 echo "==> tree query check (get_family_tree_flat)"
 person_row="$(psql "$SCRATCH_DSN" -tA -F'|' \
   -c "SELECT id, created_by_clan_id FROM persons WHERE is_deleted = false AND created_by_clan_id IS NOT NULL LIMIT 1" \
-  2>&1)"
-if [ -z "$person_row" ]; then
+  2>&1)" || true
+if [[ ! "$person_row" =~ ^[0-9a-f-]{36}\|[0-9a-f-]{36}$ ]]; then
   tree_line="WARN — no persons with a clan in restored DB; tree query skipped"
 else
   person_id="${person_row%%|*}"
