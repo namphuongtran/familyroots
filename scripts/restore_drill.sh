@@ -106,7 +106,7 @@ fi
 
 echo "==> restoring ${DUMP} -> ${SCRATCH_DB}"
 FAILURES=0
-if gunzip -c "$DUMP" | pg_restore --no-owner --no-privileges -d "$SCRATCH_DSN"; then
+if gunzip -c "$DUMP" | pg_restore --no-owner --no-privileges --exit-on-error -d "$SCRATCH_DSN"; then
   echo "==> pg_restore completed"
 else
   echo "::error::pg_restore failed"

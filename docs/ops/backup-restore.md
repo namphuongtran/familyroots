@@ -94,7 +94,7 @@ immediately after the go-live checklist's first real prod dump.
 
 | Date | Dump | Result | Notes |
 |------|------|--------|-------|
-| 2026-07-12 | `familyroots-manual` (local dev, migrated to head + seeded with a 3-person/2-generation tree) | **DRILL: PASS** | All 3 checks OK on their success path: alembic head matched (`016_document_soft_delete`), non-zero row counts for the seeded tables, tree query returned 3 rows. An earlier run against the same dev DB pre-migration/pre-seed exercised the WARN branches (behind-head, no-persons-skip) — both PASS. Failure paths (corrupt dump, unreachable Postgres, missing table, missing function, missing `uv`) were exercised in review, not on this dump — see the fix report appended to `.superpowers/sdd/task-2-report.md` ("Task 2 review fix: guard all capture sites"), plus the Task 3 `person_row` rider repro (dump missing `persons` → `DRILL: FAIL`, full report, no crash). |
+| 2026-07-14 | `familyroots-manual-seeded.dump.gz` (local dev, migrated to head + seeded with a 3-person/2-generation tree) | **DRILL: PASS** | All 3 checks OK on their success path: alembic head matched (`016_document_soft_delete`), non-zero row counts for the seeded tables, tree query returned 3 rows. An earlier run against the same dev DB pre-migration/pre-seed exercised the WARN branches (behind-head, no-persons-skip) — both PASS. Failure paths (corrupt dump, unreachable Postgres, missing table, missing function, missing `uv`) were exercised in review, not on this dump — see the fix report appended to `.superpowers/sdd/task-2-report.md` ("Task 2 review fix: guard all capture sites"), plus the Task 3 `person_row` rider repro (dump missing `persons` → `DRILL: FAIL`, full report, no crash). |
 
 Verbatim run-2 output (the success-path run referenced above):
 
@@ -178,6 +178,9 @@ docker compose down -v && docker compose up -d pgdb && \
   mean a backup happened. Someone must check the Actions log (not just the
   status) after go-live to confirm real uploads are occurring — this is a
   silent no-backup risk if skipped.
+- [ ] Confirm the workflow's pg_dump major version ≥ the production Postgres
+  major (currently 18 — the workflow pins `postgresql-client-18`; re-pin when
+  the DB upgrades).
 
 ## Still deferred (honest gaps)
 
@@ -194,6 +197,11 @@ docker compose down -v && docker compose up -d pgdb && \
 - **Admin-succession runbook**: no runbook exists for a clan whose only admin
   dies or leaves — unrelated to backups mechanically, but the same "family
   data must outlive individuals" principle; still TBD.
+- **Backup-freshness monitoring**: GitHub silently drops/auto-disables
+  scheduled workflows after 60 days of repository inactivity, with no alert
+  when this happens. A dead-man's-switch alert ("no `db/daily` object newer
+  than 48h") is a tracked follow-up; until then a green Actions history is
+  **not** proof of fresh backups.
 
 ## Related data-safety context
 
