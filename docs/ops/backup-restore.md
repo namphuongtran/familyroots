@@ -216,4 +216,3 @@ docker compose down -v && docker compose up -d pgdb && \
 - [secrets.md](secrets.md) — the 3 backup secrets and where each lives
 - [deployment.md](deployment.md) — workflow table, includes db-backup.yml
 - [incident-response.md](incident-response.md) — when a restore becomes an incident
-</content>
