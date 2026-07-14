@@ -92,9 +92,17 @@ ADMIN_DSN="postgresql://${PGUSER_}:${PGPASSWORD_}@${PGHOST_}:${PGPORT_}/postgres
 SCRATCH_DSN="postgresql://${PGUSER_}:${PGPASSWORD_}@${PGHOST_}:${PGPORT_}/${SCRATCH_DB}"
 
 echo "==> dropping scratch DB if it exists: ${SCRATCH_DB}"
-psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE)"
+if ! psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE)"; then
+  echo "::error::cannot reach Postgres at ${PGHOST_}:${PGPORT_} — is pgdb up?" >&2
+  echo "DRILL: FAIL"
+  exit 1
+fi
 echo "==> creating scratch DB: ${SCRATCH_DB}"
-psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${SCRATCH_DB}"
+if ! psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${SCRATCH_DB}"; then
+  echo "::error::cannot reach Postgres at ${PGHOST_}:${PGPORT_} — is pgdb up?" >&2
+  echo "DRILL: FAIL"
+  exit 1
+fi
 
 echo "==> restoring ${DUMP} -> ${SCRATCH_DB}"
 FAILURES=0
@@ -115,7 +123,7 @@ db_version="$(psql "$SCRATCH_DSN" -tA -c 'SELECT version_num FROM alembic_versio
 db_version="$(echo "$db_version" | tr -d '[:space:]')"
 repo_head=""
 if [ -d "${REPO_ROOT}/backend" ]; then
-  repo_head="$(cd "${REPO_ROOT}/backend" && uv run alembic heads 2>/dev/null | head -n 1 | awk '{print $1}')"
+  repo_head="$(cd "${REPO_ROOT}/backend" && uv run alembic heads 2>/dev/null | head -n 1 | awk '{print $1}')" || true
 fi
 
 alembic_line=""
@@ -134,7 +142,7 @@ echo "  ${alembic_line}"
 echo "==> row-count smoke report"
 ROW_REPORT=""
 for t in clans persons clan_memberships marriages parent_child events documents; do
-  cnt="$(psql "$SCRATCH_DSN" -tA -c "SELECT count(*) FROM ${t}" 2>&1)"
+  cnt="$(psql "$SCRATCH_DSN" -tA -c "SELECT count(*) FROM ${t}" 2>&1)" || true
   if [[ "$cnt" =~ ^[0-9]+$ ]]; then
     line="$(printf '  %-20s %s' "$t" "$cnt")"
   else
@@ -156,7 +164,7 @@ else
   person_id="${person_row%%|*}"
   clan_id="${person_row##*|}"
   tree_count="$(psql "$SCRATCH_DSN" -tA \
-    -c "SELECT count(*) FROM get_family_tree_flat('${person_id}', '${clan_id}', 5)" 2>&1)"
+    -c "SELECT count(*) FROM get_family_tree_flat('${person_id}', '${clan_id}', 5)" 2>&1)" || true
   if [[ "$tree_count" =~ ^[0-9]+$ ]]; then
     tree_line="OK   — get_family_tree_flat returned ${tree_count} row(s) for person ${person_id}"
   else
