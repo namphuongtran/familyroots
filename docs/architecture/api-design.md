@@ -35,7 +35,7 @@ response envelope.
 
 | Method | Path               | Auth | Role | Description                     |
 |--------|--------------------|------|------|---------------------------------|
-| POST   | `/register`        | No   | —    | Register + join/create clan (email starts unverified) |
+| POST   | `/register`        | No   | —    | Register + join/create clan (email starts unverified); non-enumerating — uniform 201 `{"message": ...}` whether or not the email already has an account (ADR-021) |
 | POST   | `/onboard`         | Yes  | —    | Create clan + first admin for an authenticated user (201) |
 | POST   | `/login`           | No   | —    | Login via Supabase, get profile |
 | POST   | `/logout`          | Yes  | —    | Sign out (revokes Supabase session) |
@@ -49,10 +49,14 @@ response envelope.
 
 Login with correct credentials but an unverified email fails with **403
 `email_not_verified`** (distinct from 401 bad-credentials). All `/api/v1/auth`
-routes are rate-limited (in-memory sliding window, 20 req/min/IP — the only
-rate-limited scope).
+and `/api/v1/invitations` routes are rate-limited (in-memory sliding window,
+20 req/min/IP, same bucket — the only rate-limited scope; ADR-021).
 
 ### POST `/register`
+
+Non-enumerating (ADR-021): the response body below is returned identically
+whether or not `email` already has an account. No `user_id`/`clan_id` is
+returned — see [rest-auth-api.md](../contracts/rest-auth-api.md).
 
 ```json
 {
@@ -64,6 +68,10 @@ rate-limited scope).
   "clan_name": "Nguyễn Đức",    // required when clan_action=create
   "clan_slug": "nguyen-duc"     // required when clan_action=create
 }
+```
+
+```json
+201 { "data": { "message": "..." } }
 ```
 
 ---
@@ -259,6 +267,11 @@ Full contract: `docs/contracts/rest-invitations-api.md`.
 | GET    | `/clans/{clan_id}/invitations`      | admin |
 | DELETE | `/clans/{clan_id}/invitations/{id}` | admin (204) |
 | POST   | `/invitations/{token}/accept`       | any authenticated user |
+
+`/api/v1/invitations` (the token-bearing accept surface) is rate-limited
+alongside `/api/v1/auth` (20 req/min/IP, same bucket — ADR-021). Admin CRUD
+under `/clans/{clan_id}/invitations` is **not** rate-limited — it's an
+authenticated admin surface, not the abuse-prone unauthenticated-adjacent one.
 
 ---
 

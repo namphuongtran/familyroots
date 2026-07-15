@@ -8,6 +8,7 @@ must be IdentityUnavailableError (→ 503).
 """
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
@@ -20,6 +21,17 @@ from app.domain.auth.identity_provider import (
     IdentityWeakPasswordError,
 )
 from app.infrastructure import supabase_identity_provider as sip
+
+
+def _repo_with_slug_free() -> AsyncMock:
+    """register() now validates clan input (incl. the slug-taken check) up front,
+    before create_user — so these identity-error-classification tests (which only
+    care about what happens after create_user is invoked) need a repo double
+    that answers get_clan_by_slug like a real async repository (slug not taken),
+    rather than ``None``."""
+    repo = AsyncMock()
+    repo.get_clan_by_slug.return_value = None
+    return repo
 
 
 class _RaisingAuth:
@@ -127,7 +139,7 @@ async def test_register_does_not_swallow_unavailable_into_422() -> None:
     """IdentityUnavailableError extends IdentityError — register must re-raise it
     (→ the global 503 handler), not convert it to 422 registration_failed."""
     handler = AuthCommandHandler(
-        repo=None,  # type: ignore[arg-type]
+        repo=_repo_with_slug_free(),
         uow=None,  # type: ignore[arg-type]
         identity=_UnavailableIdentity(),  # type: ignore[arg-type]  # stub: only create_user is used
         query_port=None,  # type: ignore[arg-type]
@@ -173,7 +185,7 @@ async def test_register_maps_weak_password_to_422() -> None:
     """A provider weak-password rejection surfaces as a 422 with the specific
     auth.password_too_weak code — not a 503, and not the generic registration_failed."""
     handler = AuthCommandHandler(
-        repo=None,  # type: ignore[arg-type]
+        repo=_repo_with_slug_free(),
         uow=None,  # type: ignore[arg-type]
         identity=_WeakPasswordIdentity(),  # type: ignore[arg-type]  # stub: only create_user is used
         query_port=None,  # type: ignore[arg-type]

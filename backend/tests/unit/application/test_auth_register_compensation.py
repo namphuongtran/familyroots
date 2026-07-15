@@ -14,8 +14,15 @@ async def test_register_deletes_provider_user_on_db_failure(monkeypatch):
     identity = AsyncMock()
     identity.create_user.return_value = str(new_id)
 
+    # register() now validates clan input (incl. the slug-taken check) up front,
+    # before create_user — so the repo double must answer get_clan_by_slug like a
+    # real async repository (slug not taken) rather than the plain MagicMock this
+    # test previously used, which isn't awaitable.
+    repo = AsyncMock()
+    repo.get_clan_by_slug.return_value = None
+
     handler = AuthCommandHandler(
-        repo=MagicMock(), uow=MagicMock(), identity=identity, query_port=MagicMock()
+        repo=repo, uow=MagicMock(), identity=identity, query_port=MagicMock()
     )
 
     async def _boom(**kwargs):

@@ -40,6 +40,7 @@ from app.domain.auth.identity_provider import (
 from app.domain.document.repository import StorageNotFoundError, StorageUnavailableError
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
+from app.middleware.request_meta_middleware import RequestMetaMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
 from app.services.notification import init_firebase
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -111,6 +112,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         _safe("scheduler-stop", stop_scheduler)
+        try:
+            from app.core.database import engine
+
+            await engine.dispose()
+        except Exception:
+            logger.exception("teardown step failed: engine-dispose")
 
 
 def create_app() -> FastAPI:
@@ -145,22 +152,27 @@ def create_app() -> FastAPI:
 
     # Middleware order matters. Starlette wraps the LAST-added middleware OUTERMOST,
     # so we add in reverse of the desired execution order. Desired (outermost →
-    # innermost): TrustedHost → CORS → Language → Sentry → RateLimit. This means:
+    # innermost): TrustedHost → CORS → Language → RequestMeta → Sentry → RateLimit. This means:
     #   - TrustedHost rejects a bad Host header before anything else runs;
     #   - CORS wraps the rate limiter, so even a 429 carries CORS headers;
-    #   - Language sets the locale before RateLimit builds its (localized) 429 envelope.
+    #   - Language sets the locale before RateLimit builds its (localized) 429 envelope;
+    #   - RequestMeta populates the ip/user-agent ContextVar for every request so
+    #     AuditLogHandler can enrich audit rows regardless of path.
     from app.core.rate_limit import RateLimitMiddleware
 
     # innermost
     application.add_middleware(
         RateLimitMiddleware,
-        path_prefix="/api/v1/auth",
+        path_prefixes=("/api/v1/auth", "/api/v1/invitations"),
         max_requests=20,
         window_seconds=60,
         trust_forwarded_for=settings.RATE_LIMIT_TRUST_FORWARDED_FOR,
     )
     if settings.SENTRY_DSN:
         application.add_middleware(SentryMiddleware)
+    application.add_middleware(
+        RequestMetaMiddleware, trust_forwarded_for=settings.RATE_LIMIT_TRUST_FORWARDED_FOR
+    )
     application.add_middleware(LanguageMiddleware)
     application.add_middleware(
         CORSMiddleware,

@@ -24,6 +24,11 @@ class AuthenticatedOnboardingRequest(BaseModel):
 
 
 class RegisterResponse(BaseModel):
+    """Onboard-only now (ADR-021): POST /auth/register is non-enumerating and
+    returns a uniform ``{"message": ...}`` body built by the route, not this
+    schema. POST /auth/onboard (already-authenticated users attaching to a
+    clan) still returns this full shape via ``_assign_clan_membership``."""
+
     user_id: uuid.UUID
     email: str
     full_name: str

@@ -67,14 +67,28 @@ Grouped by family. "HTTP" is the status the backend actually emits.
 
 ### Registration & onboarding
 
+`POST /auth/register` is **non-enumerating** (ADR-021): there is no code, status,
+or response-body difference between "email already has an account" and "new
+email" — both return the same 201 `{"data": {"message": "..."}}` (see
+[rest-auth-api.md](rest-auth-api.md)). `auth.email_already_exists` no longer
+exists — the single raise site, the error-code row, and its 4 i18n entries
+were all removed. There is no error row for the register success message
+(`auth.registration_received`) either — it's a 201 message key, not an error
+code. The clan-input codes below (`auth.clan_id_required_for_join`,
+`auth.clan_name_required_for_create`, `auth.clan_slug_taken`, plus
+`clan_not_found`) still fire on register and are unchanged: they run
+unconditionally before the identity is created, so they return identically
+regardless of whether the email exists, and they aren't account-existence
+oracles (clan slug/id existence is public data, not a signal about a user's
+account).
+
 | code | HTTP | raised when | detail keys | client handling |
 |---|---|---|---|---|
-| `auth.email_already_exists` | 409 | Register with an email that already has an account | — | Offer login / password reset |
 | `auth.password_too_weak` | 422 | Identity provider rejected the password strength | `detail` (provider text) | Inline field error |
 | `auth.registration_failed` | 422 | Identity provider rejected registration for another validation reason | `detail` (provider text) | Inline form error |
-| `auth.clan_id_required_for_join` | 422 | Onboard with `clan_action=join` but no `clan_id` | — | Form validation |
-| `auth.clan_name_required_for_create` | 422 | Onboard with `clan_action=create` but missing `clan_name`/`clan_slug` | — | Form validation |
-| `auth.clan_slug_taken` | 409 | Creating a clan whose slug already exists | — | Ask for another slug |
+| `auth.clan_id_required_for_join` | 422 | Register or onboard with `clan_action=join` but no `clan_id` | — | Form validation |
+| `auth.clan_name_required_for_create` | 422 | Register or onboard with `clan_action=create` but missing `clan_name`/`clan_slug` | — | Form validation |
+| `auth.clan_slug_taken` | 409 | Creating a clan (register or onboard) whose slug already exists | — | Ask for another slug |
 | `auth.already_joined_clan` | 409 | Join request for a clan the user is already an approved member of | — | Route into the clan |
 | `auth.membership_already_pending` | 409 | Join request while a pending membership request already exists | — | Show approval-pending screen |
 

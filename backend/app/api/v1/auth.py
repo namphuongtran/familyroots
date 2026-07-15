@@ -41,8 +41,9 @@ router = APIRouter()
 async def register(
     body: RegisterRequest, handler: AuthCommandHandler = Depends(get_auth_command_handler)
 ) -> dict[str, Any]:
-    """Register a new user — either create a new clan or join an existing one."""
-    result = await handler.register(
+    """Register — always the same response whether or not the email has an account
+    (non-enumerating, ADR-021). Real state arrives after email verify + login."""
+    await handler.register(
         email=body.email,
         password=body.password,
         full_name=body.full_name,
@@ -51,7 +52,7 @@ async def register(
         clan_name=body.clan_name,
         clan_slug=body.clan_slug,
     )
-    return {"data": result.model_dump()}
+    return {"data": {"message": t("auth.registration_received")}}
 
 
 @router.post("/onboard", status_code=201)

@@ -162,9 +162,42 @@ implement the reactive single-flight strategy above itself.
 
 Code: `app/infrastructure/supabase_identity_provider.py`
 (`create_user`, `send_verification_email`), `app/core/config.py`, ADR-015,
-`docs/architecture/auth-flow.md`.
+ADR-021, `docs/architecture/auth-flow.md`.
 
-What the backend does (verified):
+### 3.0 Register is non-enumerating (ADR-021, 2026-07-14)
+
+`POST /auth/register` returns the **same 201 body for every call that passes
+clan-input validation**, regardless of whether the email already has an
+account:
+
+```json
+201 { "data": { "message": "..." } }
+```
+
+**There is no `409`-on-duplicate-email anymore** — that behavior (and the
+`auth.email_already_exists` code) is gone. The client cannot and must not
+try to distinguish "new account" from "email already registered" from this
+response. **Always route to a "check your email" screen** after a successful
+`201`:
+
+- If the email was new, a verification email is on its way (§3 below).
+- If the email already had an account, the user silently receives a
+  password-reset/recovery email instead — from the user's point of view this
+  looks the same ("check your email"), which is the point: the endpoint no
+  longer confirms which case applies.
+
+Clan-input errors (bad/missing `clan_id`, `clan_name`/`clan_slug`, an
+already-taken slug, a nonexistent clan) still surface as normal 422/409/404
+errors with their existing codes (`auth.clan_id_required_for_join`,
+`auth.clan_name_required_for_create`, `auth.clan_slug_taken`,
+`clan_not_found`) and should be handled as ordinary form-validation errors —
+these are not account-existence signals.
+
+`POST /auth/onboard` (already-authenticated users attaching to a clan) is
+**unchanged** and still returns the full profile-shaped response
+(`user_id`/`email`/`clan_id`/`is_approved`/`message`).
+
+What the backend does for the underlying email delivery (verified):
 
 - `POST /auth/register` creates the Supabase user **unconfirmed**
   (`email_confirm: False`) and then sends the verification email best-effort via the

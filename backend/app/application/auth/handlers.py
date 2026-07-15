@@ -12,6 +12,7 @@ Architecture:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -37,6 +38,8 @@ from app.schemas.auth import (
     UserProfile,
 )
 from app.services.translator import t
+
+logger = logging.getLogger(__name__)
 
 # ── DB-free auth-session service ────────────────────────────────
 
@@ -207,12 +210,46 @@ class AuthCommandHandler:
         clan_id: uuid.UUID | None = None,
         clan_name: str | None = None,
         clan_slug: str | None = None,
-    ) -> RegisterResponse:
-        """Register a new user — create or join a clan."""
+    ) -> None:
+        """Register a new user — create or join a clan.
+
+        Clan-INPUT validation runs unconditionally, before ``create_user``, so a
+        bad clan_id/clan_slug fails identically whether or not the email already
+        has an account (ADR-021 non-enumeration). Without this, an existing email
+        short-circuits before ever reaching ``_assign_clan_membership``'s checks
+        while a fresh email hits them — a status-code oracle for account
+        enumeration. The checks below mirror ``_assign_clan_membership`` exactly
+        (same exceptions/codes); its copies stay in place as defense in depth for
+        callers that reach it directly (e.g. ``onboard_authenticated_user``).
+        """
+        if clan_action == "join" and not clan_id:
+            raise ValidationError("auth.clan_id_required_for_join")
+        if clan_action == "create" and (not clan_name or not clan_slug):
+            raise ValidationError("auth.clan_name_required_for_create")
+
+        if clan_action == "create":
+            # Guaranteed non-None by the validation above.
+            assert clan_name is not None and clan_slug is not None
+            existing_clan = await self._repo.get_clan_by_slug(clan_slug)
+            if existing_clan:
+                raise ConflictError("auth.clan_slug_taken")
+        else:
+            # clan_action == "join": clan_id is guaranteed non-None above.
+            assert clan_id is not None
+            clan_or_none = await self._repo.get_clan_by_id(clan_id)
+            if not clan_or_none:
+                raise NotFoundError("clan_not_found")
+
         try:
             user_id_str = await self._identity.create_user(email=email, password=password)
-        except IdentityUserExistsError as e:
-            raise ConflictError("auth.email_already_exists") from e
+        except IdentityUserExistsError:
+            # Non-enumerating register (ADR-021): an existing account gets a silent
+            # recovery-email nudge; the caller sees the same 201 as a fresh signup.
+            try:
+                await self._identity.send_password_reset(email=email)
+            except Exception:  # nudge is best-effort by design
+                logger.warning("register nudge: password-reset send failed", exc_info=True)
+            return
         except IdentityUnavailableError:
             # Provider outage/misconfiguration is not a validation failure — let the
             # dedicated 503 handler surface it truthfully.
@@ -226,7 +263,7 @@ class AuthCommandHandler:
 
         user_id = uuid.UUID(user_id_str)
         try:
-            response = await self._assign_clan_membership(
+            await self._assign_clan_membership(
                 user_id=user_id,
                 email=email,
                 full_name=full_name,
@@ -247,7 +284,6 @@ class AuthCommandHandler:
         # re-trigger via POST /auth/resend-verification.
         with suppress(Exception):
             await self._identity.send_verification_email(email=email)
-        return response
 
     async def onboard_authenticated_user(
         self,
