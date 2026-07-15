@@ -112,6 +112,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         _safe("scheduler-stop", stop_scheduler)
+        try:
+            from app.core.database import engine
+
+            await engine.dispose()
+        except Exception:
+            logger.exception("teardown step failed: engine-dispose")
 
 
 def create_app() -> FastAPI:
@@ -157,7 +163,7 @@ def create_app() -> FastAPI:
     # innermost
     application.add_middleware(
         RateLimitMiddleware,
-        path_prefix="/api/v1/auth",
+        path_prefixes=("/api/v1/auth", "/api/v1/invitations"),
         max_requests=20,
         window_seconds=60,
         trust_forwarded_for=settings.RATE_LIMIT_TRUST_FORWARDED_FOR,

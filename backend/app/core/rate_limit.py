@@ -25,7 +25,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     Args:
         app: The ASGI application.
-        path_prefix: Only apply limits to paths starting with this prefix.
+        path_prefixes: Only apply limits to paths starting with one of these prefixes.
         max_requests: Maximum requests allowed within the window.
         window_seconds: Time window in seconds.
         trust_forwarded_for: When True, derive the client IP from the first hop
@@ -37,13 +37,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self,
         app: Any,
         *,
-        path_prefix: str = "/api/v1/auth",
+        path_prefixes: tuple[str, ...] = ("/api/v1/auth",),
         max_requests: int = 20,
         window_seconds: int = 60,
         trust_forwarded_for: bool = False,
     ) -> None:
         super().__init__(app)
-        self._prefix = path_prefix
+        self._prefixes = path_prefixes
         self._max = max_requests
         self._window = window_seconds
         self._trust_xff = trust_forwarded_for
@@ -100,7 +100,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._last_sweep = now
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if not request.url.path.startswith(self._prefix):
+        if not any(request.url.path.startswith(p) for p in self._prefixes):
             return await call_next(request)
 
         client_ip = self._client_ip(request)
