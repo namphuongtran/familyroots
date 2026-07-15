@@ -29,6 +29,17 @@ Core operations:
 Request/response expectations:
 - Bearer JWT is required after login.
 - Register can either join an existing clan or create a new clan.
+- `POST /register` is **non-enumerating (ADR-021)**: it returns the identical
+  201 body whether or not the email already has an account. Clan-input
+  validation (`clan_id_required_for_join`, `clan_name_required_for_create`,
+  `clan_slug_taken`, `clan_not_found`) runs unconditionally *before* the
+  identity is created, so those 422/409/404 codes are still returned
+  identically on both paths — only the account-existence signal itself
+  (previously 409 `auth.email_already_exists`) is gone. An existing email
+  gets a silent, best-effort password-reset/recovery email instead of an
+  error; a fresh email proceeds through the normal create-and-verify flow.
+  See [error-codes.md](error-codes.md) and
+  [frontend-integration-guide.md](frontend-integration-guide.md).
 - Login returns authenticated session/profile data for client bootstrap.
 - **Email verification**: register creates the identity unconfirmed and sends a
   verification email best-effort. Login with an unconfirmed email fails with
@@ -46,7 +57,16 @@ Request/response expectations:
 Response shapes (all 2xx bodies are `{"data": ...}` — see
 [Response envelope](README.md#response-envelope)):
 
-`POST /register` (201) / `POST /onboard` (201):
+`POST /register` (201) — **uniform for both paths** (ADR-021: non-enumerating,
+no `user_id`/`clan_id`/`is_approved`/`email` — the client always routes to a
+"check your email" screen; real profile state arrives after verify + login):
+```json
+{ "data": { "message": "..." } }
+```
+
+`POST /onboard` (201) — **unchanged**, still the full profile shape (this is
+an authenticated surface — attaching an already-logged-in user to a clan —
+with no enumeration concern, so it kept `RegisterResponse`):
 ```json
 {
   "data": {
@@ -91,4 +111,8 @@ nested `user`):
 ## Versioning & Compatibility Rules
 - Adding optional auth/profile fields is non-breaking.
 - Changing login/register payload requirements is breaking.
+- `POST /register`'s response shape changed (ADR-021, 2026-07-14) from the
+  full `RegisterResponse` to a uniform `{"message": ...}` envelope, taken as a
+  breaking change deliberately accepted pre-frontend (no client consumed the
+  old shape yet).
 - Keep error envelopes and token semantics stable across client releases.

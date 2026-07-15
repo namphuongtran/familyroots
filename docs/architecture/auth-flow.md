@@ -32,7 +32,7 @@ Super-admin routes (`/api/v1/platform`) bypass clan context and are gated by
 `get_super_admin` — `user_profiles.platform_role = 'super_admin'` **from the DB**,
 never a JWT claim or env match. Bootstrap via `scripts/bootstrap_super_admin.py` only.
 
-## Registration & email verification (ADR-015)
+## Registration & email verification (ADR-015, ADR-021)
 
 - `POST /auth/register` creates the Supabase identity **unconfirmed**
   (`email_confirm: False` via admin API), creates profile + clan membership in the
@@ -43,8 +43,23 @@ never a JWT claim or env match. Bootstrap via `scripts/bootstrap_super_admin.py`
   the compensation path.
 - Login with correct credentials but unconfirmed email → **403 `email_not_verified`**
   (distinct from 401; the client offers "resend verification").
+- **Register is non-enumerating (ADR-021, 2026-07-14)**: `POST /auth/register`
+  returns the identical 201 `{"data": {"message": "..."}}` whether or not the
+  email already has an account — no `409 auth.email_already_exists`, no
+  `user_id`/`clan_id` in the response (that shape is now onboard-only). An
+  existing email silently gets a best-effort password-reset/recovery email
+  instead of an error. Clan-input validation
+  (`clan_id_required_for_join`/`clan_name_required_for_create`/
+  `clan_slug_taken`/`clan_not_found`) runs **before** the identity is created,
+  so those codes still return identically on both paths — closing both the
+  status-code oracle (the old 409) and the subtler validation-order oracle
+  that would otherwise let a bad clan input reveal whether the email existed.
+  A residual timing side-channel (the two branches do different work) is
+  accepted, mitigated by the rate limit below — see ADR-021 for the full
+  rationale.
 - `POST /auth/resend-verification` and `POST /auth/forgot-password` always return
-  200 with the same message whether or not the account exists (**non-enumerating**).
+  200 with the same message whether or not the account exists (**non-enumerating**;
+  register now matches this pattern too).
 - Password-reset **completion is client-side** (Supabase `verify_otp` + `update_user`);
   the backend has no reset-password endpoint by design.
 - Ops prerequisite: Supabase dashboard "Confirm email" ON + SMTP configured.
@@ -58,6 +73,11 @@ Identity-provider failures map **truthfully**: infrastructure unavailability →
 
 ## Rate limiting
 
-In-memory sliding window, **20 req/min/IP, scoped to `/api/v1/auth` only** (fine for
-a single instance; Redis is the scale-out path). Extending the scope to
-`/invitations/*/accept` is an open backlog item.
+In-memory sliding window, **20 req/min/IP, scoped to `/api/v1/auth` and
+`/api/v1/invitations`** (same bucket; fine for a single instance, Redis is the
+scale-out path). The scope was extended to cover `/invitations/{token}/accept`
+— the one token-bearing, unauthenticated-adjacent surface outside the
+limiter — in ADR-021 (2026-07-14); this is now **shipped**, not a backlog
+item. Admin invitation CRUD under `/clans/{clan_id}/invitations` is
+deliberately **not** covered — it requires an authenticated approved admin
+and isn't the surface this limiter protects.
