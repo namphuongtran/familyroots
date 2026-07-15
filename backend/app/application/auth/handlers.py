@@ -12,6 +12,7 @@ Architecture:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -37,6 +38,8 @@ from app.schemas.auth import (
     UserProfile,
 )
 from app.services.translator import t
+
+logger = logging.getLogger(__name__)
 
 # ── DB-free auth-session service ────────────────────────────────
 
@@ -207,12 +210,18 @@ class AuthCommandHandler:
         clan_id: uuid.UUID | None = None,
         clan_name: str | None = None,
         clan_slug: str | None = None,
-    ) -> RegisterResponse:
+    ) -> None:
         """Register a new user — create or join a clan."""
         try:
             user_id_str = await self._identity.create_user(email=email, password=password)
-        except IdentityUserExistsError as e:
-            raise ConflictError("auth.email_already_exists") from e
+        except IdentityUserExistsError:
+            # Non-enumerating register (ADR-021): an existing account gets a silent
+            # recovery-email nudge; the caller sees the same 201 as a fresh signup.
+            try:
+                await self._identity.send_password_reset(email=email)
+            except Exception:  # nudge is best-effort by design
+                logger.warning("register nudge: password-reset send failed", exc_info=True)
+            return
         except IdentityUnavailableError:
             # Provider outage/misconfiguration is not a validation failure — let the
             # dedicated 503 handler surface it truthfully.
@@ -226,7 +235,7 @@ class AuthCommandHandler:
 
         user_id = uuid.UUID(user_id_str)
         try:
-            response = await self._assign_clan_membership(
+            await self._assign_clan_membership(
                 user_id=user_id,
                 email=email,
                 full_name=full_name,
@@ -247,7 +256,6 @@ class AuthCommandHandler:
         # re-trigger via POST /auth/resend-verification.
         with suppress(Exception):
             await self._identity.send_verification_email(email=email)
-        return response
 
     async def onboard_authenticated_user(
         self,

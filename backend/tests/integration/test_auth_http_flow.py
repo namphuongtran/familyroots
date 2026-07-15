@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+import sqlalchemy as sa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
@@ -86,6 +87,7 @@ class StubIdentityProvider:
         self._private_pem = private_pem
         self._users: dict[str, dict[str, str]] = {}  # email -> {id, password, full_name}
         self.verification_emails: list[str] = []
+        self.password_resets: list[str] = []
 
     def _mint(self, user_id: str, email: str, full_name: str) -> str:
         now = datetime.now(UTC)
@@ -138,6 +140,9 @@ class StubIdentityProvider:
     async def send_verification_email(self, *, email: str) -> None:
         self.verification_emails.append(email)
 
+    async def send_password_reset(self, *, email: str) -> None:
+        self.password_resets.append(email)
+
 
 @pytest.fixture(scope="module")
 def stub_identity(rsa_keys: dict[str, Any]) -> StubIdentityProvider:
@@ -168,7 +173,10 @@ def client(
     engine.sync_engine.dispose()
 
 
-def _register(client: TestClient, email: str, password: str, slug: str) -> dict[str, Any]:
+def _register(client: TestClient, email: str, password: str, slug: str) -> None:
+    """Register is non-enumerating (ADR-021): the response is just a uniform
+    ``{"message": ...}``, never clan/user ids — those are looked up separately
+    via ``_clan_id_by_slug`` when a test needs them."""
     resp = client.post(
         "/api/v1/auth/register",
         json={
@@ -183,12 +191,23 @@ def _register(client: TestClient, email: str, password: str, slug: str) -> dict[
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert set(body.keys()) == {"data"}  # enveloped
-    result: dict[str, Any] = body["data"]
-    return result
+    assert set(body["data"].keys()) == {"message"}
+
+
+def _clan_id_by_slug(dsn: str, slug: str) -> str:
+    """Registration no longer returns the created clan's id — look it up directly
+    (the DB write itself is exactly what these tests are verifying)."""
+    engine = sa.create_engine(dsn)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(sa.text("SELECT id FROM clans WHERE slug = :s"), {"s": slug}).one()
+        return str(row.id)
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(scope="module")
-def founder(client: TestClient) -> dict[str, Any]:
+def founder(client: TestClient, migrated_db_url: str) -> dict[str, Any]:
     """A registered clan founder for the negative tests, so each of them is
     self-contained (runnable via -k) instead of depending on the happy path.
     Identifiers are unique per run — the migrated DB is session-scoped and
@@ -196,21 +215,24 @@ def founder(client: TestClient) -> dict[str, Any]:
     email = f"smoke-founder-{uuid.uuid4().hex[:8]}@example.com"
     password = "s3cret-pass"
     slug = f"smoke-clan-{uuid.uuid4().hex[:8]}"
-    reg = _register(client, email, password, slug)
-    return {"email": email, "password": password, "clan_id": reg["clan_id"], "clan_slug": slug}
+    _register(client, email, password, slug)
+    clan_id = _clan_id_by_slug(migrated_db_url, slug)
+    return {"email": email, "password": password, "clan_id": clan_id, "clan_slug": slug}
 
 
 # ── Happy path: the full flow that hid #12/#13 ────────────────────
 
 
-def test_register_login_me_clans_create_person(client: TestClient) -> None:
+def test_register_login_me_clans_create_person(client: TestClient, migrated_db_url: str) -> None:
     email = f"smoke-flow-{uuid.uuid4().hex[:8]}@example.com"
     password = "s3cret-pass"
+    slug = f"smoke-flow-{uuid.uuid4().hex[:8]}"
 
-    # Register, creating a clan → approved admin membership.
-    reg = _register(client, email, password, f"smoke-flow-{uuid.uuid4().hex[:8]}")
-    assert reg["is_approved"] is True
-    clan_id = reg["clan_id"]
+    # Register, creating a clan → approved admin membership. The response no
+    # longer carries clan_id/is_approved (non-enumerating, ADR-021); those are
+    # verified below via login's profile projection instead.
+    _register(client, email, password, slug)
+    clan_id = _clan_id_by_slug(migrated_db_url, slug)
 
     # Login — exercises the CQRS login-profile read model (the seam of #13).
     resp = client.post("/api/v1/auth/login", json={"email": email, "password": password})
@@ -376,7 +398,12 @@ def test_wrong_password_is_401_invalid_credentials(
     assert resp.json()["error"]["code"] == "auth.invalid_credentials"
 
 
-def test_duplicate_email_registration_is_409(client: TestClient, founder: dict[str, Any]) -> None:
+def test_duplicate_email_registration_is_non_enumerating(
+    client: TestClient, stub_identity: StubIdentityProvider, founder: dict[str, Any]
+) -> None:
+    """Non-enumerating register (ADR-021): registering with an email that already
+    has an account returns the SAME 201 body as a fresh signup — no 409, no ids —
+    and triggers a silent password-reset nudge instead of a duplicate account."""
     resp = client.post(
         "/api/v1/auth/register",
         json={
@@ -388,8 +415,11 @@ def test_duplicate_email_registration_is_409(client: TestClient, founder: dict[s
             "clan_slug": f"other-clan-{uuid.uuid4().hex[:8]}",
         },
     )
-    assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "auth.email_already_exists"
+    assert resp.status_code == 201
+    body = resp.json()
+    assert set(body.keys()) == {"data"}
+    assert set(body["data"].keys()) == {"message"}
+    assert stub_identity.password_resets.count(founder["email"]) == 1
 
 
 class _UnverifiedIdentityProvider:
