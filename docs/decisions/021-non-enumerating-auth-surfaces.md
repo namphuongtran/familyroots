@@ -68,14 +68,21 @@ whether the email already has an account**:
   steps shortly" / vi: "Nếu email hợp lệ, bạn sẽ sớm nhận được hướng dẫn tiếp
   theo"), not "registration received", so the message itself never confirms
   which branch ran.
-- Validation errors that do **not** leak account existence are unchanged and
-  stay symmetric on both paths: 422 `auth.password_too_weak`,
-  `auth.registration_failed`, `auth.clan_id_required_for_join`,
+- Clan-input validation errors are returned identically regardless of whether
+  the email exists — this is the property the reordering above structurally
+  guarantees: 422 `auth.clan_id_required_for_join`,
   `auth.clan_name_required_for_create`; 409 `auth.clan_slug_taken` (slug
   existence is public — a clan lookup, not an account oracle); 404
-  `clan_not_found`; 503 `auth_provider_unavailable`. These are returned
-  identically regardless of whether the email exists, which is exactly the
-  property the reordering above guarantees.
+  `clan_not_found`. Provider-unavailable (503 `auth_provider_unavailable`) is
+  likewise symmetric because `create_user` fails before either the existence
+  or the strength check can run (verified by `test_provider_unavailable_symmetric`).
+  The `create_user`-originated codes 422 `auth.password_too_weak` and
+  `auth.registration_failed` are **not** structurally guaranteed symmetric —
+  whichever `IdentityError` subclass the provider raises first wins the branch,
+  so an existing email that would also be weak/failing gets the uniform 201
+  nudge instead. Under Supabase's default password policy this is unreachable
+  (Pydantic already requires ≥8 chars); it is the accepted, config-gated
+  residual documented below, not a symmetry claim.
 
 **Breaking response-contract change, accepted pre-frontend.** `RegisterResponse`
 (`user_id`/`email`/`clan_id`/`is_approved`/`message`) is no longer returned by
