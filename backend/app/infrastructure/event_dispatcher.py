@@ -14,6 +14,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_meta import get_request_meta
 from app.domain.shared.events import AuditableEvent, DomainEvent, EventHandler
 from app.models.audit_log import AuditLog
 
@@ -71,6 +72,7 @@ class AuditLogHandler:
 
         old_value: dict[str, Any] | None = event.old_value
         new_value: dict[str, Any] | None = event.new_value
+        meta = get_request_meta()
 
         self._db.add(
             AuditLog(
@@ -82,6 +84,8 @@ class AuditLogHandler:
                 resource_id=event.resource_id,
                 old_value=old_value,
                 new_value=new_value,
+                ip_address=meta.ip if meta else None,
+                user_agent=meta.user_agent if meta else None,
             )
         )
 

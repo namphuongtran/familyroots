@@ -17,6 +17,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.core.request_meta import resolve_client_ip
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Rate-limit specific path prefixes by client IP.
@@ -60,11 +62,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         limit and inflate bucket memory. (Assumes exactly one trusted appending
         proxy; multiple proxies would need a configurable trusted-hop count.)
         """
-        if self._trust_xff:
-            xff = request.headers.get("x-forwarded-for")
-            if xff:
-                return xff.split(",")[-1].strip()
-        return request.client.host if request.client else "unknown"
+        return (
+            resolve_client_ip(
+                request.headers.get,
+                request.client.host if request.client else None,
+                self._trust_xff,
+            )
+            or "unknown"
+        )
 
     def _prune(self, client_ip: str, cutoff: float) -> list[float]:
         """Drop timestamps older than cutoff; evict the bucket if it empties."""
