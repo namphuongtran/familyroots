@@ -15,7 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.application.auth.handlers import AuthCommandHandler
 from app.core.database import get_db
-from app.domain.auth.identity_provider import IdentityUserExistsError
+from app.domain.auth.identity_provider import (
+    IdentityUnavailableError,
+    IdentityUserExistsError,
+    IdentityWeakPasswordError,
+)
 from app.infrastructure.dependencies import get_identity_provider
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.auth_repository import (
@@ -57,16 +61,34 @@ class FakeIdentityProvider:
 
     def __init__(self) -> None:
         self._existing: set[str] = set()
+        self._weak: set[str] = set()
         self._create_calls: dict[str, int] = {}
         self._reset_calls: dict[str, int] = {}
         self.fail_password_reset = False
+        self.raise_unavailable = False
 
     def seed_existing(self, email: str) -> None:
         self._existing.add(email)
 
+    def mark_weak_password(self, email: str) -> None:
+        """Mark `email` so create_user raises IdentityWeakPasswordError for it,
+        simulating a Supabase project whose password policy rejects a
+        Pydantic-valid (>=8 char) password as too weak (ADR-021 residual)."""
+        self._weak.add(email)
+
     async def create_user(self, *, email: str, password: str) -> str:
+        if self.raise_unavailable:
+            # Outage is detected before existence *or* strength can be
+            # determined either way — models the 503 symmetry ADR-021 claims.
+            raise IdentityUnavailableError("provider unreachable (simulated)")
         if email in self._existing:
+            # Existence is checked before password-strength — the (unverified
+            # upstream, but assumed-worst-case) GoTrue ordering ADR-021's
+            # weak-password residual is about. A weak-marked existing email
+            # never reaches the weak-password check below.
             raise IdentityUserExistsError(email)
+        if email in self._weak:
+            raise IdentityWeakPasswordError("password too weak (simulated)")
         self._existing.add(email)
         self._create_calls[email] = self._create_calls.get(email, 0) + 1
         return str(uuid.uuid4())
@@ -336,3 +358,90 @@ def test_nonexistent_clan_join_same_status_both_paths(
     assert identity_fake.create_user_calls_for(seeded_existing_email) == 0
     assert identity_fake.password_reset_calls_for(fresh_email) == 0
     assert identity_fake.password_reset_calls_for(seeded_existing_email) == 0
+
+
+# ── Residual: weak-password status divergence (ADR-021) ──────────────────────
+#
+# register() defers the existing-vs-weak-password decision entirely to the
+# identity provider's create_user: whichever IdentityError subclass it raises
+# first determines the branch. The three tests below pin the current, honest
+# behavior rather than pretending register is symmetric on this axis — see
+# "Residual accepted risk — weak-password status divergence" in
+# docs/decisions/021-non-enumerating-auth-surfaces.md.
+
+
+def test_weak_password_fresh_email_returns_422(
+    client: TestClient, identity_fake: FakeIdentityProvider
+) -> None:
+    """A genuinely policy-weak (but Pydantic-valid, >=8 char) password on a
+    FRESH email must still surface as 422 auth.password_too_weak — register()
+    must not accidentally swallow this into the generic 201 nudge path."""
+    email = f"weak-{uuid.uuid4().hex[:8]}@example.com"
+    identity_fake.mark_weak_password(email)
+
+    resp = client.post("/api/v1/auth/register", json=_fresh_body(email=email))
+
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "auth.password_too_weak"
+    assert identity_fake.create_user_calls_for(email) == 0
+
+
+def test_provider_unavailable_symmetric(
+    client: TestClient, identity_fake: FakeIdentityProvider, seeded_existing_email: str
+) -> None:
+    """ADR-021: create_user raising IdentityUnavailableError is symmetric — a
+    provider outage is detected before existence can be determined either way,
+    so a fresh and an existing email get an identical 503, status and body."""
+    identity_fake.raise_unavailable = True
+    fresh_email = f"fresh-{uuid.uuid4().hex[:8]}@example.com"
+
+    fresh_resp = client.post("/api/v1/auth/register", json=_fresh_body(email=fresh_email))
+    existing_resp = client.post(
+        "/api/v1/auth/register", json=_fresh_body(email=seeded_existing_email)
+    )
+
+    assert fresh_resp.status_code == existing_resp.status_code == 503
+    assert fresh_resp.json() == existing_resp.json()
+
+
+def test_weak_password_existing_email_diverges_from_fresh(
+    client: TestClient, identity_fake: FakeIdentityProvider, seeded_existing_email: str
+) -> None:
+    """Documents, honestly, the ADR-021 accepted residual — this is NOT a
+    symmetry guarantee, it is the opposite: proof the asymmetry exists today.
+
+    FakeIdentityProvider checks existence before password-strength (mirroring
+    the unverified-but-assumed-worst-case GoTrue ordering the ADR residual is
+    about). With the SAME weak-password marker on both a fresh and an existing
+    email, the fresh one 422s (auth.password_too_weak) while the existing one
+    still 201s with the uniform nudge — a status/body divergence that, in
+    principle, lets an attacker distinguish existing vs. fresh emails.
+
+    Accepted per the ADR because it is: (a) unreachable under Supabase's
+    default password policy (default min-length 6 <= our Pydantic
+    min_length=8, so no password the app accepts as input is ever "weak" by
+    default), (b) reachable only if the deployed project's policy is
+    tightened past 8 chars AND GoTrue's create_user checks existence before
+    strength (the second half is unverified upstream behavior), and
+    (c) bounded by the 20 req/min/IP auth rate limit either way.
+
+    If a future change to register()'s branch ordering makes this test's
+    fresh-path assertion fail (e.g. it starts returning 201 too), that is a
+    sign the residual has been closed for real — update the ADR accordingly
+    instead of just relaxing this test.
+    """
+    fresh_email = f"fresh-{uuid.uuid4().hex[:8]}@example.com"
+    identity_fake.mark_weak_password(fresh_email)
+    identity_fake.mark_weak_password(seeded_existing_email)
+
+    fresh_resp = client.post("/api/v1/auth/register", json=_fresh_body(email=fresh_email))
+    existing_resp = client.post(
+        "/api/v1/auth/register", json=_fresh_body(email=seeded_existing_email)
+    )
+
+    assert fresh_resp.status_code == 422
+    assert fresh_resp.json()["error"]["code"] == "auth.password_too_weak"
+    assert existing_resp.status_code == 201
+    assert set(existing_resp.json()["data"].keys()) == {"message"}
+    # The divergence itself: identical "weak" marker, different outcomes.
+    assert fresh_resp.status_code != existing_resp.status_code

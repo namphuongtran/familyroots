@@ -101,6 +101,41 @@ multi-clan genealogy platform, not a financial system) doesn't justify the
 engineering cost of constant-time branches here. Revisit if a future threat
 model demands it.
 
+**Residual accepted risk — weak-password status divergence.** `register()`
+defers the existing-vs-weak-password decision entirely to the identity
+provider's `create_user`: whichever `IdentityError` subclass it raises first
+determines the branch, and the two checks (email-exists, password-strength)
+are not both re-run app-side. If Supabase's GoTrue checks duplicate-email
+*before* password-strength inside the admin `create_user` call, a
+Pydantic-valid (>=8 char) but policy-weak password produces a **422**
+`auth.password_too_weak` for a fresh email but the uniform **201** nudge for
+an existing email — a status/body enumeration oracle, structurally
+equivalent to the one Decision 1 closed for clan-input validation. This is:
+(a) **unreachable under Supabase's default password policy** — the default
+minimum length is 6, and our Pydantic schema already requires >=8 chars, so
+no password the app accepts as input can ever be "weak" by the default
+policy; (b) **reachable only if an operator tightens** the deployed
+project's Supabase password policy past our 8-char floor (or adds other
+strength rules) **and** GoTrue's `create_user` checks existence before
+strength — that ordering is **unverified**: historically the admin
+`create_user` endpoint didn't enforce the password-strength policy at all,
+so its behavior once a project *does* enable strength enforcement on that
+path hasn't been confirmed against Supabase's source or changelog; (c)
+**mitigated** by the existing 20 req/min/IP auth rate limit (Decision 3),
+which bounds probing speed even if reachable; (d) **not worth closing
+structurally** — doing so would mean replicating Supabase's password policy
+app-side (duplicating provider-owned, operator-configurable config,
+guaranteed to drift) purely to preserve a guarantee against a threat that is
+gated behind an operator opting into a stricter policy than the default, and
+we can't return 201 for a genuinely weak fresh signup without silently
+dropping the user. Accepted as-is, pinned by regression tests in
+`backend/tests/integration/test_register_non_enumeration.py`; revisit if
+this project's Supabase password policy is ever tightened past the default.
+**Provider-unavailable (503) remains symmetric**: `create_user` raising
+`IdentityUnavailableError` happens before either check can run, so both a
+fresh and an existing email get an identical 503 — this is verified by
+`test_provider_unavailable_symmetric`, not merely assumed.
+
 ### 2. Audit rows carry `ip_address` / `user_agent` at write time
 - **New `app/core/request_meta.py`**: a `ContextVar[RequestMeta | None]`
   (`RequestMeta = {ip, user_agent}`) with pure `set_request_meta` /
@@ -154,10 +189,17 @@ being dropped by the OS. Logged (not raised) on failure so a dispose error
 never blocks the rest of teardown.
 
 ## Consequences
-Easier: register can no longer be used to enumerate accounts by status code,
-by validation-error branch, or by response body — closing the last of the
-three account-existence oracles (register/forgot-password/resend-verification
-are now uniformly non-enumerating). Audit rows are now forensically useful:
+Easier: the clan-input branch oracle and the status-code-on-duplicate-email
+oracle are both **structurally closed** — register can no longer be used to
+enumerate accounts via clan-validation branching, nor via a dedicated
+already-exists status code, and provider-unavailable (503) is symmetric on
+both paths. Register joins forgot-password/resend-verification as
+non-enumerating on every path reachable under Supabase's **default**
+password policy. One residual is accepted, not eliminated: the
+weak-password status divergence above is config-gated (see that section) —
+it doesn't reopen under default settings, but tightening the deployed
+Supabase project's password policy past our 8-char minimum could reopen a
+narrow status/body oracle on that one branch. Audit rows are now forensically useful:
 an investigator can answer "what IP/browser did this write come from"
 instead of finding `NULL` on every row. The invitation-accept surface no
 longer sits outside the abuse-mitigation net that every other public auth-
