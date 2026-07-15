@@ -211,7 +211,35 @@ class AuthCommandHandler:
         clan_name: str | None = None,
         clan_slug: str | None = None,
     ) -> None:
-        """Register a new user — create or join a clan."""
+        """Register a new user — create or join a clan.
+
+        Clan-INPUT validation runs unconditionally, before ``create_user``, so a
+        bad clan_id/clan_slug fails identically whether or not the email already
+        has an account (ADR-021 non-enumeration). Without this, an existing email
+        short-circuits before ever reaching ``_assign_clan_membership``'s checks
+        while a fresh email hits them — a status-code oracle for account
+        enumeration. The checks below mirror ``_assign_clan_membership`` exactly
+        (same exceptions/codes); its copies stay in place as defense in depth for
+        callers that reach it directly (e.g. ``onboard_authenticated_user``).
+        """
+        if clan_action == "join" and not clan_id:
+            raise ValidationError("auth.clan_id_required_for_join")
+        if clan_action == "create" and (not clan_name or not clan_slug):
+            raise ValidationError("auth.clan_name_required_for_create")
+
+        if clan_action == "create":
+            # Guaranteed non-None by the validation above.
+            assert clan_name is not None and clan_slug is not None
+            existing_clan = await self._repo.get_clan_by_slug(clan_slug)
+            if existing_clan:
+                raise ConflictError("auth.clan_slug_taken")
+        else:
+            # clan_action == "join": clan_id is guaranteed non-None above.
+            assert clan_id is not None
+            clan_or_none = await self._repo.get_clan_by_id(clan_id)
+            if not clan_or_none:
+                raise NotFoundError("clan_not_found")
+
         try:
             user_id_str = await self._identity.create_user(email=email, password=password)
         except IdentityUserExistsError:
