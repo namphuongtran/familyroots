@@ -6,6 +6,7 @@ audit rows without domain events carrying transport-specific data.
 """
 
 import ipaddress
+import logging
 from typing import Any
 
 from fastapi import Request
@@ -19,6 +20,8 @@ from app.core.request_meta import (
     set_request_meta,
 )
 
+logger = logging.getLogger(__name__)
+
 _MAX_USER_AGENT_LEN = 500
 
 
@@ -27,12 +30,21 @@ def _validated_ip(ip: str | None) -> str | None:
     row's INET column — e.g. starlette TestClient's placeholder host
     ("testclient") or a malformed/non-IP X-Forwarded-For value. Postgres would
     otherwise raise on INSERT and abort the whole write transaction (the audit
-    handler's failure re-raises through the event dispatcher)."""
+    handler's failure re-raises through the event dispatcher).
+
+    A non-empty value that fails to parse is logged: it usually signals a
+    misconfigured trusted proxy (or a spoofing attempt) and would otherwise
+    vanish from the audit trail as a silent NULL."""
     if ip is None:
         return None
     try:
         ipaddress.ip_address(ip)
     except ValueError:
+        logger.warning(
+            "request-meta: discarding unparseable client IP %r (audit ip will be NULL) — "
+            "check trusted-proxy config",
+            ip,
+        )
         return None
     return ip
 
