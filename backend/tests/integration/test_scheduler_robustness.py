@@ -2,8 +2,9 @@
 persons skipped, per-event isolation, truthful log status."""
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 import app.core.database  # noqa: F401
+from app.core.config import settings
 from app.services import scheduler
 
 
@@ -24,6 +26,14 @@ async def async_engine(migrated_db_url):
     await eng.dispose()
 
 
+def _platform_today() -> date:
+    """The scheduler computes "today" in the platform timezone (Asia/Ho_Chi_Minh).
+    A UTC CI runner between 17:00-24:00 UTC is a calendar day BEHIND the platform,
+    so seeding with date.today() made "due in 7 days" actually 6 platform-days out
+    and the job (correctly) sent nothing — a time-of-day flake, not a code bug."""
+    return datetime.now(ZoneInfo(settings.SCHEDULER_TIMEZONE)).date()
+
+
 async def _seed_event(
     maker: async_sessionmaker[AsyncSession],
     *,
@@ -31,7 +41,7 @@ async def _seed_event(
     person_deleted: bool = False,
 ) -> uuid.UUID:
     clan_id, person_id = uuid.uuid4(), uuid.uuid4()
-    event_date = date.today() + timedelta(days=7)
+    event_date = _platform_today() + timedelta(days=7)
     async with maker() as s:
         await s.execute(sa.text("DELETE FROM notification_log"))
         await s.execute(sa.text("DELETE FROM events"))
@@ -71,7 +81,7 @@ async def _seed_two_due_events(maker: async_sessionmaker[AsyncSession]) -> None:
     non-deleted, with event_date = today + 7 days and notify_days_before=7 — used to
     prove one event raising inside the loop doesn't stop the other from being
     processed."""
-    event_date = date.today() + timedelta(days=7)
+    event_date = _platform_today() + timedelta(days=7)
     async with maker() as s:
         await s.execute(sa.text("DELETE FROM notification_log"))
         await s.execute(sa.text("DELETE FROM events"))

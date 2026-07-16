@@ -13,9 +13,10 @@ on (event_id, notification_type, sent_on).
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
@@ -23,8 +24,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.services.scheduler as scheduler
+from app.core.config import settings
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+
+
+def _platform_today() -> date:
+    """The scheduler computes "today" in the platform timezone (Asia/Ho_Chi_Minh).
+    A UTC CI runner between 17:00-24:00 UTC is a calendar day BEHIND the platform,
+    so seeding with date.today() made "due in 7 days" actually 6 platform-days out
+    and the job (correctly) sent nothing — a time-of-day flake, not a code bug."""
+    return datetime.now(ZoneInfo(settings.SCHEDULER_TIMEZONE)).date()
 
 
 @pytest.fixture()
@@ -60,7 +70,7 @@ async def _seed_due_event(maker: async_sessionmaker[AsyncSession]) -> uuid.UUID:
             {
                 "i": event_id,
                 "c": clan_id,
-                "d": date.today() + timedelta(days=7),
+                "d": _platform_today() + timedelta(days=7),
                 "p": person_id,
                 "cb": uuid.uuid4(),
             },
@@ -119,7 +129,7 @@ async def test_unique_index_enforces_event_type_day(async_engine: Any) -> None:
                 "SELECT clan_id, :eid, '00000000-0000-0000-0000-000000000000', "
                 "       'death_anniversary', 'Giỗ', '', 'sent', :day FROM events WHERE id = :eid"
             ),
-            {"eid": event_id, "day": date.today()},
+            {"eid": event_id, "day": _platform_today()},
         )
 
     async with maker() as s:
