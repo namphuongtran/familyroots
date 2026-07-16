@@ -472,7 +472,7 @@ M:N link between persons and clans. Determines which persons appear in which cla
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `person_id` | UUID | FK → persons.id (CASCADE), NOT NULL | Thực thể Nhân vật |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Thuộc Dòng họ nào |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | Thuộc Dòng họ nào |
 | `role` | VARCHAR(20) | DEFAULT 'blood' | Vai trò huyết thống: blood (rút ruột), spouse (dâu rể), adopted (con nuôi) |
 | `generation` | SMALLINT | | Đời thứ mấy — relative to this clan |
 | `is_founder` | BOOLEAN | DEFAULT false | Là Thuỷ tổ (người sáng lập dòng họ này) |
@@ -492,7 +492,7 @@ Global edge linking two persons. Supports polygamy, divorce, remarriage.
 | `id` | UUID | PK | |
 | `person1_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Sinh ra từ gốc dòng họ chính |
 | `person2_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Dâu / Rể |
-| `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
+| `created_by_clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
 | `marriage_date` | DATE | | Ngày cưới |
 | `marriage_date_precision` | VARCHAR(10) | NOT NULL, DEFAULT 'exact' | exact \| year \| month \| circa \| unknown (migration 012) |
 | `marriage_date_display` | VARCHAR(100) | | Text hiển thị khi precision != exact |
@@ -520,7 +520,7 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 | `id` | UUID | PK | |
 | `parent_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Cha / Mẹ |
 | `child_id` | UUID | FK → persons.id (RESTRICT), NOT NULL | Con |
-| `created_by_clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
+| `created_by_clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | Clan managing this record / Dòng họ nắm quyền Write RLS |
 | `relationship_type` | VARCHAR(20) | DEFAULT 'biological' | Loại quan hệ: biological (con đẻ), adopted (con nuôi), step (con riêng của vợ/chồng), foster (con đỡ đầu) |
 | `birth_order` | SMALLINT | | Thứ tự sinh (con cả=1, con thứ=2...) |
 | `notes` | TEXT | | Ghi chú |
@@ -555,6 +555,15 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 > liệu hiện có đã vi phạm, migration **fail rõ ràng** và liệt kê các dòng vi phạm —
 > không tự động renumber lịch sử.
 
+> **💡 Note (VN) - Xóa clan (`ON DELETE RESTRICT`, migration 010):** mọi FK
+> trỏ về `clans.id` (memberships, marriages, parent_child, branches,
+> invitations, settings, change_requests, events, documents, notification_log,
+> user_clan_roles) dùng **RESTRICT** — một `DELETE FROM clans` thủ công sẽ fail
+> rõ ràng thay vì cascade mất toàn bộ gia phả. Ngoại lệ giữ `SET NULL`:
+> `persons.created_by_clan_id` (person được de-provenance, không bị hủy) và
+> `audit_logs.clan_id` (audit được giữ lại). Không có luồng xóa clan trong app —
+> clan chỉ suspend/reactivate.
+
 > **💡 Note (VN) - Xóa person & cạnh mồ côi (`ON DELETE RESTRICT`):**
 > FK `person1_id/person2_id` (marriages) và `parent_id/child_id` (parent_child) dùng
 > **`RESTRICT`**, KHÔNG phải CASCADE — vì `persons` dùng **soft-delete**, không bao giờ
@@ -570,7 +579,7 @@ Maps users to clans with RBAC roles.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Thuộc dòng họ nào |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | Thuộc dòng họ nào |
 | `user_id` | UUID | FK → user_profiles.id (CASCADE), NOT NULL | Tài khoản User |
 | `role` | VARCHAR(20) | DEFAULT 'viewer' | admin, editor, viewer |
 | `is_approved` | BOOLEAN | DEFAULT false | Pending admin approval / Đã được admin duyệt chưa |
@@ -605,7 +614,7 @@ Configurable cross-approval workflow. Uses `clan_settings.approval_config`.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | |
 | `requester_id` | UUID | NOT NULL | User who proposed the change / Người đề xuất thay đổi |
 | `action` | VARCHAR(20) | NOT NULL | create, update, delete |
 | `resource_type` | VARCHAR(50) | NOT NULL | person, marriage, parent_child, event, document / Loại dữ liệu |
@@ -623,7 +632,7 @@ Chi/phái/nhánh within a clan. Supports nested hierarchy.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | Thuộc dòng họ nào |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | Thuộc dòng họ nào |
 | `name` | VARCHAR(255) | NOT NULL | "Chi Hai", "Phái Bắc" / Tên đại diện nhánh |
 | `description` | TEXT | | Mô tả |
 | `founder_person_id` | UUID | FK → persons.id (SET NULL), nullable | Ông tổ chi này |
@@ -645,7 +654,7 @@ Per-clan configuration. Auto-created with new clans.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), UNIQUE, NOT NULL | One settings row per clan |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), UNIQUE, NOT NULL | One settings row per clan |
 | `approval_config` | JSONB | | Configurable approval workflow / Cấu hình duyệt dữ liệu (theo quyền hạn) |
 | `default_language` | VARCHAR(10) | DEFAULT 'vi' | Default UI language for clan members |
 | `tree_display_mode` | VARCHAR(20) | DEFAULT 'vertical' | `vertical` or `horizontal` tree rendering / Hiển thị cây dọc hay ngang |
@@ -688,7 +697,7 @@ Tracks pending email invitations to join a clan.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | |
 | `email` | VARCHAR(255) | NOT NULL | Invited email address / Email người được mời |
 | `role` | VARCHAR(20) | DEFAULT 'viewer' | Role assigned upon acceptance / Vai trò (admin, editor, viewer) |
 | `invited_by` | UUID | NOT NULL | Admin who created the invite / Admin gửi lời mời |
@@ -703,7 +712,7 @@ Family events and milestones. Clan-scoped.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | |
 | `person_id` | UUID | FK → persons.id (CASCADE) | Nullable — clan-wide events have no person / Sự kiện cá nhân hay dòng họ |
 | `event_type` | VARCHAR(30) | NOT NULL | death_anniversary (giỗ), birthday (sinh nhật), wedding_anniversary, clan_ceremony (lễ họ), custom |
 | `title` | VARCHAR(255) | NOT NULL | Tiêu đề sự kiện |
@@ -724,7 +733,7 @@ Uploaded files (photos, certificates, audio/video). Clan-scoped.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | |
 | `person_id` | UUID | FK → persons.id (SET NULL) | |
 | `title` | VARCHAR(255) | NOT NULL | Tiêu đề tài liệu / Tên file |
 | `description` | TEXT | | Ghi chú |
@@ -771,7 +780,7 @@ Tracks push notification delivery. FCM tokens are stored in `user_fcm_tokens` (n
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (CASCADE), NOT NULL | |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | |
 | `event_id` | UUID | FK → events.id (SET NULL) | Sự kiện liên quan |
 | `user_id` | UUID | NOT NULL | Người nhận thông báo |
 | `notification_type` | VARCHAR(50) | NOT NULL | Loại thông báo (event_reminder, claim_approved ...) |
