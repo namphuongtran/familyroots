@@ -132,6 +132,7 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
                 WHERE (m.person1_id = :pid OR m.person2_id = :pid)
                   AND m.created_by_clan_id = :clan_id
                   AND m.is_deleted = false
+                  AND p.is_deleted = false
             """),
             {"pid": person_id, "clan_id": clan_id},
         )
