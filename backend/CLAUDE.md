@@ -44,7 +44,7 @@ The backend follows **DDD + CQRS + hexagonal** layering. Layer rules are **machi
 - `app/infrastructure/` — concrete adapters: `persistence/*_repository.py` (SQLAlchemy implementations of domain ports), `persistence/*_query_port.py` (read-side CQRS projections), `unit_of_work.py`, `event_dispatcher.py`, `storage/`, `supabase_client.py`. `dependencies.py` is the composition root that wires repos + UoW + handlers into FastAPI `Depends(...)` providers.
 - `app/api/v1/` — thin route handlers per aggregate, aggregated in `router.py` under `/api/v1`.
 - `app/models/` — SQLAlchemy ORM models (write side). `app/schemas/` — Pydantic v2 request/response DTOs.
-- `app/services/` — legacy / cross-cutting service-layer code (notifications, scheduler, translator). Newer aggregates go through `application/` + `infrastructure/`, not here.
+- `app/services/` — legacy / cross-cutting service-layer code (notifications, scheduler, translator). Newer aggregates go through `application/` + `infrastructure/`, not here. Import-linter fences it (no api/application/domain/models imports). Its background jobs (scheduler, document purge) are **sanctioned out-of-band writers**: they commit their own sessions outside UoW/domain-events — system actions with no actor, deduped/audited by their own mechanisms — and must stay the only such writers.
 
 Aggregates currently modeled: `auth`, `branch`, `clan`, `document`, `event`, `me`, `person` (incl. claims), `platform_admin`, `relationship`, `tree`, plus `shared`.
 

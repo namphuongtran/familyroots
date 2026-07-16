@@ -165,6 +165,22 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
+# app.services is the legacy cross-cutting layer (scheduler, notifications,
+# exports, tree SQL, translator). Its background jobs run OUTSIDE the
+# UoW/domain-event pattern by design (they commit their own sessions) —
+# sanctioned out-of-band writers, but fenced: services must never reach into
+# the hexagon (api/application/domain) or touch ORM models directly, so this
+# layer cannot grow new pattern debt. New aggregates go through
+# application/ + infrastructure/, not here.
+name = "services layer never imports api/application/domain/models"
+type = "forbidden"
+source_modules = ["app.services"]
+forbidden_modules = ["app.api", "app.application", "app.domain", "app.models"]
+# Direct imports only: core legitimately touches domain (exception mapping,
+# config constants) and services legitimately import core.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
 name = "API layer never touches SQLAlchemy or ORM models directly"
 type = "forbidden"
 source_modules = ["app.api"]
