@@ -13,8 +13,7 @@ docs/
 ├── contracts/          # public API + event contracts (one file per surface)
 ├── decisions/          # ADRs (architecture decision records, numbered)
 ├── ops/                # deployment, migrations, monitoring, incident response, secrets
-├── guides/             # how-to guides: onboarding, IaC, Flutter build & lessons
-└── prompts/            # LEGACY Gemini-era prompt templates (live tooling: .claude/commands/)
+└── guides/             # how-to guides: onboarding, IaC, Flutter build & lessons
 ```
 
 ## Read this first (required pre-task reading)
@@ -67,12 +66,6 @@ Runbooks for production operations. Start at [ops/README.md](ops/README.md).
 - [Infrastructure as Code Guide](guides/iac-guide.md)
 - [Flutter Build & Publish](guides/flutter-build-publish.md)
 - [Flutter Lessons](guides/flutter-lessons.md)
-
-## Prompts
-
-**Legacy** Gemini-era prompt templates (reference `GEMINI.md`/`services/` paths that
-no longer exist). The live workflow tooling is `.claude/commands/` + `CLAUDE.md`;
-prefer those. Kept only as historical templates — candidates for deletion.
 
 ## Conventions
 
