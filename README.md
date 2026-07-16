@@ -13,7 +13,7 @@ A cross-platform genealogy app for Vietnamese family clans. Members can view and
 - **Multilingual** — Vietnamese, English, Chinese, French (vi / en / zh / fr)
 - **Relationship validation** — business rules for marriages, parent-child links
 - **Soft deletes** — data preserved with `is_deleted` flag
-- **Row-Level Security** — clan data isolation enforced at the database engine level
+- **Clan data isolation** — enforced in the application layer on every clan-scoped query (RLS exists as a deferred defense-in-depth pilot, see ADR-008)
 
 ## Tech Stack
 
@@ -31,7 +31,7 @@ A cross-platform genealogy app for Vietnamese family clans. Members can view and
 | Scheduling         | APScheduler (cron-based reminder jobs)           |
 | Backend Deploy     | Render.com (Docker)                              |
 | Web Deploy         | Vercel                                           |
-| CI/CD              | GitHub Actions (5 workflows)                     |
+| CI/CD              | GitHub Actions (6 workflows)                     |
 | IaC                | Pulumi (Python)                                  |
 | Monitoring         | Sentry                                           |
 | Package Managers   | uv (backend) · pnpm (web) · pub (mobile)         |
@@ -40,7 +40,7 @@ A cross-platform genealogy app for Vietnamese family clans. Members can view and
 
 ```
 family-roots/
-├── .github/          # CI/CD workflows (backend-ci, mobile-ci, web-ci, pr-checks, infra-ci)
+├── .github/          # CI/CD workflows (backend-ci, mobile-ci, web-ci, pr-checks, infra-ci, db-backup)
 ├── backend/          # FastAPI Python service (pure REST API)
 ├── mobile/           # Flutter app — Android + iOS + Tablet
 ├── web/              # Next.js web app — Dashboard + Admin Panel + Backoffice
@@ -54,7 +54,7 @@ family-roots/
 
 ## Data Isolation Model
 
-**Single Schema + clan_id + Row Level Security** — one PostgreSQL instance (Supabase), all tables in a single `public` schema. Every clan-scoped table has a `clan_id UUID NOT NULL` column. Supabase RLS policies enforce data isolation at the database engine level. Users who belong to multiple clans switch context via the `X-Current-Clan-Id` header.
+**Single Schema + clan_id, enforced in the application layer** — one PostgreSQL instance (Supabase), all tables in a single `public` schema. Every clan-scoped table has a `clan_id UUID NOT NULL` column, and every repository query filters by the validated clan context. Users who belong to multiple clans switch context via the `X-Current-Clan-Id` header. Row-Level Security is a deferred defense-in-depth layer — a single-table pilot exists but is inert for application traffic (see [ADR-008](docs/decisions/008-rls-defense-in-depth.md) and [Multi-Tenancy](docs/architecture/multi-tenancy.md)).
 
 ## Quick Start
 
@@ -115,12 +115,12 @@ Start at [docs/README.md](docs/README.md) for the full index. Quick links:
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Production-ready, protected |
-| `develop` | Integration branch |
-| `feature/{ticket}-desc` | Feature work |
-| `fix/{ticket}-desc` | Bug fixes |
+| `main` | Production-ready, protected — feature branches merge here via PR |
+| `feat/desc` | Feature work |
+| `fix/desc` | Bug fixes |
 | `chore/desc` | Maintenance |
-| `infra/desc` | Infrastructure changes |
+| `docs/desc` | Documentation work |
+| `ops/desc` / `infra/desc` | Operations / infrastructure changes |
 
 ## Commit Convention
 

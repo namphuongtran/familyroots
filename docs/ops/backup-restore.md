@@ -94,7 +94,7 @@ immediately after the go-live checklist's first real prod dump.
 
 | Date | Dump | Result | Notes |
 |------|------|--------|-------|
-| 2026-07-14 | `familyroots-manual-seeded.dump.gz` (local dev, migrated to head + seeded with a 3-person/2-generation tree) | **DRILL: PASS** | All 3 checks OK on their success path: alembic head matched (`016_document_soft_delete`), non-zero row counts for the seeded tables, tree query returned 3 rows. An earlier run against the same dev DB pre-migration/pre-seed exercised the WARN branches (behind-head, no-persons-skip) — both PASS. Failure paths (corrupt dump, unreachable Postgres, missing table, missing function, missing `uv`) were exercised in review, not on this dump — see the fix report appended to `.superpowers/sdd/task-2-report.md` ("Task 2 review fix: guard all capture sites"), plus the Task 3 `person_row` rider repro (dump missing `persons` → `DRILL: FAIL`, full report, no crash). |
+| 2026-07-14 | `familyroots-manual-seeded.dump.gz` (local dev, migrated to head + seeded with a 3-person/2-generation tree) | **DRILL: PASS** | All 3 checks OK on their success path: alembic head matched (`016_document_soft_delete`), non-zero row counts for the seeded tables, tree query returned 3 rows. An earlier run against the same dev DB pre-migration/pre-seed exercised the WARN branches (behind-head, no-persons-skip) — both PASS. Failure paths (corrupt dump, unreachable Postgres, missing table, missing function, missing `uv`) were exercised in review, not on this dump — the review fix guarded all capture sites, and a rider repro confirmed a dump missing `persons` yields `DRILL: FAIL` with a full report and no crash. |
 
 Verbatim run-2 output (the success-path run referenced above):
 

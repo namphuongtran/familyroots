@@ -79,7 +79,7 @@ Query semantics to preserve:
 
 ## Superpowers Workflow
 
-This repository uses the superpowers methodology for planning and implementation. See `docs/superpowers.md` for install and usage.
+This repository uses the superpowers methodology (Claude Code plugin skills) for planning and implementation.
 
 Recommended execution loop per feature slice:
 
