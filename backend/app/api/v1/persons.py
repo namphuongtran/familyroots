@@ -48,11 +48,15 @@ router = APIRouter()
 
 
 def _serialize_person_by_profile(person: Any, profile: str) -> dict[str, Any]:
-    """Serialize a person to the selected response profile."""
+    """Serialize a person to the selected response profile.
+
+    Full dumps (not exclude_unset) so every declared key of the chosen profile
+    is always present — key presence must not vary with which fields were set.
+    """
     if profile == "summary":
-        return PersonSummary.model_validate(person).model_dump(exclude_unset=True)
+        return PersonSummary.model_validate(person).model_dump()
     if profile == "detail":
-        return PersonDetail.model_validate(person).model_dump(exclude_unset=True)
+        return PersonDetail.model_validate(person).model_dump()
     dumped: dict[str, Any] = person.model_dump()
     return dumped
 

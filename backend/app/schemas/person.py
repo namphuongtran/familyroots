@@ -227,9 +227,10 @@ class PersonSummary(BaseModel):
     avatar_url: str | None = None
     birth_date: HistoricalDate = Field(default_factory=HistoricalDate)
     death_date: HistoricalDate = Field(default_factory=HistoricalDate)
-    generation: int | None = None
-    is_founder: bool | None = None
-    membership_role: str | None = None
+    # NOTE: no generation/is_founder/membership_role here — list/get serialize
+    # from PersonResponse, which carries no membership data, and đời is
+    # graph-computed on tree endpoints (clan_memberships.generation is a
+    # deprecated display source). Search's payload carries them separately.
     # Optimistic concurrency (ADR-017); see PersonResponse.version.
     version: int = 1
 
