@@ -31,11 +31,13 @@ from app.infrastructure.dependencies import (
     get_person_query_handler,
 )
 from app.schemas.claim import IdentityClaimSubmit
+from app.schemas.envelope import created, ok, ok_message, page
 from app.schemas.historical_date import to_historical_date
 from app.schemas.person import (
     PersonBatchGetRequest,
     PersonCreateRequest,
     PersonDetail,
+    PersonResponse,
     PersonSummary,
     PersonUpdateRequest,
 )
@@ -78,7 +80,7 @@ def _parse_include_by_id(
 # ── List / Search ──────────────────────────────────────────────
 
 
-@router.get("")
+@router.get("", responses=page(PersonResponse))
 async def list_persons(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
@@ -179,7 +181,7 @@ async def search_persons(
 # ── CRUD ──────────────────────────────────────────────────────
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses=created(PersonResponse))
 async def create_person(
     body: PersonCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -300,7 +302,7 @@ async def batch_get_persons(
     return {"data": data, "meta": {"errors": errors}}
 
 
-@router.get("/{person_id}")
+@router.get("/{person_id}", responses=ok(PersonResponse))
 async def get_person(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -341,7 +343,7 @@ async def get_person(
     return {"data": p_dict}
 
 
-@router.patch("/{person_id}")
+@router.patch("/{person_id}", responses=ok(PersonResponse))
 async def update_person(
     person_id: uuid.UUID,
     body: PersonUpdateRequest,
@@ -368,7 +370,7 @@ async def update_person(
     return {"data": person.model_dump()}
 
 
-@router.delete("/{person_id}")
+@router.delete("/{person_id}", responses=ok_message())
 async def delete_person(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -387,7 +389,7 @@ async def delete_person(
     return {"data": {"message": t("person.deleted"), "id": str(person_id)}}
 
 
-@router.post("/{person_id}/restore")
+@router.post("/{person_id}/restore", responses=ok(PersonResponse))
 async def restore_person(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),

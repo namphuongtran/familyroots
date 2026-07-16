@@ -20,7 +20,8 @@ from app.infrastructure.dependencies import (
     get_event_query_handler,
     get_person_query_handler,
 )
-from app.schemas.event import EventCreateRequest, EventUpdateRequest
+from app.schemas.envelope import created, ok, ok_message, page
+from app.schemas.event import EventCreateRequest, EventResponse, EventUpdateRequest
 from app.services.translator import t
 
 router = APIRouter()
@@ -48,7 +49,7 @@ async def _included_person(
     }
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses=created(EventResponse))
 async def create_event(
     body: EventCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -74,7 +75,7 @@ async def create_event(
     return {"data": event.model_dump()}
 
 
-@router.get("")
+@router.get("", responses=page(EventResponse))
 async def list_events(
     person_id: uuid.UUID | None = Query(None),
     event_type: str | None = Query(None),
@@ -135,7 +136,7 @@ async def get_upcoming_events(
     return {"data": upcoming}
 
 
-@router.get("/{event_id}")
+@router.get("/{event_id}", responses=ok(EventResponse))
 async def get_event(
     event_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -163,7 +164,7 @@ async def get_event(
     return {"data": data}
 
 
-@router.patch("/{event_id}")
+@router.patch("/{event_id}", responses=ok(EventResponse))
 async def update_event(
     event_id: uuid.UUID,
     body: EventUpdateRequest,
@@ -185,7 +186,7 @@ async def update_event(
     return {"data": event.model_dump()}
 
 
-@router.delete("/{event_id}")
+@router.delete("/{event_id}", responses=ok_message())
 async def delete_event(
     event_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -201,7 +202,7 @@ async def delete_event(
     return {"data": {"message": t("event.deleted"), "id": str(event_id)}}
 
 
-@router.post("/{event_id}/restore")
+@router.post("/{event_id}/restore", responses=ok(EventResponse))
 async def restore_event(
     event_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),

@@ -15,8 +15,9 @@ from app.api.v1.persons import router as persons_router
 from app.api.v1.platform_admin import router as platform_admin_router
 from app.api.v1.relationships import router as relationships_router
 from app.api.v1.tree import router as tree_router
+from app.schemas.envelope import DEFAULT_ERROR_RESPONSES
 
-api_v1_router = APIRouter()
+api_v1_router = APIRouter(responses=DEFAULT_ERROR_RESPONSES)
 
 api_v1_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_v1_router.include_router(branches_router, prefix="/branches", tags=["branches"])

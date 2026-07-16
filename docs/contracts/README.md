@@ -42,6 +42,16 @@ across all routers):
   ```json
   { "error": { "code": "...", "message": "...", "detail": { ... } } }
   ```
+- **OpenAPI typing (2026-07-17)**: the generated OpenAPI documents these
+  shapes via `Envelope[T]` / `PageEnvelope[T]` / `ErrorEnvelope` components
+  (`app/schemas/envelope.py`), declared per-route as **documentation-only**
+  `responses=` (never runtime `response_model=` — re-validation would break
+  the sparse `fields=`/`include=` subset responses). Client codegen
+  (openapi-typescript, Dio) can bind against them; a response filtered with
+  `fields=` is a key-subset of the documented full shape. Routes whose
+  payloads are still dynamic dicts (tree, platform-admin, /events/upcoming,
+  /auth token bodies) remain untyped in OpenAPI until their read models are
+  typed — the per-endpoint contract docs stay authoritative for those.
 
 ## HistoricalDate (canonical date shape)
 
