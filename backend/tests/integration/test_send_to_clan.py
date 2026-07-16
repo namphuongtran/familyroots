@@ -3,6 +3,7 @@ and returns (sent, failed) counts."""
 
 import uuid
 from collections.abc import AsyncGenerator
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,7 +29,13 @@ async def engine(migrated_db_url: str) -> AsyncGenerator[AsyncEngine]:
 async def test_send_to_clan_uses_user_profiles_and_counts(
     engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(notif.messaging, "send", MagicMock(name="send"))
+    send_each = MagicMock(
+        name="send_each",
+        side_effect=lambda msgs: SimpleNamespace(
+            responses=[SimpleNamespace(success=True, exception=None) for _ in msgs]
+        ),
+    )
+    monkeypatch.setattr(notif.messaging, "send_each", send_each)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     clan_id, user_id = uuid.uuid4(), uuid.uuid4()
     async with maker() as s:
@@ -69,4 +76,4 @@ async def test_send_to_clan_uses_user_profiles_and_counts(
             name="An",
         )
     assert (sent, failed) == (1, 0)
-    assert notif.messaging.send.called  # no auth.users → no UndefinedTable crash
+    assert send_each.called  # no auth.users → no UndefinedTable crash
