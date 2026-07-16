@@ -21,6 +21,7 @@ from app.infrastructure.dependencies import (
     get_person_query_handler,
 )
 from app.schemas.event import EventCreateRequest, EventUpdateRequest
+from app.services.translator import t
 
 router = APIRouter()
 
@@ -194,4 +195,4 @@ async def delete_event(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
-    return {"data": {"message": "Event deleted", "id": str(event_id)}}
+    return {"data": {"message": t("event.deleted"), "id": str(event_id)}}

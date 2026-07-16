@@ -12,6 +12,7 @@ from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireV
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
+from app.services.translator import t
 
 router = APIRouter()
 
@@ -110,7 +111,7 @@ async def delete_document(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
-    return {"data": {"message": "Document deleted", "id": str(document_id)}}
+    return {"data": {"message": t("document.deleted"), "id": str(document_id)}}
 
 
 @router.post("/{document_id}/restore")
@@ -144,4 +145,4 @@ async def set_document_as_avatar(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
-    return {"data": {"message": "Avatar set", "document_id": str(document_id)}}
+    return {"data": {"message": t("document.avatar_set"), "document_id": str(document_id)}}

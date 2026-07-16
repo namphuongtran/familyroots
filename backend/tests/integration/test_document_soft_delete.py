@@ -24,6 +24,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
 from app.main import create_app
+from app.services.translator import load_translations, t
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -114,6 +115,9 @@ async def client(
     from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     app = create_app()
+    # This suite runs without lifespan; localized response messages need the
+    # translation catalogs loaded explicitly.
+    load_translations()
 
     async def _override_db() -> AsyncGenerator[AsyncSession]:
         async with session_factory() as session:
@@ -189,7 +193,9 @@ async def test_delete_soft_deletes_and_keeps_blob(
     doc_id, storage_path = uploaded_document
     resp = await client.delete(f"/api/v1/documents/{doc_id}", headers=admin_headers)
     assert resp.status_code == 200  # existing message-envelope shape unchanged
-    assert resp.json()["data"] == {"message": "Document deleted", "id": doc_id}
+    # Localized message (default locale vi) — was hardcoded English before.
+    assert resp.json()["data"] == {"message": t("document.deleted", locale="vi"), "id": doc_id}
+    assert resp.json()["data"]["message"] != "document.deleted"  # key must resolve
 
     # gone from the list and from GET
     listing = await client.get("/api/v1/documents", headers=admin_headers)

@@ -39,6 +39,7 @@ from app.schemas.parent_child import (
     ParentChildResponse,
     ParentChildUpdateRequest,
 )
+from app.services.translator import t
 
 router = APIRouter()
 
@@ -131,7 +132,7 @@ async def delete_marriage(
             actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
-    return {"data": {"message": "Marriage deleted", "id": str(marriage_id)}}
+    return {"data": {"message": t("marriage.deleted"), "id": str(marriage_id)}}
 
 
 # ── Parent-Child ──────────────────────────────────────────────
@@ -218,4 +219,4 @@ async def delete_parent_child(
             actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
-    return {"data": {"message": "Parent-child link deleted", "id": str(link_id)}}
+    return {"data": {"message": t("parent_child.deleted"), "id": str(link_id)}}
