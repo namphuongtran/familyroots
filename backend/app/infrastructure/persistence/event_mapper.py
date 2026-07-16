@@ -69,5 +69,3 @@ def to_orm(entity: EventEntity) -> EventModel:
         notify_days_before=entity.notify_days_before,
         created_by=entity.created_by,
     )
-
-

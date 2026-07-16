@@ -159,9 +159,7 @@ async def test_patch_requires_expected_version(
     assert resp.status_code == 422, resp.text
 
 
-async def test_patch_stale_version_conflicts(
-    client: AsyncClient, headers: dict[str, str]
-) -> None:
+async def test_patch_stale_version_conflicts(client: AsyncClient, headers: dict[str, str]) -> None:
     created = await _create_event(client, headers)
     event_id = created["id"]
 

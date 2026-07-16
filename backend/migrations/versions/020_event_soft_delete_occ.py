@@ -50,9 +50,7 @@ def upgrade() -> None:
     )
     op.add_column("events", sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("events", sa.Column("deleted_by", sa.UUID(as_uuid=True), nullable=True))
-    op.add_column(
-        "events", sa.Column("version", sa.Integer(), nullable=False, server_default="1")
-    )
+    op.add_column("events", sa.Column("version", sa.Integer(), nullable=False, server_default="1"))
     op.execute("CREATE INDEX idx_events_is_deleted ON events (is_deleted) WHERE is_deleted = false")
     _repoint_person_fk("SET NULL")
 
