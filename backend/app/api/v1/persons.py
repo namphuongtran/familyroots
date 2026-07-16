@@ -5,7 +5,6 @@ Sub-resource endpoints (marriages, parent-child, documents, events, timeline)
 remain DB-direct until their respective bounded contexts are migrated.
 """
 
-import asyncio
 import uuid
 from typing import Any
 
@@ -25,7 +24,6 @@ from app.application.person.handlers import PersonCommandHandler, PersonQueryHan
 from app.core.fieldsets import filter_dict, filter_list, parse_field_set, parse_includes
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import (
     get_claim_command_handler,
@@ -38,7 +36,6 @@ from app.schemas.person import (
     PersonBatchGetRequest,
     PersonCreateRequest,
     PersonDetail,
-    PersonResponse,
     PersonSummary,
     PersonUpdateRequest,
 )
@@ -210,28 +207,20 @@ async def _fetch_included_data(
     person_id: uuid.UUID,
     includes: list[str],
 ) -> dict[str, list[Any]]:
-    tasks = {}
-    if "marriages" in includes:
-        tasks["marriages"] = handler.get_marriages(clan_id, person_id)
-    if "parent_child" in includes:
-        tasks["parent_child"] = handler.get_parent_child(clan_id, person_id)
-    if "timeline" in includes:
-        tasks["timeline"] = handler.get_timeline(clan_id, person_id)
-    if "documents" in includes:
-        tasks["documents"] = handler.get_documents(clan_id, person_id)
-
-    if not tasks:
-        return {}
-
-    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    # Sequential awaits, deliberately: everything shares one request-scoped
+    # AsyncSession, so a gather adds no real concurrency (a single connection
+    # serializes the queries) while risking concurrent-session-use hazards.
+    # A failing include sub-query must surface as an error (handled by the
+    # app's exception handlers), never be masked as empty data.
     res_dict: dict[str, list[Any]] = {}
-    for key, res in zip(tasks.keys(), results, strict=False):
-        # A failing include sub-query must surface as an error (handled by the app's
-        # exception handlers), never be masked as empty data. Re-raise the original
-        # exception, preserving its type so the same envelope is produced.
-        if isinstance(res, BaseException):
-            raise res
-        res_dict[key] = res
+    if "marriages" in includes:
+        res_dict["marriages"] = await handler.get_marriages(clan_id, person_id)
+    if "parent_child" in includes:
+        res_dict["parent_child"] = await handler.get_parent_child(clan_id, person_id)
+    if "timeline" in includes:
+        res_dict["timeline"] = await handler.get_timeline(clan_id, person_id)
+    if "documents" in includes:
+        res_dict["documents"] = await handler.get_documents(clan_id, person_id)
     return res_dict
 
 
@@ -261,20 +250,11 @@ async def batch_get_persons(
     """
     person_ids = _dedupe_person_ids(body.ids)
 
-    person_tasks = [
-        handler.get(GetPerson(person_id=person_id, clan_id=clan_id)) for person_id in person_ids
-    ]
-    person_results = await asyncio.gather(*person_tasks, return_exceptions=True)
-
-    persons: list[PersonResponse] = []
-    errors: list[dict[str, str]] = []
-    for person_id, result in zip(person_ids, person_results, strict=False):
-        if isinstance(result, EntityNotFoundError):
-            errors.append({"id": str(person_id), "code": "person_not_found"})
-            continue
-        if isinstance(result, BaseException):
-            raise result
-        persons.append(result)
+    # One ANY(:ids) query for the whole batch — never one get() per person
+    # (the old gather ran on ONE shared session, so it was N sequential
+    # round-trips wearing a concurrency costume).
+    persons, missing = await handler.get_many(person_ids, clan_id)
+    errors = [{"id": str(pid), "code": "person_not_found"} for pid in missing]
 
     await handler.redact_pii(
         persons, viewer_role=role.value, viewer_user_id=uuid.UUID(current_user["sub"])
@@ -292,37 +272,28 @@ async def batch_get_persons(
     if "stats" in all_include_keys and persons:
         stats_map = await handler.get_persons_stats(clan_id, [person.id for person in persons])
 
-    raw_included = await asyncio.gather(
-        *[
-            _fetch_included_data(
-                handler,
-                clan_id,
-                person.id,
-                list(dict.fromkeys([*includes, *includes_by_id.get(person.id, [])])),
-            )
-            for person in persons
-        ],
-        return_exceptions=True,
-    )
-    included_results: list[dict[str, list[Any]]] = []
-    for inc_result in raw_included:
-        # An include sub-query error is unexpected (DB fault / bug), not a per-item
-        # condition like not-found — propagate it (consistent with the person-fetch
-        # gather above), but only after every coroutine has been awaited so none is
-        # left orphaned.
-        if isinstance(inc_result, BaseException):
-            raise inc_result
-        included_results.append(inc_result)
+    # Per-person include sets (global + per-id overrides), then ONE batched
+    # query per include token covering exactly the persons that asked for it.
+    include_sets = {
+        person.id: set(includes) | set(includes_by_id.get(person.id, [])) for person in persons
+    }
+    include_ids: dict[str, list[uuid.UUID]] = {}
+    for token in ("marriages", "parent_child", "timeline", "documents"):
+        ids_needing = [p.id for p in persons if token in include_sets[p.id]]
+        if ids_needing:
+            include_ids[token] = ids_needing
+    included_maps = await handler.get_included_data_batch(clan_id, include_ids)
 
     data = []
-    for idx, person in enumerate(persons):
+    for person in persons:
         p_dict = _serialize_person_by_profile(person, body.profile)
 
         if "stats" in all_include_keys and person.id in stats_map:
             p_dict["stats"] = stats_map[person.id]
 
-        if idx < len(included_results):
-            p_dict.update(included_results[idx])
+        for token, per_person in included_maps.items():
+            if token in include_sets[person.id]:
+                p_dict[token] = per_person.get(person.id, [])
 
         data.append(filter_dict(p_dict, field_set))
 

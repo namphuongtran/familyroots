@@ -215,6 +215,18 @@ class PersonQueryHandler:
             raise EntityNotFoundError("person_not_found")
         return PersonResponse.model_validate(person)
 
+    async def get_many(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> tuple[list[PersonResponse], list[uuid.UUID]]:
+        """Batch get: (found persons in input order, ids not found in this clan)."""
+        found = {
+            p.id: PersonResponse.model_validate(p)
+            for p in await self._repo.get_many_in_clan(person_ids, clan_id)
+        }
+        persons = [found[pid] for pid in person_ids if pid in found]
+        missing = [pid for pid in person_ids if pid not in found]
+        return persons, missing
+
     async def redact_pii(
         self,
         persons: list[PersonResponse],
@@ -259,6 +271,27 @@ class PersonQueryHandler:
         if not self._query_port:
             raise NotImplementedError("Query port not configured for this handler")
         return await self._query_port.get_events(clan_id, person_id)
+
+    async def get_included_data_batch(
+        self,
+        clan_id: uuid.UUID,
+        include_ids: dict[str, list[uuid.UUID]],
+    ) -> dict[str, dict[uuid.UUID, list[dict[str, Any]]]]:
+        """Batched include maps: {token: {person_id: rows}} — one query per
+        token regardless of how many persons requested it."""
+        if not self._query_port:
+            raise NotImplementedError("Query port not configured for this handler")
+        fetchers = {
+            "marriages": self._query_port.get_marriages_batch,
+            "parent_child": self._query_port.get_parent_child_links_batch,
+            "timeline": self._query_port.get_timelines_batch,
+            "documents": self._query_port.get_documents_batch,
+        }
+        out: dict[str, dict[uuid.UUID, list[dict[str, Any]]]] = {}
+        for token, ids in include_ids.items():
+            if token in fetchers and ids:
+                out[token] = await fetchers[token](clan_id, ids)
+        return out
 
     async def get_timeline(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         """Return a chronological timeline for a person.

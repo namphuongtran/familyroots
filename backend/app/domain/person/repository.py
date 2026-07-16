@@ -47,6 +47,12 @@ class PersonSearchResult:
 class PersonRepository(Protocol):
     """Abstract persistence contract for Person entities."""
 
+    async def get_many_in_clan(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> list[Person]:
+        """Fetch every requested person that is a live member of the clan (one query)."""
+        ...
+
     async def get_in_clan(
         self, person_id: uuid.UUID, clan_id: uuid.UUID, include_deleted: bool = False
     ) -> Person | None:

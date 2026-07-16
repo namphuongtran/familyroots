@@ -77,6 +77,24 @@ class SqlAlchemyPersonRepository:
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
 
+    async def get_many_in_clan(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> list[PersonEntity]:
+        """Fetch every requested person that is a live member of the clan — one
+        query, not one per id (the batch endpoint's person fan-out)."""
+        if not person_ids:
+            return []
+        result = await self._session.execute(
+            select(PersonModel)
+            .join(ClanMembership, ClanMembership.person_id == PersonModel.id)
+            .where(
+                PersonModel.id.in_(person_ids),
+                ClanMembership.clan_id == clan_id,
+                PersonModel.is_deleted.is_(False),
+            )
+        )
+        return [to_domain(m) for m in result.scalars().all()]
+
     async def get_linked_person_id(self, user_id: uuid.UUID) -> uuid.UUID | None:
         result = await self._session.execute(
             select(UserProfile.person_id).where(UserProfile.id == user_id)
