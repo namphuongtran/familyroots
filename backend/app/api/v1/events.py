@@ -13,6 +13,7 @@ from app.application.person.handlers import PersonQueryHandler
 from app.core.config import settings
 from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
+from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import (
     get_event_command_handler,
@@ -22,6 +23,28 @@ from app.infrastructure.dependencies import (
 from app.schemas.event import EventCreateRequest, EventUpdateRequest
 
 router = APIRouter()
+
+
+async def _included_person(
+    person_handler: PersonQueryHandler, person_id: uuid.UUID, clan_id: uuid.UUID
+) -> dict[str, Any] | None:
+    """The include=person summary, or None when the person is genuinely gone.
+
+    Only EntityNotFoundError (e.g. the person was soft-deleted after the event
+    was created) becomes null — the event itself is still valid. Any other
+    failure propagates so the standard error envelope is produced instead of
+    masking a fault as "no linked person" (same policy as persons includes).
+    """
+    try:
+        person = await person_handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
+    except EntityNotFoundError:
+        return None
+    return {
+        "id": str(person.id),
+        "full_name": person.full_name,
+        "gender": person.gender,
+        "avatar_url": person.avatar_url,
+    }
 
 
 @router.post("", status_code=201)
@@ -128,18 +151,7 @@ async def get_event(
     if include:
         includes = {i.strip() for i in include.split(",")}
         if "person" in includes and event.person_id:
-            try:
-                person = await person_handler.get(
-                    GetPerson(person_id=event.person_id, clan_id=clan_id)
-                )
-                data["person"] = {
-                    "id": str(person.id),
-                    "full_name": person.full_name,
-                    "gender": person.gender,
-                    "avatar_url": person.avatar_url,
-                }
-            except Exception:
-                data["person"] = None
+            data["person"] = await _included_person(person_handler, event.person_id, clan_id)
 
     if fields:
         field_set = {f.strip() for f in fields.split(",")}
