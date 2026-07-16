@@ -52,10 +52,6 @@ class SqlAlchemyPersonRepository:
         self._uow = uow
         self._session = uow.session
 
-    async def get_by_id(self, person_id: uuid.UUID) -> PersonEntity | None:
-        result = await self._session.get(PersonModel, person_id)
-        return to_domain(result) if result else None
-
     async def get_in_clan(
         self, person_id: uuid.UUID, clan_id: uuid.UUID, include_deleted: bool = False
     ) -> PersonEntity | None:
