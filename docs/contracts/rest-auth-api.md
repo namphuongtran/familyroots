@@ -29,6 +29,10 @@ Core operations:
 Request/response expectations:
 - Bearer JWT is required after login.
 - Register can either join an existing clan or create a new clan.
+- `clan_slug` (register + onboard, `clan_action=create`) must match
+  `^[a-z0-9]+(-[a-z0-9]+)*$` — lowercase ASCII alphanumerics and single
+  hyphens, max 100 chars; anything else is a 422. Clients slugify the clan
+  name before submitting (the slug appears in URLs and export filenames).
 - `POST /register` is **non-enumerating (ADR-021)**: it returns the identical
   201 body whether or not the email already has an account. Clan-input
   validation (`clan_id_required_for_join`, `clan_name_required_for_create`,

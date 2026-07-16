@@ -5,6 +5,11 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
+# Slugs land in URLs and in the export Content-Disposition header (latin-1
+# only), so restrict them at the door: lowercase ASCII alphanumerics and
+# single hyphens, no leading/trailing hyphen.
+_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -13,14 +18,14 @@ class RegisterRequest(BaseModel):
     clan_action: Literal["join", "create"]
     clan_id: uuid.UUID | None = None
     clan_name: str | None = Field(None, max_length=255)
-    clan_slug: str | None = Field(None, max_length=100)
+    clan_slug: str | None = Field(None, max_length=100, pattern=_SLUG_PATTERN)
 
 
 class AuthenticatedOnboardingRequest(BaseModel):
     clan_action: Literal["join", "create"]
     clan_id: uuid.UUID | None = None
     clan_name: str | None = Field(None, max_length=255)
-    clan_slug: str | None = Field(None, max_length=100)
+    clan_slug: str | None = Field(None, max_length=100, pattern=_SLUG_PATTERN)
 
 
 class RegisterResponse(BaseModel):
