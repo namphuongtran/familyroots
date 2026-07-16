@@ -15,6 +15,7 @@ from typing import Any
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
 from app.core.config import settings
+from app.core.locale import SUPPORTED_LOCALES
 from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
     AuthTokens,
@@ -96,10 +97,12 @@ class SupabaseIdentityProvider:
             raise _classify(exc) from exc
         if resp.session is None or resp.user is None:
             raise IdentityAuthError()
+        raw_locale = resp.user.user_metadata.get("preferred_locale")
         return AuthenticatedIdentity(
             user_id=str(resp.user.id),
             email=email,
             full_name=resp.user.user_metadata.get("full_name", ""),
+            preferred_locale=raw_locale if raw_locale in SUPPORTED_LOCALES else None,
             tokens=AuthTokens(
                 access_token=resp.session.access_token,
                 refresh_token=resp.session.refresh_token,

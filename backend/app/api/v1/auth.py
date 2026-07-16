@@ -13,6 +13,7 @@ from app.application.auth.handlers import (
     AuthSessionService,
     FCMTokenHandler,
 )
+from app.core.locale import SUPPORTED_LOCALES
 from app.core.security import get_current_user, security
 from app.infrastructure.dependencies import (
     get_auth_command_handler,
@@ -141,10 +142,12 @@ async def get_me(
     handler: AuthQueryHandler = Depends(get_auth_query_handler),
 ) -> dict[str, Any]:
     """Return the authenticated user's profile."""
+    raw_locale = current_user.get("user_metadata", {}).get("preferred_locale")
     profile = await handler.get_profile(
         user_id=uuid.UUID(current_user["sub"]),
         email=current_user.get("email", ""),
         full_name=current_user.get("user_metadata", {}).get("full_name", ""),
+        preferred_locale=raw_locale if raw_locale in SUPPORTED_LOCALES else None,
     )
     return {"data": profile.model_dump()}
 
