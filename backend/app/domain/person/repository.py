@@ -33,8 +33,12 @@ class PersonSearchResult:
     full_name: str = ""
     birth_name: str | None = None
     birth_date: date | None = None
+    birth_date_precision: str | None = None
+    birth_date_display: str | None = None
+    lunar_birth_date: str | None = None
     gender: str = "unknown"
     avatar_url: str | None = None
+    version: int = 1
     generation: int | None = None
     membership_role: str | None = None
     is_founder: bool | None = None
@@ -43,8 +47,10 @@ class PersonSearchResult:
 class PersonRepository(Protocol):
     """Abstract persistence contract for Person entities."""
 
-    async def get_by_id(self, person_id: uuid.UUID) -> Person | None:
-        """Fetch a person by their global ID (not clan-scoped)."""
+    async def get_many_in_clan(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> list[Person]:
+        """Fetch every requested person that is a live member of the clan (one query)."""
         ...
 
     async def get_in_clan(

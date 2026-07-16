@@ -181,5 +181,12 @@
   "error.user_not_in_clan": "Người dùng này không phải thành viên dòng họ",
   "error.user_not_linked_to_person": "Tài khoản này chưa liên kết với nhân vật nào",
   "error.validation_error": "Xác thực thất bại",
-  "error.stale_write": "Bản ghi đã được người khác sửa. Vui lòng tải lại và thử lại."
+  "error.stale_write": "Bản ghi đã được người khác sửa. Vui lòng tải lại và thử lại.",
+  "person.deleted": "Đã xóa thành viên",
+  "marriage.deleted": "Đã xóa quan hệ hôn nhân",
+  "parent_child.deleted": "Đã xóa quan hệ cha mẹ - con",
+  "event.deleted": "Đã xóa sự kiện",
+  "branch.deleted": "Đã xóa chi họ",
+  "document.deleted": "Đã xóa tài liệu",
+  "document.avatar_set": "Đã đặt ảnh đại diện"
 }

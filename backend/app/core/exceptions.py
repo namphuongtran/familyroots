@@ -90,6 +90,9 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     from app.domain.shared.exceptions import (
         ForbiddenError as DomainForbiddenError,
     )
+    from app.domain.shared.exceptions import (
+        ValidationError as DomainValidationError,
+    )
     from app.services.translator import t
 
     assert isinstance(exc, DomainError)
@@ -100,6 +103,7 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
         DomainConflictError: 409,
         DomainAuthError: 401,
         BusinessRuleViolation: 422,
+        DomainValidationError: 422,
     }
     status_code = status_map.get(type(exc), 400)
 
@@ -245,6 +249,31 @@ async def integrity_error_handler(request: Request, exc: Exception) -> JSONRespo
             status_code=409,
             content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
         )
+
+    # The parent_child integrity trigger (ADR-023) raises check_violation with
+    # a known code slug when a write LOSES the race the app pre-check cannot
+    # stop — a legitimate 409, like a lost uniqueness race. Any other
+    # check_violation still falls through to the loud 500 (likely a bug).
+    if sqlstate == "23514":
+        message = str(getattr(exc, "orig", exc))
+        # Trigger slug -> the SAME error code the app validator uses, so a
+        # client sees one code whether the pre-check or the backstop rejected.
+        trigger_codes = {
+            "too_many_biological_parents": "relationship.too_many_biological_parents",
+            "relationship_cycle": "relationship.creates_cycle",
+        }
+        for slug, code in trigger_codes.items():
+            if slug in message:
+                logger.warning(
+                    "Integrity-trigger rejection on %s %s: %s",
+                    request.method,
+                    request.url.path,
+                    exc,
+                )
+                return JSONResponse(
+                    status_code=409,
+                    content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+                )
 
     logger.error(
         "Unexpected IntegrityError on %s %s", request.method, request.url.path, exc_info=exc

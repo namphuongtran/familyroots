@@ -20,6 +20,7 @@ from app.infrastructure.dependencies import (
     get_invitation_query_handler,
 )
 from app.schemas.auth import UserProfile
+from app.schemas.envelope import created, ok, ok_list
 from app.schemas.invitation import (
     InvitationAcceptedResponse,
     InvitationCreatedResponse,
@@ -32,7 +33,7 @@ admin_invitations_router = APIRouter()
 user_invitations_router = APIRouter()
 
 
-@admin_invitations_router.post("", status_code=201)
+@admin_invitations_router.post("", status_code=201, responses=created(InvitationCreatedResponse))
 async def create_invitation(
     clan_id: uuid.UUID,
     body: InvitationCreateRequest,
@@ -53,7 +54,7 @@ async def create_invitation(
     return {"data": InvitationCreatedResponse.model_validate(out).model_dump()}
 
 
-@admin_invitations_router.get("")
+@admin_invitations_router.get("", responses=ok_list(InvitationResponse))
 async def list_invitations(
     clan_id: uuid.UUID,
     user: UserProfile = Depends(RequireClanRole(["admin"])),
@@ -85,7 +86,7 @@ async def revoke_invitation(
     )
 
 
-@user_invitations_router.post("/{token}/accept")
+@user_invitations_router.post("/{token}/accept", responses=ok(InvitationAcceptedResponse))
 async def accept_invitation(
     token: str,
     current_user: dict[str, Any] = Depends(get_current_user),

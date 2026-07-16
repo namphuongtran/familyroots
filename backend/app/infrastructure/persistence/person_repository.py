@@ -28,7 +28,8 @@ from app.models.user_profile import UserProfile
 # expression differ from the index and forces a full sequential scan.
 _SEARCH_SQL = """
     SELECT p.id, p.full_name, p.birth_name, p.birth_date,
-         p.gender, p.avatar_url, cm.generation, cm.role AS membership_role,
+         p.birth_date_precision, p.birth_date_display, p.lunar_birth_date,
+         p.gender, p.avatar_url, p.version, cm.generation, cm.role AS membership_role,
          cm.is_founder
     FROM persons p
     JOIN clan_memberships cm ON cm.person_id = p.id
@@ -51,10 +52,6 @@ class SqlAlchemyPersonRepository:
         # auto-track the aggregate — tracking can't be forgotten at the seam.
         self._uow = uow
         self._session = uow.session
-
-    async def get_by_id(self, person_id: uuid.UUID) -> PersonEntity | None:
-        result = await self._session.get(PersonModel, person_id)
-        return to_domain(result) if result else None
 
     async def get_in_clan(
         self, person_id: uuid.UUID, clan_id: uuid.UUID, include_deleted: bool = False
@@ -79,6 +76,24 @@ class SqlAlchemyPersonRepository:
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
+
+    async def get_many_in_clan(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> list[PersonEntity]:
+        """Fetch every requested person that is a live member of the clan — one
+        query, not one per id (the batch endpoint's person fan-out)."""
+        if not person_ids:
+            return []
+        result = await self._session.execute(
+            select(PersonModel)
+            .join(ClanMembership, ClanMembership.person_id == PersonModel.id)
+            .where(
+                PersonModel.id.in_(person_ids),
+                ClanMembership.clan_id == clan_id,
+                PersonModel.is_deleted.is_(False),
+            )
+        )
+        return [to_domain(m) for m in result.scalars().all()]
 
     async def get_linked_person_id(self, user_id: uuid.UUID) -> uuid.UUID | None:
         result = await self._session.execute(
@@ -151,8 +166,12 @@ class SqlAlchemyPersonRepository:
                 full_name=row["full_name"],
                 birth_name=row["birth_name"],
                 birth_date=row["birth_date"],
+                birth_date_precision=row["birth_date_precision"],
+                birth_date_display=row["birth_date_display"],
+                lunar_birth_date=row["lunar_birth_date"],
                 gender=row["gender"],
                 avatar_url=row["avatar_url"],
+                version=row["version"],
                 generation=row["generation"],
                 membership_role=row["membership_role"],
                 is_founder=row["is_founder"],

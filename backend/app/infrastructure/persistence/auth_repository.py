@@ -108,6 +108,9 @@ class SqlAlchemyAuthQueryPort(AuthQueryPort):
             )
             .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
             .where(UserProfileModel.id == user_id)
+            # Deterministic for multi-clan users: oldest approved membership,
+            # clan_id as a stable tiebreak. Bare LIMIT 1 returned an arbitrary row.
+            .order_by(UserClanRole.created_at.asc().nulls_last(), UserClanRole.clan_id)
             .limit(1)
         )
         return _profile_view(result.first())
@@ -118,6 +121,14 @@ class SqlAlchemyAuthQueryPort(AuthQueryPort):
             .outerjoin(UserClanRole, UserProfileModel.id == UserClanRole.user_id)
             .outerjoin(Clan, UserClanRole.clan_id == Clan.id)
             .where(UserProfileModel.id == user_id)
+            # Approved membership always beats a pending one (a user approved in
+            # clan A but pending in clan B must log in as A, not "B, role null"),
+            # then oldest first, clan_id tiebreak — bare LIMIT 1 was arbitrary.
+            .order_by(
+                UserClanRole.is_approved.desc().nulls_last(),
+                UserClanRole.created_at.asc().nulls_last(),
+                UserClanRole.clan_id,
+            )
             .limit(1)
         )
         return _profile_view(result.first())

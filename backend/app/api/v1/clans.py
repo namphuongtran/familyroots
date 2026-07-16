@@ -23,12 +23,13 @@ from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_clan_command_handler, get_clan_query_handler
 from app.schemas.clan import ClanResponse, ClanStats, ClanUpdateRequest
+from app.schemas.envelope import ok
 from app.services.translator import t
 
 router = APIRouter()
 
 
-@router.get("/me")
+@router.get("/me", responses=ok(ClanResponse))
 async def get_own_clan(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
@@ -50,7 +51,7 @@ async def get_own_clan(
     return {"data": data}
 
 
-@router.patch("/me")
+@router.patch("/me", responses=ok(ClanResponse))
 async def update_own_clan(
     body: ClanUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),

@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 _firebase_app: firebase_admin.App | None = None
 
+# FCM's documented maximum messages per send_each call.
+_FCM_BATCH_LIMIT = 500
+
 
 def init_firebase() -> None:
     """Initialize the Firebase Admin SDK once at application startup."""
@@ -42,6 +45,31 @@ async def _remove_invalid_token(fcm_token: str, db: AsyncSession | None = None) 
     )
 
 
+def _build_message(
+    fcm_token: str,
+    title_key: str,
+    body_key: str,
+    locale: str,
+    data: dict[str, Any] | None,
+    **kwargs: Any,
+) -> messaging.Message:
+    """One localized FCM Message (shared by single sends and clan batches)."""
+    return messaging.Message(
+        notification=messaging.Notification(
+            title=t(title_key, locale=locale, **kwargs),
+            body=t(body_key, locale=locale, **kwargs),
+        ),
+        data={k: str(v) for k, v in (data or {}).items()},
+        token=fcm_token,
+        android=messaging.AndroidConfig(priority="normal"),
+        apns=messaging.APNSConfig(
+            payload=messaging.APNSPayload(
+                aps=messaging.Aps(sound="default"),
+            ),
+        ),
+    )
+
+
 async def send_push_notification(
     fcm_token: str,
     title_key: str,
@@ -57,20 +85,7 @@ async def send_push_notification(
     failure must not break the calling flow.
     """
     try:
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title=t(title_key, locale=locale, **kwargs),
-                body=t(body_key, locale=locale, **kwargs),
-            ),
-            data={k: str(v) for k, v in (data or {}).items()},
-            token=fcm_token,
-            android=messaging.AndroidConfig(priority="normal"),
-            apns=messaging.APNSConfig(
-                payload=messaging.APNSPayload(
-                    aps=messaging.Aps(sound="default"),
-                ),
-            ),
-        )
+        message = _build_message(fcm_token, title_key, body_key, locale, data, **kwargs)
         await asyncio.to_thread(messaging.send, message)
         return True
 
@@ -112,18 +127,34 @@ async def send_to_clan(
         {"clan_id": clan_id, "exclude": exclude_user_id},
     )
     rows = result.mappings().all()
+    if not rows:
+        return 0, 0
 
+    # Batch with send_each (500 messages/call) instead of one blocking HTTPS
+    # round-trip per token — a few hundred devices x several events was putting
+    # the scheduler job runtime into minutes while it held the advisory lock.
+    data = kwargs.pop("data", None)
+    messages = [
+        _build_message(row["token"], title_key, body_key, row["locale"], data, **kwargs)
+        for row in rows
+    ]
     sent = 0
     failed = 0
-    for row in rows:
-        ok = await send_push_notification(
-            fcm_token=row["token"],
-            title_key=title_key,
-            body_key=body_key,
-            locale=row["locale"],
-            db=db,
-            **kwargs,
-        )
-        sent += 1 if ok else 0
-        failed += 0 if ok else 1
+    for start in range(0, len(messages), _FCM_BATCH_LIMIT):
+        chunk = messages[start : start + _FCM_BATCH_LIMIT]
+        try:
+            batch = await asyncio.to_thread(messaging.send_each, chunk)
+        except Exception as e:
+            logger.error("FCM batch send failed: %s (%d messages)", e, len(chunk))
+            failed += len(chunk)
+            continue
+        for message, resp in zip(chunk, batch.responses, strict=True):
+            if resp.success:
+                sent += 1
+                continue
+            failed += 1
+            if isinstance(resp.exception, messaging.UnregisteredError):
+                await _remove_invalid_token(message.token, db)
+            else:
+                logger.error("FCM send failed: %s (token=%s)", resp.exception, message.token[:20])
     return sent, failed

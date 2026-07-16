@@ -12,8 +12,10 @@ from app.domain.event.entity import Event
 class EventRepository(Protocol):
     """Abstract persistence contract for Event entities."""
 
-    async def get_by_id(self, event_id: uuid.UUID, clan_id: uuid.UUID) -> Event | None:
-        """Fetch an event by ID within a clan."""
+    async def get_by_id(
+        self, event_id: uuid.UUID, clan_id: uuid.UUID, include_deleted: bool = False
+    ) -> Event | None:
+        """Fetch an event by ID within a clan (live only unless include_deleted)."""
         ...
 
     async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
@@ -43,10 +45,9 @@ class EventRepository(Protocol):
         """Get upcoming events with recurring logic (returns raw dicts for complex SQL)."""
         ...
 
-    async def save(self, event: Event) -> None:
-        """Insert or update an Event entity."""
-        ...
+    async def save(self, event: Event, *, expected_version: int | None = None) -> None:
+        """Insert, or update with an optimistic-concurrency check (ADR-022).
 
-    async def delete(self, event: Event) -> None:
-        """Hard-delete an event."""
+        None (delete/restore paths) updates unconditionally but still bumps
+        version so a concurrent PATCH sees a stale_write."""
         ...

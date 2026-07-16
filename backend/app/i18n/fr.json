@@ -181,5 +181,12 @@
   "error.user_not_in_clan": "Cet utilisateur n'est pas membre du clan",
   "error.user_not_linked_to_person": "Cet utilisateur n'est lié à aucune personne",
   "error.validation_error": "Échec de la validation",
-  "error.stale_write": "Cet enregistrement a été modifié par quelqu'un d'autre. Rechargez et réessayez."
+  "error.stale_write": "Cet enregistrement a été modifié par quelqu'un d'autre. Rechargez et réessayez.",
+  "person.deleted": "Membre supprimé",
+  "marriage.deleted": "Mariage supprimé",
+  "parent_child.deleted": "Lien parent-enfant supprimé",
+  "event.deleted": "Événement supprimé",
+  "branch.deleted": "Branche supprimée",
+  "document.deleted": "Document supprimé",
+  "document.avatar_set": "Avatar défini"
 }

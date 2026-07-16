@@ -166,12 +166,12 @@ def create_app() -> FastAPI:
         path_prefixes=("/api/v1/auth", "/api/v1/invitations"),
         max_requests=20,
         window_seconds=60,
-        trust_forwarded_for=settings.RATE_LIMIT_TRUST_FORWARDED_FOR,
+        trust_forwarded_for=settings.trust_forwarded_for,
     )
     if settings.SENTRY_DSN:
         application.add_middleware(SentryMiddleware)
     application.add_middleware(
-        RequestMetaMiddleware, trust_forwarded_for=settings.RATE_LIMIT_TRUST_FORWARDED_FOR
+        RequestMetaMiddleware, trust_forwarded_for=settings.trust_forwarded_for
     )
     application.add_middleware(LanguageMiddleware)
     application.add_middleware(

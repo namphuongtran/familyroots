@@ -28,6 +28,8 @@ class AuthenticatedIdentity:
     email: str
     full_name: str
     tokens: AuthTokens
+    # Validated locale from provider user metadata; None when unset/unknown.
+    preferred_locale: str | None = None
 
 
 class IdentityError(Exception):

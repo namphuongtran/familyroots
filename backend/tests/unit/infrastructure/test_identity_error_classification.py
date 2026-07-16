@@ -14,12 +14,12 @@ import pytest
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
 from app.application.auth.handlers import AuthCommandHandler
-from app.core.exceptions import ValidationError
 from app.domain.auth.identity_provider import (
     IdentityAuthError,
     IdentityUnavailableError,
     IdentityWeakPasswordError,
 )
+from app.domain.shared.exceptions import ValidationError
 from app.infrastructure import supabase_identity_provider as sip
 
 
@@ -199,5 +199,4 @@ async def test_register_maps_weak_password_to_422() -> None:
             clan_name="C",
             clan_slug="c",
         )
-    detail = exc.value.detail
-    assert isinstance(detail, dict) and detail["code"] == "auth.password_too_weak"
+    assert exc.value.code == "auth.password_too_weak"

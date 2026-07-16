@@ -13,18 +13,43 @@ from app.application.person.handlers import PersonQueryHandler
 from app.core.config import settings
 from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
+from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import (
     get_event_command_handler,
     get_event_query_handler,
     get_person_query_handler,
 )
-from app.schemas.event import EventCreateRequest, EventUpdateRequest
+from app.schemas.envelope import created, ok, ok_message, page
+from app.schemas.event import EventCreateRequest, EventResponse, EventUpdateRequest
+from app.services.translator import t
 
 router = APIRouter()
 
 
-@router.post("", status_code=201)
+async def _included_person(
+    person_handler: PersonQueryHandler, person_id: uuid.UUID, clan_id: uuid.UUID
+) -> dict[str, Any] | None:
+    """The include=person summary, or None when the person is genuinely gone.
+
+    Only EntityNotFoundError (e.g. the person was soft-deleted after the event
+    was created) becomes null — the event itself is still valid. Any other
+    failure propagates so the standard error envelope is produced instead of
+    masking a fault as "no linked person" (same policy as persons includes).
+    """
+    try:
+        person = await person_handler.get(GetPerson(person_id=person_id, clan_id=clan_id))
+    except EntityNotFoundError:
+        return None
+    return {
+        "id": str(person.id),
+        "full_name": person.full_name,
+        "gender": person.gender,
+        "avatar_url": person.avatar_url,
+    }
+
+
+@router.post("", status_code=201, responses=created(EventResponse))
 async def create_event(
     body: EventCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -50,7 +75,7 @@ async def create_event(
     return {"data": event.model_dump()}
 
 
-@router.get("")
+@router.get("", responses=page(EventResponse))
 async def list_events(
     person_id: uuid.UUID | None = Query(None),
     event_type: str | None = Query(None),
@@ -111,7 +136,7 @@ async def get_upcoming_events(
     return {"data": upcoming}
 
 
-@router.get("/{event_id}")
+@router.get("/{event_id}", responses=ok(EventResponse))
 async def get_event(
     event_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -128,18 +153,7 @@ async def get_event(
     if include:
         includes = {i.strip() for i in include.split(",")}
         if "person" in includes and event.person_id:
-            try:
-                person = await person_handler.get(
-                    GetPerson(person_id=event.person_id, clan_id=clan_id)
-                )
-                data["person"] = {
-                    "id": str(person.id),
-                    "full_name": person.full_name,
-                    "gender": person.gender,
-                    "avatar_url": person.avatar_url,
-                }
-            except Exception:
-                data["person"] = None
+            data["person"] = await _included_person(person_handler, event.person_id, clan_id)
 
     if fields:
         field_set = {f.strip() for f in fields.split(",")}
@@ -150,7 +164,7 @@ async def get_event(
     return {"data": data}
 
 
-@router.patch("/{event_id}")
+@router.patch("/{event_id}", responses=ok(EventResponse))
 async def update_event(
     event_id: uuid.UUID,
     body: EventUpdateRequest,
@@ -160,16 +174,19 @@ async def update_event(
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     changes = body.model_dump(exclude_unset=True)
+    # The OCC token is transport, not a field of the aggregate.
+    expected_version = changes.pop("expected_version")
     event = await cmd_handler.update(
         event_id=event_id,
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
         changes=changes,
+        expected_version=expected_version,
     )
     return {"data": event.model_dump()}
 
 
-@router.delete("/{event_id}")
+@router.delete("/{event_id}", responses=ok_message())
 async def delete_event(
     event_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -182,4 +199,21 @@ async def delete_event(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
-    return {"data": {"message": "Event deleted", "id": str(event_id)}}
+    return {"data": {"message": t("event.deleted"), "id": str(event_id)}}
+
+
+@router.post("/{event_id}/restore", responses=ok(EventResponse))
+async def restore_event(
+    event_id: uuid.UUID,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    cmd_handler: EventCommandHandler = Depends(get_event_command_handler),
+    role: ClanRole = RequireEditor,
+) -> dict[str, Any]:
+    """Restore a soft-deleted event (ADR-022) — same role that may delete."""
+    event = await cmd_handler.restore(
+        event_id=event_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, role.value),
+    )
+    return {"data": event.model_dump()}

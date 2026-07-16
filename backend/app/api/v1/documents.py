@@ -12,11 +12,14 @@ from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireV
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
+from app.schemas.document import DocumentResponse
+from app.schemas.envelope import created, ok, ok_message, page
+from app.services.translator import t
 
 router = APIRouter()
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses=created(DocumentResponse))
 async def upload_document(
     file: UploadFile = File(...),
     title: str = Form(...),
@@ -56,7 +59,7 @@ async def upload_document(
     return {"data": result.model_dump()}
 
 
-@router.get("")
+@router.get("", responses=page(DocumentResponse))
 async def list_documents(
     person_id: uuid.UUID | None = Query(None),
     document_type: str | None = Query(None),
@@ -83,7 +86,7 @@ async def list_documents(
     return {"data": data, "meta": meta}
 
 
-@router.get("/{document_id}")
+@router.get("/{document_id}", responses=ok(DocumentResponse))
 async def get_document(
     document_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -96,7 +99,7 @@ async def get_document(
     return {"data": result.model_dump()}
 
 
-@router.delete("/{document_id}")
+@router.delete("/{document_id}", responses=ok_message())
 async def delete_document(
     document_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -110,10 +113,10 @@ async def delete_document(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
-    return {"data": {"message": "Document deleted", "id": str(document_id)}}
+    return {"data": {"message": t("document.deleted"), "id": str(document_id)}}
 
 
-@router.post("/{document_id}/restore")
+@router.post("/{document_id}/restore", responses=ok(DocumentResponse))
 async def restore_document(
     document_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -130,7 +133,7 @@ async def restore_document(
     return {"data": result.model_dump()}
 
 
-@router.patch("/{document_id}/set-avatar")
+@router.patch("/{document_id}/set-avatar", responses=ok_message())
 async def set_document_as_avatar(
     document_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -144,4 +147,4 @@ async def set_document_as_avatar(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
-    return {"data": {"message": "Avatar set", "document_id": str(document_id)}}
+    return {"data": {"message": t("document.avatar_set"), "document_id": str(document_id)}}

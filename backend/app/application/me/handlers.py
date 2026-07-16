@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from app.core.exceptions import ForbiddenError
 from app.domain.me.query_port import MeQueryPort
+from app.domain.shared.exceptions import ForbiddenError
 
 
 class MeQueryHandler:

@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.application.shared.audit import emit_audit_event
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.auth.identity_provider import (
     IdentityAuthError,
     IdentityError,
@@ -29,7 +28,12 @@ from app.domain.auth.identity_provider import (
     IdentityWeakPasswordError,
 )
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
-from app.domain.shared.exceptions import AuthenticationError
+from app.domain.shared.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    EntityNotFoundError,
+    ValidationError,
+)
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 from app.schemas.auth import (
@@ -167,7 +171,7 @@ class AuthCommandHandler:
 
         clan_or_none = await self._repo.get_clan_by_id(clan_id)
         if not clan_or_none:
-            raise NotFoundError("clan_not_found")
+            raise EntityNotFoundError("clan_not_found")
         clan = clan_or_none
 
         existing_role = await self._repo.get_user_role(user_id, clan.id)
@@ -238,7 +242,7 @@ class AuthCommandHandler:
             assert clan_id is not None
             clan_or_none = await self._repo.get_clan_by_id(clan_id)
             if not clan_or_none:
-                raise NotFoundError("clan_not_found")
+                raise EntityNotFoundError("clan_not_found")
 
         try:
             user_id_str = await self._identity.create_user(email=email, password=password)
@@ -316,6 +320,8 @@ class AuthCommandHandler:
 
         user_id = uuid.UUID(identity.user_id)
         view = await self._query_port.get_login_profile(user_id)
+        # Same source /auth/me uses — login and /me must agree for the same user.
+        has_pending_membership = await self._query_port.has_pending_membership(user_id)
 
         return LoginResponse(
             access_token=identity.tokens.access_token,
@@ -325,11 +331,13 @@ class AuthCommandHandler:
                 id=user_id,
                 email=email,
                 full_name=identity.full_name,
+                preferred_locale=identity.preferred_locale or "vi",
                 clan_id=view.clan_id if view else None,
                 clan_name=view.clan_name if view else None,
                 # A pending membership carries a role but grants nothing yet.
                 role=view.role if view and view.is_approved else None,
                 is_approved=view.is_approved if view else False,
+                has_pending_membership=has_pending_membership,
                 person_id=view.person_id if view else None,
             ),
         )
@@ -341,7 +349,14 @@ class AuthQueryHandler:
     def __init__(self, query_port: AuthQueryPort) -> None:
         self._query_port = query_port
 
-    async def get_profile(self, *, user_id: uuid.UUID, email: str, full_name: str) -> UserProfile:
+    async def get_profile(
+        self,
+        *,
+        user_id: uuid.UUID,
+        email: str,
+        full_name: str,
+        preferred_locale: str | None = None,
+    ) -> UserProfile:
         """Return the authenticated user's profile."""
         # get_profile joins approved memberships only, so a membership present in
         # the view is by definition approved.
@@ -352,6 +367,7 @@ class AuthQueryHandler:
             id=user_id,
             email=email,
             full_name=full_name,
+            preferred_locale=preferred_locale or "vi",
             clan_id=view.clan_id if view else None,
             clan_name=view.clan_name if view else None,
             role=view.role if view else None,

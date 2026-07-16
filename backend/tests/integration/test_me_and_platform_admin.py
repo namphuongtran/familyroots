@@ -24,7 +24,6 @@ from app.application.platform_admin.handlers import (
     PlatformAdminCommandHandler,
     PlatformAdminQueryHandler,
 )
-from app.core.exceptions import ForbiddenError
 from app.domain.platform_admin.query_port import (
     AuditLogEntryView,
     ClanDetailView,
@@ -33,7 +32,7 @@ from app.domain.platform_admin.query_port import (
     Page,
     PlatformMetricsView,
 )
-from app.domain.shared.exceptions import BusinessRuleViolation
+from app.domain.shared.exceptions import BusinessRuleViolation, ForbiddenError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository

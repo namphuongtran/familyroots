@@ -10,12 +10,14 @@ from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireV
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_branch_command_handler, get_branch_query_handler
-from app.schemas.branch import BranchCreateRequest, BranchUpdateRequest
+from app.schemas.branch import BranchCreateRequest, BranchResponse, BranchUpdateRequest
+from app.schemas.envelope import created, ok, ok_list, ok_message
+from app.services.translator import t
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", responses=ok_list(BranchResponse))
 async def list_branches(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
@@ -32,7 +34,7 @@ async def list_branches(
     return {"data": data}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses=created(BranchResponse))
 async def create_branch(
     body: BranchCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -53,7 +55,7 @@ async def create_branch(
     return {"data": branch.model_dump()}
 
 
-@router.get("/{branch_id}")
+@router.get("/{branch_id}", responses=ok(BranchResponse))
 async def get_branch(
     branch_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -66,7 +68,7 @@ async def get_branch(
     return {"data": branch.model_dump()}
 
 
-@router.patch("/{branch_id}")
+@router.patch("/{branch_id}", responses=ok(BranchResponse))
 async def update_branch(
     branch_id: uuid.UUID,
     body: BranchUpdateRequest,
@@ -85,7 +87,7 @@ async def update_branch(
     return {"data": branch.model_dump()}
 
 
-@router.delete("/{branch_id}")
+@router.delete("/{branch_id}", responses=ok_message())
 async def delete_branch(
     branch_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -99,4 +101,4 @@ async def delete_branch(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
-    return {"data": {"message": "Branch deleted", "id": str(branch_id)}}
+    return {"data": {"message": t("branch.deleted"), "id": str(branch_id)}}

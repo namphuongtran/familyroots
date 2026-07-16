@@ -181,5 +181,12 @@
   "error.user_not_in_clan": "This user is not a member of the clan",
   "error.user_not_linked_to_person": "This user is not linked to a person",
   "error.validation_error": "Validation failed",
-  "error.stale_write": "This record was modified by someone else. Reload and try again."
+  "error.stale_write": "This record was modified by someone else. Reload and try again.",
+  "person.deleted": "Person deleted",
+  "marriage.deleted": "Marriage deleted",
+  "parent_child.deleted": "Parent-child link deleted",
+  "event.deleted": "Event deleted",
+  "branch.deleted": "Branch deleted",
+  "document.deleted": "Document deleted",
+  "document.avatar_set": "Avatar set"
 }

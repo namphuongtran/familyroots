@@ -9,6 +9,8 @@ straight back as a raw `fastapi.Response` (this endpoint is envelope-exempt).
 
 from __future__ import annotations
 
+import re
+import unicodedata
 import uuid
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
@@ -25,6 +27,21 @@ from app.domain.shared.exceptions import EntityNotFoundError
 BuildClanExportFn = Callable[..., dict[str, Any]]
 ToJsonBytesFn = Callable[[dict[str, Any]], bytes]
 BuildGedcomFn = Callable[..., str]
+
+
+def filename_slug(slug: str) -> str:
+    """An ASCII/header-safe filename component from a clan slug.
+
+    The slug lands in a Content-Disposition header, which is latin-1 only —
+    a diacritic slug (created before slug input validation existed) raised
+    UnicodeEncodeError → 500, and a double quote broke the quoted filename.
+    Transliterate (đ→d, then NFKD-strip accents), keep [a-z0-9-], collapse
+    hyphens, and never return an empty component.
+    """
+    transliterated = slug.replace("đ", "d").replace("Đ", "D")
+    ascii_only = unicodedata.normalize("NFKD", transliterated).encode("ascii", "ignore").decode()
+    cleaned = re.sub(r"-{2,}", "-", re.sub(r"[^a-z0-9-]+", "-", ascii_only.lower())).strip("-")
+    return cleaned or "clan"
 
 
 class ExportQueryHandler:
@@ -72,7 +89,7 @@ class ExportQueryHandler:
                 branches=branches,
                 generation_map=generation_map,
             )
-            filename = f"{clan['slug']}-gia-pha-{date.today().isoformat()}.ged"
+            filename = f"{filename_slug(clan['slug'])}-gia-pha-{date.today().isoformat()}.ged"
             return filename, "text/x-gedcom", gedcom_text.encode("utf-8")
 
         if fmt != "json":
@@ -95,7 +112,7 @@ class ExportQueryHandler:
             exported_at=now.isoformat(),
         )
         body = self._to_json_bytes(payload)
-        filename = f"{clan['slug']}-gia-pha-{date.today().isoformat()}.json"
+        filename = f"{filename_slug(clan['slug'])}-gia-pha-{date.today().isoformat()}.json"
         return filename, "application/json", body
 
     async def _presign_manifest(

@@ -33,12 +33,14 @@ from app.infrastructure.dependencies import (
     get_parent_child_command_handler,
     get_parent_child_query_handler,
 )
+from app.schemas.envelope import created, ok, ok_message
 from app.schemas.marriage import MarriageCreateRequest, MarriageResponse, MarriageUpdateRequest
 from app.schemas.parent_child import (
     ParentChildCreateRequest,
     ParentChildResponse,
     ParentChildUpdateRequest,
 )
+from app.services.translator import t
 
 router = APIRouter()
 
@@ -46,7 +48,7 @@ router = APIRouter()
 # ── Marriages ─────────────────────────────────────────────────
 
 
-@router.post("/marriages", status_code=201)
+@router.post("/marriages", status_code=201, responses=created(MarriageResponse))
 async def create_marriage(
     body: MarriageCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -76,7 +78,7 @@ async def create_marriage(
     return {"data": marriage.model_dump()}
 
 
-@router.get("/marriages/{marriage_id}")
+@router.get("/marriages/{marriage_id}", responses=ok(MarriageResponse))
 async def get_marriage(
     marriage_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -91,7 +93,7 @@ async def get_marriage(
     return {"data": MarriageResponse.model_validate(marriage).model_dump()}
 
 
-@router.patch("/marriages/{marriage_id}")
+@router.patch("/marriages/{marriage_id}", responses=ok(MarriageResponse))
 async def update_marriage(
     marriage_id: uuid.UUID,
     body: MarriageUpdateRequest,
@@ -115,7 +117,7 @@ async def update_marriage(
     return {"data": marriage.model_dump()}
 
 
-@router.delete("/marriages/{marriage_id}")
+@router.delete("/marriages/{marriage_id}", responses=ok_message())
 async def delete_marriage(
     marriage_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -131,13 +133,13 @@ async def delete_marriage(
             actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
-    return {"data": {"message": "Marriage deleted", "id": str(marriage_id)}}
+    return {"data": {"message": t("marriage.deleted"), "id": str(marriage_id)}}
 
 
 # ── Parent-Child ──────────────────────────────────────────────
 
 
-@router.post("/parent-child", status_code=201)
+@router.post("/parent-child", status_code=201, responses=created(ParentChildResponse))
 async def create_parent_child(
     body: ParentChildCreateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -163,7 +165,7 @@ async def create_parent_child(
     return response
 
 
-@router.get("/parent-child/{link_id}")
+@router.get("/parent-child/{link_id}", responses=ok(ParentChildResponse))
 async def get_parent_child(
     link_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -178,7 +180,7 @@ async def get_parent_child(
     return {"data": ParentChildResponse.model_validate(link).model_dump()}
 
 
-@router.patch("/parent-child/{link_id}")
+@router.patch("/parent-child/{link_id}", responses=ok(ParentChildResponse))
 async def update_parent_child(
     link_id: uuid.UUID,
     body: ParentChildUpdateRequest,
@@ -202,7 +204,7 @@ async def update_parent_child(
     return {"data": link.model_dump()}
 
 
-@router.delete("/parent-child/{link_id}")
+@router.delete("/parent-child/{link_id}", responses=ok_message())
 async def delete_parent_child(
     link_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -218,4 +220,4 @@ async def delete_parent_child(
             actor=ActorInfo.from_jwt(current_user, role.value),
         )
     )
-    return {"data": {"message": "Parent-child link deleted", "id": str(link_id)}}
+    return {"data": {"message": t("parent_child.deleted"), "id": str(link_id)}}

@@ -41,6 +41,8 @@ _PROD_BASE: dict[str, Any] = {
     "SUPABASE_URL": "https://proj.supabase.co",
     "SUPABASE_ANON_KEY": "sb_publishable_x",
     "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_x",
+    # Production requires an explicit XFF-trust decision (proxied → true).
+    "RATE_LIMIT_TRUST_FORWARDED_FOR": True,
 }
 
 

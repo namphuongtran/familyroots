@@ -2,8 +2,8 @@
 
 Wraps the Supabase Auth SDK and translates its (string-y, SDK-specific) failures
 into the provider-agnostic domain exceptions, so the application layer never sees
-the SDK. The Supabase client is synchronous; these async methods wrap it directly
-(pre-existing behavior — the call is short).
+the SDK. The Supabase client is synchronous; every SDK call is off-loaded via
+asyncio.to_thread so an auth round-trip never blocks the event loop.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Any
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
 from app.core.config import settings
+from app.core.locale import SUPPORTED_LOCALES
 from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
     AuthTokens,
@@ -68,8 +69,9 @@ class SupabaseIdentityProvider:
     async def create_user(self, *, email: str, password: str) -> str:
         sb = get_service_client()
         try:
-            resp = sb.auth.admin.create_user(
-                {"email": email, "password": password, "email_confirm": False}
+            resp = await asyncio.to_thread(
+                sb.auth.admin.create_user,
+                {"email": email, "password": password, "email_confirm": False},
             )
         except Exception as exc:
             if "already" in str(exc).lower():
@@ -83,20 +85,24 @@ class SupabaseIdentityProvider:
         return str(resp.user.id)
 
     async def delete_user(self, user_id: str) -> None:
-        get_service_client().auth.admin.delete_user(user_id)
+        await asyncio.to_thread(get_service_client().auth.admin.delete_user, user_id)
 
     async def sign_in(self, *, email: str, password: str) -> AuthenticatedIdentity:
         sb = get_anon_client()
         try:
-            resp = sb.auth.sign_in_with_password({"email": email, "password": password})
+            resp = await asyncio.to_thread(
+                sb.auth.sign_in_with_password, {"email": email, "password": password}
+            )
         except Exception as exc:
             raise _classify(exc) from exc
         if resp.session is None or resp.user is None:
             raise IdentityAuthError()
+        raw_locale = resp.user.user_metadata.get("preferred_locale")
         return AuthenticatedIdentity(
             user_id=str(resp.user.id),
             email=email,
             full_name=resp.user.user_metadata.get("full_name", ""),
+            preferred_locale=raw_locale if raw_locale in SUPPORTED_LOCALES else None,
             tokens=AuthTokens(
                 access_token=resp.session.access_token,
                 refresh_token=resp.session.refresh_token,
@@ -107,7 +113,7 @@ class SupabaseIdentityProvider:
     async def refresh(self, *, refresh_token: str) -> AuthTokens:
         sb = get_anon_client()
         try:
-            resp = sb.auth.refresh_session(refresh_token)
+            resp = await asyncio.to_thread(sb.auth.refresh_session, refresh_token)
         except Exception as exc:
             raise _classify(exc) from exc
         if resp.session is None:
@@ -122,7 +128,9 @@ class SupabaseIdentityProvider:
         # Best-effort: the stateless access token remains valid until its short
         # expiry; this just prevents the session from being renewed.
         with suppress(Exception):
-            get_service_client().auth.admin.sign_out(access_token, "global")
+            await asyncio.to_thread(
+                get_service_client().auth.admin.sign_out, access_token, "global"
+            )
 
     async def update_user(
         self, *, user_id: str, full_name: str | None, preferred_locale: str | None
@@ -135,7 +143,11 @@ class SupabaseIdentityProvider:
         if update_data:
             # The SDK types this as AdminUserAttributes but accepts a dict at runtime
             # (matches the prior implementation).
-            get_service_client().auth.admin.update_user_by_id(user_id, update_data)  # type: ignore[arg-type]
+            await asyncio.to_thread(
+                get_service_client().auth.admin.update_user_by_id,
+                user_id,
+                update_data,  # type: ignore[arg-type]
+            )
 
     async def send_password_reset(self, *, email: str) -> None:
         # Anon client (no service role needed); off-loaded — the SDK call is blocking.

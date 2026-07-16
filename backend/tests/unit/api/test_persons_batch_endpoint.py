@@ -60,6 +60,28 @@ class _FakePersonQueryHandler:
             raise EntityNotFoundError("person_not_found")
         return person
 
+    async def get_many(
+        self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
+    ) -> tuple[list[_FakePerson], list[uuid.UUID]]:
+        persons = [self._persons[pid] for pid in person_ids if pid in self._persons]
+        missing = [pid for pid in person_ids if pid not in self._persons]
+        return persons, missing
+
+    async def get_included_data_batch(
+        self, clan_id: uuid.UUID, include_ids: dict[str, list[uuid.UUID]]
+    ) -> dict[str, dict[uuid.UUID, list[dict[str, Any]]]]:
+        fetchers = {
+            "marriages": self.get_marriages,
+            "parent_child": self.get_parent_child,
+            "timeline": self.get_timeline,
+            "documents": self.get_documents,
+        }
+        out: dict[str, dict[uuid.UUID, list[dict[str, Any]]]] = {}
+        for token, ids in include_ids.items():
+            if token in fetchers and ids:
+                out[token] = {pid: await fetchers[token](clan_id, pid) for pid in ids}
+        return out
+
     async def redact_pii(self, persons: Any, *, viewer_role: str, viewer_user_id: Any) -> None:
         # PII redaction (L11) is covered in test_person_pii_visibility; not exercised
         # here — this batch test targets profile/fields/stats behavior.

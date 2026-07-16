@@ -84,7 +84,6 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
 
     if today is None:
         today = datetime.now(_TZ).date()
-    tz_name = settings.SCHEDULER_TIMEZONE
     this_year = next_anniversary_sql("EXTRACT(YEAR FROM :today ::date)")
     next_year = next_anniversary_sql("EXTRACT(YEAR FROM :today ::date) + 1")
 
@@ -119,6 +118,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.is_recurring = true
+                      AND e.is_deleted = false
                       AND e.is_lunar_calendar = false
                       AND (e.person_id IS NULL OR p.is_deleted = false)
                 """),
@@ -140,6 +140,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.is_recurring = true
+                      AND e.is_deleted = false
                       AND e.is_lunar_calendar = true
                       AND (e.person_id IS NULL OR p.is_deleted = false)
                 """)
@@ -163,18 +164,19 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     if days_until != event["notify_days_before"]:
                         continue
 
+                    # sent_on is the explicit platform-day stamp (migration 017)
+                    # — an index-friendly equality, not tz math over created_at.
                     dedup = await db.execute(
                         text("""
                             SELECT 1 FROM public.notification_log
                             WHERE event_id = :event_id
                               AND notification_type = :ntype
-                              AND DATE(created_at AT TIME ZONE :tz) = :today
+                              AND sent_on = :today
                             LIMIT 1
                         """),
                         {
                             "event_id": event["event_id"],
                             "ntype": event["event_type"],
-                            "tz": tz_name,
                             "today": today,
                         },
                     )
@@ -196,10 +198,11 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                         text("""
                             INSERT INTO public.notification_log
                                 (clan_id, event_id, user_id, notification_type,
-                                 title, body, status, sent_at, error_message)
+                                 title, body, status, sent_at, sent_on, error_message)
                             VALUES (:clan_id, :event_id,
                                     '00000000-0000-0000-0000-000000000000',
-                                    :ntype, :title, '', :status, NOW(), :error_message)
+                                    :ntype, :title, '', :status, NOW(), :today,
+                                    :error_message)
                         """),
                         {
                             "clan_id": event["clan_id"],
@@ -207,6 +210,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                             "ntype": event["event_type"],
                             "title": event["title"],
                             "status": status,
+                            "today": today,
                             "error_message": error_message,
                         },
                     )

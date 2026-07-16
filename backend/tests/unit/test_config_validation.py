@@ -42,6 +42,8 @@ _PROD_SAFE = {
     "SUPABASE_URL": "https://proj.supabase.co",
     "SUPABASE_ANON_KEY": "sb_publishable_x",
     "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_x",
+    # Production must decide XFF trust explicitly; Render (proxied) → true.
+    "RATE_LIMIT_TRUST_FORWARDED_FOR": True,
 }
 
 
@@ -58,3 +60,29 @@ def test_production_rejects_localhost_database_url():
 def test_production_rejects_localhost_cors_origin():
     with pytest.raises(ValidationError):
         _build(**{**_PROD_SAFE, "CORS_ORIGINS": ["http://localhost:3000"]})
+
+
+def test_production_requires_explicit_forwarded_for_decision():
+    # Deployed behind a proxy (Render) with trust left unset, every client shares
+    # the proxy's rate bucket and audit IPs record the proxy — production must
+    # make the XFF-trust decision explicitly, either way.
+    prod = {k: v for k, v in _PROD_SAFE.items() if k != "RATE_LIMIT_TRUST_FORWARDED_FOR"}
+    with pytest.raises(ValidationError):
+        _build(**prod)
+
+
+def test_production_accepts_explicit_forwarded_for_true():
+    s = _build(**{**_PROD_SAFE, "RATE_LIMIT_TRUST_FORWARDED_FOR": True})
+    assert s.trust_forwarded_for is True
+
+
+def test_production_accepts_explicit_forwarded_for_false():
+    # Direct exposure (no proxy) is a legitimate deployment — trusting XFF there
+    # would let clients spoof it — so an explicit False must also pass.
+    s = _build(**{**_PROD_SAFE, "RATE_LIMIT_TRUST_FORWARDED_FOR": False})
+    assert s.trust_forwarded_for is False
+
+
+def test_dev_unset_forwarded_for_resolves_false():
+    s = _build(APP_ENV="development")
+    assert s.trust_forwarded_for is False

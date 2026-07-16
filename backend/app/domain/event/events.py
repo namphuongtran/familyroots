@@ -68,3 +68,18 @@ class EventDeleted(AuditableEvent):
             object.__setattr__(self, "resource_type", "event")
         if self.resource_id is None:
             object.__setattr__(self, "resource_id", self.event_id)
+
+
+@dataclass(frozen=True)
+class EventRestored(AuditableEvent):
+    """Emitted when a soft-deleted event is restored (ADR-022)."""
+
+    event_id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+    def __post_init__(self) -> None:
+        if not self.action:
+            object.__setattr__(self, "action", "event.restore")
+        if not self.resource_type:
+            object.__setattr__(self, "resource_type", "event")
+        if self.resource_id is None:
+            object.__setattr__(self, "resource_id", self.event_id)

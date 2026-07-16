@@ -8,13 +8,13 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from app.core.exceptions import NotFoundError
 from app.domain.clan.repository import ClanRepository
 from app.domain.platform_admin.query_port import (
     AuditLogEntryView,
     ClanSummaryView,
     PlatformAdminQueryPort,
 )
+from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 
@@ -29,7 +29,7 @@ class PlatformAdminCommandHandler:
     async def suspend_clan(self, *, clan_id: uuid.UUID, actor: ActorInfo) -> None:
         clan = await self._repo.get_clan_for_update(clan_id)
         if clan is None:
-            raise NotFoundError("clan_not_found")
+            raise EntityNotFoundError("clan_not_found")
 
         clan.suspend(actor)  # flips is_active + emits ClanSuspended (audited)
         self._uow.track(clan)
@@ -39,7 +39,7 @@ class PlatformAdminCommandHandler:
     async def reactivate_clan(self, *, clan_id: uuid.UUID, actor: ActorInfo) -> None:
         clan = await self._repo.get_clan_for_update(clan_id)
         if clan is None:
-            raise NotFoundError("clan_not_found")
+            raise EntityNotFoundError("clan_not_found")
 
         clan.reactivate(actor)  # flips is_active + emits ClanReactivated (audited)
         self._uow.track(clan)

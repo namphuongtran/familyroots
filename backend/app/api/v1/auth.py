@@ -13,6 +13,7 @@ from app.application.auth.handlers import (
     AuthSessionService,
     FCMTokenHandler,
 )
+from app.core.locale import SUPPORTED_LOCALES
 from app.core.security import get_current_user, security
 from app.infrastructure.dependencies import (
     get_auth_command_handler,
@@ -25,11 +26,14 @@ from app.schemas.auth import (
     FCMTokenRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    LoginResponse,
     RefreshRequest,
     RegisterRequest,
     ResendVerificationRequest,
+    UserProfile,
     UserUpdateRequest,
 )
+from app.schemas.envelope import ok
 from app.services.translator import t
 
 logger = logging.getLogger(__name__)
@@ -74,7 +78,7 @@ async def onboard_authenticated_user(
     return {"data": result.model_dump()}
 
 
-@router.post("/login")
+@router.post("/login", responses=ok(LoginResponse))
 async def login(
     body: LoginRequest, handler: AuthCommandHandler = Depends(get_auth_command_handler)
 ) -> dict[str, Any]:
@@ -135,16 +139,18 @@ async def resend_verification(
     return {"data": {"message": t("auth.verification_email_sent")}}
 
 
-@router.get("/me")
+@router.get("/me", responses=ok(UserProfile))
 async def get_me(
     current_user: dict[str, Any] = Depends(get_current_user),
     handler: AuthQueryHandler = Depends(get_auth_query_handler),
 ) -> dict[str, Any]:
     """Return the authenticated user's profile."""
+    raw_locale = current_user.get("user_metadata", {}).get("preferred_locale")
     profile = await handler.get_profile(
         user_id=uuid.UUID(current_user["sub"]),
         email=current_user.get("email", ""),
         full_name=current_user.get("user_metadata", {}).get("full_name", ""),
+        preferred_locale=raw_locale if raw_locale in SUPPORTED_LOCALES else None,
     )
     return {"data": profile.model_dump()}
 

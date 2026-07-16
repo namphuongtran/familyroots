@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.exceptions import AppError, AuthenticationError, ForbiddenError
 from app.core.locale import SUPPORTED_LOCALES
+from app.domain.auth.identity_provider import IdentityUnavailableError
 from app.models.user_profile import UserProfile
 
 # auto_error=False so a MISSING/malformed Authorization header raises our own
@@ -30,6 +31,7 @@ _jwks_cache: dict[str, Any] | None = None
 _jwks_cache_time: float = 0.0
 _jwks_lock: asyncio.Lock | None = None
 _JWKS_TTL: float = 3600.0  # 1 hour
+_JWKS_FETCH_TIMEOUT: float = 5.0  # seconds — bound the auth path on cache miss
 
 
 def _get_jwks_lock() -> asyncio.Lock:
@@ -55,10 +57,16 @@ async def get_supabase_jwks() -> dict[str, Any]:
         if _jwks_cache is not None and (now - _jwks_cache_time) < _JWKS_TTL:
             return _jwks_cache
 
-        async with httpx.AsyncClient() as client:
+        # Bounded fetch: on a cache miss every request needing token verification
+        # funnels through here, so a hung JWKS endpoint must fail fast (503 via
+        # IdentityUnavailableError) instead of stalling the whole service.
+        async with httpx.AsyncClient(timeout=_JWKS_FETCH_TIMEOUT) as client:
             url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
-            resp = await client.get(url)
-            resp.raise_for_status()
+            try:
+                resp = await client.get(url)
+                resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise IdentityUnavailableError(f"JWKS fetch failed: {exc}") from exc
             _jwks_cache = resp.json()
             _jwks_cache_time = now
             return _jwks_cache
