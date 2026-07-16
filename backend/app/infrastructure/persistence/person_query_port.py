@@ -56,7 +56,11 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
 
     async def get_documents(self, clan_id: uuid.UUID, person_id: uuid.UUID) -> list[dict[str, Any]]:
         result = await self._session.execute(
-            select(Document).where(Document.clan_id == clan_id, Document.person_id == person_id)
+            select(Document).where(
+                Document.clan_id == clan_id,
+                Document.person_id == person_id,
+                Document.is_deleted.is_(False),
+            )
         )
         docs = result.scalars().all()
         return [DocumentSummary.model_validate(d).model_dump() for d in docs]
