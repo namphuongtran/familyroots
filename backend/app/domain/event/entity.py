@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from app.domain.event.events import EventCreated, EventDeleted, EventUpdated
+from app.domain.event.events import EventCreated, EventDeleted, EventRestored, EventUpdated
 from app.domain.shared.entity import AggregateRoot
 from app.domain.shared.exceptions import BusinessRuleViolation
 from app.domain.shared.value_objects import ActorInfo
@@ -66,6 +66,12 @@ class Event(AggregateRoot):
     created_by: uuid.UUID = field(default_factory=uuid.uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    # ── Soft delete + OCC (ADR-022) ───────────────────────────
+    is_deleted: bool = False
+    deleted_at: datetime | None = None
+    deleted_by: uuid.UUID | None = None
+    version: int = 1
 
     # ── Domain methods ────────────────────────────────────────
 
@@ -142,9 +148,26 @@ class Event(AggregateRoot):
         )
 
     def delete(self, actor: ActorInfo) -> None:
-        """Emit a deletion event."""
+        """Mark the event as soft-deleted (recoverable via restore)."""
+        self.is_deleted = True
+        self.deleted_at = datetime.now(UTC)
+        self.deleted_by = actor.user_id
         self.add_event(
             EventDeleted(
+                event_id=self.id,
+                clan_id=self.clan_id,
+                actor_id=actor.user_id,
+                actor_role=actor.role,
+            )
+        )
+
+    def restore(self, actor: ActorInfo) -> None:
+        """Restore a soft-deleted event."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.add_event(
+            EventRestored(
                 event_id=self.id,
                 clan_id=self.clan_id,
                 actor_id=actor.user_id,

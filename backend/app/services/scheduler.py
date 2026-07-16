@@ -118,6 +118,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.is_recurring = true
+                      AND e.is_deleted = false
                       AND e.is_lunar_calendar = false
                       AND (e.person_id IS NULL OR p.is_deleted = false)
                 """),
@@ -139,6 +140,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.is_recurring = true
+                      AND e.is_deleted = false
                       AND e.is_lunar_calendar = true
                       AND (e.person_id IS NULL OR p.is_deleted = false)
                 """)

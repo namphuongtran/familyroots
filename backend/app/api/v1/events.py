@@ -173,11 +173,14 @@ async def update_event(
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
     changes = body.model_dump(exclude_unset=True)
+    # The OCC token is transport, not a field of the aggregate.
+    expected_version = changes.pop("expected_version")
     event = await cmd_handler.update(
         event_id=event_id,
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
         changes=changes,
+        expected_version=expected_version,
     )
     return {"data": event.model_dump()}
 
@@ -196,3 +199,20 @@ async def delete_event(
         actor=ActorInfo.from_jwt(current_user, role.value),
     )
     return {"data": {"message": t("event.deleted"), "id": str(event_id)}}
+
+
+@router.post("/{event_id}/restore")
+async def restore_event(
+    event_id: uuid.UUID,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    cmd_handler: EventCommandHandler = Depends(get_event_command_handler),
+    role: ClanRole = RequireEditor,
+) -> dict[str, Any]:
+    """Restore a soft-deleted event (ADR-022) — same role that may delete."""
+    event = await cmd_handler.restore(
+        event_id=event_id,
+        clan_id=clan_id,
+        actor=ActorInfo.from_jwt(current_user, role.value),
+    )
+    return {"data": event.model_dump()}

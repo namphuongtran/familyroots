@@ -89,6 +89,7 @@ class _FakeEventCommandHandler:
         clan_id: uuid.UUID,
         actor: Any,
         changes: dict[str, Any],
+        expected_version: int,
     ) -> _FakeResponse:
         self.received_changes = changes
         return _FakeResponse(id=event_id)
@@ -194,10 +195,12 @@ def test_update_event_with_precision_field_persists() -> None:
             "event_date_precision": "month",
             "event_date_display": "Jan 1975",
             "title": "New title",
+            "expected_version": 1,
         },
     )
 
     assert response.status_code == 200, response.text
+    # expected_version is popped by the route (OCC, ADR-022) — never part of changes.
     assert handlers["event"].received_changes == {
         "event_date_precision": "month",
         "event_date_display": "Jan 1975",

@@ -5,7 +5,8 @@ from __future__ import annotations
 from app.domain.event.entity import Event as EventEntity
 from app.models.event import Event as EventModel
 
-_MAPPED_FIELDS = (
+# Public: the repository's OCC core UPDATE writes exactly these columns.
+MAPPED_FIELDS = (
     "clan_id",
     "person_id",
     "event_type",
@@ -18,6 +19,11 @@ _MAPPED_FIELDS = (
     "is_recurring",
     "notify_days_before",
     "created_by",
+    # Soft delete (ADR-022); `version` is deliberately absent — the repository
+    # bumps it in the core UPDATE (OCC), never via attribute assignment.
+    "is_deleted",
+    "deleted_at",
+    "deleted_by",
 )
 
 
@@ -39,6 +45,10 @@ def to_domain(model: EventModel) -> EventEntity:
         created_by=model.created_by,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        is_deleted=model.is_deleted,
+        deleted_at=model.deleted_at,
+        deleted_by=model.deleted_by,
+        version=model.version,
     )
 
 
@@ -61,7 +71,3 @@ def to_orm(entity: EventEntity) -> EventModel:
     )
 
 
-def apply_to_orm(entity: EventEntity, model: EventModel) -> None:
-    """Apply domain entity state onto an existing ORM model (UPDATE)."""
-    for field_name in _MAPPED_FIELDS:
-        setattr(model, field_name, getattr(entity, field_name))

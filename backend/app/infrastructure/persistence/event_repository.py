@@ -12,9 +12,11 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import select, text
+from sqlalchemy import update as sql_update
 
 from app.domain.event.entity import Event as EventEntity
-from app.infrastructure.persistence.event_mapper import apply_to_orm, to_domain, to_orm
+from app.domain.shared.exceptions import ConflictError
+from app.infrastructure.persistence.event_mapper import MAPPED_FIELDS, to_domain, to_orm
 from app.infrastructure.persistence.sql_dates import next_anniversary_sql
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
@@ -32,10 +34,13 @@ class SqlAlchemyEventRepository:
         self._uow = uow
         self._session = uow.session
 
-    async def get_by_id(self, event_id: uuid.UUID, clan_id: uuid.UUID) -> EventEntity | None:
-        result = await self._session.execute(
-            select(EventModel).where(EventModel.id == event_id, EventModel.clan_id == clan_id)
-        )
+    async def get_by_id(
+        self, event_id: uuid.UUID, clan_id: uuid.UUID, include_deleted: bool = False
+    ) -> EventEntity | None:
+        stmt = select(EventModel).where(EventModel.id == event_id, EventModel.clan_id == clan_id)
+        if not include_deleted:
+            stmt = stmt.where(EventModel.is_deleted.is_(False))
+        result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return to_domain(model) if model else None
 
@@ -59,7 +64,9 @@ class SqlAlchemyEventRepository:
     ) -> list[EventEntity]:
         from app.core.pagination import paginate_query
 
-        query = select(EventModel).where(EventModel.clan_id == clan_id)
+        query = select(EventModel).where(
+            EventModel.clan_id == clan_id, EventModel.is_deleted.is_(False)
+        )
         if person_id:
             query = query.where(EventModel.person_id == person_id)
         if event_type:
@@ -100,6 +107,7 @@ class SqlAlchemyEventRepository:
                     FROM public.events e
                     LEFT JOIN public.persons p ON p.id = e.person_id
                     WHERE e.clan_id = :clan_id
+                        AND e.is_deleted = false
                         AND (e.is_recurring = true OR e.event_date >= :today)
                         AND NOT (e.is_recurring = true AND e.is_lunar_calendar = true)
                 )
@@ -126,6 +134,7 @@ class SqlAlchemyEventRepository:
                 FROM public.events e
                 LEFT JOIN public.persons p ON p.id = e.person_id
                 WHERE e.clan_id = :clan_id
+                  AND e.is_deleted = false
                   AND e.is_recurring = true
                   AND e.is_lunar_calendar = true
             """),
@@ -182,20 +191,33 @@ class SqlAlchemyEventRepository:
             )
         return upcoming
 
-    async def save(self, event: EventEntity) -> None:
-        """Insert or update an Event."""
-        self._uow.track(event)
-        existing = await self._session.execute(select(EventModel).where(EventModel.id == event.id))
-        model = existing.scalar_one_or_none()
-        if model:
-            apply_to_orm(event, model)
-        else:
-            self._session.add(to_orm(event))
+    async def save(self, event: EventEntity, *, expected_version: int | None = None) -> None:
+        """Insert, or update with an optimistic-concurrency check (ADR-022).
 
-    async def delete(self, event: EventEntity) -> None:
-        """Hard-delete an event."""
+        expected_version=None (delete/restore paths) updates unconditionally
+        but still bumps version so any concurrent PATCH sees a stale_write —
+        the same contract persons/marriages use (ADR-017).
+        """
         self._uow.track(event)
-        result = await self._session.execute(select(EventModel).where(EventModel.id == event.id))
-        model = result.scalar_one_or_none()
-        if model:
-            await self._session.delete(model)
+        existing = await self._session.get(EventModel, event.id)
+        if existing is None:
+            self._session.add(to_orm(event))
+            return
+
+        values = {f: getattr(event, f) for f in MAPPED_FIELDS}
+        values["updated_at"] = event.updated_at
+        stmt = (
+            sql_update(EventModel)
+            .where(EventModel.id == event.id)
+            .values(**values, version=EventModel.version + 1)
+        )
+        if expected_version is not None:
+            stmt = stmt.where(EventModel.version == expected_version)
+        result = await self._session.execute(stmt)
+        if result.rowcount == 0:
+            current = await self._session.scalar(
+                select(EventModel.version).where(EventModel.id == event.id)
+            )
+            raise ConflictError("stale_write", detail={"current_version": current})
+        await self._session.refresh(existing)  # sync identity map with the core UPDATE
+        event.version = existing.version

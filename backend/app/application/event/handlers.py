@@ -18,6 +18,29 @@ from app.domain.shared.value_objects import ActorInfo
 from app.schemas.event import EventResponse
 
 
+def _to_response(event: Event) -> EventResponse:
+    """One serialization seam for the Event aggregate -> wire DTO."""
+    return EventResponse(
+        id=event.id,
+        clan_id=event.clan_id,
+        person_id=event.person_id,
+        event_type=event.event_type,
+        title=event.title,
+        description=event.description,
+        event_date=event.event_date,
+        event_date_precision=event.event_date_precision,
+        event_date_display=event.event_date_display,
+        is_lunar_calendar=event.is_lunar_calendar,
+        is_recurring=event.is_recurring,
+        notify_days_before=event.notify_days_before,
+        created_by=event.created_by,
+        created_at=event.created_at,
+        updated_at=event.updated_at,
+        version=event.version,
+        is_deleted=event.is_deleted,
+    )
+
+
 class EventCommandHandler:
     """Handles event write operations."""
 
@@ -63,23 +86,7 @@ class EventCommandHandler:
         await self._repo.save(event)
         await self._uow.commit()
 
-        return EventResponse(
-            id=event.id,
-            clan_id=event.clan_id,
-            person_id=event.person_id,
-            event_type=event.event_type,
-            title=event.title,
-            description=event.description,
-            event_date=event.event_date,
-            event_date_precision=event.event_date_precision,
-            event_date_display=event.event_date_display,
-            is_lunar_calendar=event.is_lunar_calendar,
-            is_recurring=event.is_recurring,
-            notify_days_before=event.notify_days_before,
-            created_by=event.created_by,
-            created_at=event.created_at,
-            updated_at=event.updated_at,
-        )
+        return _to_response(event)
 
     async def update(
         self,
@@ -88,32 +95,17 @@ class EventCommandHandler:
         clan_id: uuid.UUID,
         actor: ActorInfo,
         changes: dict[str, Any],
+        expected_version: int,
     ) -> EventResponse:
         # Note: person_id is create-only (not in EventUpdateRequest, and excluded
         # from the Event aggregate's updatable fields), so there is no cross-clan
         # person reference to validate on update — only create needs the guard.
         event = await self._get_or_raise(event_id, clan_id)
         event.update(changes, actor)
-        await self._repo.save(event)
+        await self._repo.save(event, expected_version=expected_version)
         await self._uow.commit()
 
-        return EventResponse(
-            id=event.id,
-            clan_id=event.clan_id,
-            person_id=event.person_id,
-            event_type=event.event_type,
-            title=event.title,
-            description=event.description,
-            event_date=event.event_date,
-            event_date_precision=event.event_date_precision,
-            event_date_display=event.event_date_display,
-            is_lunar_calendar=event.is_lunar_calendar,
-            is_recurring=event.is_recurring,
-            notify_days_before=event.notify_days_before,
-            created_by=event.created_by,
-            created_at=event.created_at,
-            updated_at=event.updated_at,
-        )
+        return _to_response(event)
 
     async def delete(
         self,
@@ -124,8 +116,26 @@ class EventCommandHandler:
     ) -> None:
         event = await self._get_or_raise(event_id, clan_id)
         event.delete(actor)
-        await self._repo.delete(event)
+        # Unconditional save still bumps version, so a concurrent PATCH holding
+        # the old version sees a stale_write (ADR-022).
+        await self._repo.save(event)
         await self._uow.commit()
+
+    async def restore(
+        self,
+        *,
+        event_id: uuid.UUID,
+        clan_id: uuid.UUID,
+        actor: ActorInfo,
+    ) -> EventResponse:
+        event = await self._repo.get_by_id(event_id, clan_id, include_deleted=True)
+        if not event or not event.is_deleted:
+            # Not-deleted → nothing to restore; same 404 documents use.
+            raise EntityNotFoundError("event_not_found")
+        event.restore(actor)
+        await self._repo.save(event)
+        await self._uow.commit()
+        return _to_response(event)
 
     async def _get_or_raise(self, event_id: uuid.UUID, clan_id: uuid.UUID) -> Event:
         event = await self._repo.get_by_id(event_id, clan_id)
@@ -144,23 +154,7 @@ class EventQueryHandler:
         event = await self._repo.get_by_id(event_id, clan_id)
         if not event:
             raise EntityNotFoundError("event_not_found")
-        return EventResponse(
-            id=event.id,
-            clan_id=event.clan_id,
-            person_id=event.person_id,
-            event_type=event.event_type,
-            title=event.title,
-            description=event.description,
-            event_date=event.event_date,
-            event_date_precision=event.event_date_precision,
-            event_date_display=event.event_date_display,
-            is_lunar_calendar=event.is_lunar_calendar,
-            is_recurring=event.is_recurring,
-            notify_days_before=event.notify_days_before,
-            created_by=event.created_by,
-            created_at=event.created_at,
-            updated_at=event.updated_at,
-        )
+        return _to_response(event)
 
     async def list_events(
         self,
@@ -181,26 +175,7 @@ class EventQueryHandler:
             limit=limit,
         )
         page = build_page(events, limit)
-        responses = [
-            EventResponse(
-                id=e.id,
-                clan_id=e.clan_id,
-                person_id=e.person_id,
-                event_type=e.event_type,
-                title=e.title,
-                description=e.description,
-                event_date=e.event_date,
-                event_date_precision=e.event_date_precision,
-                event_date_display=e.event_date_display,
-                is_lunar_calendar=e.is_lunar_calendar,
-                is_recurring=e.is_recurring,
-                notify_days_before=e.notify_days_before,
-                created_by=e.created_by,
-                created_at=e.created_at,
-                updated_at=e.updated_at,
-            )
-            for e in page["data"]
-        ]
+        responses = [_to_response(e) for e in page["data"]]
         return responses, page["meta"]
 
     async def get_upcoming(

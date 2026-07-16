@@ -134,7 +134,11 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
 
     async def _event_rows(self, clan_id: uuid.UUID, person_ids: list[uuid.UUID]) -> list[Event]:
         result = await self._session.execute(
-            select(Event).where(Event.clan_id == clan_id, Event.person_id.in_(person_ids))
+            select(Event).where(
+                Event.clan_id == clan_id,
+                Event.person_id.in_(person_ids),
+                Event.is_deleted.is_(False),
+            )
         )
         return list(result.scalars().all())
 

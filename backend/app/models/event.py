@@ -1,9 +1,9 @@
 """Event ORM model — death anniversaries, birthdays, clan ceremonies."""
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, SmallInteger, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Integer, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import ForeignKey
@@ -15,9 +15,11 @@ class Event(ClanScopedMixin, Base):
     __tablename__ = "events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # SET NULL (ADR-022): a manual person hard-delete must not destroy the giỗ
+    # records referencing them — same rule documents use.
     person_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("persons.id", ondelete="CASCADE"),
+        ForeignKey("persons.id", ondelete="SET NULL"),
         default=None,
     )
 
@@ -36,6 +38,12 @@ class Event(ClanScopedMixin, Base):
     notify_days_before: Mapped[int] = mapped_column(SmallInteger, default=7)
 
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+
+    # Soft delete + OCC (ADR-022) — events match persons/documents semantics.
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
 
     # ORM relationships
     person = relationship("Person", back_populates="events")

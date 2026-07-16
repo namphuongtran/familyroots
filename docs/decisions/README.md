@@ -23,6 +23,7 @@
 | [019](019-document-soft-delete-purge.md) | Document Soft-Delete + Retention Purge | Accepted, shipped (supersedes ADR-006's documents row) |
 | [020](020-clan-export-formats.md) | Clan Export Formats — Lossless JSON Archive + GEDCOM Interop | Accepted, shipped |
 | [021](021-non-enumerating-auth-surfaces.md) | Non-Enumerating Auth Surfaces + Request-Meta Audit Enrichment + Invitation-Accept Rate Limit | Accepted, shipped |
+| [022](022-event-soft-delete-occ.md) | Events: Soft Delete + OCC + person FK SET NULL | Accepted, shipped |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural

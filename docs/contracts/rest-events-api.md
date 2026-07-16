@@ -18,8 +18,20 @@ Core operations (create/update/delete require editor):
 - GET /  (cursor-paginated; query params: cursor, limit, person_id, event_type, fields)
 - GET /upcoming?days=N  (also accepts include=person)
 - GET /{id}  (also accepts include, fields)
-- PATCH /{id}  (editor)
-- DELETE /{id}  (editor)
+- PATCH /{id}  (editor; requires `expected_version`)
+- DELETE /{id}  (editor; soft delete)
+- POST /{id}/restore  (editor)
+
+Optimistic concurrency + soft delete (ADR-022, matching persons/marriages):
+- Every event response carries `"version": <int>` (≥1), bumped on every
+  successful write to that row — including DELETE/restore.
+- `PATCH /{id}` requires body field `expected_version: int (>=1)` (422 when
+  missing); a stale value returns 409 `stale_write` with
+  `detail.current_version`; success echoes `version` = expected + 1.
+- `DELETE /{id}` is a soft delete: the row survives, flagged `is_deleted`,
+  and disappears from GET/list/upcoming/timeline reads. `POST /{id}/restore`
+  brings it back (404 when the event is not deleted). There is no retention
+  purge for events — a deleted giỗ record is recoverable indefinitely.
 
 List response envelope (cursor pagination):
 ```

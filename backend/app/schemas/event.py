@@ -40,6 +40,8 @@ class EventUpdateRequest(BaseModel):
     is_lunar_calendar: bool | None = None
     is_recurring: bool | None = None
     notify_days_before: int | None = Field(None, ge=0, le=30)
+    # Optimistic concurrency (ADR-022): the version read from a prior response.
+    expected_version: int = Field(..., ge=1)
 
 
 class EventResponse(BaseModel):
@@ -56,6 +58,9 @@ class EventResponse(BaseModel):
     created_by: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    # Optimistic concurrency (ADR-022); bumped on every write incl. delete/restore.
+    version: int = 1
+    is_deleted: bool = False
 
     model_config = {"from_attributes": True}
 
