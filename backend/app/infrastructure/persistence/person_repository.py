@@ -28,7 +28,8 @@ from app.models.user_profile import UserProfile
 # expression differ from the index and forces a full sequential scan.
 _SEARCH_SQL = """
     SELECT p.id, p.full_name, p.birth_name, p.birth_date,
-         p.gender, p.avatar_url, cm.generation, cm.role AS membership_role,
+         p.birth_date_precision, p.birth_date_display, p.lunar_birth_date,
+         p.gender, p.avatar_url, p.version, cm.generation, cm.role AS membership_role,
          cm.is_founder
     FROM persons p
     JOIN clan_memberships cm ON cm.person_id = p.id
@@ -147,8 +148,12 @@ class SqlAlchemyPersonRepository:
                 full_name=row["full_name"],
                 birth_name=row["birth_name"],
                 birth_date=row["birth_date"],
+                birth_date_precision=row["birth_date_precision"],
+                birth_date_display=row["birth_date_display"],
+                lunar_birth_date=row["lunar_birth_date"],
                 gender=row["gender"],
                 avatar_url=row["avatar_url"],
+                version=row["version"],
                 generation=row["generation"],
                 membership_role=row["membership_role"],
                 is_founder=row["is_founder"],

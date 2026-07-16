@@ -33,8 +33,12 @@ class PersonSearchResult:
     full_name: str = ""
     birth_name: str | None = None
     birth_date: date | None = None
+    birth_date_precision: str | None = None
+    birth_date_display: str | None = None
+    lunar_birth_date: str | None = None
     gender: str = "unknown"
     avatar_url: str | None = None
+    version: int = 1
     generation: int | None = None
     membership_role: str | None = None
     is_founder: bool | None = None

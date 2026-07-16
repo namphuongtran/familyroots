@@ -33,6 +33,7 @@ from app.infrastructure.dependencies import (
     get_person_query_handler,
 )
 from app.schemas.claim import IdentityClaimSubmit
+from app.schemas.historical_date import to_historical_date
 from app.schemas.person import (
     PersonBatchGetRequest,
     PersonCreateRequest,
@@ -158,8 +159,13 @@ async def search_persons(
                 "id": str(r.id),
                 "full_name": r.full_name,
                 "gender": r.gender,
-                "birth_date": r.birth_date.isoformat() if r.birth_date else None,
+                # Contract: person dates are HistoricalDate objects everywhere,
+                # search included; version is the OCC token an edit needs.
+                "birth_date": to_historical_date(
+                    r.birth_date, r.birth_date_precision, r.birth_date_display, r.lunar_birth_date
+                ).model_dump(),
                 "avatar_url": r.avatar_url,
+                "version": r.version,
                 "generation": r.generation,
                 "membership_role": r.membership_role,
                 "is_founder": r.is_founder,
