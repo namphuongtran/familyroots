@@ -90,6 +90,9 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     from app.domain.shared.exceptions import (
         ForbiddenError as DomainForbiddenError,
     )
+    from app.domain.shared.exceptions import (
+        ValidationError as DomainValidationError,
+    )
     from app.services.translator import t
 
     assert isinstance(exc, DomainError)
@@ -100,6 +103,7 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
         DomainConflictError: 409,
         DomainAuthError: 401,
         BusinessRuleViolation: 422,
+        DomainValidationError: 422,
     }
     status_code = status_map.get(type(exc), 400)
 

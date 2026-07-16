@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.application.shared.audit import emit_audit_event
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.auth.identity_provider import (
     IdentityAuthError,
     IdentityError,
@@ -29,7 +28,12 @@ from app.domain.auth.identity_provider import (
     IdentityWeakPasswordError,
 )
 from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
-from app.domain.shared.exceptions import AuthenticationError
+from app.domain.shared.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    EntityNotFoundError,
+    ValidationError,
+)
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 from app.schemas.auth import (
@@ -167,7 +171,7 @@ class AuthCommandHandler:
 
         clan_or_none = await self._repo.get_clan_by_id(clan_id)
         if not clan_or_none:
-            raise NotFoundError("clan_not_found")
+            raise EntityNotFoundError("clan_not_found")
         clan = clan_or_none
 
         existing_role = await self._repo.get_user_role(user_id, clan.id)
@@ -238,7 +242,7 @@ class AuthCommandHandler:
             assert clan_id is not None
             clan_or_none = await self._repo.get_clan_by_id(clan_id)
             if not clan_or_none:
-                raise NotFoundError("clan_not_found")
+                raise EntityNotFoundError("clan_not_found")
 
         try:
             user_id_str = await self._identity.create_user(email=email, password=password)

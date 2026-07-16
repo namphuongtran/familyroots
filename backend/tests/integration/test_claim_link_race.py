@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.application.person.claim_handlers import ClaimCommandHandler
-from app.core.exceptions import ConflictError  # handler raises the HTTP-mapped 409
+from app.domain.shared.exceptions import ConflictError  # mapped to 409 by the domain handler
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork

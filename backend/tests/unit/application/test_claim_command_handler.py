@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.application.person.claim_handlers import ClaimCommandHandler
-from app.core.exceptions import ForbiddenError
+from app.domain.shared.exceptions import ForbiddenError
 
 
 class _Person:

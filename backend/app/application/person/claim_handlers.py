@@ -8,10 +8,14 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.pagination import build_page
 from app.domain.person.claim_entity import IdentityClaim as ClaimEntity
 from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
+from app.domain.shared.exceptions import (
+    ConflictError,
+    EntityNotFoundError,
+    ForbiddenError,
+)
 from app.schemas.claim import IdentityClaimResponse
 
 
@@ -27,7 +31,7 @@ class ClaimCommandHandler:
         # Val 1: Does user already have a linked person?
         user = await self._repo.get_user_profile(user_id)
         if not user:
-            raise NotFoundError("user_not_found")
+            raise EntityNotFoundError("user_not_found")
         if user.person_id:
             raise ConflictError("user_already_linked_to_person")
 
@@ -42,7 +46,7 @@ class ClaimCommandHandler:
         # Val 4: Person must exist
         person = await self._repo.get_person(person_id)
         if not person:
-            raise NotFoundError("person_not_found")
+            raise EntityNotFoundError("person_not_found")
 
         # Create. create_claim builds + flushes the ORM row in the adapter (IdentityClaim
         # is a plain ORM model, not an AggregateRoot, so it is NOT uow.track()ed — audit
@@ -69,7 +73,7 @@ class ClaimCommandHandler:
         """Cancel a pending claim submitted by the user."""
         claim = await self._repo.get_claim(claim_id)
         if not claim:
-            raise NotFoundError("claim_not_found")
+            raise EntityNotFoundError("claim_not_found")
 
         # Domain entity logic
         entity = ClaimEntity(
@@ -104,7 +108,7 @@ class ClaimCommandHandler:
         """Approve a claim by a clan admin of the person's origin clan."""
         claim = await self._repo.get_claim(claim_id, load_person=True)
         if not claim or not claim.person:
-            raise NotFoundError("claim_not_found")
+            raise EntityNotFoundError("claim_not_found")
 
         # Auth check: admin_id must be "admin" in person.created_by_clan_id
         await self._verify_admin_access(admin_id, claim.person.created_by_clan_id)
@@ -180,7 +184,7 @@ class ClaimCommandHandler:
         """Reject a claim by a clan admin."""
         claim = await self._repo.get_claim(claim_id, load_person=True)
         if not claim or not claim.person:
-            raise NotFoundError("claim_not_found")
+            raise EntityNotFoundError("claim_not_found")
 
         # Auth check
         await self._verify_admin_access(admin_id, claim.person.created_by_clan_id)
@@ -222,7 +226,7 @@ class ClaimCommandHandler:
         # 2. Verify target user
         user = await self._repo.get_user_profile(user_id_to_unlink)
         if not user or not user.person_id:
-            raise NotFoundError("user_not_linked_to_person")
+            raise EntityNotFoundError("user_not_linked_to_person")
 
         # 3. Ensure the person belongs to the clan the admin controls
         person = await self._repo.get_person(user.person_id)
@@ -276,13 +280,13 @@ class ClaimCommandHandler:
 
         user = await self._repo.get_user_profile(user_id_to_link)
         if not user:
-            raise NotFoundError("user_not_found")
+            raise EntityNotFoundError("user_not_found")
         if user.person_id:
             raise ConflictError("user_already_linked_to_person")
 
         person = await self._repo.get_person(person_id)
         if not person:
-            raise NotFoundError("person_not_found")
+            raise EntityNotFoundError("person_not_found")
         if person.created_by_clan_id != clan_id:
             raise ForbiddenError("person_not_controlled_by_this_clan")
 
