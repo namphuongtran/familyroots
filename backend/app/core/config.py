@@ -45,7 +45,17 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: list[str] = ["*"]
 
     # Rate limiting — only trust X-Forwarded-For when behind a trusted proxy/LB.
-    RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
+    # None means "not decided": fine in dev (resolves False), rejected in
+    # production, where an accidental False behind a proxy collapses every client
+    # into the proxy's one rate bucket and stamps audit rows with the proxy IP,
+    # while an accidental True on a directly-exposed service lets clients spoof
+    # their address. Production must choose explicitly.
+    RATE_LIMIT_TRUST_FORWARDED_FOR: bool | None = None
+
+    @property
+    def trust_forwarded_for(self) -> bool:
+        """Resolved XFF trust — the explicit value, or False when unset (dev)."""
+        return bool(self.RATE_LIMIT_TRUST_FORWARDED_FOR)
 
     # Document upload — the platform-wide max upload size (MB), env-tunable without a
     # code change. Defaults to the document domain's built-in policy so there is a
@@ -146,6 +156,11 @@ class Settings(BaseSettings):
             if not self.SUPABASE_SERVICE_ROLE_KEY:
                 raise ValueError(
                     "SUPABASE_SERVICE_ROLE_KEY must be set in production (register/storage)"
+                )
+            if self.RATE_LIMIT_TRUST_FORWARDED_FOR is None:
+                raise ValueError(
+                    "RATE_LIMIT_TRUST_FORWARDED_FOR must be set explicitly in production: "
+                    "true behind a trusted proxy/LB (Render), false when directly exposed"
                 )
         return self
 

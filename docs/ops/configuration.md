@@ -21,7 +21,7 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `SENTRY_DSN` | `""` | Sentry error reporting | Optional — empty disables Sentry |
 | `CORS_ORIGINS` | localhost:3000/8080 | Allowed browser origins (JSON list) | **Boot fails** if `["*"]` or any localhost origin |
 | `ALLOWED_HOSTS` | `["*"]` | TrustedHost allow-list (JSON list) | **Boot fails** if `["*"]` (render.yaml sets it) |
-| `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | Trust `X-Forwarded-For` for rate-limit IPs | Enable only behind a trusted proxy/LB |
+| `RATE_LIMIT_TRUST_FORWARDED_FOR` | unset (dev resolves `false`) | Trust `X-Forwarded-For` for rate-limit + audit IPs | **Required explicitly in production** (boot fails if unset): `true` behind a trusted proxy/LB (Render), `false` when directly exposed |
 | `MAX_UPLOAD_SIZE_MB` | `50` (derived from domain policy) | Platform-wide upload cap; `max_upload_bytes` property is what handlers use | Tune as needed |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Single platform clock for the cron **and** its date math | **Boot fails** on a non-IANA name (any env) |
 | `NOTIFICATION_CRON_HOUR` | `7` | Daily anniversary-job hour in the platform zone (the `document_purge` job also keys off this hour, at `minute=30`) | — |
