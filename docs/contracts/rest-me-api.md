@@ -27,13 +27,13 @@ Behavior:
 
 Response shapes (see [Response envelope](README.md#response-envelope)):
 
-`GET /clans` — a plain array under `data`, with a `meta.count` (not cursor-paginated):
+`GET /clans` — a plain canonical array under `data`, no `meta` (all approved
+memberships; a clan switcher is not paginated). Use `data.length` for the count:
 ```json
 {
   "data": [
     { "clan_id": "...", "clan_name": "...", "clan_slug": "...", "role": "...", "joined_at": "..." }
-  ],
-  "meta": { "count": 2 }
+  ]
 }
 ```
 

@@ -32,7 +32,6 @@ across all routers):
     (`data` still holds the successfully-processed items).
   - `meta.warning` — non-fatal advisories about the request that succeeded anyway
     (e.g. a parent-child link created despite an unusual age gap).
-  - `meta.count` — a simple count alongside a non-cursor list.
 - **`GET /health` is exempt** — it's an ops/liveness probe, not a data endpoint,
   and returns a bare status dict, not an envelope.
 - **`GET /exports/clan` is exempt** — it returns the raw archive/GEDCOM file as
