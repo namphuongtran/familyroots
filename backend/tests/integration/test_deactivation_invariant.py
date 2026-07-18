@@ -252,3 +252,61 @@ def test_missing_profile_is_not_deactivated(
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"] == []
+
+
+# ── Login gate (handler-level; no JWT dependency runs on /auth/login) ──────────
+
+from app.domain.auth.identity_provider import (  # noqa: E402
+    AuthenticatedIdentity,
+    AuthTokens,
+    IdentityAuthError,
+)
+from app.infrastructure.dependencies import get_identity_provider  # noqa: E402
+
+
+class _LoginStub:
+    """sign_in-only identity stub — the login-gate tests need no other provider op."""
+
+    def __init__(self, user_id: uuid.UUID, email: str, password: str) -> None:
+        self._user_id, self._email, self._password = user_id, email, password
+
+    async def sign_in(self, *, email: str, password: str) -> AuthenticatedIdentity:
+        if email != self._email or password != self._password:
+            raise IdentityAuthError("invalid credentials")
+        return AuthenticatedIdentity(
+            user_id=str(self._user_id),
+            email=email,
+            full_name="Deact Login",
+            tokens=AuthTokens(
+                access_token="stub-access", refresh_token="stub-refresh", expires_in=3600
+            ),
+        )
+
+
+def _login(client: TestClient, stub: _LoginStub, email: str, password: str) -> Any:
+    original = client.app.dependency_overrides.get(get_identity_provider)  # type: ignore[attr-defined]
+    client.app.dependency_overrides[get_identity_provider] = lambda: stub  # type: ignore[attr-defined]
+    try:
+        return client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    finally:
+        if original is not None:
+            client.app.dependency_overrides[get_identity_provider] = original  # type: ignore[attr-defined]
+        else:
+            client.app.dependency_overrides.pop(get_identity_provider, None)  # type: ignore[attr-defined]
+
+
+def test_deactivated_login_rejected_no_tokens(client: TestClient, migrated_db_url: str) -> None:
+    """Valid credentials + deactivated profile → 403, and the body must contain
+    neither tokens nor profile data."""
+    user_id, email = _seed_profile(migrated_db_url, active=False)
+    resp = _login(client, _LoginStub(user_id, email, "pw-1"), email, "pw-1")
+    _assert_deactivated(resp)
+    assert "access_token" not in resp.text
+    assert "refresh_token" not in resp.text
+
+
+def test_active_login_positive_control(client: TestClient, migrated_db_url: str) -> None:
+    user_id, email = _seed_profile(migrated_db_url, active=True)
+    resp = _login(client, _LoginStub(user_id, email, "pw-2"), email, "pw-2")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["access_token"] == "stub-access"

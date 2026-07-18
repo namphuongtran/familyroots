@@ -144,6 +144,11 @@ class SqlAlchemyAuthQueryPort(AuthQueryPort):
         )
         return bool(result.scalar())
 
+    async def is_account_active(self, user_id: uuid.UUID) -> bool | None:
+        return await self._session.scalar(
+            select(UserProfileModel.is_active).where(UserProfileModel.id == user_id)
+        )
+
 
 class SqlAlchemyFCMTokenRepository(FCMTokenRepository):
     """SQLAlchemy implementation of FCM Token repository."""

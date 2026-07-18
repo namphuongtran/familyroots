@@ -32,6 +32,7 @@ from app.domain.shared.exceptions import (
     AuthenticationError,
     ConflictError,
     EntityNotFoundError,
+    ForbiddenError,
     ValidationError,
 )
 from app.domain.shared.unit_of_work import UnitOfWork
@@ -319,6 +320,15 @@ class AuthCommandHandler:
             raise AuthenticationError(_INVALID_CREDENTIALS) from exc
 
         user_id = uuid.UUID(identity.user_id)
+
+        # H1 chokepoint parity: login returns fresh tokens plus profile/clan data —
+        # a deactivated account gets neither. Only an explicit False blocks (a
+        # missing profile row is a brand-new account). /auth/refresh is intentionally
+        # NOT gated: AuthSessionService is DB-free by design and refreshed tokens are
+        # inert against the API (get_current_user 403s every authenticated request).
+        if await self._query_port.is_account_active(user_id) is False:
+            raise ForbiddenError("account_deactivated")
+
         view = await self._query_port.get_login_profile(user_id)
         # Same source /auth/me uses — login and /me must agree for the same user.
         has_pending_membership = await self._query_port.has_pending_membership(user_id)

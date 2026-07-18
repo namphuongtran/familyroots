@@ -86,6 +86,10 @@ class AuthQueryPort(Protocol):
         """Whether the user has any pending clan membership."""
         ...
 
+    async def is_account_active(self, user_id: uuid.UUID) -> bool | None:
+        """``user_profiles.is_active`` for this user; ``None`` when no profile row exists."""
+        ...
+
 
 class FCMTokenRepository(Protocol):
     """Abstract persistence contract for FCM push token operations."""
