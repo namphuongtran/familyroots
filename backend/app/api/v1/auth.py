@@ -31,6 +31,7 @@ from app.schemas.auth import (
     RegisterRequest,
     RegisterResponse,
     ResendVerificationRequest,
+    TokenRefreshResponse,
     UserProfile,
     UserUpdateRequest,
 )
@@ -99,7 +100,7 @@ async def logout(
     return {"data": {"message": t("auth.logged_out")}}
 
 
-@router.post("/refresh")
+@router.post("/refresh", responses=ok(TokenRefreshResponse))
 async def refresh_token(
     body: RefreshRequest,
     svc: AuthSessionService = Depends(get_auth_session_service),

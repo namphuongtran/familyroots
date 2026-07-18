@@ -136,3 +136,8 @@ def test_me_select_is_envelope_of_clan_switch(openapi: dict[str, Any]) -> None:
 def test_events_upcoming_is_envelope_list_of_upcoming_event(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/events/upcoming", "get", "200")
     assert "Envelope" in ref and "UpcomingEvent" in ref, ref
+
+
+def test_auth_refresh_is_envelope_of_token_refresh(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/auth/refresh", "post", "200")
+    assert "Envelope" in ref and "TokenRefreshResponse" in ref, ref
