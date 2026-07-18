@@ -45,19 +45,31 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
   invalid with `allow_credentials=True`); missing `SUPABASE_URL`,
   `SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY`.
 
-## What render.yaml sets today (`infra/render/render.yaml`)
+## What render.yaml sets (`infra/render/render.yaml`)
 
-Currently wired: `APP_ENV=production`, `DATABASE_URL` (`fromDatabase`),
-`APP_SECRET_KEY` (`generateValue`), `ALLOWED_HOSTS`.
+The blueprint now declares **every** var the production validator requires — so a
+fresh blueprint apply boots once the dashboard values below are filled.
 
-**Not yet set** (the file's own TODO): `SUPABASE_URL` + both Supabase keys,
-`CORS_ORIGINS`, `SENTRY_DSN`, and Firebase credentials. Consequence: with today's
-blueprint the production validator **will refuse to boot** (default `CORS_ORIGINS`
-contains localhost; Supabase vars are empty) — the missing env vars are a hard
-go-live blocker, not a nice-to-have. See the go-live checklist angle in
-[secrets.md](secrets.md); note that secrets.md's "Known gaps" section predates the
-current validator, which now *does* cover `DATABASE_URL`, `CORS_ORIGINS`, and the
-Supabase keys.
+**Set directly in the blueprint (committed):**
+`APP_ENV=production`, `APP_DEBUG=false`, `DATABASE_URL` (`fromDatabase`),
+`APP_SECRET_KEY` (`generateValue`), `ALLOWED_HOSTS`, `RATE_LIMIT_TRUST_FORWARDED_FOR=true`
+(Render terminates TLS at a trusted proxy, so `X-Forwarded-For` is trustworthy).
+
+**Declared `sync: false` — you set the value in the Render dashboard, never in git**
+(Render prompts on first apply and won't overwrite):
+`CORS_ORIGINS` (JSON list of the web origin(s), e.g. `["https://app.example.com"]`),
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SENTRY_DSN`
+(optional — leave blank to disable Sentry).
+
+**Firebase FCM** (`FIREBASE_CREDENTIALS_PATH`) is **optional for boot** — a missing
+file only disables push notifications (warning, not a boot failure). To enable,
+add the service-account JSON as a Render **Secret File** and point
+`FIREBASE_CREDENTIALS_PATH` at its mount path.
+
+Verified: with the six committed vars + the four required dashboard vars set, the
+production validator boots; omitting any one of `CORS_ORIGINS` / the three Supabase
+vars / `RATE_LIMIT_TRUST_FORWARDED_FOR` makes it refuse to boot. The go-live
+dashboard checklist lives in [secrets.md](secrets.md#go-live-env-checklist).
 
 Notes:
 
