@@ -68,6 +68,13 @@ jobs:
     needs: lint-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Override the workflow-level `working-directory: backend` default: this job
+    # only hits a webhook URL and does NOT check out the repo, so the `backend`
+    # subdir does not exist on the runner — inheriting it made bash fail to start
+    # ("No such file or directory"). The workspace root always exists.
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     env:
       RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
     steps:
