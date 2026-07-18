@@ -158,3 +158,25 @@ class FocusView(BaseModel):
     focus_subtree: FocusTreeNode | None = None
 
     model_config = {"from_attributes": True}
+
+
+class PathStep(BaseModel):
+    """One node along a relationship path.
+
+    The kinship-descriptor-only fields (``birth_date``/``birth_date_precision``)
+    are stripped by the handler before the response, so they are absent here.
+    """
+
+    person_id: str
+    full_name: str
+    gender: str
+    edge_type: str | None = None
+    avatar_url: str | None = None
+
+
+class RelationshipPathResponse(BaseModel):
+    """Response body for ``GET /tree/path``."""
+
+    path: list[PathStep] = []
+    description: str | None = None
+    found: bool = False

@@ -16,12 +16,19 @@ from app.application.tree.queries import (
 from app.core.permissions import ClanRole, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.infrastructure.dependencies import get_tree_query_handler
-from app.schemas.tree import FocusView, TreeNodeDetail, TreeNodeSummary
+from app.schemas.envelope import ok, ok_list
+from app.schemas.tree import (
+    FocusView,
+    RelationshipPathResponse,
+    TreeNodeDetail,
+    TreeNodeSummary,
+    TreeResponse,
+)
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", responses=ok(TreeResponse))
 async def get_full_tree(
     root_person_id: uuid.UUID | None = Query(None),
     max_generations: int = Query(10, ge=1, le=50),
@@ -50,7 +57,7 @@ async def get_full_tree(
     return {"data": result}
 
 
-@router.get("/subtree/{person_id}")
+@router.get("/subtree/{person_id}", responses=ok(TreeResponse))
 async def get_subtree(
     person_id: uuid.UUID,
     max_generations: int = Query(5, ge=1, le=50),
@@ -79,7 +86,7 @@ async def get_subtree(
     return {"data": result}
 
 
-@router.get("/ancestors/{person_id}")
+@router.get("/ancestors/{person_id}", responses=ok_list(TreeNodeDetail))
 async def get_ancestors(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -103,7 +110,7 @@ async def get_ancestors(
     return {"data": ancestors}
 
 
-@router.get("/focus/{person_id}")
+@router.get("/focus/{person_id}", responses=ok(FocusView))
 async def get_focus(
     person_id: uuid.UUID,
     descendants: int = Query(2, ge=1, le=6),
@@ -126,7 +133,7 @@ async def get_focus(
     return {"data": FocusView.model_validate(result).model_dump()}
 
 
-@router.get("/path")
+@router.get("/path", responses=ok(RelationshipPathResponse))
 async def find_path(
     from_id: uuid.UUID = Query(...),
     to_id: uuid.UUID = Query(...),

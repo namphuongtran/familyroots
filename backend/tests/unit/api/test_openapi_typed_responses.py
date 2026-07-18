@@ -86,3 +86,18 @@ def test_platform_clan_detail_is_envelope(openapi: dict[str, Any]) -> None:
 def test_platform_metrics_is_envelope(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/platform/metrics", "get", "200")
     assert "Envelope" in ref and "PlatformMetricsResponse" in ref, ref
+
+
+def test_tree_full_is_envelope_of_tree_response(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/tree", "get", "200")
+    assert "Envelope" in ref and "TreeResponse" in ref, ref
+
+
+def test_tree_ancestors_is_envelope_list_of_detail_node(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/tree/ancestors/{person_id}", "get", "200")
+    assert "Envelope" in ref and "TreeNodeDetail" in ref, ref
+
+
+def test_tree_path_is_envelope_of_relationship_path(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/tree/path", "get", "200")
+    assert "Envelope" in ref and "RelationshipPathResponse" in ref, ref
