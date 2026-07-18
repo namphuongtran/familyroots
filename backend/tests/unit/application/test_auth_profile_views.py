@@ -44,6 +44,9 @@ class _StubQueryPort:
     async def has_pending_membership(self, user_id: uuid.UUID) -> bool:
         return self._pending
 
+    async def is_account_active(self, user_id: uuid.UUID) -> bool | None:
+        return True
+
 
 def _login_handler(view: AuthProfileView | None) -> AuthCommandHandler:
     return AuthCommandHandler(

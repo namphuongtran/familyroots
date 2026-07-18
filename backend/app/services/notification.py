@@ -122,6 +122,7 @@ async def send_to_clan(
             LEFT JOIN public.user_profiles up ON up.id = ucr.user_id
             WHERE ucr.clan_id = :clan_id
               AND ucr.is_approved = true
+              AND (up.is_active IS DISTINCT FROM false)
               AND (CAST(:exclude AS uuid) IS NULL OR ucr.user_id != CAST(:exclude AS uuid))
         """),
         {"clan_id": clan_id, "exclude": exclude_user_id},

@@ -1,9 +1,11 @@
 """L3: a deactivated account (user_profiles.is_active = False) cannot act.
 
-Deactivation lives only in our DB — the Supabase JWT stays valid — so it must be
-enforced on every authenticated, DB-touching path: ensure_user_profile (the profile /
-super-admin path) and get_current_clan_id (every clan-scoped endpoint). A revert of
-either check lets a deactivated user through and fails these tests.
+Since the H1 fix (review 2026-07-18) the gate lives in ONE place —
+``get_current_user`` — and is covered over HTTP (real JWT, real routes) by
+``test_deactivation_invariant.py``. This file keeps the layer-level behaviors
+that remain true of the clan-resolution path itself: an active user resolves
+their clan, and a MISSING profile row is reported as the accurate
+``no_approved_clan_membership``, never ``account_deactivated``.
 """
 
 import uuid
@@ -14,7 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.exceptions import ForbiddenError
-from app.core.security import ensure_user_profile, get_current_clan_id
+from app.core.security import get_current_clan_id
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -29,10 +31,7 @@ async def async_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
 
 
 async def _seed(s: AsyncSession, *, active: bool) -> tuple[uuid.UUID, uuid.UUID]:
-    """Create an (active clan, user with an approved membership) and return their ids.
-
-    The user's profile is active/inactive per ``active``.
-    """
+    """Create an (active clan, user with an approved membership) and return their ids."""
     clan_id, user_id = uuid.uuid4(), uuid.uuid4()
     await s.execute(
         sa.text("INSERT INTO clans (id, name, slug) VALUES (:c, 'C', :sl)"),
@@ -56,18 +55,8 @@ async def _seed(s: AsyncSession, *, active: bool) -> tuple[uuid.UUID, uuid.UUID]
     return clan_id, user_id
 
 
-async def test_deactivated_user_blocked_from_clan_scope(async_session: AsyncSession) -> None:
-    clan_id, user_id = await _seed(async_session, active=False)
-    with pytest.raises(ForbiddenError, match="account_deactivated"):
-        await get_current_clan_id(
-            current_user={"sub": str(user_id)},
-            db=async_session,
-            x_current_clan_id=str(clan_id),
-        )
-
-
 async def test_active_user_resolves_clan(async_session: AsyncSession) -> None:
-    """Positive control: an active user with the same setup resolves the clan."""
+    """Positive control: an active user with an approved membership resolves the clan."""
     clan_id, user_id = await _seed(async_session, active=True)
     resolved = await get_current_clan_id(
         current_user={"sub": str(user_id)},
@@ -77,16 +66,10 @@ async def test_active_user_resolves_clan(async_session: AsyncSession) -> None:
     assert resolved == clan_id
 
 
-async def test_deactivated_user_blocked_at_ensure_profile(async_session: AsyncSession) -> None:
-    _, user_id = await _seed(async_session, active=False)
-    with pytest.raises(ForbiddenError, match="account_deactivated"):
-        await ensure_user_profile(current_user={"sub": str(user_id)}, db=async_session)
-
-
 async def test_no_profile_is_not_treated_as_deactivated(async_session: AsyncSession) -> None:
-    """A user with no profile row (is_active resolves to None) must NOT be reported as
-    deactivated — they fall through to the accurate no_approved_clan_membership. Only an
-    explicit is_active=False is a deactivation."""
+    """A user with no profile row must NOT be reported as deactivated — they fall
+    through to the accurate no_approved_clan_membership. Only an explicit
+    is_active=False (enforced upstream in get_current_user) is a deactivation."""
     with pytest.raises(ForbiddenError, match="no_approved_clan_membership"):
         await get_current_clan_id(
             current_user={"sub": str(uuid.uuid4())},  # never onboarded → no profile

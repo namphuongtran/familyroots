@@ -98,11 +98,26 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """FastAPI dependency — extract and validate JWT from Authorization header."""
+    """FastAPI dependency — extract and validate JWT from Authorization header.
+
+    Also enforces the account-deactivation invariant (H1, review 2026-07-18):
+    deactivation lives only in our DB — the Supabase JWT stays valid — so it is
+    gated HERE, the single chokepoint every authenticated route inherits by
+    construction. Only an explicit ``is_active = False`` blocks; a missing
+    profile row (``None``) is a brand-new account that ``ensure_user_profile``
+    will provision on this same request.
+    """
     if credentials is None:
         raise AuthenticationError("missing_token")
-    return await verify_supabase_token(credentials.credentials)
+    payload = await verify_supabase_token(credentials.credentials)
+    is_account_active = await db.scalar(
+        select(UserProfile.is_active).where(UserProfile.id == uuid.UUID(payload["sub"]))
+    )
+    if is_account_active is False:
+        raise ForbiddenError("account_deactivated")
+    return payload
 
 
 # Throttle last_login_at updates: skip if last update was less than 5 min ago.
@@ -178,11 +193,8 @@ async def ensure_user_profile(
         if changed:
             await db.commit()
 
-    # A deactivated account is authenticated (its Supabase JWT is still valid) but must
-    # not be allowed to act — deactivation lives only in our DB, so it is enforced here,
-    # the single chokepoint that loads the local profile.
-    if not profile.is_active:
-        raise ForbiddenError("account_deactivated")
+    # Deactivation (is_active=False) is enforced upstream in get_current_user — the
+    # chokepoint every authenticated route inherits. No duplicate check here.
 
     return profile
 
@@ -221,17 +233,8 @@ async def get_current_clan_id(
 
     user_id = uuid.UUID(current_user["sub"])
 
-    # Block a deactivated account up front — this path authenticates via the JWT and
-    # never loads the profile (unlike ensure_user_profile), so the is_active gate must
-    # be applied here for every clan-scoped request. Only an explicit False is a
-    # deactivation; a missing profile row (None) means "no account/membership yet" and
-    # falls through to the membership check below, which yields the accurate
-    # no_approved_clan_membership rather than a misleading account_deactivated.
-    is_account_active = await db.scalar(
-        select(UserProfile.is_active).where(UserProfile.id == user_id)
-    )
-    if is_account_active is False:
-        raise ForbiddenError("account_deactivated")
+    # Deactivation (is_active=False) is enforced upstream in get_current_user — the
+    # chokepoint every authenticated route inherits. No duplicate check here.
 
     # Fetch all approved clan memberships for this user
     result = await db.execute(

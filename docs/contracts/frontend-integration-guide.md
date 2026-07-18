@@ -86,7 +86,11 @@ Field semantics (from `AuthCommandHandler.login` + `auth_repository.get_login_pr
 | No header, multiple approved clans | 400 `multiple_clans_no_selection` |
 | No approved membership at all | 403 `no_approved_clan_membership` |
 | Clan suspended (`clans.is_active = false`) | 403 `clan_suspended` |
-| Account deactivated (`user_profiles.is_active = false`) | 403 `account_deactivated` |
+
+Note: `403 account_deactivated` (`user_profiles.is_active = false`) is **not**
+part of this clan-resolution table — it's checked earlier, in `get_current_user`,
+the single chokepoint on every authenticated request (including this one), not
+just clan-scoped ones.
 
 Recommendation: always send the header once a clan is chosen, even for single-clan
 users — it makes client behavior deterministic if the user later joins a second clan.

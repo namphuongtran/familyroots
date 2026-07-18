@@ -14,18 +14,27 @@ handler call. Code: `backend/app/core/security.py`, `app/core/permissions.py`,
 
 ## Per-request identity pipeline
 
-1. `get_current_user` — decode + verify JWT.
+1. `get_current_user` — decode + verify JWT, **and the deactivation gate**:
+   `user_profiles.is_active = false` → 403 `account_deactivated`. This is the
+   single chokepoint enforced on **every authenticated request** (H1 fix,
+   2026-07-18); `ensure_user_profile` and `get_current_clan_id` no longer
+   carry their own copy of this check. Also enforced at `POST /auth/login`
+   (403 `account_deactivated`, no tokens/profile returned). `POST /auth/refresh`
+   is intentionally **ungated** — `AuthSessionService` is DB-free by design, and
+   refreshed tokens are inert against a deactivated account because every
+   subsequent authenticated call re-checks here. Accepted consequence: a
+   deactivated user cannot call `POST /auth/logout` either (403) — their
+   refresh token stays live at Supabase but is useless against the API.
 2. `ensure_user_profile` — **lazy upsert** of `user_profiles` on first sight of a
    user (no Supabase webhook dependency); shared `ON CONFLICT` helper.
-3. **Deactivation gate** — `user_profiles.is_active = false` → 403 `account_deactivated`.
-4. `get_current_clan_id` — resolves the active clan from the `X-Current-Clan-Id`
+3. `get_current_clan_id` — resolves the active clan from the `X-Current-Clan-Id`
    header: auto-selects when the user belongs to exactly one clan; 400 when ambiguous;
    403 when not an approved member. **Suspended clan** → 403 `clan_suspended`.
    There is intentionally **no tenant middleware** — scoping is explicit per route.
-5. Role check — `require_role(ClanRole.X)` (hierarchical `viewer < editor < admin`)
+4. Role check — `require_role(ClanRole.X)` (hierarchical `viewer < editor < admin`)
    or `RequireClanRole([...])` (explicit set), reading `user_clan_role` and requiring
    `is_approved = true`.
-6. Handlers/repositories then filter every read/write by `clan_id`
+5. Handlers/repositories then filter every read/write by `clan_id`
    (see `multi-tenancy.md` — app-layer isolation is the only enforced layer today).
 
 Super-admin routes (`/api/v1/platform`) bypass clan context and are gated by

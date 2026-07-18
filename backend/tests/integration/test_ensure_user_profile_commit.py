@@ -29,7 +29,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.core.exceptions import ForbiddenError
 from app.core.security import ensure_user_profile
 
 
@@ -170,23 +169,7 @@ async def test_concurrent_first_login_is_race_safe(engine: AsyncEngine) -> None:
     assert n == 1
 
 
-@pytest.mark.asyncio
-async def test_deactivated_account_still_blocked(engine: AsyncEngine) -> None:
-    """A deactivated profile must still raise ForbiddenError('account_deactivated')."""
-    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    user_id = uuid.uuid4()
-    email = f"a1-deactivated-{user_id.hex[:8]}@example.com"
-
-    async with maker() as db:
-        await db.execute(
-            sa.text(
-                "INSERT INTO user_profiles (id, email, display_name, is_active) "
-                "VALUES (:id, :em, 'Deactivated User', false)"
-            ),
-            {"id": user_id, "em": email},
-        )
-        await db.commit()
-
-    async with maker() as db:
-        with pytest.raises(ForbiddenError, match="account_deactivated"):
-            await ensure_user_profile(_current_user(user_id, email), db)
+# Deactivation ("account_deactivated") is no longer enforced by ensure_user_profile —
+# since the H1 fix (review 2026-07-18) it is a single chokepoint in get_current_user,
+# which this direct-call harness bypasses. See tests/integration/test_deactivation_invariant.py
+# for the HTTP-level (real dependency chain) coverage of that invariant.
