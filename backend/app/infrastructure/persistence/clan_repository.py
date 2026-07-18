@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core.pagination import build_page, paginate_query
 from app.domain.clan.entity import Clan as ClanEntity
@@ -63,10 +64,25 @@ class SqlAlchemyClanRepository:
         cursor: str | None = None,
         limit: int = 20,
     ) -> dict[str, Any]:
-        """List users with pagination. Returns a page dict."""
-        query = select(UserClanRole).where(
-            UserClanRole.clan_id == clan_id,
-            UserClanRole.is_approved.is_(approved),
+        """List users with pagination. Returns a page dict.
+
+        Eagerly LEFT JOINs ``user_profiles`` (via the ``UserClanRole.user_profile``
+        relationship, keyed on ``user_profiles.id == user_clan_roles.user_id``) so
+        callers can read each row's linked ``person_id`` without a second query or
+        an ``AttributeError`` on the raw ``UserClanRole`` row. ``joinedload`` keeps
+        cursor pagination intact: it only changes how ``UserClanRole.user_profile``
+        is populated, not the entities/columns the query returns, and a many-to-one
+        eager join never duplicates rows under ``LIMIT``. Users without a profile
+        (should not normally happen, but the join must not hide them) still come
+        back with ``user_profile is None``.
+        """
+        query = (
+            select(UserClanRole)
+            .options(joinedload(UserClanRole.user_profile))
+            .where(
+                UserClanRole.clan_id == clan_id,
+                UserClanRole.is_approved.is_(approved),
+            )
         )
         capped = min(limit, 100)
         query = paginate_query(query, UserClanRole, cursor, capped)

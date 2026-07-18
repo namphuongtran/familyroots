@@ -86,7 +86,13 @@ async def list_clan_users(
             "id": str(u.id),
             "user_id": str(u.user_id),
             "role": u.role,
-            "person_id": str(u.person_id) if u.person_id else None,
+            # user_profile is eager-loaded via a LEFT JOIN (SqlAlchemyClanRepository.list_users);
+            # it can be None if the user has no profile row, and person_id itself is nullable.
+            "person_id": (
+                str(u.user_profile.person_id)
+                if u.user_profile is not None and u.user_profile.person_id
+                else None
+            ),
             "created_at": u.created_at.isoformat(),
         }
         for u in page["data"]
