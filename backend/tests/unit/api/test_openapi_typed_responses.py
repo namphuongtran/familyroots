@@ -8,8 +8,8 @@ re-validate and break the sparse `fields=` responses); instead every route
 declares its envelope via `responses=` — documentation-only, zero runtime
 change — plus the standard error envelope.
 
-These tests pin representative routes; the sweep covers all routers that
-have typed payload models (tree/platform-admin read models are follow-up).
+These tests pin representative routes across every v1 router, including
+tree and platform-admin.
 """
 
 from __future__ import annotations
