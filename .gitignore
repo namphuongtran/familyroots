@@ -193,7 +193,7 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
-# Superpowers session working files (brainstorms, plans, specs) — local only,
-# not repo documentation. Durable decisions belong in docs/decisions/ (ADRs).
+# Superpowers SDD session scratch (ledger, task briefs/reports, review diffs) —
+# local only. NOTE: docs/superpowers/{specs,plans}/ ARE tracked design docs
+# (committed by the brainstorming/writing-plans skills) — do not ignore those.
 .superpowers/
-docs/superpowers/
