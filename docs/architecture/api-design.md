@@ -352,9 +352,10 @@ stays a scalar date (derived recurrence).
 
 ## Platform Admin (`/api/v1/platform/`)
 
-All endpoints require `user_profiles.platform_role = 'super_admin'` **and** an active
-profile (`is_active = true`), checked by the `get_super_admin` dependency — not a
-`SUPER_ADMIN_UID` env match.
+All endpoints require `user_profiles.platform_role = 'super_admin'` (checked by the
+`get_super_admin` dependency — not a `SUPER_ADMIN_UID` env match) **and** an active
+profile (`is_active = true`, enforced upstream by the `get_current_user` chokepoint
+on every authenticated request).
 
 | Method | Path                           | Auth        | Description                    |
 |--------|--------------------------------|-------------|--------------------------------|
