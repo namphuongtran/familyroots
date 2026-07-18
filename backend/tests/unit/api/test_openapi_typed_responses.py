@@ -141,3 +141,13 @@ def test_events_upcoming_is_envelope_list_of_upcoming_event(openapi: dict[str, A
 def test_auth_refresh_is_envelope_of_token_refresh(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/auth/refresh", "post", "200")
     assert "Envelope" in ref and "TokenRefreshResponse" in ref, ref
+
+
+def test_persons_search_is_envelope_list_of_search_result(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/search", "get", "200")
+    assert "Envelope" in ref and "PersonSearchResult" in ref, ref
+
+
+def test_persons_batch_is_batch_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/batch", "post", "200")
+    assert "PersonBatchEnvelope" in ref, ref

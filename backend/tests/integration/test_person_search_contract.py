@@ -120,3 +120,25 @@ async def test_search_items_carry_historical_date_and_version(
         "lunar": None,
     }
     assert item["version"] == 1
+
+
+async def test_search_wire_matches_person_search_result_schema(
+    client: AsyncClient, seeded: dict[str, Any]
+) -> None:
+    """Coherence guard: /persons/search hand-builds its rows — validate a real
+    search body against PersonSearchResult so schema/handler drift fails CI."""
+    from app.schemas.person import PersonSearchResult
+
+    resp = await client.get(
+        "/api/v1/persons/search",
+        params={"q": "Tổ"},
+        headers={
+            "Authorization": f"Bearer {seeded['viewer_id']}",
+            "X-Current-Clan-Id": str(seeded["clan_id"]),
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    results = resp.json()["data"]
+    assert results  # non-empty
+    for row in results:
+        PersonSearchResult.model_validate(row)  # raises on drift

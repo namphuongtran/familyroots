@@ -38,10 +38,12 @@ from app.schemas.historical_date import to_historical_date
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
 from app.schemas.person import (
+    PersonBatchEnvelope,
     PersonBatchGetRequest,
     PersonCreateRequest,
     PersonDetail,
     PersonResponse,
+    PersonSearchResult,
     PersonSummary,
     PersonUpdateRequest,
 )
@@ -149,7 +151,7 @@ async def list_persons(
     }
 
 
-@router.get("/search")
+@router.get("/search", responses=ok_list(PersonSearchResult))
 async def search_persons(
     q: str = Query(..., min_length=1),
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -234,7 +236,7 @@ def _filter_list_by_fields(items: list[Any], fields: str | None) -> list[Any]:
     return filter_list(items, parse_field_set(fields))
 
 
-@router.post("/batch")
+@router.post("/batch", responses={200: {"model": PersonBatchEnvelope}})
 async def batch_get_persons(
     body: PersonBatchGetRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
