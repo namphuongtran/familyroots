@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends
 from app.application.me.handlers import MeQueryHandler
 from app.core.security import get_current_user
 from app.infrastructure.dependencies import get_me_query_handler
-from app.schemas.clan import ClanSwitchResponse
+from app.schemas.clan import ClanSwitchResponse, UserClansEnvelope
 from app.schemas.envelope import ok
 
 router = APIRouter()
 
 
-@router.get("/clans")
+@router.get("/clans", responses={200: {"model": UserClansEnvelope}})
 async def list_my_clans(
     current_user: dict[str, Any] = Depends(get_current_user),
     handler: MeQueryHandler = Depends(get_me_query_handler),

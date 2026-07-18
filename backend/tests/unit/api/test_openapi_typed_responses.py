@@ -166,3 +166,8 @@ def test_clan_users_pending_is_page_envelope(openapi: dict[str, Any]) -> None:
 def test_clan_user_role_change_is_envelope(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/clans/me/users/{user_id}/role", "patch", "200")
     assert "Envelope" in ref and "UserRoleChangeResponse" in ref, ref
+
+
+def test_me_clans_is_user_clans_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/me/clans", "get", "200")
+    assert "UserClansEnvelope" in ref, ref
