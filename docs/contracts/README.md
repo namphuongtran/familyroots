@@ -48,12 +48,12 @@ across all routers):
   `responses=` (never runtime `response_model=` — re-validation would break
   the sparse `fields=`/`include=` subset responses). Client codegen
   (openapi-typescript, Dio) can bind against them; a response filtered with
-  `fields=` is a key-subset of the documented full shape. Some routes whose
-  payloads are still dynamic dicts (e.g. `/events/upcoming`, `/auth` token
-  bodies, several `/persons/*` sub-resources, `/clans/me/users*`, `/me/clans`,
-  `/claims*`, `/exports/clan`) remain untyped in OpenAPI until their read
-  models are typed — the per-endpoint contract docs stay authoritative for
-  those. This list is illustrative, not exhaustive.
+  `fields=` is a key-subset of the documented full shape. All v1 JSON 2xx
+  responses are now typed except `GET /exports/clan` (a file download,
+  envelope-exempt). Two typed routes carry a known non-canonical envelope,
+  documented as legacy exceptions pending normalization before the frontend
+  binds (ADR-024): `GET /me/clans` (`meta:{count}`) and
+  `GET /clans/me/users/pending` (omits `person_id`).
 
 ## HistoricalDate (canonical date shape)
 

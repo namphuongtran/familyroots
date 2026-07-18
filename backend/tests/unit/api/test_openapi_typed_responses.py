@@ -136,3 +136,38 @@ def test_me_select_is_envelope_of_clan_switch(openapi: dict[str, Any]) -> None:
 def test_events_upcoming_is_envelope_list_of_upcoming_event(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/events/upcoming", "get", "200")
     assert "Envelope" in ref and "UpcomingEvent" in ref, ref
+
+
+def test_auth_refresh_is_envelope_of_token_refresh(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/auth/refresh", "post", "200")
+    assert "Envelope" in ref and "TokenRefreshResponse" in ref, ref
+
+
+def test_persons_search_is_envelope_list_of_search_result(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/search", "get", "200")
+    assert "Envelope" in ref and "PersonSearchResult" in ref, ref
+
+
+def test_persons_batch_is_batch_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/batch", "post", "200")
+    assert "PersonBatchEnvelope" in ref, ref
+
+
+def test_clan_users_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/clans/me/users", "get", "200")
+    assert "PageEnvelope" in ref and "ClanUserSummary" in ref, ref
+
+
+def test_clan_users_pending_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/clans/me/users/pending", "get", "200")
+    assert "PageEnvelope" in ref and "PendingClanUser" in ref, ref
+
+
+def test_clan_user_role_change_is_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/clans/me/users/{user_id}/role", "patch", "200")
+    assert "Envelope" in ref and "UserRoleChangeResponse" in ref, ref
+
+
+def test_me_clans_is_user_clans_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/me/clans", "get", "200")
+    assert "UserClansEnvelope" in ref, ref

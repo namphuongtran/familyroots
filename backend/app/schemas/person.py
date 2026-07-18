@@ -267,3 +267,41 @@ class PersonDetailComposite(PersonResponse):
     parent_child: list[Any] | None = None
     timeline: list[Any] | None = None
     documents: list[Any] | None = None
+
+
+class PersonSearchResult(BaseModel):
+    """One row of GET /persons/search (a lean, search-specific person projection)."""
+
+    id: str
+    full_name: str
+    gender: str
+    birth_date: HistoricalDate
+    avatar_url: str | None = None
+    version: int
+    generation: int | None = None
+    membership_role: str | None = None
+    is_founder: bool
+
+
+class BatchError(BaseModel):
+    """One per-id failure in a batch fetch."""
+
+    id: str
+    code: str
+
+
+class PersonBatchMeta(BaseModel):
+    """meta for POST /persons/batch — the sanctioned `errors` adjunct (CLAUDE.md)."""
+
+    errors: list[BatchError] = []
+
+
+class PersonBatchEnvelope(BaseModel):
+    """POST /persons/batch: {data: [<person>], meta: {errors: [...]}}.
+
+    `data` items are the same dynamic person projection as GET /persons/{id}
+    (documented as the full PersonResponse; sparse `fields=`/`include=` are subsets).
+    """
+
+    data: list[PersonResponse]
+    meta: PersonBatchMeta

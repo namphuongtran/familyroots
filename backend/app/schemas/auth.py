@@ -81,6 +81,14 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class TokenRefreshResponse(BaseModel):
+    """POST /auth/refresh — a refreshed token pair (no user profile)."""
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

@@ -193,3 +193,20 @@ async def test_batch_query_count_does_not_scale_with_ids(
 
     # The pin: same statement count for 1 and 4 persons (constant, not O(N)).
     assert count_4 == count_1, f"batch queries scale with ids: {count_1} -> {count_4}"
+
+
+async def test_batch_wire_matches_batch_envelope_schema(
+    engine: AsyncEngine, seeded: dict[str, Any]
+) -> None:
+    """Coherence guard: validate a real /persons/batch body (including a populated
+    meta.errors) against PersonBatchEnvelope."""
+    from app.schemas.person import PersonBatchEnvelope
+
+    real_id = seeded["member_ids"][0]
+    missing_id = uuid.uuid4()
+    # Default profile ("full") and no `fields=` — data items must be full
+    # PersonResponse-complete for PersonBatchEnvelope.model_validate to hold.
+    _count, body = await _batch_request_statement_count(engine, seeded, [real_id, missing_id])
+
+    assert body["meta"]["errors"]  # the missing id populated errors — non-vacuous
+    PersonBatchEnvelope.model_validate(body)  # raises on drift

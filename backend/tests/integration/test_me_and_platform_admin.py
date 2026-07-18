@@ -104,6 +104,14 @@ async def test_me_lists_only_approved_and_blocks_non_member(async_engine: AsyncE
         assert ids == {str(approved_clan)}  # only the approved membership
         assert clans["count"] == 1
 
+        # Coherence: the documented UserClansEnvelope must accept the real wire body.
+        from app.schemas.clan import UserClansEnvelope
+
+        result = await handler.list_clans(user_id=str(user_id))
+        body = {"data": result["clans"], "meta": {"count": result["count"]}}
+        assert body["data"]  # non-empty
+        UserClansEnvelope.model_validate(body)
+
         # select an approved clan → ok
         selected = await handler.select_clan(user_id=str(user_id), clan_id=approved_clan)
         assert selected["clan_id"] == str(approved_clan)
