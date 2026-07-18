@@ -68,15 +68,17 @@ jobs:
     needs: lint-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Check deployment secret
+      # Deploy secrets are an owner go-live action (docs/ops/configuration.md).
+      # Until they exist, skip with a warning instead of failing the run — a
+      # red main on unconfigured infra hides real test regressions. Once the
+      # secret is added, deploys trigger automatically on the next push.
+      - name: Trigger Render deploy (skips until RENDER_DEPLOY_HOOK is configured)
         run: |
-          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
-            echo "::error::RENDER_DEPLOY_HOOK secret is missing! Please add it to GitHub Secrets."
-            exit 1
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK secret not configured — skipping Render deploy (owner go-live action)"
+            exit 0
           fi
-
-      - name: Trigger Render deploy
-        run: curl -f -s -S "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          curl -f -s -S "$RENDER_DEPLOY_HOOK"
