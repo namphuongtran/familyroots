@@ -8,20 +8,21 @@ from fastapi import APIRouter, Depends
 from app.application.me.handlers import MeQueryHandler
 from app.core.security import get_current_user
 from app.infrastructure.dependencies import get_me_query_handler
-from app.schemas.clan import ClanSwitchResponse, UserClansEnvelope
-from app.schemas.envelope import ok
+from app.schemas.clan import ClanSwitchResponse, UserClanMembership
+from app.schemas.envelope import ok, ok_list
 
 router = APIRouter()
 
 
-@router.get("/clans", responses={200: {"model": UserClansEnvelope}})
+@router.get("/clans", responses=ok_list(UserClanMembership))
 async def list_my_clans(
     current_user: dict[str, Any] = Depends(get_current_user),
     handler: MeQueryHandler = Depends(get_me_query_handler),
 ) -> dict[str, Any]:
-    """List all clans the authenticated user belongs to."""
+    """List all clans the authenticated user belongs to (a clan switcher — all
+    approved memberships, unpaginated)."""
     result = await handler.list_clans(user_id=current_user["sub"])
-    return {"data": result["clans"], "meta": {"count": result["count"]}}
+    return {"data": result}
 
 
 @router.post("/clans/{clan_id}/select", responses=ok(ClanSwitchResponse))

@@ -15,23 +15,20 @@ class MeQueryHandler:
     def __init__(self, query_port: MeQueryPort) -> None:
         self._query_port = query_port
 
-    async def list_clans(self, *, user_id: str) -> dict[str, Any]:
+    async def list_clans(self, *, user_id: str) -> list[dict[str, Any]]:
         """List all approved clan memberships for the user."""
         rows = await self._query_port.list_clans(user_id)
 
-        return {
-            "clans": [
-                {
-                    "clan_id": str(row.clan_id),
-                    "clan_name": row.clan_name,
-                    "clan_slug": row.clan_slug,
-                    "role": row.role,
-                    "joined_at": row.joined_at.isoformat() if row.joined_at else None,
-                }
-                for row in rows
-            ],
-            "count": len(rows),
-        }
+        return [
+            {
+                "clan_id": str(row.clan_id),
+                "clan_name": row.clan_name,
+                "clan_slug": row.clan_slug,
+                "role": row.role,
+                "joined_at": row.joined_at.isoformat() if row.joined_at else None,
+            }
+            for row in rows
+        ]
 
     async def select_clan(self, *, user_id: str, clan_id: uuid.UUID) -> dict[str, Any]:
         """Validate and select a clan as the active context."""

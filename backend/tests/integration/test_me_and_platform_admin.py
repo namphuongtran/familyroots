@@ -100,17 +100,18 @@ async def test_me_lists_only_approved_and_blocks_non_member(async_engine: AsyncE
         handler = MeQueryHandler(SqlAlchemyMeQueryPort(s))
 
         clans = await handler.list_clans(user_id=str(user_id))
-        ids = {c["clan_id"] for c in clans["clans"]}
+        ids = {c["clan_id"] for c in clans}
         assert ids == {str(approved_clan)}  # only the approved membership
-        assert clans["count"] == 1
+        assert len(clans) == 1
 
-        # Coherence: the documented UserClansEnvelope must accept the real wire body.
-        from app.schemas.clan import UserClansEnvelope
+        # Coherence: the documented ok_list(UserClanMembership) must accept the real
+        # wire body. /me/clans is a plain array now (no meta) — canonical, ADR-024 normalized.
+        from app.schemas.clan import UserClanMembership
 
-        result = await handler.list_clans(user_id=str(user_id))
-        body = {"data": result["clans"], "meta": {"count": result["count"]}}
+        body = {"data": clans}
         assert body["data"]  # non-empty
-        UserClansEnvelope.model_validate(body)
+        for item in body["data"]:
+            UserClanMembership.model_validate(item)  # raises on drift
 
         # select an approved clan → ok
         selected = await handler.select_clan(user_id=str(user_id), clan_id=approved_clan)
