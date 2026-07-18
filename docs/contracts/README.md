@@ -49,11 +49,8 @@ across all routers):
   the sparse `fields=`/`include=` subset responses). Client codegen
   (openapi-typescript, Dio) can bind against them; a response filtered with
   `fields=` is a key-subset of the documented full shape. All v1 JSON 2xx
-  responses are now typed except `GET /exports/clan` (a file download,
-  envelope-exempt). Two typed routes carry a known non-canonical envelope,
-  documented as legacy exceptions pending normalization before the frontend
-  binds (ADR-024): `GET /me/clans` (`meta:{count}`) and
-  `GET /clans/me/users/pending` (omits `person_id`).
+  responses are canonical except `GET /exports/clan` (a file download,
+  envelope-exempt).
 
 ## HistoricalDate (canonical date shape)
 

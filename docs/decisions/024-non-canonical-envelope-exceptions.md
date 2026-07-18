@@ -1,7 +1,10 @@
 # ADR-024: Non-Canonical Envelope Exceptions Typed As-Is (Normalize Pre-Frontend)
 
 ## Status
-Accepted (2026-07-18)
+Accepted (2026-07-18); **Normalized (2026-07-18)** — both exceptions retired:
+`/me/clans` is now a plain canonical array (`ok_list`, no `meta:{count}`) and
+`/clans/me/users/pending` now includes `person_id`. The intent recorded below is
+fulfilled; this ADR is kept for the rationale/history.
 
 ## Context
 The typed-OpenAPI sweep (#80, #82, this PR) gives every v1 2xx a named response
