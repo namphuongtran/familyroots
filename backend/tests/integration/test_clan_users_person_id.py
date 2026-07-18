@@ -1,4 +1,5 @@
-"""GET /clans/me/users must surface each approved user's linked person_id.
+"""GET /clans/me/users (and /clans/me/users/pending) must surface each user's
+linked person_id.
 
 Regression: ``list_clan_users`` (app/api/v1/clans.py) read ``u.person_id`` off a
 raw ``UserClanRole`` ORM row, which has no such column (the link lives on
@@ -133,8 +134,9 @@ async def test_list_clan_users_person_id_null_without_linked_person(
     assert page["data"][0]["person_id"] is None
 
 
-async def test_list_pending_users_has_no_person_id_key(async_session: AsyncSession) -> None:
-    """/pending's output shape is unchanged (legacy): no person_id key at all."""
+async def test_list_pending_users_includes_person_id(async_session: AsyncSession) -> None:
+    """/pending now includes person_id (ADR-024): present, with the linked
+    person's id when the pending user has one (or None otherwise)."""
     clan_id, user_id = uuid.uuid4(), uuid.uuid4()
     await _clan(async_session, clan_id)
     person_id = await _person(async_session, clan_id, user_id)
@@ -152,4 +154,4 @@ async def test_list_pending_users_has_no_person_id_key(async_session: AsyncSessi
     )
 
     assert len(page["data"]) == 1
-    assert "person_id" not in page["data"][0]
+    assert page["data"][0]["person_id"] == str(person_id)

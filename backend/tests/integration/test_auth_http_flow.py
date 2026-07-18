@@ -254,11 +254,13 @@ def test_register_login_me_clans_create_person(client: TestClient, migrated_db_u
     assert me["email"] == email
     assert me["clan_id"] == clan_id
 
-    # /me/clans — membership projection, enveloped as {"data": [...], "meta": {"count": n}}.
+    # /me/clans — membership projection, enveloped as a plain canonical array
+    # {"data": [...]} with no "meta" key (ADR-024).
     resp = client.get("/api/v1/me/clans", headers=auth)
     assert resp.status_code == 200, resp.text
     clans = resp.json()
-    assert clans["meta"]["count"] == 1
+    assert set(clans.keys()) == {"data"}
+    assert len(clans["data"]) == 1
     assert clans["data"][0]["clan_id"] == clan_id
     assert clans["data"][0]["role"] == "admin"
 

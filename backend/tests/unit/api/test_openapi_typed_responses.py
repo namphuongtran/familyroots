@@ -160,7 +160,7 @@ def test_clan_users_is_page_envelope(openapi: dict[str, Any]) -> None:
 
 def test_clan_users_pending_is_page_envelope(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/clans/me/users/pending", "get", "200")
-    assert "PageEnvelope" in ref and "PendingClanUser" in ref, ref
+    assert "PageEnvelope" in ref and "ClanUserSummary" in ref, ref
 
 
 def test_clan_user_role_change_is_envelope(openapi: dict[str, Any]) -> None:
@@ -168,6 +168,6 @@ def test_clan_user_role_change_is_envelope(openapi: dict[str, Any]) -> None:
     assert "Envelope" in ref and "UserRoleChangeResponse" in ref, ref
 
 
-def test_me_clans_is_user_clans_envelope(openapi: dict[str, Any]) -> None:
+def test_me_clans_is_envelope_list_of_membership(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/me/clans", "get", "200")
-    assert "UserClansEnvelope" in ref, ref
+    assert "Envelope" in ref and "UserClanMembership" in ref, ref

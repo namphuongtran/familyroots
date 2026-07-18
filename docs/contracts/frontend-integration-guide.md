@@ -67,10 +67,10 @@ Field semantics (from `AuthCommandHandler.login` + `auth_repository.get_login_pr
 ### 1.2 Clan resolution
 
 1. `GET /api/v1/me/clans` → `{"data": [{clan_id, clan_name, clan_slug, role,
-   joined_at}], "meta": {"count": N}}` — **approved memberships only** (pending ones
-   are never listed).
-2. If `count == 1`: you may skip explicit selection — the backend auto-selects.
-3. If `count > 1`: let the user pick; optionally validate with
+   joined_at}]}` — a plain canonical array, no `meta` — **approved memberships only**
+   (pending ones are never listed).
+2. If `data.length === 1`: you may skip explicit selection — the backend auto-selects.
+3. If `data.length > 1`: let the user pick; optionally validate with
    `POST /api/v1/me/clans/{clan_id}/select` (echoes the clan context, 403
    `clan_membership_required` if not an approved member). Selection is **not** stored
    server-side — the client must persist the choice and send it as a header.

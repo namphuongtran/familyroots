@@ -1,8 +1,9 @@
 """Request-level tests for GET /api/v1/me/clans and POST /api/v1/me/clans/{id}/select.
 
-The handler (``MeQueryHandler``) is untouched and keeps returning ``{"clans","count"}``
-/ the flat select dict — these tests assert the ROUTE wraps that into the standard
-``{"data": ...}`` envelope (with ``meta.count`` for the list endpoint).
+``MeQueryHandler.list_clans`` returns a plain list of membership dicts, and the
+ROUTE wraps that into the standard ``{"data": ...}`` envelope — a plain canonical
+array with NO ``meta`` key (the old non-canonical ``meta: {"count": n}`` was
+intentionally removed, ADR-024).
 """
 
 from __future__ import annotations
@@ -19,19 +20,16 @@ from app.infrastructure.dependencies import get_me_query_handler
 
 
 class _FakeMeQueryHandler:
-    async def list_clans(self, *, user_id: str) -> dict[str, Any]:
-        return {
-            "clans": [
-                {
-                    "clan_id": str(uuid.uuid4()),
-                    "clan_name": "N",
-                    "clan_slug": "n",
-                    "role": "admin",
-                    "joined_at": None,
-                }
-            ],
-            "count": 1,
-        }
+    async def list_clans(self, *, user_id: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "clan_id": str(uuid.uuid4()),
+                "clan_name": "N",
+                "clan_slug": "n",
+                "role": "admin",
+                "joined_at": None,
+            }
+        ]
 
     async def select_clan(self, *, user_id: str, clan_id: uuid.UUID) -> dict[str, Any]:
         return {
@@ -56,8 +54,7 @@ def test_list_my_clans_envelope() -> None:
     resp = client.get("/api/v1/me/clans")
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert set(body.keys()) == {"data", "meta"}
-    assert body["meta"] == {"count": 1}
+    assert set(body.keys()) == {"data"}
     assert isinstance(body["data"], list)
     assert body["data"][0]["role"] == "admin"
 

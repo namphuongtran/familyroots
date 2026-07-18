@@ -25,7 +25,6 @@ from app.infrastructure.dependencies import get_clan_command_handler, get_clan_q
 from app.schemas.clan import ClanResponse, ClanStats, ClanUpdateRequest
 from app.schemas.clan_membership import (
     ClanUserSummary,
-    PendingClanUser,
     UserActionResponse,
     UserRoleChangeResponse,
 )
@@ -106,7 +105,7 @@ async def list_clan_users(
     return page
 
 
-@router.get("/me/users/pending", responses=page(PendingClanUser))
+@router.get("/me/users/pending", responses=page(ClanUserSummary))
 async def list_pending_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
@@ -122,6 +121,13 @@ async def list_pending_users(
             "id": str(u.id),
             "user_id": str(u.user_id),
             "role": u.role,
+            # user_profile is eager-loaded via the same LEFT JOIN that serves the
+            # approved list (SqlAlchemyClanRepository.list_users); None-guarded.
+            "person_id": (
+                str(u.user_profile.person_id)
+                if u.user_profile is not None and u.user_profile.person_id
+                else None
+            ),
             "created_at": u.created_at.isoformat(),
         }
         for u in page["data"]

@@ -53,20 +53,6 @@ class ClanUserSummary(BaseModel):
     created_at: str
 
 
-class PendingClanUser(BaseModel):
-    """One pending member in GET /clans/me/users/pending.
-
-    LEGACY EXCEPTION (ADR-024): this shape omits the `person_id` key that its
-    sibling ClanUserSummary carries. Typed as-is (pure-typing sweep); scheduled
-    for normalization (add person_id) before the frontend binds. Do not copy.
-    """
-
-    id: str
-    user_id: str
-    role: str
-    created_at: str
-
-
 class UserActionResponse(BaseModel):
     """approve/reject/remove acknowledgement: {message, user_id}."""
 

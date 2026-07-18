@@ -32,7 +32,6 @@ across all routers):
     (`data` still holds the successfully-processed items).
   - `meta.warning` — non-fatal advisories about the request that succeeded anyway
     (e.g. a parent-child link created despite an unusual age gap).
-  - `meta.count` — a simple count alongside a non-cursor list.
 - **`GET /health` is exempt** — it's an ops/liveness probe, not a data endpoint,
   and returns a bare status dict, not an envelope.
 - **`GET /exports/clan` is exempt** — it returns the raw archive/GEDCOM file as
@@ -49,11 +48,8 @@ across all routers):
   the sparse `fields=`/`include=` subset responses). Client codegen
   (openapi-typescript, Dio) can bind against them; a response filtered with
   `fields=` is a key-subset of the documented full shape. All v1 JSON 2xx
-  responses are now typed except `GET /exports/clan` (a file download,
-  envelope-exempt). Two typed routes carry a known non-canonical envelope,
-  documented as legacy exceptions pending normalization before the frontend
-  binds (ADR-024): `GET /me/clans` (`meta:{count}`) and
-  `GET /clans/me/users/pending` (omits `person_id`).
+  responses are canonical except `GET /exports/clan` (a file download,
+  envelope-exempt).
 
 ## HistoricalDate (canonical date shape)
 

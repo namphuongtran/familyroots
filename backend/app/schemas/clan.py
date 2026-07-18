@@ -16,29 +16,6 @@ class UserClanMembership(BaseModel):
     joined_at: datetime | None = None
 
 
-class UserClansResponse(BaseModel):
-    """Response for GET /me/clans — all clans the user belongs to."""
-
-    clans: list[UserClanMembership]
-    count: int
-
-
-class CountMeta(BaseModel):
-    """LEGACY meta for GET /me/clans (ADR-024): a bare {count} instead of the
-    canonical {cursor, has_more, limit}. Typed as-is; scheduled for normalization
-    to cursor meta before the frontend binds. Do not copy this shape."""
-
-    count: int
-
-
-class UserClansEnvelope(BaseModel):
-    """GET /me/clans: {data: [UserClanMembership], meta: {count}} — non-canonical
-    (see CountMeta / ADR-024)."""
-
-    data: list[UserClanMembership]
-    meta: CountMeta
-
-
 class ClanSwitchResponse(BaseModel):
     """Response for POST /me/clans/{clan_id}/select — confirm clan selection."""
 
