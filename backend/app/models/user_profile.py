@@ -42,4 +42,8 @@ class UserProfile(TimestampMixin, Base):
 
     # ── ORM Relationships ─────────────────────────────────────
     person = relationship("Person", back_populates="user_profile", uselist=False)
-    user_roles = relationship("UserClanRole", back_populates="user_profile", lazy="selectin")
+    # Default (lazy="select"): never auto-loads. UserProfile is loaded on every
+    # authed request (ensure_user_profile) — a "selectin" here would fire an extra
+    # query per request for roles nobody asked for. The forward side
+    # (UserClanRole.user_profile) is what list_users eager-loads via joinedload.
+    user_roles = relationship("UserClanRole", back_populates="user_profile")
