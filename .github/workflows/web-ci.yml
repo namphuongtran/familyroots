@@ -51,18 +51,36 @@ jobs:
     needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
 
+      # Deploy secrets are an owner go-live action. Until VERCEL_TOKEN exists,
+      # skip with a warning instead of failing the run (an empty --token= made
+      # every merge to main go red). Once the secret is added, deploys resume
+      # automatically on the next push.
+      - name: Check deploy token
+        id: gate
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN secret not configured — skipping Vercel deploy (owner go-live action)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup pnpm
+        if: steps.gate.outputs.configured == 'true'
         uses: pnpm/action-setup@v4
         with:
           package_json_file: web/package.json
 
       - name: Setup Node.js
+        if: steps.gate.outputs.configured == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -70,7 +88,9 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Install dependencies
+        if: steps.gate.outputs.configured == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Deploy to Vercel
-        run: pnpm dlx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+        if: steps.gate.outputs.configured == 'true'
+        run: pnpm dlx vercel deploy --prod --token="$VERCEL_TOKEN"
