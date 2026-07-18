@@ -12,7 +12,8 @@
 
 - Documentation-only `responses=` on every route — **never** `response_model=`. Copied from spec: runtime re-validation would break the sparse `fields=`/`profile=` subset responses.
 - New response schemas are typed to the wire: `str` for serialized UUIDs, `str | None` for `.isoformat()` datetimes. Do **not** reuse the domain read-model dataclasses in `app/domain/platform_admin/query_port.py` (they carry `uuid.UUID`/`datetime`, not the wire shape).
-- No route/handler **body** changes — only decorator `responses=` and new schema files. The existing route/integration body tests must pass unchanged (negative control proving zero behavior change).
+- No route/handler **body** changes — only decorator `responses=` and new schema files. App-source behavior is unchanged; the negative control is that existing route/integration **body** assertions pass untouched. Test files may gain additive assertions / new tests (they strengthen coverage, not behavior).
+- **Schema↔body coherence guard:** each new/reused response schema must be validated against a *real* handler wire dict in a test, so the documentation-only schema cannot silently drift from what the handler emits. These are `@pytest.mark.integration` (real Postgres) — the executor needs `docker compose up -d pgdb` running.
 - Full quality gate before claiming done: `cd backend && uv run pytest -q && uvx ruff check . && uvx ruff format --check . && uv run mypy app/ tests/ && uv run lint-imports`
 - Line length 100 (ruff). All commands run from `backend/`.
 - Branch is already created: `feat/typed-responses-tree-platform-admin`.
@@ -190,16 +191,56 @@ Then add `responses=` to each route decorator (leave every other argument and th
 Run: `cd backend && uv run pytest tests/unit/api/test_openapi_typed_responses.py -k platform -v`
 Expected: PASS (3 tests).
 
-- [ ] **Step 6: Run format/lint/type gate on the touched files**
+- [ ] **Step 6: Add the schema↔body coherence guard**
+
+The `responses=` schemas are documentation-only, so nothing yet ties them to the
+handler's actual wire dicts. Bind them by validating the real dicts (already in
+scope) against the new schemas. Append to the **existing** test
+`test_platform_admin_handler_preserves_wire_contract` in
+`backend/tests/integration/test_me_and_platform_admin.py`, at the very end of the
+function (the variables `detail`, `clans`, `metrics`, `clan_log`, `platform_log`
+are already built earlier in that test):
+
+```python
+    # Coherence: the documentation-only OpenAPI response schemas must accept the
+    # real handler wire dicts, or a schema/handler drift ships silently to codegen.
+    from app.schemas.platform_admin import (
+        AuditLogEntryResponse,
+        ClanDetailResponse,
+        ClanSummaryResponse,
+        PlatformMetricsResponse,
+    )
+
+    ClanDetailResponse.model_validate(detail)
+    for c in clans["data"]:
+        ClanSummaryResponse.model_validate(c)
+    PlatformMetricsResponse.model_validate(metrics)
+    for e in clan_log["data"]:
+        AuditLogEntryResponse.model_validate(e)
+    for e in platform_log["data"]:
+        AuditLogEntryResponse.model_validate(e)  # clan_id is None here — must validate
+```
+
+Note: `ClanStatusResponse` (suspend/reactivate) is a 2-field literal built inline in
+the route (`{"is_active": ..., "clan_id": str(...)}`) with negligible drift surface;
+it is covered by the OpenAPI-shape presence, not a separate body test.
+
+- [ ] **Step 7: Run the platform tests (unit + the coherence guard)**
+
+Requires `docker compose up -d pgdb`. Run:
+`cd backend && uv run pytest tests/unit/api/test_openapi_typed_responses.py -k platform tests/integration/test_me_and_platform_admin.py::test_platform_admin_handler_preserves_wire_contract -v`
+Expected: PASS. Sabotage-check the guard: temporarily rename a field in `ClanDetailResponse` (e.g. `slug` → `slugX`) and confirm the coherence test FAILS, then revert.
+
+- [ ] **Step 8: Run format/lint/type gate on the touched files**
 
 Run: `cd backend && uvx ruff format app/schemas/platform_admin.py app/api/v1/platform_admin.py && uvx ruff check app/schemas/platform_admin.py app/api/v1/platform_admin.py && uv run mypy app/schemas/platform_admin.py app/api/v1/platform_admin.py`
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd "/Volumes/Macext01 HD/playground/familyroots"
-git add backend/app/schemas/platform_admin.py backend/app/api/v1/platform_admin.py backend/tests/unit/api/test_openapi_typed_responses.py
+git add backend/app/schemas/platform_admin.py backend/app/api/v1/platform_admin.py backend/tests/unit/api/test_openapi_typed_responses.py backend/tests/integration/test_me_and_platform_admin.py
 git commit -m "feat(api): typed OpenAPI responses for platform-admin router
 
 Documentation-only responses= envelopes (wire-typed schemas mirroring the
@@ -320,16 +361,72 @@ Expected: PASS (3 tests).
 
 If `test_tree_ancestors_is_envelope_list_of_detail_node` fails because the 200 schema is inlined rather than a top-level `$ref` (the `Envelope[list[...]]` component can nest differently), extend the helper: read `op["responses"]["200"]["content"]["application/json"]["schema"]` and accept either a top-level `$ref` or an `allOf`/`items` that references `TreeNodeDetail`. Do this only if the direct `$ref` assertion fails.
 
-- [ ] **Step 6: Run format/lint/type gate on the touched files**
+- [ ] **Step 6: Add the schema↔body coherence guard**
 
-Run: `cd backend && uvx ruff format app/schemas/tree.py app/api/v1/tree.py && uvx ruff check app/schemas/tree.py app/api/v1/tree.py && uv run mypy app/schemas/tree.py app/api/v1/tree.py`
+Bind the tree schemas to real handler output. Append a new test to the **existing**
+`backend/tests/integration/test_tree_focus.py` (it already has the `async_session`
+fixture and the `_clan` / `_person` / `_member` / `_pc` seeding helpers and imports
+`TreeQueryHandler` + `SqlAlchemyTreeRepository`):
+
+```python
+async def test_tree_handler_output_matches_response_schemas(
+    async_session: AsyncSession,
+) -> None:
+    """Coherence guard: the handler's wire dicts must validate against the
+    documentation-only OpenAPI response schemas, so a schema/handler drift fails CI
+    instead of shipping a wrong type to codegen. (Focus is omitted — its route
+    already coerces to FocusView at runtime, so coherence is guaranteed there.)"""
+    from app.application.tree.queries import FindPath, GetAncestors, GetFullTree
+    from app.schemas.tree import RelationshipPathResponse, TreeNodeDetail, TreeResponse
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    gp = await _person(async_session, clan_id, creator, "GP")
+    dad = await _person(async_session, clan_id, creator, "Dad")
+    child = await _person(async_session, clan_id, creator, "Child")
+    for person, founder in ((gp, True), (dad, False), (child, False)):
+        await _member(async_session, person, clan_id, is_founder=founder)
+    await _pc(async_session, gp, dad, clan_id, creator)
+    await _pc(async_session, dad, child, clan_id, creator)
+    await async_session.commit()
+
+    handler = TreeQueryHandler(SqlAlchemyTreeRepository(async_session))
+
+    full = await handler.get_full_tree(
+        GetFullTree(clan_id=clan_id, root_person_id=gp, max_generations=10)
+    )
+    TreeResponse.model_validate(full)  # raises on drift
+
+    ancestors = await handler.get_ancestors(GetAncestors(person_id=child, clan_id=clan_id))
+    assert ancestors  # non-empty so the loop actually exercises the schema
+    for node in ancestors:
+        TreeNodeDetail.model_validate(node)  # raises on drift
+
+    path = await handler.find_path(FindPath(from_id=child, to_id=gp, clan_id=clan_id))
+    assert path["found"] is True
+    RelationshipPathResponse.model_validate(path)  # raises on drift
+```
+
+Note: Pydantic ignores unexpected keys by default, so this guard catches
+missing/mis-typed documented fields (the drift clients feel), not extra
+undocumented keys — the intended, sufficient guarantee.
+
+- [ ] **Step 7: Run the tree tests (unit + coherence guard)**
+
+Requires `docker compose up -d pgdb`. Run:
+`cd backend && uv run pytest tests/unit/api/test_openapi_typed_responses.py -k tree tests/integration/test_tree_focus.py::test_tree_handler_output_matches_response_schemas -v`
+Expected: PASS. Sabotage-check: temporarily add a required field to `PathStep` (e.g. `foo: str`) and confirm the coherence test FAILS, then revert.
+
+- [ ] **Step 8: Run format/lint/type gate on the touched files**
+
+Run: `cd backend && uvx ruff format app/schemas/tree.py app/api/v1/tree.py tests/integration/test_tree_focus.py && uvx ruff check app/schemas/tree.py app/api/v1/tree.py tests/integration/test_tree_focus.py && uv run mypy app/schemas/tree.py app/api/v1/tree.py`
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd "/Volumes/Macext01 HD/playground/familyroots"
-git add backend/app/schemas/tree.py backend/app/api/v1/tree.py backend/tests/unit/api/test_openapi_typed_responses.py
+git add backend/app/schemas/tree.py backend/app/api/v1/tree.py backend/tests/unit/api/test_openapi_typed_responses.py backend/tests/integration/test_tree_focus.py
 git commit -m "feat(api): typed OpenAPI responses for tree router
 
 Wire focus/full/subtree/ancestors/path to documentation-only responses=
@@ -453,6 +550,7 @@ Expected: `untyped 2xx: []`.
 - New `PathStep`/`RelationshipPathResponse` → Task 2 Step 3. ✓
 - Ancestors documented as `TreeNodeDetail` (judgment ①) → Task 2 Step 4. ✓
 - OpenAPI test additions (6) → Tasks 1 & 2. ✓
+- Schema↔body coherence guards (drift protection) → Task 1 Step 6 (platform, 4 shapes) + Task 2 Step 6 (tree: full/ancestors/path), each sabotage-checked. ✓
 - Contracts README note + test docstring caveat → Task 3. ✓
 - Full gate + zero-behavior-change negative control → Task 4. ✓
 

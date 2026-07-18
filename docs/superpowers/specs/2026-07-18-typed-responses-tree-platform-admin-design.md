@@ -124,6 +124,19 @@ The existing route/integration tests already pin the actual response **bodies**;
 since this change is documentation-only, they must continue to pass unchanged —
 that is the negative control proving no behavior changed.
 
+**Schema↔body coherence guard (drift protection).** Documentation-only `responses=`
+means each new schema is a *second* source of truth, decoupled from the handler
+dict it describes — a later handler change could silently diverge from the schema
+and codegen clients would drift with no failing test. To prevent that, each schema
+is validated against a *real* handler wire dict in a test (`Schema.model_validate(body)`):
+platform-admin folds assertions into the existing
+`test_platform_admin_handler_preserves_wire_contract` (detail/summary/metrics/audit,
+including the `clan_id is None` platform-event case); tree adds one coherence test in
+`test_tree_focus.py` covering full-tree/ancestors/path (focus is already runtime-coerced).
+This keeps documentation-only's zero runtime cost while making the schema a *checked*
+contract. Pydantic ignores extra keys, so the guard catches missing/mis-typed
+documented fields (the drift clients actually feel), which is the intended guarantee.
+
 ## Docs
 
 - `docs/contracts/README.md` — remove the note that tree/platform-admin stay
