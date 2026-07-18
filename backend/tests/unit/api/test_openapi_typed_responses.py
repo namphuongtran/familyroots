@@ -111,3 +111,13 @@ def test_auth_onboard_is_created_envelope_of_register_response(openapi: dict[str
 def test_auth_logout_is_envelope_of_message(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/auth/logout", "post", "200")
     assert "Envelope" in ref and "MessageData" in ref, ref
+
+
+def test_persons_marriages_is_envelope_list_of_marriage(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/{person_id}/marriages", "get", "200")
+    assert "Envelope" in ref and "MarriageResponse" in ref, ref
+
+
+def test_persons_timeline_is_envelope_list_of_timeline_event(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/{person_id}/timeline", "get", "200")
+    assert "Envelope" in ref and "TimelineEvent" in ref, ref

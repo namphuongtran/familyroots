@@ -30,9 +30,13 @@ from app.infrastructure.dependencies import (
     get_person_command_handler,
     get_person_query_handler,
 )
-from app.schemas.claim import IdentityClaimSubmit
-from app.schemas.envelope import created, ok, ok_message, page
+from app.schemas.claim import IdentityClaimResponse, IdentityClaimSubmit
+from app.schemas.document import DocumentSummary
+from app.schemas.envelope import created, ok, ok_list, ok_message, page
+from app.schemas.event import EventResponse, TimelineEvent
 from app.schemas.historical_date import to_historical_date
+from app.schemas.marriage import MarriageResponse
+from app.schemas.parent_child import ParentChildResponse
 from app.schemas.person import (
     PersonBatchGetRequest,
     PersonCreateRequest,
@@ -408,7 +412,7 @@ async def restore_person(
     return {"data": {"message": t("person.restored"), "id": str(person_id)}}
 
 
-@router.post("/{person_id}/claim", status_code=201)
+@router.post("/{person_id}/claim", status_code=201, responses=created(IdentityClaimResponse))
 async def submit_identity_claim(
     person_id: uuid.UUID,
     body: IdentityClaimSubmit,
@@ -429,7 +433,7 @@ async def submit_identity_claim(
 # ── Sub-resources  ────────────────────────────────────────────────
 
 
-@router.get("/{person_id}/marriages")
+@router.get("/{person_id}/marriages", responses=ok_list(MarriageResponse))
 async def person_marriages(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -444,7 +448,7 @@ async def person_marriages(
     return {"data": _filter_list_by_fields(marriages, fields)}
 
 
-@router.get("/{person_id}/parent-child")
+@router.get("/{person_id}/parent-child", responses=ok_list(ParentChildResponse))
 async def person_parent_child(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -459,7 +463,7 @@ async def person_parent_child(
     return {"data": _filter_list_by_fields(links, fields)}
 
 
-@router.get("/{person_id}/documents")
+@router.get("/{person_id}/documents", responses=ok_list(DocumentSummary))
 async def person_documents(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -474,7 +478,7 @@ async def person_documents(
     return {"data": _filter_list_by_fields(docs, fields)}
 
 
-@router.get("/{person_id}/events")
+@router.get("/{person_id}/events", responses=ok_list(EventResponse))
 async def person_events(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -489,7 +493,7 @@ async def person_events(
     return {"data": _filter_list_by_fields(events, fields)}
 
 
-@router.get("/{person_id}/timeline")
+@router.get("/{person_id}/timeline", responses=ok_list(TimelineEvent))
 async def person_timeline(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
