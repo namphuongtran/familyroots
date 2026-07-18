@@ -45,6 +45,13 @@ Request/response expectations:
   See [error-codes.md](error-codes.md) and
   [frontend-integration-guide.md](frontend-integration-guide.md).
 - Login returns authenticated session/profile data for client bootstrap.
+- A deactivated account (`is_active = false`) gets **403 `account_deactivated`**
+  at login — no tokens, no profile data. See `auth-flow.md` and
+  `error-codes.md`.
+- `POST /refresh` is **not** gated on `is_active` (`AuthSessionService` is
+  DB-free by design): the tokens it returns are unusable against a deactivated
+  account because every authenticated request is gated at the
+  `get_current_user` chokepoint (see `auth-flow.md`).
 - **Email verification**: register creates the identity unconfirmed and sends a
   verification email best-effort. Login with an unconfirmed email fails with
   **403 `email_not_verified`** (not 401 — credentials were correct). Clients should

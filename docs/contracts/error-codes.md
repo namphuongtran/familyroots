@@ -62,7 +62,7 @@ Grouped by family. "HTTP" is the status the backend actually emits.
 | `auth.invalid_credentials` | 401 | Login rejected by identity provider (wrong email/password) | — | Show invalid-credentials message |
 | `auth.invalid_refresh_token` | 401 | Refresh token invalid, expired, or revoked | — | Sign out |
 | `email_not_verified` | 403 | Login with a valid but unverified email | — | Resend-verification screen |
-| `account_deactivated` | 403 | User profile `is_active = false` (checked on profile load and on every clan-scoped request) | — | Blocked-account screen |
+| `account_deactivated` | 403 | User profile `is_active = false` (checked on every authenticated request — `get_current_user` chokepoint — and at login) | — | Blocked-account screen |
 | `auth_provider_unavailable` | 503 | Identity provider outage/misconfiguration (DNS failure, provider 5xx, rejected API key) on any auth path | — | Retry later banner; not a credentials error |
 
 ### Registration & onboarding
