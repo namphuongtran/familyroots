@@ -12,7 +12,13 @@ from app.core.permissions import RequireClanRole, require_active_user
 from app.core.security import get_current_clan_id
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
 from app.schemas.auth import UserProfile
-from app.schemas.claim import IdentityClaimPrelink, IdentityClaimReview, IdentityClaimUnlink
+from app.schemas.claim import (
+    IdentityClaimPrelink,
+    IdentityClaimResponse,
+    IdentityClaimReview,
+    IdentityClaimUnlink,
+)
+from app.schemas.envelope import created, ok, page
 
 # Router for /m/claims
 user_claims_router = APIRouter()
@@ -24,6 +30,7 @@ admin_claims_router = APIRouter()
 @user_claims_router.get(
     "",
     summary="List my identity claims",
+    responses=page(IdentityClaimResponse),
 )
 async def list_my_claims(
     status: str | None = Query(None, description="Filter by status (e.g., PENDING)"),
@@ -53,6 +60,7 @@ async def cancel_claim(
 @admin_claims_router.get(
     "",
     summary="List claims for a clan",
+    responses=page(IdentityClaimResponse),
 )
 async def list_clan_claims(
     clan_id: uuid.UUID,
@@ -78,6 +86,7 @@ async def list_clan_claims(
 @admin_claims_router.post(
     "/{claim_id}/approve",
     summary="Approve an identity claim",
+    responses=ok(IdentityClaimResponse),
 )
 async def approve_claim(
     clan_id: uuid.UUID,
@@ -101,6 +110,7 @@ async def approve_claim(
 @admin_claims_router.post(
     "/{claim_id}/reject",
     summary="Reject an identity claim",
+    responses=ok(IdentityClaimResponse),
 )
 async def reject_claim(
     clan_id: uuid.UUID,
@@ -148,6 +158,7 @@ async def unlink_identity(
     "/members/{user_id}/prelink",
     status_code=status.HTTP_201_CREATED,
     summary="Admin Pre-link an identity",
+    responses=created(IdentityClaimResponse),
 )
 async def prelink_identity(
     clan_id: uuid.UUID,

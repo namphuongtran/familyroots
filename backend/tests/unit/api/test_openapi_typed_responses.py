@@ -121,3 +121,8 @@ def test_persons_marriages_is_envelope_list_of_marriage(openapi: dict[str, Any])
 def test_persons_timeline_is_envelope_list_of_timeline_event(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/persons/{person_id}/timeline", "get", "200")
     assert "Envelope" in ref and "TimelineEvent" in ref, ref
+
+
+def test_claims_list_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/claims", "get", "200")
+    assert "PageEnvelope" in ref and "IdentityClaimResponse" in ref, ref
