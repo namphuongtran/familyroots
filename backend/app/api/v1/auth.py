@@ -29,11 +29,12 @@ from app.schemas.auth import (
     LoginResponse,
     RefreshRequest,
     RegisterRequest,
+    RegisterResponse,
     ResendVerificationRequest,
     UserProfile,
     UserUpdateRequest,
 )
-from app.schemas.envelope import ok
+from app.schemas.envelope import MessageData, created, ok, ok_message
 from app.services.translator import t
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/register", status_code=201)
+@router.post("/register", status_code=201, responses=created(MessageData))
 async def register(
     body: RegisterRequest, handler: AuthCommandHandler = Depends(get_auth_command_handler)
 ) -> dict[str, Any]:
@@ -59,7 +60,7 @@ async def register(
     return {"data": {"message": t("auth.registration_received")}}
 
 
-@router.post("/onboard", status_code=201)
+@router.post("/onboard", status_code=201, responses=created(RegisterResponse))
 async def onboard_authenticated_user(
     body: AuthenticatedOnboardingRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -87,7 +88,7 @@ async def login(
     return {"data": result.model_dump()}
 
 
-@router.post("/logout")
+@router.post("/logout", responses=ok_message())
 async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -108,7 +109,7 @@ async def refresh_token(
     return {"data": result}
 
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", responses=ok_message())
 async def forgot_password(
     body: ForgotPasswordRequest,
     svc: AuthSessionService = Depends(get_auth_session_service),
@@ -124,7 +125,7 @@ async def forgot_password(
     return {"data": {"message": t("auth.password_reset_sent")}}
 
 
-@router.post("/resend-verification")
+@router.post("/resend-verification", responses=ok_message())
 async def resend_verification(
     body: ResendVerificationRequest,
     svc: AuthSessionService = Depends(get_auth_session_service),
@@ -155,7 +156,7 @@ async def get_me(
     return {"data": profile.model_dump()}
 
 
-@router.patch("/me")
+@router.patch("/me", responses=ok_message())
 async def update_me(
     body: UserUpdateRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -170,7 +171,7 @@ async def update_me(
     return {"data": {"message": t("auth.profile_updated")}}
 
 
-@router.post("/me/fcm-token")
+@router.post("/me/fcm-token", responses=ok_message())
 async def register_fcm_token(
     body: FCMTokenRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -185,7 +186,7 @@ async def register_fcm_token(
     return {"data": {"message": t("auth.fcm_token_registered")}}
 
 
-@router.delete("/me/fcm-token")
+@router.delete("/me/fcm-token", responses=ok_message())
 async def remove_fcm_token(
     body: FCMTokenRequest,
     current_user: dict[str, Any] = Depends(get_current_user),

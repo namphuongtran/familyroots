@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends
 from app.application.me.handlers import MeQueryHandler
 from app.core.security import get_current_user
 from app.infrastructure.dependencies import get_me_query_handler
+from app.schemas.clan import ClanSwitchResponse
+from app.schemas.envelope import ok
 
 router = APIRouter()
 
@@ -22,7 +24,7 @@ async def list_my_clans(
     return {"data": result["clans"], "meta": {"count": result["count"]}}
 
 
-@router.post("/clans/{clan_id}/select")
+@router.post("/clans/{clan_id}/select", responses=ok(ClanSwitchResponse))
 async def select_clan(
     clan_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),

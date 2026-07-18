@@ -108,6 +108,11 @@ async def test_me_lists_only_approved_and_blocks_non_member(async_engine: AsyncE
         selected = await handler.select_clan(user_id=str(user_id), clan_id=approved_clan)
         assert selected["clan_id"] == str(approved_clan)
 
+        # Coherence: the documented response schema must accept the real handler dict.
+        from app.schemas.clan import ClanSwitchResponse
+
+        ClanSwitchResponse.model_validate(selected)
+
         # select a clan the user is not an approved member of → 403
         with pytest.raises(ForbiddenError):
             await handler.select_clan(user_id=str(user_id), clan_id=other_clan)

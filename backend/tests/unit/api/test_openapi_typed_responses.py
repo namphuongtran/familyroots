@@ -101,3 +101,38 @@ def test_tree_ancestors_is_envelope_list_of_detail_node(openapi: dict[str, Any])
 def test_tree_path_is_envelope_of_relationship_path(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/tree/path", "get", "200")
     assert "Envelope" in ref and "RelationshipPathResponse" in ref, ref
+
+
+def test_auth_onboard_is_created_envelope_of_register_response(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/auth/onboard", "post", "201")
+    assert "Envelope" in ref and "RegisterResponse" in ref, ref
+
+
+def test_auth_logout_is_envelope_of_message(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/auth/logout", "post", "200")
+    assert "Envelope" in ref and "MessageData" in ref, ref
+
+
+def test_persons_marriages_is_envelope_list_of_marriage(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/{person_id}/marriages", "get", "200")
+    assert "Envelope" in ref and "MarriageResponse" in ref, ref
+
+
+def test_persons_timeline_is_envelope_list_of_timeline_event(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/persons/{person_id}/timeline", "get", "200")
+    assert "Envelope" in ref and "TimelineEvent" in ref, ref
+
+
+def test_claims_list_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/claims", "get", "200")
+    assert "PageEnvelope" in ref and "IdentityClaimResponse" in ref, ref
+
+
+def test_me_select_is_envelope_of_clan_switch(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/me/clans/{clan_id}/select", "post", "200")
+    assert "Envelope" in ref and "ClanSwitchResponse" in ref, ref
+
+
+def test_events_upcoming_is_envelope_list_of_upcoming_event(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/events/upcoming", "get", "200")
+    assert "Envelope" in ref and "UpcomingEvent" in ref, ref
