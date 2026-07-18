@@ -20,8 +20,13 @@ from app.infrastructure.dependencies import (
     get_event_query_handler,
     get_person_query_handler,
 )
-from app.schemas.envelope import created, ok, ok_message, page
-from app.schemas.event import EventCreateRequest, EventResponse, EventUpdateRequest
+from app.schemas.envelope import created, ok, ok_list, ok_message, page
+from app.schemas.event import (
+    EventCreateRequest,
+    EventResponse,
+    EventUpdateRequest,
+    UpcomingEvent,
+)
 from app.services.translator import t
 
 router = APIRouter()
@@ -102,7 +107,7 @@ async def list_events(
     return {"data": data, "meta": meta}
 
 
-@router.get("/upcoming")
+@router.get("/upcoming", responses=ok_list(UpcomingEvent))
 async def get_upcoming_events(
     days: int = Query(30, ge=1, le=365),
     current_user: dict[str, Any] = Depends(get_current_user),

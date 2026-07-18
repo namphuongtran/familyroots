@@ -126,3 +126,13 @@ def test_persons_timeline_is_envelope_list_of_timeline_event(openapi: dict[str, 
 def test_claims_list_is_page_envelope(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/claims", "get", "200")
     assert "PageEnvelope" in ref and "IdentityClaimResponse" in ref, ref
+
+
+def test_me_select_is_envelope_of_clan_switch(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/me/clans/{clan_id}/select", "post", "200")
+    assert "Envelope" in ref and "ClanSwitchResponse" in ref, ref
+
+
+def test_events_upcoming_is_envelope_list_of_upcoming_event(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/events/upcoming", "get", "200")
+    assert "Envelope" in ref and "UpcomingEvent" in ref, ref
