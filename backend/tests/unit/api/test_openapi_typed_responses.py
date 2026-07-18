@@ -71,3 +71,18 @@ def test_envelope_component_shapes(openapi: dict[str, Any]) -> None:
     assert set(error["properties"]) == {"error"}
     meta = next(v for k, v in schemas.items() if k == "ListMeta")
     assert set(meta["properties"]) == {"cursor", "has_more", "limit"}
+
+
+def test_platform_clans_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/platform/clans", "get", "200")
+    assert "PageEnvelope" in ref and "ClanSummaryResponse" in ref, ref
+
+
+def test_platform_clan_detail_is_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/platform/clans/{clan_id}", "get", "200")
+    assert "Envelope" in ref and "ClanDetailResponse" in ref, ref
+
+
+def test_platform_metrics_is_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/platform/metrics", "get", "200")
+    assert "Envelope" in ref and "PlatformMetricsResponse" in ref, ref

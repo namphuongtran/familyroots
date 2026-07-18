@@ -19,11 +19,19 @@ from app.infrastructure.dependencies import (
     get_platform_admin_query_handler,
 )
 from app.models.user_profile import UserProfile
+from app.schemas.envelope import ok, page
+from app.schemas.platform_admin import (
+    AuditLogEntryResponse,
+    ClanDetailResponse,
+    ClanStatusResponse,
+    ClanSummaryResponse,
+    PlatformMetricsResponse,
+)
 
 router = APIRouter(prefix="/platform", tags=["Platform Admin"])
 
 
-@router.get("/clans", dependencies=[Depends(get_super_admin)])
+@router.get("/clans", dependencies=[Depends(get_super_admin)], responses=page(ClanSummaryResponse))
 async def list_all_clans(
     cursor: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
@@ -33,7 +41,11 @@ async def list_all_clans(
     return await handler.list_clans(cursor=cursor, limit=limit)
 
 
-@router.get("/clans/{clan_id}", dependencies=[Depends(get_super_admin)])
+@router.get(
+    "/clans/{clan_id}",
+    dependencies=[Depends(get_super_admin)],
+    responses=ok(ClanDetailResponse),
+)
 async def get_clan_detail(
     clan_id: uuid.UUID,
     handler: PlatformAdminQueryHandler = Depends(get_platform_admin_query_handler),
@@ -43,7 +55,7 @@ async def get_clan_detail(
     return {"data": result}
 
 
-@router.post("/clans/{clan_id}/suspend")
+@router.post("/clans/{clan_id}/suspend", responses=ok(ClanStatusResponse))
 async def suspend_clan(
     clan_id: uuid.UUID,
     profile: UserProfile = Depends(get_super_admin),
@@ -55,7 +67,7 @@ async def suspend_clan(
     return {"data": {"is_active": False, "clan_id": str(clan_id)}}
 
 
-@router.post("/clans/{clan_id}/reactivate")
+@router.post("/clans/{clan_id}/reactivate", responses=ok(ClanStatusResponse))
 async def reactivate_clan(
     clan_id: uuid.UUID,
     profile: UserProfile = Depends(get_super_admin),
@@ -67,7 +79,9 @@ async def reactivate_clan(
     return {"data": {"is_active": True, "clan_id": str(clan_id)}}
 
 
-@router.get("/metrics", dependencies=[Depends(get_super_admin)])
+@router.get(
+    "/metrics", dependencies=[Depends(get_super_admin)], responses=ok(PlatformMetricsResponse)
+)
 async def platform_metrics(
     handler: PlatformAdminQueryHandler = Depends(get_platform_admin_query_handler),
 ) -> dict[str, Any]:
@@ -76,7 +90,9 @@ async def platform_metrics(
     return {"data": result}
 
 
-@router.get("/audit-log", dependencies=[Depends(get_super_admin)])
+@router.get(
+    "/audit-log", dependencies=[Depends(get_super_admin)], responses=page(AuditLogEntryResponse)
+)
 async def audit_log(
     clan_id: uuid.UUID | None = Query(None),
     action: str | None = Query(None),

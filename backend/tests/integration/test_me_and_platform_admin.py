@@ -231,6 +231,24 @@ async def test_platform_admin_handler_preserves_wire_contract(
         }
         assert all(isinstance(v, int) for v in metrics.values())
 
+        # Coherence: the documentation-only OpenAPI response schemas must accept the
+        # real handler wire dicts, or a schema/handler drift ships silently to codegen.
+        from app.schemas.platform_admin import (
+            AuditLogEntryResponse,
+            ClanDetailResponse,
+            ClanSummaryResponse,
+            PlatformMetricsResponse,
+        )
+
+        ClanDetailResponse.model_validate(detail)
+        for c in clans["data"]:
+            ClanSummaryResponse.model_validate(c)
+        PlatformMetricsResponse.model_validate(metrics)
+        for e in clan_log["data"]:
+            AuditLogEntryResponse.model_validate(e)
+        for e in platform_log["data"]:
+            AuditLogEntryResponse.model_validate(e)  # clan_id is None here — must validate
+
 
 async def test_platform_admin_audit_log_paginates_across_cursor(
     async_engine: AsyncEngine,
