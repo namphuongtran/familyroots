@@ -179,7 +179,7 @@ async def test_batch_wire_matches_batch_envelope_schema(<fixtures per this file>
     PersonBatchEnvelope.model_validate(body)  # raises on drift
 ```
 
-If this file only exercises the query handler (not the full route body assembly), assemble the body the same way `POST /persons/batch` does in `app/api/v1/persons.py` (data list + `meta.errors` from missing ids), or drive the route. Match reality.
+If this file only exercises the query handler (not the full route body assembly), assemble the body the same way `POST /persons/batch` does in `app/api/v1/persons.py` (data list + `meta.errors` from missing ids), or drive the route. Match reality. **The batch route returns `{"data": data, "meta": {"errors": errors}}` always (verified `persons.py:306`), so `PersonBatchEnvelope` fits exactly.** IMPORTANT: use the DEFAULT profile (`"full"`) and do NOT pass `fields=` — `data` items are only `PersonResponse`-complete under the full projection; a `summary`/`detail`/`fields=`-filtered item would fail `PersonResponse.model_validate`. (Extra `include=` keys like `stats` are fine — Pydantic ignores unexpected keys.)
 
 - [ ] **Step 8: Run guards + sabotage-check** — requires pgdb. Run the two new tests by node id. Expected PASS. Sabotage-check one: add a required field to `PersonSearchResult`, confirm its guard FAILS, revert.
 
@@ -292,7 +292,7 @@ Preserve existing decorator kwargs; add ONLY `responses=`.
 
 - [ ] **Step 5: Verify OpenAPI tests pass** — `-k "clan_users or clan_user_role"` → PASS.
 
-- [ ] **Step 6: Coherence guards** (users + pending) — add a test (in an existing clan-users integration test file, or a new focused one) that seeds a clan with one APPROVED and one PENDING membership, calls the real `ClanQueryHandler.list_users(clan_id, approved=True/False, ...)`, applies the same wire mapping the route does (`app/api/v1/clans.py` — id/user_id/role[/person_id]/created_at), and validates:
+- [ ] **Step 6: Coherence guards** (users + pending) — add a test to `backend/tests/integration/test_last_admin_race.py` (it already seeds `user_clan_role` rows and uses `ClanQueryHandler.list_users` — reuse its exact seeding pattern; do NOT invent helpers). Seed a clan with one APPROVED membership (with a linked `person_id`) and one PENDING membership, call the real `ClanQueryHandler.list_users(clan_id, approved=True/False, ...)`, apply the same wire mapping the route does (`app/api/v1/clans.py:84-93` for approved — id/user_id/role/person_id/created_at; `:108-115` for pending — id/user_id/role/created_at, NO person_id), and validate:
 
 ```python
 async def test_clan_users_wire_matches_schemas(<fixtures>):
