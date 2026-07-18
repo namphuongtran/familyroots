@@ -8,8 +8,8 @@ re-validate and break the sparse `fields=` responses); instead every route
 declares its envelope via `responses=` — documentation-only, zero runtime
 change — plus the standard error envelope.
 
-These tests pin representative routes; the sweep covers all routers that
-have typed payload models (tree/platform-admin read models are follow-up).
+These tests pin representative routes across every v1 router, including
+tree and platform-admin.
 """
 
 from __future__ import annotations
@@ -71,3 +71,33 @@ def test_envelope_component_shapes(openapi: dict[str, Any]) -> None:
     assert set(error["properties"]) == {"error"}
     meta = next(v for k, v in schemas.items() if k == "ListMeta")
     assert set(meta["properties"]) == {"cursor", "has_more", "limit"}
+
+
+def test_platform_clans_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/platform/clans", "get", "200")
+    assert "PageEnvelope" in ref and "ClanSummaryResponse" in ref, ref
+
+
+def test_platform_clan_detail_is_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/platform/clans/{clan_id}", "get", "200")
+    assert "Envelope" in ref and "ClanDetailResponse" in ref, ref
+
+
+def test_platform_metrics_is_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/platform/metrics", "get", "200")
+    assert "Envelope" in ref and "PlatformMetricsResponse" in ref, ref
+
+
+def test_tree_full_is_envelope_of_tree_response(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/tree", "get", "200")
+    assert "Envelope" in ref and "TreeResponse" in ref, ref
+
+
+def test_tree_ancestors_is_envelope_list_of_detail_node(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/tree/ancestors/{person_id}", "get", "200")
+    assert "Envelope" in ref and "TreeNodeDetail" in ref, ref
+
+
+def test_tree_path_is_envelope_of_relationship_path(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/tree/path", "get", "200")
+    assert "Envelope" in ref and "RelationshipPathResponse" in ref, ref

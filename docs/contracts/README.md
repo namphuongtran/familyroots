@@ -48,10 +48,12 @@ across all routers):
   `responses=` (never runtime `response_model=` — re-validation would break
   the sparse `fields=`/`include=` subset responses). Client codegen
   (openapi-typescript, Dio) can bind against them; a response filtered with
-  `fields=` is a key-subset of the documented full shape. Routes whose
-  payloads are still dynamic dicts (tree, platform-admin, /events/upcoming,
-  /auth token bodies) remain untyped in OpenAPI until their read models are
-  typed — the per-endpoint contract docs stay authoritative for those.
+  `fields=` is a key-subset of the documented full shape. Some routes whose
+  payloads are still dynamic dicts (e.g. `/events/upcoming`, `/auth` token
+  bodies, several `/persons/*` sub-resources, `/clans/me/users*`, `/me/clans`,
+  `/claims*`, `/exports/clan`) remain untyped in OpenAPI until their read
+  models are typed — the per-endpoint contract docs stay authoritative for
+  those. This list is illustrative, not exhaustive.
 
 ## HistoricalDate (canonical date shape)
 

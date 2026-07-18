@@ -545,3 +545,41 @@ async def test_child_without_mother_edge_has_null_mother(async_session: AsyncSes
     result = await handler.get_subtree(GetSubtree(person_id=father, clan_id=clan_id))
     kid = result["tree"]["children"][0]
     assert kid["mother_id"] is None and kid["mother_spouse_order"] is None
+
+
+async def test_tree_handler_output_matches_response_schemas(
+    async_session: AsyncSession,
+) -> None:
+    """Coherence guard: the handler's wire dicts must validate against the
+    documentation-only OpenAPI response schemas, so a schema/handler drift fails CI
+    instead of shipping a wrong type to codegen. (Focus is omitted — its route
+    already coerces to FocusView at runtime, so coherence is guaranteed there.)"""
+    from app.application.tree.queries import FindPath, GetAncestors, GetFullTree
+    from app.schemas.tree import RelationshipPathResponse, TreeNodeDetail, TreeResponse
+
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    gp = await _person(async_session, clan_id, creator, "GP")
+    dad = await _person(async_session, clan_id, creator, "Dad")
+    child = await _person(async_session, clan_id, creator, "Child")
+    for person, founder in ((gp, True), (dad, False), (child, False)):
+        await _member(async_session, person, clan_id, is_founder=founder)
+    await _pc(async_session, gp, dad, clan_id, creator)
+    await _pc(async_session, dad, child, clan_id, creator)
+    await async_session.commit()
+
+    handler = TreeQueryHandler(SqlAlchemyTreeRepository(async_session))
+
+    full = await handler.get_full_tree(
+        GetFullTree(clan_id=clan_id, root_person_id=gp, max_generations=10)
+    )
+    TreeResponse.model_validate(full)  # raises on drift
+
+    ancestors = await handler.get_ancestors(GetAncestors(person_id=child, clan_id=clan_id))
+    assert ancestors  # non-empty so the loop actually exercises the schema
+    for node in ancestors:
+        TreeNodeDetail.model_validate(node)  # raises on drift
+
+    path = await handler.find_path(FindPath(from_id=child, to_id=gp, clan_id=clan_id))
+    assert path["found"] is True
+    RelationshipPathResponse.model_validate(path)  # raises on drift
