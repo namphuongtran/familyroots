@@ -26,14 +26,17 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.api.v1.clans import list_clan_users, list_pending_users
 from app.application.clan.commands import ChangeUserRole, RemoveUser
-from app.application.clan.handlers import ClanCommandHandler
+from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
+from app.core.permissions import ClanRole
 from app.domain.clan.repository import ClanRepository
 from app.domain.shared.exceptions import ForbiddenError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.schemas.clan_membership import ClanUserSummary, PendingClanUser
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -289,3 +292,94 @@ async def test_concurrent_mutual_demotion_leaves_one_admin(
             {"cid": clan_id},
         )
         assert result.scalar_one() == 1
+
+
+# ── coherence guard: /clans/me/users + /pending wire shape ──────────────────
+#
+# Drives the actual route functions (as test_clan_users_person_id.py does),
+# not a hand-reconstructed dict, so the guard fails if the real wire mapping
+# in app/api/v1/clans.py ever drifts from ClanUserSummary / PendingClanUser.
+
+
+async def _add_person(s: AsyncSession, clan_id: uuid.UUID, creator: uuid.UUID) -> uuid.UUID:
+    person_id = uuid.uuid4()
+    await s.execute(
+        sa.text(
+            "INSERT INTO persons (id, full_name, gender, created_by_clan_id, created_by) "
+            "VALUES (:id, 'P', 'male', :c, :cb)"
+        ),
+        {"id": person_id, "c": clan_id, "cb": creator},
+    )
+    return person_id
+
+
+async def _add_linked_user_profile(
+    s: AsyncSession, user_id: uuid.UUID, person_id: uuid.UUID | None
+) -> None:
+    await s.execute(
+        sa.text(
+            "INSERT INTO user_profiles (id, email, display_name, person_id) "
+            "VALUES (:id, :e, 'User', :pid)"
+        ),
+        {"id": user_id, "e": f"user-{user_id.hex[:6]}@example.com", "pid": person_id},
+    )
+
+
+async def _add_pending_role(
+    s: AsyncSession, clan_id: uuid.UUID, user_id: uuid.UUID, role: str
+) -> None:
+    await s.execute(
+        sa.text(
+            "INSERT INTO user_clan_roles (user_id, clan_id, role, is_approved) "
+            "VALUES (:u, :c, :r, false)"
+        ),
+        {"u": user_id, "c": clan_id, "r": role},
+    )
+
+
+def _make_query_handler(session: AsyncSession) -> ClanQueryHandler:
+    return ClanQueryHandler(cast(ClanRepository, SqlAlchemyClanRepository(session)))
+
+
+async def test_clan_users_wire_matches_schemas(
+    session_maker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Coherence guard for /clans/me/users + /pending — validate real rows against
+    ClanUserSummary / PendingClanUser (the pending shape omits person_id, as-is)."""
+    clan_id = uuid.uuid4()
+    approved_user, pending_user = uuid.uuid4(), uuid.uuid4()
+    async with session_maker() as s:
+        await _add_clan(s, clan_id)
+        person_id = await _add_person(s, clan_id, approved_user)
+        await _add_linked_user_profile(s, approved_user, person_id)
+        await _add_approved_role(s, clan_id, approved_user, "admin", approved_user)
+        await _add_linked_user_profile(s, pending_user, None)
+        await _add_pending_role(s, clan_id, pending_user, "viewer")
+        await s.commit()
+
+    async with session_maker() as s:
+        query_handler = _make_query_handler(s)
+        approved_page = await list_clan_users(
+            current_user={"sub": str(approved_user)},
+            clan_id=clan_id,
+            query_handler=query_handler,
+            role=ClanRole.VIEWER,
+            cursor=None,
+            limit=20,
+        )
+        pending_page = await list_pending_users(
+            current_user={"sub": str(approved_user)},
+            clan_id=clan_id,
+            query_handler=query_handler,
+            role=ClanRole.ADMIN,
+            cursor=None,
+            limit=20,
+        )
+
+    approved = approved_page["data"]
+    pending = pending_page["data"]
+    assert approved and pending
+    for row in approved:
+        ClanUserSummary.model_validate(row)
+    for row in pending:
+        PendingClanUser.model_validate(row)

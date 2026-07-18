@@ -23,7 +23,13 @@ from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_clan_command_handler, get_clan_query_handler
 from app.schemas.clan import ClanResponse, ClanStats, ClanUpdateRequest
-from app.schemas.envelope import ok
+from app.schemas.clan_membership import (
+    ClanUserSummary,
+    PendingClanUser,
+    UserActionResponse,
+    UserRoleChangeResponse,
+)
+from app.schemas.envelope import ok, page
 from app.services.translator import t
 
 router = APIRouter()
@@ -70,7 +76,7 @@ async def update_own_clan(
     return {"data": ClanResponse.model_validate(clan).model_dump()}
 
 
-@router.get("/me/users")
+@router.get("/me/users", responses=page(ClanUserSummary))
 async def list_clan_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
@@ -100,7 +106,7 @@ async def list_clan_users(
     return page
 
 
-@router.get("/me/users/pending")
+@router.get("/me/users/pending", responses=page(PendingClanUser))
 async def list_pending_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
@@ -123,7 +129,7 @@ async def list_pending_users(
     return page
 
 
-@router.post("/me/users/{user_id}/approve")
+@router.post("/me/users/{user_id}/approve", responses=ok(UserActionResponse))
 async def approve_user(
     user_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -142,7 +148,7 @@ async def approve_user(
     return {"data": {"message": t("user.approved"), "user_id": str(user_id)}}
 
 
-@router.post("/me/users/{user_id}/reject")
+@router.post("/me/users/{user_id}/reject", responses=ok(UserActionResponse))
 async def reject_user(
     user_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -161,7 +167,7 @@ async def reject_user(
     return {"data": {"message": t("user.rejected"), "user_id": str(user_id)}}
 
 
-@router.patch("/me/users/{user_id}/role")
+@router.patch("/me/users/{user_id}/role", responses=ok(UserRoleChangeResponse))
 async def change_user_role(
     user_id: uuid.UUID,
     role: str,
@@ -182,7 +188,7 @@ async def change_user_role(
     return {"data": {"message": t("user.role_changed"), "user_id": str(user_id), "role": role}}
 
 
-@router.delete("/me/users/{user_id}")
+@router.delete("/me/users/{user_id}", responses=ok(UserActionResponse))
 async def remove_user(
     user_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),

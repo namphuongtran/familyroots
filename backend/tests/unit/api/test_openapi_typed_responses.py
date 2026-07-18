@@ -151,3 +151,18 @@ def test_persons_search_is_envelope_list_of_search_result(openapi: dict[str, Any
 def test_persons_batch_is_batch_envelope(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/persons/batch", "post", "200")
     assert "PersonBatchEnvelope" in ref, ref
+
+
+def test_clan_users_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/clans/me/users", "get", "200")
+    assert "PageEnvelope" in ref and "ClanUserSummary" in ref, ref
+
+
+def test_clan_users_pending_is_page_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/clans/me/users/pending", "get", "200")
+    assert "PageEnvelope" in ref and "PendingClanUser" in ref, ref
+
+
+def test_clan_user_role_change_is_envelope(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/clans/me/users/{user_id}/role", "patch", "200")
+    assert "Envelope" in ref and "UserRoleChangeResponse" in ref, ref
