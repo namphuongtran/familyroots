@@ -36,7 +36,7 @@ from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.clan_repository import SqlAlchemyClanRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
-from app.schemas.clan_membership import ClanUserSummary, PendingClanUser
+from app.schemas.clan_membership import ClanUserSummary
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -298,7 +298,7 @@ async def test_concurrent_mutual_demotion_leaves_one_admin(
 #
 # Drives the actual route functions (as test_clan_users_person_id.py does),
 # not a hand-reconstructed dict, so the guard fails if the real wire mapping
-# in app/api/v1/clans.py ever drifts from ClanUserSummary / PendingClanUser.
+# in app/api/v1/clans.py ever drifts from ClanUserSummary.
 
 
 async def _add_person(s: AsyncSession, clan_id: uuid.UUID, creator: uuid.UUID) -> uuid.UUID:
@@ -345,7 +345,7 @@ async def test_clan_users_wire_matches_schemas(
     session_maker: async_sessionmaker[AsyncSession],
 ) -> None:
     """Coherence guard for /clans/me/users + /pending — validate real rows against
-    ClanUserSummary / PendingClanUser (the pending shape omits person_id, as-is)."""
+    ClanUserSummary (pending now carries person_id too, additive per ADR-024)."""
     clan_id = uuid.uuid4()
     approved_user, pending_user = uuid.uuid4(), uuid.uuid4()
     async with session_maker() as s:
@@ -353,7 +353,8 @@ async def test_clan_users_wire_matches_schemas(
         person_id = await _add_person(s, clan_id, approved_user)
         await _add_linked_user_profile(s, approved_user, person_id)
         await _add_approved_role(s, clan_id, approved_user, "admin", approved_user)
-        await _add_linked_user_profile(s, pending_user, None)
+        pending_person_id = await _add_person(s, clan_id, pending_user)
+        await _add_linked_user_profile(s, pending_user, pending_person_id)
         await _add_pending_role(s, clan_id, pending_user, "viewer")
         await s.commit()
 
@@ -382,4 +383,5 @@ async def test_clan_users_wire_matches_schemas(
     for row in approved:
         ClanUserSummary.model_validate(row)
     for row in pending:
-        PendingClanUser.model_validate(row)
+        ClanUserSummary.model_validate(row)
+    assert any(row["person_id"] is not None for row in pending), pending
