@@ -98,11 +98,26 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """FastAPI dependency — extract and validate JWT from Authorization header."""
+    """FastAPI dependency — extract and validate JWT from Authorization header.
+
+    Also enforces the account-deactivation invariant (H1, review 2026-07-18):
+    deactivation lives only in our DB — the Supabase JWT stays valid — so it is
+    gated HERE, the single chokepoint every authenticated route inherits by
+    construction. Only an explicit ``is_active = False`` blocks; a missing
+    profile row (``None``) is a brand-new account that ``ensure_user_profile``
+    will provision on this same request.
+    """
     if credentials is None:
         raise AuthenticationError("missing_token")
-    return await verify_supabase_token(credentials.credentials)
+    payload = await verify_supabase_token(credentials.credentials)
+    is_account_active = await db.scalar(
+        select(UserProfile.is_active).where(UserProfile.id == uuid.UUID(payload["sub"]))
+    )
+    if is_account_active is False:
+        raise ForbiddenError("account_deactivated")
+    return payload
 
 
 # Throttle last_login_at updates: skip if last update was less than 5 min ago.
