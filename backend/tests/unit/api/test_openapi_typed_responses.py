@@ -101,3 +101,13 @@ def test_tree_ancestors_is_envelope_list_of_detail_node(openapi: dict[str, Any])
 def test_tree_path_is_envelope_of_relationship_path(openapi: dict[str, Any]) -> None:
     ref = _response_schema(openapi, "/api/v1/tree/path", "get", "200")
     assert "Envelope" in ref and "RelationshipPathResponse" in ref, ref
+
+
+def test_auth_onboard_is_created_envelope_of_register_response(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/auth/onboard", "post", "201")
+    assert "Envelope" in ref and "RegisterResponse" in ref, ref
+
+
+def test_auth_logout_is_envelope_of_message(openapi: dict[str, Any]) -> None:
+    ref = _response_schema(openapi, "/api/v1/auth/logout", "post", "200")
+    assert "Envelope" in ref and "MessageData" in ref, ref
