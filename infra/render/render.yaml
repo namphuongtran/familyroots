@@ -12,21 +12,48 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: APP_DEBUG
+        value: "false"          # production validator: boot fails if true
       - key: DATABASE_URL
         fromDatabase:
           name: familyroots-db
           property: connectionString
       - key: APP_SECRET_KEY
         generateValue: true
-      # Required in production: the config fail-fast rejects a wildcard host
-      # allowlist. JSON list (pydantic-settings parses complex env vars as JSON).
+      # JSON lists (pydantic-settings parses complex env vars as JSON). The
+      # production validator rejects wildcard/localhost for both host + CORS.
       - key: ALLOWED_HOSTS
         value: '["familyroots-api.onrender.com"]'
+      # Render terminates TLS at its own trusted proxy, so X-Forwarded-For is
+      # trustworthy here (rate-limit buckets + audit client IPs). Boot fails if unset.
+      - key: RATE_LIMIT_TRUST_FORWARDED_FOR
+        value: "true"
+      # ─── Set these in the Render dashboard (sync:false ⇒ never stored in git) ───
+      # Enter values on first blueprint apply; Render will not overwrite them.
+      #
+      # CORS_ORIGINS — JSON list of the web app's production origin(s), e.g.
+      #   ["https://app.familyroots.example"]. Boot fails on wildcard/localhost.
+      - key: CORS_ORIGINS
+        sync: false
+      # Supabase project URL + keys — the production validator requires all three
+      # (auth JWKS + sign-in + register/storage). Service-role key is highly
+      # sensitive (bypasses RLS project-wide) — dashboard only, never committed.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Optional — error reporting. Leave blank in the dashboard to disable Sentry.
+      - key: SENTRY_DSN
+        sync: false
     healthCheckPath: /health
     # Run DB migrations before each deploy goes live (blocks the deploy on failure).
     preDeployCommand: alembic upgrade head
-    # TODO: add remaining production env vars from .env.example
-    # (SUPABASE_URL/keys, CORS_ORIGINS, SENTRY_DSN, Firebase) before go-live.
+    # Firebase FCM (push) is OPTIONAL for boot — a missing credentials file only
+    # disables pushes (warning, not a boot failure). To enable: add the
+    # service-account JSON as a Render Secret File and set FIREBASE_CREDENTIALS_PATH
+    # to its mount path. See docs/ops/configuration.md.
 
 databases:
   - name: familyroots-db
