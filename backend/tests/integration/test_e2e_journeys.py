@@ -12,8 +12,9 @@ fix PR flips them: H3 (GET /tree 404s for API-managed clans) and M9 (malformed
 cursor → 500).
 
 Rate-limit budget: this module's app shares ONE 20 req/min/IP bucket across
-/api/v1/auth + /api/v1/invitations. Current spend: J1=2 auth, J2=3 auth + 2
-invitations, J3=2 auth → 9/20. Re-count before adding requests on those prefixes.
+/api/v1/auth + /api/v1/invitations — matched by path PREFIX, so GET /auth/me
+counts too. Current spend: J1=3 auth (register, login, /auth/me), J2=3 auth + 2
+invitations, J3=2 auth → 10/20. Re-count before adding requests on those prefixes.
 """
 
 import json
