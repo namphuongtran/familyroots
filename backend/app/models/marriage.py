@@ -53,9 +53,12 @@ class Marriage(TimestampMixin, Base):
     divorce_date_precision: Mapped[str] = mapped_column(String(10), default="exact")
     divorce_date_display: Mapped[str | None] = mapped_column(String(100), default=None)
     marriage_place: Mapped[str | None] = mapped_column(String(255), default=None)
-    status: Mapped[str] = mapped_column(
-        String(20), default="married"
-    )  # married, divorced, widowed, separated
+    # married, divorced, widowed, separated. DB-enforced invariant (022,
+    # ADR-025): at most one live non-divorced marriage per (clan, pair) —
+    # `idx_marriages_unique_pair` is a partial unique index on
+    # status <> 'divorced', matching the app's has_active_marriage semantics
+    # (widowed/separated count as "active" for uniqueness, only divorced doesn't).
+    status: Mapped[str] = mapped_column(String(20), default="married")
     spouse_order: Mapped[int | None] = mapped_column(
         SmallInteger, default=None
     )  # vợ cả=1, vợ hai=2... (from person1's perspective)
