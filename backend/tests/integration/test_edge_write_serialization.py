@@ -124,7 +124,7 @@ async def _race(
                 await s.execute(stmt, params)
                 await s.commit()
                 return "ok"
-            except (DBAPIError, IntegrityError):
+            except DBAPIError, IntegrityError:
                 await s.rollback()
                 return "rejected"
 
@@ -171,7 +171,7 @@ async def _race_forced_overlap(
                 await s.execute(stmt, params)
                 await s.commit()
                 return "ok"
-            except (DBAPIError, IntegrityError):
+            except DBAPIError, IntegrityError:
                 await s.rollback()
                 return "rejected"
 
