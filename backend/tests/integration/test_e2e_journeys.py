@@ -19,8 +19,13 @@ POST /api/v1/clans/{clan_id}/invitations — that path starts with /api/v1/clans
 NOT /api/v1/invitations, so it does NOT count against this bucket; only
 POST /api/v1/invitations/{token}/accept does. Current spend: J1=3 auth (register,
 login, /auth/me), J2=3 auth (admin register, admin login, joiner register) + 1
-invitation (accept only — create does not match the prefix), J3=2 auth → 9/20.
-Re-count before adding requests on those prefixes.
+invitation (accept only — create does not match the prefix),
+test_tree_unreachable_for_api_managed_clan_KNOWN_DEFECT_H3=2 auth (register,
+login) → 8 auth + 1 invitation = 9/20. The M9 and i18n tests below add ZERO:
+M9 mints its JWT directly against a SQL-seeded clan (no /auth/* call at all),
+and the i18n test's unauthenticated GET /api/v1/persons never touches the
+/api/v1/auth or /api/v1/invitations prefixes. Re-count before adding requests
+on those prefixes.
 """
 
 import json
@@ -31,6 +36,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pytest
+import sqlalchemy as sa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
@@ -444,3 +450,127 @@ def test_journey_multiuser_collaboration(
     foreign = client.get("/api/v1/persons", headers=_auth(viewer_token, str(uuid.uuid4())))
     assert foreign.status_code == 403, foreign.text
     assert _error_code(foreign) == "clan_membership_required"
+
+
+def test_tree_unreachable_for_api_managed_clan_KNOWN_DEFECT_H3(
+    client: TestClient, stub_identity: StubIdentityProvider
+) -> None:
+    """PINS review finding H3 (docs/architecture/backend-review-2026-07-18.md):
+    no API path can set is_founder (PersonCreateRequest has no such field; no
+    membership PATCH exists), so find_clan_founder finds nothing and GET /tree
+    404s for EVERY clan built through the API — the graph-computed đời feature
+    cannot activate. PR A3 (founder designation) MUST flip this test to the
+    desired behavior; this assertion failing is A3's RED signal, not a
+    regression."""
+    suffix = uuid.uuid4().hex[:10]
+    email = f"j3-{suffix}@ex.com"
+    _register_create(client, email, f"j3-{suffix}", "Chủ Tộc")
+    token, user = _login(client, email)
+    hdr = _auth(token, user["clan_id"])
+    _create_person(client, hdr, "Nguyễn Văn Nhất", "male")
+
+    resp = client.get("/api/v1/tree", headers=hdr)
+    assert resp.status_code == 404, (
+        "GET /tree no longer 404s — H3 has been fixed! Flip this test to assert "
+        "the working tree (thủy tổ đời 1) and delete the KNOWN_DEFECT marker."
+    )
+    assert _error_code(resp) == "clan_founder_not_found"
+
+
+def test_malformed_cursor_current_behavior_KNOWN_DEFECT_M9(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    """PINS review finding M9: decode_cursor is unwrapped, so a garbage ?cursor=
+    500s instead of returning 400 invalid_cursor. The M9 fix PR flips this to
+    assert the 400. Needs an approved clan membership to reach pagination, but
+    must not spend this module's auth-prefix budget — a JWT is minted for a
+    brand-new uuid user and the profile/clan/approved-membership rows are
+    seeded directly via a sync engine (same seeding style as
+    tests/integration/test_deactivation_invariant.py), never touching
+    /api/v1/auth or /api/v1/invitations.
+
+    Uses a LOCAL TestClient(raise_server_exceptions=False) wrapping the same
+    app instance instead of the shared module `client` fixture: the real
+    app's BaseHTTPMiddleware stack (Language/RequestMeta/RateLimit) does not
+    reliably let httpx's default TestClient observe the registered
+    catch-all's JSON response for a genuinely unhandled exception — it
+    re-raises into the test process instead (same reasoning documented in
+    tests/unit/api/test_persons_batch_endpoint.py's `_build_client`). This
+    mirrors real production behavior (the catch-all still returns the 500
+    envelope to real clients); it only affects how *this test* observes it."""
+    user_id = uuid.uuid4()
+    clan_id = uuid.uuid4()
+    email = f"m9-{user_id.hex[:8]}@ex.com"
+    eng = sa.create_engine(migrated_db_url.replace("+asyncpg", ""))
+    try:
+        with eng.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO user_profiles (id, email, display_name) VALUES (:u, :e, 'M9')"
+                ),
+                {"u": user_id, "e": email},
+            )
+            conn.execute(
+                sa.text("INSERT INTO clans (id, name, slug) VALUES (:c, 'M9 Clan', :sl)"),
+                {"c": clan_id, "sl": f"m9-{clan_id.hex[:8]}"},
+            )
+            conn.execute(
+                sa.text(
+                    "INSERT INTO user_clan_roles (user_id, clan_id, role, is_approved, "
+                    "approved_by, approved_at) VALUES (:u, :c, 'viewer', true, :u, now())"
+                ),
+                {"u": user_id, "c": clan_id},
+            )
+    finally:
+        eng.dispose()
+
+    token = _mint(rsa_keys["private_pem"], user_id, email)
+    raw_client = TestClient(client.app, raise_server_exceptions=False)
+    resp = raw_client.get(
+        "/api/v1/persons?cursor=%%%garbage%%%", headers=_auth(token, str(clan_id))
+    )
+    assert resp.status_code == 500, (
+        "malformed cursor no longer 500s — M9 fixed! Flip this test to assert "
+        "400 invalid_cursor and delete the KNOWN_DEFECT marker."
+    )
+
+
+def test_error_localization_over_http(client: TestClient, rsa_keys: dict[str, Any]) -> None:
+    """Accept-Language drives the REAL LanguageMiddleware: the same error yields
+    an English message under `en` and falls back to Vietnamese for an
+    unsupported locale (LanguageMiddleware.dispatch: only the first two chars
+    of Accept-Language are checked against SUPPORTED_LOCALES, defaulting to
+    "vi" — app/middleware/language_middleware.py, app/core/locale.py). Uses an
+    unauthenticated 401 (missing_token, from get_current_user) so it spends no
+    rate-limit budget and needs no seeding. The exact strings are pinned
+    against app/i18n/en.json / vi.json's "error.missing_token" key so a
+    catalog rename or a broken t() lookup (which would echo the raw key
+    instead) fails loudly here.
+
+    load_translations() is called explicitly because the shared `client`
+    fixture builds a bare TestClient(app) (never entered as a context
+    manager), so app.main's lifespan — and therefore
+    app.services.translator.load_translations() — never runs for this
+    module; without it app.services.translator.t() has an empty catalog and
+    silently echoes the raw "error.<code>" key for every locale, which would
+    make this test pass or fail depending on unrelated test-run order
+    (whichever other module's lifespan happened to populate the
+    process-global _translations dict first). Calling it directly here is
+    test-only, idempotent, and keeps this test deterministic regardless of
+    run order — it does not touch app code."""
+    from app.services.translator import load_translations
+
+    load_translations()
+    r_en = client.get("/api/v1/persons", headers={"Accept-Language": "en"})
+    assert r_en.status_code == 401, r_en.text
+    assert _error_code(r_en) == "missing_token"
+    msg_en = r_en.json()["error"]["message"]
+
+    r_xx = client.get("/api/v1/persons", headers={"Accept-Language": "xx-YY"})
+    assert r_xx.status_code == 401, r_xx.text
+    assert _error_code(r_xx) == "missing_token"
+    msg_xx = r_xx.json()["error"]["message"]
+
+    assert msg_en != msg_xx  # en differs from the vi fallback
+    assert msg_en == "Missing authentication token"  # app/i18n/en.json:"error.missing_token"
+    assert msg_xx == "Thiếu token xác thực"  # app/i18n/vi.json:"error.missing_token"
