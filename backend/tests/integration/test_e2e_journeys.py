@@ -373,7 +373,9 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
     # app/application/export/handlers.py) — verified: "persons", "marriages",
     # "parent_child" match verbatim.
     exported_person_ids = {p["id"] for p in archive["persons"]}
-    assert {ong["id"], ba["id"], con["id"]} <= exported_person_ids
+    # Exact equality: a foreign person leaking into this fresh clan's archive
+    # (the export walks its own ExportQueryPort path) must fail here.
+    assert exported_person_ids == {ong["id"], ba["id"], con["id"]}
     assert len(archive["marriages"]) == 1
     # Raw table rows (SqlAlchemyExportQueryPort.marriages: SELECT * FROM
     # marriages) — column names verified against app/models/marriage.py:
