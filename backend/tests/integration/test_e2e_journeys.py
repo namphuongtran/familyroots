@@ -13,8 +13,14 @@ cursor → 500).
 
 Rate-limit budget: this module's app shares ONE 20 req/min/IP bucket across
 /api/v1/auth + /api/v1/invitations — matched by path PREFIX, so GET /auth/me
-counts too. Current spend: J1=3 auth (register, login, /auth/me), J2=3 auth + 2
-invitations, J3=2 auth → 10/20. Re-count before adding requests on those prefixes.
+counts too (RateLimitMiddleware.dispatch: `request.url.path.startswith(p)`, see
+app/core/rate_limit.py). Note the admin invitation-create call is
+POST /api/v1/clans/{clan_id}/invitations — that path starts with /api/v1/clans,
+NOT /api/v1/invitations, so it does NOT count against this bucket; only
+POST /api/v1/invitations/{token}/accept does. Current spend: J1=3 auth (register,
+login, /auth/me), J2=3 auth (admin register, admin login, joiner register) + 1
+invitation (accept only — create does not match the prefix), J3=2 auth → 9/20.
+Re-count before adding requests on those prefixes.
 """
 
 import json
@@ -347,3 +353,94 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
     assert {ong["id"], ba["id"], con["id"]} <= exported_person_ids
     assert len(archive["marriages"]) == 1
     assert len(archive["parent_child"]) == 2
+
+
+def test_journey_multiuser_collaboration(
+    client: TestClient, stub_identity: StubIdentityProvider, rsa_keys: dict[str, Any]
+) -> None:
+    """Admin + two joiners over HTTP: the invitation path (immediate approval)
+    and the self-request path (pending → approve), then two-sided RBAC and a
+    cross-clan isolation check."""
+    suffix = uuid.uuid4().hex[:10]
+    admin_email = f"j2a-{suffix}@ex.com"
+    slug = f"j2-{suffix}"
+
+    # Stage 1 — admin founds the clan
+    _register_create(client, admin_email, slug, "Trưởng Tộc")
+    admin_token, admin_user = _login(client, admin_email)
+    clan_id = admin_user["clan_id"]
+    admin_hdr = _auth(admin_token, clan_id)
+    person = _create_person(client, admin_hdr, "Nguyễn Thị Gốc", "female")
+
+    # Stage 2 — invitation path: viewer invited by email, accepts, approved at once
+    invitee_email = f"j2v-{suffix}@ex.com"
+    inv = _envelope(
+        client.post(
+            f"/api/v1/clans/{clan_id}/invitations",
+            headers=admin_hdr,
+            json={"email": invitee_email, "role": "viewer"},
+        )
+    )
+    assert inv["role"] == "viewer" and inv["token"]
+    # OAuth-style invitee: verifiable JWT, no register — the accept handler
+    # provisions the profile itself (repo.ensure_profile).
+    viewer_id = uuid.uuid4()
+    viewer_token = _mint(rsa_keys["private_pem"], viewer_id, invitee_email, "Người Xem")
+    acc = _envelope(
+        client.post(f"/api/v1/invitations/{inv['token']}/accept", headers=_auth(viewer_token))
+    )
+    assert acc["clan_id"] == clan_id and acc["role"] == "viewer"
+
+    # Stage 3 — two-sided RBAC over HTTP
+    viewer_hdr = _auth(viewer_token, clan_id)
+    ok = client.get("/api/v1/persons", headers=viewer_hdr)
+    assert ok.status_code == 200, ok.text
+    denied = client.post(
+        "/api/v1/persons", headers=viewer_hdr, json={"full_name": "X", "gender": "male"}
+    )
+    assert denied.status_code == 403, denied.text
+    assert _error_code(denied) == "insufficient_permissions"
+    focus = _envelope(client.get(f"/api/v1/tree/focus/{person['id']}", headers=viewer_hdr))
+    assert focus["focus_person_id"] == person["id"]  # viewer read access works
+
+    # Stage 4 — self-request path: join → pending (person_id key present) → approve
+    joiner_email = f"j2b-{suffix}@ex.com"
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": joiner_email,
+            "password": _PW,
+            "full_name": "Người Xin Gia Nhập",
+            "clan_action": "join",
+            "clan_id": clan_id,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    pending = _envelope(
+        client.get("/api/v1/clans/me/users/pending", headers=admin_hdr), has_meta=True
+    )
+    # ClanUserSummary (app/schemas/clan_membership.py) carries no `email` — its
+    # fields are id/user_id/role/person_id/created_at only, and
+    # SqlAlchemyClanRepository.list_users never joins the email column. This
+    # freshly-created clan has exactly one pending membership (the invitee above
+    # was approved immediately in Stage 2), so the joiner is identified by
+    # clan-scoped uniqueness instead of an email field that doesn't exist.
+    assert len(pending) == 1, pending
+    joiner_row = pending[0]
+    assert "person_id" in joiner_row  # ADR-024: key present (null is fine)
+    approved = client.post(
+        f"/api/v1/clans/me/users/{joiner_row['user_id']}/approve", headers=admin_hdr
+    )
+    assert approved.status_code == 200, approved.text
+    members = _envelope(client.get("/api/v1/clans/me/users", headers=admin_hdr), has_meta=True)
+    # ClanUserSummary also carries no `is_approved` — GET /me/users itself is the
+    # approved signal (list_users(clan_id, approved=True, ...) filters server-side
+    # in app/api/v1/clans.py::list_clan_users), so membership in this list already
+    # means approved; match by the user_id captured from the pending row above.
+    assert any(u["user_id"] == joiner_row["user_id"] for u in members)
+
+    # Stage 5 — cross-clan isolation: a foreign X-Current-Clan-Id is rejected by
+    # the membership check (same code path whether or not that clan exists).
+    foreign = client.get("/api/v1/persons", headers=_auth(viewer_token, str(uuid.uuid4())))
+    assert foreign.status_code == 403, foreign.text
+    assert _error_code(foreign) == "clan_membership_required"
