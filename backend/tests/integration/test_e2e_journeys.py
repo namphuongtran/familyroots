@@ -219,7 +219,7 @@ def _envelope(resp: Any, *, has_meta: bool = False) -> Any:
 def _error_code(resp: Any) -> str:
     body = resp.json()
     assert set(body.keys()) == {"error"}, body
-    assert {"code", "message", "detail"} <= set(body["error"].keys()), body
+    assert set(body["error"].keys()) == {"code", "message", "detail"}, body
     return cast(str, body["error"]["code"])
 
 
@@ -333,6 +333,10 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
     assert listing.status_code == 200, listing.text
     people = _envelope(listing, has_meta=True)
     assert {p["id"] for p in people} == {ong["id"], ba["id"], con["id"]}
+    ong_row = next(p for p in people if p["id"] == ong["id"])
+    assert ong_row["full_name"] == "Nguyễn Văn Tổ"
+    _assert_hd(ong_row["birth_date"])
+    assert ong_row["birth_date"]["date"] == "1930-01-15"
 
     # Stage 7 — tree read models over HTTP (the untested DI seam).
     # H3 truth: no founder is settable via the API, so đời cannot anchor —
@@ -340,10 +344,23 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
     focus = _envelope(client.get(f"/api/v1/tree/focus/{con['id']}", headers=hdr))
     assert focus["focus_person_id"] == con["id"]
     assert focus["generation_of_focus"] is None  # H3: no thủy tổ → đời unanchored
-    ancestor_ids = {
-        a["id"] for a in _envelope(client.get(f"/api/v1/tree/ancestors/{con['id']}", headers=hdr))
-    }
-    assert {ong["id"], ba["id"]} <= ancestor_ids
+    # focus_subtree's root IS con himself (app/schemas/tree.py FocusTreeNode);
+    # mother_id lives directly on that node — con's biological mother is bà
+    # (đa thê attribution), not a nested field. Verified against
+    # app/services/tree_builder.py (mother_id keyed per-node by the child's own
+    # biological mother, not the marriage/spouse side).
+    assert focus["focus_subtree"]["id"] == con["id"]
+    assert focus["focus_subtree"]["mother_id"] == ba["id"]
+
+    ancestors = _envelope(client.get(f"/api/v1/tree/ancestors/{con['id']}", headers=hdr))
+    # Live payload includes the focus person itself at depth 0 (GetAncestors
+    # handler returns the full chain, not just strict ancestors) — assert the
+    # EXACT id set rather than a superset.
+    assert {a["id"] for a in ancestors} == {con["id"], ong["id"], ba["id"]}
+    ong_node = next(a for a in ancestors if a["id"] == ong["id"])
+    _assert_hd(ong_node["birth_date"])
+    assert ong_node["birth_date"]["date"] == "1930-01-15"
+    assert ong_node["full_name"] == "Nguyễn Văn Tổ"
 
     # Stage 8 — export the clan archive; the whole story must be inside.
     # Envelope-EXEMPT (app/api/v1/exports.py docstring): the body is the raw
@@ -358,7 +375,15 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
     exported_person_ids = {p["id"] for p in archive["persons"]}
     assert {ong["id"], ba["id"], con["id"]} <= exported_person_ids
     assert len(archive["marriages"]) == 1
+    # Raw table rows (SqlAlchemyExportQueryPort.marriages: SELECT * FROM
+    # marriages) — column names verified against app/models/marriage.py:
+    # person1_id/person2_id, UUIDs stringified by to_json_bytes' default=str.
+    mar_row = archive["marriages"][0]
+    assert {mar_row["person1_id"], mar_row["person2_id"]} == {ong["id"], ba["id"]}
     assert len(archive["parent_child"]) == 2
+    # Same raw-row shape; app/models/parent_child.py: parent_id/child_id.
+    pc_pairs = {(row["parent_id"], row["child_id"]) for row in archive["parent_child"]}
+    assert pc_pairs == {(ong["id"], con["id"]), (ba["id"], con["id"])}
 
 
 def test_journey_multiuser_collaboration(
@@ -401,6 +426,7 @@ def test_journey_multiuser_collaboration(
     viewer_hdr = _auth(viewer_token, clan_id)
     ok = client.get("/api/v1/persons", headers=viewer_hdr)
     assert ok.status_code == 200, ok.text
+    _envelope(ok, has_meta=True)
     denied = client.post(
         "/api/v1/persons", headers=viewer_hdr, json={"full_name": "X", "gender": "male"}
     )
@@ -438,6 +464,7 @@ def test_journey_multiuser_collaboration(
         f"/api/v1/clans/me/users/{joiner_row['user_id']}/approve", headers=admin_hdr
     )
     assert approved.status_code == 200, approved.text
+    _envelope(approved)
     members = _envelope(client.get("/api/v1/clans/me/users", headers=admin_hdr), has_meta=True)
     # ClanUserSummary also carries no `is_approved` — GET /me/users itself is the
     # approved signal (list_users(clan_id, approved=True, ...) filters server-side
@@ -447,6 +474,9 @@ def test_journey_multiuser_collaboration(
 
     # Stage 5 — cross-clan isolation: a foreign X-Current-Clan-Id is rejected by
     # the membership check (same code path whether or not that clan exists).
+    # Revisit trigger: if get_current_clan_id ever checks clan existence BEFORE
+    # membership, this random-uuid probe stops covering the real foreign-clan
+    # case — switch to a genuinely existing foreign clan then.
     foreign = client.get("/api/v1/persons", headers=_auth(viewer_token, str(uuid.uuid4())))
     assert foreign.status_code == 403, foreign.text
     assert _error_code(foreign) == "clan_membership_required"
@@ -461,7 +491,15 @@ def test_tree_unreachable_for_api_managed_clan_KNOWN_DEFECT_H3(
     404s for EVERY clan built through the API — the graph-computed đời feature
     cannot activate. PR A3 (founder designation) MUST flip this test to the
     desired behavior; this assertion failing is A3's RED signal, not a
-    regression."""
+    regression.
+
+    Flipping H3 also requires updating Journey 1 Stage 7's coupled asserts in
+    test_journey_founder_lifecycle: `focus["generation_of_focus"] is None`,
+    and (once a founder can be designated and generation is no longer null
+    everywhere) any other generation-null-shaped asserts on that stage's
+    ancestor/focus nodes should be revisited too — none currently assert a
+    specific non-null generation value there, but the None-based reasoning in
+    that stage's comments no longer holds once A3 lands."""
     suffix = uuid.uuid4().hex[:10]
     email = f"j3-{suffix}@ex.com"
     _register_create(client, email, f"j3-{suffix}", "Chủ Tộc")
