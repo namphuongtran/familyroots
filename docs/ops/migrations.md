@@ -44,9 +44,12 @@ Single linear chain:
 `008_drop_change_req_trigger` → `009_person_birthname_index` →
 `010_clan_fk_restrict` → `011_path_tiebreak` →
 `012_historical_date_precision` → `013_tree_date_precision` →
-`014_drop_date_approx`.
+`014_drop_date_approx` → `015_data_integrity` → `016_document_soft_delete` →
+`017_notification_sent_on` → `018_query_support_indexes` →
+`019_path_bfs_visited` → `020_event_soft_delete_occ` →
+`021_parent_child_guard` → `022_edge_write_serialization`.
 
-Head = `014`; verify with `cd backend && uv run alembic history`.
+Head = `022`; verify with `cd backend && uv run alembic history`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

@@ -10,9 +10,9 @@ Accepted, shipped (2026-07-17, migration 021)
 > could still race an ancestry cycle into existence (H2, review 2026-07-18).
 > 022 added a per-clan `pg_advisory_xact_lock` ahead of those person locks to
 > close it. The bio-parent cap and acyclicity walk described below are
-> unchanged. `idx_marriages_unique_pair` and `idx_parent_child_unique_edge`,
-> referenced elsewhere in this repo in the context of this trigger, were also
-> widened by 022 — see ADR-025.
+> unchanged. Separately, 022 also widened the partial unique indexes
+> `idx_parent_child_unique_edge` (this table) and `idx_marriages_unique_pair`
+> (marriages) to match the app invariants — see ADR-025.
 
 ## Context
 
