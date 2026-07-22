@@ -4,11 +4,18 @@ H2 (review 2026-07-18): 021's trigger serializes concurrent parent_child writers
 FOR UPDATE-locking the two ENDPOINT persons — writers whose endpoints are disjoint
 never serialize, so with committed D→A and B→C, concurrent inserts A→B and C→D both
 pass their (pre-race snapshot) cycle walks and COMMIT AN ANCESTRY CYCLE. Fix: a
-per-clan pg_advisory_xact_lock at the top of the trigger — the bio-cap count and the
-cycle walk are both clan-scoped, so a per-clan critical section makes every writer's
-re-check see every earlier writer's committed edges. Two-arg keyspace (classid
-728116) cannot collide with the background jobs' one-arg locks 728_115_00x (those
-occupy classid 0); hashtext collisions across clans merely over-serialize.
+per-clan pg_advisory_xact_lock in a NEW BEFORE ROW trigger
+(trg_parent_child_clan_lock) — the bio-cap count and the cycle walk are both
+clan-scoped, so a per-clan critical section makes every writer's re-check see every
+earlier writer's committed edges. BEFORE placement is load-bearing (C1, final
+review): the write's FK checks take FOR KEY SHARE on the endpoint persons before
+any AFTER trigger runs, so an AFTER-phase advisory lock deadlocked ~79% on
+same-clan shared-endpoint writes (father+mother inserts for one child). Cross-clan
+writers over shared persons retain the pre-existing (021-era) rare KEY SHARE →
+FOR UPDATE upgrade deadlock — follow-up: map 40P01 to the 409 conflict envelope.
+Two-arg keyspace (classid 728116) cannot collide with the background jobs' one-arg
+locks 728_115_00x (those occupy classid 0); hashtext collisions across clans merely
+over-serialize.
 
 M2a: idx_marriages_unique_pair was partial on status='married', but the app's
 "active" (has_active_marriage, and 015's spouse_order index) is status<>'divorced' —
@@ -115,6 +122,38 @@ END $$;
 """
 
 # The 022 function: identical to 021 except for the advisory-lock block.
+_LOCK_FUNCTION = """
+CREATE OR REPLACE FUNCTION public.parent_child_clan_lock() RETURNS trigger AS $$
+BEGIN
+    -- Serialize ALL live-edge writes within a clan (ADR-025, H2). This MUST run
+    -- in a BEFORE ROW trigger: the write's FK checks take FOR KEY SHARE on both
+    -- endpoint persons before any AFTER trigger runs, so taking this lock in the
+    -- AFTER guard deadlocked against those row locks on same-clan shared-endpoint
+    -- writes (C1, final review 2026-07-18). Here, a same-clan writer blocks
+    -- BEFORE acquiring any person lock — no hold-and-wait among same-clan
+    -- writers. The bio-cap count and cycle walk in the AFTER guard are both
+    -- clan-scoped, so this per-clan critical section is sufficient for them.
+    -- xact-scoped: auto-released at commit/rollback. Two-arg keyspace (classid
+    -- 728116) cannot collide with the jobs' one-arg locks 728_115_00x (classid
+    -- 0); cross-clan hashtext collisions merely over-serialize (harmless at
+    -- gia-phả write rates).
+    IF NOT NEW.is_deleted THEN
+        PERFORM pg_advisory_xact_lock(728116, hashtext(NEW.created_by_clan_id::text));
+    END IF;
+    -- BEFORE ROW contract: must RETURN NEW — returning NULL would silently
+    -- CANCEL the write.
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+_LOCK_TRIGGER = """
+CREATE TRIGGER trg_parent_child_clan_lock
+BEFORE INSERT OR UPDATE OF parent_id, child_id, relationship_type, is_deleted
+ON public.parent_child
+FOR EACH ROW EXECUTE FUNCTION public.parent_child_clan_lock();
+"""
+
 _FUNCTION_022 = """
 CREATE OR REPLACE FUNCTION public.parent_child_integrity_guard() RETURNS trigger AS $$
 DECLARE
@@ -131,21 +170,23 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
 
-    -- Serialize ALL live-edge writes within a clan (ADR-025). The bio-cap count
-    -- and the cycle walk below are both clan-scoped, so a per-clan critical
-    -- section makes every writer's re-check see every earlier writer's committed
-    -- edges — including writers whose edge ENDPOINTS are disjoint, the race the
-    -- per-person FOR UPDATE locks cannot close (H2, review 2026-07-18).
-    -- xact-scoped: auto-released at commit/rollback. Two-arg keyspace (classid
-    -- 728116) cannot collide with the jobs' one-arg locks 728_115_00x (classid 0);
-    -- cross-clan hashtext collisions merely over-serialize (harmless at gia-phả
-    -- write rates).
-    PERFORM pg_advisory_xact_lock(728116, hashtext(NEW.created_by_clan_id::text));
-
+    -- The per-clan advisory lock is taken by trg_parent_child_clan_lock — a
+    -- BEFORE ROW trigger — NOT here. It cannot live in this AFTER guard: the
+    -- INSERT's FK checks take FOR KEY SHARE on both endpoint persons before any
+    -- AFTER trigger runs, so acquiring the clan lock here let a second same-clan
+    -- writer arrive at the advisory wait already holding person row locks —
+    -- hold-and-wait → deadlock (~79% reproducible on concurrent father+mother
+    -- inserts for one child; C1, final review 2026-07-18). Taken in the BEFORE
+    -- phase, same-clan writers serialize before ANY person lock exists, so by
+    -- the time this guard runs its re-checks see every earlier same-clan
+    -- writer's committed edges — closing H2's disjoint-endpoint cycle race.
+    --
     -- Person-row locks kept: they additionally serialize against the
     -- claim-approval path (which FOR UPDATEs person rows). Same-clan writers are
-    -- already serialized by the advisory lock before reaching these; cross-clan
-    -- writers take them in deterministic LEAST/GREATEST order — no deadlock.
+    -- already serialized by the clan lock; CROSS-clan writers over shared
+    -- persons can still deadlock here against their own FK KEY SHARE locks
+    -- (pre-existing since 021, rare — surfaces as a rolled-back 500; follow-up:
+    -- map SQLSTATE 40P01 to the 409 conflict envelope).
     PERFORM 1 FROM public.persons WHERE id = LEAST(NEW.parent_id, NEW.child_id) FOR UPDATE;
     PERFORM 1 FROM public.persons WHERE id = GREATEST(NEW.parent_id, NEW.child_id) FOR UPDATE;
 
@@ -274,6 +315,8 @@ def upgrade() -> None:
     op.execute(_PRECHECK_PRECISION)
     op.execute(_PRECHECK_BRANCH_SELF)
 
+    op.execute(_LOCK_FUNCTION)
+    op.execute(_LOCK_TRIGGER)
     op.execute(_FUNCTION_022)
 
     op.execute("DROP INDEX IF EXISTS idx_marriages_unique_pair")
@@ -312,4 +355,6 @@ def downgrade() -> None:
         "WHERE status = 'married' AND is_deleted = false"
     )
 
+    op.execute("DROP TRIGGER IF EXISTS trg_parent_child_clan_lock ON public.parent_child")
+    op.execute("DROP FUNCTION IF EXISTS public.parent_child_clan_lock()")
     op.execute(_FUNCTION_021)

@@ -16,10 +16,17 @@ DATABASE's own guarantees). RED before 022: the race tests observe both writers
 committing (corrupt state); the sabotage tests observe forbidden values landing.
 
 Two race helpers exist deliberately: `_race` (plain gate) suffices where a DB lock
-already forces overlap; H2 uses `_race_forced_overlap` (barrier before COMMIT) because
-pre-022 no lock exists and pool warm-start asymmetry can serialize the writers by
-accident. Forcing overlap uniformly is NOT safe — applied to M2b it deadlocks (FK
-FOR KEY SHARE vs trigger FOR UPDATE); see the helper docstrings.
+already forces overlap; H2 uses `_race_forced_overlap` (pool reset + rendezvous
+barrier immediately before the statement) because pre-022 no lock exists and pool
+warm-start asymmetry can serialize the writers by accident. See the helper
+docstrings for why forced overlap stays scoped to H2.
+
+Deadlock note (C1, final review 2026-07-18): the INSERT's FK checks take FOR KEY
+SHARE on both endpoint persons before any AFTER trigger runs. An advisory lock
+acquired inside the AFTER guard therefore deadlocked against those row locks on
+same-clan shared-endpoint writes (~79%/round) — which is why 022 takes the clan
+lock in a BEFORE ROW trigger instead, ahead of every row lock.
+`test_same_clan_shared_endpoint_writers_do_not_deadlock` pins this.
 """
 
 from __future__ import annotations
@@ -161,11 +168,13 @@ async def _race_forced_overlap(
     rendezvousing on a barrier immediately before the statement removes that
     artifact.
 
-    Do NOT reuse this for M2a/M2b: when both writers target the *same* two
-    person rows (not disjoint), forcing this level of overlap collides with
-    parent_child's FK-driven FOR KEY SHARE locks and the 021 trigger's FOR
-    UPDATE upgrade, producing a genuine Postgres deadlock instead of the
-    business-rule rejection those tests are pinning.
+    Do NOT reuse this for M2a/M2b: those tests pin index-level rejections that a
+    real DB lock already forces, so plain `_race` suffices. Historical context:
+    when both writers target the SAME person rows, FK-driven FOR KEY SHARE locks
+    plus a later FOR UPDATE upgrade could deadlock (this was real production
+    behavior, not just a harness artifact — C1, final review 2026-07-18; fixed by
+    moving the clan advisory lock into a BEFORE ROW trigger so same-clan writers
+    serialize before any row lock is taken).
     """
     engine = maker.kw["bind"]
     await engine.dispose()  # drop any pooled connection from setup — start symmetric
@@ -230,6 +239,34 @@ async def test_disjoint_non_cycle_edges_both_succeed(
         maker, _INSERT_EDGE, _edge_params(p1, p2, clan), _edge_params(p3, p4, clan)
     )
     assert results == ["ok", "ok"]
+
+
+async def test_same_clan_shared_endpoint_writers_do_not_deadlock(
+    maker: async_sessionmaker[AsyncSession],
+) -> None:
+    """C1 (final whole-branch review 2026-07-18): the most common concurrent edit —
+    two editors add father→child and mother→child at once. The INSERT's FK checks
+    take FOR KEY SHARE on the shared child BEFORE any AFTER trigger runs, so an
+    advisory lock acquired inside the AFTER guard deadlocked ~79% of rounds
+    (hold-and-wait: W1 holds the clan lock and wants the child row; W2 holds the
+    child row and wants the clan lock). The clan lock must therefore be taken in
+    a BEFORE ROW trigger — ahead of every person row lock — so same-clan writers
+    serialize cleanly: both valid edges must land, every round, no deadlock.
+
+    20 rounds because the pre-fix deadlock fired probabilistically per round —
+    a clean 20/20 is a guarantee, not luck. Post-fix this is deterministic."""
+    for round_no in range(20):
+        clan, (father, mother, child) = await _seed_persons(maker, 3)
+        results = await _race(
+            maker,
+            _INSERT_EDGE,
+            _edge_params(father, child, clan),
+            _edge_params(mother, child, clan),
+        )
+        assert results == ["ok", "ok"], (
+            f"round {round_no}: concurrent shared-endpoint inserts did not both "
+            f"succeed: {results} ('rejected' here means deadlock → DBAPIError)"
+        )
 
 
 # ── M2a: marriage-pair uniqueness must match the app's "active" invariant ─────
@@ -306,15 +343,37 @@ async def test_precision_check_rejects_unknown_value(
 ) -> None:
     """The five *_precision columns are Pydantic-validated only before 022 — a raw
     write could store 'approx' (the retired pre-HistoricalDate value). The CHECK
-    must reject it on every column."""
-    _clan, (p,) = await _seed_persons(maker, 1)
+    must reject it on EVERY column, so each of the five is probed against a real
+    row (final-review M1: probing only persons.birth left 4 CHECKs untested)."""
+    clan, (p1, p2) = await _seed_persons(maker, 2)
+    marriage = _marriage_params(p1, p2, clan, "married")
+    event_id = uuid.uuid4()
     async with maker() as s:
-        with pytest.raises((DBAPIError, IntegrityError), match="ck_persons_birth_precision"):
-            await s.execute(
-                sa.text("UPDATE persons SET birth_date_precision = 'approx' WHERE id = :p"),
-                {"p": p},
-            )
-            await s.commit()
+        await s.execute(_INSERT_MARRIAGE, marriage)
+        await s.execute(
+            sa.text(
+                "INSERT INTO events (id, clan_id, event_type, title, event_date, created_by) "
+                "VALUES (:id, :c, 'birthday', 'T', '2000-01-01', :cb)"
+            ),
+            {"id": event_id, "c": clan, "cb": uuid.uuid4()},
+        )
+        await s.commit()
+
+    cases = [
+        ("persons", "birth_date_precision", p1, "ck_persons_birth_precision"),
+        ("persons", "death_date_precision", p1, "ck_persons_death_precision"),
+        ("events", "event_date_precision", event_id, "ck_events_event_precision"),
+        ("marriages", "marriage_date_precision", marriage["id"], "ck_marriages_marriage_precision"),
+        ("marriages", "divorce_date_precision", marriage["id"], "ck_marriages_divorce_precision"),
+    ]
+    for table, column, row_id, constraint in cases:
+        async with maker() as s:
+            with pytest.raises((DBAPIError, IntegrityError), match=constraint):
+                await s.execute(
+                    sa.text(f"UPDATE {table} SET {column} = 'approx' WHERE id = :i"),
+                    {"i": row_id},
+                )
+                await s.commit()
 
 
 async def test_branch_self_parent_rejected(maker: async_sessionmaker[AsyncSession]) -> None:

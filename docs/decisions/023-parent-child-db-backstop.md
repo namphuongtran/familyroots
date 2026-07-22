@@ -8,7 +8,8 @@ Accepted, shipped (2026-07-17, migration 021)
 > describes the 021 trigger, which serialized concurrent writers by locking
 > only the two edge **endpoint** persons — writers with disjoint endpoints
 > could still race an ancestry cycle into existence (H2, review 2026-07-18).
-> 022 added a per-clan `pg_advisory_xact_lock` ahead of those person locks to
+> 022 added a per-clan `pg_advisory_xact_lock` — in a dedicated BEFORE ROW
+> trigger, ahead of the FK row locks and the guard's person locks — to
 > close it. The bio-parent cap and acyclicity walk described below are
 > unchanged. Separately, 022 also widened the partial unique indexes
 > `idx_parent_child_unique_edge` (this table) and `idx_marriages_unique_pair`

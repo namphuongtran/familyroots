@@ -49,25 +49,38 @@ protect, in three ways:
 
 Migration `022_edge_write_serialization` (revises `021_parent_child_guard`):
 
-- **Per-clan advisory transaction lock.** `parent_child_integrity_guard()`
-  gains `PERFORM pg_advisory_xact_lock(728116, hashtext(NEW.created_by_clan_id::text))`
-  as its first serialization step, before the existing person `FOR UPDATE`
-  locks. Both invariants the trigger protects (bio-parent cap, acyclicity) are
-  scoped to a single clan's live edges, so a per-clan critical section is
-  sufficient: it makes every writer's re-check — regardless of which persons
-  its edge touches — see every earlier writer's committed edges within that
-  clan. This closes H2 without needing a table-wide lock. The lock is
-  xact-scoped (auto-released at commit/rollback). Its two-argument keyspace
-  (classid `728116`) is disjoint from the scheduler jobs' single-argument
-  locks `728_115_001`/`728_115_002` (classid `0`, see
-  `docs/architecture/notifications-scheduler.md`) — no collision is possible
-  between the two mechanisms. `hashtext` collisions across different clans'
-  ids merely over-serialize (harmless at gia-phả editing rates). The person
-  `FOR UPDATE` locks are kept: same-clan writers are already serialized by the
-  advisory lock before reaching them, but they additionally serialize against
-  the claim-approval path, which locks person rows independently; taken in
-  deterministic LEAST/GREATEST order, so cross-clan writers can't deadlock on
-  them either.
+- **Per-clan advisory transaction lock, in a dedicated BEFORE ROW trigger.**
+  A new `trg_parent_child_clan_lock` (`parent_child_clan_lock()`, BEFORE
+  INSERT/UPDATE of the same columns the guard watches) takes
+  `pg_advisory_xact_lock(728116, hashtext(NEW.created_by_clan_id::text))` for
+  every live-edge write. Both invariants the AFTER guard protects (bio-parent
+  cap, acyclicity) are scoped to a single clan's live edges, so a per-clan
+  critical section is sufficient: it makes every writer's re-check —
+  regardless of which persons its edge touches — see every earlier same-clan
+  writer's committed edges. This closes H2 without a table-wide lock.
+  **The BEFORE placement is load-bearing.** The write's foreign-key checks
+  take `FOR KEY SHARE` on both endpoint persons before any AFTER trigger
+  runs; a first draft that took the advisory lock inside the AFTER guard
+  therefore deadlocked ~79% of rounds on the most common concurrent edit
+  (two editors adding father→child and mother→child at once): writer 1 held
+  the clan lock wanting the child's row, writer 2 held the child's row (FK)
+  wanting the clan lock. Taken in the BEFORE phase, a same-clan writer blocks
+  before acquiring any person row lock — same-clan writers cannot deadlock.
+  The lock is xact-scoped (auto-released at commit/rollback). Its
+  two-argument keyspace (classid `728116`) is disjoint from the scheduler
+  jobs' single-argument locks `728_115_001`/`728_115_002` (classid `0`) — no
+  collision is possible. `hashtext` collisions across different clans' ids
+  merely over-serialize (harmless at gia-phả editing rates). The person
+  `FOR UPDATE` locks in the AFTER guard are kept (they additionally serialize
+  against the claim-approval path, which locks person rows independently).
+  **Known residual (pre-existing since 021, NOT introduced here):** two
+  writers from *different clans* editing edges over the same shared persons
+  take different clan locks, then can hit the classic `KEY SHARE` →
+  `FOR UPDATE` upgrade deadlock on the person rows. This is rare (requires
+  cross-clan concurrent edits of shared people), rolls back cleanly (no
+  corruption), and today surfaces as a 500 — follow-up ticket: map SQLSTATE
+  `40P01` to the 409 conflict envelope so the losing editor gets a clean
+  retryable error.
 - **`idx_marriages_unique_pair` widened** to
   `(created_by_clan_id, LEAST(person1_id, person2_id), GREATEST(person1_id, person2_id))`
   partial `WHERE status <> 'divorced' AND is_deleted = false` — at most one
@@ -115,8 +128,14 @@ changes.
   already violates a widened or new constraint, per house precedent — the
   operator gets a listed set of offending rows, not a silent migration or a
   silent repair.
-- Downgrading is exact: 022's `downgrade()` restores the 021 trigger body and
-  both original (narrower) index definitions byte-for-byte.
+- **Cross-clan residual deadlock (pre-existing, unchanged).** Concurrent
+  edge writes from different clans over the same shared persons can still hit
+  the 021-era `KEY SHARE` → `FOR UPDATE` upgrade deadlock (see Decision);
+  rare, rolls back cleanly, surfaces as a 500 today. Follow-up ticket: map
+  SQLSTATE `40P01` to the 409 conflict envelope.
+- Downgrading is exact: 022's `downgrade()` drops the BEFORE-row clan-lock
+  trigger/function and restores the 021 trigger body and both original
+  (narrower) index definitions byte-for-byte.
 
 ## Alternatives considered
 
