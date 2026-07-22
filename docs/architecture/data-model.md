@@ -533,11 +533,18 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `version` | INTEGER | NOT NULL, DEFAULT 1 | Optimistic concurrency (ADR-017, migration `015_data_integrity`) — bumped by 1 on every write (including soft-delete); `PATCH` must send the matching `expected_version` or gets 409 `stale_write` |
 
-> **💡 Note (VN) - Edge uniqueness là PER-CLAN (migration 007):**
+> **💡 Note (VN) - Edge uniqueness là PER-CLAN, widened to match app invariants
+> (migration 007, widened 022 — ADR-025):**
 > Unique index của `marriages` và `parent_child` bao gồm `created_by_clan_id`:
-> `(created_by_clan_id, LEAST/GREATEST(person1,person2), status)` và
-> `(created_by_clan_id, parent_id, child_id, relationship_type)` (partial, chỉ trên
-> rows chưa xóa). Nghĩa là **mỗi clan được ghi cạnh của riêng mình** cho person dùng
+> `idx_marriages_unique_pair (created_by_clan_id, LEAST(person1_id,person2_id),
+> GREATEST(person1_id,person2_id)) WHERE status <> 'divorced' AND is_deleted =
+> false` — tối đa **một** cuộc hôn nhân còn sống, không phải `divorced`, cho mỗi
+> cặp/clan (khớp `has_active_marriage`, không chỉ riêng `status='married'` như
+> trước 022) — và `idx_parent_child_unique_edge (created_by_clan_id, parent_id,
+> child_id) WHERE is_deleted = false` — tối đa **một** cạnh còn sống cho mỗi
+> (parent, child)/clan, bất kể `relationship_type` (trước 022, `relationship_type`
+> nằm trong khóa nên `biological` + `adopted` đồng thời cho cùng một cặp vẫn lọt
+> qua). Nghĩa là **mỗi clan được ghi cạnh của riêng mình** cho person dùng
 > chung — Họ Nguyễn đã ghi "A là con B" thì Họ Lê **vẫn** ghi được bản của họ; chống
 > trùng chỉ áp dụng bên trong một clan. Đây là nền của cơ chế clan-scoped edges
 > (mỗi cây chỉ đọc cạnh do clan mình tạo).

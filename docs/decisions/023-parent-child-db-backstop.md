@@ -3,6 +3,17 @@
 ## Status
 Accepted, shipped (2026-07-17, migration 021)
 
+> **Update (2026-07-18):** Amended by [ADR-025](025-per-clan-edge-write-serialization.md)
+> (migration `022_edge_write_serialization`): the "Serialization" bullet below
+> describes the 021 trigger, which serialized concurrent writers by locking
+> only the two edge **endpoint** persons — writers with disjoint endpoints
+> could still race an ancestry cycle into existence (H2, review 2026-07-18).
+> 022 added a per-clan `pg_advisory_xact_lock` ahead of those person locks to
+> close it. The bio-parent cap and acyclicity walk described below are
+> unchanged. `idx_marriages_unique_pair` and `idx_parent_child_unique_edge`,
+> referenced elsewhere in this repo in the context of this trigger, were also
+> widened by 022 — see ADR-025.
+
 ## Context
 
 Two graph invariants protect the gia phả from corruption:
