@@ -14,6 +14,12 @@ tracked race M4 — a divorced→active UPDATE re-checks the widened index).
 Raw SQL throughout (the app validator layer is tested elsewhere; these tests pin the
 DATABASE's own guarantees). RED before 022: the race tests observe both writers
 committing (corrupt state); the sabotage tests observe forbidden values landing.
+
+Two race helpers exist deliberately: `_race` (plain gate) suffices where a DB lock
+already forces overlap; H2 uses `_race_forced_overlap` (barrier before COMMIT) because
+pre-022 no lock exists and pool warm-start asymmetry can serialize the writers by
+accident. Forcing overlap uniformly is NOT safe — applied to M2b it deadlocks (FK
+FOR KEY SHARE vs trigger FOR UPDATE); see the helper docstrings.
 """
 
 from __future__ import annotations
@@ -132,7 +138,9 @@ async def _race(
     t1 = asyncio.create_task(_run(params_a, gate))
     t2 = asyncio.create_task(_run(params_b, gate))
     gate.set()
-    return sorted(await asyncio.gather(t1, t2))
+    # Hang guard: a regression in the trigger's lock ordering must surface as a
+    # fast, legible TimeoutError — never an indefinitely hung CI job.
+    return sorted(await asyncio.wait_for(asyncio.gather(t1, t2), timeout=30))
 
 
 async def _race_forced_overlap(
@@ -180,7 +188,9 @@ async def _race_forced_overlap(
     t1 = asyncio.create_task(_run(params_a, gate, barrier))
     t2 = asyncio.create_task(_run(params_b, gate, barrier))
     gate.set()
-    return sorted(await asyncio.gather(t1, t2))
+    # Hang guard: see _race. Both tasks commit/rollback independently, so a
+    # server-side advisory-lock wait can never deadlock the gather itself.
+    return sorted(await asyncio.wait_for(asyncio.gather(t1, t2), timeout=30))
 
 
 # ── H2: disjoint-endpoint cycle race ───────────────────────────────────────────
