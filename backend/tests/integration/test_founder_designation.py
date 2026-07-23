@@ -1,0 +1,440 @@
+"""H3 (review 2026-07-18): the thủy tổ (clan founder) was unsettable through the
+API — no route ever set ``clan_memberships.is_founder``, so ``GET /tree`` 404s for
+every API-managed clan (đời is graph-computed from founder distance + 1; no
+founder means no root to compute distance from). ADR-026 adds
+``PUT /clans/me/founder`` to designate or correct the founder.
+
+Reuses the RS256/JWKS/client harness from ``test_deactivation_invariant.py`` (the
+leanest instance): real RS256 JWTs verified against a primed JWKS cache, client
+overrides ONLY ``get_db``. RBAC and audit logging run for real over a migrated
+Postgres.
+"""
+
+from __future__ import annotations
+
+import time
+import uuid
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import pytest
+import sqlalchemy as sa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi.testclient import TestClient
+from jose import jwk, jwt
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+import app.core.security as security_module
+from app.core.database import get_db
+from app.main import create_app
+
+pytestmark = pytest.mark.integration
+
+_KID = "founder-test-key"
+
+
+@pytest.fixture(scope="module")
+def rsa_keys() -> dict[str, Any]:
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    public_pem = (
+        key.public_key()
+        .public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
+    public_jwk = jwk.construct(public_pem, "RS256").to_dict()
+    public_jwk.update({"kid": _KID, "use": "sig", "alg": "RS256"})
+    return {"private_pem": private_pem, "jwks": {"keys": [public_jwk]}}
+
+
+@pytest.fixture(scope="module")
+def jwks_cache(rsa_keys: dict[str, Any]) -> Iterator[None]:
+    old_cache, old_time = security_module._jwks_cache, security_module._jwks_cache_time
+    security_module._jwks_cache = rsa_keys["jwks"]
+    security_module._jwks_cache_time = time.monotonic()
+    yield
+    security_module._jwks_cache, security_module._jwks_cache_time = old_cache, old_time
+
+
+def _issuer() -> str:
+    return f"{security_module.settings.SUPABASE_URL.rstrip('/')}/auth/v1"  # type: ignore[attr-defined]
+
+
+def _mint(private_pem: str, user_id: uuid.UUID, email: str) -> str:
+    now = datetime.now(UTC)
+    claims = {
+        "sub": str(user_id),
+        "email": email,
+        "aud": "authenticated",
+        "iss": _issuer(),
+        "iat": now,
+        "exp": now + timedelta(hours=1),
+        "user_metadata": {"full_name": "Founder Test"},
+    }
+    return jwt.encode(claims, private_pem, algorithm="RS256", headers={"kid": _KID})
+
+
+@pytest.fixture(scope="module")
+def client(migrated_db_url: str, jwks_cache: None) -> Iterator[TestClient]:
+    app = create_app()
+    engine = create_async_engine(migrated_db_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    async def _override_db():
+        async with maker() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _override_db
+    yield TestClient(app)
+    engine.sync_engine.dispose()
+
+
+def _sync_engine(dsn: str) -> sa.Engine:
+    return sa.create_engine(dsn.replace("+asyncpg", ""))
+
+
+# ── Seeding helpers ──────────────────────────────────────────────────────────
+
+
+def _seed_clan(conn: sa.Connection, *, name: str = "C") -> uuid.UUID:
+    clan_id = uuid.uuid4()
+    conn.execute(
+        sa.text("INSERT INTO clans (id, name, slug) VALUES (:c, :n, :sl)"),
+        {"c": clan_id, "n": name, "sl": f"c-{clan_id.hex[:8]}"},
+    )
+    return clan_id
+
+
+def _seed_user_with_role(
+    conn: sa.Connection, clan_id: uuid.UUID, *, role: str, approved: bool = True
+) -> tuple[uuid.UUID, str]:
+    """user_profiles row + a user_clan_roles row for `clan_id`; returns (user_id, email)."""
+    user_id = uuid.uuid4()
+    email = f"founder-{user_id.hex[:8]}@ex.com"
+    conn.execute(
+        sa.text(
+            "INSERT INTO user_profiles (id, email, display_name, is_active) "
+            "VALUES (:u, :e, 'U', true)"
+        ),
+        {"u": user_id, "e": email},
+    )
+    conn.execute(
+        sa.text(
+            "INSERT INTO user_clan_roles (user_id, clan_id, role, is_approved, "
+            "approved_by, approved_at) VALUES (:u, :c, :r, :ap, :u, now())"
+        ),
+        {"u": user_id, "c": clan_id, "r": role, "ap": approved},
+    )
+    return user_id, email
+
+
+def _seed_person(
+    conn: sa.Connection, clan_id: uuid.UUID, *, name: str = "P", is_deleted: bool = False
+) -> uuid.UUID:
+    """A live (or soft-deleted) person, plus a ``clan_memberships`` row for `clan_id`."""
+    person_id = uuid.uuid4()
+    creator = uuid.uuid4()
+    conn.execute(
+        sa.text(
+            "INSERT INTO persons (id, full_name, created_by_clan_id, created_by, is_deleted) "
+            "VALUES (:id, :n, :c, :cb, :del)"
+        ),
+        {"id": person_id, "n": name, "c": clan_id, "cb": creator, "del": is_deleted},
+    )
+    conn.execute(
+        sa.text(
+            "INSERT INTO clan_memberships (id, person_id, clan_id, role) "
+            "VALUES (:id, :p, :c, 'blood')"
+        ),
+        {"id": uuid.uuid4(), "p": person_id, "c": clan_id},
+    )
+    return person_id
+
+
+def _founder_person_ids(conn: sa.Connection, clan_id: uuid.UUID) -> list[uuid.UUID]:
+    rows = conn.execute(
+        sa.text("SELECT person_id FROM clan_memberships WHERE clan_id = :c AND is_founder = true"),
+        {"c": clan_id},
+    ).all()
+    return [r[0] for r in rows]
+
+
+def _audit_row(conn: sa.Connection, clan_id: uuid.UUID) -> sa.engine.Row[Any] | None:
+    return conn.execute(
+        sa.text(
+            "SELECT action, clan_id, actor_id, resource_type FROM audit_logs "
+            "WHERE clan_id = :c AND action = 'clan.founder_designate' "
+            "ORDER BY created_at DESC LIMIT 1"
+        ),
+        {"c": clan_id},
+    ).first()
+
+
+def _designate(client: TestClient, token: str, clan_id: uuid.UUID, person_id: uuid.UUID) -> Any:
+    return client.put(
+        "/api/v1/clans/me/founder",
+        headers={"Authorization": f"Bearer {token}", "X-Current-Clan-Id": str(clan_id)},
+        json={"person_id": str(person_id)},
+    )
+
+
+# ── Tests ────────────────────────────────────────────────────────────────────
+
+
+def test_designate_founder_succeeds_and_audits(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+            person_a = _seed_person(conn, clan_id, name="A")
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        resp = _designate(client, admin_token, clan_id, person_a)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["person_id"] == str(person_a)
+        assert data["previous_person_id"] is None
+        assert data["message"]  # localized, non-empty
+
+        # schema<->body coherence (documentation-only responses= must not drift)
+        from app.schemas.clan import FounderDesignationResponse
+
+        FounderDesignationResponse.model_validate(data)
+
+        with eng.connect() as conn:
+            founders = _founder_person_ids(conn, clan_id)
+            assert founders == [person_a]
+
+            audit = _audit_row(conn, clan_id)
+            assert audit is not None, "expected a clan.founder_designate audit_logs row"
+            assert audit.action == "clan.founder_designate"
+            assert audit.clan_id == clan_id
+            assert audit.actor_id == admin_id
+            assert audit.resource_type == "clan_membership"
+    finally:
+        eng.dispose()
+
+
+def test_correction_swaps_and_reports_previous(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+            person_a = _seed_person(conn, clan_id, name="A")
+            person_b = _seed_person(conn, clan_id, name="B")
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        resp_a = _designate(client, admin_token, clan_id, person_a)
+        assert resp_a.status_code == 200, resp_a.text
+
+        resp_b = _designate(client, admin_token, clan_id, person_b)
+        assert resp_b.status_code == 200, resp_b.text
+        data_b = resp_b.json()["data"]
+        assert data_b["person_id"] == str(person_b)
+        assert data_b["previous_person_id"] == str(person_a)
+
+        with eng.connect() as conn:
+            founders = _founder_person_ids(conn, clan_id)
+            assert founders == [person_b]
+    finally:
+        eng.dispose()
+
+
+def test_idempotent_redesignation(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+            person_a = _seed_person(conn, clan_id, name="A")
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        first = _designate(client, admin_token, clan_id, person_a)
+        assert first.status_code == 200, first.text
+
+        second = _designate(client, admin_token, clan_id, person_a)
+        assert second.status_code == 200, second.text
+        data = second.json()["data"]
+        assert data["person_id"] == str(person_a)
+        assert data["previous_person_id"] == str(person_a)
+
+        with eng.connect() as conn:
+            founders = _founder_person_ids(conn, clan_id)
+            assert founders == [person_a]  # still exactly one founder row
+    finally:
+        eng.dispose()
+
+
+def test_foreign_clan_person_404_two_sided(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn, name="Clan A")
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+
+            other_clan_id = _seed_clan(conn, name="Clan B")
+            foreign_person = _seed_person(conn, other_clan_id, name="Foreign")
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        resp = _designate(client, admin_token, clan_id, foreign_person)
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["error"]["code"] == "person_not_found"
+
+        # The foreign clan's own data must be untouched.
+        with eng.connect() as conn:
+            assert _founder_person_ids(conn, clan_id) == []
+            assert _founder_person_ids(conn, other_clan_id) == []
+    finally:
+        eng.dispose()
+
+
+def test_soft_deleted_person_404(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+            deleted_person = _seed_person(conn, clan_id, name="Deleted", is_deleted=True)
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        resp = _designate(client, admin_token, clan_id, deleted_person)
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["error"]["code"] == "person_not_found"
+
+        with eng.connect() as conn:
+            assert _founder_person_ids(conn, clan_id) == []
+    finally:
+        eng.dispose()
+
+
+def test_viewer_and_editor_403(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            viewer_id, viewer_email = _seed_user_with_role(conn, clan_id, role="viewer")
+            editor_id, editor_email = _seed_user_with_role(conn, clan_id, role="editor")
+            person_a = _seed_person(conn, clan_id, name="A")
+
+        viewer_token = _mint(rsa_keys["private_pem"], viewer_id, viewer_email)
+        resp_viewer = _designate(client, viewer_token, clan_id, person_a)
+        assert resp_viewer.status_code == 403, resp_viewer.text
+        assert resp_viewer.json()["error"]["code"] == "insufficient_permissions"
+
+        editor_token = _mint(rsa_keys["private_pem"], editor_id, editor_email)
+        resp_editor = _designate(client, editor_token, clan_id, person_a)
+        assert resp_editor.status_code == 403, resp_editor.text
+        assert resp_editor.json()["error"]["code"] == "insufficient_permissions"
+
+        with eng.connect() as conn:
+            assert _founder_person_ids(conn, clan_id) == []
+    finally:
+        eng.dispose()
+
+
+# ── Race (DB-level, raw SQL): expected RED until Task 2's unique index ────────
+
+_CLEAR_FOUNDER = sa.text(
+    "UPDATE clan_memberships SET is_founder = false WHERE clan_id = :c AND is_founder"
+)
+_SET_FOUNDER = sa.text(
+    "UPDATE clan_memberships SET is_founder = true WHERE person_id = :p AND clan_id = :c"
+)
+
+
+async def test_designation_race_never_two_founders(migrated_db_url: str) -> None:
+    """Two concurrent transactions each do clear-then-set for different persons.
+
+    Before Task 2's partial unique index exists, both writers can commit and the
+    clan ends up with 2 founder rows — this is EXPECTED RED until Task 2 (see
+    task-1-report.md). The invariant this test pins is: afterwards the clan has
+    <= 1 founder row. It must never be weakened to tolerate >1.
+    """
+    import asyncio
+
+    from sqlalchemy.exc import DBAPIError, IntegrityError
+
+    engine = create_async_engine(migrated_db_url)
+    try:
+        maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+        clan_id = uuid.uuid4()
+        person_a, person_b = uuid.uuid4(), uuid.uuid4()
+        async with maker() as s:
+            await s.execute(
+                sa.text("INSERT INTO clans (id, name, slug) VALUES (:c, 'C', :sl)"),
+                {"c": clan_id, "sl": f"race-{clan_id.hex[:8]}"},
+            )
+            for pid, name in ((person_a, "A"), (person_b, "B")):
+                creator = uuid.uuid4()
+                await s.execute(
+                    sa.text(
+                        "INSERT INTO persons (id, full_name, created_by_clan_id, created_by) "
+                        "VALUES (:id, :n, :c, :cb)"
+                    ),
+                    {"id": pid, "n": name, "c": clan_id, "cb": creator},
+                )
+                await s.execute(
+                    sa.text(
+                        "INSERT INTO clan_memberships (id, person_id, clan_id, role) "
+                        "VALUES (:id, :p, :c, 'blood')"
+                    ),
+                    {"id": uuid.uuid4(), "p": pid, "c": clan_id},
+                )
+            await s.commit()
+
+        async def _run(person_id: uuid.UUID, gate: asyncio.Event) -> str:
+            async with maker() as s:
+                await gate.wait()
+                try:
+                    await s.execute(_CLEAR_FOUNDER, {"c": clan_id})
+                    await s.execute(_SET_FOUNDER, {"p": person_id, "c": clan_id})
+                    await s.commit()
+                    return "ok"
+                except DBAPIError, IntegrityError:
+                    await s.rollback()
+                    return "rejected"
+
+        gate = asyncio.Event()
+        t1 = asyncio.create_task(_run(person_a, gate))
+        t2 = asyncio.create_task(_run(person_b, gate))
+        gate.set()
+        results = sorted(await asyncio.wait_for(asyncio.gather(t1, t2), timeout=30))
+        assert "ok" in results  # at most one WIN is required; the loser may also succeed serially
+
+        async with maker() as s:
+            count = await s.scalar(
+                sa.text(
+                    "SELECT COUNT(*) FROM clan_memberships WHERE clan_id = :c AND is_founder = true"
+                ),
+                {"c": clan_id},
+            )
+        assert count is not None and count <= 1, (
+            f"expected at most one founder after the race, got {count} "
+            "(EXPECTED RED before Task 2's unique index)"
+        )
+    finally:
+        await engine.dispose()

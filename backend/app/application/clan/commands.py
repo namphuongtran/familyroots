@@ -42,3 +42,10 @@ class RemoveUser:
     clan_id: uuid.UUID
     target_user_id: uuid.UUID
     actor: ActorInfo
+
+
+@dataclass(frozen=True)
+class DesignateFounder:
+    clan_id: uuid.UUID
+    person_id: uuid.UUID
+    actor: ActorInfo

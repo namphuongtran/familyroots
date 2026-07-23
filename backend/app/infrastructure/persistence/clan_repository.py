@@ -15,6 +15,7 @@ from app.domain.clan.entity import Clan as ClanEntity
 from app.infrastructure.persistence.clan_mapper import apply_to_orm, to_domain
 from app.models.clan import Clan
 from app.models.clan_membership import ClanMembership
+from app.models.person import Person
 from app.models.user_clan_role import UserClanRole
 
 
@@ -142,3 +143,25 @@ class SqlAlchemyClanRepository:
 
     async def change_role(self, ucr: UserClanRole, new_role: str) -> None:
         ucr.role = new_role
+
+    async def get_membership_with_person(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> ClanMembership | None:
+        result = await self._session.execute(
+            select(ClanMembership)
+            .join(Person, Person.id == ClanMembership.person_id)
+            .where(
+                ClanMembership.clan_id == clan_id,
+                ClanMembership.person_id == person_id,
+                Person.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_founder_membership(self, clan_id: uuid.UUID) -> ClanMembership | None:
+        result = await self._session.execute(
+            select(ClanMembership).where(
+                ClanMembership.clan_id == clan_id, ClanMembership.is_founder.is_(True)
+            )
+        )
+        return result.scalars().first()

@@ -12,17 +12,25 @@ from fastapi import APIRouter, Depends, Query
 from app.application.clan.commands import (
     ApproveUser,
     ChangeUserRole,
+    DesignateFounder,
     RejectUser,
     RemoveUser,
     UpdateClan,
 )
 from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
-from app.core.permissions import ClanRole, RequireAdmin, RequireViewer
+from app.core.permissions import ClanRole, RequireAdmin, RequireClanRole, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import get_clan_command_handler, get_clan_query_handler
-from app.schemas.clan import ClanResponse, ClanStats, ClanUpdateRequest
+from app.schemas.auth import UserProfile
+from app.schemas.clan import (
+    ClanResponse,
+    ClanStats,
+    ClanUpdateRequest,
+    FounderDesignationRequest,
+    FounderDesignationResponse,
+)
 from app.schemas.clan_membership import (
     ClanUserSummary,
     UserActionResponse,
@@ -211,3 +219,29 @@ async def remove_user(
         )
     )
     return {"data": {"message": t("user.removed"), "user_id": str(user_id)}}
+
+
+@router.put("/me/founder", responses=ok(FounderDesignationResponse))
+async def designate_founder(
+    body: FounderDesignationRequest,
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    user: UserProfile = Depends(RequireClanRole(["admin"])),
+    handler: ClanCommandHandler = Depends(get_clan_command_handler),
+) -> dict[str, Any]:
+    """Designate or correct the clan's thủy tổ (founder) — roots GET /tree, anchors đời."""
+    out = await handler.designate_founder(
+        DesignateFounder(
+            clan_id=clan_id,
+            person_id=body.person_id,
+            actor=ActorInfo(user_id=user.id, role="admin"),
+        )
+    )
+    return {
+        "data": {
+            "person_id": str(out["person_id"]),
+            "previous_person_id": (
+                str(out["previous_person_id"]) if out["previous_person_id"] else None
+            ),
+            "message": t("clan.founder_designated"),
+        }
+    }

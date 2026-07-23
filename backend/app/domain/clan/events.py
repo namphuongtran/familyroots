@@ -94,3 +94,26 @@ class UserRemoved(AuditableEvent):
             object.__setattr__(self, "action", "user.remove")
         if not self.resource_type:
             object.__setattr__(self, "resource_type", "user_clan_role")
+
+
+@dataclass(frozen=True)
+class FounderDesignated(AuditableEvent):
+    person_id: uuid.UUID | None = None
+    previous_person_id: uuid.UUID | None = None
+
+    def __post_init__(self) -> None:
+        if not self.action:
+            object.__setattr__(self, "action", "clan.founder_designate")
+        if not self.resource_type:
+            object.__setattr__(self, "resource_type", "clan_membership")
+        if self.new_value is None:
+            object.__setattr__(
+                self,
+                "new_value",
+                {
+                    "person_id": str(self.person_id),
+                    "previous_person_id": (
+                        str(self.previous_person_id) if self.previous_person_id else None
+                    ),
+                },
+            )

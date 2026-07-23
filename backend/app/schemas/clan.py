@@ -66,3 +66,17 @@ class ClanUpdateRequest(BaseModel):
     motto: str | None = None
     ancestral_hall_location: str | None = None
     clan_rules: str | None = None
+
+
+class FounderDesignationRequest(BaseModel):
+    """Body for PUT /clans/me/founder — designate or correct the thủy tổ."""
+
+    person_id: uuid.UUID
+
+
+class FounderDesignationResponse(BaseModel):
+    """Result of a founder designation (ADR-026)."""
+
+    person_id: uuid.UUID
+    previous_person_id: uuid.UUID | None = None
+    message: str

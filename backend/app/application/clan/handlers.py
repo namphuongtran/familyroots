@@ -12,11 +12,13 @@ from typing import Any
 from app.application.clan.commands import (
     ApproveUser,
     ChangeUserRole,
+    DesignateFounder,
     RejectUser,
     RemoveUser,
     UpdateClan,
 )
 from app.domain.clan.events import (
+    FounderDesignated,
     UserApproved,
     UserRejected,
     UserRemoved,
@@ -164,6 +166,39 @@ class ClanCommandHandler:
         )
         self._uow.track(agg)
         await self._uow.commit()
+
+    async def designate_founder(self, cmd: DesignateFounder) -> dict[str, Any]:
+        """Designate or correct the clan's thủy tổ (ADR-026: exactly one live founder).
+
+        Idempotent: re-designating the current founder writes nothing and reports
+        previous == person_id. Swap is clear-then-set in THIS one transaction; the
+        023 partial unique index backstops out-of-band writers (23505 → 409).
+        """
+        target = await self._repo.get_membership_with_person(cmd.clan_id, cmd.person_id)
+        if target is None:
+            raise EntityNotFoundError("person_not_found")
+
+        current = await self._repo.get_founder_membership(cmd.clan_id)
+        previous_person_id = current.person_id if current else None
+        if current is None or current.person_id != cmd.person_id:
+            if current is not None:
+                current.is_founder = False
+            target.is_founder = True
+
+        agg = AggregateRoot()
+        agg.add_event(
+            FounderDesignated(
+                clan_id=cmd.clan_id,
+                actor_id=cmd.actor.user_id,
+                actor_role=cmd.actor.role,
+                resource_id=target.id,
+                person_id=cmd.person_id,
+                previous_person_id=previous_person_id,
+            )
+        )
+        self._uow.track(agg)
+        await self._uow.commit()
+        return {"person_id": cmd.person_id, "previous_person_id": previous_person_id}
 
 
 class ClanQueryHandler:

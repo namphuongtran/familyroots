@@ -56,3 +56,13 @@ class ClanRepository(Protocol):
     async def change_role(self, ucr: Any, new_role: str) -> None:
         """Change a user's role."""
         ...
+
+    async def get_membership_with_person(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> Any | None:
+        """Membership row for a LIVE person of this clan (persons.is_deleted = false)."""
+        ...
+
+    async def get_founder_membership(self, clan_id: uuid.UUID) -> Any | None:
+        """The clan's current founder membership row, if any."""
+        ...
