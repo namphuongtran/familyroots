@@ -355,7 +355,7 @@ def test_viewer_and_editor_403(
         eng.dispose()
 
 
-# ── Race (DB-level, raw SQL): expected RED until Task 2's unique index ────────
+# ── Race (DB-level, raw SQL): enforced by Task 2's unique index ──────────────
 
 _CLEAR_FOUNDER = sa.text(
     "UPDATE clan_memberships SET is_founder = false WHERE clan_id = :c AND is_founder"
@@ -368,10 +368,13 @@ _SET_FOUNDER = sa.text(
 async def test_designation_race_never_two_founders(migrated_db_url: str) -> None:
     """Two concurrent transactions each do clear-then-set for different persons.
 
-    Before Task 2's partial unique index exists, both writers can commit and the
-    clan ends up with 2 founder rows — this is EXPECTED RED until Task 2 (see
-    task-1-report.md). The invariant this test pins is: afterwards the clan has
-    <= 1 founder row. It must never be weakened to tolerate >1.
+    Task 2's partial unique index (``uq_clan_memberships_one_founder``) makes
+    it impossible for both writers to commit a second live founder row: the
+    losing writer either serializes behind the winner (clear-then-set runs
+    against the winner's already-committed row and simply re-wins) or its
+    UPDATE hits 23505 (unique_violation) and is rejected. The invariant this
+    test pins is: afterwards the clan has <= 1 founder row. It must never be
+    weakened to tolerate >1.
     """
     import asyncio
 
@@ -434,7 +437,47 @@ async def test_designation_race_never_two_founders(migrated_db_url: str) -> None
             )
         assert count is not None and count <= 1, (
             f"expected at most one founder after the race, got {count} "
-            "(EXPECTED RED before Task 2's unique index)"
+            "(DB-enforced by uq_clan_memberships_one_founder, migration 023)"
         )
     finally:
         await engine.dispose()
+
+
+# ── Sabotage (DB-level, raw SQL): 023's index is the last line of defense ────
+
+
+def test_second_founder_blocked_at_db(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    """023's partial unique index (``uq_clan_memberships_one_founder``) holds
+    even when a write bypasses the API and its clear-then-set discipline
+    entirely: a raw-SQL UPDATE that flips a second person's membership to
+    founder — while the first founder row designated via the API is still
+    live — must be rejected at the database, not silently accepted.
+    """
+    from sqlalchemy.exc import DBAPIError, IntegrityError
+
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+            person_a = _seed_person(conn, clan_id, name="A")
+            person_b = _seed_person(conn, clan_id, name="B")
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        resp = _designate(client, admin_token, clan_id, person_a)
+        assert resp.status_code == 200, resp.text
+
+        # Bypass the API entirely: raw SQL sets B's membership to founder
+        # while A's founder row (set via the API above) is still live.
+        with (
+            pytest.raises((DBAPIError, IntegrityError), match="uq_clan_memberships_one_founder"),
+            eng.begin() as conn,
+        ):
+            conn.execute(_SET_FOUNDER, {"p": person_b, "c": clan_id})
+
+        with eng.connect() as conn:
+            assert _founder_person_ids(conn, clan_id) == [person_a]
+    finally:
+        eng.dispose()

@@ -261,7 +261,17 @@ async def find_clan_founder(
     db: AsyncSession,
     clan_id: uuid.UUID,
 ) -> uuid.UUID | None:
-    """Return the id of the clan founder (root of the tree)."""
+    """Return the id of the clan founder (root of the tree).
+
+    Deterministic even on legacy data with more than one live ``is_founder``
+    row for a clan (pre-023 databases, or any row this migration's index
+    didn't retroactively repair): ordered by earliest ``joined_at`` (NULLs
+    last), then ``person_id`` as a stable tiebreaker, so repeated calls
+    always pick the same row. Migration 023's partial unique index on
+    ``clan_memberships (clan_id) WHERE is_founder = true`` makes >1 live
+    founder impossible going forward — this ordering only matters for
+    already-corrupt legacy rows.
+    """
     result = await db.execute(
         text(
             "SELECT cm.person_id FROM public.clan_memberships cm "
@@ -269,6 +279,7 @@ async def find_clan_founder(
             "WHERE cm.clan_id = :clan_id "
             "  AND cm.is_founder = true "
             "  AND p.is_deleted = false "
+            "ORDER BY cm.joined_at ASC NULLS LAST, cm.person_id "
             "LIMIT 1"
         ),
         {"clan_id": clan_id},
