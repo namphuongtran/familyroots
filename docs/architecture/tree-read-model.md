@@ -103,6 +103,32 @@ a child), `/tree`, `/tree/subtree` and `/tree/focus` render:
 - Stubs participate in the normal children sort (birth_date, then name) alongside
   real siblings — they carry the same sort key as the canonical node they mirror, so
   they appear in correct birth order, not appended at the end.
+- A stub's `children`/`spouses` are always forced empty (only the canonical branch
+  continues descent). Its `has_more_descendants` (`/tree/focus` only) is **not**
+  hard-coded false: `build_focus_view` computes it the same way for every boundary
+  node — from whether the underlying person has real children in the database —
+  so a stub that lands at the descendant-depth boundary alongside its canonical
+  mirror can legitimately report `has_more_descendants: true` even though its own
+  `children` array is empty. Don't assume the two fields agree.
+
+### `depth` is a path artifact, not the node's nesting level
+
+Every node carries `depth` (int), inherited unchanged from whichever row of
+`get_family_tree_flat` the builder's step-2 dedup pass kept for that person — and
+because that dedup keeps the FIRST-seen row and rows arrive `ORDER BY depth ASC`,
+`depth` is always that person's **shallowest** lineage distance to the tree root,
+regardless of where the node is actually nested in the response.
+
+Nesting instead follows the đời-authority **canonical parent** (ADR-027), which for
+a pedigree-collapsed person can be reached by a **longer** path than the shallowest
+one `depth` reports. Concretely: a person whose shallowest path is `F → D → C`
+(`depth` 2) but whose canonical (father-line) path is `F → S → GS → C` nests three
+levels deep under `GS`, while `depth` still reads 2 — nesting level can exceed
+`depth`. Because `max_generations` bounds the SQL traversal's row depth (the
+shallowest path), not the canonical nesting position, a node can end up nested
+**deeper than `max_generations`** in the response tree. `depth` must not be used to
+infer nesting level, row count, or đời — use `generation` for đời, and the actual
+`children` structure for rendering depth.
 
 ### Consistency guarantee — one authority, all surfaces agree
 

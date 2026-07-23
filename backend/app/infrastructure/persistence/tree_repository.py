@@ -41,8 +41,10 @@ class SqlAlchemyTreeRepository:
     async def find_clan_founder(self, clan_id: uuid.UUID) -> uuid.UUID | None:
         return await find_clan_founder(self._session, clan_id)
 
-    async def get_generation_map(self, clan_id: uuid.UUID) -> dict[uuid.UUID, DoiEntry]:
-        return await compute_generation_map(self._session, clan_id)
+    async def get_generation_map(
+        self, clan_id: uuid.UUID, founder_id: uuid.UUID | None = None
+    ) -> dict[uuid.UUID, DoiEntry]:
+        return await compute_generation_map(self._session, clan_id, founder_id)
 
     async def build_descendants_tree(
         self,

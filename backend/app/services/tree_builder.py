@@ -109,7 +109,9 @@ _GENDER_RANK = {"male": 0, "female": 1}
 _TYPE_RANK = {"biological": 0, "adopted": 1, "step": 2, "foster": 3}
 
 
-async def compute_generation_map(db: AsyncSession, clan_id: uuid.UUID) -> dict[uuid.UUID, DoiEntry]:
+async def compute_generation_map(
+    db: AsyncSession, clan_id: uuid.UUID, founder_id: uuid.UUID | None = None
+) -> dict[uuid.UUID, DoiEntry]:
     """Single đời authority (ADR-027): con theo đời cha.
 
     đời(founder) = 1; đời(X) = đời(canonical parent) + 1 where the canonical
@@ -119,8 +121,16 @@ async def compute_generation_map(db: AsyncSession, clan_id: uuid.UUID) -> dict[u
     from the founder) never captures the child's đời. Every tree/export surface
     MUST read đời from this map — no depth arithmetic anywhere else (H4).
     Returns {} when the clan has no designated founder.
+
+    ``founder_id`` is optional: pass it when the caller already resolved the
+    clan founder (avoids a doubled ``find_clan_founder`` round-trip); when
+    None this resolves it itself. Either way, this function fetches every live
+    ``parent_child`` edge for the clan in one query, uncapped by clan size —
+    caching/capping that is tracked separately (perf-net B3, ADR-027 already
+    dispositions this); this parameter does not change that behavior.
     """
-    founder_id = await find_clan_founder(db, clan_id)
+    if founder_id is None:
+        founder_id = await find_clan_founder(db, clan_id)
     if founder_id is None:
         return {}
     rows = (
@@ -343,6 +353,11 @@ async def build_descendants_tree(
         else:
             attach_parent_id = node.parent_id
         attach_of[node.id] = attach_parent_id
+        # Re-key node.parent_id to the canonical attach point (not the shallowest-path
+        # parent step 2's dedup happened to keep) so downstream lookups keyed on
+        # parent_id — notably node_to_dict's mother_spouse_order via spouse_order_map —
+        # resolve against the parent this node is actually nested under (H4).
+        node.parent_id = attach_parent_id
         if attach_parent_id is None:
             root_node = node
         elif attach_parent_id in nodes:

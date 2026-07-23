@@ -33,6 +33,13 @@ export interface TreeNode {
   membership_role?: 'blood' | 'spouse' | 'adopted'
   is_founder?: boolean
   depth: number
+  // Pedigree-collapse (H4, ADR-027): true on a stub — a lightweight mirror of a
+  // person who renders as a FULL node elsewhere in this same payload (their
+  // canonical, đời-authority parent). Stubs always have empty spouses/children.
+  // The same person id can therefore appear MORE THAN ONCE in one tree payload;
+  // consumers that de-duplicate or key elements by bare node id must account
+  // for this (see tree-transform.ts's visited-set handling).
+  pedigree_collapse_ref?: boolean
   spouses: SpouseNode[]
   children: TreeNode[]    // recursive
 }

@@ -85,11 +85,28 @@ stub variant: clients render stubs exactly like any node and simply don't descen
   (`doi=N`, see `rest-exports-api.md`) is fed by the same `generation_map`, so its
   `đời` value reflects con theo đời cha, not the old base-generation/min-depth
   behavior.
-- **Pedigree-collapse rendering is additive.** `pedigree_collapse_ref` is a new,
-  default-`false` field on tree/focus child nodes — existing clients that ignore
-  unknown fields are unaffected; clients rendering every child node unconditionally
-  will also render collapse stubs (they are valid, minimal person nodes) unless
-  updated to special-case them.
+- **Pedigree-collapse rendering adds a field, but is NOT consequence-free for every
+  client.** `pedigree_collapse_ref` is a new, default-`false` field on tree/focus
+  child nodes — additive in the schema sense (existing clients that ignore unknown
+  fields see no shape change). But the REAL caveat: a pedigree-collapsed child's
+  person id now appears **more than once in the same payload** — once as the full
+  node under its canonical parent, once (or more) as a `pedigree_collapse_ref` stub
+  under every other in-tree parent (full-shape person nodes with `children`/`spouses`
+  forced empty, not a reduced schema). Any renderer that de-duplicates elements or
+  keys state by the **bare node id** (e.g. a `Map<id, Node>`, a "seen ids" `Set`, or
+  a React key of just `id`) can silently drop the canonical subtree or collide two
+  distinct render slots for the same id — it must key by `id` **plus its parent**
+  (or otherwise exempt stubs from dedup) instead. The web tree canvas
+  (`web/src/lib/utils/tree-transform.ts`) hit exactly this failure mode and was
+  fixed in this same PR: it now only adds a node's id to its "visited" set when the
+  node is NOT a stub, and gives each stub a synthetic id+parent React-Flow key so it
+  never collides with (or masks) its canonical node.
+- **`GET /persons/search` still reads the deprecated `clan_memberships.generation`
+  column**, not this authority — a pre-existing gap (2026-07-18 review, Low #11,
+  tracked for the lows remediation batch), not introduced or closed by this ADR. A
+  person can therefore show a different đời on a search result than on `/tree`,
+  `/tree/focus`, or the export for the exact same person until that endpoint is
+  migrated to `compute_generation_map`.
 - **Disconnected or undesignated-founder clans still get `null` đời** — con theo đời
   cha does not change the "no founder / unreachable → null, never guess" contract
   from ADR-012/ADR-026.

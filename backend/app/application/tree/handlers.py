@@ -29,15 +29,22 @@ class TreeQueryHandler:
     async def get_full_tree(self, query: GetFullTree) -> dict[str, Any]:
         """Return the full family tree."""
         root_id = query.root_person_id
+        # Only set when THIS call resolved the clan founder itself (the default,
+        # no explicit root_person_id) — pass it through to get_generation_map to
+        # avoid a second find_clan_founder round-trip. An explicit root_person_id
+        # is an arbitrary subtree root, not necessarily the founder, so it must
+        # NOT be threaded through; the generation map self-resolves instead.
+        resolved_founder_id: uuid.UUID | None = None
         if root_id is None:
-            root_id = await self._repo.find_clan_founder(query.clan_id)
+            resolved_founder_id = await self._repo.find_clan_founder(query.clan_id)
+            root_id = resolved_founder_id
             if root_id is None:
                 raise EntityNotFoundError("clan_founder_not_found")
         else:
             if not await self._repo.person_in_clan(root_id, query.clan_id):
                 raise EntityNotFoundError("person_not_found")
 
-        doi = await self._repo.get_generation_map(query.clan_id)
+        doi = await self._repo.get_generation_map(query.clan_id, founder_id=resolved_founder_id)
         tree = await self._repo.build_descendants_tree(
             root_id, query.clan_id, query.max_generations, doi_map=doi
         )
@@ -102,7 +109,7 @@ class TreeQueryHandler:
         founder_id = await self._repo.find_clan_founder(query.clan_id)
         founder_str = str(founder_id) if founder_id is not None else None
 
-        doi = await self._repo.get_generation_map(query.clan_id)
+        doi = await self._repo.get_generation_map(query.clan_id, founder_id=founder_id)
         focus_entry = doi.get(query.person_id)
         generation_of_focus = focus_entry.generation if focus_entry else None
 
@@ -173,14 +180,24 @@ class TreeQueryHandler:
 
 
 def _count_nodes(tree: dict[str, Any]) -> int:
+    """Count REAL persons only. Pedigree-collapse stubs (H4) mirror a person who is
+    already counted once under their canonical parent — counting them again would
+    inflate ``total_persons`` past the actual clan headcount. Stubs never carry
+    children of their own (tree_builder enforces this), so skipping them here also
+    means we never descend into a stub's (always-empty) children list."""
     count = 1
     for child in tree.get("children", []):
+        if child.get("pedigree_collapse_ref"):
+            continue
         count += _count_nodes(child)
     return count
 
 
 def _max_depth(tree: dict[str, Any]) -> int:
-    children = tree.get("children", [])
+    """Max depth over REAL persons only — a pedigree-collapse stub (H4) is a leaf
+    mirror of a person whose actual depth is measured on its canonical branch, so
+    a branch whose only children are stubs must not extend ``total_generations``."""
+    children = [c for c in tree.get("children", []) if not c.get("pedigree_collapse_ref")]
     if not children:
         return 0
     return 1 + max(_max_depth(c) for c in children)

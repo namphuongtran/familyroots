@@ -214,7 +214,7 @@ async def test_h4_child_renders_under_both_parents(async_session: AsyncSession) 
     await _pc(async_session, f, s, clan_id, creator)
     await _pc(async_session, s, gs, clan_id, creator)
     await _pc(async_session, f, d, clan_id, creator)
-    await _marriage(async_session, gs, d, clan_id, creator)
+    await _marriage(async_session, gs, d, clan_id, creator, spouse_order=1)
     await _pc(async_session, gs, c, clan_id, creator)
     await _pc(async_session, d, c, clan_id, creator)
     await async_session.commit()
@@ -228,6 +228,14 @@ async def test_h4_child_renders_under_both_parents(async_session: AsyncSession) 
     assert c_under_gs is not None  # canonical, full node
     assert c_under_gs["generation"] == 4
     assert c_under_gs.get("pedigree_collapse_ref") is not True
+    # Regression pin: mother_id/mother_spouse_order must resolve against the
+    # CANONICAL (father, GS) attachment, not the shallowest-path parent step-2
+    # dedup happened to keep. Before the fix, node.parent_id stayed keyed on
+    # whichever row step 2 saw first (D, since D sorts before GS/S in the flat
+    # SQL result), so the spouse_order_map lookup (parent_id, mother_id) missed
+    # and mother_spouse_order came back None despite D+GS having a real marriage.
+    assert c_under_gs["mother_id"] == str(d)
+    assert c_under_gs["mother_spouse_order"] == 1
 
     d_node = _find_node(full["tree"], d)
     assert d_node is not None
@@ -246,6 +254,10 @@ async def test_h4_child_renders_under_both_parents(async_session: AsyncSession) 
     assert c_under_d["full_name"] == c_canonical["full_name"]
     assert c_under_d["birth_date"] == c_canonical["birth_date"]  # full HistoricalDate
     assert c_under_d["spouses"] == []
+    # Regression pin: total_persons must count the 5 REAL persons (F, S, GS, D, C)
+    # — NOT 6. C's pedigree-collapse stub under D is a rendering mirror of the same
+    # real person, not a second head, so it must not inflate the reported total.
+    assert full["total_persons"] == 5
 
 
 async def test_symmetric_collapse_same_doi(async_session: AsyncSession) -> None:

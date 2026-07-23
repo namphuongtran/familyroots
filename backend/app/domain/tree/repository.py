@@ -17,13 +17,18 @@ class TreeRepository(Protocol):
         """Find the earliest ancestor in a clan."""
         ...
 
-    async def get_generation_map(self, clan_id: uuid.UUID) -> dict[uuid.UUID, Any]:
+    async def get_generation_map(
+        self, clan_id: uuid.UUID, founder_id: uuid.UUID | None = None
+    ) -> dict[uuid.UUID, Any]:
         """Single đời authority (ADR-027): every person id reachable from the clan
         founder mapped to an opaque entry carrying ``.generation`` (đời, thủy tổ = 1)
         and ``.canonical_parent_id`` (con theo đời cha — the in-set parent whose đời
         + 1 the child inherits; ``None`` only for the founder). Empty when the clan
         has no designated founder. Every tree/export surface must read đời from this
-        map — no depth arithmetic anywhere else (H4)."""
+        map — no depth arithmetic anywhere else (H4).
+
+        ``founder_id``: pass it when the caller already resolved the clan founder,
+        to avoid re-resolving it; omit (None) to have this self-resolve."""
         ...
 
     async def build_descendants_tree(
