@@ -47,9 +47,10 @@ Single linear chain:
 `014_drop_date_approx` → `015_data_integrity` → `016_document_soft_delete` →
 `017_notification_sent_on` → `018_query_support_indexes` →
 `019_path_bfs_visited` → `020_event_soft_delete_occ` →
-`021_parent_child_guard` → `022_edge_write_serialization`.
+`021_parent_child_guard` → `022_edge_write_serialization` →
+`023_one_founder_per_clan`.
 
-Head = `022`; verify with `cd backend && uv run alembic history`.
+Head = `023_one_founder_per_clan`; verify with `cd backend && uv run alembic history`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

@@ -293,6 +293,33 @@ Client routing rule: after login call `GET /auth/me`; if `is_approved` is false 
 (`POST /auth/onboard`). Do **not** rely on the login response's
 `has_pending_membership` (§1.1 caveat).
 
+### 5.1 Founder designation (thủy tổ) / tree onboarding
+
+Code: `PUT /clans/me/founder` (`app/api/v1/clans.py::designate_founder`); see
+[rest-clans-api.md](rest-clans-api.md#founder-designation-thủy-tổ) for the full
+contract and [ADR-026](../decisions/026-single-founder-designation.md) for why.
+
+A newly-onboarded clan has no thủy tổ (founder) until an admin explicitly
+designates one — this is expected, not an error. The flow:
+
+1. Admin/editor creates persons (`POST /persons`) — nothing designates a
+   founder implicitly; person creation has no founder field.
+2. Admin calls `PUT /clans/me/founder` with `{person_id}` for the person who
+   should root the tree. Re-designating the current founder is a harmless
+   no-op; designating someone else is a swap (see the contract for details).
+3. `GET /tree` (no `root_person_id`) now renders, rooted at the designated
+   founder, with graph-computed đời (generation) populated on every reachable
+   node.
+
+**Until step 2 happens**, `GET /tree` (no `root_person_id`) returns
+**404 `clan_founder_not_found`**. Clients must treat this specific code as the
+"prompt the admin to designate a thủy tổ" signal — e.g. an inline banner/CTA on
+the tree screen linking to the founder-designation admin action — **not** as a
+generic not-found/broken-tree state. Non-admin viewers hitting this 404 should
+see a "waiting on your clan admin" message, since they cannot self-serve the
+fix. The same 404 can reappear later if an admin soft-deletes the current
+founder (see ADR-026); the recovery is the same — designate a founder again.
+
 ---
 
 ## 6. Error handling

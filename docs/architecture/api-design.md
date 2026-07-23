@@ -99,6 +99,7 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 | POST   | `/me/users/{user_id}/reject`   | Yes  | admin  | Reject pending user       |
 | PATCH  | `/me/users/{user_id}/role`     | Yes  | admin  | Change user role          |
 | DELETE | `/me/users/{user_id}`          | Yes  | admin  | Remove user from clan     |
+| PUT    | `/me/founder`                  | Yes  | admin  | Designate/correct clan founder (thủy tổ, ADR-026) |
 
 ---
 
