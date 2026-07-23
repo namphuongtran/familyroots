@@ -166,18 +166,26 @@ class SqlAlchemyClanRepository:
         )
         return result.scalars().first()
 
-    async def swap_founder(self, clan_id: uuid.UUID, target_membership_id: uuid.UUID) -> None:
+    async def swap_founder(
+        self, clan_id: uuid.UUID, target_membership_id: uuid.UUID
+    ) -> uuid.UUID | None:
         """Clear-then-set in two ORDERED statements (session.execute emits SQL
         immediately, unlike ORM attribute flushes whose order is unspecified) —
         required because uq_clan_memberships_one_founder is an immediate partial
-        unique index (Postgres cannot defer a partial unique)."""
-        await self._session.execute(
+        unique index (Postgres cannot defer a partial unique). The CLEAR statement
+        RETURNING person_id reports the founder actually cleared by this
+        statement, so the caller's previous_person_id reflects the row this swap
+        itself displaced rather than a separately-read snapshot."""
+        clear_result = await self._session.execute(
             update(ClanMembership)
             .where(ClanMembership.clan_id == clan_id, ClanMembership.is_founder.is_(True))
             .values(is_founder=False)
+            .returning(ClanMembership.person_id)
         )
+        previous_person_id = clear_result.scalar_one_or_none()
         await self._session.execute(
             update(ClanMembership)
             .where(ClanMembership.id == target_membership_id)
             .values(is_founder=True)
         )
+        return previous_person_id

@@ -293,6 +293,17 @@ def test_idempotent_redesignation(
         with eng.connect() as conn:
             founders = _founder_person_ids(conn, clan_id)
             assert founders == [person_a]  # still exactly one founder row
+
+            # The idempotent re-designation still writes its own audit row —
+            # idempotent means "no founder-state change", not "no audit trail".
+            audit_count = conn.execute(
+                sa.text(
+                    "SELECT COUNT(*) FROM audit_logs "
+                    "WHERE clan_id = :c AND action = 'clan.founder_designate'"
+                ),
+                {"c": clan_id},
+            ).scalar_one()
+            assert audit_count == 2
     finally:
         eng.dispose()
 
@@ -393,7 +404,7 @@ async def test_designation_race_never_two_founders(migrated_db_url: str) -> None
     """
     import asyncio
 
-    from sqlalchemy.exc import DBAPIError, IntegrityError
+    from sqlalchemy.exc import DBAPIError
 
     engine = create_async_engine(migrated_db_url)
     try:
@@ -432,7 +443,7 @@ async def test_designation_race_never_two_founders(migrated_db_url: str) -> None
                     await s.execute(_SET_FOUNDER, {"p": person_id, "c": clan_id})
                     await s.commit()
                     return "ok"
-                except DBAPIError, IntegrityError:
+                except DBAPIError:
                     await s.rollback()
                     return "rejected"
 
@@ -553,5 +564,73 @@ def test_designating_founder_activates_doi_across_three_generations(
         )
         assert focus_resp.status_code == 200, focus_resp.text
         assert focus_resp.json()["data"]["generation_of_focus"] == 3
+    finally:
+        eng.dispose()
+
+
+# ── Restore semantics (final review, live-disproven doc claim) ──────────────
+
+
+def test_restoring_soft_deleted_founder_reroots_tree(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    """Ground truth (live-verified): PersonCommandHandler.restore only flips
+    persons.is_deleted back to false — it never touches the founder's
+    clan_memberships.is_founder flag, and find_clan_founder's only founder
+    filter is p.is_deleted = false. So designate A → soft-delete A → GET /tree
+    404s (founder unreachable) → restore A via the API alone (no re-designation
+    call) → GET /tree 200s rooted at A again, generation 1.
+
+    Both delete and restore go through the real HTTP API (DELETE /persons/{id},
+    POST /persons/{id}/restore) rather than raw SQL: both routes are admin-only
+    with no expected_version/OCC requirement (DeletePerson/RestorePerson carry
+    no expected_version field, unlike PATCH /persons), so there is no OCC
+    friction that would justify dropping to raw SQL for either leg — the full
+    handler + audit-logging path runs for real, which is exactly what this test
+    is pinning.
+    """
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+            person_a = _seed_person(conn, clan_id, name="A")
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        hdr = {"Authorization": f"Bearer {admin_token}", "X-Current-Clan-Id": str(clan_id)}
+
+        designate_resp = _designate(client, admin_token, clan_id, person_a)
+        assert designate_resp.status_code == 200, designate_resp.text
+
+        tree_before = client.get("/api/v1/tree", headers=hdr)
+        assert tree_before.status_code == 200, tree_before.text
+        assert tree_before.json()["data"]["tree"]["id"] == str(person_a)
+
+        delete_resp = client.delete(f"/api/v1/persons/{person_a}", headers=hdr)
+        assert delete_resp.status_code == 200, delete_resp.text
+
+        tree_while_deleted = client.get("/api/v1/tree", headers=hdr)
+        assert tree_while_deleted.status_code == 404, tree_while_deleted.text
+        assert tree_while_deleted.json()["error"]["code"] == "clan_founder_not_found"
+
+        # The is_founder flag itself must still be set — restore alone must be
+        # what re-roots the tree, not a hidden re-designation.
+        with eng.connect() as conn:
+            assert _founder_person_ids(conn, clan_id) == [person_a]
+
+        restore_resp = client.post(f"/api/v1/persons/{person_a}/restore", headers=hdr)
+        assert restore_resp.status_code == 200, restore_resp.text
+
+        tree_after = client.get("/api/v1/tree", headers=hdr)
+        assert tree_after.status_code == 200, tree_after.text
+        root = tree_after.json()["data"]["tree"]
+        assert root["id"] == str(person_a)
+        assert root["generation"] == 1
+        assert root["is_founder"] is True
+
+        with eng.connect() as conn:
+            # Still exactly one founder row, unchanged since designation —
+            # no swap/clear-then-set ever ran during delete or restore.
+            assert _founder_person_ids(conn, clan_id) == [person_a]
     finally:
         eng.dispose()

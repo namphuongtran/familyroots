@@ -65,8 +65,11 @@ kept only as data; ADR-012).
 - **Soft-deleting the founder re-404s the tree.** Because `find_clan_founder`
   filters `persons.is_deleted = false`, soft-deleting the currently-designated
   founder person makes the clan founder-less again — `GET /tree` 404s
-  `clan_founder_not_found` until an admin re-designates (the same person after
-  restore, or someone else).
+  `clan_founder_not_found`. `is_founder` on the membership row is untouched by
+  delete/restore, so the tree re-404s until the founder is **restored**
+  (`POST /persons/{id}/restore` alone re-roots the tree — no re-designation
+  needed, since the membership's `is_founder` flag never went away) **or** an
+  admin **designates someone else** via `PUT /clans/me/founder`.
 
 ## đa thê (polygamy) mother attribution — derived, no schema change
 

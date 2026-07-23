@@ -317,8 +317,20 @@ designates one — this is expected, not an error. The flow:
 the tree screen linking to the founder-designation admin action — **not** as a
 generic not-found/broken-tree state. Non-admin viewers hitting this 404 should
 see a "waiting on your clan admin" message, since they cannot self-serve the
-fix. The same 404 can reappear later if an admin soft-deletes the current
-founder (see ADR-026); the recovery is the same — designate a founder again.
+fix.
+
+The same 404 can reappear later if an admin soft-deletes the current founder
+(see ADR-026) — `is_founder` on the membership row is untouched by
+delete/restore, it's just unreachable while the person is deleted. Recovery is
+**one of two independent paths**, whichever fits the situation:
+
+1. **Restore the deleted founder** — `POST /persons/{id}/restore` on that
+   same person. No `PUT /clans/me/founder` call is needed: the membership's
+   `is_founder` flag never changed, so as soon as the person is live again,
+   `GET /tree` re-renders rooted at them on the very next call.
+2. **Designate someone else** — `PUT /clans/me/founder` with a different
+   `person_id`, when the deleted founder isn't coming back (or the admin
+   wants a different thủy tổ regardless).
 
 ---
 

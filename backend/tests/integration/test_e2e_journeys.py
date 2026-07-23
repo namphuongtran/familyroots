@@ -545,7 +545,7 @@ def test_tree_404_without_founder_designation(
     graph-computed as distance-from-founder + 1 (docs/architecture/
     tree-read-model.md), so with no founder there is nothing to anchor
     distance from and GET /tree 404s `clan_founder_not_found`. The client flow
-    is designate → tree renders (see docs/architecture/
+    is designate → tree renders (see docs/contracts/
     frontend-integration-guide.md, added by Task 4)."""
     suffix = uuid.uuid4().hex[:10]
     email = f"j3b-{suffix}@ex.com"

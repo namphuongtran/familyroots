@@ -42,7 +42,7 @@ its read path nondeterministic:
   for a clan hits `23505` (unique_violation) at commit, surfaced by the
   generic integrity-error handler as the standard `conflict` 409 (see
   `error-codes.md`), never silently creating a second root.
-- **Deterministic `find_clan_founder`** (Task 3): the query is now
+- **Deterministic `find_clan_founder`** (Task 2): the query is now
   `ORDER BY joined_at ASC NULLS LAST, person_id LIMIT 1` — a stable tiebreak
   so repeated calls against the same data always return the same row. Under
   migration 023 this ordering only matters for legacy pre-023 rows that
@@ -64,16 +64,19 @@ its read path nondeterministic:
   `clan_founder_not_found`. Clients must treat this as "prompt the admin to
   designate a thủy tổ," not a broken-tree state — see
   `frontend-integration-guide.md` §5.1 and `error-codes.md`.
-- **Soft-deleting the founder re-404s the tree until re-designation.**
-  Because `find_clan_founder` filters `is_deleted = false` on the founder
-  person, soft-deleting the currently-designated founder makes the clan
-  founder-less again (`GET /tree` → 404 `clan_founder_not_found`) until an
-  admin designates a (possibly different) person as founder. Restoring the
-  soft-deleted person does **not** automatically re-establish them as founder
-  — `is_founder` on their membership row is untouched by delete/restore, but
-  once the founder is unreachable the read path treats the clan as
-  undesignated regardless of the flag's stored value; re-designation (of the
-  same or a different person) is required either way.
+- **Soft-deleting the founder re-404s the tree until restore or
+  re-designation.** Because `find_clan_founder` filters `is_deleted = false`
+  on the founder person, soft-deleting the currently-designated founder makes
+  the clan founder-less again (`GET /tree` → 404 `clan_founder_not_found`).
+  Delete/restore never touch `is_founder` on the membership row — the flag
+  survives the soft-delete untouched. So **restoring the same person alone
+  re-roots the tree automatically**: `PersonCommandHandler.restore` only
+  flips `persons.is_deleted` back to `false`, and on the next `GET /tree`,
+  `find_clan_founder`'s `is_deleted = false` filter matches that membership
+  row again with no further write. Re-designation via
+  `PUT /clans/me/founder` is only needed to **change** who the founder is
+  (i.e. the deleted founder will not be restored, or an admin wants someone
+  else to root the tree instead).
 - **The export's multi-founder ordered-walk tolerance is now structurally
   unreachable against a live schema** (kept for pre-023 archives/robustness —
   see the rewritten `test_clan_export_json` single-founder pin). Migration
