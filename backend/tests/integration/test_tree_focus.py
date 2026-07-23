@@ -399,40 +399,44 @@ async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     occurrence. This distinguishes "keep shallowest" from a dedup that merely keeps
     "any" occurrence.
 
-    Post-A4 (ADR-027), đời is graph-absolute per person (compute_generation_map), not
-    relative to breadcrumb depth — X's đời is the same value (2, X's own distance from
-    the founder) regardless of which occurrence in the raw chain the dedup keeps, so
+    Post-A4 (ADR-027), đời is graph-absolute per person (compute_generation_map), so
     the old ``x_entry["generation"] == base_generation - 1`` proxy can no longer
-    distinguish "kept depth 1" from "kept depth 2" (worse, it was flaky here: F's two
-    parents, X and Y, tie on gender/type, so con-theo-đời-cha's canonical-parent
-    tiebreak could pick either — undermining the proxy independent of dedup). This
-    version checks the "shallowest kept" claim directly against the raw (undeduped)
-    ancestor chain instead."""
+    distinguish "kept depth 1" from "kept depth 2". The BLACK-BOX observable that
+    still discriminates is breadcrumb ORDER: ancestors are sorted by the SURVIVING
+    occurrence's depth (descending), so with X reachable at depths {1, 3} and W fixed
+    at depth 2, "shallowest kept" places W strictly BEFORE X in the breadcrumb, while
+    a dedup that kept the deepest occurrence would place X (depth 3) before W —
+    sabotage-verified: reversing the handler's dedup scan flips this assert."""
     from app.application.tree.queries import GetFocusView
     from app.infrastructure.persistence.tree_repository import SqlAlchemyTreeRepository
 
     creator = uuid.uuid4()
     clan_id = await _clan(async_session)
     to = await _person(async_session, clan_id, creator, "To")  # thủy tổ, further back
-    x = await _person(async_session, clan_id, creator, "X")  # reachable at depth 1 AND 2
+    x = await _person(async_session, clan_id, creator, "X")  # reachable at depth 1 AND 3
+    w = await _person(async_session, clan_id, creator, "W")  # fixed at depth 2
     y = await _person(async_session, clan_id, creator, "Y")  # focus's other parent
     f = await _person(async_session, clan_id, creator, "F")  # focus person
-    for p in (x, y, f):
+    for p in (x, w, y, f):
         await _member(async_session, p, clan_id)
     await _member(async_session, to, clan_id, is_founder=True)
 
     # to -> x -> f: X is a direct parent of F (depth 1).
-    # x -> y -> f: X is also a grandparent of F via Y (depth 2, a different lineage).
+    # x -> w -> y -> f: X is ALSO F's great-grandparent via W and Y (depth 3),
+    # with W sitting at a fixed depth 2 between the two X occurrences.
     await _pc(async_session, to, x, clan_id, creator)
     await _pc(async_session, x, f, clan_id, creator)
-    await _pc(async_session, x, y, clan_id, creator)
+    await _pc(async_session, x, w, clan_id, creator)
+    await _pc(async_session, w, y, clan_id, creator)
     await _pc(async_session, y, f, clan_id, creator)
     await async_session.commit()
 
-    # Confirm the setup genuinely puts X at two different depths in the raw chain.
+    # Confirm the setup genuinely puts X at depths {1, 3} and W at exactly {2}.
     raw_chain = await SqlAlchemyTreeRepository(async_session).get_ancestors_flat(f, clan_id, 50)
     x_depths = {row["depth"] for row in raw_chain if row["id"] == str(x)}
-    assert x_depths == {1, 2}
+    assert x_depths == {1, 3}
+    w_depths = {row["depth"] for row in raw_chain if row["id"] == str(w)}
+    assert w_depths == {2}
 
     handler = await _handler(async_session)
     view = await handler.get_focus_view(GetFocusView(person_id=f, clan_id=clan_id))
@@ -440,12 +444,12 @@ async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     ids = [c["id"] for c in view["ancestors"]]
     assert ids.count(str(x)) == 1  # X must not appear twice
 
-    # The raw chain arrives depth ASC (repository contract), and the handler dedupes
-    # by keeping the FIRST-seen id per its docstring — so the first X row encountered
-    # while scanning in arrival order must be the depth-1 one, proving "shallowest
-    # kept" rather than merely "some occurrence kept".
-    first_x_row = next(row for row in raw_chain if row["id"] == str(x))
-    assert first_x_row["depth"] == 1
+    # Breadcrumb order discriminates which occurrence survived: sorted by surviving
+    # depth DESC, shallowest-kept gives X depth 1 → W (depth 2) strictly before X;
+    # deepest-kept would give X depth 3 → X before W.
+    assert ids.index(str(w)) < ids.index(str(x)), (
+        f"X's deep occurrence survived dedup — breadcrumb order {ids} places X before W"
+    )
 
 
 async def test_focus_view_generation_independent_of_breadcrumb_depth(

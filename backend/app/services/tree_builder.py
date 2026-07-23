@@ -171,7 +171,9 @@ async def compute_generation_map(db: AsyncSession, clan_id: uuid.UUID) -> dict[u
     indeg: dict[uuid.UUID, int] = dict.fromkeys(reachable, 0)
     for child in reachable:
         indeg[child] = sum(1 for _, _, p in parents_of.get(child, ()) if p in reachable)
-    queue = [n for n, d in indeg.items() if d == 0]  # the founder (+ any in-set orphans)
+    # Only the founder can start at indegree 0: `reachable` is a forward BFS over the
+    # same edges the indegree counts, so every other in-set node has ≥1 in-set parent.
+    queue = [n for n, d in indeg.items() if d == 0]
     canonical_parent: dict[uuid.UUID, uuid.UUID | None] = {founder_id: None}
     order: list[uuid.UUID] = [founder_id]
     while queue:
