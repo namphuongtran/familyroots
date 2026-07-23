@@ -237,6 +237,15 @@ async def test_h4_child_renders_under_both_parents(async_session: AsyncSession) 
     assert c_under_d["generation"] == 4
     assert c_under_d.get("pedigree_collapse_ref") is True
     assert c_under_d["children"] == []
+    # Contract pin (rest-tree-api.md): a stub is the SAME full node shape — every
+    # standard field populated, only children/spouses forced empty and the marker
+    # set. A client must be able to render a stub exactly like any node.
+    c_canonical = _child_of(gs_node, c)
+    assert c_canonical is not None
+    assert set(c_under_d.keys()) == set(c_canonical.keys())
+    assert c_under_d["full_name"] == c_canonical["full_name"]
+    assert c_under_d["birth_date"] == c_canonical["birth_date"]  # full HistoricalDate
+    assert c_under_d["spouses"] == []
 
 
 async def test_symmetric_collapse_same_doi(async_session: AsyncSession) -> None:

@@ -50,10 +50,12 @@ addition to the standard person/spouse fields:
   `GET /subtree/{person_id}` (not `GET /ancestors/{person_id}`), `true` marks a stub
   node: a child reachable from the founder via more than one in-tree parent renders
   its **full** node once, under its **canonical parent** (`pedigree_collapse_ref:
-  false`/absent), and a lightweight stub — `{id, full_name, gender, generation,
-  mother_id}` plus `pedigree_collapse_ref: true`, with `children: []` and
-  `spouses: []` — under **every other** in-tree parent, so that parent's branch is
-  never silently rendered childless. Stubs sort into `children` alongside real
+  false`/absent), and a stub under **every other** in-tree parent. A stub carries
+  the SAME full node shape (all standard fields populated — names, dates, avatar,
+  generation, mother_id, …) with `pedigree_collapse_ref: true` and `children: []`
+  and `spouses: []` forced empty, so that parent's branch is never silently
+  rendered childless and clients need no stub-specific null-guards — render it
+  like any node, just don't descend. Stubs sort into `children` alongside real
   siblings (same birth_date/name key as the canonical node). See
   [tree-read-model.md](../architecture/tree-read-model.md#both-parents-rendering-pedigree-collapse)
   and [ADR-027](../decisions/027-doi-single-authority.md).

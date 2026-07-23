@@ -67,10 +67,12 @@ same clan and read đời from its result — never from row depth, never indepe
 **Both-parents rendering (pedigree collapse).** When a child has more than one
 in-tree parent, the tree-shaped endpoints (`/tree`, `/tree/subtree`, `/tree/focus`)
 render the child's **full node** once, under its **canonical parent**, and a
-lightweight **`pedigree_collapse_ref` stub** — `{id, full_name, gender, generation,
-mother_id}` plus `pedigree_collapse_ref: true`, with empty `children`/`spouses` —
-under **every other** in-tree parent, so no parent's branch silently loses a child,
-without duplicating the full subtree under both parents.
+**`pedigree_collapse_ref` stub** — the SAME full node shape (every standard field:
+names, HistoricalDates, avatar, generation, mother_id, …) with
+`pedigree_collapse_ref: true` and `children`/`spouses` forced empty — under
+**every other** in-tree parent, so no parent's branch silently loses a child,
+without duplicating the full subtree under both parents. (One schema, no reduced
+stub variant: clients render stubs exactly like any node and simply don't descend.)
 
 ## Consequences
 

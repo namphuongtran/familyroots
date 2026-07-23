@@ -94,11 +94,12 @@ a child), `/tree`, `/tree/subtree` and `/tree/focus` render:
 - The **canonical parent**'s branch gets the child's **full node** — real
   `children`/`spouses`, participates in further descent, no
   `pedigree_collapse_ref` marker.
-- **Every other in-tree parent** gets a lightweight **`pedigree_collapse_ref` stub**
-  for that same child instead: `{id, full_name, gender, generation, mother_id}` plus
-  `pedigree_collapse_ref: true`, with **empty** `children: []` and `spouses: []` — so
-  that parent's branch is never silently rendered childless, but the subtree is never
-  duplicated in full under both parents.
+- **Every other in-tree parent** gets a **`pedigree_collapse_ref` stub** for that
+  same child instead: the SAME full node shape (every standard field populated —
+  built by `dataclasses.replace` from the canonical node) with
+  `pedigree_collapse_ref: true` and **empty** `children: []` / `spouses: []` — so
+  that parent's branch is never silently rendered childless, but the subtree is
+  never duplicated in full under both parents. One schema, no reduced stub variant.
 - Stubs participate in the normal children sort (birth_date, then name) alongside
   real siblings — they carry the same sort key as the canonical node they mirror, so
   they appear in correct birth order, not appended at the end.
