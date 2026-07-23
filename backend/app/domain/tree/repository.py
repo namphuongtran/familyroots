@@ -17,12 +17,21 @@ class TreeRepository(Protocol):
         """Find the earliest ancestor in a clan."""
         ...
 
+    async def get_generation_map(self, clan_id: uuid.UUID) -> dict[uuid.UUID, Any]:
+        """Single đời authority (ADR-027): every person id reachable from the clan
+        founder mapped to an opaque entry carrying ``.generation`` (đời, thủy tổ = 1)
+        and ``.canonical_parent_id`` (con theo đời cha — the in-set parent whose đời
+        + 1 the child inherits; ``None`` only for the founder). Empty when the clan
+        has no designated founder. Every tree/export surface must read đời from this
+        map — no depth arithmetic anywhere else (H4)."""
+        ...
+
     async def build_descendants_tree(
         self,
         root_id: uuid.UUID,
         clan_id: uuid.UUID,
         max_generations: int,
-        base_generation: int | None = None,
+        doi_map: dict[uuid.UUID, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Build a hierarchical tree dict rooted at root_id."""
         ...
@@ -53,7 +62,7 @@ class TreeRepository(Protocol):
         focus_id: uuid.UUID,
         clan_id: uuid.UUID,
         descendant_depth: int,
-        base_generation: int | None,
+        doi_map: dict[uuid.UUID, Any] | None,
     ) -> dict[str, Any]:
         """Enriched focus subtree (computed đời, branch, birth_order sort, has_more)."""
         ...

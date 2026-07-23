@@ -40,7 +40,8 @@ Output format::
 
 import datetime
 import uuid
-from dataclasses import dataclass, field
+from collections import defaultdict
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from sqlalchemy import text
@@ -93,8 +94,104 @@ class TreeNode:
     is_founder: bool
     parent_id: uuid.UUID | None
     depth: int
+    pedigree_collapse_ref: bool = False
     spouses: list[dict[str, Any]] = field(default_factory=list)
     children: list[TreeNode] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DoiEntry:
+    generation: int
+    canonical_parent_id: uuid.UUID | None  # None only for the founder
+
+
+_GENDER_RANK = {"male": 0, "female": 1}
+_TYPE_RANK = {"biological": 0, "adopted": 1, "step": 2, "foster": 3}
+
+
+async def compute_generation_map(db: AsyncSession, clan_id: uuid.UUID) -> dict[uuid.UUID, DoiEntry]:
+    """Single đời authority (ADR-027): con theo đời cha.
+
+    đời(founder) = 1; đời(X) = đời(canonical parent) + 1 where the canonical
+    parent is X's highest-priority parent AMONG THOSE DESCENDED FROM THE
+    FOUNDER: father first (biological > adopted > step > foster), then mother,
+    then unknown-gender; person_id tiebreak. A married-in parent (not descended
+    from the founder) never captures the child's đời. Every tree/export surface
+    MUST read đời from this map — no depth arithmetic anywhere else (H4).
+    Returns {} when the clan has no designated founder.
+    """
+    founder_id = await find_clan_founder(db, clan_id)
+    if founder_id is None:
+        return {}
+    rows = (
+        await db.execute(
+            text(
+                "SELECT pc.parent_id, pc.child_id, pc.relationship_type, "
+                "       par.gender AS parent_gender "
+                "FROM public.parent_child pc "
+                "JOIN public.persons par ON par.id = pc.parent_id AND par.is_deleted = false "
+                "JOIN public.persons ch  ON ch.id  = pc.child_id  AND ch.is_deleted  = false "
+                "WHERE pc.created_by_clan_id = :clan AND pc.is_deleted = false"
+            ),
+            {"clan": clan_id},
+        )
+    ).all()
+
+    children_of: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+    parents_of: dict[uuid.UUID, list[tuple[int, int, uuid.UUID]]] = defaultdict(list)
+    for r in rows:
+        children_of[r.parent_id].append(r.child_id)
+        parents_of[r.child_id].append(
+            (
+                _GENDER_RANK.get(r.parent_gender, 2),
+                _TYPE_RANK.get(r.relationship_type, 4),
+                r.parent_id,
+            )
+        )
+
+    # Reachable set (descendants of the founder) — bounded; graph is acyclic
+    # (ADR-023/025 DB backstops), belt-and-braces visit guard anyway.
+    reachable: set[uuid.UUID] = {founder_id}
+    frontier = [founder_id]
+    while frontier:
+        nxt: list[uuid.UUID] = []
+        for pid in frontier:
+            for child in children_of.get(pid, ()):
+                if child not in reachable:
+                    reachable.add(child)
+                    nxt.append(child)
+        frontier = nxt
+
+    # Kahn topological order over in-set edges, then one pass computes đời. The
+    # canonical parent for each child is resolved from `reachable` alone (not
+    # from partially-built `result`), so a same-generation tie or an in-set
+    # node processed out of dependency order can never silently drop a
+    # legitimate parent or KeyError — the entry is only read from `result`
+    # AFTER the full topo pass has populated every reachable node's đời.
+    indeg: dict[uuid.UUID, int] = dict.fromkeys(reachable, 0)
+    for child in reachable:
+        indeg[child] = sum(1 for _, _, p in parents_of.get(child, ()) if p in reachable)
+    queue = [n for n, d in indeg.items() if d == 0]  # the founder (+ any in-set orphans)
+    canonical_parent: dict[uuid.UUID, uuid.UUID | None] = {founder_id: None}
+    order: list[uuid.UUID] = [founder_id]
+    while queue:
+        node = queue.pop()
+        for child in children_of.get(node, ()):
+            if child not in reachable or child in canonical_parent:
+                continue
+            indeg[child] -= 1
+            if indeg[child] == 0:
+                queue.append(child)
+                in_set = sorted(p for p in parents_of[child] if p[2] in reachable)
+                canonical_parent[child] = in_set[0][2] if in_set else None
+                order.append(child)
+
+    result: dict[uuid.UUID, DoiEntry] = {founder_id: DoiEntry(1, None)}
+    for child in order[1:]:
+        canon = canonical_parent[child]
+        parent_gen = result[canon].generation if canon is not None else 0
+        result[child] = DoiEntry(parent_gen + 1, canon)
+    return result
 
 
 async def build_descendants_tree(
@@ -102,10 +199,16 @@ async def build_descendants_tree(
     root_id: uuid.UUID,
     clan_id: uuid.UUID,
     max_generations: int = 10,
-    base_generation: int | None = None,
+    doi_map: dict[uuid.UUID, DoiEntry] | None = None,
 ) -> dict[str, Any]:
     """Call get_family_tree_flat() SQL function, fetch spouses for each node,
     then assemble into nested dict for JSON response.
+
+    ``doi_map`` is the single đời authority (ADR-027, ``compute_generation_map``):
+    every node's ``generation`` and its canonical attach point come from this map,
+    never from row depth arithmetic. When a node is reachable via more than one
+    parent (pedigree collapse), the canonical parent's branch gets the full node;
+    every other in-nodes parent gets a ``pedigree_collapse_ref`` stub (H4).
     """
     # Step 1: Get all descendants as flat list
     flat_result = await db.execute(
@@ -123,11 +226,24 @@ async def build_descendants_tree(
             {"max_nodes": _MAX_TREE_NODES, "actual_nodes": len(rows)},
         )
 
-    # Step 2: Build node dict indexed by person_id
+    doi = doi_map or {}
+
+    # Step 2: Build node dict indexed by person_id. FIRST row wins (deterministic —
+    # never last-wins) when the same person appears more than once (pedigree
+    # collapse fan-out). Separately collect every distinct (child, parent) edge from
+    # ALL rows (not just the deduped ones) for the stub pass in step 4.
     nodes: dict[uuid.UUID, TreeNode] = {}
+    edges: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for row in rows:
+        child_id = row["person_id"]
+        parent_id = row.get("parent_id")
+        if parent_id is not None:
+            edges.add((child_id, parent_id))
+        if child_id in nodes:
+            continue
+        entry = doi.get(child_id)
         node = TreeNode(
-            id=row["person_id"],
+            id=child_id,
             full_name=row["full_name"],
             birth_name=row.get("birth_name"),
             posthumous_name=row.get("posthumous_name"),
@@ -135,11 +251,11 @@ async def build_descendants_tree(
             birth_date=_historical_date_dict(row, "birth_date"),
             death_date=_historical_date_dict(row, "death_date"),
             birth_place=row.get("birth_place"),
-            generation=row.get("generation"),
+            generation=entry.generation if entry else None,
             avatar_url=row.get("avatar_url"),
             membership_role=row.get("membership_role"),
             is_founder=row.get("is_founder", False),
-            parent_id=row.get("parent_id"),
+            parent_id=parent_id,
             depth=row["depth"],
         )
         nodes[node.id] = node
@@ -209,18 +325,50 @@ async def build_descendants_tree(
     # Step 3b: Derive each child's mother (đa thê "con của bà nào") — clan-scoped.
     mothers = await _mother_map(db, list(nodes.keys()), clan_id)
 
-    # Step 4: Wire children into parent nodes
+    # Step 4: Wire children into parent nodes. Canonical attach point is the đời
+    # authority's canonical_parent_id when it is mapped AND present among the
+    # fetched nodes; otherwise fall back to the FIRST-seen row's parent_id
+    # (deterministic — never last-wins, unlike the old bare `nodes[node.parent_id]`
+    # wiring that a later duplicate row could silently overwrite).
     root_node = None
+    attach_of: dict[uuid.UUID, uuid.UUID | None] = {}
     for node in nodes.values():
-        if node.parent_id is None:
+        entry = doi.get(node.id)
+        if entry is not None and entry.canonical_parent_id is not None:
+            attach_parent_id = (
+                entry.canonical_parent_id if entry.canonical_parent_id in nodes else node.parent_id
+            )
+        else:
+            attach_parent_id = node.parent_id
+        attach_of[node.id] = attach_parent_id
+        if attach_parent_id is None:
             root_node = node
-        elif node.parent_id in nodes:
-            nodes[node.parent_id].children.append(node)
+        elif attach_parent_id in nodes:
+            nodes[attach_parent_id].children.append(node)
 
     if root_node is None:
         return {}
 
-    # Step 5: Sort children by birth_date, then name
+    # Pedigree-collapse stubs (H4): every OTHER in-nodes parent of a child — besides
+    # the canonical attach point resolved above — gets a lightweight copy of that
+    # child rendered under it (pedigree_collapse_ref=True, no children/spouses of its
+    # own), so that parent's branch is never silently childless.
+    for child_id, parent_id in sorted(edges):
+        if child_id not in nodes or parent_id not in nodes:
+            continue
+        if parent_id == attach_of.get(child_id):
+            continue
+        stub = replace(
+            nodes[child_id],
+            parent_id=parent_id,
+            children=[],
+            spouses=[],
+            pedigree_collapse_ref=True,
+        )
+        nodes[parent_id].children.append(stub)
+
+    # Step 5: Sort children by birth_date, then name (stubs participate — they carry
+    # the same birth_date/full_name as the canonical node they mirror).
     def sort_children(node: TreeNode) -> None:
         node.children.sort(key=lambda c: (_sortable_date(c.birth_date), c.full_name))
         for child in node.children:
@@ -239,11 +387,12 @@ async def build_descendants_tree(
             "birth_date": node.birth_date,
             "death_date": node.death_date,
             "birth_place": node.birth_place,
-            "generation": (base_generation + node.depth if base_generation is not None else None),
+            "generation": node.generation,
             "avatar_url": node.avatar_url,
             "membership_role": node.membership_role,
             "is_founder": node.is_founder,
             "depth": node.depth,
+            "pedigree_collapse_ref": node.pedigree_collapse_ref,
             "mother_id": (str(mothers[node.id]) if node.id in mothers else None),
             "mother_spouse_order": (
                 spouse_order_map.get((node.parent_id, mothers[node.id]))
@@ -381,11 +530,11 @@ async def build_focus_view(
     focus_id: uuid.UUID,
     clan_id: uuid.UUID,
     descendant_depth: int,
-    base_generation: int | None,
+    doi_map: dict[uuid.UUID, DoiEntry] | None,
 ) -> dict[str, Any]:
     """Focus subtree (focus + ``descendant_depth`` generations below), enriched with computed
     đời, chi/branch, birth_order sibling order, and a has-more-descendants drill flag."""
-    subtree = await build_descendants_tree(db, focus_id, clan_id, descendant_depth, base_generation)
+    subtree = await build_descendants_tree(db, focus_id, clan_id, descendant_depth, doi_map)
     if not subtree:
         return {}
 

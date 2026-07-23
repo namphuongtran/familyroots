@@ -11,7 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.clan_membership import ClanMembership
 from app.models.person import Person
 from app.schemas.historical_date import to_historical_date
-from app.services.tree_builder import build_descendants_tree, build_focus_view, find_clan_founder
+from app.services.tree_builder import (
+    DoiEntry,
+    build_descendants_tree,
+    build_focus_view,
+    compute_generation_map,
+    find_clan_founder,
+)
 
 
 class SqlAlchemyTreeRepository:
@@ -35,15 +41,18 @@ class SqlAlchemyTreeRepository:
     async def find_clan_founder(self, clan_id: uuid.UUID) -> uuid.UUID | None:
         return await find_clan_founder(self._session, clan_id)
 
+    async def get_generation_map(self, clan_id: uuid.UUID) -> dict[uuid.UUID, DoiEntry]:
+        return await compute_generation_map(self._session, clan_id)
+
     async def build_descendants_tree(
         self,
         root_id: uuid.UUID,
         clan_id: uuid.UUID,
         max_generations: int,
-        base_generation: int | None = None,
+        doi_map: dict[uuid.UUID, DoiEntry] | None = None,
     ) -> dict[str, Any] | None:
         return await build_descendants_tree(
-            self._session, root_id, clan_id, max_generations, base_generation
+            self._session, root_id, clan_id, max_generations, doi_map
         )
 
     async def get_ancestors_flat(
@@ -108,11 +117,9 @@ class SqlAlchemyTreeRepository:
         focus_id: uuid.UUID,
         clan_id: uuid.UUID,
         descendant_depth: int,
-        base_generation: int | None,
+        doi_map: dict[uuid.UUID, DoiEntry] | None,
     ) -> dict[str, Any]:
-        return await build_focus_view(
-            self._session, focus_id, clan_id, descendant_depth, base_generation
-        )
+        return await build_focus_view(self._session, focus_id, clan_id, descendant_depth, doi_map)
 
     async def find_path(
         self, from_id: uuid.UUID, to_id: uuid.UUID, clan_id: uuid.UUID

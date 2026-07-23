@@ -42,6 +42,7 @@ class TreeNode(BaseModel):
     depth: int = 0
     mother_id: str | None = None
     mother_spouse_order: int | None = None
+    pedigree_collapse_ref: bool = False
     spouses: list[SpouseNode] = []
     children: list[TreeNode] = []  # recursive
 
@@ -81,6 +82,7 @@ class TreeNodeSummary(BaseModel):
     depth: int = 0
     mother_id: str | None = None
     mother_spouse_order: int | None = None
+    pedigree_collapse_ref: bool = False
     spouses: list[SpouseNode] = []
     children: list[TreeNodeSummary] = []
 
@@ -140,6 +142,7 @@ class FocusTreeNode(BaseModel):
     has_more_descendants: bool = False
     mother_id: str | None = None
     mother_spouse_order: int | None = None
+    pedigree_collapse_ref: bool = False
     spouses: list[SpouseNode] = []
     children: list[FocusTreeNode] = []
 
