@@ -160,6 +160,21 @@ def _seed_person(
     return person_id
 
 
+def _seed_parent_child(
+    conn: sa.Connection, parent_id: uuid.UUID, child_id: uuid.UUID, clan_id: uuid.UUID
+) -> None:
+    """A live biological parent_child edge (same shape as tests/integration/test_tree_focus.py)."""
+    creator = uuid.uuid4()
+    conn.execute(
+        sa.text(
+            "INSERT INTO parent_child "
+            "(id, parent_id, child_id, created_by_clan_id, relationship_type, created_by) "
+            "VALUES (:id, :p, :c, :cl, 'biological', :cb)"
+        ),
+        {"id": uuid.uuid4(), "p": parent_id, "c": child_id, "cl": clan_id, "cb": creator},
+    )
+
+
 def _founder_person_ids(conn: sa.Connection, clan_id: uuid.UUID) -> list[uuid.UUID]:
     rows = conn.execute(
         sa.text("SELECT person_id FROM clan_memberships WHERE clan_id = :c AND is_founder = true"),
@@ -479,5 +494,64 @@ def test_second_founder_blocked_at_db(
 
         with eng.connect() as conn:
             assert _founder_person_ids(conn, clan_id) == [person_a]
+    finally:
+        eng.dispose()
+
+
+# ── Đời proof: designation is what makes generation-anchoring possible ──────
+
+
+def test_designating_founder_activates_doi_across_three_generations(
+    client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
+) -> None:
+    """Seeds founder → child → grandchild (biological parent_child edges, one
+    clan) via raw SQL, designates the founder through the API, then asserts
+    GET /tree and GET /tree/focus/{grandchild} both anchor đời off the newly
+    designated thủy tổ: founder đời 1, child đời 2, grandchild đời 3."""
+    eng = _sync_engine(migrated_db_url)
+    try:
+        with eng.begin() as conn:
+            clan_id = _seed_clan(conn)
+            admin_id, admin_email = _seed_user_with_role(conn, clan_id, role="admin")
+            founder = _seed_person(conn, clan_id, name="Founder")
+            child = _seed_person(conn, clan_id, name="Child")
+            grandchild = _seed_person(conn, clan_id, name="Grandchild")
+            _seed_parent_child(conn, founder, child, clan_id)
+            _seed_parent_child(conn, child, grandchild, clan_id)
+
+        admin_token = _mint(rsa_keys["private_pem"], admin_id, admin_email)
+        designate_resp = _designate(client, admin_token, clan_id, founder)
+        assert designate_resp.status_code == 200, designate_resp.text
+
+        tree_resp = client.get(
+            "/api/v1/tree",
+            headers={
+                "Authorization": f"Bearer {admin_token}",
+                "X-Current-Clan-Id": str(clan_id),
+            },
+        )
+        assert tree_resp.status_code == 200, tree_resp.text
+        root = tree_resp.json()["data"]["tree"]
+        assert root["id"] == str(founder)
+        assert root["generation"] == 1
+        assert root["is_founder"] is True
+        assert len(root["children"]) == 1
+        child_node = root["children"][0]
+        assert child_node["id"] == str(child)
+        assert child_node["generation"] == 2
+        assert len(child_node["children"]) == 1
+        grandchild_node = child_node["children"][0]
+        assert grandchild_node["id"] == str(grandchild)
+        assert grandchild_node["generation"] == 3
+
+        focus_resp = client.get(
+            f"/api/v1/tree/focus/{grandchild}",
+            headers={
+                "Authorization": f"Bearer {admin_token}",
+                "X-Current-Clan-Id": str(clan_id),
+            },
+        )
+        assert focus_resp.status_code == 200, focus_resp.text
+        assert focus_resp.json()["data"]["generation_of_focus"] == 3
     finally:
         eng.dispose()

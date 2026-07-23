@@ -8,8 +8,10 @@ bugs (#12/#13) hid and where the tree routes' DI/serialization seam was never
 exercised before (review 2026-07-18, test-posture gap #2).
 
 KNOWN_DEFECT tests pin review findings the suite must keep visible until their
-fix PR flips them: H3 (GET /tree 404s for API-managed clans) and M9 (malformed
-cursor → 500).
+fix PR flips them: M9 (malformed cursor → 500). H3 (GET /tree 404s for
+API-managed clans) was CLOSED by PR A3 — see test_tree_renders_after_founder_
+designation and test_tree_404_without_founder_designation, which replace the
+old KNOWN_DEFECT_H3 pin.
 
 Rate-limit budget: this module's app shares ONE 20 req/min/IP bucket across
 /api/v1/auth + /api/v1/invitations — matched by path PREFIX, so GET /auth/me
@@ -17,15 +19,18 @@ counts too (RateLimitMiddleware.dispatch: `request.url.path.startswith(p)`, see
 app/core/rate_limit.py). Note the admin invitation-create call is
 POST /api/v1/clans/{clan_id}/invitations — that path starts with /api/v1/clans,
 NOT /api/v1/invitations, so it does NOT count against this bucket; only
-POST /api/v1/invitations/{token}/accept does. Current spend: J1=3 auth (register,
-login, /auth/me), J2=3 auth (admin register, admin login, joiner register) + 1
-invitation (accept only — create does not match the prefix),
-test_tree_unreachable_for_api_managed_clan_KNOWN_DEFECT_H3=2 auth (register,
-login) → 8 auth + 1 invitation = 9/20. The M9 and i18n tests below add ZERO:
-M9 mints its JWT directly against a SQL-seeded clan (no /auth/* call at all),
-and the i18n test's unauthenticated GET /api/v1/persons never touches the
-/api/v1/auth or /api/v1/invitations prefixes. Re-count before adding requests
-on those prefixes.
+POST /api/v1/invitations/{token}/accept does. PUT /api/v1/clans/me/founder is
+also under /api/v1/clans, not /api/v1/auth or /api/v1/invitations — it spends
+ZERO budget. Current spend: J1=3 auth (register, login, /auth/me), J2=3 auth
+(admin register, admin login, joiner register) + 1 invitation (accept only —
+create does not match the prefix), test_tree_renders_after_founder_designation
+=2 auth (register, login; the founder designation PUT itself is free) +
+test_tree_404_without_founder_designation=2 auth (register, login) → 10 auth +
+1 invitation = 11/20. The M9 and i18n tests below add ZERO: M9 mints its JWT
+directly against a SQL-seeded clan (no /auth/* call at all), and the i18n
+test's unauthenticated GET /api/v1/persons never touches the /api/v1/auth or
+/api/v1/invitations prefixes. Re-count before adding requests on those
+prefixes.
 """
 
 import json
@@ -265,9 +270,9 @@ def _create_person(
 
 def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdentityProvider) -> None:
     """One founder's whole story over HTTP. Stages are labeled; a failure names
-    its stage. Tree endpoints assert TODAY's truth for an API-managed clan
-    (generation is null everywhere — H3; the GET /tree 404 itself is pinned in
-    test_tree_unreachable_for_api_managed_clan_KNOWN_DEFECT_H3)."""
+    its stage. Ông is designated thủy tổ after Stage 5 (PUT /clans/me/founder,
+    ADR-026/A3), so đời anchors off him for the rest of the journey: ông đời 1,
+    con đời 2 (docs/architecture/tree-read-model.md)."""
     suffix = uuid.uuid4().hex[:10]
     email = f"j1-{suffix}@ex.com"
     slug = f"j1-{suffix}"
@@ -328,6 +333,17 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
         )
         assert edge["relationship_type"] == "biological"
 
+    # Stage 5b — designate ông as thủy tổ (ADR-026 / A3): admin-only, anchors đời.
+    designation = _envelope(
+        client.put(
+            "/api/v1/clans/me/founder",
+            headers=hdr,
+            json={"person_id": ong["id"]},
+        )
+    )
+    assert designation["person_id"] == ong["id"]
+    assert designation["previous_person_id"] is None
+
     # Stage 6 — persons list: cursor-page envelope
     listing = client.get("/api/v1/persons", headers=hdr)
     assert listing.status_code == 200, listing.text
@@ -339,11 +355,10 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
     assert ong_row["birth_date"]["date"] == "1930-01-15"
 
     # Stage 7 — tree read models over HTTP (the untested DI seam).
-    # H3 truth: no founder is settable via the API, so đời cannot anchor —
-    # generation is null on every node until A3 lands.
+    # Ông was designated thủy tổ in Stage 5b: ông đời 1, con đời 2.
     focus = _envelope(client.get(f"/api/v1/tree/focus/{con['id']}", headers=hdr))
     assert focus["focus_person_id"] == con["id"]
-    assert focus["generation_of_focus"] is None  # H3: no thủy tổ → đời unanchored
+    assert focus["generation_of_focus"] == 2  # con: ông đời 1 → con đời 2
     # focus_subtree's root IS con himself (app/schemas/tree.py FocusTreeNode);
     # mother_id lives directly on that node — con's biological mother is bà
     # (đa thê attribution), not a nested field. Verified against
@@ -361,6 +376,7 @@ def test_journey_founder_lifecycle(client: TestClient, stub_identity: StubIdenti
     _assert_hd(ong_node["birth_date"])
     assert ong_node["birth_date"]["date"] == "1930-01-15"
     assert ong_node["full_name"] == "Nguyễn Văn Tổ"
+    assert ong_node["generation"] == 1  # ông is thủy tổ
 
     # Stage 8 — export the clan archive; the whole story must be inside.
     # Envelope-EXEMPT (app/api/v1/exports.py docstring): the body is the raw
@@ -484,36 +500,62 @@ def test_journey_multiuser_collaboration(
     assert _error_code(foreign) == "clan_membership_required"
 
 
-def test_tree_unreachable_for_api_managed_clan_KNOWN_DEFECT_H3(
+def test_tree_renders_after_founder_designation(
     client: TestClient, stub_identity: StubIdentityProvider
 ) -> None:
-    """PINS review finding H3 (docs/architecture/backend-review-2026-07-18.md):
-    no API path can set is_founder (PersonCreateRequest has no such field; no
-    membership PATCH exists), so find_clan_founder finds nothing and GET /tree
-    404s for EVERY clan built through the API — the graph-computed đời feature
-    cannot activate. PR A3 (founder designation) MUST flip this test to the
-    desired behavior; this assertion failing is A3's RED signal, not a
-    regression.
+    """H3 CLOSED by PR A3; the undesignated-clan 404 remains correct and is
+    pinned separately (test_tree_404_without_founder_designation).
 
-    Flipping H3 also requires updating Journey 1 Stage 7's coupled asserts in
-    test_journey_founder_lifecycle: `focus["generation_of_focus"] is None`,
-    and (once a founder can be designated and generation is no longer null
-    everywhere) any other generation-null-shaped asserts on that stage's
-    ancestor/focus nodes should be revisited too — none currently assert a
-    specific non-null generation value there, but the None-based reasoning in
-    that stage's comments no longer holds once A3 lands."""
+    Was test_tree_unreachable_for_api_managed_clan_KNOWN_DEFECT_H3, which
+    pinned review finding H3 (docs/architecture/backend-review-2026-07-18.md):
+    no API path could set is_founder, so find_clan_founder found nothing and
+    GET /tree 404d for EVERY clan built through the API. ADR-026's
+    `PUT /clans/me/founder` (admin-only) now designates the thủy tổ, and
+    GET /tree anchors đời off it — thủy tổ đời 1, per
+    docs/architecture/tree-read-model.md."""
     suffix = uuid.uuid4().hex[:10]
     email = f"j3-{suffix}@ex.com"
     _register_create(client, email, f"j3-{suffix}", "Chủ Tộc")
     token, user = _login(client, email)
-    hdr = _auth(token, user["clan_id"])
-    _create_person(client, hdr, "Nguyễn Văn Nhất", "male")
+    clan_id = user["clan_id"]
+    hdr = _auth(token, clan_id)
+    person = _create_person(client, hdr, "Nguyễn Văn Nhất", "male")
+
+    designation = _envelope(
+        client.put(
+            "/api/v1/clans/me/founder",
+            headers=hdr,
+            json={"person_id": person["id"]},
+        )
+    )
+    assert designation["person_id"] == person["id"]
 
     resp = client.get("/api/v1/tree", headers=hdr)
-    assert resp.status_code == 404, (
-        "GET /tree no longer 404s — H3 has been fixed! Flip this test to assert "
-        "the working tree (thủy tổ đời 1) and delete the KNOWN_DEFECT marker."
-    )
+    assert resp.status_code == 200, resp.text
+    root = _envelope(resp)["tree"]
+    assert root["id"] == person["id"]
+    assert root["generation"] == 1
+
+
+def test_tree_404_without_founder_designation(
+    client: TestClient, stub_identity: StubIdentityProvider
+) -> None:
+    """CORRECT onboarding state, not a defect: a freshly created clan has no
+    thủy tổ until an admin designates one via `PUT /clans/me/founder` — đời is
+    graph-computed as distance-from-founder + 1 (docs/architecture/
+    tree-read-model.md), so with no founder there is nothing to anchor
+    distance from and GET /tree 404s `clan_founder_not_found`. The client flow
+    is designate → tree renders (see docs/architecture/
+    frontend-integration-guide.md, added by Task 4)."""
+    suffix = uuid.uuid4().hex[:10]
+    email = f"j3b-{suffix}@ex.com"
+    _register_create(client, email, f"j3b-{suffix}", "Chủ Tộc")
+    token, user = _login(client, email)
+    hdr = _auth(token, user["clan_id"])
+    _create_person(client, hdr, "Nguyễn Văn Nhì", "male")
+
+    resp = client.get("/api/v1/tree", headers=hdr)
+    assert resp.status_code == 404, resp.text
     assert _error_code(resp) == "clan_founder_not_found"
 
 
