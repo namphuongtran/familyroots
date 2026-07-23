@@ -16,8 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.export.ports import ExportQueryPort
-
-_TREE_MAX_GENERATIONS = 50
+from app.services.tree_builder import compute_generation_map
 
 
 class SqlAlchemyExportQueryPort(ExportQueryPort):
@@ -80,32 +79,22 @@ class SqlAlchemyExportQueryPort(ExportQueryPort):
         return [dict(row) for row in result.mappings().all()]
 
     async def generation_map(self, clan_id: uuid.UUID) -> dict[uuid.UUID, int]:
-        """Graph-computed đời per person: for each clan founder, walk
-        `get_family_tree_flat` and record `depth + 1` (thủy tổ = 1). The first
-        founder processed wins for any person reachable from more than one
-        founder (`dict.setdefault`) — founders are processed in a fixed,
-        deterministic order (`joined_at` ascending, `person_id` tiebreak) so
-        which founder "wins" a shared descendant does not depend on
-        unspecified row order from Postgres."""
-        founders_result = await self._session.execute(
-            text(
-                "SELECT cm.person_id FROM clan_memberships cm "
-                "WHERE cm.clan_id = :clan AND cm.is_founder = true "
-                "ORDER BY cm.joined_at NULLS LAST, cm.person_id"
-            ),
-            {"clan": clan_id},
-        )
-        founder_ids = [row.person_id for row in founders_result.all()]
+        """Graph-computed đời per person, delegating to the single đời
+        authority (ADR-027, `compute_generation_map`): con theo đời cha, not
+        BFS/min-depth. Pre-023 archives could have multiple live founders per
+        clan, which this port handled with an ordered per-founder loop over
+        `get_family_tree_flat` (`joined_at` ascending, `person_id` tiebreak,
+        first founder processed wins a shared descendant via
+        `dict.setdefault`) — that loop is retired because migration 023
+        enforces exactly one live founder per clan (see
+        `test_clan_export_json.py`'s single-founder determinism pin), so a
+        single call to the shared authority now suffices and reads the SAME
+        đời every other tree surface reads.
 
-        generations: dict[uuid.UUID, int] = {}
-        for founder_id in founder_ids:
-            tree_result = await self._session.execute(
-                text(
-                    "SELECT person_id, depth FROM public.get_family_tree_flat"
-                    "(:founder, :clan, :max_gen)"
-                ),
-                {"founder": founder_id, "clan": clan_id, "max_gen": _TREE_MAX_GENERATIONS},
-            )
-            for row in tree_result.mappings().all():
-                generations.setdefault(row["person_id"], row["depth"] + 1)
-        return generations
+        `compute_generation_map` returns `{}` when the clan has no
+        designated founder, and otherwise `{person_id: DoiEntry}` — adapted
+        here to the `{person_id: generation}` shape this port's callers
+        (`app/services/clan_export.py`, `app/services/gedcom_export.py`)
+        expect."""
+        doi_map = await compute_generation_map(self._session, clan_id)
+        return {person_id: entry.generation for person_id, entry in doi_map.items()}
