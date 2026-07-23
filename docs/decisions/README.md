@@ -27,6 +27,7 @@
 | [023](023-parent-child-db-backstop.md) | DB Backstop for Genealogy Graph Invariants (parent_child trigger) | Accepted, shipped |
 | [024](024-non-canonical-envelope-exceptions.md) | Non-Canonical Envelope Exceptions Typed As-Is (Normalize Pre-Frontend) | Normalized |
 | [025](025-per-clan-edge-write-serialization.md) | Per-Clan Edge-Write Serialization + Invariant-Matching Unique Backstops | Accepted, shipped (2026-07-18, amends ADR-023) |
+| [026](026-single-founder-designation.md) | Admin-Designated Single Founder (Thủy Tổ) + Deterministic Read | Accepted, shipped (2026-07-18) |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural

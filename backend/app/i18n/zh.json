@@ -112,6 +112,7 @@
   "user.rejected": "用户已拒绝",
   "user.role_changed": "角色已更改",
   "user.removed": "用户已从宗族中移除",
+  "clan.founder_designated": "已指定宗族始祖（thủy tổ）。",
   "member.deleted": "成员已删除",
   "member.restored": "成员已恢复",
   "timeline.birth": "出生",

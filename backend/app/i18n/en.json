@@ -112,6 +112,7 @@
   "user.rejected": "User rejected",
   "user.role_changed": "Role changed",
   "user.removed": "User removed from clan",
+  "clan.founder_designated": "Clan founder (thủy tổ) designated.",
   "member.deleted": "Member deleted",
   "member.restored": "Member restored",
   "timeline.birth": "Birth",

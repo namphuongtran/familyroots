@@ -117,9 +117,15 @@ Rules:
 - **`generation`** on each person is graph-computed via the same base-generation
   logic the tree endpoints use (not `clan_memberships.stored_generation`, which
   is deprecated as a display source — see [ADR-012](../decisions/012-computed-generation-mother-attribution.md)).
-  When multiple founders exist, deterministic ordering (`joined_at` ascending,
-  `person_id` tiebreak) decides which founder's tree "wins" a person reachable
-  from more than one founder.
+  Founder resolution uses the same deterministic `find_clan_founder` ordering
+  (`joined_at` ascending, `person_id` tiebreak) as the tree endpoints — see
+  [ADR-026](../decisions/026-single-founder-designation.md). Since migration
+  `023_one_founder_per_clan`, a clan can have **at most one** live founder
+  (`uq_clan_memberships_one_founder` partial unique index), so "multiple
+  founders" is no longer reachable against a live/current schema; the ordering
+  is retained purely as a tolerance for pre-023 archives or a downgraded
+  database, where legacy data could still carry more than one live-flagged
+  founder row for a clan.
 - **`exported_at`** and `documents_manifest[].download_url_expires_at` are UTC
   ISO-8601 timestamps (`datetime.now(UTC)`), not clan-local time.
 - Serialization is `ensure_ascii=False` (Vietnamese diacritics readable raw in

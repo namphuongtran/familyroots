@@ -56,3 +56,28 @@ class ClanRepository(Protocol):
     async def change_role(self, ucr: Any, new_role: str) -> None:
         """Change a user's role."""
         ...
+
+    async def get_membership_with_person(
+        self, clan_id: uuid.UUID, person_id: uuid.UUID
+    ) -> Any | None:
+        """Membership row for a LIVE person of this clan (persons.is_deleted = false)."""
+        ...
+
+    async def get_founder_membership(self, clan_id: uuid.UUID) -> Any | None:
+        """The clan's current founder membership row, if any."""
+        ...
+
+    async def swap_founder(
+        self, clan_id: uuid.UUID, target_membership_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        """Clear the clan's current founder(s) then set the target as founder,
+        as two explicitly ORDERED statements (not two ORM attribute mutations
+        left to flush in unspecified order) — required because
+        ``uq_clan_memberships_one_founder`` is an immediate partial unique
+        index and Postgres cannot make a partial uniqueness constraint
+        DEFERRABLE. Returns the ``person_id`` cleared by the first (CLEAR)
+        statement via ``RETURNING`` — the founder that was actually live at
+        the moment of the swap — or ``None`` if there was none, so callers get
+        a truthful ``previous_person_id`` even under concurrent writers rather
+        than one read moments earlier by a separate pre-read query."""
+        ...

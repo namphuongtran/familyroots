@@ -73,6 +73,7 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 | **FAMILY TREE**                |             |       |        |        |
 | View family tree               | ✅           | ✅     | ✅      | ✅      |
 | Export tree as PDF             | ✅           | ✅     | ✅      | ✅      |
+| Designate/correct clan founder (thủy tổ, `PUT /clans/me/founder`, ADR-026) | ✅ | ✅ | ❌ | ❌ |
 | **USER MANAGEMENT**            |             |       |        |        |
 | View pending users             | ✅           | ✅     | ❌      | ❌      |
 | Approve user registration      | ✅           | ✅     | ❌      | ❌      |

@@ -112,6 +112,7 @@
   "user.rejected": "Đã từ chối người dùng",
   "user.role_changed": "Đã thay đổi vai trò",
   "user.removed": "Đã xóa người dùng khỏi dòng họ",
+  "clan.founder_designated": "Đã chỉ định thủy tổ của dòng họ.",
   "member.deleted": "Đã xóa thành viên",
   "member.restored": "Đã khôi phục thành viên",
   "timeline.birth": "Sinh",

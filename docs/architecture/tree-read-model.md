@@ -36,6 +36,41 @@ kept only as data; ADR-012).
 - `null` when the node isn't descended from a founder or the clan has no founder —
   clients must render "đời ?" honestly, not guess.
 
+### Thủy tổ (founder) designation — exactly one live founder (ADR-026)
+
+- `find_clan_founder(db, clan_id)` (`tree_builder.py`) resolves the root: the
+  `clan_memberships` row with `is_founder = true` for the clan, joined to a
+  **non-soft-deleted** person (`persons.is_deleted = false`). Migration `023`'s
+  partial unique index `uq_clan_memberships_one_founder` on
+  `clan_memberships (clan_id) WHERE is_founder = true` makes more than one live
+  founder per clan impossible going forward; the query still carries an
+  `ORDER BY joined_at ASC NULLS LAST, person_id` tiebreak so it stays
+  deterministic against already-corrupt legacy (pre-023) data.
+- **Only write path:** `PUT /clans/me/founder` (admin-only) — see
+  [rest-clans-api.md](../contracts/rest-clans-api.md#founder-designation-thủy-tổ).
+  Person creation has no founder field; nothing else in the API can set
+  `is_founder`.
+- **Swap, not accumulate:** designating a different person clears the current
+  founder membership and sets the target as founder in two explicitly ordered
+  statements (`ClanRepository.swap_founder`) rather than relying on ORM flush
+  ordering, because the backing index is an immediate partial unique index
+  (Postgres cannot `DEFERRABLE` a partial unique — only constraints, not
+  indexes, support deferral). See [ADR-026](../decisions/026-single-founder-designation.md)
+  for the concurrency story.
+- **Undesignated clan = onboarding state, not a bug.** `GET /tree` without an
+  explicit `root_person_id` calls `find_clan_founder` and 404s
+  `clan_founder_not_found` when it returns `None` — this is the expected state
+  for any clan before its first `PUT /clans/me/founder` call. See
+  [frontend-integration-guide.md](../contracts/frontend-integration-guide.md#51-founder-designation-thủy-tổ--tree-onboarding).
+- **Soft-deleting the founder re-404s the tree.** Because `find_clan_founder`
+  filters `persons.is_deleted = false`, soft-deleting the currently-designated
+  founder person makes the clan founder-less again — `GET /tree` 404s
+  `clan_founder_not_found`. `is_founder` on the membership row is untouched by
+  delete/restore, so the tree re-404s until the founder is **restored**
+  (`POST /persons/{id}/restore` alone re-roots the tree — no re-designation
+  needed, since the membership's `is_founder` flag never went away) **or** an
+  admin **designates someone else** via `PUT /clans/me/founder`.
+
 ## đa thê (polygamy) mother attribution — derived, no schema change
 
 Child nodes carry `mother_id` + `mother_spouse_order` so clients can group a father's

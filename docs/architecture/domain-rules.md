@@ -168,6 +168,16 @@ default 7). Anniversary reminders are driven by APScheduler — see `backend/CLA
 - Admin actions emit auditable events: `UserApproved`, `UserRejected`,
   `UserRoleChanged`, `UserRemoved`, `ClanUpdated`.
 - `count_admins()` is used to guard against removing/demoting the last admin.
+- **Exactly one live founder (thủy tổ) per clan** ([ADR-026](../decisions/026-single-founder-designation.md)):
+  `clan_memberships.is_founder` is DB-backstopped by the partial unique index
+  `uq_clan_memberships_one_founder` (`clan_id`) `WHERE is_founder = true`
+  (migration 023) — a concurrent write that would create a second live founder
+  for a clan hits `23505` → the generic `conflict` 409. Set only via
+  `PUT /clans/me/founder` (admin-only), which swaps rather than accumulates.
+  `find_clan_founder` treats a soft-deleted founder person as no founder at
+  all, and an undesignated/founder-less clan makes `GET /tree` (no
+  `root_person_id`) 404 `clan_founder_not_found` — the onboarding signal, not
+  a domain violation.
 
 ## Soft-delete vs hard-delete summary
 

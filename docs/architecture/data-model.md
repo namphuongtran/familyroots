@@ -484,6 +484,16 @@ M:N link between persons and clans. Determines which persons appear in which cla
 > **💡 Note (VN) - Thế Thứ Tương Đối:**
 > Tại sao `generation` (đời thứ mấy) nằm ở đây thay vì ở `persons`? Vì ở họ của mẹ, người này có thể thuộc đời thứ 5, nhưng khi họ lập ra một chi báo/dòng họ mới của bản thân, họ lại là đời số 1 (Thuỷ tổ) của dòng họ đó!
 
+> **Note — exactly one live founder per clan (ADR-026):** partial unique index
+> `uq_clan_memberships_one_founder (clan_id) WHERE is_founder = true`
+> (migration `023_one_founder_per_clan`) enforces at most one `is_founder = true`
+> row per clan at the DB level. Only write path is `PUT /clans/me/founder`
+> (admin-only) — see [rest-clans-api.md](../contracts/rest-clans-api.md#founder-designation-thủy-tổ).
+> `generation` on this table is display-only legacy storage — every tree/export
+> read path computes đời from the graph instead (`clan_memberships.generation`
+> is deprecated as a display source, ADR-012); it is not kept in sync with the
+> computed value.
+
 ### `marriages`
 Global edge linking two persons. Supports polygamy, divorce, remarriage.
 
@@ -810,6 +820,10 @@ CREATE UNIQUE INDEX idx_identity_claims_pending_user ON identity_claims(user_id)
 CREATE INDEX idx_clan_memberships_clan_id ON clan_memberships(clan_id);
 CREATE INDEX idx_clan_memberships_person_id ON clan_memberships(person_id);
 CREATE INDEX idx_clan_memberships_branch ON clan_memberships(branch_id);
+
+-- Exactly one live founder (thủy tổ) per clan (migration 023_one_founder_per_clan, ADR-026)
+CREATE UNIQUE INDEX uq_clan_memberships_one_founder ON clan_memberships (clan_id)
+    WHERE is_founder = true;
 
 -- Tree traversal: find all children of a parent
 CREATE INDEX idx_parent_child_parent_id ON parent_child(parent_id);

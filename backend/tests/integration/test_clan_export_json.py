@@ -506,25 +506,26 @@ async def test_json_export_clan_memberships_lossless_and_complete(client, admin_
         assert membership["updated_at"] is not None
 
 
-async def test_generation_map_deterministic_with_multiple_founders(
+async def test_generation_map_deterministic_with_single_founder(
     session_factory,
 ):
-    """FIX 1 (task-4 review): with two founders whose descent trees overlap,
-    the founder that "wins" a shared descendant (via dict.setdefault) must be
-    determined by a total order (joined_at ASC, then person_id) — not by
-    whatever order Postgres happens to return `is_founder = true` rows in.
+    """Pins generation_map's founder-anchored walk with a SINGLE live founder.
 
-    founder_1 joins the clan BEFORE founder_2 (earlier joined_at) but its
-    clan_memberships row is inserted SECOND (after founder_2's) — physical
-    insertion order is deliberately the opposite of joined_at order, so a
-    query without an ORDER BY would very likely process founder_2 first.
+    Multi-founder states are structurally impossible since migration 023
+    (ADR-026): `uq_clan_memberships_one_founder` is an immediate partial
+    unique index enforcing at most one `is_founder = true` row per clan. The
+    export's ordered multi-founder walk (`ORDER BY joined_at, person_id` over
+    `is_founder = true` rows, first founder processed wins a shared
+    descendant) is retained in `SqlAlchemyExportQueryPort.generation_map` as
+    tolerance for pre-023 archives/robustness, but that scenario can no
+    longer be exercised against a live schema — a raw-SQL seed of a second
+    `is_founder = true` row now itself raises `IntegrityError` on the unique
+    index (sabotage-verified in Task 2). This test pins the single-founder
+    behavior instead: the founder's own generation anchors at 1 (thủy tổ),
+    and each descendant's generation is `depth + 1` along the founder's walk,
+    reproducibly across independent computations of the same live schema.
 
-    founder_1 -> shared_descendant directly (depth 1, generation 2).
-    founder_2 -> mid -> shared_descendant (depth 2, generation 3).
-
-    Correct (deterministic) behavior: founder_1 (earlier joined_at) is
-    processed first, so shared_descendant's generation is 2 — every run,
-    not just "by luck" of row order.
+    founder -> mid -> shared_descendant (depth 1, depth 2).
     """
     import sqlalchemy as sa
 
@@ -532,15 +533,14 @@ async def test_generation_map_deterministic_with_multiple_founders(
 
     clan_id = uuid.uuid4()
     admin_id = uuid.uuid4()
-    founder_1 = uuid.uuid4()
-    founder_2 = uuid.uuid4()
+    founder = uuid.uuid4()
     mid = uuid.uuid4()
     shared_descendant = uuid.uuid4()
 
     async with session_factory() as s:
         await s.execute(
-            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'Họ Đa Tổ', :slug)"),
-            {"id": clan_id, "slug": f"ho-da-to-{clan_id.hex[:8]}"},
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'Họ Một Tổ', :slug)"),
+            {"id": clan_id, "slug": f"ho-mot-to-{clan_id.hex[:8]}"},
         )
         await s.execute(
             sa.text(
@@ -549,10 +549,9 @@ async def test_generation_map_deterministic_with_multiple_founders(
             {"id": admin_id, "email": f"{admin_id.hex[:8]}@example.com"},
         )
         for pid, name in (
-            (founder_1, "Thủy Tổ Một"),
-            (founder_2, "Thủy Tổ Hai"),
+            (founder, "Thủy Tổ"),
             (mid, "Đời Giữa"),
-            (shared_descendant, "Hậu Duệ Chung"),
+            (shared_descendant, "Hậu Duệ"),
         ):
             await s.execute(
                 sa.text(
@@ -566,27 +565,13 @@ async def test_generation_map_deterministic_with_multiple_founders(
                 {"id": pid, "full_name": name, "cid": clan_id, "cid_actor": admin_id},
             )
 
-        # Deliberately inserted founder_2 THEN founder_1 (reversed vs.
-        # joined_at) to prove the ordering comes from the ORDER BY, not from
-        # physical/insertion order.
         await s.execute(
             sa.text(
                 "INSERT INTO clan_memberships (person_id, clan_id, is_founder, joined_at) "
                 "VALUES (:pid, :cid, true, :joined_at)"
             ),
             {
-                "pid": founder_2,
-                "cid": clan_id,
-                "joined_at": datetime(2000, 1, 2, tzinfo=UTC),
-            },
-        )
-        await s.execute(
-            sa.text(
-                "INSERT INTO clan_memberships (person_id, clan_id, is_founder, joined_at) "
-                "VALUES (:pid, :cid, true, :joined_at)"
-            ),
-            {
-                "pid": founder_1,
+                "pid": founder,
                 "cid": clan_id,
                 "joined_at": datetime(2000, 1, 1, tzinfo=UTC),
             },
@@ -601,8 +586,7 @@ async def test_generation_map_deterministic_with_multiple_founders(
             )
 
         for parent_id, child_id in (
-            (founder_1, shared_descendant),
-            (founder_2, mid),
+            (founder, mid),
             (mid, shared_descendant),
         ):
             await s.execute(
@@ -629,6 +613,8 @@ async def test_generation_map_deterministic_with_multiple_founders(
         second_run = await port.generation_map(clan_id)
 
     assert first_run == second_run
-    # founder_1's earlier joined_at must win: depth 1 -> generation 2 (NOT
-    # founder_2's depth-2 path, which would give generation 3).
-    assert first_run[shared_descendant] == 2
+    # Founder anchors at generation 1 (thủy tổ); descendants are depth + 1
+    # along the founder's own walk.
+    assert first_run[founder] == 1
+    assert first_run[mid] == 2
+    assert first_run[shared_descendant] == 3
