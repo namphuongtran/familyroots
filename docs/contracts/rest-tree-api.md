@@ -46,14 +46,35 @@ addition to the standard person/spouse fields:
 - Assumption: at most one female-parent edge per child is expected; if data ever
   records more than one, the mother map keeps the last one seen (acceptable for this
   read-model, not enforced as a domain invariant here).
+- `pedigree_collapse_ref` (bool, default `false`) — **additive**. On `GET /` and
+  `GET /subtree/{person_id}` (not `GET /ancestors/{person_id}`), `true` marks a stub
+  node: a child reachable from the founder via more than one in-tree parent renders
+  its **full** node once, under its **canonical parent** (`pedigree_collapse_ref:
+  false`/absent), and a lightweight stub — `{id, full_name, gender, generation,
+  mother_id}` plus `pedigree_collapse_ref: true`, with `children: []` and
+  `spouses: []` — under **every other** in-tree parent, so that parent's branch is
+  never silently rendered childless. Stubs sort into `children` alongside real
+  siblings (same birth_date/name key as the canonical node). See
+  [tree-read-model.md](../architecture/tree-read-model.md#both-parents-rendering-pedigree-collapse)
+  and [ADR-027](../decisions/027-doi-single-authority.md).
 
 `generation` (đời) is graph-computed on `GET /`, `GET /subtree/{person_id}` and
-`GET /ancestors/{person_id}`: thủy tổ (clan founder) = 1, and `null` when the node
-isn't descended from a founder (or the clan has no founder). It is computed from a
-full ancestor-chain lookup, not read from `clan_memberships.generation` — that column
-is no longer the display source for any tree endpoint.
+`GET /ancestors/{person_id}` by a **single authority function**,
+`compute_generation_map` (ADR-027): thủy tổ (clan founder) = 1; đời(X) = đời(canonical
+parent) + 1, where the canonical parent is X's highest-priority in-tree parent
+(father — biological > adopted > step > foster — then mother, then unknown-gender,
+person_id tiebreak); `null` when the node isn't descended from a founder (or the clan
+has no founder). It is **never** read from `clan_memberships.generation`, and never
+computed independently per endpoint — `GET /`, `GET /subtree/{person_id}`,
+`GET /ancestors/{person_id}`, `GET /focus/{person_id}` (see `tree-focus.md`) and the
+clan export all read the SAME map for the same clan, so đời for a given person is
+identical across every one of these surfaces (ADR-027 closes H4, where `/tree` and
+`/tree/focus`/export previously disagreed on pedigree-collapsed persons).
 
 ## Versioning & Compatibility Rules
-- Adding optional graph metadata is non-breaking.
+- Adding optional graph metadata is non-breaking. `pedigree_collapse_ref` is one such
+  addition: existing clients that ignore unknown fields see no change; clients that
+  render every child node unconditionally will render collapse stubs too (they are
+  valid, minimal person nodes) unless updated to special-case them.
 - Changing node/edge identifiers or path semantics is breaking.
 - Keep traversal responses compatible with visualization clients.

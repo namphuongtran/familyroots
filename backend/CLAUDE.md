@@ -69,7 +69,7 @@ Never bypass these checks for convenience.
 
 - **Success envelope**: every 2xx body is `{"data": ...}`; list endpoints add `"meta": {"cursor", "has_more", "limit"}` (single cursor-pagination scheme, ASC, opaque cursors); 204 has no body; `/health` is exempt. Adjunct info goes in `meta` (e.g. `meta.errors`, `meta.warning`), never beside `data`.
 - **HistoricalDate**: every date field in responses (persons birth/death, events event_date, marriages marriage/divorce, all tree nodes) is `{"date": ISO|null, "precision": "exact|year|month|circa|unknown", "display": str|null, "lunar": str|null}` — built by `app/schemas/historical_date.py`. Clients render `date` when precision is `exact`, else `display`. Write DTOs accept `*_precision`/`*_display`. Storage has matching `*_precision`/`*_display` columns; the old `*_approx` booleans are gone.
-- **đời (generation)**: always graph-computed (thủy tổ = 1, founder distance + 1) on every tree endpoint; `clan_memberships.generation` is deprecated as a display source. Child tree nodes carry derived `mother_id`/`mother_spouse_order` for đa thê grouping.
+- **đời (generation)**: always computed by the single đời authority (con theo đời cha — ADR-027): thủy tổ = 1, đời = canonical parent's đời + 1, on every tree endpoint; `clan_memberships.generation` is deprecated as a display source. Child tree nodes carry derived `mother_id`/`mother_spouse_order` for đa thê grouping, plus `pedigree_collapse_ref` (bool) marking a stub under a non-canonical in-tree parent.
 - Kinship age-based terms (`relationship_descriptor.py`) are only emitted when **both** birth dates have `precision == "exact"`.
 
 ### App startup
