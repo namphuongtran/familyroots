@@ -66,3 +66,12 @@ class ClanRepository(Protocol):
     async def get_founder_membership(self, clan_id: uuid.UUID) -> Any | None:
         """The clan's current founder membership row, if any."""
         ...
+
+    async def swap_founder(self, clan_id: uuid.UUID, target_membership_id: uuid.UUID) -> None:
+        """Clear the clan's current founder(s) then set the target as founder,
+        as two explicitly ORDERED statements (not two ORM attribute mutations
+        left to flush in unspecified order) — required because
+        ``uq_clan_memberships_one_founder`` is an immediate partial unique
+        index and Postgres cannot make a partial uniqueness constraint
+        DEFERRABLE."""
+        ...

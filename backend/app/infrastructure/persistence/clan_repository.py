@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -165,3 +165,19 @@ class SqlAlchemyClanRepository:
             )
         )
         return result.scalars().first()
+
+    async def swap_founder(self, clan_id: uuid.UUID, target_membership_id: uuid.UUID) -> None:
+        """Clear-then-set in two ORDERED statements (session.execute emits SQL
+        immediately, unlike ORM attribute flushes whose order is unspecified) —
+        required because uq_clan_memberships_one_founder is an immediate partial
+        unique index (Postgres cannot defer a partial unique)."""
+        await self._session.execute(
+            update(ClanMembership)
+            .where(ClanMembership.clan_id == clan_id, ClanMembership.is_founder.is_(True))
+            .values(is_founder=False)
+        )
+        await self._session.execute(
+            update(ClanMembership)
+            .where(ClanMembership.id == target_membership_id)
+            .values(is_founder=True)
+        )

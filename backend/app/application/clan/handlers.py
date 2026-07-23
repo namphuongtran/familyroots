@@ -171,8 +171,13 @@ class ClanCommandHandler:
         """Designate or correct the clan's thủy tổ (ADR-026: exactly one live founder).
 
         Idempotent: re-designating the current founder writes nothing and reports
-        previous == person_id. Swap is clear-then-set in THIS one transaction; the
-        023 partial unique index backstops out-of-band writers (23505 → 409).
+        previous == person_id. Swap is clear-then-set as two explicitly ORDERED
+        statements (``repo.swap_founder``), not two ORM attribute mutations left
+        to the UoW's single flush — SQLAlchemy does not guarantee dirty-object
+        flush order, so an attribute-mutation swap could emit the SET before the
+        CLEAR and spuriously trip the 023 partial unique index within this same
+        transaction. The 023 index still backstops genuine out-of-band writers
+        (23505 → 409).
         """
         target = await self._repo.get_membership_with_person(cmd.clan_id, cmd.person_id)
         if target is None:
@@ -181,9 +186,7 @@ class ClanCommandHandler:
         current = await self._repo.get_founder_membership(cmd.clan_id)
         previous_person_id = current.person_id if current else None
         if current is None or current.person_id != cmd.person_id:
-            if current is not None:
-                current.is_founder = False
-            target.is_founder = True
+            await self._repo.swap_founder(cmd.clan_id, target.id)
 
         agg = AggregateRoot()
         agg.add_event(
