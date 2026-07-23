@@ -145,6 +145,6 @@ stub variant: clients render stubs exactly like any node and simply don't descen
   again under each of ITS multiple parents, and so on), and produces a tree payload
   that no longer represents a tree at all — clients would need their own
   dedup/canonicalization logic to avoid double-counting persons. The
-  `pedigree_collapse_ref` stub (full node once, minimal stub elsewhere) avoids both
+  `pedigree_collapse_ref` stub (subtree once, non-descending stub elsewhere) avoids both
   problems: bounded payload size, and a single canonical location for descent to
   continue from.

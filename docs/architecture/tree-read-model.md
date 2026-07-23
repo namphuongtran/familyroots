@@ -109,7 +109,11 @@ a child), `/tree`, `/tree/subtree` and `/tree/focus` render:
   node — from whether the underlying person has real children in the database —
   so a stub that lands at the descendant-depth boundary alongside its canonical
   mirror can legitimately report `has_more_descendants: true` even though its own
-  `children` array is empty. Don't assume the two fields agree.
+  `children` array is empty. Don't assume the two fields agree. The converse
+  asymmetry also holds: a stub NOT at the boundary reports
+  `has_more_descendants: false` with empty children while its canonical mirror
+  visibly carries them — `pedigree_collapse_ref` is the client's cue that descent
+  happens at the canonical occurrence, never at the stub.
 
 ### `depth` is a path artifact, not the node's nesting level
 
