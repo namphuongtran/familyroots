@@ -39,6 +39,7 @@ import app.core.database  # noqa: F401  (ensures the module is loaded before mon
 from app.application.branch.handlers import BranchCommandHandler
 from app.application.document.handlers import DocumentCommandHandler
 from app.application.event.handlers import EventCommandHandler, EventQueryHandler
+from app.application.person.claim_handlers import ClaimCommandHandler
 from app.application.relationship.commands import CreateMarriage, CreateParentChild
 from app.application.relationship.handlers import (
     MarriageCommandHandler,
@@ -50,6 +51,7 @@ from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
+from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
 from app.infrastructure.persistence.relationship_repository import (
@@ -551,6 +553,63 @@ async def test_get_birth_dates_excludes_deleted(async_session: AsyncSession) -> 
     assert deleted not in dates, "M3: get_birth_dates returns a soft-deleted person's birth_date"
 
 
+# ── Identity claim resolution (SIXTH hole — claim_repository.get_person) ─
+
+
+async def test_claim_creation_blocked_for_soft_deleted_person(
+    async_session: AsyncSession,
+) -> None:
+    """M3 sixth write hole (found in final review, not the original sweep):
+    ``claim_repository.get_person`` — used by ``submit_claim`` and
+    ``prelink_identity`` to resolve the CLAIM TARGET — had no ``is_deleted``
+    filter. A soft-deleted person could still be claimed (or admin-prelinked);
+    once approved, a live user's ``user_profile.person_id`` would bind to an
+    INVISIBLE person.
+
+    Fix: a new ``get_live_person`` (is_deleted-filtered) is used only at the two
+    claim-CREATION sites. ``get_person`` stays unfiltered for ``cancel_claim``'s
+    non-gating audit-metadata lookup and ``unlink_identity``'s resolution of an
+    ALREADY-established link — filtering those could strand a legitimate
+    in-flight operation on a person soft-deleted after the fact, the same
+    E3-cascade rationale this suite already applies to approve/reject.
+    """
+    creator = uuid.uuid4()
+    clan_id = await _clan(async_session)
+    uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
+    handler = ClaimCommandHandler(SqlAlchemyClaimRepository(async_session), uow)
+
+    async def _user(email: str) -> uuid.UUID:
+        uid = uuid.uuid4()
+        await async_session.execute(
+            sa.text("INSERT INTO user_profiles (id, email, display_name) VALUES (:id, :em, 'U')"),
+            {"id": uid, "em": email},
+        )
+        return uid
+
+    # Restore-symmetry control — independent person+user pair (reusing the
+    # blocked pair would hit user_already_has_pending_claim, a false signal
+    # unrelated to this hole, per this file's established pattern).
+    person_ctrl = await _person(async_session, clan_id, creator, "Ctrl")
+    await _member(async_session, person_ctrl, clan_id)
+    user_ctrl = await _user(f"ctrl-{uuid.uuid4().hex[:8]}@example.com")
+    await async_session.commit()
+    await _set_deleted(async_session, person_ctrl, True)
+    await _set_deleted(async_session, person_ctrl, False)  # restored before use
+
+    ctrl = await handler.submit_claim(user_id=user_ctrl, person_id=person_ctrl, requester_note=None)
+    assert ctrl.person_id == person_ctrl
+
+    # Blocked path: soft-deleted person.
+    person = await _person(async_session, clan_id, creator, "Deleted")
+    await _member(async_session, person, clan_id)
+    user = await _user(f"blocked-{uuid.uuid4().hex[:8]}@example.com")
+    await async_session.commit()
+    await _set_deleted(async_session, person, True)
+
+    with pytest.raises(EntityNotFoundError, match="person_not_found"):
+        await handler.submit_claim(user_id=user, person_id=person, requester_note=None)
+
+
 # ── Source-scan class gate ───────────────────────────────────────────────
 
 
@@ -561,6 +620,16 @@ def test_every_person_guard_filters_soft_deleted() -> None:
 
     Deliberately NOT a DB test (no fixtures used) — this is a pure static-source
     check kept here for cohesion with the rest of the M3 suite it future-proofs.
+
+    SCOPE (read before assuming this gate covers a new guard): it only scans
+    persistence-layer classes/methods literally named ``person_in_clan`` or
+    ``persons_in_clan`` (see guard_method_names below). A person-existence guard
+    under any OTHER name — e.g. claim_repository.get_live_person, which resolves
+    the identity-claim target and is not clan-scoped so it was never named that
+    way — is invisible to this scan and was in fact the SIXTH hole (found in
+    final review, not by this gate). Any future differently-named resolver
+    needs its own dedicated pinning test, the way
+    test_claim_live_person_resolver_filters_soft_deleted below pins this one.
     """
     import importlib
     import inspect
@@ -596,4 +665,21 @@ def test_every_person_guard_filters_soft_deleted() -> None:
     assert checked, (
         "gate found zero person(s)_in_clan guards in app.infrastructure.persistence "
         "— the scan itself is broken (module/method discovery regressed)"
+    )
+
+
+def test_claim_live_person_resolver_filters_soft_deleted() -> None:
+    """Dedicated pin for the SIXTH M3 hole: SqlAlchemyClaimRepository.get_live_person
+    isn't named person(s)_in_clan, so test_every_person_guard_filters_soft_deleted's
+    source-scan gate above does not (and by design cannot) see it. Pin it here
+    explicitly so a future refactor can't silently drop its is_deleted filter
+    without a test noticing."""
+    import inspect
+
+    from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
+
+    source = inspect.getsource(SqlAlchemyClaimRepository.get_live_person)
+    assert "is_deleted" in source, (
+        "SqlAlchemyClaimRepository.get_live_person must filter is_deleted — it "
+        "resolves the identity-claim target and must not admit a soft-deleted person"
     )

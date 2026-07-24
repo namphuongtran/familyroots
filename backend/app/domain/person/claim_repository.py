@@ -15,7 +15,19 @@ class ClaimRepository(Protocol):
         ...
 
     async def get_person(self, person_id: uuid.UUID) -> Any | None:
-        """Get the person."""
+        """Get the person, regardless of soft-delete state.
+
+        Used only where the person reference is ALREADY established (cancel_claim's
+        non-gating audit lookup, unlink_identity's resolution of an existing link) —
+        never to admit a NEW claim/prelink. See get_live_person for that."""
+        ...
+
+    async def get_live_person(self, person_id: uuid.UUID) -> Any | None:
+        """Get the person, or None if it doesn't exist OR is soft-deleted.
+
+        Used to resolve the CLAIM TARGET at the two claim-creation sites
+        (submit_claim, prelink_identity): a soft-deleted person must be invisible
+        to a new claim, the same as every other write guard (M3)."""
         ...
 
     async def get_claim(self, claim_id: uuid.UUID, load_person: bool = False) -> Any | None:
