@@ -143,7 +143,7 @@ erDiagram
         date divorce_date
         varchar marriage_place
         varchar status "married | divorced | widowed | separated"
-        smallint spouse_order "1st wife, 2nd wife... (from person1)"
+        smallint spouse_order "vợ cả/hai/ba; unique per person two-sided (ADR-029)"
         text notes
         uuid created_by
         uuid updated_by
@@ -559,18 +559,31 @@ Global edge linking parent to child. Supports biological, adopted, step, foster.
 > trùng chỉ áp dụng bên trong một clan. Đây là nền của cơ chế clan-scoped edges
 > (mỗi cây chỉ đọc cạnh do clan mình tạo).
 
-> **💡 Note (VN) - `spouse_order` uniqueness per person1 (migration `015_data_integrity`):**
+> **💡 Note (VN) - `spouse_order` uniqueness là two-sided per-person, index vẫn
+> person1-keyed (migration `015_data_integrity`; app-layer widened, ADR-029,
+> không migration mới):**
 > Partial unique index `uq_marriages_spouse_order (created_by_clan_id, person1_id,
 > spouse_order) WHERE spouse_order IS NOT NULL AND is_deleted = false AND status <>
-> 'divorced'` đảm bảo thứ tự vợ cả/vợ hai/vợ ba của **cùng một `person1`** không bao
-> giờ trùng nhau trong số các cuộc hôn nhân đang active — active nghĩa là **bất kỳ
-> status nào khác `divorced`** (married, widowed/góa, separated/ly thân đều tính),
-> khớp với định nghĩa active của `has_active_marriage`; chỉ ly dị/xóa mềm thì không
-> tính. Validator (`check_spouse_order`) chặn trước ở tầng domain (409
-> `relationship.duplicate_spouse_order`); index này là lớp chặn cuối cho race
-> condition (raw SQL bypass → `23505` → 409). Migration có bước pre-check: nếu dữ
-> liệu hiện có đã vi phạm, migration **fail rõ ràng** và liệt kê các dòng vi phạm —
-> không tự động renumber lịch sử.
+> 'divorced'` vẫn chỉ key trên `person1_id` — không đổi từ migration 015. Nhưng
+> `person1_id`/`person2_id` là cặp **không thứ tự** (person nào cũng có thể nằm ở
+> cột nào), nên validator tầng domain (`check_spouse_order` /
+> `has_spouse_order_conflict`) đã **mở rộng hai chiều (ADR-029)**: kiểm tra CẢ
+> `person1_id` lẫn `person2_id` của cả hai người tham gia, đảm bảo **không một
+> người nào** (dù nằm ở cột nào) có hai cuộc hôn nhân active cùng `spouse_order`.
+> Trước ADR-029, ghi đa thê theo chiều `(vợ hai, chồng)` thay vì `(chồng, vợ hai)`
+> lọt qua check vì tra chỉ đúng cột `person1_id`. Active nghĩa là **bất kỳ status
+> nào khác `divorced`** (married, widowed/góa, separated/ly thân đều tính), khớp
+> với định nghĩa active của `has_active_marriage`; chỉ ly dị/xóa mềm thì không
+> tính. Validator chặn trước ở tầng application (409
+> `relationship.duplicate_spouse_order`); index (vẫn person1-keyed) chỉ là lớp
+> chặn cuối cho race condition **cùng chiều** (raw SQL bypass → `23505` → 409) —
+> một race giữa hai insert **khác chiều** cùng lúc không được index này chặn
+> (residual đã ghi trong ADR-029, hiếm ở tốc độ chỉnh sửa gia phả của người
+> dùng thật). Hệ quả được chấp nhận: một người không thể là vợ/chồng cùng thứ
+> hạng (vd. vợ cả) trong hai cuộc hôn nhân active **đồng thời** — over-reject
+> trường hợp hiếm đa phu (polyandry), chấp nhận theo mô hình đa thê (ADR-029).
+> Migration có bước pre-check: nếu dữ liệu hiện có đã vi phạm, migration **fail
+> rõ ràng** và liệt kê các dòng vi phạm — không tự động renumber lịch sử.
 
 > **💡 Note (VN) - Xóa clan (`ON DELETE RESTRICT`, migration 010):** mọi FK
 > trỏ về `clans.id` (memberships, marriages, parent_child, branches,
