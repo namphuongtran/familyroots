@@ -282,7 +282,8 @@ class SqlAlchemyRelationshipQueryPort:
 
     async def has_spouse_order_conflict(
         self,
-        person1_id: uuid.UUID,
+        person_a: uuid.UUID,
+        person_b: uuid.UUID,
         spouse_order: int,
         clan_id: uuid.UUID,
         exclude_marriage_id: uuid.UUID | None = None,
@@ -290,14 +291,16 @@ class SqlAlchemyRelationshipQueryPort:
         result = await self._session.execute(
             text("""
                 SELECT 1 FROM public.marriages
-                WHERE person1_id = :p1 AND spouse_order = :so
+                WHERE spouse_order = :so
                   AND created_by_clan_id = :clan_id
                   AND status <> 'divorced' AND is_deleted = false
+                  AND (person1_id IN (:a, :b) OR person2_id IN (:a, :b))
                   AND (CAST(:exclude_id AS uuid) IS NULL OR id != :exclude_id)
                 LIMIT 1
             """),
             {
-                "p1": person1_id,
+                "a": person_a,
+                "b": person_b,
                 "so": spouse_order,
                 "clan_id": clan_id,
                 "exclude_id": exclude_marriage_id,

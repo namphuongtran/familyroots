@@ -49,7 +49,8 @@ class RelationshipQueryPort(Protocol):
     ) -> set[uuid.UUID]: ...
     async def has_spouse_order_conflict(
         self,
-        person1_id: uuid.UUID,
+        person_a: uuid.UUID,
+        person_b: uuid.UUID,
         spouse_order: int,
         clan_id: uuid.UUID,
         exclude_marriage_id: uuid.UUID | None = None,
@@ -149,13 +150,17 @@ class RelationshipDomainValidator:
 
     async def check_spouse_order(
         self,
-        person1_id: uuid.UUID,
+        person_a: uuid.UUID,
+        person_b: uuid.UUID,
         spouse_order: int | None,
         clan_id: uuid.UUID,
         *,
         exclude_marriage_id: uuid.UUID | None = None,
     ) -> None:
-        """Active marriages of person1 must have distinct spouse_order (vợ cả/hai/ba).
+        """Active marriages of EITHER spouse must have distinct spouse_order
+        (vợ cả/hai/ba). Two-sided: (person1_id, person2_id) is an unordered
+        pair — either spouse may land in either column — so the conflict
+        check must look at both endpoints, not just person1.
 
         "Active" = non-divorced (status <> 'divorced'): married, widowed, and
         separated marriages all participate in the uniqueness check; only
@@ -165,6 +170,6 @@ class RelationshipDomainValidator:
         if spouse_order is None:
             return
         if await self._q.has_spouse_order_conflict(
-            person1_id, spouse_order, clan_id, exclude_marriage_id
+            person_a, person_b, spouse_order, clan_id, exclude_marriage_id
         ):
             raise ConflictError("relationship.duplicate_spouse_order")

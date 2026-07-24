@@ -168,6 +168,7 @@
   "error.person_not_found": "未找到人物",
   "error.person.death_before_birth": "死亡日期不能早于出生日期",
   "error.rate_limited": "请求过多；请稍后再试",
+  "error.relationship.divorce_before_marriage": "离婚日期不能早于结婚日期。",
   "error.relationship.duplicate_marriage": "该婚姻关系已存在",
   "error.relationship.duplicate_parent_child": "该亲子关系已存在",
   "error.relationship.duplicate_spouse_order": "此人已存在该婚姻顺序。",

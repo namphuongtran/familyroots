@@ -6,6 +6,7 @@ Orchestrate domain entities, repository, validator, and UoW.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Any, cast
 
 from app.application.relationship.commands import (
@@ -19,7 +20,7 @@ from app.application.relationship.commands import (
 from app.domain.relationship.entities import Marriage, ParentChild
 from app.domain.relationship.repository import MarriageRepository, ParentChildRepository
 from app.domain.relationship.validator import RelationshipDomainValidator
-from app.domain.shared.exceptions import EntityNotFoundError
+from app.domain.shared.exceptions import EntityNotFoundError, ValidationError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
@@ -40,7 +41,9 @@ class MarriageCommandHandler:
         await self._validator.ensure_persons_in_clan([cmd.person1_id, cmd.person2_id], cmd.clan_id)
         await self._validator.check_duplicate_marriage(cmd.person1_id, cmd.person2_id, cmd.clan_id)
         if cmd.status != "divorced":
-            await self._validator.check_spouse_order(cmd.person1_id, cmd.spouse_order, cmd.clan_id)
+            await self._validator.check_spouse_order(
+                cmd.person1_id, cmd.person2_id, cmd.spouse_order, cmd.clan_id
+            )
 
         marriage = Marriage.create(
             person1_id=cmd.person1_id,
@@ -85,10 +88,22 @@ class MarriageCommandHandler:
         if new_status != "divorced" and ("spouse_order" in cmd.changes or "status" in cmd.changes):
             await self._validator.check_spouse_order(
                 marriage.person1_id,
+                marriage.person2_id,
                 new_order,
                 cmd.clan_id,
                 exclude_marriage_id=marriage.id,
             )
+
+        # M1: a PATCH must not be able to put the marriage into a
+        # divorce-before-marriage state that CREATE would have rejected. Runs
+        # BEFORE marriage.update()/repo.save() — the DB also refuses this via
+        # the marriages_divorce_after_marriage CHECK constraint, but that
+        # CheckViolation is unmapped and would surface as a raw 500; this
+        # pre-write check raises a clean domain 422 instead.
+        eff_marriage = cast("date | None", cmd.changes.get("marriage_date", marriage.marriage_date))
+        eff_divorce = cast("date | None", cmd.changes.get("divorce_date", marriage.divorce_date))
+        if eff_marriage and eff_divorce and eff_divorce < eff_marriage:
+            raise ValidationError("relationship.divorce_before_marriage")
 
         marriage.update(cmd.changes, cmd.actor, cmd.clan_id)
         await self._repo.save(marriage, expected_version=cmd.expected_version)

@@ -168,6 +168,7 @@
   "error.person_not_found": "Personne introuvable",
   "error.person.death_before_birth": "La date de décès ne peut pas précéder la date de naissance",
   "error.rate_limited": "Trop de requêtes ; veuillez ralentir",
+  "error.relationship.divorce_before_marriage": "La date de divorce ne doit pas être antérieure à la date de mariage.",
   "error.relationship.duplicate_marriage": "Ce mariage existe déjà",
   "error.relationship.duplicate_parent_child": "Cette relation parent-enfant existe déjà",
   "error.relationship.duplicate_spouse_order": "Cet ordre de mariage existe déjà pour cette personne.",
