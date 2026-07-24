@@ -613,6 +613,29 @@ async def test_claim_creation_blocked_for_soft_deleted_person(
 # ── Source-scan class gate ───────────────────────────────────────────────
 
 
+def _source_references_name(source: str, name: str) -> bool:
+    """True iff ``name`` appears in ``source`` as a real Python NAME token —
+    i.e. actual code (an attribute access / identifier), NOT merely inside a
+    comment or a string/docstring. A raw ``name in source`` substring check is
+    defeated by a comment that mentions the name (final review round 2 proved
+    exactly this: a method whose comment said "is_deleted filter" passed a
+    substring gate even with the real .where() predicate deleted). Tokenizing
+    and matching NAME tokens closes that vacuous-pass hole for both the class
+    gate and the dedicated claim pin below."""
+    import io
+    import textwrap
+    import tokenize
+
+    reader = io.StringIO(textwrap.dedent(source)).readline
+    try:
+        for tok in tokenize.generate_tokens(reader):
+            if tok.type == tokenize.NAME and tok.string == name:
+                return True
+    except tokenize.TokenError:  # pragma: no cover - malformed slice guard
+        return False
+    return False
+
+
 def test_every_person_guard_filters_soft_deleted() -> None:
     """Source-scan gate: every person(s)_in_clan guard in the persistence layer
     must reference is_deleted. Catches the M3 class in FUTURE aggregates —
@@ -656,7 +679,7 @@ def test_every_person_guard_filters_soft_deleted() -> None:
                 qualified_name = f"{module_name}.{class_name}.{method_name}"
                 source = inspect.getsource(method)
                 checked.append(qualified_name)
-                assert "is_deleted" in source, (
+                assert _source_references_name(source, "is_deleted"), (
                     f"M3 class gate: {qualified_name} does not filter is_deleted — "
                     "a person(s)_in_clan guard must exclude soft-deleted persons "
                     "from being treated as valid references"
@@ -679,7 +702,7 @@ def test_claim_live_person_resolver_filters_soft_deleted() -> None:
     from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
 
     source = inspect.getsource(SqlAlchemyClaimRepository.get_live_person)
-    assert "is_deleted" in source, (
+    assert _source_references_name(source, "is_deleted"), (
         "SqlAlchemyClaimRepository.get_live_person must filter is_deleted — it "
         "resolves the identity-claim target and must not admit a soft-deleted person"
     )
