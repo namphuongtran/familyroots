@@ -30,6 +30,20 @@ Validation rules (current behavior):
 - prevent duplicate active marriage relationships
 - max biological parent constraints
 - age-gap and cycle checks for parent-child edges
+- **`parent_too_young` is precision-gated (ADR-011; M5, review 2026-07-18):** a
+  biological parent-child edge with a computed age gap <12 years is a hard
+  **422** `relationship.parent_too_young` only when **both** the parent's and
+  child's birth dates have `precision == "exact"`. If either birth date is an
+  estimate (`year`, `month`, `circa`, or `unknown`), the same <12y gap does
+  **not** block the write — the edge is created and the response carries a
+  non-fatal `meta.warning` instead, because an estimated date can't justify a
+  hard block. The **>80y age-gap advisory** (`meta.warning`, never a hard
+  error) and **cycle detection** (`relationship.creates_cycle`, always a hard
+  422) both still run independently of this precision gate — cycle detection
+  in particular is unconditional: it is checked even when the age check only
+  produced a warning (a prior bug where the >80y-warning path skipped cycle
+  detection entirely was fixed as part of M5; see
+  [domain-rules.md](../architecture/domain-rules.md#relationship-rules)).
 - `person1_id`/`person2_id` (marriage) and `parent_id`/`child_id` (parent-child)
   must each resolve to a live (non-soft-deleted) member of the active clan on
   create — a soft-deleted person is rejected the same as a nonexistent one
@@ -66,8 +80,10 @@ Response shapes (see [Response envelope](README.md#response-envelope)):
   (`{"data": {...}}`); `DELETE` endpoints return a message envelope
   (`{"data": {"message": "...", "id": "..."}}`).
 - `POST /parent-child` (201) additionally returns an **optional** `meta.warning`
-  when the link is created despite a non-fatal advisory (e.g. an unusual age
-  gap) — omitted entirely when there's nothing to warn about:
+  when the link is created despite a non-fatal advisory (e.g. an unusually
+  large >80y age gap, or a <12y biological age gap where either birth date is
+  not `precision == "exact"` — see the `parent_too_young` precision gate
+  above) — omitted entirely when there's nothing to warn about:
   ```json
   { "data": { "id": "...", "parent_id": "...", "child_id": "...", "...": "..." },
     "meta": { "warning": "..." } }

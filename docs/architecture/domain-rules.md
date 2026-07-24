@@ -32,7 +32,8 @@ and the `Marriage` / `ParentChild` aggregates (`app/domain/relationship/entities
 | No self-marriage | `person1_id == person2_id` | `self_marriage_not_allowed` | BusinessRuleViolation |
 | No self-parent | `parent_id == child_id` | `self_parent_not_allowed` | BusinessRuleViolation |
 | Max 2 biological parents | child already has ≥2 `biological` parents | `relationship.too_many_biological_parents` | ConflictError |
-| Minimum parent age gap | parent <12 yrs older than child | `relationship.parent_too_young` (detail: `{min_age_gap: 12, actual}`) | BusinessRuleViolation |
+| Minimum parent age gap | biological parent <12 yrs older than child **and both** birth dates have `precision == "exact"` | `relationship.parent_too_young` (detail: `{min_age_gap: 12, actual}`) | BusinessRuleViolation (hard 422) |
+| Minimum parent age gap, non-exact dates | biological parent <12 yrs older than child but **either** birth date has `precision != "exact"` | *(no error — returns `{warning}`)* | warning (non-blocking) |
 | Unusual age gap | parent >80 yrs older than child | *(no error — returns `{warning}`)* | warning |
 | Cycle prevention | new parent is already a descendant of child | `relationship.creates_cycle` | BusinessRuleViolation |
 | No duplicate parent-child | link already exists | `relationship.duplicate_parent_child` | ConflictError |
@@ -41,6 +42,18 @@ and the `Marriage` / `ParentChild` aggregates (`app/domain/relationship/entities
 Age gap is computed as `(child_birth - parent_birth).days / 365.25`; the check is
 skipped when either birth date is missing. Ancestry/cycle and biological-parent
 counts are queried through `RelationshipQueryPort` (kept infrastructure-free).
+
+**Precision governs the age-floor's severity (ADR-011; M5, review 2026-07-18).**
+`get_birth_dates` returns a `BirthDate(value, precision)` per person, and
+`validate_parent_child` only raises the hard `relationship.parent_too_young`
+422 when **both** the parent's and child's birth dates carry
+`precision == "exact"`. If either date is an estimate (`year`, `month`,
+`circa`, or `unknown`), a <12y gap instead produces a non-blocking
+`meta.warning` and the edge is still created — an estimated date is
+display-only (ADR-011) and cannot justify a hard block. This mirrors the
+"kinship age terms only when both exact" rule in the Vietnamese glossary
+below (§ *Lịch âm và ngày tháng*) — same principle, same `precision` field,
+applied to a different rule.
 
 The parent-child validation pipeline (`validate_parent_child`):
 
@@ -51,20 +64,25 @@ flowchart TD
     B -->|"không"| C{"biological & đã có ≥2 cha/mẹ ruột?"}
     C -->|"có"| E2["❌ too_many_biological_parents"]
     C -->|"không"| D{"có đủ ngày sinh 2 người?"}
-    D -->|"không"| G{"tạo vòng lặp huyết thống?"}
-    D -->|"có"| F{"chênh lệch tuổi < 12?"}
-    F -->|"có"| E3["❌ parent_too_young"]
+    D -->|"không"| G
+    D -->|"có"| F{"biological & chênh lệch tuổi < 12?"}
+    F -->|"có"| F2{"cả hai ngày sinh precision == exact?"}
+    F2 -->|"có"| E3["❌ parent_too_young (422)"]
+    F2 -->|"không"| W1["⚠️ warning: chênh lệch tuổi thấp<br/>(dates ước lượng — không chặn)"] --> G
     F -->|"không"| H{"chênh lệch tuổi > 80?"}
-    H -->|"có"| W["⚠️ trả về warning<br/>(bỏ qua cycle check)"]
+    H -->|"có"| W2["⚠️ warning: chênh lệch tuổi bất thường"] --> G
     H -->|"không"| G
+    G{"tạo vòng lặp huyết thống?"}
     G -->|"có"| E4["❌ creates_cycle"]
-    G -->|"không"| OK["✅ hợp lệ"]
+    G -->|"không"| OK["✅ hợp lệ (kèm warning nếu có)"]
 ```
 
-> 🇻🇳 **Lưu ý:** khi chênh lệch tuổi **> 80 năm**, validator trả về cảnh báo
-> (`warning`) và **dừng luôn** — *không* chạy kiểm tra vòng lặp huyết thống. Đây là
-> hành vi hiện tại của code (`validator.py`), cần biết để không hiểu nhầm là đã
-> kiểm tra cycle trong nhánh này.
+> 🇻🇳 **Lưu ý:** kiểm tra vòng lặp huyết thống (cycle, node `G`) **luôn luôn** chạy
+> sau các nhánh tuổi ở trên, bất kể nhánh đó kết thúc bằng cảnh báo (`warning`) hay
+> không — kể cả khi chênh lệch tuổi **> 80 năm**. Trước đây (lỗi đã sửa ở M5, review
+> 2026-07-18) nhánh cảnh báo >80 năm trả về sớm và bỏ qua luôn kiểm tra cycle; hành
+> vi đó đã được vá trong `validator.py` — sơ đồ trên phản ánh code hiện tại, không
+> phải hành vi cũ.
 
 ## Person rules
 
@@ -184,6 +202,19 @@ Events support lunar-calendar dates (`is_lunar_calendar`) and recurrence
 default 7). Anniversary reminders are driven by APScheduler — see `backend/CLAUDE.md`
 (`NOTIFICATION_CRON_HOUR` / `NOTIFICATION_DAYS_BEFORE`).
 
+**Recurring reminders require an exact date (ADR-011; M4, review 2026-07-18).**
+A recurring event (`is_recurring = true`) only feeds the anniversary scheduler
+and `GET /events/upcoming` when `event_date_precision == 'exact'` — enforced
+identically in both the solar and lunar branches of `scheduler.py` and in
+`event_repository.py::get_upcoming`'s CTE. A recurring event recorded with an
+estimated precision (`year`, `month`, `circa`, or `unknown`) is **recorded**
+and still shows up on `GET /events` list/detail/timeline reads, but is never
+notified and never appears in `/events/upcoming` — a placeholder date (e.g.
+"khoảng 1950") cannot anchor a real yearly anniversary. One-off events
+(`is_recurring = false`) are unaffected by precision: they appear in
+`/upcoming` whenever their `event_date` falls in the requested window,
+regardless of precision.
+
 ## Clan membership rules
 
 `app/domain/clan/` (administration over the ORM `Clan` / `UserClanRole`):
@@ -247,10 +278,20 @@ rành gia phả lẫn lập trình viên hiểu đúng. Tên trường lấy t�
   ngày giỗ âm lịch kế tiếp (quy đổi sang dương lịch qua thuật toán Hồ Ngọc Đức, UTC+7,
   `app/services/lunar_calendar.py`) để phục vụ scheduler nhắc nhở và `/events/upcoming`
   — phạm vi tính toán chỉ là ngày lặp lại (recurrence), không sinh ra chuỗi hiển thị
-  `HistoricalDate.lunar` ở trên.
+  `HistoricalDate.lunar` ở trên. **Điều kiện tiên quyết:** nhắc nhở định kỳ (giỗ/sinh
+  nhật lặp lại) chỉ kích hoạt khi `event_date_precision == 'exact'` (ADR-011; M4,
+  review 2026-07-18) — sự kiện lặp lại với ngày ước lượng vẫn được lưu và hiển thị
+  trên danh sách/timeline nhưng **không** được thông báo và **không** xuất hiện
+  trong `/events/upcoming`; sự kiện không lặp lại (`is_recurring=false`) không bị
+  ảnh hưởng bởi precision.
 - **Kinship theo tuổi**: các từ xưng hô phụ thuộc tuổi (bác/chú, cậu/dì…) chỉ được
   suy ra khi **cả hai** ngày sinh có `precision == "exact"` — không khẳng định vai
   vế dựa trên ngày ước lượng (`relationship_descriptor`).
+- **Ngưỡng tuổi cha/mẹ ruột** (`parent_too_young`, chênh lệch tối thiểu 12 năm):
+  cùng nguyên tắc như trên — chỉ chặn cứng (422) khi **cả hai** ngày sinh có
+  `precision == "exact"`; nếu không, hệ thống vẫn tạo quan hệ nhưng trả về
+  `meta.warning` (không chặn) — ngày ước lượng không đủ cơ sở để khẳng định hay
+  chặn cứng (ADR-011; M5, review 2026-07-18).
 
 ### Loại sự kiện (`event_type`)
 | Mã | Tiếng Việt |

@@ -50,16 +50,25 @@ pattern.
 ## The anniversary flow — two sources, merged in Python
 
 The job pulls events from **two sources** and feeds both through the same
-per-event loop (see [ADR-018](../decisions/018-vietnamese-lunar-calendar.md)):
+per-event loop (see [ADR-018](../decisions/018-vietnamese-lunar-calendar.md)).
+**Both source queries require `event_date_precision = 'exact'`** (ADR-011; M4,
+review 2026-07-18): a recurring event recorded with an estimated date is
+recorded and still visible elsewhere (list/detail/timeline, and
+`GET /events/upcoming` filters it out too — see
+[rest-events-api.md](../contracts/rest-events-api.md)), but never reaches this
+job — a placeholder date cannot anchor a real yearly anniversary. One-off
+(`is_recurring = false`) events have no notification path at all, independent
+of precision.
 
 1. **Solar SQL query**: recurring solar events (`is_recurring = true AND
-   is_lunar_calendar = false`, linked person not soft-deleted). Each row already
-   carries a precomputed `next_occurrence` (this year or next), calculated in SQL
-   via `next_anniversary_sql` — cheap date arithmetic that cannot raise.
+   is_lunar_calendar = false AND event_date_precision = 'exact'`, linked person
+   not soft-deleted). Each row already carries a precomputed `next_occurrence`
+   (this year or next), calculated in SQL via `next_anniversary_sql` — cheap
+   date arithmetic that cannot raise.
 2. **Lunar raw-row query**: recurring lunar events (`is_recurring = true AND
-   is_lunar_calendar = true`, same person join). This query selects only
-   `event_date` — no `next_occurrence` in SQL, because a lunar anniversary cannot
-   be expressed as solar date arithmetic.
+   is_lunar_calendar = true AND event_date_precision = 'exact'`, same person
+   join). This query selects only `event_date` — no `next_occurrence` in SQL,
+   because a lunar anniversary cannot be expressed as solar date arithmetic.
 3. The two row sets are concatenated (`[*events, *lunar_events]`) into one loop.
    For each event:
    - If the row already has `next_occurrence` (a solar row), use it directly.
