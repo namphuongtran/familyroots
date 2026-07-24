@@ -333,5 +333,8 @@ def test_pool_settings_are_env_tunable() -> None:
     )
     engine = make_engine(settings)
 
-    assert engine.pool.size() == 7
-    assert engine.pool._max_overflow == 3
+    # White-box probe of the (Async)QueuePool: `.size()` is QueuePool-specific and
+    # `_max_overflow` is private — neither is on the base `Pool` type mypy infers for
+    # `engine.pool`, so ignore attr-defined here rather than weaken the assertion.
+    assert engine.pool.size() == 7  # type: ignore[attr-defined]
+    assert engine.pool._max_overflow == 3  # type: ignore[attr-defined]
