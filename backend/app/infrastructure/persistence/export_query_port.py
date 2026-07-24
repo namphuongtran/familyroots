@@ -98,3 +98,9 @@ class SqlAlchemyExportQueryPort(ExportQueryPort):
         expect."""
         doi_map = await compute_generation_map(self._session, clan_id)
         return {person_id: entry.generation for person_id, entry in doi_map.items()}
+
+    async def release(self) -> None:
+        """End the read transaction (ADR-028): a read-only session, so a
+        rollback cleanly releases the pooled connection back to the pool
+        before the caller starts a multi-round-trip external call (presign)."""
+        await self._session.rollback()

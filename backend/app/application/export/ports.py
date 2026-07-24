@@ -58,3 +58,9 @@ class ExportQueryPort(Protocol):
         (`clan_memberships.is_founder = true`); the first founder processed
         wins for any person reachable from more than one founder."""
         ...
+
+    async def release(self) -> None:
+        """End the read transaction, returning the pooled connection (ADR-028)
+        — called after all reads, before presigning, so N presign round-trips
+        hold no connection."""
+        ...
