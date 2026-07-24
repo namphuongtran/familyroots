@@ -75,13 +75,29 @@ export function treeToReactFlow(root: TreeNode): { nodes: Node[]; edges: Edge[] 
     y: number,
     parentId?: string,
   ) {
-    if (visited.has(node.id)) return
-    visited.add(node.id)
+    // A pedigree-collapse stub (H4) mirrors a person who also appears as a FULL
+    // node elsewhere in this same payload — the same person id, twice. Stubs
+    // must never gate `visited`: if a stub is reached before its canonical full
+    // node (e.g. sibling ordering puts the stub's branch first), gating on the
+    // bare id would make the later full node look "already visited" and drop
+    // its entire subtree. Only full nodes enter `visited`; a stub encountered
+    // after its full node still renders (as a leaf).
+    const isStub = node.pedigree_collapse_ref === true
+    if (!isStub) {
+      if (visited.has(node.id)) return
+      visited.add(node.id)
+    }
 
     const nodeX = centreX - NODE_WIDTH / 2
+    // React Flow requires unique node ids. Since a stub carries the same person
+    // id as its canonical node, key the stub's React Flow id by id+parent so it
+    // never collides with the canonical node (or with another stub of the same
+    // person under a different parent). `data.member.id` keeps the real person
+    // id untouched for anything reading it back out of node data.
+    const flowId = isStub ? `${node.id}::stub::${parentId ?? 'root'}` : node.id
 
     nodes.push({
-      id: node.id,
+      id: flowId,
       type: 'memberNode',
       position: { x: nodeX, y },
       data: {
@@ -95,13 +111,18 @@ export function treeToReactFlow(root: TreeNode): { nodes: Node[]; edges: Edge[] 
     // Parent → child edge
     if (parentId) {
       edges.push({
-        id: `${parentId}->${node.id}`,
+        id: `${parentId}->${flowId}`,
         source: parentId,
-        target: node.id,
+        target: flowId,
         type: 'smoothstep',
         style: { stroke: '#8B6914', strokeWidth: 1.5 },
       })
     }
+
+    // A stub renders as a leaf — the backend never populates its spouses or
+    // children (tree_builder forces both empty), so there is nothing to recurse
+    // into.
+    if (isStub) return
 
     // Spouse nodes + spouse edges
     node.spouses.forEach((spouse, i) => {

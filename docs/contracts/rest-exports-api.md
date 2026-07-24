@@ -114,9 +114,15 @@ Rules:
   membership fields (`role`, `stored_generation`, `is_founder`, `branch_id`,
   `membership_id`, `joined_at`, `created_at`, `updated_at`) never appear on the
   `persons` entries; they live only in `clan_memberships`, keyed by `person_id`.
-- **`generation`** on each person is graph-computed via the same base-generation
-  logic the tree endpoints use (not `clan_memberships.stored_generation`, which
-  is deprecated as a display source — see [ADR-012](../decisions/012-computed-generation-mother-attribution.md)).
+- **`generation`** on each person is graph-computed via the same single đời
+  authority the tree endpoints use (`compute_generation_map` — con theo đời cha:
+  đời(X) = đời(canonical parent) + 1, never `clan_memberships.stored_generation`,
+  which is deprecated as a display source — see
+  [ADR-012](../decisions/012-computed-generation-mother-attribution.md) and
+  [ADR-027](../decisions/027-doi-single-authority.md)). This guarantees the export's
+  đời for a given person matches `/tree`, `/tree/subtree`, `/tree/ancestors` and
+  `/tree/focus` for the same clan, including for pedigree-collapsed persons (ADR-027
+  closes H4, where the export previously disagreed with `/tree` on such persons).
   Founder resolution uses the same deterministic `find_clan_founder` ordering
   (`joined_at` ascending, `person_id` tiebreak) as the tree endpoints — see
   [ADR-026](../decisions/026-single-founder-designation.md). Since migration

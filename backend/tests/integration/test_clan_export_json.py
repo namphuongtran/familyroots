@@ -513,17 +513,16 @@ async def test_generation_map_deterministic_with_single_founder(
 
     Multi-founder states are structurally impossible since migration 023
     (ADR-026): `uq_clan_memberships_one_founder` is an immediate partial
-    unique index enforcing at most one `is_founder = true` row per clan. The
-    export's ordered multi-founder walk (`ORDER BY joined_at, person_id` over
-    `is_founder = true` rows, first founder processed wins a shared
-    descendant) is retained in `SqlAlchemyExportQueryPort.generation_map` as
-    tolerance for pre-023 archives/robustness, but that scenario can no
-    longer be exercised against a live schema — a raw-SQL seed of a second
-    `is_founder = true` row now itself raises `IntegrityError` on the unique
-    index (sabotage-verified in Task 2). This test pins the single-founder
-    behavior instead: the founder's own generation anchors at 1 (thủy tổ),
-    and each descendant's generation is `depth + 1` along the founder's walk,
-    reproducibly across independent computations of the same live schema.
+    unique index enforcing at most one `is_founder = true` row per clan —
+    a raw-SQL seed of a second `is_founder = true` row itself raises
+    `IntegrityError` (sabotage-verified). The export's old ordered
+    multi-founder walk was therefore RETIRED entirely when `generation_map`
+    became a consumer of the shared đời authority
+    (`compute_generation_map`, ADR-027 con theo đời cha). This test pins the
+    single-founder behavior: the founder anchors at đời 1 (thủy tổ), each
+    descendant follows the canonical-parent rule (equal to path depth + 1 in
+    this linear one-parent chain), reproducibly across independent
+    computations of the same live schema.
 
     founder -> mid -> shared_descendant (depth 1, depth 2).
     """

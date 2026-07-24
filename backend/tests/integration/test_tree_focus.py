@@ -153,7 +153,7 @@ async def _branch(s: AsyncSession, clan_id: uuid.UUID, name: str, order: int) ->
 async def test_build_focus_view_enriches_generation_branch_sort_hasmore(
     async_session: AsyncSession,
 ) -> None:
-    from app.services.tree_builder import build_focus_view
+    from app.services.tree_builder import DoiEntry, build_focus_view
 
     creator = uuid.uuid4()
     clan_id = await _clan(async_session)
@@ -175,9 +175,18 @@ async def test_build_focus_view_enriches_generation_branch_sort_hasmore(
     await _pc(async_session, grand, ggrand, clan_id, creator)  # depth 2 → cut when descendants=2
     await async_session.commit()
 
-    tree = await build_focus_view(
-        async_session, root, clan_id, descendant_depth=2, base_generation=3
-    )
+    # This test exercises build_focus_view's enrichment logic (branch/birth_order
+    # sort/has_more) in isolation from compute_generation_map, so the đời authority's
+    # map is hand-built here with the same absolute-per-person shape the real map
+    # would produce (root=3, its children=4, grandchild=5) — replacing the old
+    # base_generation int + depth arithmetic this function no longer does.
+    doi_map = {
+        root: DoiEntry(3, None),
+        son_a: DoiEntry(4, root),
+        son_b: DoiEntry(4, root),
+        grand: DoiEntry(5, son_a),
+    }
+    tree = await build_focus_view(async_session, root, clan_id, descendant_depth=2, doi_map=doi_map)
 
     assert tree["generation"] == 3  # focus stamped with base
     # children sorted by birth_order → An (1) before Bình (2), not alphabetical/birth_date
@@ -387,27 +396,47 @@ async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     """The SAME ancestor reachable at two different depths — once as a direct parent
     (depth 1) and once as a grandparent via a different lineage (depth 2) — must be
     deduped to exactly one breadcrumb entry, and that entry must be the SHALLOWEST
-    occurrence (its computed đời reflects depth 1, not depth 2). This distinguishes
-    "keep shallowest" from a dedup that merely keeps "any" occurrence."""
+    occurrence. This distinguishes "keep shallowest" from a dedup that merely keeps
+    "any" occurrence.
+
+    Post-A4 (ADR-027), đời is graph-absolute per person (compute_generation_map), so
+    the old ``x_entry["generation"] == base_generation - 1`` proxy can no longer
+    distinguish "kept depth 1" from "kept depth 2". The BLACK-BOX observable that
+    still discriminates is breadcrumb ORDER: ancestors are sorted by the SURVIVING
+    occurrence's depth (descending), so with X reachable at depths {1, 3} and W fixed
+    at depth 2, "shallowest kept" places W strictly BEFORE X in the breadcrumb, while
+    a dedup that kept the deepest occurrence would place X (depth 3) before W —
+    sabotage-verified: reversing the handler's dedup scan flips this assert."""
     from app.application.tree.queries import GetFocusView
+    from app.infrastructure.persistence.tree_repository import SqlAlchemyTreeRepository
 
     creator = uuid.uuid4()
     clan_id = await _clan(async_session)
     to = await _person(async_session, clan_id, creator, "To")  # thủy tổ, further back
-    x = await _person(async_session, clan_id, creator, "X")  # reachable at depth 1 AND 2
+    x = await _person(async_session, clan_id, creator, "X")  # reachable at depth 1 AND 3
+    w = await _person(async_session, clan_id, creator, "W")  # fixed at depth 2
     y = await _person(async_session, clan_id, creator, "Y")  # focus's other parent
     f = await _person(async_session, clan_id, creator, "F")  # focus person
-    for p in (x, y, f):
+    for p in (x, w, y, f):
         await _member(async_session, p, clan_id)
     await _member(async_session, to, clan_id, is_founder=True)
 
     # to -> x -> f: X is a direct parent of F (depth 1).
-    # x -> y -> f: X is also a grandparent of F via Y (depth 2, a different lineage).
+    # x -> w -> y -> f: X is ALSO F's great-grandparent via W and Y (depth 3),
+    # with W sitting at a fixed depth 2 between the two X occurrences.
     await _pc(async_session, to, x, clan_id, creator)
     await _pc(async_session, x, f, clan_id, creator)
-    await _pc(async_session, x, y, clan_id, creator)
+    await _pc(async_session, x, w, clan_id, creator)
+    await _pc(async_session, w, y, clan_id, creator)
     await _pc(async_session, y, f, clan_id, creator)
     await async_session.commit()
+
+    # Confirm the setup genuinely puts X at depths {1, 3} and W at exactly {2}.
+    raw_chain = await SqlAlchemyTreeRepository(async_session).get_ancestors_flat(f, clan_id, 50)
+    x_depths = {row["depth"] for row in raw_chain if row["id"] == str(x)}
+    assert x_depths == {1, 3}
+    w_depths = {row["depth"] for row in raw_chain if row["id"] == str(w)}
+    assert w_depths == {2}
 
     handler = await _handler(async_session)
     view = await handler.get_focus_view(GetFocusView(person_id=f, clan_id=clan_id))
@@ -415,11 +444,12 @@ async def test_focus_view_dedup_keeps_shallowest_when_reachable_at_two_depths(
     ids = [c["id"] for c in view["ancestors"]]
     assert ids.count(str(x)) == 1  # X must not appear twice
 
-    base_generation = view["generation_of_focus"]
-    assert base_generation is not None
-    x_entry = next(c for c in view["ancestors"] if c["id"] == str(x))
-    # Kept the depth-1 occurrence, not the depth-2 one.
-    assert x_entry["generation"] == base_generation - 1
+    # Breadcrumb order discriminates which occurrence survived: sorted by surviving
+    # depth DESC, shallowest-kept gives X depth 1 → W (depth 2) strictly before X;
+    # deepest-kept would give X depth 3 → X before W.
+    assert ids.index(str(w)) < ids.index(str(x)), (
+        f"X's deep occurrence survived dedup — breadcrumb order {ids} places X before W"
+    )
 
 
 async def test_focus_view_generation_independent_of_breadcrumb_depth(
@@ -553,7 +583,15 @@ async def test_tree_handler_output_matches_response_schemas(
     """Coherence guard: the handler's wire dicts must validate against the
     documentation-only OpenAPI response schemas, so a schema/handler drift fails CI
     instead of shipping a wrong type to codegen. (Focus is omitted — its route
-    already coerces to FocusView at runtime, so coherence is guaranteed there.)"""
+    already coerces to FocusView at runtime, so coherence is guaranteed there.)
+
+    The seeded family includes a pedigree collapse (``child`` descends from GP via
+    BOTH ``dad`` and ``mom``) so the ``pedigree_collapse_ref`` stub node (ADR-027,
+    H4) is exercised too: model_validate alone would NOT catch a schema regression
+    here (pydantic silently drops unknown dict keys by default), so this test reads
+    the field back off the VALIDATED model instead of the raw dict — if
+    ``pedigree_collapse_ref`` were removed from ``TreeNode``, that attribute access
+    would fail instead of silently passing."""
     from app.application.tree.queries import FindPath, GetAncestors, GetFullTree
     from app.schemas.tree import RelationshipPathResponse, TreeNodeDetail, TreeResponse
 
@@ -561,11 +599,14 @@ async def test_tree_handler_output_matches_response_schemas(
     clan_id = await _clan(async_session)
     gp = await _person(async_session, clan_id, creator, "GP")
     dad = await _person(async_session, clan_id, creator, "Dad")
+    mom = await _person(async_session, clan_id, creator, "Mom", gender="female")
     child = await _person(async_session, clan_id, creator, "Child")
-    for person, founder in ((gp, True), (dad, False), (child, False)):
+    for person, founder in ((gp, True), (dad, False), (mom, False), (child, False)):
         await _member(async_session, person, clan_id, is_founder=founder)
     await _pc(async_session, gp, dad, clan_id, creator)
+    await _pc(async_session, gp, mom, clan_id, creator)
     await _pc(async_session, dad, child, clan_id, creator)
+    await _pc(async_session, mom, child, clan_id, creator)  # collapse: child descends via both
     await async_session.commit()
 
     handler = TreeQueryHandler(SqlAlchemyTreeRepository(async_session))
@@ -573,7 +614,17 @@ async def test_tree_handler_output_matches_response_schemas(
     full = await handler.get_full_tree(
         GetFullTree(clan_id=clan_id, root_person_id=gp, max_generations=10)
     )
-    TreeResponse.model_validate(full)  # raises on drift
+    validated_tree = TreeResponse.model_validate(full).tree  # raises on drift
+
+    dad_node = next(c for c in validated_tree.children if c.id == str(dad))
+    mom_node = next(c for c in validated_tree.children if c.id == str(mom))
+    child_under_dad = next(c for c in dad_node.children if c.id == str(child))
+    child_under_mom = next(c for c in mom_node.children if c.id == str(child))
+    # dad wins canonical (male beats female at equal type_rank, con theo đời cha):
+    # the full node renders under dad, a pedigree_collapse_ref stub under mom.
+    assert child_under_dad.pedigree_collapse_ref is False
+    assert child_under_mom.pedigree_collapse_ref is True
+    assert child_under_mom.children == []
 
     ancestors = await handler.get_ancestors(GetAncestors(person_id=child, clan_id=clan_id))
     assert ancestors  # non-empty so the loop actually exercises the schema
