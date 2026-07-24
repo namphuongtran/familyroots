@@ -15,6 +15,7 @@ from app.infrastructure.persistence.branch_mapper import apply_to_orm, to_domain
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.branch import Branch as BranchModel
 from app.models.clan_membership import ClanMembership
+from app.models.person import Person as PersonModel
 
 
 class SqlAlchemyBranchRepository:
@@ -32,10 +33,15 @@ class SqlAlchemyBranchRepository:
         return to_domain(model) if model else None
 
     async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        """A soft-deleted person is invisible here, matching the read paths
+        (M3, review 2026-07-18)."""
         result = await self._session.execute(
-            select(ClanMembership.person_id).where(
+            select(ClanMembership.person_id)
+            .join(PersonModel, PersonModel.id == ClanMembership.person_id)
+            .where(
                 ClanMembership.person_id == person_id,
                 ClanMembership.clan_id == clan_id,
+                PersonModel.is_deleted.is_(False),
             )
         )
         return result.first() is not None

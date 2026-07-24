@@ -43,8 +43,9 @@ class ClaimCommandHandler:
         if await self._repo.has_pending_claims(user_id):
             raise ConflictError("user_already_has_pending_claim")
 
-        # Val 4: Person must exist
-        person = await self._repo.get_person(person_id)
+        # Val 4: Person must exist and must not be soft-deleted (M3: a soft-deleted
+        # person is invisible to every write guard, including a NEW identity claim).
+        person = await self._repo.get_live_person(person_id)
         if not person:
             raise EntityNotFoundError("person_not_found")
 
@@ -284,7 +285,9 @@ class ClaimCommandHandler:
         if user.person_id:
             raise ConflictError("user_already_linked_to_person")
 
-        person = await self._repo.get_person(person_id)
+        # Person must exist and must not be soft-deleted (M3: a new admin pre-link
+        # is a NEW identity claim, same rule as submit_claim above).
+        person = await self._repo.get_live_person(person_id)
         if not person:
             raise EntityNotFoundError("person_not_found")
         if person.created_by_clan_id != clan_id:

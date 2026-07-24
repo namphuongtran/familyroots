@@ -21,6 +21,7 @@ from app.infrastructure.persistence.sql_dates import next_anniversary_sql
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
+from app.models.person import Person as PersonModel
 from app.schemas.historical_date import to_historical_date
 from app.services.lunar_calendar import next_lunar_anniversary
 
@@ -45,10 +46,15 @@ class SqlAlchemyEventRepository:
         return to_domain(model) if model else None
 
     async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        """A soft-deleted person is invisible here, matching the read paths
+        (M3, review 2026-07-18)."""
         result = await self._session.execute(
-            select(ClanMembership.person_id).where(
+            select(ClanMembership.person_id)
+            .join(PersonModel, PersonModel.id == ClanMembership.person_id)
+            .where(
                 ClanMembership.person_id == person_id,
                 ClanMembership.clan_id == clan_id,
+                PersonModel.is_deleted.is_(False),
             )
         )
         return result.first() is not None
@@ -84,7 +90,11 @@ class SqlAlchemyEventRepository:
         end_date: date,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        """Upcoming events with recurring logic — optimized CTE."""
+        """Upcoming events with recurring logic — optimized CTE.
+
+        Mirrors scheduler.py's filter — /upcoming shows exactly what will be
+        notified: a soft-deleted person's events are invisible here too
+        (M3, review 2026-07-18)."""
         this_year = next_anniversary_sql("EXTRACT(YEAR FROM :today)", "e.event_date")
         next_year = next_anniversary_sql("EXTRACT(YEAR FROM :today) + 1", "e.event_date")
         result = await self._session.execute(
@@ -110,6 +120,7 @@ class SqlAlchemyEventRepository:
                         AND e.is_deleted = false
                         AND (e.is_recurring = true OR e.event_date >= :today)
                         AND NOT (e.is_recurring = true AND e.is_lunar_calendar = true)
+                        AND (e.person_id IS NULL OR p.is_deleted = false)
                 )
                 SELECT * FROM next_dates
                 WHERE next_occurrence BETWEEN :today AND :end_date
@@ -137,6 +148,7 @@ class SqlAlchemyEventRepository:
                   AND e.is_deleted = false
                   AND e.is_recurring = true
                   AND e.is_lunar_calendar = true
+                  AND (e.person_id IS NULL OR p.is_deleted = false)
             """),
             {"clan_id": clan_id},
         )

@@ -355,9 +355,14 @@ class SqlAlchemyRelationshipQueryPort:
         return result.first() is not None
 
     async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, date | None]:
+        """A soft-deleted person is invisible here, matching the read paths
+        (M3, review 2026-07-18)."""
         if not person_ids:
             return {}
-        stmt = select(PersonModel.id, PersonModel.birth_date).where(PersonModel.id.in_(person_ids))
+        stmt = select(PersonModel.id, PersonModel.birth_date).where(
+            PersonModel.id.in_(person_ids),
+            PersonModel.is_deleted.is_(False),
+        )
         result = await self._session.execute(stmt)
         return {row.id: row.birth_date for row in result}
 
@@ -367,13 +372,19 @@ class SqlAlchemyRelationshipQueryPort:
         """Subset of person_ids that are members of clan_id (clan_memberships).
 
         Mirrors the read-path definition of "person in clan" used by
-        PersonRepository.get_in_clan.
+        PersonRepository.get_in_clan. A soft-deleted person is invisible here,
+        matching the read paths (M3, review 2026-07-18).
         """
         if not person_ids:
             return set()
-        stmt = select(ClanMembership.person_id).where(
-            ClanMembership.person_id.in_(person_ids),
-            ClanMembership.clan_id == clan_id,
+        stmt = (
+            select(ClanMembership.person_id)
+            .join(PersonModel, PersonModel.id == ClanMembership.person_id)
+            .where(
+                ClanMembership.person_id.in_(person_ids),
+                ClanMembership.clan_id == clan_id,
+                PersonModel.is_deleted.is_(False),
+            )
         )
         result = await self._session.execute(stmt)
         return set(result.scalars().all())

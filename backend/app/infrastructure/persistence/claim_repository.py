@@ -31,6 +31,19 @@ class SqlAlchemyClaimRepository(ClaimRepository):
     async def get_person(self, person_id: uuid.UUID) -> Person | None:
         return await self._session.get(Person, person_id)
 
+    async def get_live_person(self, person_id: uuid.UUID) -> Person | None:
+        # NOTE for the M3 class gate (test_every_person_guard_filters_soft_deleted in
+        # tests/integration/test_soft_delete_consistency.py): that gate source-scans
+        # methods literally named `person_in_clan`/`persons_in_clan`. This resolver is
+        # named differently (it isn't clan-scoped) so the gate does NOT see it — its
+        # own is_deleted filter is pinned by a dedicated test in the same file
+        # (test_claim_live_person_resolver_filters_soft_deleted). Any future
+        # differently-named person-existence guard needs its own explicit pin too.
+        result = await self._session.execute(
+            select(Person).where(Person.id == person_id, Person.is_deleted.is_(False))
+        )
+        return result.scalar_one_or_none()
+
     async def get_claim(self, claim_id: uuid.UUID, load_person: bool = False) -> ClaimModel | None:
         options = [selectinload(ClaimModel.person)] if load_person else []
         return await self._session.get(ClaimModel, claim_id, options=options)

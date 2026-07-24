@@ -41,7 +41,13 @@ List response envelope (cursor pagination):
 }
 ```
 - `GET /upcoming` returns a plain list (not paginated).
-- `person_id` on create is validated to belong to the active clan; it is create-only.
+- `person_id` on create is validated to belong to the active clan (a soft-deleted
+  person is rejected as `person_not_found`, same as nonexistent — M3, review
+  2026-07-18); it is create-only.
+- `GET /upcoming` also excludes an event whose linked `person_id` is currently
+  soft-deleted (person-less clan-ceremony events are unaffected), matching the
+  anniversary scheduler's own exclusion — the two no longer disagree on which
+  events are due (M3, review 2026-07-18).
 
 Behavior:
 - Represents historical and reminder-style family events.

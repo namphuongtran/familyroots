@@ -30,6 +30,12 @@ Validation rules (current behavior):
 - prevent duplicate active marriage relationships
 - max biological parent constraints
 - age-gap and cycle checks for parent-child edges
+- `person1_id`/`person2_id` (marriage) and `parent_id`/`child_id` (parent-child)
+  must each resolve to a live (non-soft-deleted) member of the active clan on
+  create — a soft-deleted person is rejected the same as a nonexistent one
+  (404 `person_not_found`; M3, review 2026-07-18). These fields are immutable
+  on `PATCH` (not in either edge's updatable-fields set), so the guard only
+  needs to run at create time.
 - `spouse_order` uniqueness per `person1` among their active (`status <> divorced` —
   married, widowed, or separated) marriages (`relationship.duplicate_spouse_order`,
   409) — checked on create, and on update when `spouse_order` is set or the
