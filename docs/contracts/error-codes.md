@@ -177,7 +177,7 @@ See also **Optimistic concurrency** above: `PATCH /persons/{id}` requires
 | `self_marriage_not_allowed` | 422 | Marriage where both spouses are the same person | — | Form validation |
 | `self_parent_not_allowed` | 422 | Parent-child edge where parent == child | — | Form validation |
 | `relationship.too_many_biological_parents` | 409 | Child already has 2 biological parents in this clan (checked on create, and on a PATCH that changes `relationship_type` to `biological`, excluding the edge being updated) | — | Explain limit |
-| `relationship.parent_too_young` | 422 | Biological parent < ~12 years older than child (checked on create and on a `relationship_type` PATCH) | `min_age_gap`, `actual` | Show age-gap message |
+| `relationship.parent_too_young` | 422 | Biological parent < ~12 years older than child, **and both** birth dates have `precision == "exact"` (checked on create and on a `relationship_type` PATCH). If either birth date is an estimate (`year`/`month`/`circa`/`unknown`), the same age gap does **not** raise this code — the edge is created with a `meta.warning` instead (ADR-011; M5, review 2026-07-18) | `min_age_gap`, `actual` | Show age-gap message |
 | `relationship.creates_cycle` | 422 | Edge would make a person their own ancestor (unbounded ancestor walk, no depth cap) | — | Explain cycle |
 | `relationship.duplicate_parent_child` | 409 | Identical parent-child edge already exists in this clan | — | Refresh |
 | `relationship.duplicate_marriage` | 409 | Active marriage between the two persons already exists in this clan (checked on create, and on a PATCH that flips `status` from `divorced` to any non-divorced status, excluding the marriage being updated) | — | Refresh |

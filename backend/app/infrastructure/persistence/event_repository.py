@@ -120,6 +120,7 @@ class SqlAlchemyEventRepository:
                         AND e.is_deleted = false
                         AND (e.is_recurring = true OR e.event_date >= :today)
                         AND NOT (e.is_recurring = true AND e.is_lunar_calendar = true)
+                        AND NOT (e.is_recurring = true AND e.event_date_precision <> 'exact')
                         AND (e.person_id IS NULL OR p.is_deleted = false)
                 )
                 SELECT * FROM next_dates
@@ -148,6 +149,7 @@ class SqlAlchemyEventRepository:
                   AND e.is_deleted = false
                   AND e.is_recurring = true
                   AND e.is_lunar_calendar = true
+                  AND e.event_date_precision = 'exact'
                   AND (e.person_id IS NULL OR p.is_deleted = false)
             """),
             {"clan_id": clan_id},

@@ -72,9 +72,12 @@ async def _seed_clan_with_feb29_event(
 async def _seed_clan_with_circa_event(
     maker: async_sessionmaker[AsyncSession],
 ) -> uuid.UUID:
-    """A non-recurring event whose recorded date has a non-'exact' precision + display,
-    to prove /events/upcoming's `event_date` carries the real stored precision/display
-    instead of silently defaulting to 'exact' (historical-date review, task 5)."""
+    """A NON-RECURRING future event whose recorded date has a non-'exact' precision +
+    display, to prove /events/upcoming's `event_date` carries the real stored
+    precision/display instead of silently defaulting to 'exact' (historical-date review,
+    task 5). Must be non-recurring: since M4 (2026-07), a non-exact RECURRING event is
+    excluded from /upcoming (no real anniversary to notify); a non-exact ONE-OFF future
+    event still appears, which is what this test needs."""
     clan_id = uuid.uuid4()
     async with maker() as s:
         await s.execute(
@@ -87,9 +90,9 @@ async def _seed_clan_with_circa_event(
                 "event_date_precision, event_date_display, "
                 "is_recurring, notify_days_before, created_by) "
                 "VALUES (:id, :clan, 'custom', 'Circa event', :d, "
-                "'circa', 'khoảng năm 1950', true, 7, :cb)"
+                "'circa', 'khoảng tháng 6/2026', false, 7, :cb)"
             ),
-            {"id": uuid.uuid4(), "clan": clan_id, "d": date(1950, 6, 15), "cb": uuid.uuid4()},
+            {"id": uuid.uuid4(), "clan": clan_id, "d": date(2026, 6, 15), "cb": uuid.uuid4()},
         )
         await s.commit()
     return clan_id
@@ -135,10 +138,11 @@ async def test_get_upcoming_event_date_is_historical_date_object(engine: AsyncEn
     event_date = row["event_date"]
     assert isinstance(event_date, dict), f"event_date must be an object, got {event_date!r}"
     assert event_date == {
-        "date": date(1950, 6, 15),
+        "date": date(2026, 6, 15),
         "precision": "circa",
-        "display": "khoảng năm 1950",
+        "display": "khoảng tháng 6/2026",
         "lunar": None,
     }
     # next_occurrence is the derived recurrence date — remains a scalar ISO string.
+    # For a one-off event it is the event's own date.
     assert row["next_occurrence"] == date(2026, 6, 15).isoformat()

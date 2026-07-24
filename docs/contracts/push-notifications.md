@@ -41,6 +41,11 @@ There is exactly **one** send path in the backend: the daily anniversary cron
 A push is sent for an event when **all** of:
 
 - `events.is_recurring = true`
+- `events.event_date_precision = 'exact'` (ADR-011; M4, review 2026-07-18) — a
+  recurring event recorded with an estimated precision (`year`, `month`,
+  `circa`, or `unknown`) is recorded and still visible on other reads, but is
+  **never** fed into this cron and never notified. This does not apply to
+  one-off (`is_recurring = false`) events, which have no push path at all.
 - days until the next anniversary of `event_date` **equals** `notify_days_before`
   (0–30, default 7). For `events.is_lunar_calendar = false` the anniversary is the
   next solar month/day match; for `events.is_lunar_calendar = true` it is the next

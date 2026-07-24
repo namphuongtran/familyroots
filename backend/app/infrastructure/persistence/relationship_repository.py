@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
 
 from sqlalchemy import select, text
 from sqlalchemy import update as sql_update
@@ -11,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.relationship.entities import Marriage as MarriageEntity
 from app.domain.relationship.entities import ParentChild as ParentChildEntity
+from app.domain.relationship.validator import BirthDate
 from app.domain.shared.exceptions import ConflictError
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
@@ -357,17 +357,26 @@ class SqlAlchemyRelationshipQueryPort:
         )
         return result.first() is not None
 
-    async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, date | None]:
+    async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, BirthDate]:
         """A soft-deleted person is invisible here, matching the read paths
-        (M3, review 2026-07-18)."""
+        (M3, review 2026-07-18).
+
+        Carries ``birth_date_precision`` alongside the value (M5) so the domain
+        validator can tell an 'exact' date from a 'circa'/'year'/'month'/'unknown'
+        estimate before hard-blocking on it."""
         if not person_ids:
             return {}
-        stmt = select(PersonModel.id, PersonModel.birth_date).where(
+        stmt = select(
+            PersonModel.id, PersonModel.birth_date, PersonModel.birth_date_precision
+        ).where(
             PersonModel.id.in_(person_ids),
             PersonModel.is_deleted.is_(False),
         )
         result = await self._session.execute(stmt)
-        return {row.id: row.birth_date for row in result}
+        return {
+            row.id: BirthDate(value=row.birth_date, precision=row.birth_date_precision)
+            for row in result
+        }
 
     async def persons_in_clan(
         self, person_ids: list[uuid.UUID], clan_id: uuid.UUID

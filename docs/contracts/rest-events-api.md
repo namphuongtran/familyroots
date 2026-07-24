@@ -48,6 +48,18 @@ List response envelope (cursor pagination):
   soft-deleted (person-less clan-ceremony events are unaffected), matching the
   anniversary scheduler's own exclusion — the two no longer disagree on which
   events are due (M3, review 2026-07-18).
+- **`GET /upcoming` and push notifications require an exact date for RECURRING
+  events (ADR-011; M4, review 2026-07-18).** A recurring event
+  (`is_recurring = true`, solar or lunar) is only surfaced in `/upcoming` and
+  only fed to the anniversary notification cron when
+  `event_date_precision == 'exact'`. A recurring event recorded with an
+  estimated precision (`year`, `month`, `circa`, or `unknown`) is **not** an
+  error — it is created and remains visible via `GET /` (list/detail) and
+  timeline reads — but it is silently excluded from both `/upcoming` and
+  notifications, because an estimated date cannot anchor a real yearly
+  anniversary. **One-off events (`is_recurring = false`) are unaffected**:
+  they appear in `/upcoming` whenever `event_date` falls within the
+  requested `days` window, regardless of `event_date_precision`.
 
 Behavior:
 - Represents historical and reminder-style family events.
