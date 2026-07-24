@@ -28,6 +28,15 @@ services:
       # trustworthy here (rate-limit buckets + audit client IPs). Boot fails if unset.
       - key: RATE_LIMIT_TRUST_FORWARDED_FOR
         value: "true"
+      # DB connection pool (ADR-028) — not secrets, tunable per instance count.
+      # Defaults shown match make_engine()'s built-in fallback. Before raising
+      # instance count, check docs/ops/configuration.md's headroom formula:
+      # (DB_POOL_SIZE + DB_MAX_OVERFLOW + 2 background-job connections) ×
+      # instances ≤ provider connection ceiling (Supabase small tier ≈ 60).
+      - key: DB_POOL_SIZE
+        value: "10"
+      - key: DB_MAX_OVERFLOW
+        value: "20"
       # ─── Set these in the Render dashboard (sync:false ⇒ never stored in git) ───
       # Enter values on first blueprint apply; Render will not overwrite them.
       #
