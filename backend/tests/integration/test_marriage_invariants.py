@@ -168,12 +168,16 @@ async def test_marriage_create_still_blocks_divorce_before_marriage(
 async def test_marriage_update_blocks_divorce_before_marriage(
     client: AsyncClient, editor_headers: dict[str, str]
 ) -> None:
-    """RED today: PATCH has no date-order re-validation at all —
-    ``MarriageUpdateRequest`` carries no ``validate_marriage``-equivalent
-    check and ``MarriageCommandHandler.update`` never re-derives/validates
-    effective dates, so this PATCH currently succeeds (200) instead of being
-    blocked with the domain ``relationship.divorce_before_marriage`` 422 that
-    CREATE would have raised for the same date pair."""
+    """RED today: PATCH has no date-order re-validation —
+    ``MarriageUpdateRequest`` carries no ``validate_marriage``-equivalent check
+    and ``MarriageCommandHandler.update`` never re-derives/validates effective
+    dates. The data itself is NOT corrupted (a pre-existing DB CHECK
+    ``marriages_divorce_after_marriage``, migration 001, refuses the write) —
+    but that ``CheckViolation`` is unmapped by ``integrity_error_handler``, so
+    today this PATCH surfaces a raw **500 internal_error** instead of the clean
+    domain ``relationship.divorce_before_marriage`` 422. Task 2's pre-write
+    domain check short-circuits before the DB call, turning the 500 into the
+    422 CREATE would have raised for the same date pair."""
     h = await _make_person(client, editor_headers, "Husband M1b", "male")
     w = await _make_person(client, editor_headers, "Wife M1b", "female")
 
@@ -199,10 +203,12 @@ async def test_marriage_update_blocks_divorce_before_marriage(
 async def test_marriage_update_blocks_marriage_after_divorce(
     client: AsyncClient, editor_headers: dict[str, str]
 ) -> None:
-    """RED today: same gap approached from the other side — a marriage already
-    divorced (marriage=1950, divorce=1960) gets its marriage_date PATCHed to
-    1970 (after its own divorce_date). Nothing re-derives/validates the
-    effective date pair on update, so this currently succeeds (200)."""
+    """RED today: same gap from the other side — a marriage already divorced
+    (marriage=1950, divorce=1960) gets its marriage_date PATCHed to 1970 (after
+    its own divorce_date). Nothing re-derives/validates the effective date pair
+    on update; the DB CHECK refuses it but the unmapped CheckViolation surfaces
+    as a raw **500** today (not 200), which Task 2's pre-write domain check
+    turns into a clean 422."""
     h = await _make_person(client, editor_headers, "Husband M1c", "male")
     w = await _make_person(client, editor_headers, "Wife M1c", "female")
 
