@@ -549,3 +549,51 @@ async def test_get_birth_dates_excludes_deleted(async_session: AsyncSession) -> 
 
     assert live in dates  # control: live person's birth date is still returned
     assert deleted not in dates, "M3: get_birth_dates returns a soft-deleted person's birth_date"
+
+
+# ── Source-scan class gate ───────────────────────────────────────────────
+
+
+def test_every_person_guard_filters_soft_deleted() -> None:
+    """Source-scan gate: every person(s)_in_clan guard in the persistence layer
+    must reference is_deleted. Catches the M3 class in FUTURE aggregates —
+    runtime tests above prove today's five; this catches the sixth.
+
+    Deliberately NOT a DB test (no fixtures used) — this is a pure static-source
+    check kept here for cohesion with the rest of the M3 suite it future-proofs.
+    """
+    import importlib
+    import inspect
+    import pkgutil
+
+    import app.infrastructure.persistence as persistence_pkg
+
+    guard_method_names = {"person_in_clan", "persons_in_clan"}
+    checked: list[str] = []
+
+    for module_info in pkgutil.iter_modules(persistence_pkg.__path__):
+        module_name = module_info.name
+        if module_name.startswith("_"):
+            continue
+        module = importlib.import_module(f"{persistence_pkg.__name__}.{module_name}")
+
+        for class_name, cls in inspect.getmembers(module, inspect.isclass):
+            if cls.__module__ != module.__name__:
+                continue  # skip re-exported/imported classes; only this module's own
+
+            for method_name, method in inspect.getmembers(cls, inspect.isfunction):
+                if method_name not in guard_method_names:
+                    continue
+                qualified_name = f"{module_name}.{class_name}.{method_name}"
+                source = inspect.getsource(method)
+                checked.append(qualified_name)
+                assert "is_deleted" in source, (
+                    f"M3 class gate: {qualified_name} does not filter is_deleted — "
+                    "a person(s)_in_clan guard must exclude soft-deleted persons "
+                    "from being treated as valid references"
+                )
+
+    assert checked, (
+        "gate found zero person(s)_in_clan guards in app.infrastructure.persistence "
+        "— the scan itself is broken (module/method discovery regressed)"
+    )

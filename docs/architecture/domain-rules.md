@@ -87,6 +87,19 @@ flowchart TD
 - **Soft delete.** `soft_delete()` sets `is_deleted`, `deleted_at`, `deleted_by` and
   emits `PersonDeleted`; `restore()` clears them and emits `PersonRestored`.
   Records are never physically removed. See [ADR-006](../decisions/006-soft-vs-hard-delete.md).
+- **A soft-deleted person is invisible everywhere, including every write guard
+  (M3, review 2026-07-18).** It's not just reads: marriage, parent-child, event,
+  and document creation all treat a soft-deleted `person_id` reference as
+  `404 person_not_found`, the same as a nonexistent one (these fields are
+  create-only — immutable on `PATCH` — so the guard only needs to run there);
+  branch `founder_person_id` gets the same treatment on **both** create and
+  update, since it's one of the updatable fields. `GET /events/upcoming` was
+  the one consumer that diverged from this (it leaked a soft-deleted person's
+  giỗ) and now matches the anniversary scheduler. Proven in
+  `backend/tests/integration/test_soft_delete_consistency.py`, whose
+  `test_every_person_guard_filters_soft_deleted` source-scans every
+  `person(s)_in_clan` guard in `app/infrastructure/persistence/` as a class
+  gate against a future aggregate reintroducing the hole.
 - **Audited updates.** `update()` records old/new values into the `PersonUpdated`
   event for the audit trail.
 
