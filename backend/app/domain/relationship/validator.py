@@ -8,6 +8,7 @@ delegated to the repository protocol so this validator stays infrastructure-free
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
@@ -16,6 +17,19 @@ from app.domain.shared.exceptions import (
     ConflictError,
     EntityNotFoundError,
 )
+
+
+@dataclass(frozen=True)
+class BirthDate:
+    """A person's birth date plus its recorded precision.
+
+    ``get_birth_dates`` must surface precision alongside the value: an age-gap
+    computed from a 'circa'/'year'/'month'/'unknown' estimate cannot justify a
+    hard business-rule block (ADR-011) the way an 'exact' date can.
+    """
+
+    value: date | None
+    precision: str
 
 
 class RelationshipQueryPort(Protocol):
@@ -41,9 +55,7 @@ class RelationshipQueryPort(Protocol):
     async def is_ancestor(
         self, descendant_id: uuid.UUID, ancestor_id: uuid.UUID, clan_id: uuid.UUID
     ) -> bool: ...
-    async def get_birth_dates(
-        self, person_ids: list[uuid.UUID]
-    ) -> dict[uuid.UUID, date | None]: ...
+    async def get_birth_dates(self, person_ids: list[uuid.UUID]) -> dict[uuid.UUID, BirthDate]: ...
     async def persons_in_clan(
         self, person_ids: list[uuid.UUID], clan_id: uuid.UUID
     ) -> set[uuid.UUID]: ...
@@ -96,10 +108,16 @@ class RelationshipDomainValidator:
             raise BusinessRuleViolation("self_parent_not_allowed")
 
         dates = await self._q.get_birth_dates([parent_id, child_id])
-        parent_bd = dates.get(parent_id)
-        child_bd = dates.get(child_id)
+        parent = dates.get(parent_id)
+        child = dates.get(child_id)
+        parent_bd = parent.value if parent else None
+        child_bd = child.value if child else None
+        both_exact = bool(
+            parent and child and parent.precision == "exact" and child.precision == "exact"
+        )
         age_gap = (child_bd - parent_bd).days / 365.25 if parent_bd and child_bd else None
 
+        warning: str | None = None
         if relationship_type == "biological":
             # Rule: max 2 biological parents. Scoped to the acting clan: edges are
             # owned per-clan (created_by_clan_id), and persons are shared M:N across
@@ -112,21 +130,28 @@ class RelationshipDomainValidator:
             # This is a BIOLOGICAL floor only — an adoptive/step/foster parent may be any
             # age (e.g. an older sibling adopting), so it must not gate those types.
             if age_gap is not None and age_gap < 12:
-                raise BusinessRuleViolation(
-                    "relationship.parent_too_young",
-                    detail={"min_age_gap": 12, "actual": round(age_gap, 1)},
+                if both_exact:
+                    raise BusinessRuleViolation(
+                        "relationship.parent_too_young",
+                        detail={"min_age_gap": 12, "actual": round(age_gap, 1)},
+                    )
+                # non-exact: an estimate can't justify a hard block (ADR-011) — advise only
+                warning = (
+                    f"Parent only {round(age_gap, 1)} years older than child (dates approximate)"
                 )
 
         # Advisory (any relationship type): flag an unusually large age gap.
         if age_gap is not None and age_gap > 80:
-            return {"warning": f"Unusual age gap: {round(age_gap, 1)} years"}
+            warning = f"Unusual age gap: {round(age_gap, 1)} years"
 
         # Rule: cycle detection. Skipped on update — parent_id/child_id are immutable
-        # once created, so a type-only change cannot introduce a new cycle.
+        # once created, so a type-only change cannot introduce a new cycle. Must run
+        # regardless of the age-warning path above (previously the >80 branch
+        # returned early and skipped this check entirely — fixed here).
         if check_cycle and await self._q.is_ancestor(parent_id, child_id, clan_id):
             raise BusinessRuleViolation("relationship.creates_cycle")
 
-        return None
+        return {"warning": warning} if warning else None
 
     async def check_duplicate_parent_child(
         self, parent_id: uuid.UUID, child_id: uuid.UUID, clan_id: uuid.UUID

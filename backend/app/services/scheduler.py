@@ -120,6 +120,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     WHERE e.is_recurring = true
                       AND e.is_deleted = false
                       AND e.is_lunar_calendar = false
+                      AND e.event_date_precision = 'exact'
                       AND (e.person_id IS NULL OR p.is_deleted = false)
                 """),
                 {"today": today},
@@ -142,6 +143,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     WHERE e.is_recurring = true
                       AND e.is_deleted = false
                       AND e.is_lunar_calendar = true
+                      AND e.event_date_precision = 'exact'
                       AND (e.person_id IS NULL OR p.is_deleted = false)
                 """)
             )

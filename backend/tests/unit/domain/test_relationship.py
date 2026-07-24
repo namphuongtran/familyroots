@@ -13,7 +13,7 @@ from app.domain.relationship.events import (
     ParentChildCreated,
     ParentChildDeleted,
 )
-from app.domain.relationship.validator import RelationshipDomainValidator
+from app.domain.relationship.validator import BirthDate, RelationshipDomainValidator
 from app.domain.shared.exceptions import BusinessRuleViolation, ConflictError
 from app.domain.shared.value_objects import ActorInfo
 
@@ -124,7 +124,10 @@ class TestRelationshipDomainValidator:
     async def test_parent_too_young_raises(self) -> None:
         parent_id, child_id = uuid.uuid4(), uuid.uuid4()
         v = self._make_validator(
-            get_birth_dates={parent_id: date(2000, 1, 1), child_id: date(2005, 1, 1)},
+            get_birth_dates={
+                parent_id: BirthDate(date(2000, 1, 1), "exact"),
+                child_id: BirthDate(date(2005, 1, 1), "exact"),
+            },
         )
         with pytest.raises(BusinessRuleViolation, match="parent_too_young"):
             await v.validate_parent_child(parent_id, child_id, "biological", uuid.uuid4())
@@ -136,7 +139,10 @@ class TestRelationshipDomainValidator:
         # same young gap raised parent_too_young for every relationship type.
         parent_id, child_id = uuid.uuid4(), uuid.uuid4()
         v = self._make_validator(
-            get_birth_dates={parent_id: date(2000, 1, 1), child_id: date(2005, 1, 1)},
+            get_birth_dates={
+                parent_id: BirthDate(date(2000, 1, 1), "exact"),
+                child_id: BirthDate(date(2005, 1, 1), "exact"),
+            },
         )
         for rel_type in ("adopted", "step", "foster"):
             assert (
@@ -173,7 +179,10 @@ class TestRelationshipDomainValidator:
     async def test_unusual_age_gap_returns_warning(self) -> None:
         parent_id, child_id = uuid.uuid4(), uuid.uuid4()
         v = self._make_validator(
-            get_birth_dates={parent_id: date(1900, 1, 1), child_id: date(1990, 1, 1)},
+            get_birth_dates={
+                parent_id: BirthDate(date(1900, 1, 1), "exact"),
+                child_id: BirthDate(date(1990, 1, 1), "exact"),
+            },
         )
         result = await v.validate_parent_child(parent_id, child_id, "biological", uuid.uuid4())
         assert result is not None
