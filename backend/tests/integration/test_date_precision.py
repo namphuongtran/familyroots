@@ -384,18 +384,18 @@ async def test_cycle_still_detected_when_age_downgraded_to_warning(
     is attempted as parent-of A: this both reverses an existing edge (would close
     a 2-node cycle) AND produces a negative/<12y age gap on a non-exact date (A's
     birth date is 'circa'). Once Task 2 downgrades that age check to a warning
-    instead of hard-blocking, cycle detection must still run and reject with 409
-    relationship.creates_cycle — proving the warning path does not early-return
+    instead of hard-blocking, cycle detection must still run and reject with
+    `relationship.creates_cycle` — proving the warning path does not early-return
     before the cycle check.
 
-    TODAY-STATE (documented per brief): validate_parent_child runs the hard
-    parent_too_young check BEFORE the cycle check (see
-    app/domain/relationship/validator.py), so today this second POST fails with
-    422 relationship.parent_too_young and never reaches is_ancestor at all — a
-    different failure mode than the 409 relationship.creates_cycle asserted
-    below. This test therefore documents its own RED (422, not 409) rather than
-    "cycle undetected"; it will only pass once Task 2 both downgrades the age
-    check to a warning AND leaves cycle detection intact afterward.
+    Both parent_too_young and creates_cycle are `BusinessRuleViolation` → HTTP
+    **422**; the discriminator that proves the fix is the error CODE, not the
+    status. TODAY-STATE: validate_parent_child runs the hard parent_too_young
+    check BEFORE the cycle check, so today this second POST fails 422
+    `relationship.parent_too_young` and never reaches is_ancestor. Once Task 2
+    downgrades the age check to a warning for the non-exact date AND keeps cycle
+    detection after it, the same 422 carries code `relationship.creates_cycle`
+    instead — which is what this test asserts.
     """
     a = await _make_person(client, editor_headers, "A M5-C", date(1970, 1, 1), precision="circa")
     b = await _make_person(client, editor_headers, "B M5-C", date(2000, 1, 1))
@@ -412,7 +412,10 @@ async def test_cycle_still_detected_when_age_downgraded_to_warning(
         headers=editor_headers,
         json={"parent_id": b, "child_id": a, "relationship_type": "biological"},
     )
-    assert cycle_attempt.status_code == 409  # RED today: observed 422 (see docstring)
+    assert cycle_attempt.status_code == 422, cycle_attempt.text
+    # The CODE is the discriminator: today it's parent_too_young (hard age check
+    # fires first); after the fix it's creates_cycle (age downgraded to a warning,
+    # cycle check still runs).
     assert cycle_attempt.json()["error"]["code"] == "relationship.creates_cycle"
 
 
