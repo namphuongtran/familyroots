@@ -98,6 +98,7 @@ class ExportQueryHandler:
         now = datetime.now(UTC)
         events = await self._port.events(clan_id)
         documents = await self._port.documents(clan_id)
+        await self._port.release()  # ADR-028: no connection held during presign
         documents_manifest = await self._presign_manifest(documents, now)
 
         payload = self._build_clan_export(

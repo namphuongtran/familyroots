@@ -29,6 +29,45 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `PASSWORD_RESET_REDIRECT_URL` | `""` | Recovery-email landing page | Empty → Supabase Site URL fallback |
 | `EMAIL_VERIFY_REDIRECT_URL` | `""` | Signup-confirmation landing page | Empty → Supabase Site URL fallback |
 | `INVITATION_TTL_DAYS` | `7` | Invitation link lifetime | — |
+| `DB_POOL_SIZE` | `10` | Async engine `pool_size` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
+| `DB_MAX_OVERFLOW` | `20` | Async engine `max_overflow` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
+
+## DB connection pool headroom (ADR-028)
+
+`DB_POOL_SIZE` / `DB_MAX_OVERFLOW` are sourced by `make_engine(settings)`
+(`backend/app/core/database.py`) into `create_async_engine(...)` — env-tunable
+so pool sizing can change per environment without a code change. Defaults
+(`10`/`20`) match the values that were previously hardcoded.
+
+Sizing them safely means keeping the platform's **total possible connection
+count** under the database provider's ceiling:
+
+```
+(DB_POOL_SIZE + DB_MAX_OVERFLOW + N_background_jobs) × instances ≤ provider connection ceiling
+```
+
+- `N_background_jobs = 2` — the in-process scheduler's `anniversary_notifications`
+  and `document_purge` jobs (`app/services/scheduler.py`,
+  `app/services/document_purge.py`) each open their **own** dedicated
+  `engine.connect()` outside the pooled sessionmaker (see
+  [notifications-scheduler.md](../architecture/notifications-scheduler.md) — the
+  advisory-lock topology requires a connection dedicated to the job, not one
+  borrowed from a request's session), so they add to the per-instance
+  connection count on top of the pool.
+- `instances` — the number of running app replicas (Render service instance
+  count).
+- Supabase's **small-tier direct-connection ceiling is roughly 60**. With the
+  defaults (`10 + 20 = 30` per instance) and 2 background-job connections, two
+  instances already reach `(30 + 2) × 2 = 64` — over that ceiling. Lower
+  `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`, or point at Supabase's transaction-mode
+  pooler (pgbouncer, see the note in `app/core/database.py` about
+  `prepare_threshold`) for higher effective headroom, before scaling instance
+  count on the small tier.
+- This formula caps the **connection budget**; it does not by itself prevent a
+  connection from being held idle-in-transaction across slow external I/O —
+  that's the separate hygiene rule in [ADR-028](../decisions/028-no-external-io-holding-db-connection.md)
+  (no external network I/O while holding a pooled connection), which is what
+  actually stops uploads/exports from starving the pool regardless of size.
 
 ## Validators (fail-fast at boot)
 
@@ -53,7 +92,9 @@ fresh blueprint apply boots once the dashboard values below are filled.
 **Set directly in the blueprint (committed):**
 `APP_ENV=production`, `APP_DEBUG=false`, `DATABASE_URL` (`fromDatabase`),
 `APP_SECRET_KEY` (`generateValue`), `ALLOWED_HOSTS`, `RATE_LIMIT_TRUST_FORWARDED_FOR=true`
-(Render terminates TLS at a trusted proxy, so `X-Forwarded-For` is trustworthy).
+(Render terminates TLS at a trusted proxy, so `X-Forwarded-For` is trustworthy),
+`DB_POOL_SIZE=10` / `DB_MAX_OVERFLOW=20` (ADR-028 defaults, documented — not
+secrets — tune per the headroom formula above before scaling instance count).
 
 **Declared `sync: false` — you set the value in the Render dashboard, never in git**
 (Render prompts on first apply and won't overwrite):

@@ -80,6 +80,12 @@ class DocumentCommandHandler:
         if person_id and not await self._repo.person_in_clan(person_id, clan_id):
             raise EntityNotFoundError("person_not_found", {"person_id": str(person_id)})
 
+        # ADR-028: end the read transaction so the multi-second Supabase blob
+        # upload below holds NO pooled connection (H5). A None person_id skips
+        # the read above; rollback() is then a no-op. The read has nothing to
+        # persist, so rollback (not commit) is the cheap way to release.
+        await self._uow.rollback()
+
         file_ext = _safe_extension(filename)
         file_id = uuid.uuid4()
         storage_path = f"clans/{clan_id}/documents/{file_id}.{file_ext}"

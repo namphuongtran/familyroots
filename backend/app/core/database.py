@@ -7,23 +7,37 @@ read). DB-level RLS is a planned defense-in-depth addition (SP-3C), not yet acti
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 
 # NOTE: if DATABASE_URL is ever pointed at a transaction-mode connection pooler
 # (e.g. Supabase's pgbouncer on :6543), psycopg v3's automatic server-side
 # prepared statements break with DuplicatePreparedStatement. In that case add
 # connect_args={"prepare_threshold": None}. A direct Postgres (current Render
 # setup) does not need it.
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_recycle=300,
-    pool_pre_ping=True,
-    echo=settings.APP_DEBUG,
-)
+
+
+def make_engine(settings: Settings) -> AsyncEngine:
+    """Build the async engine, sourcing pool size/overflow from Settings
+    (ADR-028/H5) so they are env-tunable. Defaults (10/20) match the
+    previous hardcoded values, so out-of-box behavior is unchanged."""
+    return create_async_engine(
+        settings.DATABASE_URL,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_recycle=300,
+        pool_pre_ping=True,
+        echo=settings.APP_DEBUG,
+    )
+
+
+engine = make_engine(settings)
 
 AsyncSessionLocal = async_sessionmaker(
     engine,

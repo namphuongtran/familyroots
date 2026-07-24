@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     # and row permanently.
     DOCUMENT_RETENTION_DAYS: int = 30
 
+    # DB connection pool (ADR-028/H5): env-tunable so pool sizing can be adjusted
+    # without a code change. Defaults match the previous hardcoded values.
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:
