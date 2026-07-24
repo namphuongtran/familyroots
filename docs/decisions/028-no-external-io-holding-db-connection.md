@@ -95,6 +95,15 @@ needs to write.
 - **Pool headroom is now an operational tuning knob, not a code change.** See
   `docs/ops/configuration.md` for the headroom formula and Supabase small-tier
   ceiling.
+- **Known remaining instance (not closed by this ADR):** `GET /documents/{id}`
+  (`DocumentQueryHandler.get`) still runs its `get_presigned_url` while the
+  read transaction that fetched the row is open — the same rule as above, but a
+  single presign round-trip on a read-only handler (no multi-second body, no
+  N-serial loop), so its blast radius is small. It is a genuine remaining
+  instance of this rule, deliberately left as a tracked follow-up rather than
+  silently treated as resolved by the H5 fix; a future pass should release the
+  read before presigning there too (and extend the `session.in_transaction()`
+  oracle to that path).
 
 ## Alternatives considered
 
