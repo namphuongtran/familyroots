@@ -96,9 +96,21 @@ instead of an unmapped 500.
      check, even though neither husband individually holds a duplicate order.
      This over-rejects the rare polyandry / dual-live-household data case;
      acceptable under the polygyny convention this system targets. Workaround:
-     distinct orders, or mark one marriage divorced/widowed.
-     `test_polyandry_same_rank_rejected_ADR029` pins this as intended
-     behavior, not a defect.
+     distinct orders, or mark one marriage **divorced** (widowed does NOT free
+     the slot — see residual 3). `test_polyandry_same_rank_rejected_ADR029`
+     pins this as intended behavior, not a defect.
+  3. **A widowed marriage still holds its `spouse_order`.** The check filters
+     `status <> 'divorced'` only — married, widowed, and separated all count as
+     live for ordering. So a husband widowed from his vợ cả (`order=1`,
+     status `widowed`, the truthful record of the deceased first wife) cannot
+     record a *new* wife at `order=1`: the widowed row still occupies rank 1,
+     and the remarriage collides (409 `duplicate_spouse_order`). This is
+     intended, not an over-reject: **vợ cả is historically singular** — a wife
+     married after the first wife's death is vợ kế (a successor), not
+     retroactively a second "first wife". Only marking the first marriage
+     `divorced` (which would be untruthful for a death) or using a distinct
+     order records the remarriage; the correct action is the distinct order.
+     `test_widowed_marriage_still_blocks_same_spouse_order` pins this.
   2. **Concurrent-flip race is not DB-backstopped.** The existing unique index
      stays person1-keyed, so two *simultaneous* inserts in opposite
      orientations at the same order can still both pass the index (though the

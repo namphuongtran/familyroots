@@ -143,7 +143,7 @@ erDiagram
         date divorce_date
         varchar marriage_place
         varchar status "married | divorced | widowed | separated"
-        smallint spouse_order "1st wife, 2nd wife... (from person1)"
+        smallint spouse_order "vợ cả/hai/ba; unique per person two-sided (ADR-029)"
         text notes
         uuid created_by
         uuid updated_by

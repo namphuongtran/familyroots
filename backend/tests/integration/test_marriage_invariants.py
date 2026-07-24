@@ -387,3 +387,29 @@ async def test_divorced_marriage_excluded_from_spouse_order(
         client, editor_headers, h, w2, status="divorced", spouse_order=1
     )
     assert divorced.status_code == 201, divorced.text
+
+
+async def test_widowed_marriage_still_blocks_same_spouse_order(
+    client: AsyncClient, editor_headers: dict[str, str]
+) -> None:
+    """ADR-029 residual 3 (intended, not an over-reject): the spouse_order check
+    filters status <> 'divorced' ONLY, so a WIDOWED marriage still holds its rank.
+    A husband widowed from his vợ cả (order=1, status='widowed' — the truthful
+    record of a deceased first wife) cannot record a NEW wife at order=1: vợ cả is
+    historically singular, so the remarriage is vợ kế (a distinct order), not a
+    second 'first wife'. Contrast test_divorced_marriage_excluded (divorced DOES
+    free the slot)."""
+    h = await _make_person(client, editor_headers, "Husband M7f", "male")
+    w1 = await _make_person(client, editor_headers, "Wife M7f-1", "female")
+    w2 = await _make_person(client, editor_headers, "Wife M7f-2", "female")
+
+    widowed = await _create_marriage(
+        client, editor_headers, h, w1, status="widowed", spouse_order=1
+    )
+    assert widowed.status_code == 201, widowed.text
+
+    remarriage = await _create_marriage(
+        client, editor_headers, h, w2, status="married", spouse_order=1
+    )
+    assert remarriage.status_code == 409, remarriage.text
+    assert remarriage.json()["error"]["code"] == "relationship.duplicate_spouse_order"
