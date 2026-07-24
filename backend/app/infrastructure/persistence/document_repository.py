@@ -11,6 +11,7 @@ from app.infrastructure.persistence.document_mapper import apply_to_orm, to_doma
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.document import Document as DocumentModel
+from app.models.person import Person as PersonModel
 
 
 class SqlAlchemyDocumentRepository:
@@ -87,10 +88,15 @@ class SqlAlchemyDocumentRepository:
         return [to_domain(m) for m in result.scalars().all()]
 
     async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
+        """A soft-deleted person is invisible here, matching the read paths
+        (M3, review 2026-07-18)."""
         result = await self._session.execute(
-            select(ClanMembership.id).where(
+            select(ClanMembership.id)
+            .join(PersonModel, PersonModel.id == ClanMembership.person_id)
+            .where(
                 ClanMembership.person_id == person_id,
                 ClanMembership.clan_id == clan_id,
+                PersonModel.is_deleted.is_(False),
             )
         )
         return result.first() is not None
