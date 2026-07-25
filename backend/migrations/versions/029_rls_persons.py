@@ -16,6 +16,18 @@ Cross-clan readers (identity-claim handlers, platform-admin metrics) run on the 
 system session and bypass this (see the composition root). Grants exist (002 + 026).
 Reversible (drop policies + disable).
 
+LOAD-BEARING INVARIANT: the tree functions (get_family_tree_flat/get_ancestors_flat/
+find_relationship_path) JOIN persons, so under this policy a person is visible in the tree
+only if they are a member of the clan. The tree therefore does NOT truncate ONLY BECAUSE
+every edge/marriage-referenced person is a clan member — enforced by
+``ensure_persons_in_clan`` on edge/marriage creation, with no membership-removal or
+validator-bypassing bulk/GEDCOM-import path today. Any future path that records an edge for
+a non-member person (or removes a membership while edges remain) would silently drop that
+person and their subtree from the tree — it MUST preserve this invariant. Pinned by
+test_rls_phase4_persons (positive: married-in spouse returns; negative:
+test_non_member_edge_person_is_hidden). NOTE: this supersedes migration 005's docstring,
+which pre-RLS said a non-member edge-referenced person "stays visible."
+
 Revision ID: 029_rls_persons
 Revises: 028_rls_edges
 """

@@ -171,14 +171,23 @@ async def test_default_deny_persons_when_no_clan(engine: AsyncEngine) -> None:
 
 
 async def test_tree_not_truncated_under_persons_rls(engine: AsyncEngine) -> None:
-    """find_relationship_path JOINs persons; under persons-RLS every node is a member of
-    the clan, so the full path still returns (no truncation)."""
+    """The tree SQL functions JOIN persons; under persons-RLS every node must be a member
+    of the clan, so the full graph still returns. Covers the descendants function
+    (get_family_tree_flat), ancestors (get_ancestors_flat), the path function, AND a
+    married-in SPOUSE (referenced by a marriage edge) — the case the review flagged.
+
+    NOTE (load-bearing invariant): persons-RLS relies on every edge/marriage-referenced
+    person being a clan_memberships member of that clan. This is enforced by
+    ``ensure_persons_in_clan`` on edge/marriage creation; a future bulk/GEDCOM import or a
+    membership-removal path MUST preserve it or trees would silently truncate (see
+    test_non_member_edge_person_is_hidden for the negative behavior)."""
     clan_a = uuid.uuid4()
     async with engine.begin() as conn:
         await _clan(conn, clan_a)
         gpa = await _person(conn, clan_a, [clan_a])
         dad = await _person(conn, clan_a, [clan_a])
         kid = await _person(conn, clan_a, [clan_a])
+        spouse = await _person(conn, clan_a, [clan_a])  # married-in spouse, a member
         actor = uuid.uuid4()
         for parent, child in ((gpa, dad), (dad, kid)):
             await conn.execute(
@@ -188,6 +197,13 @@ async def test_tree_not_truncated_under_persons_rls(engine: AsyncEngine) -> None
                 ),
                 {"id": uuid.uuid4(), "p": parent, "c": child, "cl": clan_a, "a": actor},
             )
+        await conn.execute(
+            sa.text(
+                "INSERT INTO marriages (id, person1_id, person2_id, created_by_clan_id, "
+                "status, created_by) VALUES (:id, :p1, :p2, :cl, 'married', :a)"
+            ),
+            {"id": uuid.uuid4(), "p1": kid, "p2": spouse, "cl": clan_a, "a": actor},
+        )
 
     rls = _rls(engine)
     set_request_clan_id(clan_a)
@@ -205,7 +221,59 @@ async def test_tree_not_truncated_under_persons_rls(engine: AsyncEngine) -> None
             .scalars()
             .all()
         )
-    assert list(path) == [gpa, dad, kid], path
+        assert list(path) == [gpa, dad, kid], path
+
+        ancestors = set(
+            (
+                await s.execute(
+                    sa.text("SELECT person_id FROM public.get_ancestors_flat(:p, :c, 10)"),
+                    {"p": kid, "c": clan_a},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert {gpa, dad, kid} <= ancestors, ancestors
+
+        descendants = set(
+            (
+                await s.execute(
+                    sa.text("SELECT person_id FROM public.get_family_tree_flat(:r, :c, 10)"),
+                    {"r": gpa, "c": clan_a},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert {gpa, dad, kid} <= descendants, descendants
+        # The married-in spouse (a member) is visible at the DB layer.
+        assert spouse in set((await s.execute(sa.text("SELECT id FROM persons"))).scalars().all())
+
+
+async def test_non_member_edge_person_is_hidden(engine: AsyncEngine) -> None:
+    """Documents the persons-RLS behavior + the invariant it relies on: a person referenced
+    by a clan's edge but WITHOUT a clan_memberships row is invisible under the seam (would
+    truncate the tree). This case is unreachable today (ensure_persons_in_clan enforces
+    membership on edge creation) — this test pins that any future path that inserts an edge
+    without a membership is a regression."""
+    clan_a = uuid.uuid4()
+    async with engine.begin() as conn:
+        await _clan(conn, clan_a)
+        member = await _person(conn, clan_a, [clan_a])
+        stranger = await _person(conn, clan_a, [])  # origin A but NOT a member
+        await conn.execute(
+            sa.text(
+                "INSERT INTO parent_child (id, parent_id, child_id, created_by_clan_id, "
+                "relationship_type, created_by) VALUES (:id, :p, :c, :cl, 'biological', :a)"
+            ),
+            {"id": uuid.uuid4(), "p": stranger, "c": member, "cl": clan_a, "a": uuid.uuid4()},
+        )
+
+    rls = _rls(engine)
+    set_request_clan_id(clan_a)
+    async with rls() as s:
+        ids = set((await s.execute(sa.text("SELECT id FROM persons"))).scalars().all())
+    assert member in ids and stranger not in ids, ids
 
 
 async def test_claim_repo_resolves_person_cross_clan_on_system_session(
