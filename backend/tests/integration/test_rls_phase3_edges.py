@@ -155,7 +155,8 @@ async def test_tree_functions_work_under_the_seam(engine: AsyncEngine) -> None:
             (
                 await s.execute(
                     sa.text(
-                        "SELECT person_id FROM public.find_relationship_path(:f, :t, :c) ORDER BY step"
+                        "SELECT person_id FROM public.find_relationship_path(:f, :t, :c) "
+                        "ORDER BY step"
                     ),
                     {"f": a["gpa"], "t": a["kid"], "c": clan_a},
                 )
