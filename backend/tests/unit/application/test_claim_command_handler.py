@@ -40,7 +40,6 @@ class _FakeRepo:
         self._claim = claim
         self._clan_id = clan_id
         self._caller_role = caller_role
-        self.added_audits = []
         self.added_roles = []
 
     async def get_claim(self, claim_id, load_person=False):
@@ -64,16 +63,32 @@ class _FakeRepo:
     def add_role(self, **kwargs):
         self.added_roles.append(kwargs)
 
-    def add_audit(self, **kwargs):
-        self.added_audits.append(kwargs)
+
+class _FakeSession:
+    async def refresh(self, obj, attribute_names=None):
+        # approve/reject refresh the UPDATE-expired timestamps before model_validate;
+        # the fake claim already carries created_at/updated_at, so this is a no-op.
+        return None
 
 
 class _FakeUow:
     def __init__(self):
         self.commits = 0
+        self.tracked = []
+        self.session = _FakeSession()
+
+    def track(self, aggregate):
+        # Claim handlers now buffer their audit row via track_audit_event(uow, ...)
+        # instead of repo.add_audit; the audit aggregate lands here and is dispatched
+        # on commit (ip/UA enrichment happens in the real AuditLogHandler).
+        self.tracked.append(aggregate)
 
     async def commit(self):
         self.commits += 1
+
+    def audit_events(self):
+        """Collect the buffered CrudAuditEvents from every tracked aggregate."""
+        return [event for agg in self.tracked for event in agg.collect_events()]
 
 
 @pytest.mark.asyncio
@@ -91,7 +106,9 @@ async def test_approve_claim_uses_uow_and_writes_audit():
     assert claim.status == "APPROVED"
     assert claim.reviewed_at is not None  # copied from the entity transition
     assert uow.commits == 1
-    assert len(repo.added_audits) == 1
+    audit_events = uow.audit_events()
+    assert len(audit_events) == 1
+    assert audit_events[0].action == "claim.approve"
     assert result.status == "APPROVED"
 
 
@@ -110,7 +127,9 @@ async def test_reject_claim_uses_uow_and_writes_audit():
     assert claim.status == "REJECTED"
     assert claim.reviewed_at is not None  # copied from the entity transition
     assert uow.commits == 1
-    assert len(repo.added_audits) == 1
+    audit_events = uow.audit_events()
+    assert len(audit_events) == 1
+    assert audit_events[0].action == "claim.reject"
     assert result.status == "REJECTED"
 
 

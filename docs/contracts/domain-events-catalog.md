@@ -117,6 +117,25 @@ distinguishing payload fields, the `action` code, and the trigger.
 | `UserRoleChanged` | `user.change_role` | `target_user_id`, `old_role`→`new_role` (in `old_value`/`new_value`) | change member role |
 | `UserRemoved` | `user.remove` | `target_user_id` | remove member |
 
+### person — identity claims
+These do not have dedicated event classes: the claim handlers emit the generic
+`CrudAuditEvent` via `track_audit_event(...)` (see the backend developer guide), so they
+carry the same `AuditableEvent` fields and route through the same fail-closed dispatcher
+as every other write. All use `resource_type = identity_claim`.
+
+| `action` | Key payload (`old_value` → `new_value`) | Trigger |
+|----------|------------------------------------------|---------|
+| `claim.submit` | → `{status: PENDING, ...}` | user submits an identity claim |
+| `claim.cancel` | `{status: PENDING}` → `{status: CANCELLED}` | claimant cancels their pending claim (audited unconditionally — M12) |
+| `claim.approve` | `{status: PENDING}` → `{status: APPROVED, person_id}` | admin approves a claim |
+| `claim.reject` | `{status: PENDING}` → `{status: REJECTED}` | admin rejects a claim |
+| `claim.unlink` | link removal | admin unlinks an established user↔person identity |
+| `claim.prelink` | → link creation | admin pre-links a user to a person |
+
+Before M12 these rows were written directly by `claim_repository.add_audit`, bypassing the
+dispatcher — so they lacked `ip_address`/`user_agent`. That writer is retired; claims now
+enrich like every other audited write.
+
 ## Versioning & Compatibility Rules
 - Additive payload fields are preferred.
 - Renaming/removing a field or an `action` code requires a compatibility shim in

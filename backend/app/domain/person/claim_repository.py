@@ -76,21 +76,6 @@ class ClaimRepository(Protocol):
         ``app.models``."""
         ...
 
-    def add_audit(
-        self,
-        *,
-        clan_id: uuid.UUID | None,
-        actor_id: uuid.UUID,
-        actor_role: str,
-        action: str,
-        resource_type: str,
-        resource_id: uuid.UUID | None,
-        old_value: dict[str, Any] | None = None,
-        new_value: dict[str, Any] | None = None,
-    ) -> None:
-        """Stage an audit_logs row (ORM built in the adapter)."""
-        ...
-
     def add_role(
         self,
         *,
