@@ -418,3 +418,125 @@ async def test_gedcom_export_body_shape(client, admin_headers, rich_clan):
 
     # Cháu A carries `doi=` (generation) in her Vietnamese metadata NOTE.
     assert re.search(r"1 NOTE FamilyRoots:.*doi=3", text)
+
+
+async def test_gedcom_mixed_type_parents_no_invented_couple(client, session_factory):
+    """M6 real-DB end-to-end: a child with a biological mother + biological father AND an
+    adoptive father must NOT export a FAM pairing the adoptive father with a biological
+    parent. The two biological parents form one couple FAM; the adoptive father is a
+    single-parent FAM; the child has exactly two FAMC (birth + adoptive PEDI)."""
+    clan = uuid.uuid4()
+    admin = uuid.uuid4()
+    child = uuid.uuid4()
+    bio_mother = uuid.uuid4()
+    bio_father = uuid.uuid4()
+    adoptive_father = uuid.uuid4()
+
+    async with session_factory() as s:
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'Họ Lê', :slug)"),
+            {"id": clan, "slug": f"ho-le-{clan.hex[:8]}"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO user_profiles (id, email, display_name) VALUES (:id, :e, 'admin')"
+            ),
+            {"id": admin, "e": f"{admin.hex[:8]}@example.com"},
+        )
+        await s.execute(
+            sa.text(
+                "INSERT INTO user_clan_roles (user_id, clan_id, role, is_approved, "
+                "approved_by, approved_at) VALUES (:u, :c, 'admin', true, :u, now())"
+            ),
+            {"u": admin, "c": clan},
+        )
+        for pid, name, gender in (
+            (child, "Con", "unknown"),
+            (bio_mother, "Mẹ Ruột", "female"),
+            (bio_father, "Cha Ruột", "male"),
+            (adoptive_father, "Cha Nuôi", "male"),
+        ):
+            await s.execute(
+                sa.text(
+                    "INSERT INTO persons (id, full_name, gender, created_by_clan_id, created_by) "
+                    "VALUES (:id, :n, :g, :c, :cb)"
+                ),
+                {"id": pid, "n": name, "g": gender, "c": clan, "cb": admin},
+            )
+            # The export's persons query JOINs clan_memberships, so each person needs one.
+            await s.execute(
+                sa.text(
+                    "INSERT INTO clan_memberships (person_id, clan_id, is_founder, joined_at) "
+                    "VALUES (:p, :c, false, now())"
+                ),
+                {"p": pid, "c": clan},
+            )
+        for parent, rel in (
+            (bio_mother, "biological"),
+            (bio_father, "biological"),
+            (adoptive_father, "adopted"),
+        ):
+            await s.execute(
+                sa.text(
+                    "INSERT INTO parent_child (id, parent_id, child_id, created_by_clan_id, "
+                    "relationship_type, created_by) VALUES (:id, :p, :c, :cl, :r, :cb)"
+                ),
+                {"id": uuid.uuid4(), "p": parent, "c": child, "cl": clan, "r": rel, "cb": admin},
+            )
+        await s.commit()
+
+    headers = {"Authorization": f"Bearer {admin}", "X-Current-Clan-Id": str(clan)}
+    resp = await client.get("/api/v1/exports/clan?format=gedcom", headers=headers)
+    assert resp.status_code == 200, resp.text
+    text = resp.text
+
+    def _records(gedcom: str) -> list[list[str]]:
+        records: list[list[str]] = []
+        current: list[str] = []
+        for line in gedcom.split("\n"):
+            if line.startswith("0 "):
+                if current:
+                    records.append(current)
+                current = [line]
+            else:
+                current.append(line)
+        if current:
+            records.append(current)
+        return records
+
+    # Map full_name -> @Ix@ xref.
+    xref = {}
+    for rec in _records(text):
+        if rec[0].endswith(" INDI"):
+            name = next(ln[len("1 NAME ") :] for ln in rec if ln.startswith("1 NAME "))
+            xref[name] = rec[0].split()[1]
+    x_child = xref["Con"]
+    x_bio_m, x_bio_f, x_adopt = xref["Mẹ Ruột"], xref["Cha Ruột"], xref["Cha Nuôi"]
+
+    # Parse FAM records into their {husb, wife, chil} spouse sets.
+    fams = []
+    for rec in _records(text):
+        if rec[0].endswith(" FAM"):
+            spouses = {ln.split()[2] for ln in rec if ln.startswith(("1 HUSB ", "1 WIFE "))}
+            chil = {ln.split()[2] for ln in rec if ln.startswith("1 CHIL ")}
+            fams.append({"xref": rec[0].split()[1], "spouses": spouses, "chil": chil})
+
+    # No FAM pairs the adoptive father with a biological parent as spouses.
+    for fam in fams:
+        assert not (
+            x_adopt in fam["spouses"] and (x_bio_m in fam["spouses"] or x_bio_f in fam["spouses"])
+        ), f"invented cross-type couple: {fam}"
+
+    # Exactly one FAM has BOTH biological parents as spouses and lists the child.
+    bio_couple = [f for f in fams if f["spouses"] == {x_bio_m, x_bio_f} and x_child in f["chil"]]
+    assert len(bio_couple) == 1, f"expected one biological-couple FAM, got {fams}"
+
+    # The adoptive father is a single-parent FAM containing the child.
+    adopt_fam = [f for f in fams if f["spouses"] == {x_adopt} and x_child in f["chil"]]
+    assert len(adopt_fam) == 1, f"expected one adoptive single-parent FAM, got {fams}"
+
+    # The child's FAMC to the adoptive FAM carries PEDI adopted; to the bio FAM, none.
+    child_rec = next(r for r in _records(text) if r[0].split()[1] == x_child)
+    joined = "\n".join(child_rec)
+    assert f"1 FAMC {adopt_fam[0]['xref']}\n2 PEDI adopted" in joined, joined
+    assert joined.count("1 FAMC ") == 2, joined
