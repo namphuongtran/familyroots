@@ -84,6 +84,19 @@ flowchart TD
 > vi đó đã được vá trong `validator.py` — sơ đồ trên phản ánh code hiện tại, không
 > phải hành vi cũ.
 
+**Kinship descriptor excludes divorced marriages (M8, review 2026-07-18; migration
+024).** The relationship-path SQL (`find_relationship_path`) traverses a `spouse`
+edge only for marriages with `status <> 'divorced'` (married, widowed, or separated —
+matching `has_active_marriage` / ADR-025's "active = non-divorced" semantics, the same
+predicate the marriage-uniqueness index in migration 022 uses). Since
+`relationship_descriptor.describe_relationship` resolves a term purely from the edge
+sequence, a **divorced** marriage no longer produces present-tense kinship terms
+("Vợ/Chồng", step-parent "Mẹ kế/Bố dượng", con dâu/rể, or affinal in-laws): the spouse
+edge is simply absent, so a pair connected *only* through a dissolved marriage returns
+no kinship path (divorce ends affinity). Blood kin reachable via shared children are
+unaffected (parent/child edges are never filtered), and **widowed** spouses still
+resolve to their spouse term — bereavement does not end the kinship, only divorce does.
+
 ## Person rules
 
 `app/domain/person/entity.py`:
