@@ -34,23 +34,58 @@ from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 def test_trigram_indexes_are_usable_for_search_expression(sync_engine: sa.Engine) -> None:
+    """Planner-robust: an EMPTY/unanalyzed persons table makes the planner pick a cheaper
+    index (e.g. the keyset btree with a filter) regardless of enable_seqscan, so this
+    used to pass only mid-suite. We seed enough rows with a term that ANALYZE sees as rare
+    and ANALYZE the table, so the GIN trigram index is genuinely the cheapest path for the
+    leading-wildcard ILIKE (the btree keyset index cannot serve `%q%`). Seed rows are
+    cleaned up and stats restored in `finally`."""
     checks = [
         ("full_name", "idx_persons_fullname_trgm"),
         ("birth_name", "idx_persons_birthname_trgm"),
     ]
+    clan_id, actor = uuid.uuid4(), uuid.uuid4()
     with sync_engine.connect() as conn:
-        conn.execute(sa.text("SET enable_seqscan = off"))
-        for col, index_name in checks:
-            rows = conn.execute(
+        try:
+            conn.execute(
+                sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'Trgm', :slug)"),
+                {"id": clan_id, "slug": f"trgm-{clan_id.hex[:8]}"},
+            )
+            # ~400 rows whose names do NOT contain the search term, so ANALYZE learns the
+            # term is rare → the GIN trigram lookup is far cheaper than scanning the whole
+            # keyset index and filtering.
+            conn.execute(
                 sa.text(
-                    f"EXPLAIN SELECT p.id FROM persons p "
-                    f"WHERE public.f_unaccent(p.{col}) ILIKE '%' || public.f_unaccent(:q) || '%'"
+                    "INSERT INTO persons (id, full_name, birth_name, gender, "
+                    "created_by_clan_id, created_by) "
+                    "SELECT gen_random_uuid(), 'Person ' || g, 'Birth ' || g, 'unknown', "
+                    ":c, :a FROM generate_series(1, 400) AS g"
                 ),
-                {"q": "nguyen"},
-            ).fetchall()
-            plan = "\n".join(r[0] for r in rows)
-            assert index_name in plan, (col, plan)
-            assert "Seq Scan on persons" not in plan, (col, plan)
+                {"c": clan_id, "a": actor},
+            )
+            conn.commit()
+            conn.execute(sa.text("ANALYZE persons"))
+
+            conn.execute(sa.text("SET enable_seqscan = off"))
+            for col, index_name in checks:
+                rows = conn.execute(
+                    sa.text(
+                        f"EXPLAIN SELECT p.id FROM persons p WHERE public.f_unaccent(p.{col}) "
+                        f"ILIKE '%' || public.f_unaccent(:q) || '%'"
+                    ),
+                    {"q": "nguyen"},
+                ).fetchall()
+                plan = "\n".join(r[0] for r in rows)
+                assert index_name in plan, (col, plan)
+                assert "Seq Scan on persons" not in plan, (col, plan)
+        finally:
+            conn.rollback()  # drop the SET and any open state
+            conn.execute(
+                sa.text("DELETE FROM persons WHERE created_by_clan_id = :c"), {"c": clan_id}
+            )
+            conn.execute(sa.text("DELETE FROM clans WHERE id = :c"), {"c": clan_id})
+            conn.commit()
+            conn.execute(sa.text("ANALYZE persons"))  # restore stats to the empty table
 
 
 def test_search_sql_uses_the_indexed_expression() -> None:
