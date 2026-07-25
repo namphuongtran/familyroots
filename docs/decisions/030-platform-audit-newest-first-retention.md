@@ -14,8 +14,9 @@ finding **M14**) flagged the platform-admin audit log:
   indexes were built `created_at DESC` (`idx_audit_logs_clan`, `idx_audit_logs_actor`,
   migration 001). So a super-admin saw the **oldest** events first and had to page
   through the entire history to reach today.
-- The platform-wide query (`clan_id IS NULL`) had **no bare `(created_at)` index**, so
-  it fell back to a full scan + sort that worsened as `audit_logs` grew.
+- The **unfiltered** platform-wide query (no `clan_id` filter — it returns rows across
+  all clans, not only `clan_id IS NULL` platform events) had **no bare `(created_at)`
+  index**, so it fell back to a full scan + sort that worsened as `audit_logs` grew.
 - `audit_logs` and `notification_log` grow **unbounded** (no retention).
 
 The whole public API uses a **single ASC cursor-pagination scheme** (opaque
