@@ -50,13 +50,15 @@ Single linear chain:
 `021_parent_child_guard` → `022_edge_write_serialization` →
 `023_one_founder_per_clan` → `024_kinship_exclude_divorced` →
 `025_audit_logs_created_at_index` → `026_rls_activation_grants` →
-`027_rls_events_branches`.
+`027_rls_events_branches` → `028_rls_edges`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
 ADR-008); grants only, no table/RLS change, reversible.
 
 `027_rls_events_branches` enables the clan-isolation RLS policy on `events` + `branches` (SP-3 Phase 2); reversible (drop policy + disable).
+
+`028_rls_edges` enables the clan-isolation RLS policy on `parent_child` + `marriages` (created_by_clan_id; SP-3 Phase 3); reversible.
 
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
@@ -65,7 +67,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `027_rls_events_branches`; verify with `cd backend && uv run alembic history`.
+Head = `028_rls_edges`; verify with `cd backend && uv run alembic history`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 
