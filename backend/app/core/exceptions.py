@@ -241,20 +241,58 @@ async def integrity_error_handler(request: Request, exc: Exception) -> JSONRespo
     """
     from app.services.translator import t
 
-    sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+    orig = getattr(exc, "orig", None)
+    sqlstate = getattr(orig, "sqlstate", None)
+    constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
+
     if sqlstate == "23505":  # unique_violation
         logger.warning("Unique violation on %s %s: %s", request.method, request.url.path, exc)
-        code = "conflict"
+        # A named partial-unique index whose race IS a specific client outcome maps to its
+        # own code (so the loser of e.g. two fresh concurrent invites sees the same code
+        # the app pre-check would raise); everything else is the stable generic conflict.
+        unique_codes = {
+            "uq_clan_invitations_pending": "invitation.pending_exists",
+            "uq_marriages_spouse_order": "relationship.duplicate_spouse_order",
+        }
+        code = unique_codes.get(constraint or "", "conflict")
         return JSONResponse(
             status_code=409,
             content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
         )
 
-    # The parent_child integrity trigger (ADR-023) raises check_violation with
-    # a known code slug when a write LOSES the race the app pre-check cannot
-    # stop — a legitimate 409, like a lost uniqueness race. Any other
-    # check_violation still falls through to the loud 500 (likely a bug).
+    # check_violation (23514) has two shapes:
+    #  (a) a real named CHECK constraint the app pre-check normally shadows (e.g. a
+    #      divorce-before-marriage or self-edge write that slipped the pre-check) — map to
+    #      its specific client code instead of a raw 500; and
+    #  (b) an ADR-023 trigger RAISE with NO constraint name but a known slug in the message
+    #      (a lost bio-parent/cycle race) — map by slug.
+    # Any OTHER check_violation is a genuine server bug → falls through to the loud 500.
     if sqlstate == "23514":
+        # Real DB names carry the SQLAlchemy naming-convention prefix (base.py:
+        # ``ck_%(table_name)s_%(constraint_name)s``), doubled here because the migration's
+        # own ``name=`` already included the table — pinned by test_integrity_constraint_names.
+        check_constraints = {
+            "ck_marriages_marriages_divorce_after_marriage": (
+                422,
+                "relationship.divorce_before_marriage",
+            ),
+            "ck_marriages_marriages_no_self": (422, "self_marriage_not_allowed"),
+            "ck_parent_child_parent_child_no_self": (422, "self_parent_not_allowed"),
+        }
+        if constraint in check_constraints:
+            status_code, code = check_constraints[constraint]
+            logger.warning(
+                "CHECK-constraint rejection (%s) on %s %s: %s",
+                constraint,
+                request.method,
+                request.url.path,
+                exc,
+            )
+            return JSONResponse(
+                status_code=status_code,
+                content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+            )
+
         message = str(getattr(exc, "orig", exc))
         # Trigger slug -> the SAME error code the app validator uses, so a
         # client sees one code whether the pre-check or the backstop rejected.
