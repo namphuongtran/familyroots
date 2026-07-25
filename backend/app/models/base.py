@@ -43,9 +43,10 @@ class ClanScopedMixin(TimestampMixin):
     """Mixin for all tables that belong to a specific clan.
 
     Every query against these tables MUST include a clan_id filter. Clan
-    isolation is enforced in the application layer (the repository contract);
-    a database-level RLS layer is a planned defense-in-depth addition (SP-3),
-    not yet active.
+    isolation is enforced in the application layer (the repository contract) as the
+    PRIMARY guarantee; RLS layer-2 (SP-3, ADR-008) is defense-in-depth behind it and is
+    now active for some of these tables (documents, events, branches) — see
+    ``app/core/rls.py``.
     """
 
     clan_id: Mapped[uuid.UUID] = mapped_column(

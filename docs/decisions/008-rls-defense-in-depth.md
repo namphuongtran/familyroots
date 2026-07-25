@@ -27,10 +27,25 @@ drops the role every transaction (auth deps touch only non-RLS tables in Phase 1
 `get_current_clan_id` sets the GUC the moment it resolves the clan (plus records it in
 the ContextVar so post-commit transactions re-apply it).
 
-Not yet: RLS on tables other than `documents` (Phase 2+ — `persons` via a
-`clan_memberships` subquery needs a perf check), and a possible final `FORCE ROW LEVEL
-SECURITY`. Until each table is covered, its application-layer filter remains its only
-enforced isolation.
+- **Phase 2 (2026-07-25, migration `027_rls_events_branches`)** — RLS extended to
+  `events` and `branches` (same `clan_id = app.clan_id` policy). Both are read/written
+  only by clan-scoped request handlers (GUC set); the anniversary scheduler reads
+  `events` via the privileged system session (bypass). Proven by
+  `test_rls_phase2_events_branches` (two-sided reads, WITH CHECK rejects a cross-clan
+  write, fail-closed default-deny); the coverage guard now pins
+  `{documents, events, branches}`.
+
+Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
+tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
+by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break
+every request until the GUC is moved earlier), `clan_invitations` is read by the
+unauthenticated accept-by-token path, and `audit_logs` has nullable-clan platform rows +
+a super-admin cross-clan reader. `persons`/`parent_child`/`marriages` need care (the M:N
+`persons` policy is a `clan_memberships` subquery needing a perf check; the tree SQL
+functions run SECURITY INVOKER under the role and would become RLS-filtered — verify they
+still return correctly with the GUC set). A possible final `FORCE ROW LEVEL SECURITY`
+comes once all tables are covered. Until each table is covered, its application-layer
+filter remains its only enforced isolation.
 
 ## Context
 Clan isolation is currently enforced entirely in the **application/repository
