@@ -50,6 +50,10 @@ class _FakeRepo:
     async def get_pending_by_email(self, clan_id, email):
         return self._pending
 
+    async def expire_stale_pending(self, clan_id, email):
+        self.call_order.append("expire_stale_pending")
+        return 0
+
     async def get_by_token(self, token):
         return self._by_token
 

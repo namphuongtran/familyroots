@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import desc, select, update
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.invitation.entity import Invitation
@@ -21,14 +21,34 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
         self._session = session
 
     async def get_pending_by_email(self, clan_id: uuid.UUID, email: str) -> ClanInvitation | None:
+        """A LIVE pending invitation only — a timed-out (expires_at <= now) row is not a
+        blocker (it is lazily retired by ``expire_stale_pending`` on the re-invite path)."""
         result = await self._session.execute(
             select(ClanInvitation).where(
                 ClanInvitation.clan_id == clan_id,
                 ClanInvitation.email == email,
                 ClanInvitation.status == "pending",
+                ClanInvitation.expires_at > func.now(),
             )
         )
         return result.scalar_one_or_none()
+
+    async def expire_stale_pending(self, clan_id: uuid.UUID, email: str) -> int:
+        """Transition a timed-out (expires_at <= now) ``pending`` invitation for this
+        (clan, email) to ``expired``. DB-side ``now()`` for one clock. Returns the row
+        count (0 or 1 — the partial unique index ``uq_clan_invitations_pending`` allows at
+        most one pending per pair). Frees that unique slot so a fresh invite can insert."""
+        result = await self._session.execute(
+            update(ClanInvitation)
+            .where(
+                ClanInvitation.clan_id == clan_id,
+                ClanInvitation.email == email,
+                ClanInvitation.status == "pending",
+                ClanInvitation.expires_at <= func.now(),
+            )
+            .values(status="expired")
+        )
+        return result.rowcount
 
     async def get_by_token(self, token: str) -> Invitation | None:
         result = await self._session.execute(

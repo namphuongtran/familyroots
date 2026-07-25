@@ -132,7 +132,7 @@ and `expected_version` is a **required** field on the matching PATCH request bod
 
 | code | HTTP | raised when | detail keys | client handling |
 |---|---|---|---|---|
-| `invitation.pending_exists` | 409 | Inviting an email that already has a pending invitation in this clan | — | Show existing invitation |
+| `invitation.pending_exists` | 409 | Inviting an email that already has a **live** (non-expired) pending invitation in this clan (a timed-out one is lazily expired and re-invite succeeds — M11) | — | Show existing invitation |
 | `invitation.not_found` | 404 | Invitation id/token does not exist | — | Invalid-invitation screen |
 | `invitation.not_pending` | 409 | Accept/revoke on an invitation already accepted, revoked, or expired-marked | — | Refresh state |
 | `invitation.expired` | 409 | Accepting an invitation past its expiry | — | Ask inviter to re-send |
