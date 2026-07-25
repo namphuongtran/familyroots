@@ -138,6 +138,7 @@
   "error.http_error": "请求失败",
   "error.insufficient_permissions": "您没有权限执行此操作",
   "error.invalid_clan_id_format": "宗族 ID 格式无效",
+  "error.invalid_cursor": "分页游标无效。",
   "error.invalid_event_type": "事件类型无效",
   "error.invalid_role": "角色无效",
   "error.invalid_role_assignment": "角色分配无效",

@@ -5,12 +5,22 @@ even when rows are inserted mid-page.
 """
 
 import base64
+import binascii
 import json
 import uuid
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import and_, asc, or_
+
+from app.core.exceptions import AppError
+
+# Every failure mode a hand-tampered/garbage cursor can trigger while decoding:
+# bad base64 padding (binascii.Error), malformed JSON or wrong-typed values
+# (ValueError), missing expected keys (KeyError), or a non-str/None where a
+# str was expected (TypeError). All must surface as 400 invalid_cursor, not
+# an unhandled 500.
+_CURSOR_ERRORS = (binascii.Error, ValueError, KeyError, TypeError)
 
 
 def encode_cursor(created_at: datetime, record_id: uuid.UUID) -> str:
@@ -20,9 +30,16 @@ def encode_cursor(created_at: datetime, record_id: uuid.UUID) -> str:
 
 
 def decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
-    """Decode a base64 cursor string back into (created_at, id)."""
-    payload = json.loads(base64.urlsafe_b64decode(cursor.encode()))
-    return datetime.fromisoformat(payload["created_at"]), uuid.UUID(payload["id"])
+    """Decode a base64 cursor string back into (created_at, id).
+
+    Raises ``AppError(400, "invalid_cursor")`` for any malformed/tampered
+    cursor instead of leaking the raw stdlib exception.
+    """
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+        return datetime.fromisoformat(payload["created_at"]), uuid.UUID(payload["id"])
+    except _CURSOR_ERRORS as exc:
+        raise AppError(400, "invalid_cursor") from exc
 
 
 def paginate_query(query: Any, model: Any, cursor: str | None, limit: int = 20) -> Any:
@@ -54,8 +71,17 @@ def encode_fields_cursor(fields: dict[str, Any]) -> str:
 
 
 def decode_fields_cursor(cursor: str) -> dict[str, Any]:
-    """Decode a cursor produced by ``encode_fields_cursor`` back into its field mapping."""
-    payload: dict[str, Any] = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+    """Decode a cursor produced by ``encode_fields_cursor`` back into its field mapping.
+
+    Raises ``AppError(400, "invalid_cursor")`` for a malformed/tampered cursor.
+    Callers that extract specific keys/types out of the returned mapping (e.g.
+    ``decoded["full_name"]``, ``uuid.UUID(decoded["id"])``) are responsible for
+    guarding that extraction the same way — this only covers the base64/JSON decode.
+    """
+    try:
+        payload: dict[str, Any] = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+    except _CURSOR_ERRORS as exc:
+        raise AppError(400, "invalid_cursor") from exc
     return payload
 
 

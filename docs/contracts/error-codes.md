@@ -240,6 +240,7 @@ validation codes which are 422. Branch on the code, not the status.
 | `rate_limited` | 429 | Too many requests to `/api/v1/auth/*` (20/min per IP, sliding window) | `retry_after` (seconds) | Back off; see header note below |
 | `internal_error` | 500 | Unhandled server error (details logged server-side only) | — | Generic error state; safe to retry |
 | `bad_request` | 400 | Bare 400 normalized into the envelope | `hint` (string, optional) | Generic |
+| `invalid_cursor` | 400 | Malformed or tampered `cursor` query param on any cursor-paginated list endpoint — bad base64, non-JSON payload, or valid JSON missing the expected fields (e.g. `full_name`/`id`, `created_at`/`id`) | — | Drop the cursor and refetch the first page; cursors are opaque, never construct one client-side |
 | `unauthorized` | 401 | Bare 401 normalized into the envelope | `hint` (optional) | As per 401 rule above |
 | `forbidden` | 403 | Bare 403 normalized into the envelope | `hint` (optional) | Hide/disable action |
 | `not_found` | 404 | Unknown route, or bare 404 | `hint` (optional) | Not-found state |
