@@ -35,6 +35,18 @@ the ContextVar so post-commit transactions re-apply it).
   write, fail-closed default-deny); the coverage guard now pins
   `{documents, events, branches}`.
 
+- **Phase 3 (2026-07-25, migration `028_rls_edges`)** — RLS extended to the tree edges
+  `parent_child` and `marriages` (policy on `created_by_clan_id`). The subtle risk vs
+  events/branches: the SECURITY-INVOKER tree functions (`find_relationship_path`,
+  `get_ancestors_flat`, the descendants CTE) and the `parent_child` BEFORE-ROW trigger run
+  under the request role with the GUC set, so their edge queries become RLS-filtered —
+  but they are already clan-scoped by `p_clan_id`/`created_by_clan_id` = the request's
+  clan = the GUC, so the predicate is redundant and results are unchanged. No system path
+  reads edges (only the scheduler reads `events`). Proven by `test_rls_phase3_edges`
+  (two-sided reads, WITH CHECK cross-clan rejection, default-deny, **tree functions return
+  correctly under the seam**, and **a write survives the BEFORE trigger + WITH CHECK**).
+  Coverage guard now `{documents, events, branches, parent_child, marriages}`.
+
 Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
 tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
 by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break
