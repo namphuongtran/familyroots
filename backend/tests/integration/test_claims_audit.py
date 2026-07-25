@@ -372,3 +372,124 @@ async def test_claim_audit_content_preserved(
     assert row["resource_id"] == claim_id
     assert row["old_value"] == {"status": "PENDING"}
     assert row["new_value"] == {"status": "APPROVED", "person_id": str(seeded["person_id"])}
+
+
+async def _seed_approved_link(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    claim_id: uuid.UUID,
+    user_id: uuid.UUID,
+    person_id: uuid.UUID,
+) -> None:
+    """An APPROVED claim plus a live user↔person link -- the precondition for unlink
+    (``get_last_approved_claim`` + ``user.person_id`` set)."""
+    now = datetime.now(UTC)
+    async with session_factory() as s:
+        await s.execute(
+            sa.text(
+                "INSERT INTO identity_claims "
+                "(id, user_id, person_id, status, requester_note, reviewed_by, reviewed_at, "
+                "created_at, updated_at) "
+                "VALUES (:id, :uid, :pid, 'APPROVED', :note, :uid, :now, :now, :now)"
+            ),
+            {"id": claim_id, "uid": user_id, "pid": person_id, "note": "linked", "now": now},
+        )
+        await s.execute(
+            sa.text("UPDATE user_profiles SET person_id = :pid WHERE id = :uid"),
+            {"pid": person_id, "uid": user_id},
+        )
+        await s.commit()
+
+
+async def test_claim_reject_audit_has_ip_and_content(
+    client: AsyncClient,
+    admin_headers: dict[str, str],
+    session_factory: async_sessionmaker[AsyncSession],
+    seeded: dict[str, Any],
+) -> None:
+    """Admin rejects a pending claim over real HTTP -> the claim.reject audit row
+    carries ip/UA AND the right old/new status (reject was previously untested E2E)."""
+    claim_id = uuid.uuid4()
+    await _seed_pending_claim(
+        session_factory,
+        claim_id=claim_id,
+        user_id=seeded["submitter_id"],
+        person_id=seeded["person_id"],
+    )
+
+    resp = await client.post(
+        f"/api/v1/clans/{seeded['clan_id']}/claims/{claim_id}/reject",
+        json={"reviewer_note": "not you"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+    rows = await _audit_rows(session_factory, action="claim.reject", resource_id=claim_id)
+    assert len(rows) == 1, f"expected exactly one claim.reject audit row, got {rows}"
+    row = rows[0]
+    assert row["ip_address"] is not None, f"expected non-null ip_address, got {row}"
+    assert row["user_agent"] is not None, f"expected non-null user_agent, got {row}"
+    assert row["old_value"] == {"status": "PENDING"}
+    assert row["new_value"] == {"status": "REJECTED"}
+
+
+async def test_claim_unlink_audit_has_ip_and_content(
+    client: AsyncClient,
+    admin_headers: dict[str, str],
+    session_factory: async_sessionmaker[AsyncSession],
+    seeded: dict[str, Any],
+) -> None:
+    """Admin unlinks an established identity over real HTTP -> the claim.unlink audit
+    row carries ip/UA AND its distinct person_id-removal payload (unlink was previously
+    untested E2E and carries a different value dict than the status transitions)."""
+    claim_id = uuid.uuid4()
+    await _seed_approved_link(
+        session_factory,
+        claim_id=claim_id,
+        user_id=seeded["submitter_id"],
+        person_id=seeded["person_id"],
+    )
+
+    resp = await client.post(
+        f"/api/v1/clans/{seeded['clan_id']}/claims/members/{seeded['submitter_id']}/unlink",
+        json={"reason": "wrong person"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 204, resp.text
+
+    rows = await _audit_rows(session_factory, action="claim.unlink", resource_id=claim_id)
+    assert len(rows) == 1, f"expected exactly one claim.unlink audit row, got {rows}"
+    row = rows[0]
+    assert row["ip_address"] is not None, f"expected non-null ip_address, got {row}"
+    assert row["user_agent"] is not None, f"expected non-null user_agent, got {row}"
+    assert row["old_value"] == {"person_id": str(seeded["person_id"])}
+    assert row["new_value"] == {"person_id": None, "reason": "wrong person"}
+
+
+async def test_claim_prelink_audit_has_ip_and_content(
+    client: AsyncClient,
+    admin_headers: dict[str, str],
+    session_factory: async_sessionmaker[AsyncSession],
+    seeded: dict[str, Any],
+) -> None:
+    """Admin pre-links a member to a person over real HTTP -> the claim.prelink audit
+    row carries ip/UA AND its distinct link-creation payload (prelink was previously
+    untested E2E; resource_id is the claim the handler mints, read from the response)."""
+    resp = await client.post(
+        f"/api/v1/clans/{seeded['clan_id']}/claims/members/{seeded['submitter_id']}/prelink",
+        json={"person_id": str(seeded["person_id"])},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 201, resp.text
+    claim_id = uuid.UUID(resp.json()["data"]["id"])
+
+    rows = await _audit_rows(session_factory, action="claim.prelink", resource_id=claim_id)
+    assert len(rows) == 1, f"expected exactly one claim.prelink audit row, got {rows}"
+    row = rows[0]
+    assert row["ip_address"] is not None, f"expected non-null ip_address, got {row}"
+    assert row["user_agent"] is not None, f"expected non-null user_agent, got {row}"
+    assert row["old_value"] is None
+    assert row["new_value"] == {
+        "person_id": str(seeded["person_id"]),
+        "user_id": str(seeded["submitter_id"]),
+    }

@@ -40,7 +40,6 @@ class _FakeRepo:
         self._claim = claim
         self._clan_id = clan_id
         self._caller_role = caller_role
-        self.added_audits = []
         self.added_roles = []
 
     async def get_claim(self, claim_id, load_person=False):
@@ -63,9 +62,6 @@ class _FakeRepo:
 
     def add_role(self, **kwargs):
         self.added_roles.append(kwargs)
-
-    def add_audit(self, **kwargs):
-        self.added_audits.append(kwargs)
 
 
 class _FakeSession:
