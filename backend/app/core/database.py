@@ -81,3 +81,13 @@ async def get_db() -> AsyncIterator[AsyncSession]:
             # Belt-and-suspenders: each request runs in its own task/context, but clear
             # the clan ContextVar so a stale value can never bleed into a reused context.
             set_request_clan_id(None)
+
+
+async def get_system_db() -> AsyncIterator[AsyncSession]:
+    """Privileged (non-RLS) request dependency for flows that legitimately span clans and
+    have no single clan context — identity claims (a claimant resolving a person by global
+    id) and platform-admin (cross-clan metrics). Uses the system session (no RLS seam), so
+    it bypasses RLS exactly like the scheduler/purge. Only these cross-clan handlers use
+    it; every clan-scoped handler uses ``get_db`` (RLS-enforced)."""
+    async with AsyncSessionLocal() as session:
+        yield session

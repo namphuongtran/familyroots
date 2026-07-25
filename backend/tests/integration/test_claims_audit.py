@@ -37,7 +37,7 @@ from fastapi import Header
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.database import get_db
+from app.core.database import get_db, get_system_db
 from app.core.security import get_current_user
 from app.main import create_app
 
@@ -71,6 +71,9 @@ async def client(
             yield session
 
     app.dependency_overrides[get_db] = _override_db
+    # Claim handlers run on the system session (Phase 4 persons-RLS); point it at the same
+    # test DB so audit rows land where the test reads them.
+    app.dependency_overrides[get_system_db] = _override_db
     app.dependency_overrides[get_current_user] = _override_current_user
 
     transport = ASGITransport(app=app)

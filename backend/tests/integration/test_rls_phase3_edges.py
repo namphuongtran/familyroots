@@ -53,6 +53,12 @@ async def _person(conn: AsyncConnection, clan_id: uuid.UUID, actor: uuid.UUID) -
         ),
         {"id": pid, "c": clan_id, "a": actor},
     )
+    # A clan_memberships row so the person is visible under persons-RLS (Phase 4) — every
+    # person in a clan's tree is a member of it.
+    await conn.execute(
+        sa.text("INSERT INTO clan_memberships (person_id, clan_id) VALUES (:p, :c)"),
+        {"p": pid, "c": clan_id},
+    )
     return pid
 
 

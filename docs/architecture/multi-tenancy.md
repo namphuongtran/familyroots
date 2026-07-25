@@ -8,7 +8,7 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > layer** — this is the primary, tested guarantee. Row-Level Security is the
 > **defense-in-depth layer-2** (ADR-008); **Phase 1 is ACTIVE**: request traffic
 > runs under the non-bypass `familyroots_app` role with a per-request `app.clan_id`
-> GUC, so `documents`, `events`, `branches`, `parent_child`, and `marriages` are now RLS-enforced at the DB layer (other clan-scoped tables
+> GUC, so `documents`, `events`, `branches`, `parent_child`, `marriages`, and `persons` are now RLS-enforced at the DB layer (other clan-scoped tables
 > are added table-by-table). The sections below describe the application-layer
 > mechanism that remains the primary guarantee.
 
