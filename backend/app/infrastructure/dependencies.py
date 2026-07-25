@@ -41,7 +41,7 @@ from app.application.relationship.handlers import (
     ParentChildQueryHandler,
 )
 from app.application.tree.handlers import TreeQueryHandler
-from app.core.database import get_db
+from app.core.database import get_db, get_system_db
 from app.domain.auth.identity_provider import IdentityProvider
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.infrastructure.event_dispatcher import create_event_dispatcher
@@ -106,12 +106,16 @@ def get_person_query_handler(db: AsyncSession = Depends(get_db)) -> PersonQueryH
 # ── Claim handlers ──────────────────────────────────────────────
 
 
-def get_claim_command_handler(db: AsyncSession = Depends(get_db)) -> ClaimCommandHandler:
+# Identity claims are a CROSS-CLAN flow (a claimant resolves a person by global id and is
+# not yet a member of that person's clan), so they run on the privileged system session —
+# they bypass persons-RLS (Phase 4) and write only non-RLS tables (identity_claims,
+# user_clan_roles, user_profiles, audit_logs). See ADR-008 / the persons-RLS design.
+def get_claim_command_handler(db: AsyncSession = Depends(get_system_db)) -> ClaimCommandHandler:
     uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
     return ClaimCommandHandler(SqlAlchemyClaimRepository(db), uow)
 
 
-def get_claim_query_handler(db: AsyncSession = Depends(get_db)) -> ClaimQueryHandler:
+def get_claim_query_handler(db: AsyncSession = Depends(get_system_db)) -> ClaimQueryHandler:
     return ClaimQueryHandler(SqlAlchemyClaimQueryPort(db))
 
 
@@ -125,15 +129,18 @@ def get_me_query_handler(db: AsyncSession = Depends(get_db)) -> MeQueryHandler:
 # ── Platform Admin handlers ──────────────────────────────────────
 
 
+# Platform-admin is a CROSS-CLAN super-admin flow (metrics count persons across all clans,
+# the audit log spans clans) → system session, bypassing RLS. It writes only non-RLS
+# tables (clans, audit_logs). See ADR-008 / the persons-RLS design.
 def get_platform_admin_command_handler(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_system_db),
 ) -> PlatformAdminCommandHandler:
     uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
     return PlatformAdminCommandHandler(SqlAlchemyClanRepository(db), uow)
 
 
 def get_platform_admin_query_handler(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_system_db),
 ) -> PlatformAdminQueryHandler:
     return PlatformAdminQueryHandler(SqlAlchemyPlatformAdminQueryPort(db))
 

@@ -47,6 +47,20 @@ the ContextVar so post-commit transactions re-apply it).
   correctly under the seam**, and **a write survives the BEFORE trigger + WITH CHECK**).
   Coverage guard now `{documents, events, branches, parent_child, marriages}`.
 
+- **Phase 4 (2026-07-25, migration `029_rls_persons`)** — RLS extended to `persons`, the
+  M:N table. Per-command policies keyed on `app.clan_id`: SELECT/UPDATE/DELETE require a
+  `clan_memberships` membership of the active clan (read backstop); INSERT WITH CHECK
+  `created_by_clan_id = GUC` (a membership-based WITH CHECK can't be used — `save_with_membership`
+  inserts the person row before its membership row); UPDATE WITH CHECK permissive so
+  soft-delete and shared-person edits (member here, origin another clan) don't break. The
+  two **cross-clan** person readers — identity-claim handlers (a claimant resolves a person
+  by global id, no membership yet) and platform-admin metrics (counts persons across all
+  clans) — now run on the privileged **system session** (`get_system_db`), bypassing RLS;
+  they write only non-RLS tables. Membership subquery is index-backed (perf-tested). The
+  tree does not truncate because every edge-referenced person is a clan member. Proven by
+  `test_rls_phase4_persons`. Coverage guard now `{documents, events, branches, parent_child,
+  marriages, persons}`.
+
 Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
 tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
 by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break

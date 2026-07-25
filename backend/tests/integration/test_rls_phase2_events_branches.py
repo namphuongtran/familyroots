@@ -71,7 +71,7 @@ async def _seed_two(engine: AsyncEngine) -> tuple[uuid.UUID, uuid.UUID, dict[str
 
 @pytest.mark.parametrize("table", ["events", "branches"])
 async def test_rls_scopes_reads_to_the_active_clan(engine: AsyncEngine, table: str) -> None:
-    clan_a, clan_b, ids = await _seed_two(engine)
+    clan_a, _clan_b, ids = await _seed_two(engine)
     rls = async_sessionmaker(engine, sync_session_class=RlsSession, expire_on_commit=False)
     own = {"events": ids["ea"], "branches": ids["ba"]}[table]
     other = {"events": ids["eb"], "branches": ids["bb"]}[table]
