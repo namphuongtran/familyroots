@@ -7,11 +7,12 @@ provider is the only stubbed seam. This is the layer where the 2026-07-03 e2e
 bugs (#12/#13) hid and where the tree routes' DI/serialization seam was never
 exercised before (review 2026-07-18, test-posture gap #2).
 
-KNOWN_DEFECT tests pin review findings the suite must keep visible until their
-fix PR flips them: M9 (malformed cursor → 500). H3 (GET /tree 404s for
-API-managed clans) was CLOSED by PR A3 — see test_tree_renders_after_founder_
-designation and test_tree_404_without_founder_designation, which replace the
-old KNOWN_DEFECT_H3 pin.
+KNOWN_DEFECT tests pinned review findings until their fix PR flipped them.
+Both are now CLOSED: M9 (malformed cursor → 400 invalid_cursor) by the
+cursor-400 PR — see test_malformed_cursor_returns_400_invalid_cursor; H3
+(GET /tree 404s for API-managed clans) by PR A3 — see
+test_tree_renders_after_founder_designation and
+test_tree_404_without_founder_designation. No KNOWN_DEFECT pins remain.
 
 Rate-limit budget: this module's app shares ONE 20 req/min/IP bucket across
 /api/v1/auth + /api/v1/invitations — matched by path PREFIX, so GET /auth/me
@@ -559,12 +560,13 @@ def test_tree_404_without_founder_designation(
     assert _error_code(resp) == "clan_founder_not_found"
 
 
-def test_malformed_cursor_current_behavior_KNOWN_DEFECT_M9(
+def test_malformed_cursor_returns_400_invalid_cursor(
     client: TestClient, migrated_db_url: str, rsa_keys: dict[str, Any]
 ) -> None:
-    """PINS review finding M9: decode_cursor is unwrapped, so a garbage ?cursor=
-    500s instead of returning 400 invalid_cursor. The M9 fix PR flips this to
-    assert the 400. Needs an approved clan membership to reach pagination, but
+    """M9 CLOSED (was test_..._KNOWN_DEFECT_M9): a garbage ?cursor= now returns a
+    clean 400 `invalid_cursor` instead of a raw 500 — decode_fields_cursor +
+    the person-repo extraction raise AppError(400) (fix/cursor-400). Needs an
+    approved clan membership to reach pagination, but
     must not spend this module's auth-prefix budget — a JWT is minted for a
     brand-new uuid user and the profile/clan/approved-membership rows are
     seeded directly via a sync engine (same seeding style as
@@ -611,10 +613,8 @@ def test_malformed_cursor_current_behavior_KNOWN_DEFECT_M9(
     resp = raw_client.get(
         "/api/v1/persons?cursor=%%%garbage%%%", headers=_auth(token, str(clan_id))
     )
-    assert resp.status_code == 500, (
-        "malformed cursor no longer 500s — M9 fixed! Flip this test to assert "
-        "400 invalid_cursor and delete the KNOWN_DEFECT marker."
-    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"]["code"] == "invalid_cursor"
 
 
 def test_error_localization_over_http(client: TestClient, rsa_keys: dict[str, Any]) -> None:
