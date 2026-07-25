@@ -17,11 +17,19 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.domain.platform_admin.query_port import AuditLogEntryView
 from app.infrastructure.persistence.platform_admin_query_port import (
     SqlAlchemyPlatformAdminQueryPort,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+
+
+def _ts(entry: AuditLogEntryView) -> datetime:
+    """Narrow AuditLogEntryView.created_at (datetime | None) to datetime — the seeded
+    rows always carry an explicit created_at."""
+    assert entry.created_at is not None
+    return entry.created_at
 
 
 @pytest.fixture()
@@ -96,7 +104,7 @@ async def test_audit_log_newest_first(session: AsyncSession) -> None:
     )
     assert page.data[0].created_at is not None
     # Strictly descending created_at.
-    times = [e.created_at for e in page.data]
+    times = [_ts(e) for e in page.data]
     assert times == sorted(times, reverse=True), times
 
 
@@ -125,8 +133,8 @@ async def test_audit_log_desc_cursor_no_overlap_monotonic(session: AsyncSession)
     assert len(page2.data) == 2
 
     assert not ({e.id for e in page1.data} & {e.id for e in page2.data})
-    newest_of_page2 = max(e.created_at for e in page2.data)
-    oldest_of_page1 = min(e.created_at for e in page1.data)
+    newest_of_page2 = max(_ts(e) for e in page2.data)
+    oldest_of_page1 = min(_ts(e) for e in page1.data)
     assert newest_of_page2 <= oldest_of_page1, "page2 must be strictly older than page1"
 
 
