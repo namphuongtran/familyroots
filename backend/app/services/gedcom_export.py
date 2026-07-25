@@ -151,16 +151,71 @@ def _husb_wife(p1: Any, gender1: str | None, p2: Any, gender2: str | None) -> tu
     return p1, p2
 
 
+def _make_couple_fam(
+    p_a: Any,
+    p_b: Any,
+    persons_by_id: dict[Any, dict[str, Any]],
+    families: list[dict[str, Any]],
+    family_by_pair: dict[frozenset[Any], dict[str, Any]],
+) -> dict[str, Any]:
+    """Get-or-create a synthetic (marriage-less) couple FAM for a parent pair, keyed by
+    the pair so co-children of the same couple share one FAM."""
+    key = frozenset({p_a, p_b})
+    fam = family_by_pair.get(key)
+    if fam is None:
+        husb, wife = _husb_wife(
+            p_a, persons_by_id[p_a].get("gender"), p_b, persons_by_id[p_b].get("gender")
+        )
+        fam = {
+            "husb": husb,
+            "wife": wife,
+            "marriage": None,
+            "children": [],
+            "_sort_key": (1, str(husb), str(wife)),
+        }
+        families.append(fam)
+        family_by_pair[key] = fam
+    return fam
+
+
+def _make_single_fam(
+    parent_id: Any,
+    persons_by_id: dict[Any, dict[str, Any]],
+    families: list[dict[str, Any]],
+    family_by_pair: dict[frozenset[Any], dict[str, Any]],
+) -> dict[str, Any]:
+    """Get-or-create a single-parent FAM, keyed by the lone parent so that parent's
+    children all share one FAM."""
+    key = frozenset({parent_id})
+    fam = family_by_pair.get(key)
+    if fam is None:
+        gender = persons_by_id[parent_id].get("gender")
+        is_husb = gender != "female"
+        fam = {
+            "husb": parent_id if is_husb else None,
+            "wife": parent_id if not is_husb else None,
+            "marriage": None,
+            "children": [],
+            "_sort_key": (2, str(parent_id)),
+        }
+        families.append(fam)
+        family_by_pair[key] = fam
+    return fam
+
+
 def _link_children(
     live_edges: list[dict[str, Any]],
     persons_by_id: dict[Any, dict[str, Any]],
     families: list[dict[str, Any]],
     family_by_pair: dict[frozenset[Any], dict[str, Any]],
 ) -> dict[Any, list[tuple[dict[str, Any], str | None]]]:
-    """Group parent_child edges by child, matching (father, mother) pairs
-    against existing marriage FAMs and creating single-parent FAMs (or
-    synthetic couple FAMs, for an unmarried pair) for the rest. A given
-    single parent's children all share the same single-parent FAM."""
+    """Group a child's parents into FAMs BY relationship type (M6): parents of
+    different types are never paired into a couple (a biological father is never emitted
+    as HUSB/WIFE of an adoptive father). Within one type: attach the child to a real
+    marriage FAM between two of them if present; else exactly-two parents form ONE
+    synthetic couple FAM; else each parent gets a single-parent FAM. The child thus
+    receives one FAMC per family unit — birth family (no PEDI) plus adoptive family
+    (PEDI adopted), etc. Deterministic: children, types, and parents are all sorted."""
     child_groups: dict[Any, list[tuple[Any, str]]] = defaultdict(list)
     for edge in live_edges:
         child_groups[edge["child_id"]].append(
@@ -170,54 +225,50 @@ def _link_children(
     child_famc: dict[Any, list[tuple[dict[str, Any], str | None]]] = defaultdict(list)
 
     for child_id in sorted(child_groups, key=str):
+        # Dedup parents (keep the first relationship_type seen per parent).
         unique_parents: dict[Any, str] = {}
         for parent_id, rel in child_groups[child_id]:
             unique_parents.setdefault(parent_id, rel)
-        parent_items = sorted(unique_parents.items(), key=lambda kv: str(kv[0]))
 
-        while len(parent_items) >= 2:
-            (p_a, rel_a), (p_b, rel_b) = parent_items[0], parent_items[1]
-            parent_items = parent_items[2:]
-            pair_key = frozenset({p_a, p_b})
-            fam = family_by_pair.get(pair_key)
-            if fam is None:
-                husb, wife = _husb_wife(
-                    p_a,
-                    persons_by_id[p_a].get("gender"),
-                    p_b,
-                    persons_by_id[p_b].get("gender"),
+        # Partition by relationship type so couples are never formed across types.
+        by_type: dict[str, list[Any]] = defaultdict(list)
+        for parent_id, rel in unique_parents.items():
+            by_type[rel].append(parent_id)
+
+        for rel in sorted(by_type):
+            pts = sorted(by_type[rel], key=str)
+            pedi = None if rel == "biological" else rel
+            consumed: set[Any] = set()
+
+            # 1. Prefer a real marriage between two parents OF THIS TYPE.
+            for i, p_a in enumerate(pts):
+                if p_a in consumed:
+                    continue
+                for p_b in pts[i + 1 :]:
+                    if p_b in consumed:
+                        continue
+                    fam = family_by_pair.get(frozenset({p_a, p_b}))
+                    if fam is not None and fam.get("marriage") is not None:
+                        consumed.update({p_a, p_b})
+                        fam["children"].append(child_id)
+                        child_famc[child_id].append((fam, pedi))
+                        break
+
+            remaining = [p for p in pts if p not in consumed]
+
+            # 2. Exactly two unmarried same-type parents → one couple FAM.
+            #    Otherwise (one, or three-plus that couldn't pair) → single-parent FAMs.
+            if len(remaining) == 2:
+                fam = _make_couple_fam(
+                    remaining[0], remaining[1], persons_by_id, families, family_by_pair
                 )
-                fam = {
-                    "husb": husb,
-                    "wife": wife,
-                    "marriage": None,
-                    "children": [],
-                    "_sort_key": (1, str(husb), str(wife)),
-                }
-                families.append(fam)
-                family_by_pair[pair_key] = fam
-            pedi = rel_a if rel_a != "biological" else (rel_b if rel_b != "biological" else None)
-            fam["children"].append(child_id)
-            child_famc[child_id].append((fam, pedi))
-
-        for parent_id, rel in parent_items:  # 0 or 1 leftover parent
-            single_key = frozenset({parent_id})
-            fam = family_by_pair.get(single_key)
-            if fam is None:
-                gender = persons_by_id[parent_id].get("gender")
-                is_husb = gender != "female"
-                fam = {
-                    "husb": parent_id if is_husb else None,
-                    "wife": parent_id if not is_husb else None,
-                    "marriage": None,
-                    "children": [],
-                    "_sort_key": (2, str(parent_id)),
-                }
-                families.append(fam)
-                family_by_pair[single_key] = fam
-            pedi = rel if rel != "biological" else None
-            fam["children"].append(child_id)
-            child_famc[child_id].append((fam, pedi))
+                fam["children"].append(child_id)
+                child_famc[child_id].append((fam, pedi))
+            else:
+                for parent_id in remaining:
+                    fam = _make_single_fam(parent_id, persons_by_id, families, family_by_pair)
+                    fam["children"].append(child_id)
+                    child_famc[child_id].append((fam, pedi))
 
     return child_famc
 
