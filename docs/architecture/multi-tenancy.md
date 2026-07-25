@@ -51,7 +51,13 @@ PostgreSQL instance
    depends on it.
 3. **Write side.** Create/update validate that body-supplied references (person ids on
    relationship/event/branch, founder/parent ids) belong to the acting clan, so a clan
-   cannot attach its data to another clan's records.
+   cannot attach its data to another clan's records. Relationship writes enforce this via
+   `ensure_persons_in_clan` (a `clan_memberships` membership check → `404
+   person_not_found`). Preventing **cross-clan edges** (an edge whose endpoint is not a
+   member of the edge's clan, which the tree CTEs would otherwise traverse) is an
+   accepted **application-layer** guarantee — there is intentionally no DB membership
+   trigger; RLS layer-2 (below) is the planned database backstop. Pinned two-sided by
+   `test_cross_clan_edge_guard.py`. See [ADR-031](../decisions/031-cross-clan-edges-app-layer.md).
 4. **RBAC.** `require_role` / `RequireClanRole` re-derive the caller's role from
    `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.

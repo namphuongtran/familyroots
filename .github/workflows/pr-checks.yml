@@ -2,6 +2,10 @@ name: PR Checks
 
 on:
   pull_request:
+    # `edited` is required so a title-only fix re-runs the Conventional-Commits
+    # check — the default activity types (opened/synchronize/reopened) do not fire
+    # on a title edit, which otherwise leaves the check stuck at its first result.
+    types: [opened, synchronize, reopened, edited]
     branches: [main, develop]
 
 # The semantic-pull-request and gitleaks actions read PR metadata/commits via the

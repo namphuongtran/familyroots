@@ -32,6 +32,7 @@
 | [028](028-no-external-io-holding-db-connection.md) | No External I/O While Holding a Pooled DB Connection | Accepted, shipped (2026-07-18) |
 | [029](029-two-sided-spouse-order.md) | Two-Sided Per-Person `spouse_order` + Marriage Date-Order on Update | Accepted, shipped (2026-07-18) |
 | [030](030-platform-audit-newest-first-retention.md) | Platform Audit Log Newest-First (Opt-In DESC) + Audit Retention by Design | Accepted, shipped (2026-07-25) |
+| [031](031-cross-clan-edges-app-layer.md) | Cross-Clan Edge Prevention Is an Application-Layer Guarantee (No DB Trigger) | Accepted (2026-07-25) |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural
