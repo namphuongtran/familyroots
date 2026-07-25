@@ -17,7 +17,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal, get_db
+from app.core.database import AsyncRequestSessionLocal, AsyncSessionLocal, get_db
 from app.core.exceptions import (
     AppError,
     app_exception_handler,
@@ -108,6 +108,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raise RuntimeError(message)
         logger.error(message)
 
+    # RLS layer-2 readiness (SP-3, ADR-008): if RLS is enabled, prove the request path
+    # genuinely drops to the non-bypass role. Otherwise RLS is silently inert (false
+    # security), or the role/grant is misconfigured and every request would 500 on the
+    # first SET LOCAL ROLE — catch it at boot, not per-request. Prod: refuse to boot;
+    # dev: warn. RLS_ENABLED=false is the deliberate app-layer-only fallback.
+    if settings.RLS_ENABLED:
+        try:
+            async with AsyncRequestSessionLocal() as session:
+                who = await session.scalar(text("SELECT current_user"))
+                bypass = await session.scalar(
+                    text("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
+                )
+            rls_ok = who == settings.RLS_APP_ROLE and bypass is False
+            rls_detail = f"current_user={who}, bypassrls={bypass}"
+        except Exception as exc:
+            rls_ok = False
+            rls_detail = f"{type(exc).__name__}: {exc}"
+        if not rls_ok:
+            rls_message = (
+                f"RLS is enabled but the request role did not engage ({rls_detail}). Ensure "
+                f"the app DB user can SET ROLE {settings.RLS_APP_ROLE} (a NOBYPASSRLS role) "
+                "and migrations are applied, or set RLS_ENABLED=false for app-layer-only."
+            )
+            if settings.APP_ENV == "production":
+                raise RuntimeError(rls_message)
+            logger.error(rls_message)
+
     try:
         yield
     finally:
@@ -187,7 +214,8 @@ def create_app() -> FastAPI:
     # NOTE: No tenant middleware — clan isolation is enforced in the
     # application/repository layer (every clan-scoped read takes clan_id).
     # Users select their active clan via the X-Current-Clan-Id header.
-    # DB-level RLS is a planned defense-in-depth addition (SP-3C), not yet active.
+    # DB-level RLS layer-2 (SP-3, ADR-008) is defense-in-depth behind that: Phase 1 is
+    # active for `documents` via the request-role seam (app/core/rls.py).
 
     # Include API v1 routes
     application.include_router(api_v1_router, prefix="/api/v1")

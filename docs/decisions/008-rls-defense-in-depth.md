@@ -1,14 +1,36 @@
 # ADR-008: Row-Level Security as Defense-in-Depth Layer-2
 
 ## Status
-Accepted — **Pilot only; not active for application traffic** (as of 2026-06-28).
-Shipped: the `documents` pilot (migration `002_rls_documents_pilot`) — a non-bypass
-`familyroots_app` role + a fail-closed clan policy, `ENABLE`d (not `FORCE`d), proven
-by `test_rls_documents`. Not yet implemented: runtime activation (the app still
-connects as a bypass role, so RLS is inert for app traffic), the per-request GUC
-plumbing, the role switch, the startup non-bypass assertion, and the table-by-table
-rollout + CI coverage test. Until activation, **application-layer isolation is the
-only enforced layer**.
+Accepted — **Phase 1 ACTIVE: `documents` is RLS-enforced for application traffic**
+(2026-07-25); table-by-table rollout in progress. The application layer remains the
+PRIMARY isolation mechanism; RLS is defense-in-depth.
+
+Shipped:
+- Pilot (migration `002_rls_documents_pilot`, 2026-06-28) — the non-bypass
+  `familyroots_app` role + the fail-closed `documents_clan_isolation` policy
+  (`ENABLE`d, not `FORCE`d), proven at the DB level by `test_rls_documents`.
+- **Phase-1 runtime activation (2026-07-25)** — the request path now drops to
+  `familyroots_app` and sets the transaction-local `app.clan_id` GUC via an
+  `after_begin` seam on a dedicated request session class (`app/core/rls.py`,
+  `app/core/database.py::RlsSession`/`AsyncRequestSessionLocal`), driven by a request
+  `ContextVar` that `get_current_clan_id` populates. Migration `026_rls_activation_grants`
+  completes the role's grants (EXECUTE on functions, sequence usage). The
+  `RLS_ENABLED`/`RLS_APP_ROLE` settings gate it (disabling is the code-free rollback).
+  System paths (Alembic, scheduler, document-purge) use the default privileged session
+  and legitimately bypass. Proven by `test_rls_activation` (seam applies role+GUC with
+  no manual SET, re-applies after commit, fail-closed default-deny, system bypass,
+  rollback switch, grant smoke, and a coverage-enumeration CI guard).
+
+**Ordering blocker (resolved).** `get_current_clan_id → get_current_user → get_db`, so
+the transaction begins before the clan is known. Resolution: the `after_begin` event
+drops the role every transaction (auth deps touch only non-RLS tables in Phase 1), and
+`get_current_clan_id` sets the GUC the moment it resolves the clan (plus records it in
+the ContextVar so post-commit transactions re-apply it).
+
+Not yet: RLS on tables other than `documents` (Phase 2+ — `persons` via a
+`clan_memberships` subquery needs a perf check), and a possible final `FORCE ROW LEVEL
+SECURITY`. Until each table is covered, its application-layer filter remains its only
+enforced isolation.
 
 ## Context
 Clan isolation is currently enforced entirely in the **application/repository

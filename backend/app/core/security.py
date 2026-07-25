@@ -10,7 +10,7 @@ import httpx
 from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.exceptions import AppError, AuthenticationError, ForbiddenError
 from app.core.locale import SUPPORTED_LOCALES
+from app.core.rls import set_request_clan_id
 from app.domain.auth.identity_provider import IdentityUnavailableError
 from app.models.user_profile import UserProfile
 
@@ -271,5 +272,13 @@ async def get_current_clan_id(
     is_active = await db.scalar(select(Clan.is_active).where(Clan.id == resolved_clan_id))
     if not is_active:
         raise ForbiddenError("clan_suspended")
+
+    # RLS layer-2 (SP-3, ADR-008): record the active clan so the request session sets
+    # app.clan_id on each transaction, and apply it to the CURRENT transaction now — it
+    # began (during auth) before the clan was known, so this same session's later queries
+    # must be clan-scoped immediately. No-op at the DB when RLS is disabled or the session
+    # is privileged (set_config is harmless there).
+    set_request_clan_id(resolved_clan_id)
+    await db.execute(select(func.set_config("app.clan_id", str(resolved_clan_id), True)))
 
     return resolved_clan_id
