@@ -263,8 +263,14 @@ async def test_divorced_coparents_still_linked_via_child(async_session: AsyncSes
     assert len(rows) >= 2, "co-parents must stay connected after divorce"
     assert rows[0].person_id == a and rows[-1].person_id == b, [r.person_id for r in rows]
 
-    # The shared child provides a live blood route independent of the marriage: A→C→B is
-    # child then parent, with no spouse edge on it.
+    # ...and the A→B route must NOT use the divorced marriage: it runs through the shared
+    # child (A→C→B = child then parent), with no spouse edge. This also WITNESSES the fix —
+    # before migration 024 the divorced spouse edge gave the shorter A→B = ['spouse'].
+    assert _edges(rows) == ["child", "parent"], (
+        f"co-parents must link via child, not spouse: {_edges(rows)}"
+    )
+
+    # The shared child provides a live blood route independent of the marriage.
     via_child = await _find_path(async_session, a, c, clan_id)
     assert _edges(via_child) == ["child"], _edges(via_child)
 
