@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, settings
-from app.core.rls import register_rls_session_events
+from app.core.rls import register_rls_session_events, set_request_clan_id
 
 # NOTE: if DATABASE_URL is ever pointed at a transaction-mode connection pooler
 # (e.g. Supabase's pgbouncer on :6543), psycopg v3's automatic server-side
@@ -75,4 +75,9 @@ async def get_db() -> AsyncIterator[AsyncSession]:
     RLS request role (SET LOCAL ROLE + app.clan_id), so DB-level clan isolation applies
     behind the primary application-layer filters."""
     async with AsyncRequestSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            # Belt-and-suspenders: each request runs in its own task/context, but clear
+            # the clan ContextVar so a stale value can never bleed into a reused context.
+            set_request_clan_id(None)
