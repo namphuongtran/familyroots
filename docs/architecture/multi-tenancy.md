@@ -4,12 +4,13 @@
 
 FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 
-> **Status (2026-06-28):** Isolation is enforced **in the application/repository
-> layer** — this is the primary, tested guarantee. Row-Level Security is a
-> **deferred defense-in-depth layer-2** (ADR-008): a single-table pilot exists on
-> `documents` (`ENABLE`d, not `FORCE`d) but the app still connects as a
-> privileged/bypass role, so **RLS is currently inert for application traffic**.
-> The sections below describe the application-layer mechanism that actually runs.
+> **Status (2026-07-25):** Isolation is enforced **in the application/repository
+> layer** — this is the primary, tested guarantee. Row-Level Security is the
+> **defense-in-depth layer-2** (ADR-008); **Phase 1 is ACTIVE**: request traffic
+> runs under the non-bypass `familyroots_app` role with a per-request `app.clan_id`
+> GUC, so `documents` is now RLS-enforced at the DB layer (other clan-scoped tables
+> are added table-by-table). The sections below describe the application-layer
+> mechanism that remains the primary guarantee.
 
 ## Why not separate schemas?
 
@@ -61,9 +62,13 @@ PostgreSQL instance
 4. **RBAC.** `require_role` / `RequireClanRole` re-derive the caller's role from
    `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
-6. **RLS (deferred layer-2).** A `documents` pilot exists (non-bypass `familyroots_app`
-   role + a fail-closed clan policy), proven by tests, but not yet wired into the app's
-   connection — see ADR-008.
+6. **RLS layer-2 (Phase 1 ACTIVE for `documents`).** The request path drops to the
+   non-bypass `familyroots_app` role and sets the transaction-local `app.clan_id` GUC
+   (an `after_begin` seam on the request session, driven by a ContextVar
+   `get_current_clan_id` sets), so `documents` is RLS-enforced at the DB layer behind the
+   primary application filters. System paths (scheduler/purge/migrations) use the
+   privileged session and bypass. Other clan-scoped tables are added table-by-table
+   (Phase 2+). Gated by `RLS_ENABLED` (code-free rollback). See ADR-008.
 
 ## Multi-clan membership (clan switcher)
 

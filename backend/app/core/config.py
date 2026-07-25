@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     APP_DEBUG: bool = False
     APP_PORT: int = 8000
 
+    # RLS layer-2 (SP-3, ADR-008). When enabled, request-path transactions drop to the
+    # non-bypass RLS_APP_ROLE and set the app.clan_id GUC. Disabling is the code-free
+    # rollback switch (RLS off → the application layer still fully enforces isolation).
+    RLS_ENABLED: bool = True
+    RLS_APP_ROLE: str = "familyroots_app"
+
     # Supabase / PostgreSQL
     DATABASE_URL: str = "postgresql+psycopg://postgres:password@localhost:5432/family_roots"
     SUPABASE_URL: str = ""

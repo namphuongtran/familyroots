@@ -1,8 +1,11 @@
 """Async SQLAlchemy engine and session management.
 
 Single schema — no search_path switching. clan_id isolation is enforced in the
-application/repository layer (explicit clan_id filtering on every clan-scoped
-read). DB-level RLS is a planned defense-in-depth addition (SP-3C), not yet active.
+application/repository layer (explicit clan_id filtering on every clan-scoped read) as
+the PRIMARY guarantee. RLS layer-2 (SP-3, ADR-008) is defense-in-depth: request sessions
+(``AsyncRequestSessionLocal``/``RlsSession``) drop to the non-bypass role + set the
+``app.clan_id`` GUC per transaction (see ``app/core/rls.py``); system sessions
+(``AsyncSessionLocal``) stay privileged and bypass. Phase 1 enforces ``documents``.
 """
 
 from collections.abc import AsyncIterator
@@ -13,8 +16,10 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, settings
+from app.core.rls import register_rls_session_events
 
 # NOTE: if DATABASE_URL is ever pointed at a transaction-mode connection pooler
 # (e.g. Supabase's pgbouncer on :6543), psycopg v3's automatic server-side
@@ -39,6 +44,8 @@ def make_engine(settings: Settings) -> AsyncEngine:
 
 engine = make_engine(settings)
 
+# SYSTEM sessions (lifespan, scheduler, document-purge) — privileged, no RLS seam, so
+# these cross-clan/system writers legitimately bypass RLS (SP-3 Phase 1, ADR-008).
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
@@ -46,7 +53,26 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+class RlsSession(Session):
+    """Request-path sync Session. A distinct subclass so the RLS ``after_begin`` seam
+    (SET LOCAL ROLE + app.clan_id GUC) attaches ONLY to request transactions, never to
+    the system ``AsyncSessionLocal``/scheduler sessions (option A — explicit split)."""
+
+
+register_rls_session_events(RlsSession)
+
+# REQUEST sessions — drop to the non-bypass role + set the clan GUC per transaction.
+AsyncRequestSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    sync_session_class=RlsSession,
+    expire_on_commit=False,
+)
+
+
 async def get_db() -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency — yield an async database session."""
-    async with AsyncSessionLocal() as session:
+    """FastAPI request dependency — an async session whose transactions run under the
+    RLS request role (SET LOCAL ROLE + app.clan_id), so DB-level clan isolation applies
+    behind the primary application-layer filters."""
+    async with AsyncRequestSessionLocal() as session:
         yield session
