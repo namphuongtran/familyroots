@@ -121,15 +121,17 @@ async def _parent_child(
 async def _find_path(
     s: AsyncSession, frm: uuid.UUID, to: uuid.UUID, clan_id: uuid.UUID
 ) -> list[Any]:
-    return (
-        await s.execute(
-            sa.text(
-                "SELECT step, person_id, edge_type "
-                "FROM public.find_relationship_path(:f, :t, :c) ORDER BY step"
-            ),
-            {"f": frm, "t": to, "c": clan_id},
-        )
-    ).all()
+    return list(
+        (
+            await s.execute(
+                sa.text(
+                    "SELECT step, person_id, edge_type "
+                    "FROM public.find_relationship_path(:f, :t, :c) ORDER BY step"
+                ),
+                {"f": frm, "t": to, "c": clan_id},
+            )
+        ).all()
+    )
 
 
 def _edges(rows: list[Any]) -> list[str]:
