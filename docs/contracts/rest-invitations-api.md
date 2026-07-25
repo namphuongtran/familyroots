@@ -30,8 +30,14 @@ Headers:
 
 - The path `{clan_id}` **must equal** the active `X-Current-Clan-Id`, else
   403 `clan_context_mismatch` (the guard fires before the handler).
-- A pending invitation is unique per `(clan_id, email)` (partial unique index);
-  a duplicate create surfaces `invitation.pending_exists` (409).
+- A **live** pending invitation is unique per `(clan_id, email)` (partial unique
+  index); creating a second one while the first is still valid surfaces
+  `invitation.pending_exists` (409).
+- **Re-inviting after expiry works** (M11): a pending invitation whose `expires_at`
+  has passed is lazily transitioned to `expired` on the next create for that
+  `(clan_id, email)`, and the new invitation is issued with a fresh `token`/`expires_at`.
+  Expiry is realized lazily on re-invite (no background sweep) and emits no event; the
+  timed-out row remains as `expired` history. Only a *still-valid* pending invite blocks.
 - The invitation `token` is a ~256-bit `secrets.token_urlsafe(32)` value.
 
 ### Invitee surface — base route: /api/v1/invitations
