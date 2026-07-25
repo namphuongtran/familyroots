@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 
 import pytest
 import sqlalchemy as sa
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -202,10 +201,6 @@ async def test_submit_claim_commits_without_crash(async_engine: AsyncEngine) -> 
             )
         except AttributeError as exc:  # pragma: no cover - the C10 regression
             pytest.fail(f"submit_claim crashed at commit (uow.track on ORM model): {exc}")
-        except ValidationError:
-            # Known harness artifact: model_validate lazy-loads updated_at outside the
-            # FastAPI greenlet. The commit already succeeded; assertions below verify it.
-            pass
 
     async with maker() as verify:
         claim = (
@@ -222,8 +217,13 @@ async def test_submit_claim_commits_without_crash(async_engine: AsyncEngine) -> 
                 sa.text(
                     "SELECT clan_id, actor_id, actor_role, new_value "
                     "FROM audit_logs "
-                    "WHERE action = 'claim.submit' AND resource_type = 'identity_claim'"
-                )
+                    "WHERE action = 'claim.submit' AND resource_type = 'identity_claim' "
+                    # Scope to THIS test's actor (a fresh uuid4) — the session-scoped test
+                    # DB is shared, and other suites (e.g. test_claims_audit) also write
+                    # claim.submit rows; without this the count assertion collides.
+                    "AND actor_id = :a"
+                ),
+                {"a": claimant_id},
             )
         ).all()
         assert len(audit) == 1

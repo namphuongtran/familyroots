@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from app.application.shared.audit import track_audit_event
 from app.core.pagination import build_page
 from app.domain.person.claim_entity import IdentityClaim as ClaimEntity
 from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
@@ -16,6 +17,7 @@ from app.domain.shared.exceptions import (
     EntityNotFoundError,
     ForbiddenError,
 )
+from app.domain.shared.value_objects import ActorInfo
 from app.schemas.claim import IdentityClaimResponse
 
 
@@ -56,13 +58,13 @@ class ClaimCommandHandler:
             user_id=user_id, person_id=person_id, status="PENDING", requester_note=requester_note
         )
 
-        self._repo.add_audit(
-            clan_id=person.created_by_clan_id,
-            actor_id=user_id,
-            actor_role="viewer",  # They are applying, so minimum role
+        track_audit_event(
+            self._uow,
             action="claim.submit",
             resource_type="identity_claim",
             resource_id=claim_model.id,
+            actor=ActorInfo(user_id=user_id, role="viewer"),  # applying → minimum role
+            clan_id=person.created_by_clan_id,
             new_value={"status": "PENDING", "person_id": str(person_id)},
         )
 
@@ -89,17 +91,17 @@ class ClaimCommandHandler:
 
         # Get the clan_id for the audit log
         person = await self._repo.get_person(claim.person_id)
-        if person:
-            self._repo.add_audit(
-                clan_id=person.created_by_clan_id,
-                actor_id=user_id,
-                actor_role="viewer",
-                action="claim.cancel",
-                resource_type="identity_claim",
-                resource_id=claim.id,
-                old_value={"status": "PENDING"},
-                new_value={"status": "CANCELLED"},
-            )
+        clan_id = person.created_by_clan_id if person else None
+        track_audit_event(
+            self._uow,
+            action="claim.cancel",
+            resource_type="identity_claim",
+            resource_id=claim.id,
+            actor=ActorInfo(user_id=user_id, role="viewer"),
+            clan_id=clan_id,
+            old_value={"status": "PENDING"},
+            new_value={"status": "CANCELLED"},
+        )
 
         await self._uow.commit()
 
@@ -165,18 +167,23 @@ class ClaimCommandHandler:
                 approved_at=datetime.now(UTC),
             )
 
-        self._repo.add_audit(
-            clan_id=claim.person.created_by_clan_id,
-            actor_id=admin_id,
-            actor_role="admin",
+        track_audit_event(
+            self._uow,
             action="claim.approve",
             resource_type="identity_claim",
             resource_id=claim.id,
+            actor=ActorInfo(user_id=admin_id, role="admin"),
+            clan_id=claim.person.created_by_clan_id,
             old_value={"status": "PENDING"},
             new_value={"status": "APPROVED", "person_id": str(claim.person_id)},
         )
 
         await self._uow.commit()
+        # The UPDATE bumps the server-side `updated_at` (onupdate=func.now()), which
+        # SQLAlchemy expires after commit. Re-fetch the timestamps inside the async
+        # context so model_validate below doesn't trigger an async lazy-load
+        # (MissingGreenlet → 500); the targeted attribute list keeps relationships loaded.
+        await self._uow.session.refresh(claim, attribute_names=["updated_at", "created_at"])
         return IdentityClaimResponse.model_validate(claim)
 
     async def reject_claim(
@@ -203,18 +210,21 @@ class ClaimCommandHandler:
         claim.reviewer_note = entity.reviewer_note
         claim.reviewed_at = entity.reviewed_at
 
-        self._repo.add_audit(
-            clan_id=claim.person.created_by_clan_id,
-            actor_id=admin_id,
-            actor_role="admin",
+        track_audit_event(
+            self._uow,
             action="claim.reject",
             resource_type="identity_claim",
             resource_id=claim.id,
+            actor=ActorInfo(user_id=admin_id, role="admin"),
+            clan_id=claim.person.created_by_clan_id,
             old_value={"status": "PENDING"},
             new_value={"status": "REJECTED"},
         )
 
         await self._uow.commit()
+        # See approve_claim: refresh the server-side timestamps expired by the UPDATE
+        # so model_validate doesn't async lazy-load them (MissingGreenlet → 500).
+        await self._uow.session.refresh(claim, attribute_names=["updated_at", "created_at"])
         return IdentityClaimResponse.model_validate(claim)
 
     async def unlink_identity(
@@ -247,13 +257,13 @@ class ClaimCommandHandler:
             claim.reviewed_by = admin_id
             claim.reviewed_at = datetime.now(UTC)
 
-        self._repo.add_audit(
-            clan_id=clan_id,
-            actor_id=admin_id,
-            actor_role="admin",
+        track_audit_event(
+            self._uow,
             action="claim.unlink",
             resource_type="identity_claim",
             resource_id=claim.id if claim else None,
+            actor=ActorInfo(user_id=admin_id, role="admin"),
+            clan_id=clan_id,
             old_value={"person_id": str(person_id)},
             new_value={"person_id": None, "reason": reason},
         )
@@ -326,13 +336,13 @@ class ClaimCommandHandler:
             reviewed_at=datetime.now(UTC),
         )
 
-        self._repo.add_audit(
-            clan_id=clan_id,
-            actor_id=admin_id,
-            actor_role="admin",
+        track_audit_event(
+            self._uow,
             action="claim.prelink",
             resource_type="identity_claim",
             resource_id=claim_model.id,
+            actor=ActorInfo(user_id=admin_id, role="admin"),
+            clan_id=clan_id,
             new_value={"person_id": str(person_id), "user_id": str(user_id_to_link)},
         )
 

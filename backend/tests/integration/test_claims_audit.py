@@ -35,7 +35,6 @@ import pytest
 import sqlalchemy as sa
 from fastapi import Header
 from httpx import ASGITransport, AsyncClient
-from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import get_db
@@ -264,30 +263,19 @@ async def _approve_over_http(
     claim_id: uuid.UUID,
     headers: dict[str, str],
 ) -> None:
-    """POST the approve endpoint, tolerating a known, unrelated harness artifact.
+    """POST the approve endpoint and require a clean 200.
 
-    ``approve_claim`` (app/application/person/claim_handlers.py) commits successfully
-    -- its ``add_audit`` call and the uow commit both complete -- and only THEN calls
-    ``IdentityClaimResponse.model_validate(claim)`` to build the response body. That
-    lazy-loads the UPDATE-triggered ``updated_at`` column (onupdate=func.now(), a
-    server-side value SQLAlchemy did not eagerly fetch via RETURNING for this UPDATE),
-    which raises MissingGreenlet wrapped as a pydantic ValidationError -- verified by
-    direct reproduction to occur identically whether the handler is invoked directly
-    or over real HTTP (contradicts the "test-harness only" assumption noted in
-    tests/integration/test_claim_approval.py; this is a pre-existing, separate defect,
-    out of scope for M12's ip/user_agent fix). Since it fires strictly AFTER the
-    commit we care about, the audit_logs row is already durable by the time this is
-    raised, so we swallow it here and let the DB assertions verify the real behavior.
+    Task 2 folded in the post-commit MissingGreenlet fix (approve_claim now refreshes
+    the UPDATE-expired ``updated_at``/``created_at`` before ``model_validate``), so the
+    endpoint returns a real ``IdentityClaimResponse`` instead of raising a pydantic
+    ValidationError after an already-durable commit. No tolerance needed anymore.
     """
-    try:
-        resp = await client.post(
-            f"/api/v1/clans/{clan_id}/claims/{claim_id}/approve",
-            json={"reviewer_note": "looks right"},
-            headers=headers,
-        )
-        assert resp.status_code == 200, resp.text
-    except PydanticValidationError:
-        pass
+    resp = await client.post(
+        f"/api/v1/clans/{clan_id}/claims/{claim_id}/approve",
+        json={"reviewer_note": "looks right"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
 
 
 async def test_claim_approve_audit_has_ip_and_user_agent(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +11,6 @@ from sqlalchemy.orm import selectinload
 
 from app.core.pagination import paginate_query
 from app.domain.person.claim_repository import ClaimQueryPort, ClaimRepository
-from app.models.audit_log import AuditLog
 from app.models.identity_claim import IdentityClaim as ClaimModel
 from app.models.person import Person
 from app.models.user_clan_role import UserClanRole
@@ -126,31 +124,6 @@ class SqlAlchemyClaimRepository(ClaimRepository):
         # uuid default), so this is about persisting the row, not populating the id.
         await self._session.flush()
         return claim
-
-    def add_audit(
-        self,
-        *,
-        clan_id: uuid.UUID | None,
-        actor_id: uuid.UUID,
-        actor_role: str,
-        action: str,
-        resource_type: str,
-        resource_id: uuid.UUID | None,
-        old_value: dict[str, Any] | None = None,
-        new_value: dict[str, Any] | None = None,
-    ) -> None:
-        self._session.add(
-            AuditLog(
-                clan_id=clan_id,
-                actor_id=actor_id,
-                actor_role=actor_role,
-                action=action,
-                resource_type=resource_type,
-                resource_id=resource_id,
-                old_value=old_value,
-                new_value=new_value,
-            )
-        )
 
     def add_role(
         self,

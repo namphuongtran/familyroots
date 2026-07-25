@@ -17,7 +17,6 @@ from datetime import UTC, datetime
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.exc
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -29,6 +28,7 @@ from app.application.person.claim_handlers import ClaimCommandHandler
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from app.schemas.claim import IdentityClaimResponse
 
 
 @pytest.fixture()
@@ -131,11 +131,12 @@ async def test_approve_claim_new_claimant_satisfies_check_constraint(
 
     # ── Act phase (separate session mirrors production wiring) ───────────────────
     # Pre-fix: IntegrityError raised inside uow.commit() due to CHECK violation.
-    # Post-fix: commit() succeeds; approve_claim then raises ValidationError (pydantic)
-    # when model_validate tries to refresh `updated_at` -- that is a test-harness
-    # artifact: outside FastAPI's greenlet the async lazy-load path is unavailable.
-    # In production the request runs inside an async greenlet so the load works.
-    # We only fail on IntegrityError (the C1 regression); DB assertions confirm state.
+    # Post-M12-Task2: commit() succeeds AND approve_claim returns a real
+    # IdentityClaimResponse. The prior "test-harness artifact" ValidationError was in
+    # fact the same real post-commit MissingGreenlet defect this task fixed (the handler
+    # now refreshes the UPDATE-expired `updated_at`/`created_at` before model_validate),
+    # so no tolerance is needed here anymore. We still fail loudly on IntegrityError
+    # (the C1 regression); the DB assertions below confirm the committed state.
     async with maker() as handler_session:
         repo = SqlAlchemyClaimRepository(handler_session)
         dispatcher = create_event_dispatcher(handler_session)
@@ -143,7 +144,7 @@ async def test_approve_claim_new_claimant_satisfies_check_constraint(
         handler = ClaimCommandHandler(repo, uow)
 
         try:
-            await handler.approve_claim(
+            result = await handler.approve_claim(
                 claim_id=claim_id,
                 admin_id=admin_id,
                 reviewer_note="ok",
@@ -152,14 +153,10 @@ async def test_approve_claim_new_claimant_satisfies_check_constraint(
             # C1 regression: CHECK constraint `user_clan_roles_approval_consistency` fired.
             # This means approved_by/approved_at were not set on the auto-granted role.
             pytest.fail(f"approve_claim raised IntegrityError (CHECK constraint violated): {exc}")
-        except ValidationError:
-            # Known test-harness artifact: after a successful commit, approve_claim calls
-            # IdentityClaimResponse.model_validate() which lazy-loads `updated_at` on the
-            # ORM object. Outside FastAPI's async greenlet, that SQLAlchemy lazy-load raises
-            # MissingGreenlet wrapped inside a pydantic ValidationError. The commit already
-            # succeeded at this point, so the SQL assertions below still verify correctness.
-            # In production the handler runs inside an async greenlet and returns normally.
-            pass
+
+        # approve_claim now returns cleanly (no MissingGreenlet): a real response DTO.
+        assert isinstance(result, IdentityClaimResponse)
+        assert result.status == "APPROVED"
 
     # ── Assert phase (fresh session reads committed state) ───────────────────────
     async with maker() as verify:
