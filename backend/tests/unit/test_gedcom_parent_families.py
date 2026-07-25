@@ -387,3 +387,31 @@ def test_deterministic_regardless_of_edge_order() -> None:
     gedcom_1 = build_gedcom(clan, persons, [], edges_a, [], {})
     gedcom_2 = build_gedcom(clan, persons, [], edges_b, [], {})
     assert gedcom_1 == gedcom_2, "GEDCOM output must be byte-identical regardless of edge order"
+
+
+def test_step_parent_emits_note_not_invalid_pedi() -> None:
+    """`2 PEDI step` is invalid GEDCOM 5.5.1 ({adopted, birth, foster, sealing}). A step
+    relationship must emit a NOTE under FAMC instead; adopted/foster stay valid PEDI."""
+    child = _person(full_name="Con")
+    step = _person(full_name="Cha Ghẻ")
+    adoptive = _person(full_name="Cha Nuôi")
+    foster = _person(full_name="Cha Đỡ Đầu")
+    edges = [
+        _edge(step["id"], child["id"], relationship_type="step"),
+        _edge(adoptive["id"], child["id"], relationship_type="adopted"),
+        _edge(foster["id"], child["id"], relationship_type="foster"),
+    ]
+    gedcom = build_gedcom(_clan(), [child, step, adoptive, foster], [], edges, [], {})
+
+    # No invalid PEDI value anywhere.
+    assert "2 PEDI step" not in gedcom
+    # Valid PEDI values are still emitted for adopted/foster.
+    assert "2 PEDI adopted" in gedcom
+    assert "2 PEDI foster" in gedcom
+
+    # The child's FAMC pedi values are only the valid ones (step → None, i.e. a NOTE).
+    child_rec = _indi_record(gedcom, _indi_xrefs(gedcom)["Con"])
+    pedis = {pedi for _, pedi in _famc_links(child_rec) if pedi is not None}
+    assert pedis == {"adopted", "foster"}
+    # The step relationship is documented via a NOTE (a valid GEDCOM structure).
+    assert any(line.startswith("2 NOTE") and "step" in line for line in child_rec), child_rec

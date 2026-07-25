@@ -119,6 +119,11 @@ _SUBMITTER_LINES = (
     "1 NAME FamilyRoots Export",
 )
 
+# GEDCOM 5.5.1 PEDI enum is {adopted, birth, foster, sealing}. Of our relationship_types
+# (biological/adopted/step/foster), only these two are valid PEDI values (biological is
+# the implied default → no PEDI; 'step' has no PEDI equivalent → emitted as a NOTE).
+_VALID_PEDI = frozenset({"adopted", "foster"})
+
 
 def _build_marriage_families(
     live_marriages: list[dict[str, Any]],
@@ -332,8 +337,13 @@ def _indi_lines(
 
     for fam, pedi in sorted(famc_links, key=lambda item: item[0]["_xref"]):
         lines.append(f"1 FAMC {fam['_xref']}")
-        if pedi:
+        if pedi in _VALID_PEDI:
             lines.append(f"2 PEDI {pedi}")
+        elif pedi:
+            # 'step' is a relationship_type but NOT a GEDCOM 5.5.1 PEDI value
+            # ({adopted, birth, foster, sealing}); emit a NOTE instead of an
+            # invalid `2 PEDI step` so the document validates.
+            lines.extend(_fold(2, "NOTE", f"FamilyRoots: {pedi}-parent relationship"))
 
     for fam in sorted(fams_links, key=lambda f: f["_xref"]):
         lines.append(f"1 FAMS {fam['_xref']}")
