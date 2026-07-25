@@ -144,7 +144,9 @@ class SqlAlchemyPlatformAdminQueryPort(PlatformAdminQueryPort):
         if action:
             query = query.where(AuditLog.action == action)
 
-        query = paginate_query(query, AuditLog, cursor, limit)
+        # Newest-first: the audit log's contract is "recent" and its indexes are
+        # created_at DESC. The opt-in keeps every other list on the default ASC scheme.
+        query = paginate_query(query, AuditLog, cursor, limit, descending=True)
         result = await self._session.execute(query)
         entries = list(result.scalars().all())
 
