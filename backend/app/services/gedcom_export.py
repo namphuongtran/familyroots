@@ -225,9 +225,12 @@ def _link_children(
     child_famc: dict[Any, list[tuple[dict[str, Any], str | None]]] = defaultdict(list)
 
     for child_id in sorted(child_groups, key=str):
-        # Dedup parents (keep the first relationship_type seen per parent).
+        # Dedup parents (one relationship_type per parent). Sort the edges first so the
+        # kept type is deterministic even in the (DB-unique-index-precluded) case of a
+        # parent appearing twice under different types — determinism rests on sorting
+        # here, not on input/edge order.
         unique_parents: dict[Any, str] = {}
-        for parent_id, rel in child_groups[child_id]:
+        for parent_id, rel in sorted(child_groups[child_id], key=lambda pr: (str(pr[0]), pr[1])):
             unique_parents.setdefault(parent_id, rel)
 
         # Partition by relationship type so couples are never formed across types.
