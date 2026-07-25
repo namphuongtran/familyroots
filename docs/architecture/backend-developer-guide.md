@@ -106,11 +106,22 @@ side builds a fresh `SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))`; rea
 uses the `_repo_uow(db)` helper (same wrapper, no commit ever issued).
 
 **Lightweight audit path** — CRUD-heavy modules that don't warrant a full aggregate
-(documents, events, branches historically) may call `emit_audit_event(...)` from
-`app/application/shared/audit.py`, which wraps a `CrudAuditEvent` in a transient
-`AggregateRoot`, tracks it, and **commits the UoW itself**. Acceptable only when there are
-no domain invariants worth modeling; anything with real business rules gets the full
-entity + events treatment.
+(documents, events, branches historically, claims) use `app/application/shared/audit.py`,
+which wraps a `CrudAuditEvent` in a transient `AggregateRoot` and tracks it. Two entry
+points:
+- `emit_audit_event(...)` — tracks **and commits the UoW itself**. For handlers whose
+  audit is the only write, or the last one.
+- `track_audit_event(...)` — tracks **without committing**; the caller's own
+  `await uow.commit()` (after its state change) dispatches it in the same transaction.
+  For handlers that already commit their own write and would otherwise double-commit.
+
+This is the **only** sanctioned audit-write path — every module routes through the
+fail-closed `AuditLogHandler` (same-transaction + ip/user_agent enrichment from
+`RequestMeta`). Claims were migrated onto `track_audit_event` (M12); the old direct
+`claim_repository.add_audit` writer — which bypassed the dispatcher and so never
+recorded ip/user_agent — has been retired, leaving no non-dispatcher audit writer.
+Acceptable only when there are no domain invariants worth modeling; anything with real
+business rules gets the full entity + events treatment.
 
 ## 2. Read path (CQRS)
 
