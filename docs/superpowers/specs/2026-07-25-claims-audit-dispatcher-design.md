@@ -105,3 +105,24 @@ drift again (the review's stated goal).
   dispatcher (`emit_audit_event` / `track_audit_event`) is the ONLY audit writer.
 - Grep sweep: `add_audit|audit|claim` across docs/contracts + docs/architecture;
   per-hit dispositions.
+
+## Addendum (discovered during Task 1): approve/reject 500 post-commit — folded into M12
+
+`approve_claim` / `reject_claim` end with `return IdentityClaimResponse.model_validate(claim)`
+AFTER `uow.commit()`. `IdentityClaimResponse` declares `updated_at`, whose column
+carries `onupdate=func.now()` (server-side). After the status UPDATE, SQLAlchemy
+expires `updated_at` (it can't know the server-computed value and does not RETURNING
+it on UPDATE), so `model_validate` accessing it triggers an **async lazy refresh
+outside a greenlet → MissingGreenlet**, wrapped as a pydantic ValidationError → the
+handler 500s **even though the commit succeeded** (the claim IS approved/rejected).
+`submit_claim` is unaffected (INSERT fetches server defaults via RETURNING); `cancel`
+returns None (no serialization).
+
+This is a real, user-facing pre-existing bug (mislabeled a "test-harness artifact" in
+`tests/integration/test_claim_approval.py`). M12's own approve/reject audit tests
+can't cleanly assert a 200 without it, and M12 already rewrites these handlers, so
+the fix is folded in: after commit, before `model_validate`, refresh the expired
+timestamp columns within the async context —
+`await self._uow.session.refresh(claim, attribute_names=["updated_at", "created_at"])`
+— on both `approve_claim` and `reject_claim`. Both this suite's approve-tolerance and
+the pre-existing `test_claim_approval.py` tolerance are removed to assert clean 200s.
