@@ -177,7 +177,7 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
             .scalars()
             .all()
         )
-        assert rls_tables == {"documents"}, f"Phase-1 RLS scope drifted: {rls_tables}"
+        assert rls_tables == {"documents", "events", "branches"}, f"RLS scope drifted: {rls_tables}"
 
         for table in rls_tables:
             n_policies = await conn.scalar(
