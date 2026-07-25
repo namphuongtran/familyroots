@@ -140,8 +140,12 @@ async def test_audit_log_tiebreak_equal_created_at(session: AsyncSession) -> Non
     # Two explicit ids so we know the DESC-id winner.
     id_lo = uuid.UUID("00000000-0000-0000-0000-000000000001")
     id_hi = uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
-    await _audit_at(session, clan_id=clan_id, actor_id=actor_id, action="a", created_at=ts, row_id=id_lo)
-    await _audit_at(session, clan_id=clan_id, actor_id=actor_id, action="b", created_at=ts, row_id=id_hi)
+    await _audit_at(
+        session, clan_id=clan_id, actor_id=actor_id, action="a", created_at=ts, row_id=id_lo
+    )
+    await _audit_at(
+        session, clan_id=clan_id, actor_id=actor_id, action="b", created_at=ts, row_id=id_hi
+    )
     await session.commit()
 
     port = SqlAlchemyPlatformAdminQueryPort(session)
@@ -150,3 +154,18 @@ async def test_audit_log_tiebreak_equal_created_at(session: AsyncSession) -> Non
     page2 = await port.get_audit_log(clan_id, None, page1.meta.cursor, 1)
     assert [e.id for e in page2.data] == [id_lo]
     assert page2.meta.has_more is False
+
+
+async def test_audit_logs_created_at_index_exists(session: AsyncSession) -> None:
+    """M14 index pin: the platform-wide 'recent' scan is backed by a bare
+    (created_at DESC, id DESC) index (migration 025)."""
+    row = (
+        await session.execute(
+            sa.text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE tablename = 'audit_logs' AND indexname = 'idx_audit_logs_created_at'"
+            )
+        )
+    ).scalar_one_or_none()
+    assert row is not None, "idx_audit_logs_created_at is missing"
+    assert "created_at DESC" in row and "id DESC" in row, row

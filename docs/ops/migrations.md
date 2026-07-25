@@ -48,13 +48,17 @@ Single linear chain:
 `017_notification_sent_on` → `018_query_support_indexes` →
 `019_path_bfs_visited` → `020_event_soft_delete_occ` →
 `021_parent_child_guard` → `022_edge_write_serialization` →
-`023_one_founder_per_clan` → `024_kinship_exclude_divorced`.
+`023_one_founder_per_clan` → `024_kinship_exclude_divorced` →
+`025_audit_logs_created_at_index`.
 
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
 
-Head = `024_kinship_exclude_divorced`; verify with `cd backend && uv run alembic history`.
+`025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
+id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
+
+Head = `025_audit_logs_created_at_index`; verify with `cd backend && uv run alembic history`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

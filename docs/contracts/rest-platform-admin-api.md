@@ -26,6 +26,11 @@ Behavior:
   resolved server-side — not a JWT claim and not clan-scoped).
 - Used for platform-wide oversight rather than clan-scoped business workflows.
 - Suspended clans reject clan-scoped requests with 403 `clan_suspended`.
+- **`GET /audit-log` is newest-first (DESC)** — the single intentional exception to the
+  otherwise-ASC list ordering, matching its "recent" purpose and its `created_at DESC`
+  indexes (ADR-030). The opaque cursor still just walks the next (older) page.
+  `audit_logs` is retained indefinitely (audit trail = compliance/heritage record; no
+  retention purge by design — ADR-030).
 
 ## Versioning & Compatibility Rules
 - Any change to super-admin authorization is high risk and should be treated as breaking.
