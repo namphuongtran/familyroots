@@ -138,6 +138,7 @@
   "error.http_error": "Request failed",
   "error.insufficient_permissions": "You do not have permission to perform this action",
   "error.invalid_clan_id_format": "Invalid clan id format",
+  "error.invalid_cursor": "The pagination cursor is invalid.",
   "error.invalid_event_type": "Invalid event type",
   "error.invalid_role": "Invalid role",
   "error.invalid_role_assignment": "Invalid role assignment",

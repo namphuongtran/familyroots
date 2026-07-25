@@ -138,6 +138,7 @@
   "error.http_error": "Échec de la requête",
   "error.insufficient_permissions": "Vous n'avez pas la permission d'effectuer cette action",
   "error.invalid_clan_id_format": "Format d'identifiant de clan invalide",
+  "error.invalid_cursor": "Le curseur de pagination n'est pas valide.",
   "error.invalid_event_type": "Type d'événement invalide",
   "error.invalid_role": "Rôle invalide",
   "error.invalid_role_assignment": "Attribution de rôle invalide",

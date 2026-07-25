@@ -26,6 +26,11 @@ across all routers):
     default/cap).
   - This cursor scheme is the **only** pagination contract — there is no
     `page`/`page_size`/`total`/`next_cursor` variant anywhere in the API.
+  - A malformed or tampered `cursor` value (bad base64, non-JSON payload, or a
+    valid-shaped payload missing the expected fields) returns `400
+    invalid_cursor` (see [error-codes.md](error-codes.md)) rather than a 500 —
+    the cursor stays opaque; clients must never construct or repair one
+    themselves, just drop it and refetch the first page.
 - **204 No Content** responses (e.g. revoke/unlink/cancel) have **no body**.
 - **Non-data adjuncts live under `meta`**, never mixed into `data`:
   - `meta.errors` — per-item failures in a batch/partial-failure operation

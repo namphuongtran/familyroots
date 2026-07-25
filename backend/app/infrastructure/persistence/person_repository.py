@@ -11,6 +11,7 @@ import uuid
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy import update as sql_update
 
+from app.core.exceptions import AppError
 from app.core.pagination import decode_fields_cursor
 from app.domain.person.entity import Person as PersonEntity
 from app.domain.person.repository import PersonFilters, PersonSearchResult
@@ -130,8 +131,11 @@ class SqlAlchemyPersonRepository:
         # whenever id-order and full_name-order disagree.
         if cursor:
             decoded = decode_fields_cursor(cursor)
-            cursor_name = decoded["full_name"]
-            cursor_id = uuid.UUID(decoded["id"])
+            try:
+                cursor_name = decoded["full_name"]
+                cursor_id = uuid.UUID(decoded["id"])
+            except (KeyError, ValueError, TypeError) as exc:
+                raise AppError(400, "invalid_cursor") from exc
             stmt = stmt.where(
                 or_(
                     PersonModel.full_name > cursor_name,

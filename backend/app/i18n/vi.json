@@ -138,6 +138,7 @@
   "error.http_error": "Yêu cầu thất bại",
   "error.insufficient_permissions": "Bạn không có quyền thực hiện thao tác này",
   "error.invalid_clan_id_format": "Định dạng mã dòng họ không hợp lệ",
+  "error.invalid_cursor": "Con trỏ phân trang không hợp lệ.",
   "error.invalid_event_type": "Loại sự kiện không hợp lệ",
   "error.invalid_role": "Vai trò không hợp lệ",
   "error.invalid_role_assignment": "Phân vai trò không hợp lệ",
