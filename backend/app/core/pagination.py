@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, asc, or_
+from sqlalchemy import and_, asc, desc, or_
 
 from app.core.exceptions import AppError
 
@@ -42,20 +42,35 @@ def decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise AppError(400, "invalid_cursor") from exc
 
 
-def paginate_query(query: Any, model: Any, cursor: str | None, limit: int = 20) -> Any:
+def paginate_query(
+    query: Any, model: Any, cursor: str | None, limit: int = 20, descending: bool = False
+) -> Any:
     """Apply cursor filter and ordering to a SQLAlchemy select query.
 
-    Always orders by (created_at ASC, id ASC) for stable pagination.
-    Fetches ``limit + 1`` rows to detect whether more pages exist.
+    Orders by ``(created_at, id)`` — ASC by default (the single frontend-bound list
+    scheme; every clan-facing list uses this). Pass ``descending=True`` for newest-first
+    (the platform-admin audit log, whose contract is "recent"): the keyset comparator and
+    the ordering both flip, and the opaque ``(created_at, id)`` cursor / ``build_page``
+    are direction-agnostic. Fetches ``limit + 1`` rows to detect a further page.
     """
     if cursor:
         created_at, last_id = decode_cursor(cursor)
-        query = query.where(
-            or_(
-                model.created_at > created_at,
-                and_(model.created_at == created_at, model.id > last_id),
+        if descending:
+            query = query.where(
+                or_(
+                    model.created_at < created_at,
+                    and_(model.created_at == created_at, model.id < last_id),
+                )
             )
-        )
+        else:
+            query = query.where(
+                or_(
+                    model.created_at > created_at,
+                    and_(model.created_at == created_at, model.id > last_id),
+                )
+            )
+    if descending:
+        return query.order_by(desc(model.created_at), desc(model.id)).limit(limit + 1)
     return query.order_by(asc(model.created_at), asc(model.id)).limit(limit + 1)
 
 
