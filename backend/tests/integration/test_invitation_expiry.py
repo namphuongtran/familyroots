@@ -94,11 +94,12 @@ async def _pending_count(session: AsyncSession, clan_id: uuid.UUID, email: str) 
 
 
 async def _status_of_token(session: AsyncSession, token: str) -> str:
-    return (
+    row = (
         await session.execute(
             sa.text("SELECT status FROM clan_invitations WHERE token = :t"), {"t": token}
         )
     ).scalar_one()
+    return str(row)
 
 
 def _create_cmd(clan_id: uuid.UUID, email: str, inviter: uuid.UUID) -> CreateInvitation:
@@ -158,7 +159,7 @@ async def test_live_pending_still_blocks(async_session: AsyncSession) -> None:
     )
     await async_session.commit()
 
-    with pytest.raises(ConflictError, match="invitation.pending_exists"):
+    with pytest.raises(ConflictError, match=r"invitation\.pending_exists"):
         await _handler(async_session).create(_create_cmd(clan_id, email, inviter))
     await async_session.rollback()
 
@@ -248,3 +249,58 @@ async def test_reinvite_isolation_two_sided(async_session: AsyncSession) -> None
     # clanB is untouched: still exactly one pending, same token.
     assert await _pending_count(async_session, clan_b, email) == 1
     assert await _status_of_token(async_session, b_token) == "pending"
+
+
+@pytest.mark.asyncio
+async def test_expire_stale_pending_targets_only_stale(async_session: AsyncSession) -> None:
+    """Direct repo probe (Task 2): expire_stale_pending flips ONLY a past-expiry pending
+    row to 'expired'; a future-expiry pending and a non-pending row are untouched."""
+    repo = SqlAlchemyInvitationRepository(async_session)
+    clan = uuid.uuid4()
+    inviter = uuid.uuid4()
+    await _seed_clan(async_session, clan)
+
+    stale = await _seed_pending(
+        async_session,
+        clan_id=clan,
+        inviter=inviter,
+        token="stale-tok",
+        email="stale@example.com",
+        expires_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    await async_session.commit()
+
+    # Past-expiry pending -> exactly one row flipped to 'expired'.
+    assert await repo.expire_stale_pending(clan, "stale@example.com") == 1
+    await async_session.commit()
+    assert await _status_of_token(async_session, "stale-tok") == "expired"
+
+    # Future-expiry pending -> untouched (returns 0).
+    await _seed_pending(
+        async_session,
+        clan_id=clan,
+        inviter=inviter,
+        token="live-tok",
+        email="live@example.com",
+        expires_at=datetime.now(UTC) + timedelta(days=3),
+    )
+    # An already-accepted past-expiry row must also be left alone (status guard).
+    await _seed_pending(
+        async_session,
+        clan_id=clan,
+        inviter=inviter,
+        token="done-tok",
+        email="done@example.com",
+        expires_at=datetime.now(UTC) - timedelta(days=2),
+        status="accepted",
+    )
+    await async_session.commit()
+
+    assert await repo.expire_stale_pending(clan, "live@example.com") == 0
+    assert await repo.expire_stale_pending(clan, "done@example.com") == 0
+    await async_session.commit()
+    assert await _status_of_token(async_session, "live-tok") == "pending"
+    assert await _status_of_token(async_session, "done-tok") == "accepted"
+    # The already-expired stale row is idempotent (no longer pending -> 0 rows).
+    assert await repo.expire_stale_pending(clan, "stale@example.com") == 0
+    _ = stale

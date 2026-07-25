@@ -11,7 +11,13 @@ from app.domain.invitation.entity import Invitation
 
 class InvitationRepository(Protocol):
     async def get_pending_by_email(self, clan_id: uuid.UUID, email: str) -> Any | None:
-        """Return a pending invitation for (clan_id, email), if any."""
+        """Return a LIVE pending invitation for (clan_id, email), if any (a timed-out
+        one does not count — it is retired by ``expire_stale_pending``)."""
+        ...
+
+    async def expire_stale_pending(self, clan_id: uuid.UUID, email: str) -> int:
+        """Transition a timed-out pending invitation for (clan_id, email) to ``expired``.
+        Returns the number of rows affected (0 or 1)."""
         ...
 
     async def get_by_token(self, token: str) -> Invitation | None:

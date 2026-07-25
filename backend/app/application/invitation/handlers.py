@@ -26,6 +26,10 @@ class InvitationCommandHandler:
 
     async def create(self, cmd: CreateInvitation) -> dict[str, Any]:
         email = cmd.email.strip().lower()
+        # Lazily retire a timed-out prior invite for this (clan, email) so it neither
+        # blocks re-invite (get_pending_by_email is now live-only) nor collides on the
+        # partial unique index. Committed atomically with the new invite below.
+        await self._repo.expire_stale_pending(cmd.clan_id, email)
         if await self._repo.get_pending_by_email(cmd.clan_id, email):
             raise ConflictError("invitation.pending_exists")
 
