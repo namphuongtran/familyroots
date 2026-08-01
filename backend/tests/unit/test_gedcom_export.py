@@ -153,9 +153,12 @@ def test_multiline_biography_uses_cont_for_embedded_newlines() -> None:
 
 
 def test_multiline_biography_also_folds_long_segments_with_conc() -> None:
-    """FIX 1: within each newline-delimited segment, length-based CONC
-    folding must still apply (CONT lines nest their own CONC folds one level
-    deeper)."""
+    """Within each newline-delimited segment, length-based CONC folding must
+    still apply. Every CONC/CONT of a value is a direct subordinate of the
+    primary tag (GEDCOM 5.5.1: continuations concatenate to the primary line's
+    value), so they all sit at ``primary_level + 1`` — never nested one level
+    deeper under the preceding CONT. For a level-1 NOTE that means the second
+    paragraph's CONC fold is ``2 CONC``, exactly like the first paragraph's."""
     long_a = "A" * 300
     long_b = "B" * 300
     person = _person(full_name="LongMulti", biography=f"{long_a}\n{long_b}")
@@ -165,12 +168,72 @@ def test_multiline_biography_also_folds_long_segments_with_conc() -> None:
     note_idx = lines.index("1 NOTE " + "A" * 193)
     conc_a_idx = lines.index("2 CONC " + "A" * 107)
     cont_idx = lines.index("2 CONT " + "B" * 193)
-    conc_b_idx = lines.index("3 CONC " + "B" * 107)
+    conc_b_idx = lines.index("2 CONC " + "B" * 107)  # the CONT's fold stays at level 2
     assert note_idx < conc_a_idx < cont_idx < conc_b_idx
 
     for line in lines:
         assert _LINE_RE.match(line), f"malformed GEDCOM line: {line!r}"
         assert len(line.encode("utf-8")) <= 255
+
+
+def _bio_note_value(indi_block: str) -> str:
+    """Reassemble a person's biography NOTE value the way a STRICT, level-aware
+    GEDCOM parser does: the ``1 NOTE`` line's value plus ONLY its direct
+    CONC/CONT children (at level 2), CONC concatenating and CONT re-inserting a
+    newline. A continuation emitted at the wrong (deeper) level is not a direct
+    child of the NOTE, so a strict parser never folds it back in — modelling the
+    exact text-loss this guards against."""
+    lines = indi_block.split("\n")
+    note_idx = next(i for i, ln in enumerate(lines) if ln.startswith("1 NOTE "))
+    value = lines[note_idx][len("1 NOTE ") :].replace("@@", "@")
+    for line in lines[note_idx + 1 :]:
+        level = int(line.split(" ", 1)[0])
+        if level <= 1:
+            break  # next INDI substructure — the NOTE's value subtree has ended
+        if level != 2:
+            continue  # deeper than a direct continuation → a strict parser drops it
+        tag = line.split(" ", 2)[1]
+        text = line.split(" ", 2)[2].replace("@@", "@") if line.count(" ") >= 2 else ""
+        if tag == "CONC":
+            value += text
+        elif tag == "CONT":
+            value += "\n" + text
+        else:
+            break  # a real substructure, not a continuation → value ends
+    return value
+
+
+def test_folded_multiline_note_survives_strict_parser_roundtrip() -> None:
+    """A biography with a paragraph break whose SECOND paragraph is long enough
+    to fold must round-trip losslessly through a strict, level-aware parser. The
+    bug emitted the second paragraph's CONC fold as ``3 CONC`` (a child of the
+    ``2 CONT`` line) instead of ``2 CONC`` (a sibling continuation of the NOTE),
+    so a strict parser silently dropped the folded tail — this pins that the
+    full value comes back."""
+    bio = "A" * 300 + "\n" + "B" * 300
+    person = _person(full_name="Roundtrip", biography=bio)
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    block = _indi_blocks(gedcom)["Roundtrip"]
+
+    assert _bio_note_value(block) == bio
+
+
+def test_folded_note_continuations_never_nest_below_parent_level() -> None:
+    """Structural invariant (GEDCOM 5.5.1): every CONC/CONT line of a level-1
+    NOTE is at level 2 — continuations are direct subordinates of the primary
+    tag, never nested one level deeper under a preceding CONT."""
+    bio = "A" * 300 + "\n" + "B" * 300 + "\n" + "C" * 300
+    person = _person(full_name="Levels", biography=bio)
+    gedcom = build_gedcom(_clan(), [person], [], [], [], {})
+    block = _indi_blocks(gedcom)["Levels"].split("\n")
+
+    note_idx = next(i for i, ln in enumerate(block) if ln.startswith("1 NOTE "))
+    for line in block[note_idx + 1 :]:
+        level, tag = int(line.split(" ", 1)[0]), line.split(" ", 2)[1]
+        if level <= 1:
+            break
+        if tag in ("CONC", "CONT"):
+            assert level == 2, f"continuation not at parent+1: {line!r}"
 
 
 def test_approximate_only_birth_date_falls_back_to_note() -> None:
