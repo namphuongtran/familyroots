@@ -141,13 +141,24 @@ class SupabaseIdentityProvider:
         if preferred_locale is not None:
             update_data.setdefault("user_metadata", {})["preferred_locale"] = preferred_locale
         if update_data:
-            # The SDK types this as AdminUserAttributes but accepts a dict at runtime
-            # (matches the prior implementation).
-            await asyncio.to_thread(
-                get_service_client().auth.admin.update_user_by_id,
-                user_id,
-                update_data,  # type: ignore[arg-type]
-            )
+            try:
+                # The SDK types this as AdminUserAttributes but accepts a dict at runtime
+                # (matches the prior implementation).
+                await asyncio.to_thread(
+                    get_service_client().auth.admin.update_user_by_id,
+                    user_id,
+                    update_data,  # type: ignore[arg-type]
+                )
+            except Exception as exc:
+                classified = _classify(exc)
+                # A provider outage / rejected api-key surfaces as 503; any other failure
+                # of an admin update-by-id is a server-side problem (bad id/payload), so
+                # collapse it to a generic IdentityError (loud 500) rather than let
+                # _classify mislabel a 4xx as IdentityAuthError (401 "invalid credentials",
+                # which makes no sense for an authenticated profile update).
+                if isinstance(classified, IdentityUnavailableError):
+                    raise classified from exc
+                raise IdentityError(str(exc)) from exc
 
     async def send_password_reset(self, *, email: str) -> None:
         # Anon client (no service role needed); off-loaded — the SDK call is blocking.

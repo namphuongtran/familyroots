@@ -66,9 +66,17 @@ async def get_supabase_jwks() -> dict[str, Any]:
             try:
                 resp = await client.get(url)
                 resp.raise_for_status()
+                # .json() must stay INSIDE the guard: a 200 with a non-JSON body (a
+                # captive portal / proxy / gateway returning an HTML error page) makes
+                # it raise ValueError (json.JSONDecodeError), which is NOT an
+                # httpx.HTTPError — so outside this try it would escape as a 500 on
+                # every token-verified request during the cache-miss window.
+                jwks = resp.json()
             except httpx.HTTPError as exc:
                 raise IdentityUnavailableError(f"JWKS fetch failed: {exc}") from exc
-            _jwks_cache = resp.json()
+            except ValueError as exc:
+                raise IdentityUnavailableError(f"JWKS response was not valid JSON: {exc}") from exc
+            _jwks_cache = jwks
             _jwks_cache_time = now
             return _jwks_cache
 

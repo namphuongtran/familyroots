@@ -9,6 +9,7 @@ auth_provider_unavailable envelope the rest of the auth path uses.
 
 from __future__ import annotations
 
+import json
 from typing import Any, ClassVar
 
 import httpx
@@ -67,10 +68,47 @@ class _CapturingClient:
         return _Resp()
 
 
+class _NonJsonClient:
+    """A 200 response whose body is not JSON — e.g. a captive portal / proxy / gateway
+    returning an HTML error page. ``raise_for_status`` passes; ``json()`` blows up."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    async def __aenter__(self) -> _NonJsonClient:
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        return None
+
+    async def get(self, url: str) -> Any:
+        class _Resp:
+            @staticmethod
+            def raise_for_status() -> None:
+                return None
+
+            @staticmethod
+            def json() -> dict[str, Any]:
+                raise json.JSONDecodeError("Expecting value", "<html>503</html>", 0)
+
+        return _Resp()
+
+
 async def test_jwks_transport_failure_maps_to_identity_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(httpx, "AsyncClient", _FailingClient)
+    with pytest.raises(IdentityUnavailableError):
+        await security.get_supabase_jwks()
+
+
+async def test_jwks_non_json_body_maps_to_identity_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 200 with a non-JSON body (proxy/captive-portal error page) must be a truthful
+    503, not a JSONDecodeError -> 500 on every token-verified request during the
+    cache-miss window (resp.json() previously sat outside the httpx.HTTPError guard)."""
+    monkeypatch.setattr(httpx, "AsyncClient", _NonJsonClient)
     with pytest.raises(IdentityUnavailableError):
         await security.get_supabase_jwks()
 
