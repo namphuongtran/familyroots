@@ -16,6 +16,7 @@ from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPassw
 from app.application.auth.handlers import AuthCommandHandler
 from app.domain.auth.identity_provider import (
     IdentityAuthError,
+    IdentityError,
     IdentityUnavailableError,
     IdentityWeakPasswordError,
 )
@@ -91,6 +92,9 @@ class _RaisingAdmin:
     def create_user(self, *_a: Any, **_k: Any) -> Any:
         raise self._exc
 
+    def update_user_by_id(self, *_a: Any, **_k: Any) -> Any:
+        raise self._exc
+
 
 class _RaisingServiceClient:
     def __init__(self, exc: Exception) -> None:
@@ -127,6 +131,49 @@ async def test_create_user_weak_password_is_not_unavailable(
     )
     with pytest.raises(IdentityWeakPasswordError):
         await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="weak")
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        AuthRetryableError("timeout", 503),
+        AuthApiError("upstream exploded", 502, None),
+        AuthApiError("Too Many Requests", 429, None),
+        AuthApiError("Invalid API key", 401, None),
+        ConnectionError("[Errno -2] Name or service not known"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_update_user_outage_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch, exc: Exception
+) -> None:
+    """PATCH /auth/me: a provider outage on the admin update-by-id call must surface as
+    503, not a raw 500. This call site was previously unwrapped (no _classify), unlike
+    sign_in/refresh/create_user."""
+    monkeypatch.setattr(sip, "get_service_client", lambda: _RaisingServiceClient(exc))
+    with pytest.raises(IdentityUnavailableError):
+        await sip.SupabaseIdentityProvider().update_user(
+            user_id="u1", full_name="New Name", preferred_locale=None
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_user_generic_4xx_is_not_credentials_or_outage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-outage 4xx on an admin update-by-id is a server-side problem (bad id/
+    payload) — a generic IdentityError (loud 500), never IdentityAuthError (401, a
+    credential verdict that makes no sense for an authenticated profile update)."""
+    monkeypatch.setattr(
+        sip,
+        "get_service_client",
+        lambda: _RaisingServiceClient(AuthApiError("Bad Request", 400, None)),
+    )
+    with pytest.raises(IdentityError) as ei:
+        await sip.SupabaseIdentityProvider().update_user(
+            user_id="u1", full_name="New Name", preferred_locale=None
+        )
+    assert type(ei.value) is IdentityError  # not IdentityAuthError / IdentityUnavailableError
 
 
 class _UnavailableIdentity:
