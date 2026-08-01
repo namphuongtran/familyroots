@@ -96,6 +96,7 @@
   "error.clan.last_admin_cannot_demote": "Impossible de rétrograder le dernier administrateur",
   "error.clan.last_admin_cannot_remove": "Impossible de supprimer le dernier administrateur du clan.",
   "error.clan.cannot_remove_self": "Impossible de se retirer soi-même du clan",
+  "error.clan.role_changed_concurrently": "Le rôle de ce membre vient d'être modifié par quelqu'un d'autre ; veuillez réessayer",
   "error.user.already_approved": "L'utilisateur est déjà approuvé",
   "auth.clan_created": "Clan créé avec succès",
   "auth.registration_pending": "Inscription réussie, en attente d'approbation",

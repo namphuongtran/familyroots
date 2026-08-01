@@ -53,16 +53,20 @@ class ClanRepository(Protocol):
         """Current approval state of a role by id (None if gone); identity-map-immune."""
         ...
 
-    async def delete_user_role(self, ucr: Any) -> None:
-        """Delete a user clan role record."""
+    async def delete_role_by_id(self, ucr_id: uuid.UUID) -> bool:
+        """Atomically delete a role by id (any state); return whether this call won."""
         ...
 
     async def delete_if_pending(self, ucr_id: uuid.UUID) -> bool:
         """Atomically delete a still-pending role; return whether this call won."""
         ...
 
-    async def change_role(self, ucr: Any, new_role: str) -> None:
-        """Change a user's role."""
+    async def change_role_if(self, ucr_id: uuid.UUID, expected_role: str, new_role: str) -> bool:
+        """Atomically change a role by id iff it still holds expected_role; won?"""
+        ...
+
+    async def role_of(self, ucr_id: uuid.UUID) -> str | None:
+        """Current role of a membership by id (None if gone); identity-map-immune."""
         ...
 
     async def get_membership_with_person(

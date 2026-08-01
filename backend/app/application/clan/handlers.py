@@ -140,7 +140,14 @@ class ClanCommandHandler:
                 raise ForbiddenError("clan.last_admin_cannot_demote")
 
         old_role = ucr.role
-        await self._repo.change_role(ucr, cmd.new_role)
+        # Atomic guard: compare-and-set on the role we read. A concurrent change_role
+        # (lost update + duplicate audit) or a concurrent remove/reject (0-row ORM
+        # UPDATE -> StaleDataError -> 500) both turn into a clean 0-row loss here,
+        # resolved by the exact row id: gone -> 404, role moved under us -> 409.
+        if not await self._repo.change_role_if(ucr.id, old_role, cmd.new_role):
+            if await self._repo.role_of(ucr.id) is None:
+                raise EntityNotFoundError("user_not_found")
+            raise ConflictError("clan.role_changed_concurrently")
 
         agg = AggregateRoot()
         agg.add_event(
@@ -171,7 +178,12 @@ class ClanCommandHandler:
             if admin_count <= 1:
                 raise ForbiddenError("clan.last_admin_cannot_remove")
 
-        await self._repo.delete_user_role(ucr)
+        # Atomic guard: a conditional DELETE reports whether it won. A concurrent
+        # remove/reject that deleted the row first would otherwise make the ORM's
+        # 0-row DELETE silently succeed and write a phantom audit; here the loser
+        # gets a clean 404 and emits nothing.
+        if not await self._repo.delete_role_by_id(ucr.id):
+            raise EntityNotFoundError("user_not_found")
 
         agg = AggregateRoot()
         agg.add_event(

@@ -96,6 +96,7 @@
   "error.clan.last_admin_cannot_demote": "Cannot demote the last admin",
   "error.clan.last_admin_cannot_remove": "Cannot remove the clan's last admin.",
   "error.clan.cannot_remove_self": "Cannot remove yourself from the clan",
+  "error.clan.role_changed_concurrently": "This member's role was changed by someone else; please retry",
   "error.user.already_approved": "User is already approved",
   "auth.clan_created": "Clan created successfully",
   "auth.registration_pending": "Registration successful, pending approval",
