@@ -67,6 +67,21 @@ class InvitationRepository(Protocol):
         """Stage a new approved user_clan_roles row (ORM built inside the adapter)."""
         ...
 
+    async def promote_if_pending(
+        self,
+        ucr_id: uuid.UUID,
+        *,
+        role: str,
+        approved_by: uuid.UUID,
+        approved_at: datetime,
+    ) -> bool:
+        """Atomically promote a still-pending membership to approved; won?"""
+        ...
+
+    async def membership_is_approved(self, ucr_id: uuid.UUID) -> bool | None:
+        """Current approval state of a membership by id (None if gone); identity-map-immune."""
+        ...
+
     async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Invitation | None:
         """Load a clan-scoped Invitation aggregate by its primary key, if any."""
         ...

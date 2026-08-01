@@ -146,6 +146,40 @@ class SqlAlchemyInvitationRepository(InvitationRepository):
             )
         )
 
+    async def promote_if_pending(
+        self,
+        ucr_id: uuid.UUID,
+        *,
+        role: str,
+        approved_by: uuid.UUID,
+        approved_at: datetime,
+    ) -> bool:
+        """Atomically promote a STILL-PENDING membership to approved; return whether it
+        won. Conditional UPDATE (``WHERE id = :id AND is_approved = false``) so a
+        concurrent reject/remove that deleted the pending self-request, or a concurrent
+        approve, makes accept's promote match 0 rows (the caller re-resolves) instead of
+        a 0-row ORM UPDATE -> StaleDataError -> 500. ``synchronize_session=False`` — the
+        pre-read ORM instance is not reused after this write."""
+        result = await self._session.execute(
+            update(UserClanRole)
+            .where(UserClanRole.id == ucr_id, UserClanRole.is_approved.is_(False))
+            .values(role=role, is_approved=True, approved_by=approved_by, approved_at=approved_at)
+            .returning(UserClanRole.id)
+            .execution_options(synchronize_session=False)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def membership_is_approved(self, ucr_id: uuid.UUID) -> bool | None:
+        """Truthful current approval state of a membership BY ID: None if the row is
+        gone, else its ``is_approved``. Column select (not entity) so it bypasses the
+        identity map — the pre-read ORM instance carries a stale ``is_approved`` — used
+        to distinguish 'pending row removed' (grant fresh) from 'approved concurrently'
+        (already_member) after a lost ``promote_if_pending``."""
+        result = await self._session.execute(
+            select(UserClanRole.is_approved).where(UserClanRole.id == ucr_id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_id(self, invitation_id: uuid.UUID, clan_id: uuid.UUID) -> Invitation | None:
         result = await self._session.execute(
             select(ClanInvitation).where(

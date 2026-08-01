@@ -26,6 +26,7 @@ def _inv(**kw: Any) -> Invitation:
 
 class _ExistingRole:
     def __init__(self):
+        self.id = uuid.uuid4()
         self.role = "viewer"
         self.is_approved = False
         self.approved_by = None
@@ -84,6 +85,25 @@ class _FakeRepo:
                 is_approved=True,
             )
         )
+
+    async def promote_if_pending(self, ucr_id, *, role, approved_by, approved_at):
+        # Mirror the real repo's atomic conditional UPDATE: promote a still-pending
+        # row in place and report the win, so the fake stays consistent with the DB.
+        self.call_order.append("promote_if_pending")
+        r = self._existing_role
+        if r is not None and getattr(r, "id", None) == ucr_id and not r.is_approved:
+            r.role = role
+            r.is_approved = True
+            r.approved_by = approved_by
+            r.approved_at = approved_at
+            return True
+        return False
+
+    async def membership_is_approved(self, ucr_id):
+        r = self._existing_role
+        if r is None or getattr(r, "id", None) != ucr_id:
+            return None
+        return r.is_approved
 
     async def transition_status(
         self, invitation_id, *, expected, to, accepted_by=None, accepted_at=None

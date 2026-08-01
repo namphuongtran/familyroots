@@ -95,12 +95,28 @@ class InvitationCommandHandler:
         existing = await self._repo.get_user_role(cmd.user_id, inv.clan_id)
         if existing and existing.is_approved:
             raise ConflictError("invitation.already_member")
-        if existing and not existing.is_approved:
-            # Promote the pending self-request to approved with the invited role.
-            existing.role = inv.role
-            existing.is_approved = True
-            existing.approved_by = inv.invited_by
-            existing.approved_at = now
+        if existing:
+            # Promote the pending self-request atomically. A concurrent reject/remove
+            # that deleted it, or a concurrent approve, makes this match 0 rows (instead
+            # of a 0-row ORM UPDATE -> StaleDataError -> 500); re-resolve by the exact id.
+            if not await self._repo.promote_if_pending(
+                existing.id, role=inv.role, approved_by=inv.invited_by, approved_at=now
+            ):
+                # Promote lost: the row is no longer the pending one we read. If it
+                # still EXISTS (approved concurrently) treat it as already_member — a
+                # fresh INSERT would collide on the (user_id, clan_id) unique index.
+                # Only a row that was removed (state is None) frees us to grant fresh.
+                if await self._repo.membership_is_approved(existing.id) is not None:
+                    raise ConflictError("invitation.already_member")
+                # The pending row was removed concurrently — the invitation is still
+                # valid, so grant a fresh approved membership.
+                self._repo.add_membership(
+                    clan_id=inv.clan_id,
+                    user_id=cmd.user_id,
+                    role=inv.role,
+                    approved_by=inv.invited_by,
+                    approved_at=now,
+                )
         else:
             self._repo.add_membership(
                 clan_id=inv.clan_id,
