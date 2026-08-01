@@ -30,6 +30,7 @@ _HANDLER_CODES = {
     "http_error",
     "internal_error",
     "auth_provider_unavailable",
+    "database_unavailable",
 }
 
 

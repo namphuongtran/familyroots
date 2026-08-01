@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -21,6 +21,7 @@ from app.core.database import AsyncRequestSessionLocal, AsyncSessionLocal, get_d
 from app.core.exceptions import (
     AppError,
     app_exception_handler,
+    database_unavailable_handler,
     domain_exception_handler,
     http_exception_handler,
     identity_email_not_verified_handler,
@@ -175,6 +176,11 @@ def create_app() -> FastAPI:
     # is a 409, not a 500 (Starlette matches by the exception's MRO, so IntegrityError
     # wins over Exception).
     application.add_exception_handler(IntegrityError, integrity_error_handler)
+    # A transient DB operational failure (dropped connection, pool exhaustion, restart)
+    # is a 503, not a 500 (ADR-032). OperationalError is a sibling of IntegrityError
+    # under DBAPIError, so this never shadows the 409 path; ProgrammingError/DataError
+    # (our bugs) have no handler and stay 500 via the catch-all below.
+    application.add_exception_handler(OperationalError, database_unavailable_handler)
     application.add_exception_handler(Exception, unhandled_exception_handler)
 
     # Middleware order matters. Starlette wraps the LAST-added middleware OUTERMOST,

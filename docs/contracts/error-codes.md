@@ -240,6 +240,7 @@ validation codes which are 422. Branch on the code, not the status.
 | `conflict` | 409 | Generic conflict; also the safety net for a DB unique-violation race (SQLSTATE 23505) | — | Refetch and retry |
 | `rate_limited` | 429 | Too many requests to `/api/v1/auth/*` (20/min per IP, sliding window) | `retry_after` (seconds) | Back off; see header note below |
 | `internal_error` | 500 | Unhandled server error (details logged server-side only) | — | Generic error state; safe to retry |
+| `database_unavailable` | 503 | Transient DB operational failure mid-request — dropped connection, pool exhaustion, DB restart/shutdown, or resource exhaustion (SQLAlchemy `OperationalError`). NOT our-bug DB errors (`ProgrammingError`/`DataError`), which stay `internal_error` 500 (ADR-032) | — | Retry-later banner; safe to retry with backoff |
 | `bad_request` | 400 | Bare 400 normalized into the envelope | `hint` (string, optional) | Generic |
 | `invalid_cursor` | 400 | Malformed or tampered `cursor` query param on any cursor-paginated list endpoint — bad base64, non-JSON payload, or valid JSON missing the expected fields (e.g. `full_name`/`id`, `created_at`/`id`) | — | Drop the cursor and refetch the first page; cursors are opaque, never construct one client-side |
 | `unauthorized` | 401 | Bare 401 normalized into the envelope | `hint` (optional) | As per 401 rule above |
