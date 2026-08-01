@@ -113,6 +113,7 @@ account).
 | `clan_not_found` | 404 | Clan id does not exist (clan detail, join, platform admin ops) | — | Not-found state |
 | `user_not_found` | 404 | Target member/user does not exist in this clan (approve, change role, remove, claims) | — | Refresh member list |
 | `user.already_approved` | 409 | Approving a membership that is already approved | — | Refresh list |
+| `clan.role_changed_concurrently` | 409 | `PATCH /clans/me/users/{user_id}/role` lost a compare-and-set: the member's role was changed by another admin between this request's read and its write (the row still exists — a concurrent removal instead yields `user_not_found`) | — | Re-fetch the member and retry |
 | `invalid_role` | 422 | Role change to a value outside admin/editor/viewer | `allowed` (list) | Fix client bug |
 | `clan.last_admin_cannot_demote` | 403 | Demoting the clan's only approved admin (any target, not just self — enforced under a `FOR UPDATE` lock on the clan's admin rows so concurrent demotions can't both pass, ADR-017 sibling fix) | — | Explain: promote another admin first |
 | `clan.last_admin_cannot_remove` | 403 | Removing the clan's only approved admin from the clan (same `FOR UPDATE` guard as `last_admin_cannot_demote`, applied to `DELETE /clans/me/users/{user_id}`) | — | Explain: promote another admin first, or transfer admin before removing |

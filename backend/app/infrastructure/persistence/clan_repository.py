@@ -169,8 +169,23 @@ class SqlAlchemyClanRepository:
         )
         return result.scalar_one_or_none()
 
-    async def delete_user_role(self, ucr: UserClanRole) -> None:
-        await self._session.delete(ucr)
+    async def delete_role_by_id(self, ucr_id: uuid.UUID) -> bool:
+        """Atomically delete a role BY ID (any state); return whether it won.
+
+        remove_user's race guard: a conditional DELETE (``WHERE id = :id``) matches
+        the row (True) or nothing (False) if a concurrent remove/reject already
+        deleted it. Unlike ``session.delete`` + flush — whose 0-row DELETE does not
+        raise, so remove would *silently succeed* on an already-gone row and write a
+        phantom audit — this reports the loss so the caller raises a clean 404.
+        ``synchronize_session=False``: the caller does not reuse the pre-read ORM
+        instance after this write."""
+        result = await self._session.execute(
+            delete(UserClanRole)
+            .where(UserClanRole.id == ucr_id)
+            .returning(UserClanRole.id)
+            .execution_options(synchronize_session=False)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def delete_if_pending(self, ucr_id: uuid.UUID) -> bool:
         """Atomically delete a STILL-PENDING role; return whether it won.
@@ -189,8 +204,36 @@ class SqlAlchemyClanRepository:
         )
         return result.scalar_one_or_none() is not None
 
-    async def change_role(self, ucr: UserClanRole, new_role: str) -> None:
-        ucr.role = new_role
+    async def change_role_if(self, ucr_id: uuid.UUID, expected_role: str, new_role: str) -> bool:
+        """Atomically change a role BY ID with a compare-and-set on the role we read;
+        return whether it won.
+
+        change_role's race guard: ``UPDATE role = :new WHERE id = :id AND
+        role = :expected``. Matches (True) only if the row still holds the role the
+        caller based its decision on — so a concurrent change_role (lost update / dup
+        audit) or a concurrent remove (0-row ORM UPDATE -> StaleDataError -> 500) both
+        turn into a clean 0-row False that the caller resolves to a precise 4xx.
+        ``synchronize_session=False`` (the pre-read ORM instance is not reused)."""
+        result = await self._session.execute(
+            update(UserClanRole)
+            .where(UserClanRole.id == ucr_id, UserClanRole.role == expected_role)
+            .values(role=new_role)
+            .returning(UserClanRole.id)
+            .execution_options(synchronize_session=False)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def role_of(self, ucr_id: uuid.UUID) -> str | None:
+        """Truthful current role of a membership BY ID (None if the row is gone).
+
+        Column select (not entity) so it bypasses the identity map — the pre-read ORM
+        instance carries the stale pre-write role — and keyed on the exact ``ucr_id``,
+        so the loser can distinguish 'row deleted' (404) from 'role changed under me'
+        (409) after a lost ``change_role_if``."""
+        result = await self._session.execute(
+            select(UserClanRole.role).where(UserClanRole.id == ucr_id)
+        )
+        return result.scalar_one_or_none()
 
     async def get_membership_with_person(
         self, clan_id: uuid.UUID, person_id: uuid.UUID

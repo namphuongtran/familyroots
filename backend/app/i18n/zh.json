@@ -96,6 +96,7 @@
   "error.clan.last_admin_cannot_demote": "无法降级最后一位管理员",
   "error.clan.last_admin_cannot_remove": "无法移除宗族最后一位管理员。",
   "error.clan.cannot_remove_self": "无法将自己从宗族中移除",
+  "error.clan.role_changed_concurrently": "该成员的角色刚被他人更改；请重试",
   "error.user.already_approved": "用户已被批准",
   "auth.clan_created": "宗族创建成功",
   "auth.registration_pending": "注册成功，等待审批",
