@@ -45,12 +45,20 @@ class ClanRepository(Protocol):
         """Get aggregate statistics for a clan."""
         ...
 
-    async def approve_user(self, ucr: Any, approved_by: uuid.UUID) -> None:
-        """Approve a pending user."""
+    async def approve_if_pending(self, ucr_id: uuid.UUID, approved_by: uuid.UUID) -> bool:
+        """Atomically approve a still-pending role; return whether this call won."""
+        ...
+
+    async def role_is_approved(self, ucr_id: uuid.UUID) -> bool | None:
+        """Current approval state of a role by id (None if gone); identity-map-immune."""
         ...
 
     async def delete_user_role(self, ucr: Any) -> None:
         """Delete a user clan role record."""
+        ...
+
+    async def delete_if_pending(self, ucr_id: uuid.UUID) -> bool:
+        """Atomically delete a still-pending role; return whether this call won."""
         ...
 
     async def change_role(self, ucr: Any, new_role: str) -> None:
