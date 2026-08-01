@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -133,13 +133,61 @@ class SqlAlchemyClanRepository:
             apply_to_orm(clan, model)
         return model
 
-    async def approve_user(self, ucr: UserClanRole, approved_by: uuid.UUID) -> None:
-        ucr.is_approved = True
-        ucr.approved_by = approved_by
-        ucr.approved_at = datetime.now(UTC)
+    async def approve_if_pending(self, ucr_id: uuid.UUID, approved_by: uuid.UUID) -> bool:
+        """Atomically flip a STILL-PENDING role to approved; return whether it won.
+
+        A single conditional UPDATE (``WHERE id = :id AND is_approved = false``)
+        is the race guard for two admins working the same pending row: it either
+        matches the pending row (True) or matches nothing (False) because a
+        concurrent approve already approved it or a concurrent reject/remove
+        deleted it. Unlike a read-then-ORM-mutate, a lost race here can never emit
+        a 0-row ORM UPDATE (``StaleDataError`` -> raw 500); the caller resolves the
+        loss to a precise 4xx instead. Mirrors the invitation ``transition_status``
+        guard, including ``synchronize_session=False`` (the caller does not trust
+        the pre-read ORM instance's attributes after this write)."""
+        result = await self._session.execute(
+            update(UserClanRole)
+            .where(UserClanRole.id == ucr_id, UserClanRole.is_approved.is_(False))
+            .values(is_approved=True, approved_by=approved_by, approved_at=datetime.now(UTC))
+            .returning(UserClanRole.id)
+            .execution_options(synchronize_session=False)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def role_is_approved(self, ucr_id: uuid.UUID) -> bool | None:
+        """Truthful current approval state of a role BY ID: None if the row is
+        gone, else its ``is_approved``.
+
+        Selects the *column* (not the entity) so it bypasses the session identity
+        map — after ``approve_if_pending`` the pre-read ORM instance still carries
+        its stale ``is_approved=False``, so entity re-reads would lie. Keyed on the
+        exact ``ucr_id`` the conditional write targeted (not the natural key), so a
+        concurrent reject-then-re-invite that inserts a *fresh* pending row for the
+        same user cannot be mistaken for 'this row was approved'."""
+        result = await self._session.execute(
+            select(UserClanRole.is_approved).where(UserClanRole.id == ucr_id)
+        )
+        return result.scalar_one_or_none()
 
     async def delete_user_role(self, ucr: UserClanRole) -> None:
         await self._session.delete(ucr)
+
+    async def delete_if_pending(self, ucr_id: uuid.UUID) -> bool:
+        """Atomically delete a STILL-PENDING role; return whether it won.
+
+        Reject's race guard, symmetric to ``approve_if_pending``: a conditional
+        DELETE (``WHERE id = :id AND is_approved = false``) matches the pending
+        row (True) or nothing (False) if a concurrent approve promoted it or a
+        concurrent reject already deleted it — so reject can never delete an
+        already-approved member out from under an approve, and never emits a
+        0-row ORM DELETE."""
+        result = await self._session.execute(
+            delete(UserClanRole)
+            .where(UserClanRole.id == ucr_id, UserClanRole.is_approved.is_(False))
+            .returning(UserClanRole.id)
+            .execution_options(synchronize_session=False)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def change_role(self, ucr: UserClanRole, new_role: str) -> None:
         ucr.role = new_role

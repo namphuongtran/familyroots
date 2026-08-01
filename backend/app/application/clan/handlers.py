@@ -62,7 +62,22 @@ class ClanCommandHandler:
         if ucr.is_approved:
             raise ConflictError("user.already_approved")
 
-        await self._repo.approve_user(ucr, cmd.actor.user_id)
+        # Atomic guard: flip the row only while it is still pending. A concurrent
+        # reject/remove (delete) or a concurrent approve can land between the read
+        # above and here; the conditional UPDATE wins on exactly one of them and
+        # returns False on the loser — which we resolve to a precise 4xx below,
+        # never a 0-row ORM UPDATE (StaleDataError -> 500) and never a duplicate
+        # UserApproved audit row.
+        if not await self._repo.approve_if_pending(ucr.id, cmd.actor.user_id):
+            # Lost the race on THIS row: it was either deleted (reject/remove won)
+            # or approved (a concurrent approve won) — it cannot still be pending,
+            # or the conditional UPDATE would have matched. Resolve by the exact
+            # row id (a concurrent re-invite inserts a *different* pending row that
+            # must not be read as "this one was approved").
+            approved = await self._repo.role_is_approved(ucr.id)
+            if approved is None:
+                raise EntityNotFoundError("user_not_found")
+            raise ConflictError("user.already_approved")
 
         agg = AggregateRoot()
         agg.add_event(
@@ -85,7 +100,11 @@ class ClanCommandHandler:
         if ucr.is_approved:
             raise EntityNotFoundError("user_not_found")
 
-        await self._repo.delete_user_role(ucr)
+        # Atomic guard (symmetric to approve): delete only while still pending, so a
+        # concurrent approve that committed first is not silently removed here — the
+        # conditional DELETE matches nothing and reject reports user_not_found.
+        if not await self._repo.delete_if_pending(ucr.id):
+            raise EntityNotFoundError("user_not_found")
 
         agg = AggregateRoot()
         agg.add_event(
