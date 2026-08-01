@@ -175,6 +175,26 @@ async def storage_not_found_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+async def database_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Surface a transient DB operational failure as 503, in one place (ADR-032).
+
+    A dropped connection, pool exhaustion, DB restart/shutdown, or resource
+    exhaustion mid-request raises a SQLAlchemy ``OperationalError`` (the DBAPI class
+    for failures not under the programmer's control) — a "try again", not a bug. It
+    must be a truthful ``503 database_unavailable`` rather than an opaque 500, matching
+    ``/health``'s ``degraded`` and the storage/identity 503 handlers. Only
+    ``OperationalError`` routes here; ``ProgrammingError``/``DataError`` (our bugs) stay
+    loud 500s via the catch-all. The raw DBAPI message is logged, never returned."""
+    from app.services.translator import t
+
+    logger.error("Database unavailable on %s %s: %s", request.method, request.url.path, exc)
+    code = "database_unavailable"
+    return JSONResponse(
+        status_code=503,
+        content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+    )
+
+
 _STATUS_CODE_TO_ERROR_CODE = {
     400: "bad_request",
     401: "unauthorized",

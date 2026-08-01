@@ -149,6 +149,7 @@
   "error.auth_provider_unavailable": "Dịch vụ xác thực tạm thời không khả dụng, vui lòng thử lại sau",
   "error.email_not_verified": "Vui lòng xác minh email của bạn trước khi đăng nhập.",
   "error.storage_unavailable": "Kho lưu trữ tạm thời không khả dụng",
+  "error.database_unavailable": "Dịch vụ tạm thời không khả dụng, vui lòng thử lại sau giây lát",
   "error.storage_not_found": "Không tìm thấy tệp",
   "error.invitation.already_member": "Người dùng này đã là thành viên của dòng họ",
   "error.invitation.email_mismatch": "Lời mời này được cấp cho email khác",

@@ -149,6 +149,7 @@
   "error.auth_provider_unavailable": "认证服务暂时不可用，请稍后再试",
   "error.email_not_verified": "请先验证您的邮箱后再登录。",
   "error.storage_unavailable": "存储暂时不可用",
+  "error.database_unavailable": "服务暂时不可用，请稍后再试",
   "error.storage_not_found": "未找到文件",
   "error.invitation.already_member": "该用户已是宗族成员",
   "error.invitation.email_mismatch": "该邀请发给了其他邮箱",

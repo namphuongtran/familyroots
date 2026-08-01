@@ -149,6 +149,7 @@
   "error.auth_provider_unavailable": "Authentication service is temporarily unavailable, please try again later",
   "error.email_not_verified": "Please verify your email address before signing in.",
   "error.storage_unavailable": "Storage is temporarily unavailable",
+  "error.database_unavailable": "The service is temporarily unavailable, please try again shortly",
   "error.storage_not_found": "File not found",
   "error.invitation.already_member": "This user is already a member of the clan",
   "error.invitation.email_mismatch": "This invitation was issued to a different email",
