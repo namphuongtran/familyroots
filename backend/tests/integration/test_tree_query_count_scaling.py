@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.application.tree.handlers import TreeQueryHandler
-from app.application.tree.queries import GetFullTree
+from app.application.tree.queries import GetFocusView, GetFullTree
 from app.infrastructure.persistence.tree_repository import SqlAlchemyTreeRepository
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -94,10 +94,13 @@ async def _pc(
 
 async def _seed_tree(
     maker: async_sessionmaker[AsyncSession], *, generations: int, branching: int
-) -> tuple[uuid.UUID, int]:
+) -> tuple[uuid.UUID, uuid.UUID, int]:
     """A founder + a `branching`-ary descendants tree of `generations` levels
-    (founder is a member with is_founder=true). Returns (clan_id, person_count)."""
+    (founder is a member with is_founder=true). Returns (clan_id, focus_id,
+    person_count), where focus_id is the founder's first child — a gen-1 node with an
+    ancestor (the founder) above and, for generations >= 2, descendants below."""
     creator = uuid.uuid4()
+    focus_id: uuid.UUID | None = None
     async with maker() as s:
         clan_id = await _clan(s)
         founder = await _person(s, clan_id, creator, "F")
@@ -111,11 +114,14 @@ async def _seed_tree(
                     child = await _person(s, clan_id, creator, f"P{gen}-{i}-{uuid.uuid4().hex[:4]}")
                     await _member(s, child, clan_id)
                     await _pc(s, parent, child, clan_id, creator)
+                    if focus_id is None:
+                        focus_id = child  # the founder's first child (gen 1)
                     nxt.append(child)
                     count += 1
             frontier = nxt
         await s.commit()
-    return clan_id, count
+    assert focus_id is not None  # generations >= 1 always creates a gen-1 child
+    return clan_id, focus_id, count
 
 
 async def _full_tree_statement_count(
@@ -140,8 +146,8 @@ async def _full_tree_statement_count(
 
 async def test_full_tree_query_count_is_independent_of_clan_size(engine: AsyncEngine) -> None:
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    small_clan, small_n = await _seed_tree(maker, generations=1, branching=2)  # 3 persons, depth 1
-    large_clan, large_n = await _seed_tree(maker, generations=3, branching=2)  # 15 persons, depth 3
+    small_clan, _sf, small_n = await _seed_tree(maker, generations=1, branching=2)  # 3, depth 1
+    large_clan, _lf, large_n = await _seed_tree(maker, generations=3, branching=2)  # 15, depth 3
 
     small_count, small_tree = await _full_tree_statement_count(engine, small_clan)
     large_count, large_tree = await _full_tree_statement_count(engine, large_clan)
@@ -159,3 +165,49 @@ async def test_full_tree_query_count_is_independent_of_clan_size(engine: AsyncEn
     )
     # And it stays a small constant — a coarse guard against a gross regression.
     assert small_count <= 8, f"full-tree issues {small_count} statements for a 3-person clan"
+
+
+async def _focus_view_statement_count(
+    engine: AsyncEngine, clan_id: uuid.UUID, focus_id: uuid.UUID
+) -> tuple[int, dict[str, Any]]:
+    """Run get_focus_view on a fresh session, counting the SQL statements it issues."""
+    statements: list[str] = []
+
+    def _count(conn: Any, cursor: Any, statement: str, *args: Any) -> None:
+        statements.append(statement)
+
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with maker() as session:
+        handler = TreeQueryHandler(SqlAlchemyTreeRepository(session))
+        sa.event.listen(engine.sync_engine, "before_cursor_execute", _count)
+        try:
+            result = await handler.get_focus_view(
+                GetFocusView(
+                    person_id=focus_id, clan_id=clan_id, ancestor_depth=50, descendant_depth=50
+                )
+            )
+        finally:
+            sa.event.remove(engine.sync_engine, "before_cursor_execute", _count)
+    return len(statements), result
+
+
+async def test_focus_view_query_count_is_independent_of_clan_size(engine: AsyncEngine) -> None:
+    """get_focus_view does MORE per-boundary work than get_full_tree — build_focus_view
+    adds bulk branch-map, birth-order, and has-children lookups on top of the descendants
+    build — so it is the tree path most at risk of an N+1. Pin its statement count as a
+    clan-size- and depth-independent constant too."""
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    # focus = the founder's first child (gen 1), so ancestors (founder) AND a descendant
+    # subtree below are both exercised; the large clan's subtree is much bigger/deeper.
+    small_clan, small_focus, small_n = await _seed_tree(maker, generations=2, branching=2)  # 7
+    large_clan, large_focus, large_n = await _seed_tree(maker, generations=4, branching=2)  # 31
+
+    small_count, _small = await _focus_view_statement_count(engine, small_clan, small_focus)
+    large_count, _large = await _focus_view_statement_count(engine, large_clan, large_focus)
+
+    assert large_n > small_n * 3  # genuinely different sizes/depths
+    assert large_count == small_count, (
+        f"focus-view query count scales with the clan: {small_n} persons -> {small_count} "
+        f"statements, {large_n} persons -> {large_count} statements"
+    )
+    assert small_count <= 14, f"focus-view issues {small_count} statements for a 7-person clan"
