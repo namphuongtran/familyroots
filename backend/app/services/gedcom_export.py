@@ -441,7 +441,12 @@ def _fold(level: int, tag: str, value: str) -> list[str]:
     lines = _fold_segment(first_prefix, segments[0], level + 1)
     for segment in segments[1:]:
         cont_prefix = f"{level + 1} CONT "
-        lines.extend(_fold_segment(cont_prefix, segment, level + 2))
+        # Every CONC/CONT of a value is a direct subordinate of the PRIMARY tag,
+        # so they all sit at `level + 1` — a CONT's own byte-fold stays at
+        # `level + 1`, NOT `level + 2`. GEDCOM 5.5.1 continuations concatenate to
+        # the primary line's value; a deeper-nested CONC would parse as a child
+        # of the CONT and be dropped by a strict, level-aware parser.
+        lines.extend(_fold_segment(cont_prefix, segment, level + 1))
     return lines
 
 
