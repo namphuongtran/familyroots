@@ -133,6 +133,7 @@ async def test_trigger_slug_check_still_maps_by_message() -> None:
     [
         ("uq_clan_invitations_pending", "invitation.pending_exists"),
         ("uq_marriages_spouse_order", "relationship.duplicate_spouse_order"),
+        ("uq_clans_slug", "auth.clan_slug_taken"),
     ],
 )
 async def test_known_unique_constraint_maps_to_specific_409(constraint: str, code: str) -> None:

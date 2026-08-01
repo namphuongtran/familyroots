@@ -253,6 +253,10 @@ async def integrity_error_handler(request: Request, exc: Exception) -> JSONRespo
         unique_codes = {
             "uq_clan_invitations_pending": "invitation.pending_exists",
             "uq_marriages_spouse_order": "relationship.duplicate_spouse_order",
+            # A concurrent clan-create race that loses the slug uniqueness (the app
+            # pre-checks get_clan_by_slug, but that is a TOCTOU) surfaces the SAME code
+            # the pre-check raises, not the generic conflict.
+            "uq_clans_slug": "auth.clan_slug_taken",
         }
         code = unique_codes.get(constraint or "", "conflict")
         return JSONResponse(

@@ -90,3 +90,56 @@ async def test_marriage_divorce_check_reports_its_name(session: AsyncSession) ->
         await session.flush()
     assert getattr(ei.value.orig, "sqlstate", None) == "23514"
     assert _constraint_name(ei.value) == "ck_marriages_marriages_divorce_after_marriage"
+
+
+async def test_clans_slug_unique_reports_its_name(session: AsyncSession) -> None:
+    """A duplicate clans.slug violates uq_clans_slug; psycopg reports that name (the key
+    the handler maps to auth.clan_slug_taken for a lost slug-create race)."""
+    slug = f"dup-{uuid.uuid4().hex[:8]}"
+    await session.execute(
+        sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :s)"),
+        {"id": uuid.uuid4(), "s": slug},
+    )
+    with pytest.raises(IntegrityError) as ei:
+        await session.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C2', :s)"),
+            {"id": uuid.uuid4(), "s": slug},
+        )
+        await session.flush()
+    assert getattr(ei.value.orig, "sqlstate", None) == "23505"
+    assert _constraint_name(ei.value) == "uq_clans_slug"
+
+
+async def test_concurrent_clan_create_same_slug_exactly_one_wins(migrated_db_url: str) -> None:
+    """The real slug race: two concurrent creates of the same slug (the app's
+    get_clan_by_slug pre-check is a TOCTOU) → exactly one commits, the other raises an
+    IntegrityError on uq_clans_slug (which the handler maps to auth.clan_slug_taken)."""
+    import asyncio
+
+    engine = create_async_engine(migrated_db_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    slug = f"race-{uuid.uuid4().hex[:8]}"
+
+    async def _create() -> str:
+        async with maker() as s:
+            try:
+                await s.execute(
+                    sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'R', :s)"),
+                    {"id": uuid.uuid4(), "s": slug},
+                )
+                await s.commit()
+                return "ok"
+            except IntegrityError as exc:
+                await s.rollback()
+                return _constraint_name(exc) or "other"
+
+    try:
+        results = await asyncio.gather(_create(), _create())
+        assert sorted(results) == ["ok", "uq_clans_slug"], results
+        async with maker() as s:
+            count = await s.scalar(
+                sa.text("SELECT count(*) FROM clans WHERE slug = :s"), {"s": slug}
+            )
+        assert count == 1
+    finally:
+        await engine.dispose()

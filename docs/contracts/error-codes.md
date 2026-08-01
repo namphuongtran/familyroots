@@ -88,7 +88,7 @@ account).
 | `auth.registration_failed` | 422 | Identity provider rejected registration for another validation reason | `detail` (provider text) | Inline form error |
 | `auth.clan_id_required_for_join` | 422 | Register or onboard with `clan_action=join` but no `clan_id` | — | Form validation |
 | `auth.clan_name_required_for_create` | 422 | Register or onboard with `clan_action=create` but missing `clan_name`/`clan_slug` | — | Form validation |
-| `auth.clan_slug_taken` | 409 | Creating a clan (register or onboard) whose slug already exists | — | Ask for another slug |
+| `auth.clan_slug_taken` | 409 | Creating a clan (register or onboard) whose slug already exists — from the `get_clan_by_slug` pre-check, and (on a concurrent create that both pass the pre-check) from the `uq_clans_slug` `23505` race, mapped by index name to this same code rather than the generic `conflict` | — | Ask for another slug |
 | `auth.already_joined_clan` | 409 | Join request for a clan the user is already an approved member of | — | Route into the clan |
 | `auth.membership_already_pending` | 409 | Join request while a pending membership request already exists | — | Show approval-pending screen |
 
