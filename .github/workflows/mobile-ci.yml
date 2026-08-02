@@ -36,6 +36,16 @@ jobs:
         working-directory: mobile
         run: flutter test
 
+      # The Riverpod rebuild (ADR-034) deletes the old app and reassembles it task
+      # by task; there is no `lib/main.dart` until M0 Task 18 wires the router, Dio
+      # and bootstrap together, so `flutter build apk` fails with
+      # `Target file "lib/main.dart" not found.` Guarding on the file keeps CI
+      # honest in the meantime and makes the step reactivate by itself the moment
+      # an entry point lands — nobody has to remember to switch it back on.
+      #
+      # M0 Task 19 rewrites this workflow properly (format gate, coverage,
+      # generated-code freshness check). This is the minimum to stop main being red.
       - name: Build APK (debug — validate build)
+        if: hashFiles('mobile/lib/main.dart') != ''
         working-directory: mobile
         run: flutter build apk --debug
