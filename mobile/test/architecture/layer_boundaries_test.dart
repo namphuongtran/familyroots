@@ -45,6 +45,30 @@ const _domainForbiddenPackages = <String>[
   'package:json_annotation/',
 ];
 
+/// A domain file must not carry wire serialisation.
+///
+/// The import ban alone does not catch this. `freezed_annotation` re-exports the
+/// whole of `json_annotation`, so `@JsonSerializable` is already in scope inside
+/// `domain/**` through the import the domain legitimately needs — an entity can
+/// acquire a `fromJson`/`toJson` pair without ever writing the banned
+/// `package:json_annotation/` string, and the ratchet stays green. That hole was
+/// demonstrated exploitable before this check existed.
+///
+/// `part '*.g.dart';` is the tell: freezed alone emits `*.freezed.dart`, and only
+/// json_serializable emits `*.g.dart`. Banning it catches what actually matters —
+/// the domain learning the backend's wire shape — without banning freezed, which
+/// the domain needs for value equality.
+String? generatedCodeViolationFor(String libRelPath, List<String> parts) {
+  if (!libRelPath.startsWith('domain/')) return null;
+  for (final part in parts) {
+    if (part.endsWith('.g.dart')) {
+      return "$libRelPath declares part '$part' — domain must not carry wire "
+          'serialisation; map DTOs to domain types in features/*/data instead';
+    }
+  }
+  return null;
+}
+
 /// Returns a human-readable violation, or null.
 String? violationFor(String libRelPath, String target) {
   if (libRelPath.startsWith('domain/')) {
@@ -159,6 +183,32 @@ export 'package:family_roots_mobile/domain/shared/page.dart';
     );
   });
 
+  test(
+    'generatedCodeViolationFor flags a domain part of generated JSON code',
+    () {
+      expect(
+        generatedCodeViolationFor('domain/person/person.dart', [
+          'person.g.dart',
+        ]),
+        isNotNull,
+      );
+      // freezed's own output is fine — the domain needs value equality.
+      expect(
+        generatedCodeViolationFor('domain/person/person.dart', [
+          'person.freezed.dart',
+        ]),
+        isNull,
+      );
+      // Outside domain, wire serialisation is exactly where it belongs.
+      expect(
+        generatedCodeViolationFor('features/persons/data/person_dto.dart', [
+          'person_dto.g.dart',
+        ]),
+        isNull,
+      );
+    },
+  );
+
   test('lib/ has no layer-boundary violations', () {
     final libDir = Directory('lib');
     expect(libDir.existsSync(), isTrue, reason: 'run from the package root');
@@ -167,7 +217,16 @@ export 'package:family_roots_mobile/domain/shared/page.dart';
     for (final entity in libDir.listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
       final libRel = p.relative(entity.path, from: 'lib');
-      for (final d in parseDirectives(entity.readAsStringSync())) {
+      final source = entity.readAsStringSync();
+
+      final parts = RegExp(
+        "^\\s*part\\s+'([^']+)'\\s*;",
+        multiLine: true,
+      ).allMatches(source).map((m) => m.group(1)!).toList();
+      final generated = generatedCodeViolationFor(libRel, parts);
+      if (generated != null) violations.add(generated);
+
+      for (final d in parseDirectives(source)) {
         final target = normalize(d, libRel);
         if (target == null) continue;
         final v = violationFor(libRel, target);
