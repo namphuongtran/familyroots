@@ -1216,16 +1216,23 @@ table, it is a bug.
 
 Where the domain and good UI genuinely pulled in different directions.
 
-**J1 — Two primaries in the codebase.** `web/src/app/globals.css` declares primary
-`#c41e3a` (lacquer red) while `mobile/lib/app/theme/colors.dart` declares `#4A6741`
-(leaf green). Both are defensible and both are shipped. Rather than pick a winner,
+**J1 — Three primaries in the codebase, and mobile disagrees with itself.**
+`web/src/app/globals.css` declares primary `#c41e3a` (lacquer red, also bound to
+`--ring`). Mobile declares a green primary **twice, at two different values**:
+`mobile/lib/app/theme/colors.dart` says `#4A6741` and
+`mobile/lib/core/theme/app_colors.dart` says `#37563B` — and it is the second one that
+screens actually render, because `AppColors.primary` is what the widgets import. So
+there is no single "mobile green" to reconcile with web; there are two, and the
+`ColorScheme` one is dead code. The mobile rebuild (ADR-034) deletes both files, which
+is precisely why this document has to state the replacement rather than inherit one.
+All three values are defensible and all three are shipped. Rather than pick a winner,
 this system **assigns them different jobs**: leaf green is `primary` (interaction —
 buttons, links, active nav, selection), and lacquer + gilt become the reserved
 `heritage` family (thủy tổ, giỗ, đời badges, ancestral emphasis). This keeps the
 "arbor" reading of the design system, keeps Vietnamese ceremonial colour where it means
 something, and — practically — stops red from being spent on ordinary buttons so that it
-still reads as significant when it marks the thủy tổ. Both existing values shift
-slightly for contrast (`#3E5C38`, `#A3182F`); `gilt-decor` keeps `#D4AF37` exactly.
+still reads as significant when it marks the thủy tổ. The shipped values shift slightly
+for contrast (`#3E5C38`, `#A3182F`); `gilt-decor` keeps `#D4AF37` exactly.
 
 **J2 — No-1px-border vs. accessibility.** The no-line rule and WCAG focus visibility are
 in direct conflict. Resolution: **focus rings, error indicators, active tab indicators,
