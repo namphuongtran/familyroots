@@ -750,20 +750,17 @@ class Page<T> {
 `mobile/lib/domain/shared/ids.dart`:
 
 ```dart
-extension type const ClanId(String value) {
-  @override
-  String toString() => value;
-}
+/// Zero-cost wrappers so a ClanId cannot be passed where a PersonId is meant.
+///
+/// Extension types may NOT declare `toString`, `==`, `hashCode`, `runtimeType`
+/// or `noSuchMethod` — those conflict with the Object members and are a
+/// compile error ("This extension member conflicts with Object member
+/// 'toString'"). Use `.value` for interpolation.
+extension type const ClanId(String value) {}
 
-extension type const PersonId(String value) {
-  @override
-  String toString() => value;
-}
+extension type const PersonId(String value) {}
 
-extension type const UserId(String value) {
-  @override
-  String toString() => value;
-}
+extension type const UserId(String value) {}
 ```
 
 - [ ] **Step 4: Write `historical_date.dart`**
@@ -1353,6 +1350,1165 @@ feat(mobile): unwrap the canonical envelope in exactly one place
 unwrapData/unwrapPage are the only functions that know about {"data": ...}.
 Handles the meta-less array shape used by GET /me/clans, and carries the
 opaque cursor verbatim.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 6: Header interceptors — auth, clan, locale, trace
+
+**Files:**
+- Create: `mobile/lib/core/network/interceptors/{auth,clan,locale,trace}_interceptor.dart`, `mobile/lib/core/observability/traceparent.dart`
+- Test: `mobile/test/support/sequence_adapter.dart`, `mobile/test/core/network/interceptors_test.dart`
+
+**Interfaces:**
+- Produces:
+  - `bool isClanScoped(String path)`
+  - `AuthInterceptor(String? Function() accessToken)`, `ClanInterceptor(String? Function() currentClanId)`, `LocaleInterceptor(String Function() locale)`, `TraceInterceptor({String Function()? generator})`
+  - `String newTraceparent({bool sampled = true})`
+  - `class Canned(int statusCode, Object? body)` and `class SequenceAdapter implements HttpClientAdapter` with `List<RequestOptions> received`, `int callCount`
+
+> **Why `SequenceAdapter` exists (V8):** `http_mock_adapter` 0.6.1 fixes the status code at registration (`reply(status, data)`), `replyCallback` varies only the body, and duplicate registrations do not queue — the matcher keeps the **last** match. It cannot express "401 then 200". Task 7 needs exactly that, so the adapter is built here and shared.
+
+- [ ] **Step 1: Write the shared test double**
+
+`mobile/test/support/sequence_adapter.dart`:
+
+```dart
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+
+class Canned {
+  const Canned(this.statusCode, this.body);
+  final int statusCode;
+  final Object? body;
+}
+
+/// Returns each canned response in order, repeating the last one thereafter,
+/// and records every RequestOptions it saw.
+class SequenceAdapter implements HttpClientAdapter {
+  SequenceAdapter(this._responses);
+
+  final List<Canned> _responses;
+  final List<RequestOptions> received = <RequestOptions>[];
+
+  int get callCount => received.length;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    received.add(options);
+    final index = received.length <= _responses.length
+        ? received.length - 1
+        : _responses.length - 1;
+    final canned = _responses[index];
+    return ResponseBody.fromString(
+      jsonEncode(canned.body),
+      canned.statusCode,
+      headers: <String, List<String>>{
+        Headers.contentTypeHeader: <String>[Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+```
+
+- [ ] **Step 2: Write the failing test**
+
+`mobile/test/core/network/interceptors_test.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/network/interceptors/auth_interceptor.dart';
+import 'package:family_roots_mobile/core/network/interceptors/clan_interceptor.dart';
+import 'package:family_roots_mobile/core/network/interceptors/locale_interceptor.dart';
+import 'package:family_roots_mobile/core/network/interceptors/trace_interceptor.dart';
+import 'package:family_roots_mobile/core/observability/traceparent.dart';
+
+import '../../support/sequence_adapter.dart';
+
+Dio _dio(SequenceAdapter a) =>
+    Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))..httpClientAdapter = a;
+
+SequenceAdapter _ok() => SequenceAdapter(<Canned>[
+  const Canned(200, <String, Object?>{'data': null}),
+]);
+
+void main() {
+  group('isClanScoped', () {
+    test('clan-scoped routes', () {
+      expect(isClanScoped('/persons'), isTrue);
+      expect(isClanScoped('/tree'), isTrue);
+      expect(isClanScoped('/events'), isTrue);
+      expect(isClanScoped('/documents'), isTrue);
+      expect(isClanScoped('/relationships/marriages'), isTrue);
+      expect(isClanScoped('/branches'), isTrue);
+      expect(isClanScoped('/claims'), isTrue);
+      expect(isClanScoped('/clans/me/founder'), isTrue);
+    });
+
+    test('exempt routes', () {
+      expect(isClanScoped('/auth/login'), isFalse);
+      expect(isClanScoped('/auth/me'), isFalse);
+      expect(isClanScoped('/auth/refresh'), isFalse);
+      expect(isClanScoped('/me/clans'), isFalse);
+      expect(isClanScoped('/me/clans/abc-123/select'), isFalse);
+      expect(isClanScoped('/platform/audit'), isFalse);
+      expect(isClanScoped('/invitations/tok/accept'), isFalse);
+    });
+
+    test('an invitations route that is not /accept stays clan-scoped', () {
+      expect(isClanScoped('/invitations'), isTrue);
+    });
+  });
+
+  test('AuthInterceptor attaches the bearer token', () async {
+    final a = _ok();
+    await (_dio(a)..interceptors.add(AuthInterceptor(() => 'tok')))
+        .get<Object?>('/persons');
+    expect(a.received.single.headers['Authorization'], 'Bearer tok');
+  });
+
+  test('AuthInterceptor omits the header when signed out', () async {
+    final a = _ok();
+    await (_dio(a)..interceptors.add(AuthInterceptor(() => null)))
+        .get<Object?>('/auth/login');
+    expect(a.received.single.headers.containsKey('Authorization'), isFalse);
+  });
+
+  test('ClanInterceptor attaches only on clan-scoped routes', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{'data': null}),
+      const Canned(200, <String, Object?>{'data': null}),
+    ]);
+    final dio = _dio(a)..interceptors.add(ClanInterceptor(() => 'clan-1'));
+
+    await dio.get<Object?>('/persons');
+    expect(a.received[0].headers['X-Current-Clan-Id'], 'clan-1');
+
+    await dio.get<Object?>('/me/clans');
+    expect(a.received[1].headers.containsKey('X-Current-Clan-Id'), isFalse);
+  });
+
+  test('ClanInterceptor omits the header when no clan is selected', () async {
+    final a = _ok();
+    await (_dio(a)..interceptors.add(ClanInterceptor(() => null)))
+        .get<Object?>('/persons');
+    expect(
+      a.received.single.headers.containsKey('X-Current-Clan-Id'),
+      isFalse,
+    );
+  });
+
+  test('LocaleInterceptor sends the app locale', () async {
+    final a = _ok();
+    await (_dio(a)..interceptors.add(LocaleInterceptor(() => 'vi')))
+        .get<Object?>('/persons');
+    expect(a.received.single.headers['Accept-Language'], 'vi');
+  });
+
+  test('TraceInterceptor sends a W3C traceparent', () async {
+    final a = _ok();
+    await (_dio(a)..interceptors.add(TraceInterceptor()))
+        .get<Object?>('/persons');
+    final tp = a.received.single.headers['traceparent']! as String;
+    expect(
+      RegExp(r'^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$').hasMatch(tp),
+      isTrue,
+      reason: tp,
+    );
+  });
+
+  test('each request gets a distinct traceparent', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{'data': null}),
+      const Canned(200, <String, Object?>{'data': null}),
+    ]);
+    final dio = _dio(a)..interceptors.add(TraceInterceptor());
+    await dio.get<Object?>('/persons');
+    await dio.get<Object?>('/persons');
+    expect(
+      a.received[0].headers['traceparent'],
+      isNot(a.received[1].headers['traceparent']),
+    );
+  });
+
+  test('newTraceparent honours the sampled flag', () {
+    expect(newTraceparent().endsWith('-01'), isTrue);
+    expect(newTraceparent(sampled: false).endsWith('-00'), isTrue);
+  });
+}
+```
+
+- [ ] **Step 3: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/core/network/interceptors_test.dart
+```
+Expected: FAIL — the interceptor files do not exist.
+
+- [ ] **Step 4: Write `traceparent.dart`**
+
+`mobile/lib/core/observability/traceparent.dart`:
+
+```dart
+import 'dart:math';
+
+final _rng = Random.secure();
+
+String _hex(int bytes) {
+  final buffer = StringBuffer();
+  for (var i = 0; i < bytes; i++) {
+    buffer.write(_rng.nextInt(256).toRadixString(16).padLeft(2, '0'));
+  }
+  return buffer.toString();
+}
+
+/// A W3C trace-context `traceparent` (ADR-033), so a mobile span joins the
+/// backend trace: `00-<32 hex trace-id>-<16 hex span-id>-<2 hex flags>`.
+String newTraceparent({bool sampled = true}) =>
+    '00-${_hex(16)}-${_hex(8)}-${sampled ? '01' : '00'}';
+```
+
+- [ ] **Step 5: Write the four interceptors**
+
+`mobile/lib/core/network/interceptors/auth_interceptor.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+
+/// Attaches `Authorization: Bearer <token>` from the current Supabase session.
+class AuthInterceptor extends Interceptor {
+  AuthInterceptor(this._accessToken);
+  final String? Function() _accessToken;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final token = _accessToken();
+    if (token != null) {
+      options.headers['Authorization'] = 'Bearer $token';
+    }
+    handler.next(options);
+  }
+}
+```
+
+`mobile/lib/core/network/interceptors/clan_interceptor.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+
+/// Routes that must NOT carry `X-Current-Clan-Id`: `/auth/*`, `/me/clans`,
+/// `/me/clans/{id}/select`, `/invitations/{token}/accept`, `/platform/*`.
+bool isClanScoped(String path) {
+  const exempt = <String>['/auth/', '/me/clans', '/platform/'];
+  for (final prefix in exempt) {
+    if (path.startsWith(prefix)) return false;
+  }
+  if (path.startsWith('/invitations/') && path.endsWith('/accept')) {
+    return false;
+  }
+  return true;
+}
+
+/// Sent on every clan-scoped request, including for single-clan users, so
+/// behaviour stays deterministic if the user later joins a second clan.
+class ClanInterceptor extends Interceptor {
+  ClanInterceptor(this._currentClanId);
+  final String? Function() _currentClanId;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final clanId = _currentClanId();
+    if (clanId != null && isClanScoped(options.path)) {
+      options.headers['X-Current-Clan-Id'] = clanId;
+    }
+    handler.next(options);
+  }
+}
+```
+
+`mobile/lib/core/network/interceptors/locale_interceptor.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+
+/// Drives all server-localised text. The app owns its locale and never reads
+/// the backend's `preferred_locale`, which always returns "vi" (spec R3).
+class LocaleInterceptor extends Interceptor {
+  LocaleInterceptor(this._locale);
+  final String Function() _locale;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    options.headers['Accept-Language'] = _locale();
+    handler.next(options);
+  }
+}
+```
+
+`mobile/lib/core/network/interceptors/trace_interceptor.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+
+import '../../observability/traceparent.dart';
+
+/// W3C trace context (ADR-033): a crash on a phone links to the exact backend
+/// log line.
+class TraceInterceptor extends Interceptor {
+  TraceInterceptor({String Function()? generator})
+    : _generator = generator ?? newTraceparent;
+
+  final String Function() _generator;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    options.headers['traceparent'] = _generator();
+    handler.next(options);
+  }
+}
+```
+
+- [ ] **Step 6: Run the tests**
+
+```bash
+cd mobile && flutter test test/core/network/interceptors_test.dart
+```
+Expected: `All tests passed!` (10 tests).
+
+- [ ] **Step 7: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/core mobile/test
+git commit -m "$(cat <<'EOF'
+feat(mobile): add auth, clan, locale and trace interceptors
+
+X-Current-Clan-Id is attached only on clan-scoped routes; /auth/*,
+/me/clans, /platform/* and invitation accept are exempt. traceparent
+follows W3C trace context per ADR-033.
+
+Adds test/support/sequence_adapter.dart: http_mock_adapter 0.6.1 fixes
+the status code at registration and keeps the last matching handler, so
+it cannot express a 401-then-200 sequence.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 7: Single-flight refresh and retry-exactly-once
+
+**Files:**
+- Create: `mobile/lib/core/network/token_refresher.dart`, `mobile/lib/core/network/interceptors/refresh_interceptor.dart`
+- Test: `mobile/test/core/network/refresh_test.dart`
+
+**Interfaces:**
+- Consumes: `SequenceAdapter`, `Canned` (Task 6)
+- Produces:
+  - `class TokenRefresher(Future<String?> Function() refresh)` → `Future<String?> refresh()`, `int refreshCallCount`
+  - `class RefreshInterceptor({required TokenRefresher refresher, required Dio retryDio, required void Function() onSignOut})`
+
+> Spec D8: a browser tab is alive, a phone is backgrounded for days. This is the reactive single-flight strategy `frontend-integration-guide.md` §2 recommends for non-Supabase-SDK clients.
+
+- [ ] **Step 1: Write the failing test**
+
+`mobile/test/core/network/refresh_test.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/network/interceptors/refresh_interceptor.dart';
+import 'package:family_roots_mobile/core/network/token_refresher.dart';
+
+import '../../support/sequence_adapter.dart';
+
+const _unauthorized = <String, Object?>{
+  'error': <String, Object?>{
+    'code': 'invalid_token',
+    'message': 'Token không hợp lệ',
+    'detail': <String, Object?>{},
+  },
+};
+
+Dio _dio(SequenceAdapter a) =>
+    Dio(BaseOptions(baseUrl: 'https://api.test'))..httpClientAdapter = a;
+
+void main() {
+  group('TokenRefresher', () {
+    test('concurrent callers share one in-flight refresh', () async {
+      var calls = 0;
+      final refresher = TokenRefresher(() async {
+        calls++;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        return 'new-token';
+      });
+
+      final results = await Future.wait<String?>(<Future<String?>>[
+        refresher.refresh(),
+        refresher.refresh(),
+        refresher.refresh(),
+      ]);
+
+      expect(results, <String?>['new-token', 'new-token', 'new-token']);
+      expect(calls, 1);
+    });
+
+    test('a later refresh starts a new flight', () async {
+      var calls = 0;
+      final refresher = TokenRefresher(() async {
+        calls++;
+        return 't$calls';
+      });
+      expect(await refresher.refresh(), 't1');
+      expect(await refresher.refresh(), 't2');
+      expect(calls, 2);
+    });
+
+    test('a throwing refresh does not wedge the refresher', () async {
+      var calls = 0;
+      final refresher = TokenRefresher(() async {
+        calls++;
+        if (calls == 1) throw StateError('boom');
+        return 'ok';
+      });
+      await expectLater(refresher.refresh(), throwsStateError);
+      expect(await refresher.refresh(), 'ok');
+    });
+  });
+
+  group('RefreshInterceptor', () {
+    test('401 refreshes once and retries exactly once', () async {
+      final a = SequenceAdapter(<Canned>[
+        const Canned(401, _unauthorized),
+        const Canned(200, <String, Object?>{'data': <Object?>[]}),
+      ]);
+      final dio = _dio(a);
+
+      var signedOut = false;
+      final refresher = TokenRefresher(() async => 'fresh');
+      dio.interceptors.add(
+        RefreshInterceptor(
+          refresher: refresher,
+          retryDio: dio,
+          onSignOut: () => signedOut = true,
+        ),
+      );
+
+      final res = await dio.get<Object?>('/persons');
+      expect(res.statusCode, 200);
+      expect(a.callCount, 2);
+      expect(a.received.last.headers['Authorization'], 'Bearer fresh');
+      expect(refresher.refreshCallCount, 1);
+      expect(signedOut, isFalse);
+    });
+
+    test('a failed refresh signs out and does not loop', () async {
+      final a = SequenceAdapter(<Canned>[const Canned(401, _unauthorized)]);
+      final dio = _dio(a);
+
+      var signedOut = false;
+      dio.interceptors.add(
+        RefreshInterceptor(
+          refresher: TokenRefresher(() async => null),
+          retryDio: dio,
+          onSignOut: () => signedOut = true,
+        ),
+      );
+
+      await expectLater(
+        dio.get<Object?>('/persons'),
+        throwsA(isA<DioException>()),
+      );
+      expect(signedOut, isTrue);
+      expect(a.callCount, 1);
+    });
+
+    test('a second 401 on the retry is not retried again', () async {
+      final a = SequenceAdapter(<Canned>[
+        const Canned(401, _unauthorized),
+        const Canned(401, _unauthorized),
+      ]);
+      final dio = _dio(a);
+      final refresher = TokenRefresher(() async => 'fresh');
+      dio.interceptors.add(
+        RefreshInterceptor(
+          refresher: refresher,
+          retryDio: dio,
+          onSignOut: () {},
+        ),
+      );
+
+      await expectLater(
+        dio.get<Object?>('/persons'),
+        throwsA(isA<DioException>()),
+      );
+      expect(a.callCount, 2);
+      expect(refresher.refreshCallCount, 1);
+    });
+
+    test('a non-401 error passes straight through', () async {
+      final a = SequenceAdapter(<Canned>[
+        const Canned(403, <String, Object?>{
+          'error': <String, Object?>{
+            'code': 'insufficient_permissions',
+            'message': 'Không đủ quyền',
+            'detail': <String, Object?>{},
+          },
+        }),
+      ]);
+      final dio = _dio(a);
+      final refresher = TokenRefresher(() async => 'fresh');
+      dio.interceptors.add(
+        RefreshInterceptor(
+          refresher: refresher,
+          retryDio: dio,
+          onSignOut: () {},
+        ),
+      );
+
+      await expectLater(
+        dio.get<Object?>('/persons'),
+        throwsA(isA<DioException>()),
+      );
+      expect(refresher.refreshCallCount, 0);
+      expect(a.callCount, 1);
+    });
+
+    test('a cancellation is rethrown unchanged and never refreshes', () async {
+      final dio = _dio(
+        SequenceAdapter(<Canned>[
+          const Canned(200, <String, Object?>{'data': null}),
+        ]),
+      );
+      final refresher = TokenRefresher(() async => 'fresh');
+      dio.interceptors.add(
+        RefreshInterceptor(
+          refresher: refresher,
+          retryDio: dio,
+          onSignOut: () {},
+        ),
+      );
+
+      final token = CancelToken()..cancel('user left the screen');
+      await expectLater(
+        dio.get<Object?>('/persons', cancelToken: token),
+        throwsA(
+          isA<DioException>().having(
+            (e) => e.type,
+            'type',
+            DioExceptionType.cancel,
+          ),
+        ),
+      );
+      expect(refresher.refreshCallCount, 0);
+    });
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/core/network/refresh_test.dart
+```
+Expected: FAIL — `token_refresher.dart` and `refresh_interceptor.dart` do not exist.
+
+- [ ] **Step 3: Write `token_refresher.dart`**
+
+```dart
+/// Single-flight: concurrent callers await the same in-flight future, so a
+/// burst of 401s produces exactly one refresh.
+class TokenRefresher {
+  TokenRefresher(this._refresh);
+
+  final Future<String?> Function() _refresh;
+  Future<String?>? _inFlight;
+
+  /// Underlying refreshes actually performed. Test-facing.
+  int refreshCallCount = 0;
+
+  Future<String?> refresh() {
+    final existing = _inFlight;
+    if (existing != null) return existing;
+    refreshCallCount++;
+    // whenComplete also clears the slot on error, so a failed refresh does
+    // not wedge every later attempt.
+    final future = _refresh().whenComplete(() => _inFlight = null);
+    _inFlight = future;
+    return future;
+  }
+}
+```
+
+- [ ] **Step 4: Write `refresh_interceptor.dart`**
+
+```dart
+import 'package:dio/dio.dart';
+
+import '../token_refresher.dart';
+
+const _retriedFlag = 'familyroots.retried';
+
+/// On 401: one shared refresh, concurrent 401s queued behind it, retry the
+/// original request exactly once; on refresh failure, sign out.
+class RefreshInterceptor extends Interceptor {
+  RefreshInterceptor({
+    required this.refresher,
+    required this.retryDio,
+    required this.onSignOut,
+  });
+
+  final TokenRefresher refresher;
+  final Dio retryDio;
+  final void Function() onSignOut;
+
+  @override
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    // A caller-initiated cancellation is rethrown unchanged and is never
+    // reported as a network or auth failure.
+    if (err.type == DioExceptionType.cancel) {
+      handler.next(err);
+      return;
+    }
+
+    final options = err.requestOptions;
+    if (err.response?.statusCode != 401 ||
+        options.extra[_retriedFlag] == true) {
+      handler.next(err);
+      return;
+    }
+
+    final String? token;
+    try {
+      token = await refresher.refresh();
+    } on Object {
+      onSignOut();
+      handler.next(err);
+      return;
+    }
+
+    if (token == null) {
+      onSignOut();
+      handler.next(err);
+      return;
+    }
+
+    options.extra[_retriedFlag] = true;
+    options.headers['Authorization'] = 'Bearer $token';
+    try {
+      handler.resolve(await retryDio.fetch<Object?>(options));
+    } on DioException catch (e) {
+      handler.next(e);
+    }
+  }
+}
+```
+
+- [ ] **Step 5: Run the tests**
+
+```bash
+cd mobile && flutter test test/core/network/refresh_test.dart
+```
+Expected: `All tests passed!` (8 tests).
+
+- [ ] **Step 6: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/core/network mobile/test/core/network
+git commit -m "$(cat <<'EOF'
+feat(mobile): single-flight token refresh with retry-exactly-once
+
+Concurrent 401s queue behind one refresh; the original request is retried
+exactly once and never loops. Refresh failure signs out. Cancellations are
+rethrown unchanged. Implements ADR-034 D8.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 8: Secure session storage and preferences
+
+**Files:**
+- Create: `mobile/lib/core/storage/secure_session_store.dart`, `mobile/lib/core/storage/prefs_store.dart`
+- Test: `mobile/test/core/storage/secure_session_store_test.dart`
+
+**Interfaces:**
+- Produces:
+  - `class SecureSessionStore extends LocalStorage` with `static const sessionKey`
+  - `class SecurePkceStore extends GotrueAsyncStorage`
+  - `class PrefsStore` — `static Future<PrefsStore> open()`, `String? readClanId()`, `Future<void> writeClanId(String)`, `Future<void> clearClanId()`, `String? readLocale()`, `Future<void> writeLocale(String)`
+
+> **Two stores, not one (V10).** `LocalStorage` covers the session; the PKCE code verifier goes through a *separate* `GotrueAsyncStorage`. Leaving it default puts the verifier in SharedPreferences plaintext, which `frontend-integration-guide.md` §2 forbids. Clan selection and locale are *not* secrets — spec §4.3 puts them in ordinary preferences.
+>
+> **Verified (V11):** pass a bare `AndroidOptions()`. `encryptedSharedPreferences: true` is deprecated, ignored, and removed in v11; v10's default is already KeyStore-backed AES-GCM with RSA-OAEP key wrapping.
+
+- [ ] **Step 1: Write the failing test**
+
+Platform channels are unavailable under `flutter test`, so this injects a fake `FlutterSecureStorage` and asserts the `LocalStorage` contract. Real Keychain/Keystore behaviour is N3 and is covered by the device run in Task 18.
+
+`mobile/test/core/storage/secure_session_store_test.dart`:
+
+```dart
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:family_roots_mobile/core/storage/prefs_store.dart';
+import 'package:family_roots_mobile/core/storage/secure_session_store.dart';
+
+class _MockSecureStorage extends Mock implements FlutterSecureStorage {}
+
+void main() {
+  late _MockSecureStorage storage;
+  late SecureSessionStore store;
+
+  setUp(() {
+    storage = _MockSecureStorage();
+    store = SecureSessionStore(storage: storage);
+  });
+
+  test('is a supabase LocalStorage', () {
+    expect(store, isA<LocalStorage>());
+  });
+
+  test('initialize does not touch the keystore', () async {
+    await store.initialize();
+    verifyZeroInteractions(storage);
+  });
+
+  test('persistSession writes under the namespaced key', () async {
+    when(
+      () => storage.write(key: any(named: 'key'), value: any(named: 'value')),
+    ).thenAnswer((_) async {});
+
+    await store.persistSession('{"access_token":"a"}');
+
+    verify(
+      () => storage.write(
+        key: SecureSessionStore.sessionKey,
+        value: '{"access_token":"a"}',
+      ),
+    ).called(1);
+  });
+
+  test('accessToken, hasAccessToken and removePersistedSession', () async {
+    when(
+      () => storage.read(key: SecureSessionStore.sessionKey),
+    ).thenAnswer((_) async => '{"access_token":"a"}');
+    when(
+      () => storage.containsKey(key: SecureSessionStore.sessionKey),
+    ).thenAnswer((_) async => true);
+    when(() => storage.delete(key: any(named: 'key'))).thenAnswer((_) async {});
+
+    expect(await store.accessToken(), '{"access_token":"a"}');
+    expect(await store.hasAccessToken(), isTrue);
+
+    await store.removePersistedSession();
+    verify(() => storage.delete(key: SecureSessionStore.sessionKey)).called(1);
+  });
+
+  test('the PKCE verifier store is secure too', () async {
+    final pkce = SecurePkceStore(storage: storage);
+    expect(pkce, isA<GotrueAsyncStorage>());
+
+    when(
+      () => storage.write(key: any(named: 'key'), value: any(named: 'value')),
+    ).thenAnswer((_) async {});
+
+    await pkce.setItem(key: 'verifier', value: 'v1');
+    verify(() => storage.write(key: 'verifier', value: 'v1')).called(1);
+  });
+
+  test('PrefsStore round-trips clan id and locale', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final prefs = await PrefsStore.open();
+
+    expect(prefs.readClanId(), isNull);
+    await prefs.writeClanId('clan-1');
+    expect(prefs.readClanId(), 'clan-1');
+    await prefs.clearClanId();
+    expect(prefs.readClanId(), isNull);
+
+    expect(prefs.readLocale(), isNull);
+    await prefs.writeLocale('vi');
+    expect(prefs.readLocale(), 'vi');
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/core/storage/secure_session_store_test.dart
+```
+Expected: FAIL — cannot resolve `secure_session_store.dart`.
+
+- [ ] **Step 3: Write `secure_session_store.dart`**
+
+```dart
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+const _defaultStorage = FlutterSecureStorage(
+  // v10's default is already KeyStore-backed AES-GCM with RSA-OAEP key
+  // wrapping. `encryptedSharedPreferences` is deprecated, ignored, and gone
+  // in v11 — do not pass it.
+  aOptions: AndroidOptions(),
+  iOptions: IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock_this_device,
+  ),
+);
+
+/// The Supabase session at rest: iOS Keychain / Android Keystore, never
+/// SharedPreferences (frontend-integration-guide.md §2, ADR-034 D6).
+class SecureSessionStore extends LocalStorage {
+  SecureSessionStore({FlutterSecureStorage? storage})
+    : _storage = storage ?? _defaultStorage;
+
+  static const sessionKey = 'familyroots.supabase.session';
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<bool> hasAccessToken() => _storage.containsKey(key: sessionKey);
+
+  @override
+  Future<String?> accessToken() => _storage.read(key: sessionKey);
+
+  @override
+  Future<void> removePersistedSession() => _storage.delete(key: sessionKey);
+
+  @override
+  Future<void> persistSession(String persistSessionString) =>
+      _storage.write(key: sessionKey, value: persistSessionString);
+}
+
+/// The PKCE code verifier needs securing too — the default implementation
+/// writes it to SharedPreferences in plaintext.
+class SecurePkceStore extends GotrueAsyncStorage {
+  SecurePkceStore({FlutterSecureStorage? storage})
+    : _storage = storage ?? _defaultStorage;
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<String?> getItem({required String key}) => _storage.read(key: key);
+
+  @override
+  Future<void> removeItem({required String key}) => _storage.delete(key: key);
+
+  @override
+  Future<void> setItem({required String key, required String value}) =>
+      _storage.write(key: key, value: value);
+}
+```
+
+- [ ] **Step 4: Write `prefs_store.dart`**
+
+```dart
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Non-secret client state: the selected clan and the user's chosen locale.
+/// The app owns the locale and never reads the backend's `preferred_locale`,
+/// which always returns "vi" (documented backend gap, spec R3).
+class PrefsStore {
+  PrefsStore(this._prefs);
+
+  static const _clanKey = 'familyroots.selected_clan_id';
+  static const _localeKey = 'familyroots.locale';
+
+  final SharedPreferences _prefs;
+
+  static Future<PrefsStore> open() async =>
+      PrefsStore(await SharedPreferences.getInstance());
+
+  String? readClanId() => _prefs.getString(_clanKey);
+  Future<void> writeClanId(String clanId) => _prefs.setString(_clanKey, clanId);
+  Future<void> clearClanId() => _prefs.remove(_clanKey);
+
+  String? readLocale() => _prefs.getString(_localeKey);
+  Future<void> writeLocale(String locale) =>
+      _prefs.setString(_localeKey, locale);
+}
+```
+
+- [ ] **Step 5: Run the tests**
+
+```bash
+cd mobile && flutter test test/core/storage/secure_session_store_test.dart
+```
+Expected: `All tests passed!` (6 tests).
+
+- [ ] **Step 6: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/core/storage mobile/test/core/storage
+git commit -m "$(cat <<'EOF'
+feat(mobile): store the Supabase session in platform secure storage
+
+Implements supabase_flutter's LocalStorage over flutter_secure_storage
+(ADR-034 D6) and secures the PKCE code verifier through a matching
+GotrueAsyncStorage, which the default leaves in SharedPreferences
+plaintext. Clan selection and locale stay in ordinary preferences.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 9: sqflite read cache
+
+**Files:**
+- Create: `mobile/lib/core/storage/cache_store.dart`
+- Test: `mobile/test/core/storage/cache_store_test.dart`
+
+**Interfaces:**
+- Produces:
+  - `class CachedPayload(Object? body, DateTime storedAt)`
+  - `abstract class CacheStore` — `put`, `get`, `remove`, `clear`
+  - `class SqfliteCacheStore implements CacheStore` with `static const table`, `static const createTableSql`, `static Future<SqfliteCacheStore> open()`
+
+> **Verified (V15):** `sqflite` throws `Bad state: databaseFactory not initialized` under `flutter test`. Every test touching it must call `sqfliteFfiInit(); databaseFactory = databaseFactoryFfi;` in `setUpAll`. `sqflite_common_ffi` is the dev dependency added in Task 1.
+
+- [ ] **Step 1: Write the failing test**
+
+`mobile/test/core/storage/cache_store_test.dart`:
+
+```dart
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'package:family_roots_mobile/core/storage/cache_store.dart';
+
+void main() {
+  setUpAll(() {
+    // sqflite has no implementation under `flutter test`; the FFI factory
+    // provides a real SQLite without a device.
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
+  late SqfliteCacheStore store;
+
+  setUp(() async {
+    final db = await databaseFactory.openDatabase(
+      inMemoryDatabasePath,
+      options: OpenDatabaseOptions(
+        version: 1,
+        onCreate: (d, _) => d.execute(SqfliteCacheStore.createTableSql),
+      ),
+    );
+    store = SqfliteCacheStore(db);
+  });
+
+  test('round-trips a payload with a timestamp', () async {
+    await store.put('GET /me/clans', <String, Object?>{
+      'data': <Object?>[
+        <String, Object?>{'clan_id': 'c1'},
+      ],
+    });
+
+    final got = await store.get('GET /me/clans');
+    expect(got, isNotNull);
+    expect(got!.body, <String, Object?>{
+      'data': <Object?>[
+        <String, Object?>{'clan_id': 'c1'},
+      ],
+    });
+    expect(DateTime.now().difference(got.storedAt).inSeconds, lessThan(5));
+  });
+
+  test('a miss is null, not an error', () async {
+    expect(await store.get('never written'), isNull);
+  });
+
+  test('put replaces an existing key rather than duplicating it', () async {
+    await store.put('k', <String, Object?>{'v': 1});
+    await store.put('k', <String, Object?>{'v': 2});
+    expect((await store.get('k'))!.body, <String, Object?>{'v': 2});
+  });
+
+  test('remove drops one key', () async {
+    await store.put('a', 1);
+    await store.put('b', 2);
+    await store.remove('a');
+    expect(await store.get('a'), isNull);
+    expect((await store.get('b'))!.body, 2);
+  });
+
+  test('clear empties the cache — used on sign-out', () async {
+    await store.put('a', 1);
+    await store.put('b', 2);
+    await store.clear();
+    expect(await store.get('a'), isNull);
+    expect(await store.get('b'), isNull);
+  });
+
+  test('stores lists as well as maps', () async {
+    await store.put('list', <Object?>[1, 'two', null]);
+    expect((await store.get('list'))!.body, <Object?>[1, 'two', null]);
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/core/storage/cache_store_test.dart
+```
+Expected: FAIL — cannot resolve `cache_store.dart`.
+
+- [ ] **Step 3: Write the implementation**
+
+`mobile/lib/core/storage/cache_store.dart`:
+
+```dart
+import 'dart:convert';
+
+import 'package:sqflite/sqflite.dart';
+
+class CachedPayload {
+  const CachedPayload(this.body, this.storedAt);
+
+  /// The decoded payload — already unwrapped from the envelope.
+  final Object? body;
+  final DateTime storedAt;
+}
+
+/// Read cache only (ADR-034 consequence 7): every successful network read is
+/// written here so it can be re-served when the network fails. Writes always
+/// require connectivity — there is no write queue and no offline conflict
+/// resolution.
+///
+/// Presigned URLs are excluded by rule: they expire after 3600s and must never
+/// be persisted (frontend-integration-guide.md §8).
+abstract class CacheStore {
+  Future<void> put(String key, Object? body);
+  Future<CachedPayload?> get(String key);
+  Future<void> remove(String key);
+  Future<void> clear();
+}
+
+class SqfliteCacheStore implements CacheStore {
+  SqfliteCacheStore(this._db);
+
+  static const table = 'response_cache';
+
+  static const createTableSql =
+      '''
+CREATE TABLE IF NOT EXISTS $table (
+  key TEXT PRIMARY KEY,
+  body TEXT NOT NULL,
+  stored_at INTEGER NOT NULL
+)''';
+
+  final Database _db;
+
+  static Future<SqfliteCacheStore> open() async {
+    final path = '${await getDatabasesPath()}/familyroots_cache.db';
+    final db = await openDatabase(
+      path,
+      version: 1,
+      onCreate: (d, _) => d.execute(createTableSql),
+    );
+    return SqfliteCacheStore(db);
+  }
+
+  @override
+  Future<void> put(String key, Object? body) async {
+    await _db.insert(table, <String, Object?>{
+      'key': key,
+      'body': jsonEncode(body),
+      'stored_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<CachedPayload?> get(String key) async {
+    final rows = await _db.query(
+      table,
+      where: 'key = ?',
+      whereArgs: <Object?>[key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return CachedPayload(
+      jsonDecode(row['body']! as String),
+      DateTime.fromMillisecondsSinceEpoch(row['stored_at']! as int),
+    );
+  }
+
+  @override
+  Future<void> remove(String key) =>
+      _db.delete(table, where: 'key = ?', whereArgs: <Object?>[key]);
+
+  @override
+  Future<void> clear() => _db.delete(table);
+}
+```
+
+- [ ] **Step 4: Run the tests**
+
+```bash
+cd mobile && flutter test test/core/storage/cache_store_test.dart
+```
+Expected: `All tests passed!` (6 tests).
+
+- [ ] **Step 5: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/core/storage/cache_store.dart mobile/test/core/storage/cache_store_test.dart
+git commit -m "$(cat <<'EOF'
+feat(mobile): add the sqflite read cache
+
+Single key/JSON/timestamp table (ADR-034 D5). Read cache only: writes
+always require the network. Presigned URLs are excluded by rule.
+
+Tests drive it through sqflite_common_ffi — sqflite has no implementation
+under `flutter test`.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
