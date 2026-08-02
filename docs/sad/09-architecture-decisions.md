@@ -92,7 +92,8 @@ graph TB
 - **ADR-008** is live (Phases 1–4: documents, events, branches, marriages,
   parent_child, persons), not the "inert pilot" older prose describes — see
   [11-risks-and-technical-debt.md](11-risks-and-technical-debt.md).
-- **ADR-024** — a few endpoints are intentionally non-canonical; normalize before the
-  frontend binds them.
+- **ADR-024** — both non-canonical endpoints were normalized on 2026-07-18 (`/me/clans`
+  is a plain canonical array; `/clans/me/users/pending` includes `person_id`). The ADR
+  is retained for rationale only — nothing left to do.
 
 **Rule:** any architectural choice or breaking change ships a new ADR **in the same PR**.

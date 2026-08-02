@@ -25,6 +25,18 @@ Adopt **W3C Trace Context** (`traceparent`) as the correlation identifier.
   and stores it in a ContextVar (`app/core/trace_context.py`).
 - Every JSON log line inside a request carries `trace_id`, `span_id`, and where known
   `route` and `clan_id`. Outside a request (scheduler, purge) those keys are absent.
+  `route` is the **raw request path** including ids (`/api/v1/persons/<uuid>`), not a
+  route template — the field name is kept for continuity, but do not group on it as if
+  it were low-cardinality. `clan_id` records the **claimed** `X-Current-Clan-Id` header,
+  not an authorized clan: it is unvalidated at this layer (authorization happens later,
+  in the repository/permission layer), so treat it as a caller-supplied hint and expect
+  values that the caller had no right to. It is truncated to 64 characters so an
+  oversized header cannot amplify log volume across every line of a request.
+- An unhandled 500 is a special case: Starlette hoists the catch-all `Exception`
+  handler into `ServerErrorMiddleware`, outside all user middleware and therefore
+  outside the ContextVar's lifetime. The middleware also stashes the context on the
+  request scope's `state`, and `unhandled_exception_handler` reads it back so the 500
+  still logs a `trace_id` and still returns a `traceparent`.
 - The response echoes `traceparent`, and CORS exposes it so the browser can show the
   user a trace id to quote to an admin.
 - Sentry continues to do its own distributed tracing via the FastAPI integration and
