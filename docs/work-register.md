@@ -15,31 +15,30 @@ Last updated: 2026-08-02.
 
 ## 1. In flight
 
-### 1.1 Dependency upgrade sweep — backend + web
+### 1.1 Dependency upgrade sweep — mobile remainder
 
-Bring every direct and transitive dependency to its latest stable release, and adopt
-`httpx2` where it supersedes `httpx`.
+Backend and web are done (see §4). What is left:
 
-- **Backend:** 71 outdated packages. Majors involved: `mypy` 1.19→2.x, `cryptography`
-  46→50, `cachetools` 6→7, `rich` 14→15, `websockets` 15→17. Verified by the 1044-test
-  suite plus the full gate.
-- **Web:** ~35 outdated. Majors involved: `typescript` 5.9→7.0 (the native port),
-  `tailwindcss` 3.4→4.3, `zod` 3.25→4.4, `eslint` 9→10, `@hookform/resolvers` 3→5,
-  `tailwind-merge` 2→3, `lucide-react` 0.511→1.28, `@supabase/ssr` 0.6→0.12,
-  `@types/node` 22→26.
-- **`httpx2`:** `httpx` is frozen at 0.28.1; `httpx2` (pydantic org, 2.9.1) is the
-  successor, and Starlette 1.x emits `StarletteDeprecationWarning` on every
-  `TestClient` construction until it is installed. Retires the deferred item in §3.2.
-- **Mobile:** blocked — no Flutter/Dart toolchain on this machine. `mobile/pubspec.yaml`
-  still carries `flutter_bloc ^8`, `get_it ^7`, `go_router ^14`, `dio ^5`,
-  `retrofit >=4 <5`, `hive ^2`, `intl ^0.20`. Run `flutter pub outdated` on a machine
-  that has the SDK.
+- **Mobile:** blocked — no Flutter/Dart toolchain on this machine.
+  `mobile/pubspec.yaml` still carries `flutter_bloc ^8`, `get_it ^7`, `go_router ^14`,
+  `dio ^5`, `retrofit >=4 <5`, `hive ^2`, `intl ^0.20`. Run `flutter pub outdated` on
+  a machine that has the SDK.
 
-**Ordering constraint:** `tailwindcss` 4 and `zod` 4 land underneath sub-projects A
-and B (§2.1, §2.2). Upgrading before those start is cheaper than migrating new code
-afterwards — but it also means the web spine plan's pinned versions and its
-hand-written zod boundary schemas must be re-checked against zod 4 before Task 1
-begins.
+Three upgrades were attempted and deliberately not taken, each blocked upstream
+rather than by our code:
+
+| Package | Wanted | Landed | Why |
+|---|---|---|---|
+| `typescript` | 7.0.2 | 6.0.3 | typescript-eslint hard-errors on TS 7 (`typescript-eslint#10940`, targets ≥7.1), and eslint-config-next loads it, so the whole lint step dies. TS 7 itself type-checks and builds fine. |
+| `eslint` | 10.8.0 | 9.39.5 | `eslint-plugin-react`'s latest release (7.37.5) declares `eslint: ^3 \|\| … \|\| ^9.7` and throws inside `usedPropTypes` on v10. `eslint-config-next` depends on it. |
+| `firebase-admin` `Message.fid` | — | kept `token` | `fid` is a Firebase Installation ID, `token` a device registration token — distinct, mutually exclusive wire fields. Switching needs the Flutter client to send installation IDs first. The deprecation warning is filtered by exact message. |
+
+Re-check all three when the upstream packages move.
+
+**Consequence for sub-project A (§2.1):** the web spine plan predates zod 4 and
+Tailwind 4. Its pinned versions and its hand-written zod boundary schemas must be
+re-checked before Task 1 — `z.infer` is now the *output* type, and any schema using
+`.default()` needs the `z.input`/`z.output` split the relationship schemas now use.
 
 ---
 
@@ -89,10 +88,13 @@ configured token, and rate limiting — failed attempts are silent 404s that sit
 the rate limiter, so the endpoint can be brute-forced without trace. Recorded in
 `docs/ops/monitoring.md`. **Decide before anything scrapes the endpoint.**
 
-### 3.2 `StarletteDeprecationWarning` on every `TestClient`
+### 3.2 `pnpm format:check` fails on 112 web files
 
-Test output is no longer warning-free. Fixed by the `httpx2` adoption in §1.1; if that
-slips, the fallback is a `filterwarnings` entry in `pyproject.toml`.
+Pre-existing prettier drift in files no recent branch has touched
+(`src/middleware.ts`, `src/store/auth.store.ts`, `tsconfig.json`, …). It is not part
+of the documented web gate (`pnpm type-check && pnpm lint`), so CI stays green.
+Running `pnpm format` would fix it in one sweep at the cost of a 112-file diff —
+worth folding into sub-project A rather than doing standalone.
 
 ### 3.3 Stale remote branches
 
@@ -118,6 +120,8 @@ Carried from `CLAUDE.md` — none of these are scheduled:
 
 | Work | Where | Merge |
 |---|---|---|
+| Backend dependency sweep + httpx2 (71 packages, 5 majors) | `backend/pyproject.toml` | `d2d2de1` |
+| Web dependency sweep: Tailwind 4, zod 4, TS 6 | `web/package.json` | `a457e29`, `5f4cb7f`, `5dc340a`, `e3ce8d8` |
 | W3C trace context + Prometheus metrics (ADR-033) | `docs/superpowers/plans/2026-08-02-backend-trace-context-metrics.md` | `dc6f499`, CI green |
 | Software Architecture Document (arc42 + C4) | `docs/sad/` | PR #121 |
 | Backend production-readiness backlog | — | complete per owner sign-off |
