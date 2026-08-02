@@ -6,6 +6,12 @@ requires-python = ">=3.14"
 license = { text = "Apache-2.0" }
 dependencies = [
     "fastapi>=0.135.1",
+    # FastAPI itself declares only starlette>=0.46.0 with no upper bound, so its
+    # major version is decided silently by whichever transitive dependency happens
+    # to pin tightest (prometheus-fastapi-instrumentator forced 1.x here). Declared
+    # directly so any future major bump shows up in a diff a human reads, not only
+    # in uv.lock.
+    "starlette>=1.3.1,<2",
     "uvicorn[standard]>=0.41.0",
     "sqlalchemy[asyncio]>=2.0.48",
     "psycopg[binary]>=3.2",
