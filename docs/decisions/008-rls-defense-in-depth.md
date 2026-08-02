@@ -61,6 +61,23 @@ the ContextVar so post-commit transactions re-apply it).
   `test_rls_phase4_persons`. Coverage guard now `{documents, events, branches, parent_child,
   marriages, persons}`.
 
+  - **Phase 4 follow-up (2026-08-02, ADR-038 — no migration).** The INSERT-ordering
+    carve-out above was only half the problem. Postgres also matches a **`RETURNING`**
+    row against the **SELECT** policy, so `INSERT INTO persons … RETURNING …` inside the
+    same window is rejected by `persons_sel` even though `persons_ins` accepted the write
+    — and SQLAlchemy 2.0's `eager_defaults="auto"` appends
+    `RETURNING version, created_at, updated_at` to every `persons` INSERT. Every
+    `POST /api/v1/persons` therefore failed under the non-bypass role; it was invisible
+    until a test drove an HTTP write through a real `RlsSession`. Fixed in the ORM, not
+    the policy: `Person.__mapper_args__ = {"eager_defaults": False}`. `029_rls_persons` is
+    unchanged, the server defaults stay (the DB is still the timestamp/version authority),
+    and no read plan changes. Widening `persons_sel` to
+    `<membership> OR created_by_clan_id = GUC` — and the narrower "visible only while
+    memberless" variant — were rejected because both let a clan keep reading a person
+    after their `clan_memberships` row is removed; see ADR-038 for the empirical check.
+    **Standing constraint:** any new `persons` write path must insert the membership row
+    first or avoid `RETURNING`. Proven by `test_rls_person_create`.
+
 Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
 tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
 by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break
@@ -155,5 +172,6 @@ Harder:
 
 ## Related
 - [ADR-002: Single Schema Clan-Scoped Multitenancy](002-clan-scoped-multitenancy.md)
+- [ADR-038: `persons` RLS — Fix the RETURNING/`persons_sel` Collision in the ORM, Not in the Policy](038-persons-returning-vs-membership-rls.md) — amends Phase 4
 - Backend production-hardening effort: application-layer isolation (SP-2B) is the
   primary mechanism; this RLS layer is SP-3C.

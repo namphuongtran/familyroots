@@ -860,11 +860,13 @@ class TestUnderRlsSession:
       ``persons_upd USING (membership)`` policy.
 
     The target person is seeded through a privileged session rather than
-    ``POST /api/v1/persons`` **deliberately**: person *creation* is currently broken
-    under a real RLS session for reasons unrelated to change requests (the ORM's
-    ``INSERT … RETURNING`` is evaluated against ``persons_sel``, whose membership
-    predicate cannot hold yet because ``clan_memberships`` is inserted after
-    ``persons``). Seeding around it keeps this test honest about what it covers.
+    ``POST /api/v1/persons`` so this file keeps testing change requests and nothing
+    else. (Person creation under a real RLS session used to be broken here — the ORM's
+    ``INSERT … RETURNING`` was evaluated against ``persons_sel``, whose membership
+    predicate cannot hold yet because ``clan_memberships`` is inserted after ``persons``.
+    Fixed by ADR-038 and covered by ``test_rls_person_create.py``; the seeding stays
+    because a change-request regression should not be able to hide behind a person-create
+    failure.)
     """
 
     @pytest.fixture(autouse=True)

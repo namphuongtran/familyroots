@@ -14,6 +14,24 @@ from app.models.base import Base, TimestampMixin
 class Person(TimestampMixin, Base):
     __tablename__ = "persons"
 
+    # RLS layer-2 (ADR-008 / ADR-038). ``persons_sel`` (migration 029) is membership-based,
+    # and Postgres matches a RETURNING row against the SELECT policy. ``save_with_membership``
+    # must insert the ``persons`` row before its ``clan_memberships`` row (the FK forces that
+    # order), so during that window no membership exists and any read-back of the new row is
+    # rejected with "new row violates row-level security policy" — even though ``persons_ins``
+    # accepted the INSERT itself.
+    #
+    # SQLAlchemy 2.0's ``eager_defaults="auto"`` would append
+    # ``RETURNING version, created_at, updated_at`` to every persons INSERT, so every person
+    # create would fail under the non-bypass role. Turning it off removes the read, not the
+    # policy: the server defaults stay on the columns and Postgres still generates the values
+    # (nothing reads them back — the API response is built from the domain entity, which
+    # carries its own timestamps). Pinned by tests/integration/test_rls_person_create.py.
+    # RUF012: SQLAlchemy declares __mapper_args__ as an instance variable on
+    # DeclarativeBase, so annotating it ClassVar is a mypy override error — the plain
+    # dict is the documented declarative form.
+    __mapper_args__ = {"eager_defaults": False}  # noqa: RUF012
+
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Origin clan (nullable — may not belong to any clan in the system)

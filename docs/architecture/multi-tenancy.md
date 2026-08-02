@@ -4,13 +4,15 @@
 
 FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 
-> **Status (2026-07-25):** Isolation is enforced **in the application/repository
+> **Status (2026-08-02):** Isolation is enforced **in the application/repository
 > layer** — this is the primary, tested guarantee. Row-Level Security is the
-> **defense-in-depth layer-2** (ADR-008); **Phase 1 is ACTIVE**: request traffic
-> runs under the non-bypass `familyroots_app` role with a per-request `app.clan_id`
-> GUC, so `documents`, `events`, `branches`, `parent_child`, `marriages`, and `persons` are now RLS-enforced at the DB layer (other clan-scoped tables
-> are added table-by-table). The sections below describe the application-layer
-> mechanism that remains the primary guarantee.
+> **defense-in-depth layer-2** (ADR-008) and is **ACTIVE**: request traffic runs under
+> the non-bypass `familyroots_app` role with a per-request `app.clan_id` GUC, so
+> `documents`, `events`, `branches`, `parent_child`, `marriages`, and `persons` are
+> RLS-enforced at the DB layer (other clan-scoped tables are added table-by-table).
+> `persons` carries two extra rules — see point 6 below and
+> [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
+> describe the application-layer mechanism that remains the primary guarantee.
 
 ## Why not separate schemas?
 
@@ -28,12 +30,13 @@ Separate-schema multi-tenancy was considered and rejected:
 PostgreSQL instance
 └── public schema (all tables, data separated by clan_id / created_by_clan_id)
     ├── clans              (one row per clan)
-    ├── persons            (global — origin_clan_id optional, visible via clan_memberships)
+    ├── persons            (global — created_by_clan_id is provenance only; visibility is
+    │                       clan_memberships, in the app layer AND in RLS)
     ├── clan_memberships   (M:N link between persons and clans, filtered by clan_id)
     ├── marriages          (global edges, write-gated by created_by_clan_id)
     ├── parent_child       (global edges, write-gated by created_by_clan_id)
-    ├── documents          (filtered by clan_id in the app layer; RLS pilot ENABLEd here only)
-    ├── events             (filtered by clan_id in the app layer)
+    ├── documents          (filtered by clan_id in the app layer; RLS-enforced)
+    ├── events             (filtered by clan_id in the app layer; RLS-enforced)
     ├── user_clan_roles    (which user belongs to which clan, with what role)
     ├── change_requests    (approval workflow queue, filtered by clan_id)
     └── audit_log          (cross-clan audit trail)
@@ -62,13 +65,32 @@ PostgreSQL instance
 4. **RBAC.** `require_role` / `RequireClanRole` re-derive the caller's role from
    `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
-6. **RLS layer-2 (Phase 1 ACTIVE for `documents`).** The request path drops to the
-   non-bypass `familyroots_app` role and sets the transaction-local `app.clan_id` GUC
-   (an `after_begin` seam on the request session, driven by a ContextVar
-   `get_current_clan_id` sets), so `documents` is RLS-enforced at the DB layer behind the
-   primary application filters. System paths (scheduler/purge/migrations) use the
-   privileged session and bypass. Other clan-scoped tables are added table-by-table
-   (Phase 2+). Gated by `RLS_ENABLED` (code-free rollback). See ADR-008.
+6. **RLS layer-2 (ACTIVE for `documents`, `events`, `branches`, `parent_child`,
+   `marriages`, `persons`).** The request path drops to the non-bypass `familyroots_app`
+   role and sets the transaction-local `app.clan_id` GUC (an `after_begin` seam on the
+   request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
+   RLS-enforced at the DB layer behind the primary application filters. System paths
+   (scheduler/purge/migrations, plus the two cross-clan readers — identity claims and
+   platform-admin metrics) use the privileged session and bypass. Remaining clan-scoped
+   tables are added table-by-table. Gated by `RLS_ENABLED` (code-free rollback). See
+   ADR-008.
+
+   `persons` is the M:N exception: its policies are per-command and keyed on a
+   `clan_memberships` membership subquery for SELECT/UPDATE/DELETE, with
+   `WITH CHECK (created_by_clan_id = app.clan_id)` on INSERT because
+   `save_with_membership` must write the `persons` row before its membership row. Two
+   consequences follow, and both are load-bearing:
+
+   - **`created_by_clan_id` is provenance, never visibility.** Removing a person's
+     `clan_memberships` row makes them unreadable by that clan, including the clan that
+     created them. Pinned by `test_rls_person_create.py::
+     TestMembershipRemovalStillHidesThePerson`.
+   - **No `RETURNING` on a `persons` INSERT before its membership row exists.** Postgres
+     matches a `RETURNING` row against the SELECT policy, so the membership predicate
+     would be evaluated in a window where it cannot hold. `Person` sets
+     `eager_defaults=False` so SQLAlchemy never emits one; any new `persons` write path
+     must insert the membership first or avoid `RETURNING`. See
+     [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md).
 
 ## Multi-clan membership (clan switcher)
 
@@ -105,4 +127,5 @@ Done in under 100ms.
 - [RBAC](rbac.md) — role hierarchy within clans
 - [Data Model](data-model.md) — table definitions
 - [Overview](overview.md) — system overview
-- [ADR-008](../decisions/008-rls-defense-in-depth.md) — RLS defense-in-depth (deferred layer-2)
+- [ADR-008](../decisions/008-rls-defense-in-depth.md) — RLS defense-in-depth (layer-2, active)
+- [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md) — the two extra rules `persons`-RLS imposes (provenance ≠ visibility; no `RETURNING` before the membership row)
