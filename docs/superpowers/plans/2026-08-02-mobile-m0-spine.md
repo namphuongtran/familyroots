@@ -12,7 +12,9 @@
 
 ## Verification status
 
-Everything below was executed against a throwaway project (`flutter create /tmp/m0probe`) on the machine's real toolchain — **Flutter 3.44.8 • Dart 3.12.2 • DevTools 2.57.0**, `~/development/flutter/bin/flutter`, the exact version CI resolves. The probe finished on: `dart format --set-exit-if-changed` clean, `dart run build_runner build` reproducible, `flutter analyze` → **"No issues found!"**, `flutter test` → **30 passing**.
+Everything below was executed against a throwaway project (`flutter create /tmp/m0probe`) on the machine's real toolchain — **Flutter 3.44.8 • Dart 3.12.2 • DevTools 2.57.0**, `~/development/flutter/bin/flutter`, the exact version CI resolves. The probe finished on: `dart format --set-exit-if-changed` clean, `dart run build_runner build` reproducible, `flutter analyze` → **"No issues found!"**, `flutter test` → **94 passing**.
+
+Four of the findings below (V25–V28) are defects this plan's own first drafts contained. They were caught by running the code, not by reading about it — which is the point of the exercise.
 
 ### VERIFIED — ran it, saw the output
 
@@ -42,6 +44,17 @@ Everything below was executed against a throwaway project (`flutter create /tmp/
 | V22 | The repo's current `mobile/assets/` holds **only `.gitkeep` files — there are no fonts**, so "carry `assets/` forward" carries nothing. Fonts must be fetched. | `ls -la mobile/assets/{icons,images}` |
 | V23 | The `packages/**` CI trigger the spec says to remove is **already gone**, and `mobile-ci.yml` already self-triggers. Only the new gates need adding. | current `.github/workflows/mobile-ci.yml` |
 | V24 | The two Google Fonts variable TTFs and their OFL licence are fetchable (HTTP 200) | `curl -o /dev/null -w %{http_code}` on all three URLs |
+| V25 | **`DioExceptionType` in dio 5.11 has nine members, not eight** — the extra one is `transformTimeout`. An exhaustive switch without it does not compile. | `Error: The type 'DioExceptionType' is not exhaustively matched ... doesn't match 'DioExceptionType.transformTimeout'` |
+| V26 | Under `strict-*` + `flutter_lints` 6, `if (x != null) 'k': x` in a collection literal trips `use_null_aware_elements`; Dart 3.12's `'k': ?x` null-aware element is the clean form | analyzer info, then "No issues found!" after the rewrite |
+| V27 | **Writing to a notifier from inside a provider that also watches it deadlocks the container.** The first `clanResolution` draft auto-selected the single clan inside its own build; the test hung 30s then failed. Auto-selection must live in a notifier **method**. | `TimeoutException after 0:00:30`, then `Bad state: The provider clanResolutionProvider was disposed during loading state, yet no value could be emitted.` Fixed → 5 tests pass |
+| V28 | **Extension types cannot override `Object` members.** The first `ids.dart` draft gave `ClanId` a `toString()`. | `Error: This extension member conflicts with Object member 'toString'` ×3 |
+| V29 | `ApiClient` end-to-end: envelope unwrap, opaque-cursor forwarding, error-envelope → `ApiException` with `detail`, non-envelope → `MalformedResponseException`, trace-id lifted from the outgoing `traceparent`, cancellation rethrown unwrapped | 11 tests |
+| V30 | Auth + clan repositories map the **verbatim** JSON from `rest-auth-api.md` / `rest-me-api.md`, including `role: null` for a pending member, empty `/me/clans` for a purely-pending user, and unknown-role degradation | 9 tests |
+| V31 | `SessionController`: login → `GET /auth/me`, `AsyncError` carries the `ApiException` (code preserved for `policyActionFor`), `signOut` clears state even when `POST /auth/logout` 503s | 4 tests |
+| V32 | Clan resolution per `frontend-integration-guide.md` §1.2 — none / auto-select-one / picker-for-many, plus a stored clan that is no longer an approved membership forcing the picker | 5 tests |
+| V33 | Presentation: `vi` by default and `en` on locale switch, plural `=0/=1/other`, an ARB placeholder, tap-to-select, and **200% text scale with `tester.takeException()` null** (no RenderFlex overflow) | 7 tests |
+| V34 | `AppLocalizations.localizationsDelegates` and `.supportedLocales` are static members of the generated class; `flutter gen-l10n` with `template-arb-file: app_vi.arb` produces them | generated + used in every widget test |
+| V35 | `ThemeExtension<ArborTokens>` + `context.tokens` resolves, and the mandate values survive into the widget tree (`#1d1b16` not `#000000`, 9999/32 radii, 0.8/20 glass) | theme test |
 
 ### NOT VERIFIED — stated honestly
 
@@ -55,6 +68,9 @@ Everything below was executed against a throwaway project (`flutter create /tmp/
 | N6 | The exact Supabase email-link parameter format (spec R2) | Unknowable from this repo. **M0 does not need it** — spec §7 puts deep links out of scope, and the verification screen only needs `POST /auth/resend-verification`. Recorded as an open question below. |
 | N7 | `firebase_messaging` 16.4.3 | M4 scope; deliberately not added to the pubspec in M0. |
 | N8 | That `riverpod_lint`'s analyzer plugin actually reports Riverpod misuse | It is wired via `plugins: - riverpod_lint` and `flutter analyze` runs clean, but no deliberate Riverpod misuse was written to confirm the plugin fires. Note `riverpod_lint` 3.1.3 uses the native `analysis_server_plugin`, **not** `custom_lint`. |
+| N9 | The **full app wiring** — `main.dart`, `bootstrap()`, `dio_provider`'s five interceptors composed on one Dio, and the `ref.listen` bridge from `sessionControllerProvider` onto the router's `ChangeNotifier`. | Each piece is verified in isolation (interceptors V6, refresh V7, bootstrap compiles V9–V12, router V13, session V31), but they were never assembled and run together. Task 17 is where that first happens; Task 19 is where a device proves it. |
+| N10 | The l10n "unsupported locale falls back to `vi`" assertion in Task 12 | Written from the documented `MaterialApp` resolution rule, not observed. The task tells the implementer to assert what actually happens if it differs. |
+| N11 | `ClanPickerView`, `LoginPage`, `MessagePage`, `ErrorView` | Only `MyClansView` was built and tested in the probe. The other four are the same shape and use only verified APIs, but they were not compiled. Treat their snippets as close drafts, not as verified code. |
 
 ### Package set correction — spec §4.7 does not resolve
 
@@ -4122,3 +4138,1705 @@ EOF
 ```
 
 ---
+
+## Task 15: Clan slice — `GET /me/clans` and clan resolution
+
+**Files:**
+- Create: `mobile/lib/features/clan/data/clan_dto.dart`, `clan_repository.dart`, `mobile/lib/features/clan/application/clan_context.dart`, `mobile/lib/features/clan/clan.dart`
+- Test: `mobile/test/features/clan/clan_repository_test.dart`, `mobile/test/features/clan/clan_context_test.dart`
+
+**Interfaces:**
+- Consumes: `ApiClient` (Task 10), `ClanMembership`/`ClanRole` (Task 13), `PrefsStore` (Task 8)
+- Produces:
+  - `ClanMembership clanMembershipFromJson(Object?)`
+  - `class ClanRepository(ApiClient api)` — `Future<List<ClanMembership>> myClans()`, `Future<ClanMembership> select(String clanId)`
+  - `clanRepositoryProvider`, `prefsStoreProvider` (overridden at bootstrap)
+  - `myClansProvider` (`Future<List<ClanMembership>>`)
+  - `enum ClanResolution { none, resolved, needsPicker }`
+  - `selectedClanProvider` + `SelectedClan` notifier with `select(ClanId)`, `clear()`, `Future<ClanResolution> resolve()`
+  - `clanResolutionProvider` (pure, read-only)
+
+> **Verified defect and fix (V27):** writing to `selectedClanProvider` from inside a provider that also *watches* it deadlocks the container — the test hung for 30s then failed with `Bad state: The provider clanResolutionProvider was disposed during loading state, yet no value could be emitted.` Auto-selection therefore lives in a **notifier method** (`resolve()`), and `clanResolutionProvider` stays pure and read-only.
+
+- [ ] **Step 1: Write the repository test**
+
+`mobile/test/features/clan/clan_repository_test.dart`:
+
+```dart
+// Fixtures copied verbatim from docs/contracts/rest-me-api.md.
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/domain/clan/clan_membership.dart';
+import 'package:family_roots_mobile/features/clan/data/clan_repository.dart';
+
+import '../../support/sequence_adapter.dart';
+
+ApiClient _client(SequenceAdapter a) => ApiClient(
+  Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))..httpClientAdapter = a,
+);
+
+const _meClans = <String, Object?>{
+  'data': <Object?>[
+    <String, Object?>{
+      'clan_id': '11111111-1111-1111-1111-111111111111',
+      'clan_name': 'Họ Nguyễn Phúc',
+      'clan_slug': 'ho-nguyen-phuc',
+      'role': 'admin',
+      'joined_at': '2026-01-15T08:30:00Z',
+    },
+    <String, Object?>{
+      'clan_id': '22222222-2222-2222-2222-222222222222',
+      'clan_name': 'Họ Trần',
+      'clan_slug': 'ho-tran',
+      'role': 'viewer',
+      'joined_at': '2026-03-02T11:00:00Z',
+    },
+  ],
+};
+
+void main() {
+  test('GET /me/clans maps to domain memberships', () async {
+    final a = SequenceAdapter(<Canned>[const Canned(200, _meClans)]);
+    final clans = await ClanRepository(_client(a)).myClans();
+
+    expect(clans, hasLength(2));
+    expect(clans.first.clanName, 'Họ Nguyễn Phúc');
+    expect(clans.first.clanId.value, '11111111-1111-1111-1111-111111111111');
+    expect(clans.first.role, ClanRole.admin);
+    expect(clans.first.role.canAdminister, isTrue);
+    expect(clans.first.joinedAt, DateTime.utc(2026, 1, 15, 8, 30));
+    expect(clans.last.role, ClanRole.viewer);
+    expect(clans.last.role.canEdit, isFalse);
+  });
+
+  test('no X-Current-Clan-Id header is needed for /me/clans', () async {
+    final a = SequenceAdapter(<Canned>[const Canned(200, _meClans)]);
+    await ClanRepository(_client(a)).myClans();
+    expect(
+      a.received.single.headers.containsKey('X-Current-Clan-Id'),
+      isFalse,
+    );
+  });
+
+  test('an unknown role degrades rather than throwing', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{
+        'data': <Object?>[
+          <String, Object?>{
+            'clan_id': 'c1',
+            'clan_name': 'X',
+            'clan_slug': 'x',
+            'role': 'archivist',
+            'joined_at': null,
+          },
+        ],
+      }),
+    ]);
+    final clans = await ClanRepository(_client(a)).myClans();
+    expect(clans.single.role, ClanRole.unknown);
+    expect(clans.single.role.canEdit, isFalse);
+    expect(clans.single.joinedAt, isNull);
+  });
+
+  test('an empty clan list is valid — a purely pending user', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{'data': <Object?>[]}),
+    ]);
+    expect(await ClanRepository(_client(a)).myClans(), isEmpty);
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/features/clan/clan_repository_test.dart
+```
+Expected: FAIL — the clan files do not exist.
+
+- [ ] **Step 3: Write the DTO mapper and repository**
+
+`mobile/lib/features/clan/data/clan_dto.dart`:
+
+```dart
+import '../../../domain/clan/clan_membership.dart';
+import '../../../domain/shared/ids.dart';
+
+/// The only place that knows the backend's wire shape for clans.
+ClanMembership clanMembershipFromJson(Object? json) {
+  final m = json! as Map<String, Object?>;
+  final joined = m['joined_at'];
+  return ClanMembership(
+    clanId: ClanId(m['clan_id']! as String),
+    clanName: m['clan_name']! as String,
+    clanSlug: m['clan_slug'] as String? ?? '',
+    role: ClanRole.fromWire(m['role']),
+    joinedAt: joined is String ? DateTime.tryParse(joined) : null,
+  );
+}
+```
+
+`mobile/lib/features/clan/data/clan_repository.dart`:
+
+```dart
+import '../../../core/network/api_client.dart';
+import '../../../domain/clan/clan_membership.dart';
+import 'clan_dto.dart';
+
+class ClanRepository {
+  ClanRepository(this._api);
+  final ApiClient _api;
+
+  /// GET /me/clans — approved memberships only, a plain canonical array with
+  /// no `meta`. Pending memberships are never listed, so this is empty for a
+  /// purely-pending user.
+  Future<List<ClanMembership>> myClans() async {
+    final page = await _api.getPage<ClanMembership>(
+      '/me/clans',
+      parse: clanMembershipFromJson,
+    );
+    return page.items;
+  }
+
+  /// POST /me/clans/{id}/select — optional validation, 403
+  /// clan_membership_required if not approved. The selection is NOT stored
+  /// server-side; the client persists it and sends the header.
+  Future<ClanMembership> select(String clanId) => _api.post<ClanMembership>(
+    '/me/clans/$clanId/select',
+    parse: clanMembershipFromJson,
+  );
+}
+```
+
+- [ ] **Step 4: Run the repository tests**
+
+```bash
+cd mobile && flutter test test/features/clan/clan_repository_test.dart
+```
+Expected: `All tests passed!` (4 tests).
+
+- [ ] **Step 5: Write the clan-context test**
+
+`mobile/test/features/clan/clan_context_test.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/core/storage/prefs_store.dart';
+import 'package:family_roots_mobile/domain/shared/ids.dart';
+import 'package:family_roots_mobile/features/clan/application/clan_context.dart';
+import 'package:family_roots_mobile/features/clan/data/clan_repository.dart';
+
+import '../../support/sequence_adapter.dart';
+
+ClanRepository _repo(List<Canned> canned) => ClanRepository(
+  ApiClient(
+    Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))
+      ..httpClientAdapter = SequenceAdapter(canned),
+  ),
+);
+
+Canned _clans(List<Map<String, Object?>> rows) =>
+    Canned(200, <String, Object?>{'data': rows});
+
+Map<String, Object?> _row(String id, String name) => <String, Object?>{
+  'clan_id': id,
+  'clan_name': name,
+  'clan_slug': name.toLowerCase(),
+  'role': 'admin',
+  'joined_at': null,
+};
+
+Future<ProviderContainer> _container(List<Canned> canned) async {
+  SharedPreferences.setMockInitialValues(<String, Object>{});
+  final prefs = await PrefsStore.open();
+  return ProviderContainer(
+    overrides: [
+      clanRepositoryProvider.overrideWithValue(_repo(canned)),
+      prefsStoreProvider.overrideWithValue(prefs),
+    ],
+  );
+}
+
+void main() {
+  test('no approved clans resolves to none', () async {
+    final c = await _container(<Canned>[_clans(<Map<String, Object?>>[])]);
+    addTearDown(c.dispose);
+    expect(await c.read(clanResolutionProvider.future), ClanResolution.none);
+  });
+
+  test('exactly one clan auto-selects and persists', () async {
+    final c = await _container(<Canned>[
+      _clans(<Map<String, Object?>>[_row('c1', 'Ho A')]),
+    ]);
+    addTearDown(c.dispose);
+
+    expect(
+      await c.read(selectedClanProvider.notifier).resolve(),
+      ClanResolution.resolved,
+    );
+    expect(c.read(selectedClanProvider), const ClanId('c1'));
+  });
+
+  test('several clans need the picker until one is chosen', () async {
+    final c = await _container(<Canned>[
+      _clans(<Map<String, Object?>>[_row('c1', 'Ho A'), _row('c2', 'Ho B')]),
+    ]);
+    addTearDown(c.dispose);
+
+    expect(
+      await c.read(clanResolutionProvider.future),
+      ClanResolution.needsPicker,
+    );
+
+    await c.read(selectedClanProvider.notifier).select(const ClanId('c2'));
+    c.invalidate(clanResolutionProvider);
+    expect(
+      await c.read(clanResolutionProvider.future),
+      ClanResolution.resolved,
+    );
+    expect(c.read(selectedClanProvider), const ClanId('c2'));
+  });
+
+  test('a stored clan the user no longer belongs to forces the picker', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'familyroots.selected_clan_id': 'gone',
+    });
+    final prefs = await PrefsStore.open();
+    final c = ProviderContainer(
+      overrides: [
+        clanRepositoryProvider.overrideWithValue(
+          _repo(<Canned>[
+            _clans(<Map<String, Object?>>[
+              _row('c1', 'Ho A'),
+              _row('c2', 'Ho B'),
+            ]),
+          ]),
+        ),
+        prefsStoreProvider.overrideWithValue(prefs),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    expect(c.read(selectedClanProvider), const ClanId('gone'));
+    expect(
+      await c.read(clanResolutionProvider.future),
+      ClanResolution.needsPicker,
+    );
+  });
+
+  test('clear drops the stored selection', () async {
+    final c = await _container(<Canned>[
+      _clans(<Map<String, Object?>>[_row('c1', 'Ho A')]),
+    ]);
+    addTearDown(c.dispose);
+
+    await c.read(selectedClanProvider.notifier).resolve();
+    expect(c.read(selectedClanProvider), isNotNull);
+
+    await c.read(selectedClanProvider.notifier).clear();
+    expect(c.read(selectedClanProvider), isNull);
+  });
+}
+```
+
+- [ ] **Step 6: Write `clan_context.dart`**
+
+```dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../../../core/storage/prefs_store.dart';
+import '../../../domain/clan/clan_membership.dart';
+import '../../../domain/shared/ids.dart';
+import '../data/clan_repository.dart';
+
+part 'clan_context.g.dart';
+
+final clanRepositoryProvider = Provider<ClanRepository>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+
+final prefsStoreProvider = Provider<PrefsStore>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+
+/// GET /me/clans — approved memberships only.
+@Riverpod(keepAlive: true)
+Future<List<ClanMembership>> myClans(Ref ref) =>
+    ref.watch(clanRepositoryProvider).myClans();
+
+enum ClanResolution { none, resolved, needsPicker }
+
+/// The active clan, persisted locally (not a secret) and sent as
+/// X-Current-Clan-Id on every clan-scoped request thereafter.
+@Riverpod(keepAlive: true)
+class SelectedClan extends _$SelectedClan {
+  @override
+  ClanId? build() {
+    final stored = ref.read(prefsStoreProvider).readClanId();
+    return stored == null ? null : ClanId(stored);
+  }
+
+  Future<void> select(ClanId id) async {
+    await ref.read(prefsStoreProvider).writeClanId(id.value);
+    state = id;
+  }
+
+  /// On 400 invalid_clan_id_format: clear the stored clan and re-resolve.
+  Future<void> clear() async {
+    await ref.read(prefsStoreProvider).clearClanId();
+    state = null;
+  }
+
+  /// Called once by the app shell after sign-in. A single-clan user is
+  /// selected silently; the header is still sent so behaviour stays
+  /// deterministic if they later join a second clan.
+  ///
+  /// This is a METHOD, not a provider body: writing to this notifier from
+  /// inside a provider that also watches it deadlocks the container
+  /// ("disposed during loading state, yet no value could be emitted").
+  Future<ClanResolution> resolve() async {
+    final clans = await ref.read(myClansProvider.future);
+    if (clans.isEmpty) return ClanResolution.none;
+
+    final selected = state;
+    if (selected != null && clans.any((c) => c.clanId == selected)) {
+      return ClanResolution.resolved;
+    }
+    if (selected != null) {
+      // The stored clan is no longer an approved membership.
+      await clear();
+    }
+    if (clans.length == 1) {
+      await select(clans.single.clanId);
+      return ClanResolution.resolved;
+    }
+    return ClanResolution.needsPicker;
+  }
+}
+
+/// PURE — read-only. See the note on [SelectedClan.resolve].
+@Riverpod(keepAlive: true)
+Future<ClanResolution> clanResolution(Ref ref) async {
+  final clans = await ref.watch(myClansProvider.future);
+  if (clans.isEmpty) return ClanResolution.none;
+
+  final selected = ref.watch(selectedClanProvider);
+  if (selected != null && clans.any((c) => c.clanId == selected)) {
+    return ClanResolution.resolved;
+  }
+  if (clans.length == 1) return ClanResolution.resolved;
+  return ClanResolution.needsPicker;
+}
+```
+
+- [ ] **Step 7: Write the slice public surface**
+
+`mobile/lib/features/clan/clan.dart`:
+
+```dart
+/// Public surface of the clan slice.
+export 'application/clan_context.dart'
+    show
+        ClanResolution,
+        SelectedClan,
+        clanRepositoryProvider,
+        clanResolutionProvider,
+        myClansProvider,
+        prefsStoreProvider,
+        selectedClanProvider;
+export 'data/clan_repository.dart' show ClanRepository;
+export 'presentation/my_clans_page.dart' show MyClansView;
+```
+
+> `presentation/my_clans_page.dart` arrives in Task 16. Add that export line only once the file exists, or the build will fail.
+
+- [ ] **Step 8: Generate and run**
+
+```bash
+cd mobile && dart run build_runner build \
+  && flutter test test/features/clan/
+```
+Expected: `All tests passed!` (9 tests across the two files).
+
+- [ ] **Step 9: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && dart run build_runner build && git diff --exit-code \
+  && flutter analyze && flutter test
+git add mobile/lib/features/clan mobile/test/features/clan
+git commit -m "$(cat <<'EOF'
+feat(mobile): add the clan slice and clan-context resolution
+
+Implements frontend-integration-guide.md 1.2: one clan auto-selects,
+several need the picker, and the choice is persisted client-side because
+the backend does not store it.
+
+Auto-selection lives in a notifier method rather than a provider body —
+writing to selectedClanProvider from a provider that watches it deadlocks
+the container.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 16: Screens — login, clan picker, my clans, and the blocked states
+
+**Files:**
+- Create: `mobile/lib/features/auth/presentation/login_page.dart`, `verify_email_page.dart`, `pending_approval_page.dart`, `blocked_page.dart`; `mobile/lib/features/clan/presentation/my_clans_page.dart`, `clan_picker_page.dart`; `mobile/lib/shared/widgets/error_view.dart`
+- Test: `mobile/test/features/clan/my_clans_view_test.dart`, `mobile/test/goldens/my_clans_golden_test.dart`
+
+**Interfaces:**
+- Consumes: `AppLocalizations` (Task 12), `ArborTokens` (Task 11), `ClanMembership` (Task 13), the clan slice (Task 15)
+- Produces: `class MyClansView extends StatelessWidget({required List<ClanMembership> clans, required void Function(ClanMembership) onSelect, String? staleAsOf})`; `class ErrorView extends StatelessWidget({required AppException error, VoidCallback? onRetry})`
+
+> Presentation imports its own application + domain + `shared/widgets` + `core/theme` + `core/l10n`. **Never `data`.** The boundary test enforces it, so keep the views dumb: pass data in, report events out. `MyClansView` is a pure `StatelessWidget` precisely so it can be widget-tested and golden-tested without a container.
+
+- [ ] **Step 1: Write the failing widget test**
+
+`mobile/test/features/clan/my_clans_view_test.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/l10n/generated/app_localizations.dart';
+import 'package:family_roots_mobile/core/theme/app_theme.dart';
+import 'package:family_roots_mobile/domain/clan/clan_membership.dart';
+import 'package:family_roots_mobile/domain/shared/ids.dart';
+import 'package:family_roots_mobile/features/clan/presentation/my_clans_page.dart';
+
+import '../../support/load_app_fonts.dart';
+
+final _clans = <ClanMembership>[
+  const ClanMembership(
+    clanId: ClanId('c1'),
+    clanName: 'Họ Nguyễn Phúc',
+    clanSlug: 'ho-nguyen-phuc',
+    role: ClanRole.admin,
+    joinedAt: null,
+  ),
+  const ClanMembership(
+    clanId: ClanId('c2'),
+    clanName: 'Họ Trần',
+    clanSlug: 'ho-tran',
+    role: ClanRole.viewer,
+    joinedAt: null,
+  ),
+];
+
+Widget host(
+  Widget child, {
+  Locale locale = const Locale('vi'),
+  double scale = 1.0,
+}) => MaterialApp(
+  locale: locale,
+  theme: buildAppTheme(),
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  builder: (context, w) => MediaQuery(
+    data: MediaQuery.of(
+      context,
+    ).copyWith(textScaler: TextScaler.linear(scale)),
+    child: w!,
+  ),
+  home: child,
+);
+
+void main() {
+  setUpAll(loadAppFonts);
+
+  testWidgets('renders Vietnamese by default', (tester) async {
+    await tester.pumpWidget(host(MyClansView(clans: _clans, onSelect: (_) {})));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dòng họ của tôi'), findsOneWidget);
+    expect(find.text('Họ Nguyễn Phúc'), findsOneWidget);
+    expect(find.text('2 dòng họ'), findsOneWidget);
+  });
+
+  testWidgets('renders English when the locale is en', (tester) async {
+    await tester.pumpWidget(
+      host(
+        MyClansView(clans: _clans, onSelect: (_) {}),
+        locale: const Locale('en'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('My clans'), findsOneWidget);
+    expect(find.text('2 clans'), findsOneWidget);
+  });
+
+  testWidgets('the plural zero case has its own wording', (tester) async {
+    await tester.pumpWidget(
+      host(MyClansView(clans: const <ClanMembership>[], onSelect: (_) {})),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Chưa có dòng họ'), findsOneWidget);
+  });
+
+  testWidgets('the stale banner uses the ARB placeholder', (tester) async {
+    await tester.pumpWidget(
+      host(
+        MyClansView(clans: _clans, onSelect: (_) {}, staleAsOf: '01/08/2026'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Dữ liệu ngày 01/08/2026'), findsOneWidget);
+  });
+
+  testWidgets('survives 200% text scale without overflow', (tester) async {
+    await tester.pumpWidget(
+      host(MyClansView(clans: _clans, onSelect: (_) {}), scale: 2.0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Họ Nguyễn Phúc'), findsOneWidget);
+    // Non-null if a RenderFlex overflowed.
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping a clan reports the selection', (tester) async {
+    ClanMembership? picked;
+    await tester.pumpWidget(
+      host(MyClansView(clans: _clans, onSelect: (c) => picked = c)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Họ Trần'));
+    await tester.pumpAndSettle();
+    expect(picked?.clanId.value, 'c2');
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/features/clan/my_clans_view_test.dart
+```
+Expected: FAIL — `my_clans_page.dart` does not exist.
+
+- [ ] **Step 3: Write `my_clans_page.dart`**
+
+```dart
+import 'package:flutter/material.dart';
+
+import '../../../core/l10n/generated/app_localizations.dart';
+import '../../../core/theme/tokens.dart';
+import '../../../domain/clan/clan_membership.dart';
+
+/// Dumb view: data in, events out. No transport, no container — so it is
+/// trivially widget- and golden-testable.
+class MyClansView extends StatelessWidget {
+  const MyClansView({
+    super.key,
+    required this.clans,
+    required this.onSelect,
+    this.staleAsOf,
+  });
+
+  final List<ClanMembership> clans;
+  final void Function(ClanMembership) onSelect;
+
+  /// Set when the payload came from the read cache instead of the network.
+  final String? staleAsOf;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.myClansTitle)),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (staleAsOf != null)
+            Container(
+              // The no-line rule: a background shift, not a border.
+              color: t.surfaceContainerLow,
+              padding: EdgeInsets.all(t.spaceSm),
+              child: Text(l10n.staleDataBanner(staleAsOf!)),
+            ),
+          Padding(
+            padding: EdgeInsets.all(t.spaceMd),
+            child: Text(l10n.clanCount(clans.length)),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: clans.length,
+              itemBuilder: (context, i) {
+                final clan = clans[i];
+                return Card(
+                  margin: EdgeInsets.symmetric(
+                    horizontal: t.spaceMd,
+                    vertical: t.spaceXs,
+                  ),
+                  child: ListTile(
+                    title: Text(clan.clanName),
+                    subtitle: Text(clan.role.name),
+                    onTap: () => onSelect(clan),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+- [ ] **Step 4: Run the widget tests**
+
+```bash
+cd mobile && flutter test test/features/clan/my_clans_view_test.dart
+```
+Expected: `All tests passed!` (6 tests).
+
+- [ ] **Step 5: Write the remaining screens**
+
+`mobile/lib/features/clan/presentation/clan_picker_page.dart` — same shape as `MyClansView`, titled `l10n.clanPickerTitle`, and it must **navigate explicitly** after selection (V13: clearing a guard condition does not pull the user forward):
+
+```dart
+import 'package:flutter/material.dart';
+
+import '../../../core/l10n/generated/app_localizations.dart';
+import '../../../core/theme/tokens.dart';
+import '../../../domain/clan/clan_membership.dart';
+
+class ClanPickerView extends StatelessWidget {
+  const ClanPickerView({
+    super.key,
+    required this.clans,
+    required this.onSelect,
+  });
+
+  final List<ClanMembership> clans;
+  final void Function(ClanMembership) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.clanPickerTitle)),
+      body: ListView.builder(
+        padding: EdgeInsets.all(t.spaceMd),
+        itemCount: clans.length,
+        itemBuilder: (context, i) => Card(
+          margin: EdgeInsets.symmetric(vertical: t.spaceXs),
+          child: ListTile(
+            title: Text(clans[i].clanName),
+            subtitle: Text(clans[i].role.name),
+            onTap: () => onSelect(clans[i]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+`mobile/lib/features/auth/presentation/login_page.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/l10n/generated/app_localizations.dart';
+import '../../../core/theme/tokens.dart';
+import '../../../shared/widgets/error_view.dart';
+import '../application/session_controller.dart';
+
+class LoginPage extends ConsumerStatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  ConsumerState<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends ConsumerState<LoginPage> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+    final state = ref.watch(sessionControllerProvider);
+
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(t.spaceLg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                l10n.loginTitle,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              SizedBox(height: t.spaceLg),
+              TextField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const <String>[AutofillHints.email],
+                decoration: InputDecoration(labelText: l10n.emailLabel),
+              ),
+              SizedBox(height: t.spaceMd),
+              TextField(
+                controller: _password,
+                obscureText: true,
+                autofillHints: const <String>[AutofillHints.password],
+                decoration: InputDecoration(labelText: l10n.passwordLabel),
+              ),
+              SizedBox(height: t.spaceLg),
+              if (state.hasError) ...<Widget>[
+                ErrorView(error: state.error!),
+                SizedBox(height: t.spaceMd),
+              ],
+              FilledButton(
+                onPressed: state.isLoading
+                    ? null
+                    : () => ref
+                          .read(sessionControllerProvider.notifier)
+                          .signIn(
+                            email: _email.text.trim(),
+                            password: _password.text,
+                          ),
+                child: state.isLoading
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(l10n.loginButton),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+`mobile/lib/shared/widgets/error_view.dart` — the one place an `AppException` becomes user-facing text. `ApiException.message` is already localised server-side and is shown verbatim; the ARB fallbacks exist only for the offline cases:
+
+```dart
+import 'package:flutter/material.dart';
+
+import '../../core/l10n/generated/app_localizations.dart';
+import '../../core/network/api_exception.dart';
+import '../../core/theme/tokens.dart';
+
+class ErrorView extends StatelessWidget {
+  const ErrorView({super.key, required this.error, this.onRetry});
+
+  final Object error;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+
+    final (String text, String? traceId) = switch (error) {
+      // Already localised server-side — display it, never parse it.
+      ApiException(:final message, :final traceId) => (message, traceId),
+      NetworkException() => (l10n.errorOffline, null),
+      TimeoutException() => (l10n.errorTimeout, null),
+      MalformedResponseException() => (l10n.errorUnexpected, null),
+      _ => (l10n.errorUnexpected, null),
+    };
+
+    return Container(
+      padding: EdgeInsets.all(t.spaceMd),
+      decoration: BoxDecoration(
+        color: t.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(t.radiusNode),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(text, style: TextStyle(color: t.error)),
+          if (traceId != null) ...<Widget>[
+            SizedBox(height: t.spaceXs),
+            Text(
+              l10n.errorTraceId(traceId),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (onRetry != null) ...<Widget>[
+            SizedBox(height: t.spaceSm),
+            FilledButton(onPressed: onRetry, child: Text(l10n.retryAction)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+```
+
+`mobile/lib/features/auth/presentation/verify_email_page.dart`, `pending_approval_page.dart` and `blocked_page.dart` are the same simple shape — a title, a body, and (for verify) a resend button:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/l10n/generated/app_localizations.dart';
+import '../../../core/theme/tokens.dart';
+import '../application/session_controller.dart';
+
+class MessagePage extends ConsumerWidget {
+  const MessagePage({
+    super.key,
+    required this.title,
+    required this.body,
+    this.action,
+    this.actionLabel,
+  });
+
+  final String title;
+  final String body;
+  final Future<void> Function()? action;
+  final String? actionLabel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Padding(
+        padding: EdgeInsets.all(t.spaceLg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(body),
+            SizedBox(height: t.spaceLg),
+            if (action != null && actionLabel != null)
+              FilledButton(onPressed: action, child: Text(actionLabel!)),
+            SizedBox(height: t.spaceMd),
+            TextButton(
+              onPressed: () =>
+                  ref.read(sessionControllerProvider.notifier).signOut(),
+              child: Text(l10n.signOutAction),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+> **On spec R2 (the email-link format):** M0 does **not** need it. Spec §7 puts deep links out of scope, so the verification screen only offers `POST /auth/resend-verification` plus "open your email", both of which are fully knowable. The owner action stands, but it does not block M0.
+
+- [ ] **Step 6: Write the golden test**
+
+`mobile/test/goldens/my_clans_golden_test.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/domain/clan/clan_membership.dart';
+import 'package:family_roots_mobile/domain/shared/ids.dart';
+import 'package:family_roots_mobile/features/clan/presentation/my_clans_page.dart';
+
+import '../features/clan/my_clans_view_test.dart' show host;
+import '../support/load_app_fonts.dart';
+
+final _clans = <ClanMembership>[
+  const ClanMembership(
+    clanId: ClanId('c1'),
+    clanName: 'Họ Nguyễn Phúc',
+    clanSlug: 'ho-nguyen-phuc',
+    role: ClanRole.admin,
+    joinedAt: null,
+  ),
+];
+
+void main() {
+  setUpAll(loadAppFonts);
+
+  testWidgets('my clans at text scale 1.0', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(host(MyClansView(clans: _clans, onSelect: (_) {})));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MyClansView),
+      matchesGoldenFile('goldens/my_clans_1x.png'),
+    );
+  });
+
+  testWidgets('my clans at text scale 2.0', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      host(MyClansView(clans: _clans, onSelect: (_) {}), scale: 2.0),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MyClansView),
+      matchesGoldenFile('goldens/my_clans_2x.png'),
+    );
+  });
+}
+```
+
+- [ ] **Step 7: Create the golden baselines and eyeball them**
+
+```bash
+cd mobile && flutter test --update-goldens test/goldens/
+open test/goldens/goldens/my_clans_2x.png   # macOS; use xdg-open on Linux
+```
+Look at the 2.0 image before accepting it: text must wrap, not clip, and nothing may be cut off. Then confirm they now pass without the flag:
+
+```bash
+flutter test test/goldens/
+```
+
+> **N5 caveat:** golden images are host-renderer sensitive. If CI (Linux) and local (macOS) disagree, either tag the golden tests and exclude them from CI, or generate baselines in a Linux container. Decide this now rather than after the first red build.
+
+- [ ] **Step 8: Add the presentation export to the clan slice surface**
+
+Append to `mobile/lib/features/clan/clan.dart`:
+
+```dart
+export 'presentation/clan_picker_page.dart' show ClanPickerView;
+export 'presentation/my_clans_page.dart' show MyClansView;
+```
+
+- [ ] **Step 9: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/features mobile/lib/shared mobile/test
+git commit -m "$(cat <<'EOF'
+feat(mobile): add login, clan picker, my-clans and blocked-state screens
+
+Views are dumb (data in, events out) so they widget- and golden-test
+without a container. Goldens cover text scale 1.0 and 2.0, with real
+fonts loaded — flutter test otherwise renders a weight-insensitive
+placeholder.
+
+ErrorView is the one place an AppException becomes user-facing text;
+ApiException.message is already localised server-side and shown verbatim.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 17: Router, guards and the app shell
+
+**Files:**
+- Create: `mobile/lib/app/router/routes.dart`, `app_router.dart`; `mobile/lib/app/app.dart`, `bootstrap.dart`; `mobile/lib/main.dart`; `mobile/lib/core/network/dio_provider.dart`
+- Test: `mobile/test/app/router_test.dart`
+
+**Interfaces:**
+- Consumes: the auth slice (Task 14), the clan slice (Task 15), theme (11), l10n (12), stores (8, 9)
+- Produces: `class AuthRouteState extends ChangeNotifier`, `GoRouter buildRouter(AuthRouteState auth)`, `Future<void> bootstrap()`, `class FamilyRootsApp extends ConsumerWidget`
+
+> **Verified go_router 17 semantics (V13):** `refreshListenable` re-runs `redirect` for the **current** location. If `redirect` returns null the router stays put — clearing a guard does **not** pull the user forward. The clan picker must therefore call `context.go('/clans')` itself after a selection.
+
+- [ ] **Step 1: Write the failing test**
+
+`mobile/test/app/router_test.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/app/router/app_router.dart';
+
+void main() {
+  testWidgets('unauthenticated lands on /login', (tester) async {
+    final auth = AuthRouteState()..signedIn = false;
+    await tester.pumpWidget(
+      MaterialApp.router(routerConfig: buildRouter(auth)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('login'), findsOneWidget);
+  });
+
+  testWidgets('signing in reroutes to /clans via refreshListenable',
+      (tester) async {
+    final auth = AuthRouteState()..signedIn = false;
+    await tester.pumpWidget(
+      MaterialApp.router(routerConfig: buildRouter(auth)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('login'), findsOneWidget);
+
+    auth.set(signedIn: true);
+    await tester.pumpAndSettle();
+    expect(find.text('clans'), findsOneWidget);
+  });
+
+  testWidgets('an unverified email is held on /verify-email', (tester) async {
+    final auth = AuthRouteState()
+      ..signedIn = true
+      ..emailVerified = false;
+    final router = buildRouter(auth);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    expect(find.text('verify'), findsOneWidget);
+
+    router.go('/clans');
+    await tester.pumpAndSettle();
+    expect(find.text('verify'), findsOneWidget);
+  });
+
+  testWidgets('no approved membership goes to /pending', (tester) async {
+    final auth = AuthRouteState()
+      ..signedIn = true
+      ..hasApprovedMembership = false;
+    await tester.pumpWidget(
+      MaterialApp.router(routerConfig: buildRouter(auth)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('pending'), findsOneWidget);
+  });
+
+  testWidgets('a multi-clan user is sent to the picker and must navigate '
+      'explicitly afterwards', (tester) async {
+    final auth = AuthRouteState()
+      ..signedIn = true
+      ..needsClanPick = true;
+    final router = buildRouter(auth);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    expect(find.text('picker'), findsOneWidget);
+
+    // VERIFIED go_router 17 semantics: clearing a guard condition does NOT
+    // pull the user forward. redirect returns null for /clan-picker, so the
+    // router stays put until the picker navigates itself.
+    auth.set(needsClanPick: false);
+    await tester.pumpAndSettle();
+    expect(find.text('picker'), findsOneWidget);
+
+    router.go('/clans');
+    await tester.pumpAndSettle();
+    expect(find.text('clans'), findsOneWidget);
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/app/router_test.dart
+```
+Expected: FAIL — `app_router.dart` does not exist.
+
+- [ ] **Step 3: Write `app_router.dart`**
+
+The route builders below render bare text so the guard logic is testable in isolation. Swap each `Text('...')` for the real page from Task 16 in step 5 — the test asserts routing, not chrome.
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+/// Drives router re-evaluation when session or clan state changes.
+class AuthRouteState extends ChangeNotifier {
+  bool signedIn = false;
+  bool emailVerified = true;
+  bool hasApprovedMembership = true;
+  bool needsClanPick = false;
+
+  void set({
+    bool? signedIn,
+    bool? emailVerified,
+    bool? hasApprovedMembership,
+    bool? needsClanPick,
+  }) {
+    this.signedIn = signedIn ?? this.signedIn;
+    this.emailVerified = emailVerified ?? this.emailVerified;
+    this.hasApprovedMembership =
+        hasApprovedMembership ?? this.hasApprovedMembership;
+    this.needsClanPick = needsClanPick ?? this.needsClanPick;
+    notifyListeners();
+  }
+}
+
+const _publicRoutes = <String>{'/login', '/verify-email'};
+
+GoRouter buildRouter(AuthRouteState auth) {
+  return GoRouter(
+    initialLocation: '/login',
+    refreshListenable: auth,
+    redirect: (BuildContext context, GoRouterState state) {
+      final loc = state.matchedLocation;
+      if (!auth.signedIn) {
+        return _publicRoutes.contains(loc) ? null : '/login';
+      }
+      if (!auth.emailVerified) {
+        return loc == '/verify-email' ? null : '/verify-email';
+      }
+      if (!auth.hasApprovedMembership) {
+        return loc == '/pending' ? null : '/pending';
+      }
+      if (auth.needsClanPick) {
+        return loc == '/clan-picker' ? null : '/clan-picker';
+      }
+      if (_publicRoutes.contains(loc)) return '/clans';
+      return null;
+    },
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/login',
+        builder: (_, _) => const Scaffold(body: Text('login')),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (_, _) => const Scaffold(body: Text('verify')),
+      ),
+      GoRoute(
+        path: '/pending',
+        builder: (_, _) => const Scaffold(body: Text('pending')),
+      ),
+      GoRoute(
+        path: '/clan-picker',
+        builder: (_, _) => const Scaffold(body: Text('picker')),
+      ),
+      GoRoute(
+        path: '/clans',
+        builder: (_, _) => const Scaffold(body: Text('clans')),
+      ),
+    ],
+  );
+}
+```
+
+Note `(_, _)` — two bare underscores. `flutter_lints` 6 flags `(_, __)` as `unnecessary_underscores`.
+
+- [ ] **Step 4: Run the router tests**
+
+```bash
+cd mobile && flutter test test/app/router_test.dart
+```
+Expected: `All tests passed!` (5 tests).
+
+- [ ] **Step 5: Swap the placeholder builders for the real pages**
+
+Replace each `builder:` with the corresponding widget from Task 16 (`LoginPage`, `MessagePage` for verify/pending, `ClanPickerView` and `MyClansView` wired through `ConsumerWidget`s that read `myClansProvider`). Keep the router test green by asserting on a `Key` instead of the text, e.g. add `key: const Key('route-clans')` to each page and change the finders to `find.byKey`.
+
+Then re-run:
+
+```bash
+cd mobile && flutter test test/app/router_test.dart
+```
+
+- [ ] **Step 6: Write `dio_provider.dart`**
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'api_client.dart';
+import 'interceptors/auth_interceptor.dart';
+import 'interceptors/clan_interceptor.dart';
+import 'interceptors/locale_interceptor.dart';
+import 'interceptors/refresh_interceptor.dart';
+import 'interceptors/trace_interceptor.dart';
+import 'token_refresher.dart';
+
+/// Overridden at bootstrap with the real base URL.
+final apiBaseUrlProvider = Provider<String>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+
+/// Reads: current access token, current clan id, current locale, sign-out.
+final accessTokenProvider = Provider<String? Function()>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+final currentClanIdProvider = Provider<String? Function()>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+final currentLocaleProvider = Provider<String Function()>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+final tokenRefresherProvider = Provider<TokenRefresher>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+final onSignOutProvider = Provider<void Function()>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+
+/// The single Dio instance, with the five interceptors in the mandated order.
+final dioProvider = Provider<Dio>((ref) {
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: ref.watch(apiBaseUrlProvider),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+    ),
+  );
+
+  dio.interceptors.addAll(<Interceptor>[
+    AuthInterceptor(ref.watch(accessTokenProvider)),
+    ClanInterceptor(ref.watch(currentClanIdProvider)),
+    LocaleInterceptor(ref.watch(currentLocaleProvider)),
+    TraceInterceptor(),
+    RefreshInterceptor(
+      refresher: ref.watch(tokenRefresherProvider),
+      retryDio: dio,
+      onSignOut: ref.watch(onSignOutProvider),
+    ),
+  ]);
+
+  return dio;
+});
+
+final apiClientProvider = Provider<ApiClient>(
+  (ref) => ApiClient(ref.watch(dioProvider)),
+);
+```
+
+- [ ] **Step 7: Write `bootstrap.dart`, `app.dart` and `main.dart`**
+
+`mobile/lib/app/bootstrap.dart`:
+
+```dart
+import 'package:flutter/widgets.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/storage/secure_session_store.dart';
+
+/// Sentry, Supabase and the secure stores, in that order. Everything after
+/// this point can assume they exist.
+Future<void> bootstrap({
+  required String supabaseUrl,
+  required String supabasePublishableKey,
+  required String sentryDsn,
+  required Widget Function() appBuilder,
+}) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: supabaseUrl,
+    // `anonKey` is deprecated in supabase_flutter 2.16.0.
+    publishableKey: supabasePublishableKey,
+    authOptions: FlutterAuthClientOptions(
+      // Tokens in the Keychain/Keystore, never SharedPreferences.
+      localStorage: SecureSessionStore(),
+      pkceAsyncStorage: SecurePkceStore(),
+      authFlowType: AuthFlowType.pkce,
+    ),
+  );
+
+  await SentryFlutter.init(
+    (SentryFlutterOptions options) {
+      options.dsn = sentryDsn;
+      options.tracesSampleRate = 0.2;
+      options.sendDefaultPii = false;
+    },
+    appRunner: () => runApp(appBuilder()),
+  );
+}
+```
+
+`mobile/lib/app/app.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/l10n/generated/app_localizations.dart';
+import '../core/theme/app_theme.dart';
+import 'router/app_router.dart';
+
+class FamilyRootsApp extends ConsumerStatefulWidget {
+  const FamilyRootsApp({super.key});
+
+  @override
+  ConsumerState<FamilyRootsApp> createState() => _FamilyRootsAppState();
+}
+
+class _FamilyRootsAppState extends ConsumerState<FamilyRootsApp> {
+  final _authRouteState = AuthRouteState();
+  late final _router = buildRouter(_authRouteState);
+
+  @override
+  void dispose() {
+    _authRouteState.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Bridge Riverpod state onto the router's ChangeNotifier.
+    ref.listen(sessionControllerProvider, (previous, next) {
+      final profile = next.valueOrNull;
+      _authRouteState.set(
+        signedIn: profile != null,
+        hasApprovedMembership: profile?.isApproved ?? true,
+      );
+    });
+
+    return MaterialApp.router(
+      routerConfig: _router,
+      theme: buildAppTheme(),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      // vi is default and fallback; nothing assumes the set is exactly two.
+      locale: const Locale('vi'),
+    );
+  }
+}
+```
+
+Add the missing import for `sessionControllerProvider` — `import '../features/auth/auth.dart';` (the slice public surface, never a deeper path).
+
+`mobile/lib/main.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'app/app.dart';
+import 'app/bootstrap.dart';
+import 'core/network/dio_provider.dart';
+import 'core/storage/prefs_store.dart';
+import 'features/clan/clan.dart';
+
+/// Supplied by `--dart-define`; never committed.
+const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const _supabaseKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+const _sentryDsn = String.fromEnvironment('SENTRY_DSN');
+const _apiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'http://10.0.2.2:8000/api/v1',
+);
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await PrefsStore.open();
+
+  await bootstrap(
+    supabaseUrl: _supabaseUrl,
+    supabasePublishableKey: _supabaseKey,
+    sentryDsn: _sentryDsn,
+    appBuilder: () => ProviderScope(
+      overrides: [
+        apiBaseUrlProvider.overrideWithValue(_apiBaseUrl),
+        prefsStoreProvider.overrideWithValue(prefs),
+      ],
+      child: const FamilyRootsApp(),
+    ),
+  );
+}
+```
+
+> `10.0.2.2` is the Android emulator's alias for the host machine's localhost. On a physical device pass your machine's LAN address:
+> `flutter run --dart-define=API_BASE_URL=http://192.168.1.x:8000/api/v1 ...`
+
+The remaining `dio_provider` overrides (`accessTokenProvider`, `currentClanIdProvider`, `currentLocaleProvider`, `tokenRefresherProvider`, `onSignOutProvider`) are wired in the same `overrides:` list, reading from `Supabase.instance.client.auth.currentSession`, `prefs.readClanId()`, `prefs.readLocale() ?? 'vi'`, a `TokenRefresher` around `Supabase.instance.client.auth.refreshSession()`, and a closure calling `signOut()`.
+
+- [ ] **Step 8: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && dart run build_runner build && git diff --exit-code \
+  && flutter analyze && flutter test
+git add mobile/lib/app mobile/lib/main.dart mobile/lib/core/network/dio_provider.dart mobile/test/app
+git commit -m "$(cat <<'EOF'
+feat(mobile): wire the router, guards, Dio and app bootstrap
+
+Guards cover unauthenticated, unverified, unapproved and multi-clan
+states. Clearing a guard does not pull the user forward in go_router 17,
+so the clan picker navigates explicitly after a selection.
+
+The single Dio carries the five interceptors in the mandated order.
+Secrets arrive via --dart-define and are never committed.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 18: Rewrite Mobile CI
+
+**Files:**
+- Modify: `.github/workflows/mobile-ci.yml`
+
+**Interfaces:**
+- Produces: a workflow that runs format → codegen → freshness → analyze → coverage → APK.
+
+> **Already done (V23):** the `packages/**` path trigger the spec asks to remove is *already gone*, and the workflow already self-triggers. Only the gates need adding.
+>
+> **Verified (V16):** `--delete-conflicting-outputs` was **removed** in build_runner 2.15.1 (`These options have been removed and were ignored`). Do not use it.
+>
+> **Verified (V17):** the freshness check works — after `build_runner build`, `git diff --exit-code` is clean; a corrupted `.g.dart` is detected and named.
+
+- [ ] **Step 1: Replace the workflow**
+
+`.github/workflows/mobile-ci.yml`:
+
+```yaml
+name: Mobile CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Pinned, not `channel: stable`. This dependency set is version
+          # sensitive: analyzer/meta/test_api constraints from the SDK decide
+          # which riverpod and freezed versions can resolve at all.
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --set-exit-if-changed lib test
+
+      - name: Regenerate code
+        # --delete-conflicting-outputs was removed in build_runner 2.15.x.
+        run: dart run build_runner build
+
+      - name: Fail if generated code is stale
+        run: git diff --exit-code
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test --coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-coverage
+          path: mobile/coverage/lcov.info
+          if-no-files-found: warn
+
+      - name: Build APK (debug — validate build)
+        run: flutter build apk --debug
+```
+
+- [ ] **Step 2: Rehearse the gate locally, in CI order**
+
+```bash
+cd mobile
+dart format --set-exit-if-changed lib test
+dart run build_runner build
+git diff --exit-code
+flutter analyze
+flutter test --coverage
+flutter build apk --debug
+```
+Every step must exit 0. `flutter build apk --debug` is the one step not verified during planning (N2) — if it fails it will be Android toolchain configuration, not Dart.
+
+- [ ] **Step 3: Prove the freshness gate can fail**
+
+```bash
+cd mobile
+python3 - <<'PY'
+import glob
+p = sorted(glob.glob('lib/**/*.g.dart', recursive=True))[0]
+s = open(p).read()
+open(p, 'w').write(s + '\n// deliberate staleness\n')
+print('corrupted', p)
+PY
+dart run build_runner build
+git diff --exit-code && echo "BAD: staleness not detected" || echo "good: detected"
+git checkout -- .
+```
+
+- [ ] **Step 4: Decide the golden-image policy**
+
+If the Task 16 goldens were generated on macOS they may not match Linux CI (N5). Either regenerate them in a Linux container, or tag them and skip on CI by adding `--exclude-tags golden` to the test step. Record which you chose in `mobile/CLAUDE.md` (Task 19).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add .github/workflows/mobile-ci.yml
+git commit -m "$(cat <<'EOF'
+ci(mobile): add format, codegen-freshness and coverage gates
+
+Pins flutter-version 3.44.8 — this dependency set is version sensitive
+and `channel: stable` drifts. The freshness check turns "forgot to run
+build_runner" from a mysterious local error into a named CI failure
+(spec R1). --delete-conflicting-outputs is gone in build_runner 2.15.x.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 19: Prove it against the real backend, then sync the docs
+
+This is the task that makes M0 done. Everything before it is verified only against mocks (N1).
+
+**Files:**
+- Rewrite: `mobile/CLAUDE.md`
+- Modify: `CLAUDE.md` (root), `docs/work-register.md`, `docs/decisions/README.md`, `docs/contracts/frontend-integration-guide.md`
+
+- [ ] **Step 1: Start the backend and confirm it answers**
+
+```bash
+docker compose up -d pgdb
+cd backend && uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --host 0.0.0.0
+curl -s localhost:8000/health
+```
+`--host 0.0.0.0` matters: the default binds loopback only and a device cannot reach it.
+
+- [ ] **Step 2: Run on a real device**
+
+```bash
+cd mobile
+flutter devices
+flutter run -d <device-id> \
+  --dart-define=API_BASE_URL=http://<your-lan-ip>:8000/api/v1 \
+  --dart-define=SUPABASE_URL=<url> \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=<key> \
+  --dart-define=SENTRY_DSN=<dsn>
+```
+
+- [ ] **Step 3: Walk the acceptance path and tick each line**
+
+This is M0's definition of done. Every line must be observed on the device, not inferred.
+
+- [ ] Sign in with a real approved account → the clans screen lists the clans from `GET /me/clans`
+- [ ] The clan names match what the backend returns (check with `curl` and the same bearer token)
+- [ ] A single-clan account skips the picker; a multi-clan account is shown it, and picking one navigates onward
+- [ ] Kill and relaunch the app → still signed in (the session survived in the Keychain/Keystore — this is N3)
+- [ ] Sign in with a wrong password → the backend's own Vietnamese message is displayed, not a generic one
+- [ ] Sign in with an unverified account → the verification screen, not a credentials error
+- [ ] Switch the device language to English → chrome switches; `HistoricalDate.display` values stay verbatim
+- [ ] Set the device font size to maximum → the clans screen still reads, nothing clipped
+- [ ] Turn on airplane mode and relaunch → the cached clan list renders with the "dữ liệu ngày …" banner
+- [ ] Stop the backend and sign in → a transient-outage message, never "wrong password"
+
+- [ ] **Step 4: Record anything that surprised you**
+
+Any divergence between the contract docs and the real backend is a doc bug. Per the root `CLAUDE.md`, the code is the truth — fix `docs/contracts/` in this same PR and note it here.
+
+- [ ] **Step 5: Rewrite `mobile/CLAUDE.md`**
+
+Delete the whole file and write it fresh. It must cover:
+
+- **Commands** — the quality gate, `flutter run` with the `--dart-define` set, `flutter gen-l10n`, `dart run build_runner build` (and that `--delete-conflicting-outputs` no longer exists).
+- **R1 warning, prominently** — Riverpod codegen means `build_runner` must run after touching any `@riverpod`, `@freezed` or `@JsonSerializable` declaration; CI fails on stale generated code.
+- **Architecture** — the `lib/` layout from spec §3 and the dependency-rule table from §3.1, noting they are enforced by `test/architecture/layer_boundaries_test.dart`.
+- **The version constraint** — why `flutter_riverpod` is 3.3.1 and not 3.4.2, so nobody "helpfully" upgrades it and breaks resolution. Copy the Package set correction table.
+- **Arbor Heritage mandates** — carried over verbatim from the old file, minus the `google_fonts` reference (fonts are bundled now).
+- **L10n workflow** — carried over, with `app_vi.arb` now the template.
+- **Testing** — the six layers from spec §5, plus: `sqflite` needs `sqflite_common_ffi`; goldens need `loadAppFonts()`; sequenced HTTP responses need `SequenceAdapter`.
+- **Delete** — the entire "Known scaffold state (Prompt 2 TODOs)" section, the two-`domain` explanation, the `get_it`/`injectable`/BLoC/Hive/Retrofit references, and the Stitch UI-first workflow (spec §7 puts design-drift tracking out of scope).
+
+- [ ] **Step 6: Update the root `CLAUDE.md`**
+
+- Services map: mobile stays Flutter/Dart but `BLoC, Dio/Retrofit` becomes `Riverpod 3, Dio`.
+- Key global commands: mobile quality gate becomes the full five-step gate.
+- "Dart business entities live in mobile/lib/domain" — still true, keep it.
+- Known pain points: drop the mobile Prompt-2 TODO scaffolds line.
+
+- [ ] **Step 7: Update the remaining docs**
+
+- `docs/decisions/README.md` — add the ADR-034 row.
+- `docs/work-register.md` — replace §2.3 with the M0–M4 milestone list; resolve the §1.1 mobile-dependency block as obsolete.
+- `docs/contracts/frontend-integration-guide.md` — §1.3 currently says "Mobile: the Dio `auth_interceptor.dart` is still a scaffold (see `mobile/CLAUDE.md`)". Replace with a pointer to the real interceptors. §2's mobile storage guidance is now satisfied — say so.
+
+- [ ] **Step 8: Final gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && dart run build_runner build && git diff --exit-code \
+  && flutter analyze && flutter test
+git add -A
+git commit -m "$(cat <<'EOF'
+docs(mobile): sync docs after the M0 spine lands
+
+M0 verified on a real device against the real backend: sign in ->
+GET /auth/me -> clan resolution -> the clans screen from GET /me/clans.
+
+Rewrites mobile/CLAUDE.md for the Riverpod architecture, records why the
+riverpod tooling is pinned below latest, and removes the scaffold-era
+guidance. Updates the services map, the ADR index, the work register and
+the frontend integration guide's stale mobile references.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Open questions the spec did not settle
+
+1. **Package versions (blocking, needs owner sign-off before Task 1).** Spec §4.7 does not resolve on Flutter 3.44.8. This plan proposes the all-stable analyzer-9 line, which keeps `freezed` at the spec's 3.2.5 but moves `flutter_riverpod` to 3.3.1 and drops `custom_lint`. The alternative keeps Riverpod newer at the cost of a prerelease freezed. Someone must choose.
+2. **Golden-image host (N5).** Goldens generated on macOS may not match Linux CI. Regenerate in a container, or exclude them from CI? Decided in Task 18 step 4 but the spec does not say.
+3. **Spec R2, the email-link format.** Genuinely unknowable from this repo — but it does **not** block M0, because spec §7 puts deep links out of scope and the verification screen only needs `POST /auth/resend-verification`. The owner action stands for M1+.
+4. **`persons.avatar_url` (spec R4).** Still undefined; irrelevant to M0, blocks M2/M3 as the spec says.
+5. **Locale source of truth on first run.** The spec says the app owns its locale and must not trust `preferred_locale`. It does not say what to seed it with. This plan seeds from `PrefsStore`, falling back to `vi` — *not* to the device locale, since `vi` is the documented default and most users are Vietnamese. If the owner prefers the device locale when it is one of the supported set, that is a one-line change in `main.dart`.
+6. **Where `ClanRole.unknown` is allowed to surface.** The backend has `invalid_role_assignment` as its own corruption guard. This plan degrades unknown roles to `unknown` with no permissions rather than throwing, so one bad row cannot blank the clan list. The spec does not address forward-compatibility of enums.
+
