@@ -19,6 +19,7 @@
     "test:contracts": "node --test tests/contracts/*.test.mjs",
     "test:unit": "vitest run --project unit",
     "test:watch": "vitest --project unit",
+    "gen:api": "node scripts/generate-api-types.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -54,6 +55,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.84.0",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
@@ -66,6 +68,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.12",
     "jsdom": "^30",
+    "openapi-typescript": "^7",
     "postcss": "^8.5.25",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
