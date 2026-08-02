@@ -2517,3 +2517,1608 @@ EOF
 ```
 
 ---
+
+## Task 10: `ApiClient` — the only class that touches Dio
+
+**Files:**
+- Create: `mobile/lib/core/network/api_client.dart`
+- Test: `mobile/test/core/network/api_client_test.dart`
+
+**Interfaces:**
+- Consumes: `unwrapData`, `unwrapPage`, `Parse<T>` (Task 5); the taxonomy (Task 4)
+- Produces:
+  - `class ApiClient(Dio dio)` with
+    `Future<T> getOne<T>(String path, {Map<String, Object?>? query, CancelToken? cancelToken, required Parse<T> parse})`,
+    `Future<Page<T>> getPage<T>(String path, {String? cursor, int? limit, Map<String, Object?>? query, CancelToken? cancelToken, required Parse<T> parse})`,
+    `Future<T> post<T>(String path, {Object? body, CancelToken? cancelToken, required Parse<T> parse})`
+  - `AppException toAppException(DioException e)`
+
+> **Verified gotcha (V25):** `DioExceptionType` in dio 5.11 has **nine** members — the usual eight plus `transformTimeout`. An exhaustive switch without it is a compile error: `The type 'DioExceptionType' is not exhaustively matched ... doesn't match 'DioExceptionType.transformTimeout'`.
+>
+> **Verified gotcha (V26):** under `strict-*` + `flutter_lints` 6, `if (cursor != null) 'cursor': cursor` inside a collection literal now trips `use_null_aware_elements`. Dart 3.12's null-aware element syntax `'cursor': ?cursor` is the clean form.
+
+- [ ] **Step 1: Write the failing test**
+
+`mobile/test/core/network/api_client_test.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/core/network/api_exception.dart';
+import 'package:family_roots_mobile/core/network/interceptors/trace_interceptor.dart';
+
+import '../../support/sequence_adapter.dart';
+
+ApiClient _client(SequenceAdapter a, {bool trace = false}) {
+  final dio = Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))
+    ..httpClientAdapter = a;
+  if (trace) dio.interceptors.add(TraceInterceptor());
+  return ApiClient(dio);
+}
+
+void main() {
+  test('getOne unwraps the envelope', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{
+        'data': <String, Object?>{'id': 'u1', 'email': 'a@b.c'},
+      }),
+    ]);
+    final got = await _client(a).getOne<String>(
+      '/auth/me',
+      parse: (j) => (j! as Map<String, Object?>)['email']! as String,
+    );
+    expect(got, 'a@b.c');
+  });
+
+  test('getPage handles the meta-less array of GET /me/clans', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{
+        'data': <Object?>[
+          <String, Object?>{'clan_id': 'c1'},
+          <String, Object?>{'clan_id': 'c2'},
+        ],
+      }),
+    ]);
+    final page = await _client(a).getPage<String>(
+      '/me/clans',
+      parse: (j) => (j! as Map<String, Object?>)['clan_id']! as String,
+    );
+    expect(page.items, <String>['c1', 'c2']);
+    expect(page.cursor, isNull);
+    expect(page.hasMore, isFalse);
+  });
+
+  test('getPage forwards an opaque cursor verbatim', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{'data': <Object?>[]}),
+    ]);
+    await _client(a).getPage<int>(
+      '/persons',
+      cursor: 'weird!!:{}',
+      limit: 25,
+      parse: (j) => j! as int,
+    );
+    expect(a.received.single.uri.queryParameters['cursor'], 'weird!!:{}');
+    expect(a.received.single.uri.queryParameters['limit'], '25');
+  });
+
+  test('an error envelope becomes ApiException with code and detail', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(409, <String, Object?>{
+        'error': <String, Object?>{
+          'code': 'stale_write',
+          'message': 'Người khác vừa sửa',
+          'detail': <String, Object?>{'current_version': 4},
+        },
+      }),
+    ]);
+    await expectLater(
+      _client(a).getOne<Object?>('/persons/1', parse: (j) => j),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.code, 'code', 'stale_write')
+            .having((e) => e.status, 'status', 409)
+            .having((e) => e.currentVersion, 'currentVersion', 4),
+      ),
+    );
+  });
+
+  test('a 403 error envelope keeps its code for policyActionFor', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(403, <String, Object?>{
+        'error': <String, Object?>{
+          'code': 'email_not_verified',
+          'message': 'Email chưa xác thực',
+          'detail': <String, Object?>{},
+        },
+      }),
+    ]);
+    try {
+      await _client(a).getOne<Object?>('/persons', parse: (j) => j);
+      fail('expected ApiException');
+    } on ApiException catch (e) {
+      expect(
+        policyActionFor(e.code, status: e.status),
+        PolicyAction.resendVerification,
+      );
+    }
+  });
+
+  test('a non-envelope error body is MalformedResponseException', () async {
+    final a = SequenceAdapter(<Canned>[const Canned(500, 'gateway exploded')]);
+    await expectLater(
+      _client(a).getOne<Object?>('/persons', parse: (j) => j),
+      throwsA(isA<MalformedResponseException>()),
+    );
+  });
+
+  test('a 2xx body without data is MalformedResponseException', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{'unexpected': 1}),
+    ]);
+    await expectLater(
+      _client(a).getOne<Object?>('/persons', parse: (j) => j),
+      throwsA(isA<MalformedResponseException>()),
+    );
+  });
+
+  test('the trace id is lifted from the traceparent header', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(500, <String, Object?>{
+        'error': <String, Object?>{
+          'code': 'internal_error',
+          'message': 'Lỗi hệ thống',
+          'detail': <String, Object?>{},
+        },
+      }),
+    ]);
+    try {
+      await _client(
+        a,
+        trace: true,
+      ).getOne<Object?>('/persons', parse: (j) => j);
+      fail('expected ApiException');
+    } on ApiException catch (e) {
+      expect(e.traceId, isNotNull);
+      expect(RegExp(r'^[0-9a-f]{32}$').hasMatch(e.traceId!), isTrue);
+    }
+  });
+
+  test('a cancellation is rethrown as DioException, not wrapped', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{'data': null}),
+    ]);
+    final token = CancelToken()..cancel('gone');
+    await expectLater(
+      _client(
+        a,
+      ).getOne<Object?>('/persons', cancelToken: token, parse: (j) => j),
+      throwsA(
+        isA<DioException>().having(
+          (e) => e.type,
+          'type',
+          DioExceptionType.cancel,
+        ),
+      ),
+    );
+  });
+
+  test('toAppException maps timeouts and connection errors', () {
+    final req = RequestOptions(path: '/x');
+    expect(
+      toAppException(
+        DioException(
+          requestOptions: req,
+          type: DioExceptionType.receiveTimeout,
+        ),
+      ),
+      isA<TimeoutException>(),
+    );
+    expect(
+      toAppException(
+        DioException(
+          requestOptions: req,
+          type: DioExceptionType.connectionError,
+        ),
+      ),
+      isA<NetworkException>(),
+    );
+  });
+
+  test('post unwraps the envelope', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{
+        'data': <String, Object?>{'access_token': 'tok'},
+      }),
+    ]);
+    final got = await _client(a).post<String>(
+      '/auth/login',
+      body: <String, Object?>{'email': 'a@b.c', 'password': 'x'},
+      parse: (j) => (j! as Map<String, Object?>)['access_token']! as String,
+    );
+    expect(got, 'tok');
+    expect(a.received.single.method, 'POST');
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/core/network/api_client_test.dart
+```
+Expected: FAIL — cannot resolve `api_client.dart`.
+
+- [ ] **Step 3: Write the implementation**
+
+`mobile/lib/core/network/api_client.dart`:
+
+```dart
+import 'package:dio/dio.dart' as dio;
+
+import '../../domain/shared/page.dart';
+import 'api_exception.dart';
+import 'envelope.dart';
+
+/// The only class that talks to Dio. Everything above it sees domain types and
+/// AppException — never DioException, never `{"data": ...}`.
+class ApiClient {
+  ApiClient(this._dio);
+
+  final dio.Dio _dio;
+
+  Future<T> getOne<T>(
+    String path, {
+    Map<String, Object?>? query,
+    dio.CancelToken? cancelToken,
+    required Parse<T> parse,
+  }) => _guard(() async {
+    final res = await _dio.get<Object?>(
+      path,
+      queryParameters: query,
+      cancelToken: cancelToken,
+    );
+    return unwrapData<T>(res.data, parse);
+  });
+
+  Future<Page<T>> getPage<T>(
+    String path, {
+    String? cursor,
+    int? limit,
+    Map<String, Object?>? query,
+    dio.CancelToken? cancelToken,
+    required Parse<T> parse,
+  }) => _guard(() async {
+    final res = await _dio.get<Object?>(
+      path,
+      queryParameters: <String, Object?>{
+        ...?query,
+        // Opaque: replayed verbatim, never constructed or parsed.
+        // `?x` is Dart 3.12's null-aware element — the entry is omitted when
+        // the value is null. `if (x != null)` trips use_null_aware_elements.
+        'cursor': ?cursor,
+        'limit': ?limit,
+      },
+      cancelToken: cancelToken,
+    );
+    return unwrapPage<T>(res.data, parse);
+  });
+
+  Future<T> post<T>(
+    String path, {
+    Object? body,
+    dio.CancelToken? cancelToken,
+    required Parse<T> parse,
+  }) => _guard(() async {
+    final res = await _dio.post<Object?>(
+      path,
+      data: body,
+      cancelToken: cancelToken,
+    );
+    return unwrapData<T>(res.data, parse);
+  });
+
+  Future<T> _guard<T>(Future<T> Function() run) async {
+    try {
+      return await run();
+    } on dio.DioException catch (e) {
+      // A caller-initiated cancellation is rethrown unchanged.
+      if (e.type == dio.DioExceptionType.cancel) rethrow;
+      throw toAppException(e);
+    }
+  }
+}
+
+/// Maps a DioException onto the sealed client taxonomy.
+AppException toAppException(dio.DioException e) {
+  switch (e.type) {
+    case dio.DioExceptionType.connectionTimeout:
+    case dio.DioExceptionType.sendTimeout:
+    case dio.DioExceptionType.receiveTimeout:
+    // dio 5.11 added transformTimeout; the switch must be exhaustive.
+    case dio.DioExceptionType.transformTimeout:
+      return const TimeoutException();
+    case dio.DioExceptionType.connectionError:
+    case dio.DioExceptionType.unknown:
+    case dio.DioExceptionType.badCertificate:
+      return NetworkException(e.error ?? e);
+    case dio.DioExceptionType.cancel:
+      return NetworkException(e);
+    case dio.DioExceptionType.badResponse:
+      final res = e.response;
+      final body = res?.data;
+      if (body is Map<String, Object?> &&
+          body['error'] is Map<String, Object?>) {
+        final err = body['error']! as Map<String, Object?>;
+        final code = err['code'];
+        final message = err['message'];
+        if (code is String && message is String) {
+          return ApiException(
+            code: code,
+            message: message,
+            status: res?.statusCode ?? 0,
+            detail:
+                (err['detail'] as Map<String, Object?>?) ??
+                const <String, Object?>{},
+            traceId: _traceIdOf(res),
+          );
+        }
+      }
+      return MalformedResponseException(body);
+  }
+}
+
+/// The 32-hex trace-id half of the request's traceparent, surfaced to the user
+/// so a report links to the exact backend log line.
+String? _traceIdOf(dio.Response<Object?>? res) {
+  final tp = res?.requestOptions.headers['traceparent'];
+  if (tp is! String) return null;
+  final parts = tp.split('-');
+  return parts.length >= 2 ? parts[1] : null;
+}
+```
+
+- [ ] **Step 4: Run the tests**
+
+```bash
+cd mobile && flutter test test/core/network/api_client_test.dart
+```
+Expected: `All tests passed!` (11 tests).
+
+- [ ] **Step 5: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/core/network/api_client.dart mobile/test/core/network/api_client_test.dart
+git commit -m "$(cat <<'EOF'
+feat(mobile): add ApiClient, the only class that touches Dio
+
+getOne/getPage/post unwrap the envelope and translate DioException into
+the sealed AppException taxonomy. Cursors are forwarded verbatim.
+Cancellations are rethrown unchanged. The trace id is lifted from the
+outgoing traceparent so errors can cite it.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 11: Bundled fonts and Arbor Heritage theme tokens
+
+**Files:**
+- Create: `mobile/assets/fonts/PlusJakartaSans.ttf`, `Manrope.ttf`, `OFL.txt`; `mobile/lib/core/theme/tokens.dart`, `mobile/lib/core/theme/app_theme.dart`; `mobile/test/support/load_app_fonts.dart`
+- Modify: `mobile/pubspec.yaml` (fonts section)
+- Test: `mobile/test/core/theme/theme_test.dart`
+
+**Interfaces:**
+- Produces: `class ArborTokens extends ThemeExtension<ArborTokens>` with `ArborTokens.light()`; `extension ArborContext on BuildContext { ArborTokens get tokens }`; `ThemeData buildAppTheme()`; `Future<void> loadAppFonts()`
+
+> **Verified (V18/V22/V24):** the repo ships **no fonts** — `assets/` holds only `.gitkeep`. Upstream has **only variable** fonts (`static/` 404s). Declaring the same variable TTF twice with different `weight:` values works; the wght axis is applied (regular 247.3px vs bold 250.5px for the same string).
+>
+> **Verified (V19):** `flutter test` renders a **placeholder** font unless you load the real ones. Without `loadAppFonts()` the same string measured 480.0×32.0 at *both* weights. Any golden or layout assertion must call it in `setUpAll`.
+
+- [ ] **Step 1: Fetch the fonts and their licence**
+
+```bash
+cd mobile && mkdir -p assets/fonts
+curl -sL -o assets/fonts/PlusJakartaSans.ttf \
+  "https://github.com/google/fonts/raw/main/ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf"
+curl -sL -o assets/fonts/Manrope.ttf \
+  "https://github.com/google/fonts/raw/main/ofl/manrope/Manrope%5Bwght%5D.ttf"
+curl -sL -o assets/fonts/OFL.txt \
+  "https://github.com/google/fonts/raw/main/ofl/plusjakartasans/OFL.txt"
+file assets/fonts/*.ttf
+```
+Expected: both report `TrueType Font data`. Sizes are roughly 176 KB and 165 KB. If either is a few hundred bytes you fetched an HTML error page — stop and re-fetch.
+
+- [ ] **Step 2: Declare them in `pubspec.yaml`**
+
+Add under the existing `flutter:` key, after `assets:`:
+
+```yaml
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 700
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
+          weight: 400
+        - asset: assets/fonts/Manrope.ttf
+          weight: 700
+```
+
+Also add `- assets/fonts/` to the `assets:` list.
+
+- [ ] **Step 3: Write the font loader for tests**
+
+`mobile/test/support/load_app_fonts.dart`:
+
+```dart
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Widget tests render a weight-insensitive placeholder font unless the real
+/// ones are registered. Call this in setUpAll for any golden or layout test.
+Future<void> loadAppFonts() async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const families = <String, String>{
+    'PlusJakartaSans': 'assets/fonts/PlusJakartaSans.ttf',
+    'Manrope': 'assets/fonts/Manrope.ttf',
+  };
+  for (final entry in families.entries) {
+    final loader = FontLoader(entry.key)
+      ..addFont(
+        File(entry.value).readAsBytes().then(
+          (b) => ByteData.view(Uint8List.fromList(b).buffer),
+        ),
+      );
+    await loader.load();
+  }
+}
+```
+
+- [ ] **Step 4: Write the failing test**
+
+`mobile/test/core/theme/theme_test.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/theme/app_theme.dart';
+import 'package:family_roots_mobile/core/theme/tokens.dart';
+
+import '../../support/load_app_fonts.dart';
+
+void main() {
+  setUpAll(loadAppFonts);
+
+  testWidgets('tokens honour the Arbor Heritage mandates', (tester) async {
+    late ArborTokens t;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: Builder(
+          builder: (context) {
+            t = context.tokens;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Never #000000.
+    expect(t.onSurface, isNot(const Color(0xFF000000)));
+    expect(t.onSurface, const Color(0xFF1D1B16));
+    // 9999px for primary buttons, 2rem for nodes. Never sm or none.
+    expect(t.radiusPill, 9999);
+    expect(t.radiusNode, 32);
+    // Glass: surface at 80% opacity with 20px backdrop blur.
+    expect(t.glassOpacity, 0.8);
+    expect(t.glassBlur, 20);
+    // Ambient depth, not rigid drop shadows.
+    expect(t.ambientBlur, 32);
+    expect(t.ambientOpacity, 0.06);
+  });
+
+  testWidgets('the no-line rule: dividers have no thickness', (tester) async {
+    final theme = buildAppTheme();
+    expect(theme.dividerTheme.thickness, 0);
+    expect(theme.cardTheme.elevation, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('body text is Manrope, headings Plus Jakarta Sans',
+      (tester) async {
+    final theme = buildAppTheme();
+    expect(theme.textTheme.headlineLarge?.fontFamily, 'PlusJakartaSans');
+    expect(theme.textTheme.titleLarge?.fontFamily, 'PlusJakartaSans');
+    // The family default covers body/labels.
+    expect(theme.textTheme.bodyMedium?.fontFamily ?? 'Manrope', 'Manrope');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the bundled variable font applies its weight axis',
+      (tester) async {
+    Future<Size> measure(FontWeight w) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: Text(
+              'Gia phả dòng họ',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 32,
+                fontWeight: w,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return tester.getSize(find.byType(Text));
+    }
+
+    final regular = await measure(FontWeight.w400);
+    final bold = await measure(FontWeight.w700);
+    // The placeholder test font is weight-insensitive; the real one is not.
+    expect(bold.width, isNot(regular.width));
+  });
+}
+```
+
+- [ ] **Step 5: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/core/theme/theme_test.dart
+```
+Expected: FAIL — cannot resolve `tokens.dart`.
+
+- [ ] **Step 6: Write `tokens.dart`**
+
+```dart
+import 'package:flutter/material.dart';
+
+/// Arbor Heritage design tokens. Violating a mandate should take effort, so
+/// every colour, radius, spacing and elevation lives here and nowhere else.
+@immutable
+class ArborTokens extends ThemeExtension<ArborTokens> {
+  const ArborTokens({
+    required this.surface,
+    required this.surfaceContainerLow,
+    required this.onSurface,
+    required this.primary,
+    required this.onPrimary,
+    required this.error,
+    required this.outlineVariant,
+    required this.radiusPill,
+    required this.radiusNode,
+    required this.spaceXs,
+    required this.spaceSm,
+    required this.spaceMd,
+    required this.spaceLg,
+    required this.ambientBlur,
+    required this.ambientOpacity,
+    required this.glassOpacity,
+    required this.glassBlur,
+  });
+
+  /// Primary text is `on_surface` #1d1b16 — never #000000.
+  factory ArborTokens.light() => const ArborTokens(
+    surface: Color(0xFFFDFCF7),
+    surfaceContainerLow: Color(0xFFF5F1E6),
+    onSurface: Color(0xFF1D1B16),
+    primary: Color(0xFF7A5C2E),
+    onPrimary: Color(0xFFFFFFFF),
+    error: Color(0xFF8C1D18),
+    outlineVariant: Color(0xFFCFC7B4),
+    // 9999px for primary buttons, 2rem (32px) for nodes. Never sm or none.
+    radiusPill: 9999,
+    radiusNode: 32,
+    spaceXs: 4,
+    spaceSm: 8,
+    spaceMd: 16,
+    spaceLg: 24,
+    // Ambient depth, not rigid drop shadows.
+    ambientBlur: 32,
+    ambientOpacity: 0.06,
+    // Glass: surface at 80% opacity with 20px backdrop blur.
+    glassOpacity: 0.8,
+    glassBlur: 20,
+  );
+
+  final Color surface;
+  final Color surfaceContainerLow;
+  final Color onSurface;
+  final Color primary;
+  final Color onPrimary;
+  final Color error;
+  final Color outlineVariant;
+  final double radiusPill;
+  final double radiusNode;
+  final double spaceXs;
+  final double spaceSm;
+  final double spaceMd;
+  final double spaceLg;
+  final double ambientBlur;
+  final double ambientOpacity;
+  final double glassOpacity;
+  final double glassBlur;
+
+  @override
+  ArborTokens copyWith({Color? surface, Color? onSurface, Color? primary}) =>
+      ArborTokens(
+        surface: surface ?? this.surface,
+        surfaceContainerLow: surfaceContainerLow,
+        onSurface: onSurface ?? this.onSurface,
+        primary: primary ?? this.primary,
+        onPrimary: onPrimary,
+        error: error,
+        outlineVariant: outlineVariant,
+        radiusPill: radiusPill,
+        radiusNode: radiusNode,
+        spaceXs: spaceXs,
+        spaceSm: spaceSm,
+        spaceMd: spaceMd,
+        spaceLg: spaceLg,
+        ambientBlur: ambientBlur,
+        ambientOpacity: ambientOpacity,
+        glassOpacity: glassOpacity,
+        glassBlur: glassBlur,
+      );
+
+  @override
+  ArborTokens lerp(ThemeExtension<ArborTokens>? other, double t) {
+    if (other is! ArborTokens) return this;
+    return ArborTokens(
+      surface: Color.lerp(surface, other.surface, t)!,
+      surfaceContainerLow: Color.lerp(
+        surfaceContainerLow,
+        other.surfaceContainerLow,
+        t,
+      )!,
+      onSurface: Color.lerp(onSurface, other.onSurface, t)!,
+      primary: Color.lerp(primary, other.primary, t)!,
+      onPrimary: Color.lerp(onPrimary, other.onPrimary, t)!,
+      error: Color.lerp(error, other.error, t)!,
+      outlineVariant: Color.lerp(outlineVariant, other.outlineVariant, t)!,
+      radiusPill: radiusPill,
+      radiusNode: radiusNode,
+      spaceXs: spaceXs,
+      spaceSm: spaceSm,
+      spaceMd: spaceMd,
+      spaceLg: spaceLg,
+      ambientBlur: ambientBlur,
+      ambientOpacity: ambientOpacity,
+      glassOpacity: glassOpacity,
+      glassBlur: glassBlur,
+    );
+  }
+}
+
+extension ArborContext on BuildContext {
+  ArborTokens get tokens => Theme.of(this).extension<ArborTokens>()!;
+}
+```
+
+- [ ] **Step 7: Write `app_theme.dart`**
+
+```dart
+import 'package:flutter/material.dart';
+
+import 'tokens.dart';
+
+/// ThemeData is built FROM the tokens — never the other way round.
+ThemeData buildAppTheme() {
+  final t = ArborTokens.light();
+  final scheme = ColorScheme.fromSeed(
+    seedColor: t.primary,
+    surface: t.surface,
+    onSurface: t.onSurface,
+    error: t.error,
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: t.surface,
+    extensions: <ThemeExtension<dynamic>>[t],
+    // Bundled, never fetched at runtime; never falls back to the system font.
+    fontFamily: 'Manrope',
+    textTheme: const TextTheme(
+      displayLarge: TextStyle(fontFamily: 'PlusJakartaSans'),
+      displayMedium: TextStyle(fontFamily: 'PlusJakartaSans'),
+      displaySmall: TextStyle(fontFamily: 'PlusJakartaSans'),
+      headlineLarge: TextStyle(fontFamily: 'PlusJakartaSans'),
+      headlineMedium: TextStyle(fontFamily: 'PlusJakartaSans'),
+      headlineSmall: TextStyle(fontFamily: 'PlusJakartaSans'),
+      titleLarge: TextStyle(fontFamily: 'PlusJakartaSans'),
+    ),
+    // The no-line rule: boundaries come from background shifts, not borders.
+    dividerTheme: const DividerThemeData(thickness: 0, space: 0),
+    cardTheme: CardThemeData(
+      elevation: 0,
+      color: t.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(t.radiusNode),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(t.radiusPill),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: t.spaceLg,
+          vertical: t.spaceMd,
+        ),
+      ),
+    ),
+  );
+}
+```
+
+- [ ] **Step 8: Run the tests**
+
+```bash
+cd mobile && flutter pub get && flutter test test/core/theme/theme_test.dart
+```
+Expected: `All tests passed!` (4 tests). If the weight-axis test fails with equal widths, `loadAppFonts()` did not run — check the `setUpAll`.
+
+- [ ] **Step 9: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/assets/fonts mobile/pubspec.yaml mobile/lib/core/theme mobile/test
+git commit -m "$(cat <<'EOF'
+feat(mobile): bundle the mandated fonts and encode Arbor Heritage tokens
+
+Plus Jakarta Sans and Manrope ship as assets (OFL included) rather than
+being fetched at runtime by google_fonts, which fell back to the system
+font offline — a direct mandate violation (ADR-034 D4). Only variable
+fonts exist upstream; the wght axis is applied via duplicate weight
+declarations.
+
+Design tokens are a ThemeExtension and ThemeData is built from them, so
+no widget hardcodes a colour or radius.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 12: Localisation — `vi` default, `en` alongside
+
+**Files:**
+- Modify: `mobile/lib/core/l10n/app_vi.arb`, `app_en.arb` (carried forward in Task 1)
+- Create: `mobile/lib/core/l10n/generated/**` (generated, committed)
+- Test: `mobile/test/core/l10n/l10n_test.dart`
+
+**Interfaces:**
+- Produces: `AppLocalizations` with `AppLocalizations.of(context)`, `AppLocalizations.localizationsDelegates`, `AppLocalizations.supportedLocales`, and the M0 keys below.
+
+> The carried-forward ARB pair already has 55 keys from the old scaffold. Keep them — most are reusable — and **add** the M0 keys. `vi` is the template, so every key must exist in `app_vi.arb`; missing `en` values fall back to `vi`.
+>
+> Nothing may assume the locale set is exactly two: `zh` and `fr` are accepted by the backend and get added to `supportedLocales` automatically when their ARB files appear.
+
+- [ ] **Step 1: Add the M0 keys to `app_vi.arb`**
+
+Merge these into the existing object (do not delete the 55 carried-forward keys):
+
+```jsonc
+  "myClansTitle": "Dòng họ của tôi",
+  "clanPickerTitle": "Chọn dòng họ",
+  "clanCount": "{count, plural, =0{Chưa có dòng họ} =1{1 dòng họ} other{{count} dòng họ}}",
+  "@clanCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "staleDataBanner": "Dữ liệu ngày {date}",
+  "@staleDataBanner": {
+    "placeholders": { "date": { "type": "String" } }
+  },
+  "signOutAction": "Đăng xuất",
+  "retryAction": "Thử lại",
+  "errorOffline": "Không có kết nối mạng",
+  "errorTimeout": "Máy chủ phản hồi quá chậm",
+  "errorUnexpected": "Đã xảy ra lỗi không mong muốn",
+  "errorTraceId": "Mã lỗi: {traceId}",
+  "@errorTraceId": {
+    "placeholders": { "traceId": { "type": "String" } }
+  },
+  "pendingApprovalTitle": "Đang chờ duyệt",
+  "pendingApprovalBody": "Yêu cầu tham gia của bạn đang chờ quản trị viên dòng họ duyệt.",
+  "verifyEmailTitle": "Xác thực email",
+  "verifyEmailBody": "Vui lòng mở email và bấm liên kết xác thực.",
+  "resendVerificationAction": "Gửi lại email xác thực",
+  "onboardingTitle": "Tham gia dòng họ",
+  "accountBlockedTitle": "Tài khoản đã bị khoá",
+  "clanSuspendedTitle": "Dòng họ đã bị tạm ngưng"
+```
+
+- [ ] **Step 2: Add the same keys to `app_en.arb`**
+
+Placeholder metadata (`@key`) lives only in the template, so `en` carries values only:
+
+```jsonc
+  "myClansTitle": "My clans",
+  "clanPickerTitle": "Choose a clan",
+  "clanCount": "{count, plural, =0{No clans} =1{1 clan} other{{count} clans}}",
+  "staleDataBanner": "Data from {date}",
+  "signOutAction": "Sign out",
+  "retryAction": "Retry",
+  "errorOffline": "No network connection",
+  "errorTimeout": "The server took too long to respond",
+  "errorUnexpected": "Something went wrong",
+  "errorTraceId": "Error id: {traceId}",
+  "pendingApprovalTitle": "Awaiting approval",
+  "pendingApprovalBody": "Your join request is waiting for a clan admin to approve it.",
+  "verifyEmailTitle": "Verify your email",
+  "verifyEmailBody": "Open your email and tap the verification link.",
+  "resendVerificationAction": "Resend verification email",
+  "onboardingTitle": "Join a clan",
+  "accountBlockedTitle": "Account blocked",
+  "clanSuspendedTitle": "Clan suspended"
+```
+
+- [ ] **Step 3: Generate**
+
+```bash
+cd mobile && flutter gen-l10n
+ls lib/core/l10n/generated
+```
+Expected: `app_localizations.dart`, `app_localizations_en.dart`, `app_localizations_vi.dart`. If you see `The argument "synthetic-package" no longer has any effect`, remove that key from `l10n.yaml`.
+
+- [ ] **Step 4: Write the test**
+
+`mobile/test/core/l10n/l10n_test.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/l10n/generated/app_localizations.dart';
+
+Widget _host(Locale locale, void Function(AppLocalizations) probe) =>
+    MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Builder(
+        builder: (context) {
+          probe(AppLocalizations.of(context));
+          return const SizedBox();
+        },
+      ),
+    );
+
+void main() {
+  testWidgets('vi and en are both supported, vi first', (tester) async {
+    expect(
+      AppLocalizations.supportedLocales.map((l) => l.languageCode),
+      containsAll(<String>['vi', 'en']),
+    );
+    expect(AppLocalizations.supportedLocales.first.languageCode, 'vi');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Vietnamese strings', (tester) async {
+    late AppLocalizations l;
+    await tester.pumpWidget(_host(const Locale('vi'), (x) => l = x));
+    await tester.pumpAndSettle();
+
+    expect(l.myClansTitle, 'Dòng họ của tôi');
+    expect(l.clanCount(0), 'Chưa có dòng họ');
+    expect(l.clanCount(1), '1 dòng họ');
+    expect(l.clanCount(5), '5 dòng họ');
+    expect(l.staleDataBanner('01/08/2026'), 'Dữ liệu ngày 01/08/2026');
+  });
+
+  testWidgets('English strings', (tester) async {
+    late AppLocalizations l;
+    await tester.pumpWidget(_host(const Locale('en'), (x) => l = x));
+    await tester.pumpAndSettle();
+
+    expect(l.myClansTitle, 'My clans');
+    expect(l.clanCount(0), 'No clans');
+    expect(l.clanCount(2), '2 clans');
+  });
+
+  testWidgets('an unsupported locale falls back to vi', (tester) async {
+    late AppLocalizations l;
+    await tester.pumpWidget(_host(const Locale('zh'), (x) => l = x));
+    await tester.pumpAndSettle();
+    expect(l.myClansTitle, 'Dòng họ của tôi');
+  });
+}
+```
+
+> The fallback test depends on `MaterialApp` resolving an unsupported locale to the first supported one. Confirm the assertion matches observed behaviour when you run it; if Flutter resolves differently, assert what it actually does rather than forcing the expectation.
+
+- [ ] **Step 5: Run**
+
+```bash
+cd mobile && flutter test test/core/l10n/l10n_test.dart
+```
+Expected: `All tests passed!` (4 tests).
+
+- [ ] **Step 6: Full gate and commit**
+
+Generated localisations are committed like all other generated code.
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/core/l10n mobile/test/core/l10n mobile/l10n.yaml
+git commit -m "$(cat <<'EOF'
+feat(mobile): ship vi and en localisations with vi as default
+
+app_vi.arb is the gen-l10n template because vi is both default and
+fallback. Nothing assumes the locale set is exactly two — zh and fr join
+supportedLocales as soon as their ARB files exist.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 13: Auth slice — domain, DTOs and repository
+
+**Files:**
+- Create: `mobile/lib/domain/auth/user_profile.dart`, `mobile/lib/domain/clan/clan_membership.dart`, `mobile/lib/features/auth/data/auth_dto.dart`, `mobile/lib/features/auth/data/auth_repository.dart`
+- Test: `mobile/test/features/auth/auth_repository_test.dart`
+
+**Interfaces:**
+- Produces:
+  - `enum ClanRole { admin, editor, viewer, unknown }` with `ClanRole.fromWire(Object?)`, `bool get canEdit`, `bool get canAdminister`
+  - `ClanMembership({ClanId clanId, String clanName, String clanSlug, ClanRole role, DateTime? joinedAt})`
+  - `UserProfile({UserId id, String email, String? fullName, ClanId? clanId, String? clanName, ClanRole? role, bool isApproved, bool hasPendingMembership, PersonId? personId})` with `bool get needsPendingScreen`, `bool get needsOnboarding`
+  - `UserProfile userProfileFromJson(Object?)`, `LoginResult loginResultFromJson(Object?)`
+  - `class LoginResult({String accessToken, String refreshToken, int expiresIn, UserProfile user})`
+  - `class AuthRepository(ApiClient api)` — `login`, `me`, `resendVerification`, `logout`
+
+> `preferred_locale` is deliberately **not** mapped: it always returns `"vi"` regardless of what was saved (spec R3). The app owns locale in `PrefsStore`.
+>
+> `role` is non-null only when the membership is approved — a pending member gets `role: null`, which is why `UserProfile.role` is nullable while `ClanMembership.role` is not.
+
+- [ ] **Step 1: Write the failing test**
+
+`mobile/test/features/auth/auth_repository_test.dart`:
+
+```dart
+// Fixtures copied verbatim from docs/contracts/rest-auth-api.md.
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/core/network/api_exception.dart';
+import 'package:family_roots_mobile/domain/clan/clan_membership.dart';
+import 'package:family_roots_mobile/features/auth/data/auth_repository.dart';
+
+import '../../support/sequence_adapter.dart';
+
+ApiClient _client(SequenceAdapter a) => ApiClient(
+  Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))..httpClientAdapter = a,
+);
+
+const _login = <String, Object?>{
+  'data': <String, Object?>{
+    'access_token': 'eyJhbGciOi...',
+    'refresh_token': 'v1.Mr7...',
+    'expires_in': 3600,
+    'user': <String, Object?>{
+      'id': '99999999-9999-9999-9999-999999999999',
+      'email': 'minh@example.com',
+      'full_name': 'Nguyễn Văn Minh',
+      'clan_id': '11111111-1111-1111-1111-111111111111',
+      'clan_name': 'Họ Nguyễn Phúc',
+      'role': 'admin',
+      'is_approved': true,
+      'has_pending_membership': false,
+      'person_id': '33333333-3333-3333-3333-333333333333',
+      'preferred_locale': 'vi',
+    },
+  },
+};
+
+void main() {
+  test('POST /login maps tokens and the nested user', () async {
+    final a = SequenceAdapter(<Canned>[const Canned(200, _login)]);
+    final res = await AuthRepository(
+      _client(a),
+    ).login(email: 'minh@example.com', password: 'secret');
+
+    expect(res.accessToken, 'eyJhbGciOi...');
+    expect(res.refreshToken, 'v1.Mr7...');
+    expect(res.expiresIn, 3600);
+    expect(res.user.email, 'minh@example.com');
+    expect(res.user.role, ClanRole.admin);
+    expect(res.user.personId!.value, '33333333-3333-3333-3333-333333333333');
+  });
+
+  test('GET /auth/me carries the real has_pending_membership', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{
+        'data': <String, Object?>{
+          'id': 'u1',
+          'email': 'pending@example.com',
+          'full_name': 'Chờ Duyệt',
+          'clan_id': 'c1',
+          'clan_name': 'Họ Lê',
+          'role': null,
+          'is_approved': false,
+          'has_pending_membership': true,
+          'person_id': null,
+          'preferred_locale': 'vi',
+        },
+      }),
+    ]);
+    final me = await AuthRepository(_client(a)).me();
+
+    expect(me.isApproved, isFalse);
+    expect(me.hasPendingMembership, isTrue);
+    expect(me.role, isNull, reason: 'role is null until approved');
+    expect(me.needsPendingScreen, isTrue);
+    expect(me.needsOnboarding, isFalse);
+  });
+
+  test('a user attached to no clan needs onboarding', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(200, <String, Object?>{
+        'data': <String, Object?>{
+          'id': 'u2',
+          'email': 'new@example.com',
+          'full_name': null,
+          'clan_id': null,
+          'clan_name': null,
+          'role': null,
+          'is_approved': false,
+          'has_pending_membership': false,
+          'person_id': null,
+          'preferred_locale': 'vi',
+        },
+      }),
+    ]);
+    final me = await AuthRepository(_client(a)).me();
+    expect(me.needsOnboarding, isTrue);
+    expect(me.needsPendingScreen, isFalse);
+  });
+
+  test('login with an unverified email surfaces email_not_verified', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(403, <String, Object?>{
+        'error': <String, Object?>{
+          'code': 'email_not_verified',
+          'message': 'Email chưa được xác thực',
+          'detail': <String, Object?>{},
+        },
+      }),
+    ]);
+    try {
+      await AuthRepository(_client(a)).login(email: 'a@b.c', password: 'x');
+      fail('expected ApiException');
+    } on ApiException catch (e) {
+      expect(e.code, 'email_not_verified');
+      expect(e.status, 403);
+      expect(
+        policyActionFor(e.code, status: e.status),
+        PolicyAction.resendVerification,
+      );
+    }
+  });
+
+  test('rate limiting surfaces retry_after', () async {
+    final a = SequenceAdapter(<Canned>[
+      const Canned(429, <String, Object?>{
+        'error': <String, Object?>{
+          'code': 'rate_limited',
+          'message': 'Quá nhiều yêu cầu',
+          'detail': <String, Object?>{'retry_after': 42},
+        },
+      }),
+    ]);
+    try {
+      await AuthRepository(_client(a)).login(email: 'a@b.c', password: 'x');
+      fail('expected ApiException');
+    } on ApiException catch (e) {
+      expect(e.retryAfter, 42);
+      expect(policyActionFor(e.code), PolicyAction.backOff);
+    }
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/features/auth/auth_repository_test.dart
+```
+Expected: FAIL — the auth files do not exist.
+
+- [ ] **Step 3: Write `domain/clan/clan_membership.dart`**
+
+```dart
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+import '../shared/ids.dart';
+
+part 'clan_membership.freezed.dart';
+
+enum ClanRole {
+  admin,
+  editor,
+  viewer,
+  unknown;
+
+  /// Never throws: an unrecognised role degrades to [unknown] so a new server
+  /// role cannot crash a shipped client. `invalid_role_assignment` is the
+  /// backend's own guard for corrupted values.
+  static ClanRole fromWire(Object? raw) {
+    for (final r in ClanRole.values) {
+      if (r.name == raw) return r;
+    }
+    return ClanRole.unknown;
+  }
+
+  bool get canEdit => this == admin || this == editor;
+  bool get canAdminister => this == admin;
+}
+
+@freezed
+abstract class ClanMembership with _$ClanMembership {
+  const factory ClanMembership({
+    required ClanId clanId,
+    required String clanName,
+    required String clanSlug,
+    required ClanRole role,
+    required DateTime? joinedAt,
+  }) = _ClanMembership;
+
+  const ClanMembership._();
+}
+```
+
+- [ ] **Step 4: Write `domain/auth/user_profile.dart`**
+
+```dart
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+import '../clan/clan_membership.dart';
+import '../shared/ids.dart';
+
+part 'user_profile.freezed.dart';
+
+@freezed
+abstract class UserProfile with _$UserProfile {
+  const factory UserProfile({
+    required UserId id,
+    required String email,
+    required String? fullName,
+    required ClanId? clanId,
+    required String? clanName,
+    // Non-null only when the membership is approved.
+    required ClanRole? role,
+    required bool isApproved,
+    required bool hasPendingMembership,
+    required PersonId? personId,
+  }) = _UserProfile;
+
+  const UserProfile._();
+
+  /// Routing rule from frontend-integration-guide.md §5.
+  bool get needsPendingScreen => !isApproved && hasPendingMembership;
+
+  /// Neither approved nor pending, attached to no clan → onboarding.
+  bool get needsOnboarding =>
+      !isApproved && !hasPendingMembership && clanId == null;
+}
+```
+
+- [ ] **Step 5: Write `features/auth/data/auth_dto.dart`**
+
+```dart
+import '../../../domain/auth/user_profile.dart';
+import '../../../domain/clan/clan_membership.dart';
+import '../../../domain/shared/ids.dart';
+
+/// The only place that knows the backend's wire shape for auth, so a new
+/// backend field changes exactly one file.
+///
+/// `preferred_locale` is deliberately not mapped: it always returns "vi"
+/// regardless of what was saved (spec R3). The app owns locale in PrefsStore.
+UserProfile userProfileFromJson(Object? json) {
+  final m = json! as Map<String, Object?>;
+  final clanId = m['clan_id'];
+  final personId = m['person_id'];
+  return UserProfile(
+    id: UserId(m['id']! as String),
+    email: m['email']! as String,
+    fullName: m['full_name'] as String?,
+    clanId: clanId is String ? ClanId(clanId) : null,
+    clanName: m['clan_name'] as String?,
+    role: m['role'] == null ? null : ClanRole.fromWire(m['role']),
+    isApproved: m['is_approved'] as bool? ?? false,
+    hasPendingMembership: m['has_pending_membership'] as bool? ?? false,
+    personId: personId is String ? PersonId(personId) : null,
+  );
+}
+
+class LoginResult {
+  const LoginResult({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.expiresIn,
+    required this.user,
+  });
+
+  final String accessToken;
+  final String refreshToken;
+  final int expiresIn;
+
+  /// `has_pending_membership` HERE IS ALWAYS FALSE — the login handler never
+  /// computes it. Call GET /auth/me and route on that value instead.
+  final UserProfile user;
+}
+
+LoginResult loginResultFromJson(Object? json) {
+  final m = json! as Map<String, Object?>;
+  return LoginResult(
+    accessToken: m['access_token']! as String,
+    refreshToken: m['refresh_token']! as String,
+    expiresIn: m['expires_in'] as int? ?? 3600,
+    user: userProfileFromJson(m['user']),
+  );
+}
+```
+
+- [ ] **Step 6: Write `features/auth/data/auth_repository.dart`**
+
+```dart
+import '../../../core/network/api_client.dart';
+import '../../../domain/auth/user_profile.dart';
+import 'auth_dto.dart';
+
+class AuthRepository {
+  AuthRepository(this._api);
+  final ApiClient _api;
+
+  Future<LoginResult> login({
+    required String email,
+    required String password,
+  }) => _api.post<LoginResult>(
+    '/auth/login',
+    body: <String, Object?>{'email': email, 'password': password},
+    parse: loginResultFromJson,
+  );
+
+  /// Joined on approved memberships only, and with a real
+  /// has_pending_membership — unlike the login response.
+  Future<UserProfile> me() =>
+      _api.getOne<UserProfile>('/auth/me', parse: userProfileFromJson);
+
+  /// Always 200 with the same message (non-enumerating).
+  Future<String> resendVerification(String email) => _api.post<String>(
+    '/auth/resend-verification',
+    body: <String, Object?>{'email': email},
+    parse: (j) => (j! as Map<String, Object?>)['message']! as String,
+  );
+
+  /// Best-effort server-side revoke. The access token stays valid until it
+  /// expires, so clear all client state regardless.
+  Future<void> logout() => _api.post<Object?>('/auth/logout', parse: (j) => j);
+}
+```
+
+- [ ] **Step 7: Generate and run**
+
+```bash
+cd mobile && dart run build_runner build \
+  && flutter test test/features/auth/auth_repository_test.dart
+```
+Expected: `All tests passed!` (5 tests).
+
+- [ ] **Step 8: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && dart run build_runner build && git diff --exit-code \
+  && flutter analyze && flutter test
+git add mobile/lib/domain mobile/lib/features/auth mobile/test/features/auth
+git commit -m "$(cat <<'EOF'
+feat(mobile): add the auth slice (UserProfile, DTOs, repository)
+
+Fixtures are copied verbatim from docs/contracts/rest-auth-api.md.
+preferred_locale is deliberately unmapped (always "vi", spec R3), and
+role stays nullable because it is non-null only once approved. Unknown
+roles degrade rather than throwing.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 14: Session controller — login → `GET /auth/me`
+
+**Files:**
+- Create: `mobile/lib/features/auth/application/session_controller.dart`, `mobile/lib/features/auth/auth.dart`
+- Test: `mobile/test/features/auth/session_controller_test.dart`
+
+**Interfaces:**
+- Consumes: `AuthRepository` (Task 13)
+- Produces:
+  - `final authRepositoryProvider = Provider<AuthRepository>(...)` (overridden at bootstrap)
+  - `@Riverpod(keepAlive: true) class SessionController extends _$SessionController` → `Future<UserProfile?> build()`, `Future<void> signIn({required String email, required String password})`, `Future<void> signOut()`
+  - generated `sessionControllerProvider`
+  - `features/auth/auth.dart` — the slice's public surface, the only file other slices may import
+
+> Signed-out is a **state**, not an error — hence `UserProfile?` rather than throwing. `keepAlive` because the session must outlive any one screen.
+
+- [ ] **Step 1: Write the failing test**
+
+`mobile/test/features/auth/session_controller_test.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/core/network/api_exception.dart';
+import 'package:family_roots_mobile/domain/auth/user_profile.dart';
+import 'package:family_roots_mobile/features/auth/application/session_controller.dart';
+import 'package:family_roots_mobile/features/auth/data/auth_repository.dart';
+
+import '../../support/sequence_adapter.dart';
+
+AuthRepository _repo(List<Canned> canned) => AuthRepository(
+  ApiClient(
+    Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))
+      ..httpClientAdapter = SequenceAdapter(canned),
+  ),
+);
+
+const _loginOk = Canned(200, <String, Object?>{
+  'data': <String, Object?>{
+    'access_token': 'a',
+    'refresh_token': 'r',
+    'expires_in': 3600,
+    'user': <String, Object?>{
+      'id': 'u1',
+      'email': 'a@b.c',
+      'full_name': 'A',
+      'clan_id': 'c1',
+      'clan_name': 'Họ A',
+      'role': 'admin',
+      'is_approved': true,
+      'has_pending_membership': false,
+      'person_id': null,
+      'preferred_locale': 'vi',
+    },
+  },
+});
+
+const _meApproved = Canned(200, <String, Object?>{
+  'data': <String, Object?>{
+    'id': 'u1',
+    'email': 'a@b.c',
+    'full_name': 'A',
+    'clan_id': 'c1',
+    'clan_name': 'Họ A',
+    'role': 'admin',
+    'is_approved': true,
+    'has_pending_membership': false,
+    'person_id': null,
+    'preferred_locale': 'vi',
+  },
+});
+
+void main() {
+  test('starts signed out', () async {
+    final c = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(_repo(<Canned>[]))],
+    );
+    addTearDown(c.dispose);
+    expect(await c.read(sessionControllerProvider.future), isNull);
+  });
+
+  test('signIn logs in then reads GET /auth/me', () async {
+    final c = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(
+          _repo(<Canned>[_loginOk, _meApproved]),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    await c.read(sessionControllerProvider.future);
+    await c
+        .read(sessionControllerProvider.notifier)
+        .signIn(email: 'a@b.c', password: 'x');
+
+    final profile = c.read(sessionControllerProvider).requireValue;
+    expect(profile, isA<UserProfile>());
+    expect(profile!.email, 'a@b.c');
+    expect(profile.isApproved, isTrue);
+  });
+
+  test('a failed login lands in AsyncError carrying the ApiException', () async {
+    final c = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(
+          _repo(<Canned>[
+            const Canned(401, <String, Object?>{
+              'error': <String, Object?>{
+                'code': 'auth.invalid_credentials',
+                'message': 'Sai email hoặc mật khẩu',
+                'detail': <String, Object?>{},
+              },
+            }),
+          ]),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    await c.read(sessionControllerProvider.future);
+    await c
+        .read(sessionControllerProvider.notifier)
+        .signIn(email: 'a@b.c', password: 'wrong');
+
+    final state = c.read(sessionControllerProvider);
+    expect(state.hasError, isTrue);
+    expect(state.error, isA<ApiException>());
+    expect((state.error! as ApiException).code, 'auth.invalid_credentials');
+  });
+
+  test('signOut clears the profile even if logout fails', () async {
+    final c = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(
+          _repo(<Canned>[
+            _loginOk,
+            _meApproved,
+            const Canned(503, <String, Object?>{
+              'error': <String, Object?>{
+                'code': 'auth_provider_unavailable',
+                'message': 'Tạm thời gián đoạn',
+                'detail': <String, Object?>{},
+              },
+            }),
+          ]),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    await c.read(sessionControllerProvider.future);
+    await c
+        .read(sessionControllerProvider.notifier)
+        .signIn(email: 'a@b.c', password: 'x');
+    expect(c.read(sessionControllerProvider).requireValue, isNotNull);
+
+    await c.read(sessionControllerProvider.notifier).signOut();
+    expect(c.read(sessionControllerProvider).requireValue, isNull);
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/features/auth/session_controller_test.dart
+```
+Expected: FAIL — `session_controller.dart` does not exist.
+
+- [ ] **Step 3: Write the controller**
+
+`mobile/lib/features/auth/application/session_controller.dart`:
+
+```dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../../../domain/auth/user_profile.dart';
+import '../data/auth_repository.dart';
+
+part 'session_controller.g.dart';
+
+/// Infrastructure binding — overridden in ProviderScope at bootstrap.
+final authRepositoryProvider = Provider<AuthRepository>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+
+/// Signed-out is a state, not an error — hence UserProfile? rather than
+/// throwing. keepAlive because the session outlives any one screen.
+@Riverpod(keepAlive: true)
+class SessionController extends _$SessionController {
+  @override
+  Future<UserProfile?> build() async => null;
+
+  /// login → GET /auth/me, because the login response's
+  /// has_pending_membership is always false (documented backend gap).
+  Future<void> signIn({required String email, required String password}) async {
+    state = const AsyncValue<UserProfile?>.loading();
+    state = await AsyncValue.guard<UserProfile?>(() async {
+      final repo = ref.read(authRepositoryProvider);
+      await repo.login(email: email, password: password);
+      return repo.me();
+    });
+  }
+
+  Future<void> signOut() async {
+    final repo = ref.read(authRepositoryProvider);
+    try {
+      await repo.logout();
+    } on Object {
+      // Logout is best-effort server-side; clear local state regardless.
+    }
+    state = const AsyncValue<UserProfile?>.data(null);
+  }
+}
+```
+
+- [ ] **Step 4: Write the slice public surface**
+
+`mobile/lib/features/auth/auth.dart` — the ONLY file another slice may import:
+
+```dart
+/// Public surface of the auth slice. Other slices import this and nothing
+/// deeper; the import-boundary test enforces it.
+export 'application/session_controller.dart'
+    show SessionController, sessionControllerProvider, authRepositoryProvider;
+export 'data/auth_repository.dart' show AuthRepository;
+```
+
+- [ ] **Step 5: Generate and run**
+
+```bash
+cd mobile && dart run build_runner build \
+  && flutter test test/features/auth/session_controller_test.dart
+```
+Expected: `All tests passed!` (4 tests).
+
+- [ ] **Step 6: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && dart run build_runner build && git diff --exit-code \
+  && flutter analyze && flutter test
+git add mobile/lib/features/auth mobile/test/features/auth
+git commit -m "$(cat <<'EOF'
+feat(mobile): add SessionController (login -> GET /auth/me)
+
+Login alone is not enough: the login response's has_pending_membership is
+always false, so the controller follows every login with GET /auth/me and
+routes on that. Signed-out is modelled as data(null), not an error.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
