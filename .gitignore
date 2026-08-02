@@ -197,3 +197,6 @@ app.*.symbols
 # local only. NOTE: docs/superpowers/{specs,plans}/ ARE tracked design docs
 # (committed by the brainstorming/writing-plans skills) — do not ignore those.
 .superpowers/
+
+# Git worktrees created by the harness / using-git-worktrees skill — local only.
+.claude/worktrees/
