@@ -26,6 +26,12 @@ class TraceContextMiddleware(BaseHTTPMiddleware):
             clan_id=request.headers.get("X-Current-Clan-Id"),
         )
         token = set_trace_context(ctx)
+        # Also stash it on the request scope. Starlette hoists the catch-all
+        # `Exception` handler into ServerErrorMiddleware, which runs OUTSIDE every
+        # user middleware — i.e. after the `finally` below has already reset the
+        # ContextVar. `HTTPConnection.state` writes into `scope["state"]`, which that
+        # handler still holds, so an unhandled 500 stays correlatable.
+        request.state.trace_context = ctx
         try:
             response = await call_next(request)
             response.headers["traceparent"] = ctx.to_traceparent()

@@ -5,8 +5,15 @@ DB, so a 200 or a 503 are both acceptable — the assertion is about headers, no
 the body.
 """
 
+import io
+import json
+import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from fastapi.testclient import TestClient
 
+from app.core.logging import JsonFormatter
 from app.core.trace_context import parse_traceparent
 from app.main import create_app
 
@@ -53,6 +60,59 @@ def test_two_requests_get_different_traces():
     first = client.get("/health").headers["traceparent"]
     second = client.get("/health").headers["traceparent"]
     assert first != second
+
+
+def _crashing_client() -> TestClient:
+    """An app with one route that raises, so the catch-all 500 handler runs."""
+    application = create_app()
+
+    @application.get("/__boom__")
+    async def boom() -> None:
+        raise RuntimeError("boom")
+
+    return TestClient(application, raise_server_exceptions=False)
+
+
+@contextmanager
+def _captured_json_logs(logger_name: str) -> Iterator[list[dict]]:
+    """Attach a JsonFormatter handler; the yielded list is filled with the parsed
+    records on exit. Asserting on the real formatter's output is the point: the
+    trace fields come from the ContextVar it reads, not from the record itself."""
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(JsonFormatter())
+    logger = logging.getLogger(logger_name)
+    logger.addHandler(handler)
+    previous = logger.level
+    logger.setLevel(logging.ERROR)
+    records: list[dict] = []
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous)
+        records.extend(json.loads(line) for line in stream.getvalue().splitlines() if line)
+
+
+def test_unhandled_500_still_carries_a_traceparent():
+    """Starlette hoists the catch-all Exception handler into ServerErrorMiddleware,
+    outside TraceContextMiddleware — so the ContextVar is already reset when it runs.
+    The scope-state fallback must keep the 500 (the one response that most needs a
+    trace id) correlatable."""
+    response = _crashing_client().get("/__boom__")
+    assert response.status_code == 500
+    assert parse_traceparent(response.headers.get("traceparent")) is not None
+
+
+def test_unhandled_500_log_line_carries_the_same_trace_id():
+    with _captured_json_logs("app.core.exceptions") as records:
+        response = _crashing_client().get("/__boom__", headers={"traceparent": CALLER})
+
+    assert response.headers["traceparent"].startswith("00-4bf92f3577b34da6a3ce929d0e0e4736-")
+    logged = [r for r in records if r["message"].startswith("Unhandled exception")]
+    assert logged, records
+    assert logged[0]["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
+    assert logged[0]["route"] == "/__boom__"
 
 
 def test_cors_exposes_traceparent_to_browsers():

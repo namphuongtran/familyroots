@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
+from app.core.trace_context import TraceContext, reset_trace_context, set_trace_context
+
 logger = logging.getLogger(__name__)
 
 
@@ -352,10 +354,28 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     """Catch-all: log the real error server-side, return the standard envelope.
 
     Never leaks the exception message or traceback to the client.
+
+    Trace correlation needs re-establishing here, and only here. Starlette hoists any
+    ``Exception``/500 handler out of ``ExceptionMiddleware`` into
+    ``ServerErrorMiddleware``, which sits outside every user middleware — so
+    ``TraceContextMiddleware`` has already run its ``finally`` and cleared the
+    ContextVar by the time we are called. Without this, the one case correlation
+    exists for (an unexplained 500) would be the one case with no ``trace_id`` in the
+    log and no ``traceparent`` on the response. The middleware also stashes the
+    context on the request scope's ``state``, which survives; we restore it around the
+    log call and echo it on the response. Every other handler keys on a specific
+    exception type, stays inside ``ExceptionMiddleware``, and needs none of this.
     """
     from app.services.translator import t
 
-    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    # Absent when the exception was raised above TraceContextMiddleware.
+    ctx: TraceContext | None = getattr(request.state, "trace_context", None)
+    token = set_trace_context(ctx) if ctx is not None else None
+    try:
+        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    finally:
+        if token is not None:
+            reset_trace_context(token)
     return JSONResponse(
         status_code=500,
         content={
@@ -365,4 +385,5 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
                 "detail": {},
             }
         },
+        headers={"traceparent": ctx.to_traceparent()} if ctx is not None else None,
     )
