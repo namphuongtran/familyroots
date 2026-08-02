@@ -1,7 +1,7 @@
 """FamilyRoots FastAPI application factory."""
 
 import logging
-import secrets as _secrets
+import secrets
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
@@ -253,11 +253,17 @@ def create_app() -> FastAPI:
         Envelope-exempt like /health: the body is text/plain exposition format.
         """
         token = request.headers.get("X-Metrics-Token")
+        # Compare BYTES, not str: Starlette decodes header bytes as latin-1, so any
+        # byte >= 0x80 yields a non-ASCII str and compare_digest(str, str) raises
+        # TypeError -> an unauthenticated 500 that distinguishes this endpoint from a
+        # nonexistent path, defeating the ADR-021 non-enumeration property.
         if (
             not settings.METRICS_ENABLED
             or not settings.METRICS_TOKEN
             or token is None
-            or not _secrets.compare_digest(token, settings.METRICS_TOKEN)
+            or not secrets.compare_digest(
+                token.encode("utf-8"), settings.METRICS_TOKEN.encode("utf-8")
+            )
         ):
             raise StarletteHTTPException(status_code=404)
         return Response(
