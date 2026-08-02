@@ -16,7 +16,9 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `SUPABASE_URL` | `""` | Supabase project URL (auth JWKS, storage) | **Boot fails** if empty |
 | `SUPABASE_SERVICE_ROLE_KEY` | `""` | Service-role key (register/storage; bypasses RLS) | **Boot fails** if empty |
 | `SUPABASE_ANON_KEY` | `""` | Anon key (sign-in) | **Boot fails** if empty |
-| `SUPABASE_STORAGE_BUCKET` | `family-roots-files` | Blob bucket ([storage](../architecture/storage.md)) | Default is correct |
+| `SUPABASE_STORAGE_BUCKET` | `family-roots-files` | **Private** blob bucket ([storage](../architecture/storage.md)) | Default is correct |
+| `SUPABASE_AVATAR_BUCKET` | `family-roots-avatars` | **Public-read** avatars bucket (ADR-036). Must differ from `SUPABASE_STORAGE_BUCKET` | Default is correct, but **the bucket must be created by hand** per environment (Supabase dashboard, public read). Until then set-avatar returns `503 storage_bucket_not_configured` |
+| `AVATAR_CACHE_CONTROL_SECONDS` | `300` | `Cache-Control: max-age` on published avatars. The path is stable per person, so this is how long a replaced portrait can still be served stale | Tune for cacheability vs freshness |
 | `FIREBASE_CREDENTIALS_PATH` | `./firebase-credentials.json` | FCM service-account file | Optional — missing file just disables pushes (warning) |
 | `SENTRY_DSN` | `""` | Sentry error reporting | Optional — empty disables Sentry |
 | `CORS_ORIGINS` | localhost:3000/8080 | Allowed browser origins (JSON list) | **Boot fails** if `["*"]` or any localhost origin |

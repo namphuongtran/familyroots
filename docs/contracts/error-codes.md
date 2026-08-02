@@ -209,8 +209,12 @@ See also **Optimistic concurrency** above: `PATCH /relationships/marriages/{id}`
 | `file_too_large` | 400 | Upload exceeds the size limit | `max_bytes` | Show size limit |
 | `document_not_linked_to_person` | 422 | Setting a document as avatar when it has no `person_id` | — | Explain requirement |
 | `only_photo_can_be_avatar` | 422 | Setting a non-photo document as avatar | — | Explain requirement |
+| `document.avatar_source_outside_clan` | 422 | Clan backstop on set-avatar: the document's storage key is not under the acting clan's prefix (ADR-036) | `document_id` | Should be unreachable — report it |
+| `person.avatar_url_invalid` | 422 | A published avatar URL was not an absolute http(s) URL within 500 chars (server-side invariant, ADR-036) | `max_length` | Should be unreachable — report it |
+| `person.avatar_url_not_permanent` | 422 | A published avatar URL carried a query string or fragment, i.e. was presigned/expiring (ADR-036) | — | Should be unreachable — report it |
 | `storage_not_found` | 404 | Referenced storage object missing from the storage backend | — | Treat as missing file |
 | `storage_unavailable` | 503 | Storage backend outage/misconfiguration | — | Retry-later banner |
+| `storage_bucket_not_configured` | 503 | The public avatars bucket is missing, unreachable, or not public-read — an operator action, not a transient outage (ADR-036) | — | "Avatars unavailable in this environment"; a retry will not help |
 
 Note: the three upload-validation codes are emitted with **400** (domain
 `ValidationError` falls through the domain→HTTP mapper's default), unlike other
