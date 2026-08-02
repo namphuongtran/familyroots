@@ -5,6 +5,7 @@ import logging
 import sys
 
 from app.core.config import settings
+from app.core.trace_context import get_trace_context
 
 
 class JsonFormatter(logging.Formatter):
@@ -17,6 +18,16 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        # Correlation fields, present only inside a request. Absent (not null) for
+        # scheduler/purge work so a log query for trace_id never matches system jobs.
+        ctx = get_trace_context()
+        if ctx is not None:
+            payload["trace_id"] = ctx.trace_id
+            payload["span_id"] = ctx.span_id
+            if ctx.route is not None:
+                payload["route"] = ctx.route
+            if ctx.clan_id is not None:
+                payload["clan_id"] = ctx.clan_id
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)
