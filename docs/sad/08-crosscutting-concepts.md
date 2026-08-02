@@ -157,11 +157,28 @@ graph LR
 
 ## 8.9 Observability and audit
 
+- **Correlation:** every request carries a W3C `traceparent` — `TraceContextMiddleware`
+  continues an inbound one or generates a new one, and sits just inside `CORS` in the
+  chain (outermost → innermost: `TrustedHost → CORS → TraceContext → Language →
+  RequestMeta → Sentry → RateLimit`) so every log line for the request, including a
+  localized 429 from the rate limiter, carries it.
+- **Logs:** JSON log lines gain `trace_id`/`span_id`, plus `route`/`clan_id` where known,
+  while inside a request. Outside one (scheduler, purge jobs) those keys are **absent**,
+  not null, so a trace-id log search never matches system-initiated work.
+- **Response/CORS:** the response echoes `traceparent`, and CORS exposes it — browsers
+  hide non-safelisted response headers from JS otherwise — so a web client can show the
+  user a trace id to quote to an admin.
+- **Errors/tracing:** Sentry keeps its own distributed tracing (FastAPI integration,
+  `sentry-trace` / `baggage` headers) on backend, web, and mobile (mobile init still
+  TODO); we additionally tag events with `trace_id`, the pivot from a Sentry issue to
+  log search.
+- **Metrics:** RED metrics at `GET /internal/metrics` — opt-in (`METRICS_ENABLED`),
+  token-guarded (`X-Metrics-Token` header vs `METRICS_TOKEN`), 404 on every failure path
+  (ADR-021), envelope-exempt like `/health`.
 - **Audit:** every mutation writes `audit_logs` in the same transaction, enriched with
   client IP + User-Agent captured by `RequestMetaMiddleware` (ADR-021).
-- **Errors/tracing:** Sentry on backend, web, and mobile (mobile init still TODO).
 - **Health:** `GET /health` probes DB → 503 `degraded` when unreachable.
-- → [ops/monitoring.md](../ops/monitoring.md).
+- → ADR-033, [ops/monitoring.md](../ops/monitoring.md).
 
 ## 8.10 Security
 

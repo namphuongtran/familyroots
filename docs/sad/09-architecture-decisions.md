@@ -1,6 +1,6 @@
 # 9. Architecture Decisions
 
-Authoritative index: [docs/decisions/README.md](../decisions/README.md) (ADR-001 … 032).
+Authoritative index: [docs/decisions/README.md](../decisions/README.md) (ADR-001 … 033).
 This page groups them by the concern they settle.
 
 ## 9.1 Decision map

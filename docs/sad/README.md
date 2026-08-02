@@ -78,7 +78,7 @@ graph LR
   sad[docs/sad<br/>arc42 and C4 synthesis]:::host
   arch[docs/architecture<br/>per-surface design]:::comp
   con[docs/contracts<br/>frozen API spec]:::comp
-  adr[docs/decisions<br/>ADR 001-032]:::comp
+  adr[docs/decisions<br/>ADR 001-033]:::comp
   ops[docs/ops<br/>runbooks]:::comp
   code[(backend / web / mobile<br/>source of truth)]:::store
 
