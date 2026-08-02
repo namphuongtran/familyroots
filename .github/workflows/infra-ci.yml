@@ -5,15 +5,19 @@ on:
     branches: [main, develop]
     paths:
       - "infra/pulumi/**"
+      - ".github/workflows/infra-ci.yml"
   pull_request:
     branches: [main, develop]
     paths:
       - "infra/pulumi/**"
+      - ".github/workflows/infra-ci.yml"
 
 jobs:
   preview:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,23 +29,40 @@ jobs:
       - name: Set up Python
         run: uv python install
 
+      # Runs unconditionally: resolving the lockfile is the part of this job
+      # worth having even when no Pulumi credentials exist.
       - name: Install dependencies
         working-directory: infra/pulumi
         run: uv sync --frozen
 
+      # Pulumi credentials are an owner go-live action. Until
+      # PULUMI_ACCESS_TOKEN exists, skip with a warning instead of failing the
+      # run — the same gate web-ci.yml uses for VERCEL_TOKEN. Once the secret
+      # is added, previews resume automatically on the next PR.
+      - name: Check Pulumi token
+        id: gate
+        run: |
+          if [ -z "$PULUMI_ACCESS_TOKEN" ]; then
+            echo "::warning::PULUMI_ACCESS_TOKEN secret not configured — skipping Pulumi preview (owner go-live action)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Pulumi preview
+        if: steps.gate.outputs.configured == 'true'
         uses: pulumi/actions@v6
         with:
           command: preview
           work-dir: infra/pulumi
           stack-name: dev
           comment-on-pr: true
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -57,11 +78,20 @@ jobs:
         working-directory: infra/pulumi
         run: uv sync --frozen
 
+      - name: Check Pulumi token
+        id: gate
+        run: |
+          if [ -z "$PULUMI_ACCESS_TOKEN" ]; then
+            echo "::warning::PULUMI_ACCESS_TOKEN secret not configured — skipping Pulumi deploy (owner go-live action)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Pulumi up
+        if: steps.gate.outputs.configured == 'true'
         uses: pulumi/actions@v6
         with:
           command: up
           work-dir: infra/pulumi
           stack-name: prod
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
