@@ -49,6 +49,42 @@ async def test_get_presigned_url_raises_not_found(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("signed_url", [None, ""])
+async def test_get_presigned_url_rejects_empty_signed_url(
+    monkeypatch: pytest.MonkeyPatch, signed_url: str | None
+) -> None:
+    """A 200 with no URL must 503, not hand ``None`` back as if it were a URL.
+
+    storage3 2.31 types ``signedURL`` as ``str | None``; before that the adapter
+    returned whatever was in the key unchecked.
+    """
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.create_signed_url.return_value = {"signedURL": signed_url}
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
+    with pytest.raises(StorageUnavailableError):
+        await mod.SupabaseStorageAdapter().get_presigned_url("clans/x/documents/y.jpg")
+
+
+@pytest.mark.asyncio
+async def test_get_presigned_url_returns_url_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.create_signed_url.return_value = {"signedURL": "https://cdn.example/signed"}
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
+    url = await mod.SupabaseStorageAdapter().get_presigned_url("clans/x/documents/y.jpg")
+    assert url == "https://cdn.example/signed"
+
+
+@pytest.mark.asyncio
 async def test_upload_raises_unavailable_on_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.infrastructure.storage import supabase_adapter as mod
 

@@ -5,27 +5,30 @@ description = "FamilyRoots — FastAPI backend service for Vietnamese family gen
 requires-python = ">=3.14"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "fastapi>=0.135.1",
+    "fastapi>=0.141.1",
     # FastAPI itself declares only starlette>=0.46.0 with no upper bound, so its
     # major version is decided silently by whichever transitive dependency happens
     # to pin tightest (prometheus-fastapi-instrumentator forced 1.x here). Declared
     # directly so any future major bump shows up in a diff a human reads, not only
     # in uv.lock.
     "starlette>=1.3.1,<2",
-    "uvicorn[standard]>=0.41.0",
-    "sqlalchemy[asyncio]>=2.0.48",
-    "psycopg[binary]>=3.2",
-    "pydantic[email]>=2.12.5",
-    "pydantic-settings>=2.13.1",
-    "alembic>=1.18.4",
+    "uvicorn[standard]>=0.52.1",
+    "sqlalchemy[asyncio]>=2.0.51",
+    "psycopg[binary]>=3.3.4",
+    "pydantic[email]>=2.13.4",
+    "pydantic-settings>=2.14.2",
+    "alembic>=1.18.5",
     "python-jose[cryptography]>=3.5.0",
-    "httpx>=0.28.1",
-    "supabase>=2.28.0",
-    "firebase-admin>=7.2.0",
-    "python-multipart>=0.0.22",
-    "apscheduler>=3.11.2",
-    "sentry-sdk[fastapi]>=2.54.0",
-    "prometheus-fastapi-instrumentator>=7.1.0",
+    # httpx is frozen at 0.28.1; httpx2 is its successor and the client Starlette 1.x
+    # wants (TestClient warns without it). Both are present because supabase and
+    # firebase-admin still pull httpx transitively — first-party code uses httpx2.
+    "httpx2>=2.9.1",
+    "supabase>=2.31.0",
+    "firebase-admin>=7.5.0",
+    "python-multipart>=0.0.32",
+    "apscheduler>=3.11.3",
+    "sentry-sdk[fastapi]>=2.66.1",
+    "prometheus-fastapi-instrumentator>=8.1.0",
 ]
 
 [project.optional-dependencies]
@@ -128,6 +131,7 @@ forbidden_modules = [
     "alembic",
     "supabase",
     "httpx",
+    "httpx2",
     "jose",
     "firebase_admin",
     "apscheduler",
@@ -209,15 +213,24 @@ markers = [
     "integration: Integration tests",
     "slow: Slow tests",
 ]
+# Test output stays pristine, so every silenced warning needs a reason and a
+# narrow match — never a blanket ignore.
+filterwarnings = [
+    # firebase-admin 7.5 wants Message.fid, a Firebase Installation ID. We target
+    # devices by registration token, which is a different identifier and a
+    # mutually exclusive wire field. Migrating requires a mobile-client change
+    # first — see the comment in app/services/notification.py.
+    "ignore:Message.token is deprecated:DeprecationWarning",
+]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
+    "httpx2>=2.9.1",
     "import-linter>=2.13",
-    "mypy>=1.19.1",
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=7.0.0",
-    "ruff>=0.15.5",
+    "mypy>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.1",
     "types-python-jose>=3.3.0",
 ]

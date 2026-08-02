@@ -62,7 +62,10 @@ from app.infrastructure.persistence.relationship_repository import (
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.services import scheduler
 
-pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+# No blanket asyncio mark: this module mixes async tests with two synchronous
+# source-scan gates, and pytest 9.1 warns when the mark lands on a sync function.
+# asyncio_mode="auto" (pyproject) already collects the async ones.
+pytestmark = pytest.mark.integration
 
 _PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 

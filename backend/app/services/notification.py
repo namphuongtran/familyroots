@@ -60,6 +60,13 @@ def _build_message(
             body=t(body_key, locale=locale, **kwargs),
         ),
         data={k: str(v) for k, v in (data or {}).items()},
+        # firebase-admin 7.5 deprecates Message.token in favour of Message.fid, but
+        # they are NOT the same identifier: `fid` is a Firebase Installation ID and
+        # `token` a device registration token, and the encoder treats them as
+        # mutually exclusive targets. What we store is what the Flutter client's
+        # getToken() returns — a registration token. Switching to `fid` needs the
+        # mobile client to send installation IDs first, so it is a product change,
+        # not a rename. The DeprecationWarning is filtered in pyproject.toml.
         token=fcm_token,
         android=messaging.AndroidConfig(priority="normal"),
         apns=messaging.APNSConfig(

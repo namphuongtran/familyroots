@@ -108,4 +108,10 @@ class SupabaseStorageAdapter:
             )
         except Exception as e:
             raise _classify_storage(e) from e
-        return result["signedURL"]
+        signed_url = result["signedURL"]
+        if not signed_url:
+            # storage3 2.31 types signedURL as str | None. A success response with
+            # no URL is a provider fault, not a code bug — same class as a 5xx, so
+            # it 503s instead of handing None to the caller as if it were a URL.
+            raise StorageUnavailableError(f"storage returned no signed URL for {storage_path!r}")
+        return signed_url

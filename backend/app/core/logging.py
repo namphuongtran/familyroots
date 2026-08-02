@@ -45,8 +45,10 @@ def configure_logging() -> None:
     root.handlers.clear()
     root.addHandler(handler)
 
-    # Quiet noisy libraries
+    # Quiet noisy libraries. Both HTTP clients are live: first-party code uses
+    # httpx2, while supabase and firebase-admin still pull httpx transitively.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(
         logging.INFO if settings.APP_DEBUG else logging.WARNING
     )

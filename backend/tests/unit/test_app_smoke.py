@@ -19,7 +19,16 @@ EXPECTED_ROUTES = {
 
 
 def test_app_builds_and_mounts_core_routes() -> None:
+    """Assert against the OpenAPI schema, not ``app.routes``.
+
+    FastAPI 0.141 stopped flattening ``include_router`` children into
+    ``app.routes``; it stores lazy ``_IncludedRouter`` wrappers there instead and
+    resolves them per request. Walking ``app.routes`` therefore reports only the
+    four routes declared directly on the app, and the old assertion passed for
+    years only because the flattening happened to be eager. The schema is also
+    the better subject: it is what clients bind to.
+    """
     app = create_app()
-    paths = {getattr(r, "path", None) for r in app.routes}
+    paths = set(app.openapi()["paths"])
     missing = EXPECTED_ROUTES - paths
     assert not missing, f"routes missing from assembled app: {sorted(missing)}"

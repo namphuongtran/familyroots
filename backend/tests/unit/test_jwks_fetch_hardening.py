@@ -3,7 +3,7 @@
 On a cache miss (cold start or hourly TTL expiry) every request needing token
 verification goes through get_supabase_jwks. Without a timeout a hung Supabase
 JWKS endpoint stalls the whole service; without error mapping a transport
-failure escapes as a raw httpx exception → opaque 500 instead of the 503
+failure escapes as a raw httpx2 exception → opaque 500 instead of the 503
 auth_provider_unavailable envelope the rest of the auth path uses.
 """
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from typing import Any, ClassVar
 
-import httpx
+import httpx2
 import pytest
 
 from app.core import security
@@ -40,7 +40,7 @@ class _FailingClient:
         return None
 
     async def get(self, url: str) -> Any:
-        raise httpx.ConnectTimeout("connection timed out")
+        raise httpx2.ConnectTimeout("connection timed out")
 
 
 class _CapturingClient:
@@ -97,7 +97,7 @@ class _NonJsonClient:
 async def test_jwks_transport_failure_maps_to_identity_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(httpx, "AsyncClient", _FailingClient)
+    monkeypatch.setattr(httpx2, "AsyncClient", _FailingClient)
     with pytest.raises(IdentityUnavailableError):
         await security.get_supabase_jwks()
 
@@ -107,8 +107,8 @@ async def test_jwks_non_json_body_maps_to_identity_unavailable(
 ) -> None:
     """A 200 with a non-JSON body (proxy/captive-portal error page) must be a truthful
     503, not a JSONDecodeError -> 500 on every token-verified request during the
-    cache-miss window (resp.json() previously sat outside the httpx.HTTPError guard)."""
-    monkeypatch.setattr(httpx, "AsyncClient", _NonJsonClient)
+    cache-miss window (resp.json() previously sat outside the httpx2.HTTPError guard)."""
+    monkeypatch.setattr(httpx2, "AsyncClient", _NonJsonClient)
     with pytest.raises(IdentityUnavailableError):
         await security.get_supabase_jwks()
 
@@ -117,6 +117,6 @@ async def test_jwks_client_is_constructed_with_a_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _CapturingClient.kwargs = {}
-    monkeypatch.setattr(httpx, "AsyncClient", _CapturingClient)
+    monkeypatch.setattr(httpx2, "AsyncClient", _CapturingClient)
     await security.get_supabase_jwks()
     assert _CapturingClient.kwargs.get("timeout") is not None

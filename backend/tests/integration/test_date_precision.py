@@ -33,7 +33,7 @@ from zoneinfo import ZoneInfo
 import pytest
 import sqlalchemy as sa
 from fastapi import Header
-from httpx import ASGITransport, AsyncClient
+from httpx2 import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.core.database  # noqa: F401

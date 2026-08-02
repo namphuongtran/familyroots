@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
+import httpx2
 from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -61,7 +61,7 @@ async def get_supabase_jwks() -> dict[str, Any]:
         # Bounded fetch: on a cache miss every request needing token verification
         # funnels through here, so a hung JWKS endpoint must fail fast (503 via
         # IdentityUnavailableError) instead of stalling the whole service.
-        async with httpx.AsyncClient(timeout=_JWKS_FETCH_TIMEOUT) as client:
+        async with httpx2.AsyncClient(timeout=_JWKS_FETCH_TIMEOUT) as client:
             url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
             try:
                 resp = await client.get(url)
@@ -69,10 +69,10 @@ async def get_supabase_jwks() -> dict[str, Any]:
                 # .json() must stay INSIDE the guard: a 200 with a non-JSON body (a
                 # captive portal / proxy / gateway returning an HTML error page) makes
                 # it raise ValueError (json.JSONDecodeError), which is NOT an
-                # httpx.HTTPError — so outside this try it would escape as a 500 on
+                # httpx2.HTTPError — so outside this try it would escape as a 500 on
                 # every token-verified request during the cache-miss window.
                 jwks = resp.json()
-            except httpx.HTTPError as exc:
+            except httpx2.HTTPError as exc:
                 raise IdentityUnavailableError(f"JWKS fetch failed: {exc}") from exc
             except ValueError as exc:
                 raise IdentityUnavailableError(f"JWKS response was not valid JSON: {exc}") from exc
