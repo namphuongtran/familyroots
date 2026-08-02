@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ADR-034: generated code (*.g.dart, *.freezed.dart) is COMMITTED, never
+# ignored, so a fresh clone analyses and tests without a build step.
+.dart_tool/
+build/
+.flutter-plugins-generated
+*.iml

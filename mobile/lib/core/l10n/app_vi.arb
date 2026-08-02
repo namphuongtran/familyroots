@@ -1,0 +1,102 @@
+{
+  "@@locale": "vi",
+
+  "appName": "Gia Phả",
+  "greeting": "Kính chào",
+  "familyNameTitle": "Dòng họ {surname}",
+  "@familyNameTitle": {
+    "description": "Main family name on home page",
+    "placeholders": {
+      "surname": { "type": "String" }
+    }
+  },
+  "searchAction": "Tìm kiếm",
+  "addMemberAction": "Thêm người",
+  "eventsAction": "Sự kiện",
+  "genealogyAction": "Gia phả",
+  "upcomingEvents": "Sự Kiện Sắp Tới",
+  "viewAll": "Xem tất cả",
+  "recentActivity": "Hoạt Động Mới Nhất",
+  "hoursAgo": "{count} giờ trước",
+  "@hoursAgo": {
+    "description": "Relative time display",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "loginTitle": "Đăng nhập",
+  "loginSubtitle": "Lưu giữ cội nguồn - Kết nối tương lai",
+  "emailLabel": "Email",
+  "emailHint": "Nhập email của bạn",
+  "passwordLabel": "Mật khẩu",
+  "passwordHint": "Nhập mật khẩu",
+  "forgotPassword": "Quên mật khẩu?",
+  "loginButton": "Đăng Nhập",
+  "orDivider": "Hoặc",
+  "noAccountPrompt": "Chưa có tài khoản? ",
+  "registerLink": "Đăng ký ngay",
+
+  "registerTitle": "Tạo Tài Khoản",
+  "registerSubtitle": "Bắt đầu hành trình lưu giữ di sản gia đình",
+  "fullNameLabel": "Họ và tên",
+  "fullNameHint": "Nhập họ và tên của bạn",
+  "confirmPasswordLabel": "Xác nhận mật khẩu",
+  "confirmPasswordHint": "Nhập lại mật khẩu",
+  "registerButton": "Đăng Ký",
+  "hasAccountPrompt": "Đã có tài khoản? ",
+  "loginLink": "Đăng nhập",
+
+  "membersTitle": "Thành viên",
+  "searchMembersHint": "Tìm kiếm thành viên...",
+  "generationBranch": "Đời thứ {gen} · Nhánh {branch}",
+  "@generationBranch": {
+    "description": "Member generation and branch info",
+    "placeholders": {
+      "gen": { "type": "int" },
+      "branch": { "type": "int" }
+    }
+  },
+
+  "genealogyTitle": "Gia Phả",
+  "addBranch": "Thêm nhánh",
+  "generationLabel": "Đời thứ {number}",
+  "@generationLabel": {
+    "description": "Generation label in family tree",
+    "placeholders": {
+      "number": { "type": "int" }
+    }
+  },
+
+  "memberCount": "{count, plural, =0{Chưa có thành viên} =1{1 thành viên} other{{count} thành viên}}",
+  "@memberCount": {
+    "description": "Member count with plural",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "deathAnniversaryNotification": "Ngày giỗ của {name} còn {days} ngày nữa",
+  "@deathAnniversaryNotification": {
+    "description": "Notification for upcoming death anniversary",
+    "placeholders": {
+      "name": { "type": "String" },
+      "days": { "type": "int" }
+    }
+  },
+
+  "profileBirthYear": "Năm sinh",
+  "profileStatus": "Tình trạng",
+  "profileStatusAlive": "Còn sống",
+  "profileDescendants": "Hậu duệ",
+  "biographyTitle": "Tiểu Sử",
+  "familyRelationsTitle": "Quan hệ gia đình",
+  "relationFather": "Bố",
+  "relationMother": "Mẹ",
+  "relationWife": "Vợ",
+  "relationHusband": "Chồng",
+  "relationSon": "Con trai",
+  "relationDaughter": "Con gái",
+  "profileStatusDeceased": "Đã mất",
+  "lunarCalendar": "Âm lịch",
+  "solarCalendar": "Dương lịch"
+}
