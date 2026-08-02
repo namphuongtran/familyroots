@@ -119,6 +119,38 @@ nested `user`):
 { "data": { "id": "...", "email": "...", "full_name": "...", "...": "..." } }
 ```
 
+### Profile field semantics (login and `GET /me`)
+
+- `has_pending_membership` — true when the user has any membership row with
+  `is_approved = false`. **Both** `POST /login` and `GET /me` compute it from the
+  same query port, so they agree for the same user; clients do not need a
+  follow-up `GET /me` after login just to read this flag.
+- `preferred_locale` — echoed from the session's identity metadata
+  (`user_metadata.preferred_locale`), validated against `vi|en|zh|fr`; unknown or
+  absent → `"vi"`. `GET /me` reads the claim off the **presented access token**, so
+  a value written by `PATCH /me` appears here from the next token refresh onward.
+- `clan_id`/`clan_name`/`role`/`is_approved` describe **one** membership, chosen
+  deterministically — see below.
+
+### Which membership login returns (multi-clan users)
+
+A user may belong to several clans. `POST /login` returns exactly one membership,
+selected by a fixed, documented ordering
+([ADR-035](../decisions/035-deterministic-login-membership-selection.md)):
+
+1. **approved before pending** (`is_approved DESC`),
+2. then **oldest `joined_at` first** (the membership row's `created_at` — the same
+   value `GET /me/clans` exposes as `joined_at`),
+3. then **lowest `clan_id`** as a final tiebreak.
+
+`role` is non-null only when the selected membership is approved, so a
+purely-pending user gets `role: null`, `is_approved: false`. `GET /me` applies the
+same ordering over **approved memberships only**.
+
+This is a *landing hint*, not server-side state: clan selection is still the
+client's, sent per request as `X-Current-Clan-Id` (see
+[frontend-integration-guide.md](frontend-integration-guide.md#12-clan-resolution)).
+
 ## Versioning & Compatibility Rules
 - Adding optional auth/profile fields is non-breaking.
 - Changing login/register payload requirements is breaking.
@@ -127,3 +159,5 @@ nested `user`):
   breaking change deliberately accepted pre-frontend (no client consumed the
   old shape yet).
 - Keep error envelopes and token semantics stable across client releases.
+- The login membership-selection ordering (ADR-035) is load-bearing for client
+  bootstrap; changing it is a behaviour change requiring a new ADR.
