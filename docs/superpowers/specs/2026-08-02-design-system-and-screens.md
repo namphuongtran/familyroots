@@ -382,24 +382,26 @@ Three clan roles. The rule is **remove, do not disable**.
 
 | Surface | admin | editor | viewer |
 |---|---|---|---|
-| Person profile header | `Sửa`, `Xóa`, `⋯` | `Sửa` | *(no buttons)* |
+| Person profile header | `Sửa`, `Xóa`, `⋯` | `Sửa` | **`Đề nghị sửa`** (§7.9a) |
 | Member list | `+ Thêm thành viên` FAB | `+ Thêm thành viên` FAB | *(no FAB)* |
-| Tree node long-press sheet | Xem · Sửa · Thêm con · Thêm vợ/chồng · Đặt thủy tổ | Xem · Sửa · Thêm con · Thêm vợ/chồng | Xem hồ sơ · Tìm quan hệ |
+| Tree node long-press sheet | Xem · Sửa · Thêm con · Thêm vợ/chồng · Đặt thủy tổ | Xem · Sửa · Thêm con · Thêm vợ/chồng | Xem hồ sơ · Tìm quan hệ · **Đề nghị sửa** |
 | `clan_founder_not_found` | `Chọn thủy tổ` CTA | read-only explainer | read-only explainer |
 | Events | tạo/sửa/xóa | tạo/sửa/xóa | *(no buttons)* |
 | Documents | tải lên, xóa | tải lên | *(no buttons)* |
+| Change-request queue (`Đề nghị sửa`) | full clan queue, duyệt/từ chối | full clan queue, duyệt/từ chối | **own proposals only, read-only** |
 | Admin nav item | visible | hidden | hidden |
 
 A viewer sees **zero disabled controls**. A screen full of greyed buttons reads as
 "broken" to a non-technical user and as "you are not trusted" to a family member.
-Instead, the profile header carries one quiet, permanent line in `body-md` /
+A viewer now has a real contribution path (`POST /change-requests`, ADR-037), so the
+profile header carries a working action plus one quiet, permanent line in `body-md` /
 `on-surface-muted`:
 
-> Bạn đang xem gia phả với quyền **Người xem**. Để bổ sung hoặc sửa thông tin, xin liên
-> hệ quản trị dòng họ.
+> Bạn đang xem gia phả với quyền **Người xem**. Bạn có thể gửi đề nghị sửa để quản trị
+> hoặc biên tập viên xem xét.
 
-with `Xem danh sách quản trị` as a text link. See §9-J5 — the honest fix is a
-change-request feature that does not exist yet.
+Everything else a viewer cannot do is still absent rather than greyed. See §7.9 for the
+full flow and §9-J5 for how the old "no endpoint" gap was closed.
 
 ### 3.6 Error code → UI state
 
@@ -420,7 +422,20 @@ it). Codes below get a designed state; anything else falls through to the generi
 | `rate_limited` | 429 | Inline countdown from `detail.retry_after`; disable submit |
 | `auth_provider_unavailable`, `storage_unavailable` | 503 | Transient banner + retry — **never** "sai mật khẩu" |
 | `relationship.parent_too_young` | 422 | Inline field error on the parent field |
+| `change_request.target_conflict` | 409 | Reviewer conflict state (§7.9e) — **not** the same UI as `stale_write` |
+| `change_request.target_deleted` | 409 | Reviewer blocked state (§7.9e), offering restore or reject |
+| `change_request.not_pending` | 409 | "Đề nghị này đã được xử lý" + reload detail |
+| `change_request.field_not_submittable` | 422 | Should be unreachable — the proposal form omits those fields. If seen, inline error naming `detail.fields` |
+| `change_request.no_changes` | 422 | Should be unreachable — submit stays disabled until a field differs |
+| `change_request_not_found` | 404 | Plain "Không tìm thấy đề nghị này." Never "bạn không có quyền" — the queue is not an enumeration oracle |
 | `meta.warning` on a 2xx | — | Non-blocking toast after success, never a blocker |
+
+**Two staleness codes, two different screens.** `stale_write` (§7.7c) is *my* edit
+racing someone else's, resolved field-by-field by the person who was typing.
+`change_request.target_conflict` (§7.9e) is *someone else's week-old proposal* no longer
+applying, resolved by a reviewer who was not typing anything. They must never share a
+dialog: the first asks "which of your two versions?", the second asks "is this proposal
+still right?".
 
 ---
 
@@ -606,6 +621,17 @@ without hover (a `⋯` sheet, helper text, or an info button). Mobile has no too
 - **CursorList** — the only list primitive. Owns: first-page skeleton, empty, error,
   `Tải thêm`, end-of-list marker, and `invalid_cursor` recovery. No screen implements
   pagination itself.
+- **FieldDiff** — §7.9d. The three-way row (`base` / `proposed` / `current`) with its
+  three verdicts. The single most information-dense component in the product; it
+  collapses to two values when the third carries nothing.
+- **TargetStateBanner** — §7.9c. Renders the `target` block (`is_stale`, `is_deleted`,
+  `conflicts`) into one of four states and owns whether `Duyệt` exists at all.
+- **ProposalCard** — §7.9c. Queue row: requester, target person, field count, age, and
+  a triage pill computed from `target`.
+- **RoleBadge** — `Quản trị` / `Biên tập viên` / `Người xem`, tonal, always text.
+- **AuditRow** — §7.11: actor, action (server-localised), target, timestamp.
+- **DocumentTile** — §7.12. Type icon + title render before, and without, the image.
+- **ApprovalRow** — §7.10a: pending member with `Duyệt` / `Từ chối` and a role select.
 
 ---
 
@@ -869,7 +895,16 @@ vợ, con cháu — and move along it without getting lost.
 - Connectors are 2px `secondary` @ 40% curves. These are data relations, not section
   rules, so they are exempt from the no-line rule.
 - Floating glass toolbar, bottom-centre: `−` `100%` `+` · `Vừa khung` · `Chế độ danh
-  sách` · `Xuất PDF`. Exactly one glass surface on this screen.
+  sách` · `Xuất gia phả` (admin only — see below). Exactly one glass surface on this
+  screen.
+
+  **Correction to the first draft of this spec.** This toolbar previously carried
+  `Xuất PDF`, taken from the `Export tree as PDF` row in `rbac.md`. That row is an
+  aspirational permission with **no endpoint behind it** — PDF export is deferred by
+  ADR-020, depends on the unbuilt worker of ADR-005 and the unbuilt Redis of ADR-004,
+  and `format=pdf` would 422 today. Drawing it was the same mistake this spec refused
+  to make for `Đề nghị sửa`. The button is replaced by `Xuất gia phả` (§7.14), which is
+  **admin-only** and produces JSON or GEDCOM. See §9-J22.
 - Right side panel (≥1280) shows the selected person's summary and
   `Xem hồ sơ đầy đủ →`.
 - Depth control: `Hiển thị {n} đời` slider, 1–10, default 5 (not the API's 10 — ten đời
@@ -944,8 +979,9 @@ attempting to draw everything. *Error* — `ErrorState` with retry and a
 `Chế độ danh sách` fallback. *Offline* — last successfully loaded tree, OfflineBar,
 navigation limited to cached nodes.
 
-**Role.** Viewer: no long-press edit actions, no `Chọn thủy tổ`, `Xuất PDF` allowed
-(RBAC permits it for all roles).
+**Role.** Viewer: no long-press edit actions, no `Chọn thủy tổ`, and **no export
+control** — `GET /exports/clan` is admin-only. Viewer and editor get `Đề nghị sửa` on
+the node sheet (§7.9a); admin additionally gets `Xuất gia phả`.
 
 ---
 
@@ -1189,6 +1225,788 @@ events (RBAC allows editors to delete events).
 
 ---
 
+### 7.9 Đề nghị sửa — change requests
+
+**Purpose.** Close the loop that J5 could not: the people who know a birth date is wrong
+are the relatives reading the tree, not the two or three members with edit rights. A
+viewer proposes a correction to a person, field by field; an editor or admin reviews it.
+
+Backed by `POST/GET /change-requests`, `…/{id}/approve`, `…/{id}/reject`
+(`docs/contracts/rest-change-requests-api.md`, ADR-037). Scope in v1 is
+`action="update"` on `resource_type="person"` — the UI never exposes an action or
+resource picker, because there is nothing to pick.
+
+**Who sees what.** Submitting is open to every approved member; in practice viewers.
+Reviewing is **editor or admin** — an editor can already make the same edit
+unilaterally, so gating on admin would protect nothing and would stall the queue. A
+viewer sees only their own proposals on both list and detail; someone else's returns
+`404`, and the UI says "không tìm thấy", never "bạn không có quyền".
+
+#### 7.9a Gửi đề nghị (the viewer's submit flow)
+
+**Entry.** From the person profile a viewer now has a real header action,
+`Đề nghị sửa` (tonal, not primary — reading is still the main job on that screen). Each
+value row in `Ngày tháng`, `Tên gọi` and `Nơi chốn` additionally offers
+`Đề nghị sửa mục này` on tap/`⋯`, which opens the same form with that one field
+pre-selected. Also reachable from the tree node sheet.
+
+**The form is the edit form.** The contract fixes `changes` to exactly the
+`PATCH /persons/{id}` body minus `expected_version`, explicitly "so a client can render
+one form for both". So §7.7's form is reused wholesale, including
+`HistoricalDateField`, with four differences:
+
+1. Header reads `Đề nghị sửa hồ sơ {tên}`, submit reads `Gửi đề nghị`.
+2. Every field starts at the record's current value and is visually marked once
+   touched — a `Đã sửa` chip on the field label and a running count in the sticky bar:
+   `Gửi đề nghị (2 mục)`. Only touched fields go into `changes`; an untouched field is
+   never proposed, which is what keeps `base_values` small and the merge (§7.9d) loose.
+3. A `note` field at the bottom, `Vì sao bạn cho rằng cần sửa?`, multiline, optional but
+   **visually encouraged** (helper: *"Ví dụ: gia phả chép tay trang 12 ghi năm Canh
+   Thân."*). Reviewers act on evidence; an unexplained proposal is a guess.
+4. **`Số điện thoại` and `Email` are absent from the form**, not disabled — they are not
+   proposable, and the reason is worth one line rather than a mystery:
+   *"Số điện thoại và email không đề nghị sửa được — đây là thông tin liên lạc, không
+   phải nội dung gia phả."* `avatar_url` is likewise absent (it is server-managed).
+
+**Submit gating.** `Gửi đề nghị` stays disabled until at least one field differs from
+the record, so `422 change_request.no_changes` is unreachable by construction. This is
+the one place a disabled control is correct — it is a transient form state, not a
+permission (§4.1).
+
+**Success.** Not a toast — a full confirmation, because the user needs to know a human
+is now involved:
+
+> **Đã gửi đề nghị**
+> Đề nghị sửa hồ sơ **Trần Đình Đàm** đã được gửi tới quản trị và biên tập viên của dòng
+> họ. Bạn sẽ thấy kết quả trong mục **Đề nghị của tôi**.
+> [Xem đề nghị của tôi] [Về hồ sơ]
+
+There is **no notification** when a proposal is submitted or reviewed (ADR-037 defers
+it), so the confirmation must not promise one. "Bạn sẽ thấy kết quả trong mục Đề nghị
+của tôi" is true; "chúng tôi sẽ báo cho bạn" would not be. See §9-J16.
+
+**Errors.** `404 person_not_found` (target deleted while the form was open) →
+`warning-container` banner *"Người này vừa được xóa khỏi gia phả nên không gửi đề nghị
+được."* with the text preserved and a `Sao chép nội dung của tôi` escape.
+`422 change_request.field_not_submittable` should be unreachable; if it fires, the
+inline error names `detail.fields` rather than showing a raw code.
+
+#### 7.9b Đề nghị của tôi (the requester's own list)
+
+**Purpose.** The requester asked a question of the clan; this is where the answer lands.
+
+**Mobile.** Tabs `Đang chờ` | `Đã duyệt` | `Bị từ chối` (mapping to `status`), a
+`CursorList` of cards. Each card: target person (avatar + name + đời), the proposed
+fields as chips (`Ngày mất`, `Nơi sinh`), the note excerpt, and relative age
+(`Gửi 3 ngày trước`). Resolved cards additionally carry the outcome:
+
+- Approved — `success-container` strip, `Đã được duyệt · bác Vinh · 12/08`, plus
+  `review_notes` when present, and `Xem hồ sơ` to see the applied result.
+- Rejected — `surface-container-high` (**not** `danger`), `Không được duyệt · bác Vinh ·
+  12/08` and the `review_notes` verbatim. A declined suggestion from a relative is not
+  an error and must not be coloured like one (§9-J15).
+
+**Desktop.** Same list at max-width 720 in the content column; no table — these are
+prose-carrying items, not tabular data.
+
+**There is no withdraw action**, because there is no endpoint for one. The UI does not
+draw a `Thu hồi` button it cannot honour; a pending card instead reads
+*"Đang chờ quản trị hoặc biên tập viên xem xét."* Flagged in §9-J16.
+
+**States.** *Loading* — 3 card skeletons. *Empty* — `Bạn chưa gửi đề nghị nào.` plus one
+line explaining what the feature is for and `Xem cây gia phả`. *Error* — `ErrorState`.
+
+#### 7.9c Hàng đợi đề nghị (the reviewer's queue)
+
+**Purpose.** Let a busy trưởng họ triage on a phone in under a minute, and never open a
+proposal only to find it cannot be actioned.
+
+**Entry.** On web, a sidebar item `Đề nghị sửa` for editor+ with a pending count badge.
+On mobile the bottom nav's five slots are all spoken for, so the entry is a counted chip
+in the dashboard app bar (`✎ 3`) — the slot the removed notification bell used to occupy
+(§9-J24) — plus the `Cần bạn xử lý` dashboard card (§7.3 card 5). The queue is a pushed
+route with a back arrow, not a nav destination, on mobile.
+
+**Mobile.** Filter chips `Đang chờ` (default) | `Đã duyệt` | `Bị từ chối`, then a
+`CursorList` of `ProposalCard`s:
+
+```
+Trần Đình Đàm            Đời 2        [Sẵn sàng duyệt]
+2 mục · Ngày mất, Nơi mất
+"Gia phả chép tay trang 12 ghi năm Canh Thân"
+anh Hải · 3 ngày trước
+```
+
+**The triage pill is computed from `target`, and it is the whole point of the card.**
+It is what stops a reviewer opening ten proposals to find the two they can act on:
+
+| `target` | Pill | Colour |
+|---|---|---|
+| `is_deleted: true` | `Người đã bị xóa` | `warning` |
+| `conflicts` non-empty | `Có xung đột ({n} mục)` | `danger` |
+| `is_stale: true`, `conflicts: []` | `Sẵn sàng duyệt` | `success` |
+| not stale | `Sẵn sàng duyệt` | `success` |
+
+Note the last two rows are deliberately identical. `is_stale` alone is the *normal,
+harmless* case — somebody edited a different field — and approval still succeeds with
+both edits surviving. Surfacing it as a warning would train reviewers to fear a
+non-event. See §9-J14.
+
+**Desktop.** Two-pane at ≥1280: queue list 380px on the left, review detail on the
+right, so a reviewer with a screen can work the queue without navigating. Below 1280 it
+is list → detail like mobile.
+
+**States.** *Loading* — 4 card skeletons. *Empty pending* — `Không có đề nghị nào đang
+chờ.` plus, on first-ever use, one line explaining that members can now propose
+corrections. *Empty approved/rejected* — plain. *Error* — `ErrorState`.
+`400 invalid_cursor` → drop and refetch silently, per §3.6.
+
+**Role.** Viewers never see this nav item; if they deep-link, the same route renders
+§7.9b (their own proposals) rather than an error — the API scopes them to their own
+rows anyway, so the honest UI is "this is your list", not "access denied".
+
+#### 7.9d Xem xét một đề nghị — the three-value comparison
+
+**Purpose.** Show the reviewer exactly what would change and what it would overwrite,
+on a phone, without a spreadsheet.
+
+**Layout, top to bottom.**
+
+1. **Target header** — avatar, person name (`title-lg`, links to the profile), đời badge.
+2. **Provenance** — `anh Hải đề nghị · 3 ngày trước`, and the `note` in `body-lg` on
+   `surface-container-low`. The note is the reviewer's evidence; it is not a footnote.
+3. **TargetStateBanner** (§7.9e) — only when it has something to say.
+4. **The field list** — one `FieldDiff` per proposed field.
+5. **Sticky action bar** — `Duyệt` primary + `Từ chối` ghost, or per §7.9e.
+
+**FieldDiff — three values, shown only when the third means something.** The API always
+sends `base`, `proposed`, and (via the target snapshot) `current`. Rendering all three
+every time would be honest and unusable: on the common path `base == current` and the
+third column is pure noise on a 360dp screen. So the component has three renderings,
+one per merge verdict (ADR-037 §5):
+
+*Verdict A — `current == base` (nobody touched this field). Two values:*
+
+```
+Ngày mất
+  Hiện tại        khoảng 1851   [khoảng]
+  Đề nghị sửa     15/11/1851
+```
+`surface-container-low`, neutral. The proposed value is the emphasised one.
+
+*Verdict B — `current == proposed` (someone already made this exact correction).
+Informational, deemphasised, and it still approves:*
+
+```
+Nơi mất                                    [Đã sửa rồi]
+  Gia phả hiện đã ghi   Làng Hành Thiện, Nam Định
+  Đề nghị này cũng ghi đúng như vậy — duyệt sẽ không đổi gì thêm.
+```
+`surface-container`, `on-surface-variant`. This case is why the merge is loose; showing
+it as a change would be a lie.
+
+*Verdict C — conflict (`current` is neither). All three, and this is where the design
+spends its contrast:*
+
+```
+Ngày mất                                   [Xung đột]
+  Lúc gửi đề nghị      1919                        ← base
+  Người đề nghị muốn   khoảng 1920                 ← proposed
+  Gia phả hiện ghi     31/12/1921  · bác Vinh sửa  ← current, emphasised
+```
+`danger-container`, and the **`current` row is the visually dominant one** — it is the
+value that would be destroyed, and it is the reason the button is gone.
+
+**Ordering is by verdict, not by field order: conflicts first, then real changes, then
+already-applied.** A reviewer scanning a phone must hit the blocker before the noise.
+
+**Section counts** above the list: `1 xung đột · 2 thay đổi · 1 đã sửa rồi`, `tabular-nums`.
+
+**Dates inside a diff** are rendered by `HistoricalDateDisplay` (§3.1) from the scalar
+`birth_date` / `_precision` / `_display` triple that `changes` and `conflicts` carry —
+**not** the `HistoricalDate` object. This is the contract's one documented shape
+exception and the diff component is the only place in the product that must know about
+it. See §9-J17.
+
+**Actions.**
+- `Duyệt` — confirmation dialog naming the person and the count:
+  *"Duyệt đề nghị và cập nhật hồ sơ **Trần Đình Đàm** (2 mục)?"* On success: toast
+  `Đã duyệt và cập nhật hồ sơ.` and return to the queue with the row moved to `Đã duyệt`.
+- `Từ chối` — sheet (mobile) / dialog (web) with an optional `review_notes` field,
+  helper *"Lời nhắn này hiển thị cho người đã gửi đề nghị."* A rejection with a reason
+  is the difference between a relative contributing again and not.
+
+**A consequence to surface.** Approval advances the person's `version` exactly as a
+`PATCH` would, so a reviewer who also has that person open in an edit form elsewhere
+will get `409 stale_write` (§7.7c) on their next save. That is correct and already
+designed for; the approve confirmation does not need to mention it, but the two flows
+must not be merged.
+
+**States.** *Loading* — header + three `FieldDiff`-shaped skeletons. *Already reviewed*
+(`409 change_request.not_pending`, or arriving at a resolved id) — the same comparison
+rendered read-only with an outcome strip and no action bar; `conflicts` is `[]` on
+reviewed proposals, so verdict C never appears here. *Offline* — read-only with the
+action bar replaced by *"Cần kết nối mạng để duyệt hoặc từ chối."*
+
+#### 7.9e Không duyệt được — the blocked and conflict states
+
+The contract is explicit that clients gate the Approve affordance on `conflicts` and
+`is_deleted`, and that the `target` block exists so a reviewer is warned **before** they
+press. So the rule is: **`Duyệt` is absent, not disabled, whenever it would fail.**
+
+**Conflict** (`conflicts` non-empty, or a `409 change_request.target_conflict` returned
+by a race between load and press):
+
+> **Không duyệt được — hồ sơ đã thay đổi**
+> Kể từ khi đề nghị này được gửi, **1 mục** đã được người khác sửa sang một giá trị
+> khác. Duyệt bây giờ sẽ xóa mất thay đổi mới hơn đó, nên hệ thống không cho duyệt.
+
+`danger-container`. Actions offered, both from the contract's recommended flow:
+
+1. `Từ chối đề nghị` — the newer value stands. Pre-fills `review_notes` with a
+   suggested, editable sentence naming the field:
+   *"Hồ sơ đã được cập nhật ngày mất là 31/12/1921 nên đề nghị này không còn áp dụng."*
+2. `Tự sửa hồ sơ` — opens §7.7's person edit form pre-filled with the **proposed**
+   values (they are already in PATCH body shape, which is exactly why the contract keeps
+   them unwrapped), so the reviewer can merge by hand. On save, returns here with
+   `Từ chối` pre-filled *"Đã sửa trực tiếp theo đề nghị này."*
+
+**There is deliberately no force-approve, and the UI must not imply one exists.** A
+reviewer hunting for it gets one line under the two buttons:
+*"Không có cách duyệt đè. Ghi đè thay đổi của người khác là việc phải làm trực tiếp trên
+hồ sơ, với giá trị của họ hiển thị trước mặt."*
+
+**Target deleted** (`is_deleted: true`, or `409 change_request.target_deleted`):
+
+> **Người này đã bị xóa khỏi gia phả**
+> Không thể duyệt đề nghị cho một hồ sơ đã bị xóa.
+
+`warning-container`. Admin gets `Khôi phục {tên}` (`POST /persons/{id}/restore`) — after
+which the banner re-evaluates and, because delete/restore bump `version` without
+touching any proposed field, the proposal typically becomes approvable with
+`is_stale: true, conflicts: []`. Editors, who cannot restore, get
+*"Quản trị dòng họ cần khôi phục người này trước."* Both roles keep `Từ chối`, which has
+no target preconditions at all — clearing an unactionable proposal out of the queue must
+always be possible.
+
+**Stale but harmless** (`is_stale: true`, `conflicts: []`) — an `info-container` line,
+**not** a warning, and `Duyệt` stays primary:
+
+> Hồ sơ đã được sửa ở mục khác kể từ khi có đề nghị này. Duyệt vẫn an toàn — cả hai
+> thay đổi đều được giữ.
+
+---
+
+### 7.10 Quản trị dòng họ — admin panel
+
+**Purpose.** The four things a trưởng họ actually does: let relatives in, decide what
+they may do, invite the ones who are not here yet, and keep the clan's own record
+straight.
+
+**Entry.** `Quản trị` nav item, admin only (hidden, not disabled, for editor and
+viewer). Sub-tabs: `Duyệt thành viên` · `Thành viên` · `Lời mời` · `Cài đặt` ·
+`Nhật ký`.
+
+**Mobile.** The admin panel is a phone-first surface — approvals happen from a phone
+at a family gathering, not at a desk. Tabs scroll horizontally; each tab is a
+`CursorList`.
+
+**Desktop.** Sidebar sub-navigation at ≥1024; content max-width 900.
+
+#### 7.10a Duyệt thành viên (pending approvals)
+
+`GET /clans/me/users/pending` → `ApprovalRow` per pending membership, with
+`POST …/{user_id}/approve` and `…/reject`.
+
+**Row content, and a blocker.** Approving a membership grants a stranger access to
+several hundred living relatives' records. It is an identity decision, and the API does
+not currently return an identity: `PendingClanUser` is `{id, user_id, role, created_at}`
+— no name, no email, and (unlike the sibling approved-members list) not even
+`person_id`. **A screen that asks "Duyệt `d95c1ee7-…`?" is not a screen we should
+ship.** So this spec designs the row the decision needs and names the gap precisely
+rather than papering over it. See §9-J18.
+
+Row, as designed (requires the gap closed):
+
+```
+Nguyễn Văn Hải                          [Xin làm Người xem]
+hai.nguyen@gmail.com
+Gửi yêu cầu 2 ngày trước
+                                    [Từ chối]  [Duyệt]
+```
+
+Interim rendering, until `full_name`/`email` are added: the row leads with
+`Yêu cầu tham gia` and the join date, shows a short id chip, and the primary action is
+**not** `Duyệt` but `Xem chi tiết`, which is honest about the admin needing to identify
+the person out of band. `Duyệt` appears only where an identity is shown.
+
+**Role select.** The requested role is shown as a chip; the admin can change it before
+approving via a `Duyệt với quyền…` menu (`Người xem` / `Biên tập viên` / `Quản trị`),
+defaulting to what was requested. Approving with a role is two calls (approve, then
+`PATCH …/role`) — the UI shows one action and one success.
+
+**States.** *Loading* — 3 row skeletons. *Empty* — `Không có ai đang chờ duyệt.` and a
+line pointing to `Lời mời` as the way to bring someone in. *Approving* — that row only
+enters loading; the rest stay live. *`409 user.already_approved`* — silently refetch and
+show `Người này đã được duyệt.` (another admin got there first — not an error).
+*`404 user_not_found`* — row disappears with `Yêu cầu này không còn nữa.`
+
+#### 7.10b Thành viên và vai trò
+
+`GET /clans/me/users`, `PATCH …/{user_id}/role`, `DELETE …/{user_id}`.
+
+Row: member identity (same gap as above), `RoleBadge`, joined date, and a `⋯` with
+`Đổi vai trò` and `Xóa khỏi dòng họ`.
+
+**Last-admin protection is the copy problem here.** Two codes, both 403, both meaning
+"the clan would be left with no admin". A bare "không thể" is a dead end; the message
+must say what to do instead:
+
+- `clan.last_admin_cannot_demote` → *"Đây là quản trị duy nhất của dòng họ. Hãy bổ nhiệm
+  thêm một quản trị khác trước khi hạ quyền người này."* with `Bổ nhiệm quản trị` opening
+  the member picker.
+- `clan.last_admin_cannot_remove` → same shape, *"…trước khi xóa người này khỏi dòng
+  họ."*
+
+Both are **predictable**, so the UI predicts them: when the clan has exactly one approved
+admin, that admin's row shows no `Đổi vai trò`/`Xóa` at all, plus one quiet line
+*"Dòng họ cần luôn có ít nhất một quản trị."* The 403 handling above remains as the
+race-condition backstop (two admins demoting each other simultaneously).
+
+- `clan.cannot_remove_self` → the admin's own row never carries `Xóa khỏi dòng họ`, for
+  any admin count. **There is no "Rời dòng họ" action anywhere in the product**, because
+  there is no endpoint for one — see §9-J19.
+- `clan.role_changed_concurrently` (409) → *"Vai trò vừa được người khác thay đổi."* +
+  refetch the row and show the current role; do not retry blindly.
+- `invalid_role` (422) → unreachable from a select; if seen, generic error.
+
+**Destructive confirmation.** `Xóa khỏi dòng họ` always confirms, names the person, and
+states the consequence in plain Vietnamese: *"Người này sẽ mất quyền xem gia phả dòng
+họ. Dữ liệu gia phả không bị xóa."*
+
+#### 7.10c Lời mời
+
+`POST/GET/DELETE /clans/{clan_id}/invitations`. Admin only.
+
+**Create.** Sheet/dialog: `Email` + `Vai trò` segmented (`Người xem` default, per the
+API). On 201 the response carries the raw `token` and `accept_path`, so success is a
+**one-time link reveal**, not a toast:
+
+> **Đã tạo lời mời cho hai.nguyen@gmail.com**
+> Gửi liên kết này cho người được mời. Liên kết có hiệu lực **7 ngày**.
+> `https://…/invitations/{token}/accept`   [Sao chép liên kết]
+> Chỉ người đăng nhập bằng đúng địa chỉ email trên mới dùng được liên kết này.
+
+The token is a secret: revealed once, never rendered in the list, never in a screenshot-
+friendly place, and the copy says what protects it (email binding) so an admin who
+forwards it to the wrong person understands the failure mode.
+
+**List.** Plain array, **not** cursor-paginated and with no server-side filters — so the
+list is client-filtered (`Đang chờ` / `Đã nhận` / `Hết hạn` / `Đã thu hồi`) and
+virtualized above ~200 rows.
+
+**Expiry must be computed client-side.** A timed-out invitation keeps `status:
+"pending"` until the next create for that email lazily flips it — there is no sweep. So
+the row derives its own state from `expires_at`:
+
+```
+hai.nguyen@gmail.com            Người xem
+Hết hạn 3 ngày trước                        [Mời lại]
+```
+
+`Mời lại` re-posts the same email+role; the backend expires the stale row and issues a
+fresh token, so this action reliably succeeds and re-opens the link reveal. A row whose
+`status` says `pending` but whose `expires_at` has passed must **never** be shown as
+`Đang chờ` — that would have an admin waiting on a dead link. See §9-J20.
+
+**Errors.** `invitation.pending_exists` (409) → not an error state: show the existing
+live invitation inline with `Sao chép liên kết` / `Thu hồi`, headed *"Đã có lời mời đang
+chờ cho địa chỉ này."* `invitation.not_pending`, `invitation.expired` → refetch the list.
+
+**Accept, from the invitee's side.** `POST /invitations/{token}/accept` works for a
+user who is authenticated but not yet approved anywhere, so the accept landing is
+reachable from the pending screen (§7.2a). States: success → `Bạn đã tham gia dòng họ
+{tên}` and route in; `invitation.email_mismatch` (403) → *"Lời mời này dành cho một địa
+chỉ email khác. Xin đăng nhập bằng địa chỉ đã được mời."* with `Đăng nhập bằng tài khoản
+khác`; `invitation.expired` (409) → *"Lời mời đã hết hạn. Xin liên hệ quản trị dòng họ để
+được mời lại."*; `invitation.already_member` (409) → not an error, route straight into
+the clan; `429 rate_limited` → countdown per §3.6.
+
+#### 7.10d Cài đặt dòng họ
+
+`GET /clans/me`, `PATCH /clans/me`, plus `PUT /clans/me/founder`.
+
+Fields: `Tên dòng họ`, `Mã dòng họ` (slug, with a warning that existing invite links and
+join codes keep working but the code people quote will change), `Mô tả`, `Nguồn gốc`
+(`origin_place`), `Năm thành lập`, `Câu đối / phương châm` (`motto`), `Nhà thờ họ`
+(`ancestral_hall_location`), `Tộc ước` (`clan_rules`, long text).
+
+**Thủy tổ** gets its own block, not a form field, because it is a designation and not an
+attribute: current founder as a person card, `Đổi thủy tổ` opening the searchable person
+picker from §7.4b, and the confirmation naming both people when swapping:
+*"Đặt **{tên mới}** làm thủy tổ thay cho **{tên cũ}**?"* Re-designating the current
+founder is a harmless no-op and the UI simply closes. `409 conflict` (lost the unique-
+index race) → *"Có người vừa đổi thủy tổ. Xin tải lại và thử lại."*
+
+**What this screen must not contain.** The `clan_settings` table (`allow_public_tree`,
+`privacy_level`, `tree_display_mode`, `max_upload_size_mb`, `notification_defaults`) is
+largely inert — nothing enforces those knobs today, and `max_upload_size_mb`'s default
+of 10 contradicts the domain's real 50 MB limit. **No toggle for an unenforced setting
+ships**, especially not a privacy toggle: a `Cho phép xem công khai` switch that does
+nothing is the most dangerous control we could draw. Filed in §9-J21.
+
+#### 7.10e Nhật ký hoạt động
+
+Clan audit log, admin only. `AuditRow`: actor, action (server-localised — `user.approve`,
+`user.change_role` with `old_value`→`new_value`, `person.update`,
+`change_request.submit`/`.approve`, `claim.approve`, `clan.update`, …), target, and an
+absolute timestamp with a relative one beneath.
+
+Filter chips by area (`Thành viên` / `Nhân khẩu` / `Đề nghị sửa` / `Nhận thân` /
+`Dòng họ`). Cursor-paginated. Empty: `Chưa có hoạt động nào được ghi.`
+
+This screen exists mostly for one question — *"ai đã sửa cụ tổ nhà tôi?"* — so a row for
+a person edit links straight to that person's profile.
+
+---
+
+### 7.11 Nhận thân — identity claims
+
+**Purpose.** Let a living member say *"bản ghi này chính là tôi"* and have an admin
+confirm it. This is what connects a login to a place in the tree, and it is the one flow
+where the product touches a person's own identity rather than an ancestor's record.
+
+#### 7.11a Gửi yêu cầu nhận thân
+
+**Entry.** `POST /persons/{id}/claim` from a person profile: `Đây là tôi` as a tonal
+action in the `⋯` menu (not in the header — it is rare, and the header belongs to
+reading). Sheet: the person card, a `requester_note` field
+(*"Cho quản trị biết vì sao đây là bạn — ví dụ: tôi là con ông Trần Đình Vinh."*), and
+`Gửi yêu cầu`.
+
+**One pending claim per user, globally.** This is a hard unique constraint, so the UI
+must not present a button that will 409. While the user has a pending claim, the action
+everywhere reads `Bạn đang có một yêu cầu nhận thân chờ duyệt` and links to it. If a
+409 `user_already_has_pending_claim` still arrives (raced), the sheet **replaces itself
+with the existing claim** rather than showing an error toast.
+
+Other blocking cases, each with its own copy rather than a shared "lỗi":
+`user_already_linked_to_person` (409) → *"Tài khoản của bạn đã được gắn với một người
+trong gia phả."* + link to that person; `person_already_linked_to_user` (409) →
+*"Người này đã được một tài khoản khác nhận."*; `person_not_found` (404) → the person is
+soft-deleted or not in this clan.
+
+#### 7.11b Yêu cầu của tôi
+
+`GET /claims` — the user's own claims, statuses `PENDING` / `APPROVED` / `REJECTED` /
+`CANCELLED`. Card per claim: person, `requester_note`, status chip, and on a reviewed one
+the `reviewer_note` verbatim.
+
+`Hủy yêu cầu` (`DELETE /claims/{id}`, 204) appears **only** on `PENDING` and only for the
+owner. Confirmation, because re-submitting means waiting again.
+
+**Rows can change without the user acting.** Approving a claim auto-rejects every other
+pending claim on the same person, so a user may find their claim `REJECTED` with no
+reviewer note. The empty-note rejected state therefore has its own copy:
+*"Người này đã được một thành viên khác nhận thân."* — inferred from state, not invented.
+
+#### 7.11c Hàng đợi nhận thân (reviewer)
+
+`GET /clans/{clan_id}/claims`. **Admin and editor can view; only admin can approve,
+reject, unlink or prelink.**
+
+This is the one place in the product where "remove, don't disable" produces a
+read-only screen for a role that can otherwise write. An editor sees the queue with no
+action buttons and one line at the top:
+*"Chỉ quản trị dòng họ mới duyệt được yêu cầu nhận thân."* Removing the whole screen
+would be worse — an editor legitimately needs to know who is claiming whom.
+
+Row: requester, claimed person (avatar, name, đời), `requester_note`, age, status chip.
+Filters `PENDING` (default) / `APPROVED` / `REJECTED` / `CANCELLED`; cursor-paginated.
+
+**Approve** confirms with both identities named — *"Xác nhận **{người dùng}** chính là
+**{tên trong gia phả}**?"* — and the success toast states the side effect the API
+performs silently: *"Đã xác nhận. Các yêu cầu nhận thân khác cho người này đã tự động bị
+từ chối."* **Reject** takes an optional `reviewer_note`, encouraged for the same reason
+as §7.9d.
+
+**Unactionable claims.** `person_has_no_controlling_clan` (403) is a genuine dead end —
+the person's origin clan was cleared, so no clan can ever review the claim. The row
+renders with no actions and an honest line: *"Hồ sơ này không còn thuộc quyền quản lý của
+dòng họ nào nên không xét duyệt được. Xin liên hệ hỗ trợ."* We do not hide it; a hidden
+row is a claim the requester waits on forever.
+
+Race codes on approve — `user_already_linked`, `person_already_linked`,
+`claim.not_pending` — all resolve to the same behaviour: refetch the row, show its new
+state, no error dialog. The wording differs (`…vừa được gắn với người khác` vs
+`…đã được xử lý`) because the admin's next move differs.
+
+#### 7.11d Gắn / gỡ thủ công (admin)
+
+`prelink` and `unlink` live in the member detail (§7.10b) rather than the claims queue,
+because they are member administration, not review. `Gỡ liên kết` confirms and states
+that the gia phả record is untouched. `user_not_in_clan` (403) → *"Hãy mời người này vào
+dòng họ trước."* with `Tạo lời mời`.
+
+---
+
+### 7.12 Ảnh và tài liệu
+
+**Purpose.** The clan's photographs, sắc phong, bia mộ rubbings and scanned gia phả
+pages — the evidence behind the records.
+
+#### 7.12a Thư viện
+
+`GET /documents` — cursor-paginated, filters `person_id` and `document_type`.
+
+**The list has no URLs.** `GET /documents` returns summaries **without**
+`presigned_url`; only `GET /documents/{id}` mints one. A thumbnail grid would therefore
+need one detail request per tile, which on 3G is exactly the wrong shape. So the library
+is **a list, not a gallery**:
+
+`DocumentTile` renders from the summary alone — a type icon on a tonal ground, `title`
+in `title-md`, `document_type` chip, `original_filename`, `file_size_bytes` humanised,
+`taken_date` (a **scalar** date, not a `HistoricalDate` — one of the documented
+exceptions), and the linked person when `person_id` is set. **The tile is complete and
+useful before any image exists**, which is also what satisfies T-16.
+
+Images are fetched lazily, one detail call per tile, only for tiles that scroll into
+view and only for image MIME types — and the tile does not resize when the image
+arrives (the icon block and the image occupy the same reserved box). On a metered
+connection a `Chỉ hiện ảnh khi tôi bấm` preference stops the lazy fetch entirely.
+
+**Desktop ≥1024** may use a 3-up grid, still list-shaped per tile.
+
+Filter chips: `Tất cả` · `Ảnh` · `Giấy tờ` · `Bằng cấp / chứng nhận` · `Âm thanh` ·
+`Video` · `Khác`, plus a person filter when arriving from a profile.
+
+**States.** *Loading* — 6 tile skeletons at the real tile height. *Empty* —
+`Dòng họ chưa có ảnh hay tài liệu nào.` + `Tải lên tài liệu đầu tiên` (editor+) or an
+explanation (viewer). *Empty for a filter* — `Không có tài liệu nào thuộc loại này.` +
+`Xóa bộ lọc`. *Image failed / URL expired* — the tile falls back to its icon state with
+`Tải lại`; never a broken-image glyph.
+
+#### 7.12b Tải lên
+
+`POST /documents` (multipart), editor+. Web: drag-and-drop zone plus a file picker.
+Mobile: `Chụp ảnh` / `Chọn từ thư viện` / `Chọn tệp`.
+
+Form: `Tiêu đề` (required), `Loại tài liệu` (required, segmented), `Người liên quan`
+(person picker, optional), `Mô tả`, `Ngày chụp/thu` (plain date — this one is **not** a
+`HistoricalDateField`), `Nơi chụp/thu`.
+
+**Limits stated before the failure, not after.** The zone reads
+*"Tối đa 50 MB · JPG, PNG, WEBP, HEIC, PDF, MP3, WAV, MP4, MOV"*, and the client checks
+size and type before uploading. Server errors are still handled, and note the trap:
+`invalid_mime_type`, `file_too_large` and `invalid_document_type` are **400, not 422** —
+branch on the code, not the status.
+
+- `file_too_large` (400) → *"Tệp {tên} nặng {n} MB, vượt quá giới hạn {detail.max_bytes}."*
+- `invalid_mime_type` (400) → lists `detail.allowed` in human words, not MIME strings.
+- `storage_unavailable` (503) → *"Kho lưu trữ tạm thời gián đoạn. Tệp của bạn chưa được
+  tải lên."* + `Thử lại`, with the chosen file retained.
+
+**Progress.** Determinate progress per file, cancellable; a failed file in a multi-file
+selection does not roll back the successful ones (each is its own request), and the
+result panel lists successes and failures separately.
+
+#### 7.12c Chi tiết, ảnh đại diện, xóa và khôi phục
+
+Detail sheet/page from `GET /documents/{id}`: the media (image inline, PDF/audio/video
+as a download or native player), all metadata, and actions by role.
+
+**`Đặt làm ảnh đại diện`** (`PATCH /{id}/set-avatar`, editor+) appears only on
+`document_type == "photo"` **and** only when `person_id` is set — the two 422s
+(`only_photo_can_be_avatar`, `document_not_linked_to_person`) are made unreachable by
+hiding the action rather than by explaining a rejection. If the document has no person,
+the action is replaced by `Gắn với một người` which opens the picker first.
+
+**Deleting is admin-only** and soft (ADR-019). Confirmation states the recoverable
+window honestly: *"Tài liệu sẽ được ẩn khỏi thư viện. Quản trị có thể khôi phục trong
+**30 ngày**, sau đó tệp bị xóa vĩnh viễn."*
+
+**Restore has no discovery path, and the UI must not pretend otherwise.** Reads filter
+soft-deleted rows out, and there is **no endpoint listing deleted documents**, so
+`POST /{id}/restore` is only reachable by an admin who still has the id. The design
+does what it can and no more: after a delete, an undo affordance persists in a
+session-scoped `Vừa xóa` tray at the bottom of the library (holding ids from this
+session only), labelled *"Chỉ hiện trong phiên làm việc này."* There is deliberately no
+`Thùng rác` screen, because it could never be complete. See §9-J23.
+
+**Avatar interplay, surfaced.** Soft-deleting a document that is a person's avatar does
+not clear `is_avatar`; the avatar keeps working until the blob is purged and then
+vanishes silently. So deleting an avatar photo adds a second line to the confirmation:
+*"Đây đang là ảnh đại diện của {tên}. Sau 30 ngày ảnh sẽ biến mất khỏi hồ sơ."*
+
+---
+
+### 7.13 Nhắc nhở và thông báo
+
+**Purpose.** Set expectations about the only notification the platform actually sends,
+and let a device turn it on or off.
+
+**There is no notifications API.** No inbox, no read/unread, no history, no preferences
+endpoint — `notification_log` is server-side only. The only client-facing surface is
+FCM device-token registration (`POST`/`DELETE /auth/me/fcm-token`). So this screen is
+**not** a notification centre, and:
+
+- **The bell icon is removed from the app bar.** The first round of dashboard mockups
+  drew one; a bell that opens nothing, or opens an empty list that can never fill, is a
+  promise the product cannot keep. Its slot in the §7.3 app bar is taken by
+  `Đề nghị sửa` with a pending count for editor+, which is a real queue. See §9-J24.
+- Nothing in the product shows an unread badge.
+
+**Layout** (mobile, under `Tài khoản`; web, under account settings):
+
+1. **`Nhắc ngày giỗ trên thiết bị này`** — a single switch. On → register the FCM token;
+   off → `DELETE` it. Per-device, and the copy says so:
+   *"Cài đặt này chỉ áp dụng cho thiết bị bạn đang dùng."* When the OS permission is
+   denied, the switch is replaced by `Mở cài đặt hệ thống` — a switch that cannot move
+   is worse than a link that works.
+2. **`Bạn sẽ được nhắc những gì`** — an honest, complete list, because the send rules
+   are narrow and a user who expects more will conclude the app is broken:
+   > Hệ thống chỉ gửi nhắc cho **sự kiện lặp lại hằng năm có ngày chính xác** — ngày giỗ,
+   > sinh nhật, kỷ niệm ngày cưới. Thư nhắc gửi vào **7 giờ sáng**, trước sự kiện đúng số
+   > ngày bạn đặt cho từng sự kiện.
+   >
+   > Hệ thống **không** gửi thông báo khi: có người xin vào dòng họ, có đề nghị sửa mới,
+   > yêu cầu nhận thân được duyệt, hoặc sự kiện chỉ diễn ra một lần.
+3. **`Thời điểm nhắc`** — read-only explanation that lead time is per event
+   (`notify_days_before`, 0–30, default 7), with `Xem danh sách sự kiện` linking to
+   §7.8. There is no global default to set, so none is drawn.
+4. A line for events that will never notify: *"Sự kiện ghi ngày ước lượng sẽ không được
+   nhắc."* — the same fact §7.8 warns about at input time, restated where a user goes
+   looking for a missing reminder.
+
+**Tapping a push opens the events list, not the event.** The FCM payload's `data` is
+empty — no `event_id`, no `clan_id` — so a deep link is impossible today, and for a
+multi-clan user the app cannot even switch to the right clan. The handler therefore
+opens `Sự kiện · Sắp tới` in the currently active clan. This is a backend gap, not a
+design choice; recorded in §9-J24.
+
+**Two event types are known to send broken text.** Only `death_anniversary`, `birthday`
+and `wedding_anniversary` have translations; a recurring `clan_ceremony` or `custom`
+event pushes the raw i18n key as its title. Until that is fixed, the event form's
+`Lặp lại hằng năm` switch shows an inline note for those two types:
+*"Loại sự kiện này hiện chưa có nội dung nhắc hoàn chỉnh."* — better a small
+disclosure than a relative receiving `notification.clan_ceremony.title`.
+
+---
+
+### 7.14 Xuất gia phả
+
+**Purpose.** Let an admin take the clan's data out. `GET /exports/clan?format=json|gedcom`,
+**admin only**, synchronous.
+
+**Entry.** `Quản trị › Cài đặt › Xuất dữ liệu`, and `Xuất gia phả` on the tree toolbar
+for admins. Absent for editor and viewer.
+
+**Layout.** Two format cards, chosen by what the user wants to do, not by file type:
+
+- **`Bản lưu đầy đủ (JSON)`** — *"Toàn bộ dữ liệu dòng họ, kể cả người đã xóa. Dùng để
+  lưu trữ hoặc chuyển sang hệ thống khác."*
+- **`Chuẩn GEDCOM 5.5.1`** — *"Định dạng gia phả tiêu chuẩn, mở được bằng hầu hết phần
+  mềm gia phả. Người đã xóa không có trong tệp này."*
+
+Each card lists honestly what it does and does not contain, because the difference
+matters and is invisible after download: GEDCOM drops soft-deleted records entirely and
+does not carry nghề nghiệp, tôn giáo or nơi chốn; JSON carries everything including
+`is_deleted` rows.
+
+**A confirmation step is obligatory, and it is about PII.** The JSON archive contains
+`phone` and `email` for living relatives with no redaction and no opt-out:
+
+> **Tệp này chứa thông tin cá nhân**
+> Bản lưu đầy đủ bao gồm **số điện thoại và email** của các thành viên còn sống, và cả
+> những người đã bị xóa khỏi gia phả. Xin chỉ lưu ở nơi an toàn và không chia sẻ công
+> khai.
+> [Hủy] [Tôi hiểu, tải xuống]
+
+**Two more truths the UI must carry**, both consequences of the archive's shape:
+
+- *"Ảnh và tài liệu không nằm trong tệp. Tệp chỉ chứa danh sách kèm liên kết tải, và
+  các liên kết này hết hạn sau khoảng **1 giờ**."* — a week-old archive's photo links
+  are all dead, and a user who discovers that later will think the export was broken.
+- *"Hệ thống chưa hỗ trợ nạp ngược tệp này trở lại."* Export is one-way; no import
+  exists.
+
+**States.** *Idle* → *Đang tạo tệp…* — an indeterminate spinner and
+*"Xin giữ nguyên màn hình. Dòng họ lớn có thể mất một lúc."* There is no job queue, no
+progress percentage and no polling to design, because the request is synchronous;
+inventing a progress bar would be a lie. Then the browser/OS download handoff and
+`Đã tạo tệp {tên}`.
+
+*Errors.* `503 storage_unavailable` (the manifest presigns go through storage) →
+*"Không lấy được liên kết ảnh nên chưa tạo được tệp. Xin thử lại sau ít phút."*
+`503 database_unavailable` → transient retry. A dropped connection mid-download →
+`Tải lại tệp`. Because it is envelope-exempt, the client must bypass the standard
+`{"data"}` unwrap for this one call.
+
+---
+
+### 7.15 Quản trị nền tảng (super admin)
+
+**Purpose.** The platform operator's view across clans. Entirely separate from clan
+UX: different nav, no `X-Current-Clan-Id`, and invisible to every clan role including
+admin. `403 super_admin_required` means the area is hidden, never greyed.
+
+**This is the one surface designed desktop-first.** It is operated from a desk, its
+tables are genuinely tabular, and its audit log needs width. Mobile gets a reduced
+read-only version: metrics, clan list and clan detail, but not the audit log, which is
+unusable narrow.
+
+#### 7.15a Số liệu nền tảng
+
+`GET /platform/metrics` — headline figures in `display-md` `tabular-nums` over
+`label-md` captions. The metric key names are not documented anywhere, so the layout is
+specified as *"a responsive row of stat tiles, one per returned key, label-driven"*
+rather than a fixed set — a hard-coded grid would break the first time a key is renamed.
+Totals are independent counts, so they are safe to show beside a paginated list.
+
+#### 7.15b Danh sách dòng họ
+
+`GET /platform/clans`, cursor-paginated, no server-side search or status filter
+documented — so filtering is client-side over the loaded pages and the UI does not draw
+a search box that would silently only search what has loaded. Columns: `Dòng họ` (name +
+slug), `Trạng thái` (`Hoạt động` / `Tạm ngưng` — text plus tint, never tint alone),
+`Thành viên`, `Ngày tạo`.
+
+**Suspend / reactivate** (`POST …/suspend`, `…/reactivate`) is a heavy action with a
+heavy confirmation, naming the consequence for real people:
+
+> **Tạm ngưng dòng họ {tên}?**
+> Toàn bộ **{n} thành viên** sẽ không xem được gia phả cho tới khi dòng họ được mở lại.
+> Dữ liệu không bị xóa.
+
+Idempotency is undocumented, so the UI treats a repeat call as success and refetches
+rather than showing an error. **There is no delete** — clans are suspended, never
+removed — so no delete affordance exists anywhere.
+
+#### 7.15c Nhật ký toàn nền tảng
+
+`GET /platform/audit-log`, filters `clan_id` and `action`, cursor-paginated.
+
+**This list is newest-first (DESC) — the only DESC list in the entire product.** The
+shared `CursorList` appends at the bottom as it pages, which for DESC means paging
+*backwards in time*. The component takes an explicit `order` prop and the screen labels
+the direction (`Mới nhất trước`) so the behaviour is stated rather than inferred. Any
+component that assumed ASC append is wrong here.
+
+The log is retained **indefinitely** by design, so the screen never offers "load all",
+never shows a total, and leads with filters rather than data: an unfiltered infinite
+list of every action ever taken is not a feature.
+
+Row: timestamp (absolute + relative), `actor_role` chip, `action`, `resource_type` /
+`resource_id`, clan, and `ip_address` / `user_agent` in a secondary line. Expanding a
+row reveals `old_value` / `new_value`, which are free-form JSONB — so the detail drawer
+uses a **generic JSON diff renderer**, monospace, with changed keys highlighted. Not a
+typed field list; the shapes vary per action and always will.
+
+**States.** *Empty for a filter* — `Không có hoạt động nào khớp bộ lọc.` *Loading* — row
+skeletons. `clan_id` filter accepts a clan picked from §7.15b rather than a typed UUID.
+
+---
+
 ## 8. Where web and mobile deliberately diverge
 
 Divergence is a cost; each of these buys something specific.
@@ -1205,6 +2023,9 @@ Divergence is a cost; each of these buys something specific.
 | D8 | **Documents: drag-and-drop (web) vs camera capture (mobile)** | Platform-native capability, same upload contract. |
 | D9 | **Overlays: dialog/side panel (web) vs bottom sheet (mobile)** | Same content, same component contract, different presentation. |
 | D10 | **Glass surfaces: up to two (web) vs one (mobile)** | Per-frame blur on a five-year-old Android is a real frame-budget cost; mobile spends it only on the bottom nav. |
+| D11 | **Change-request review: two-pane (web ≥1280) vs list→detail (mobile)** | A reviewer with a screen should work the queue without navigating; a reviewer with a phone should see one proposal at a time. The `FieldDiff` component is identical in both. |
+| D12 | **Platform admin: desktop-first, reduced on mobile** | The only surface in the product that is not phone-first. The cross-clan audit log with `old_value`/`new_value` JSON diffs is unusable narrow, so mobile omits it rather than shipping a cramped version. |
+| D13 | **Documents: list-shaped tiles everywhere, 3-up grid on web ≥1024** | Driven by the API, not the viewport: `GET /documents` returns no URLs, so a thumbnail-first gallery would cost one extra request per tile. Both clients render from metadata and fetch images lazily. |
 
 Everything else — tokens, copy, states, validation, error mapping, đời/đa thê/precision
 rendering — is identical by construction. If a behaviour differs and is not in this
@@ -1254,7 +2075,28 @@ navigator has no đời axis to violate. Both are honest; neither hides anyone.
 nothing is worse than no expander, so stubs get **no expand control at all** — only
 `Xem ở nhánh chính →`. We deliberately ignore `has_more_descendants` on stubs.
 
-**J5 — Viewers and the missing change-request feature.** "Don't show viewers disabled
+**J5 — Viewers and the change-request feature. RESOLVED 2026-08-02 (ADR-037).** The
+original entry, kept below for the record, said the honest design was to remove every
+write affordance from a viewer and refuse to draw a `Đề nghị sửa` button with no
+endpoint behind it. That gap is now closed: `POST /change-requests` exists, viewers may
+propose person corrections field by field, and editors **or** admins review them. §7.9
+is the full flow and §3.5's role table now gives a viewer a real primary action.
+
+Three things about the resolution are worth recording, because they were design inputs
+rather than consequences:
+
+- **The reviewer pool is editor+, not admin.** An editor can already make the identical
+  edit unilaterally, so an admin-only gate would have protected nothing while letting a
+  single busy admin stall the whole queue. The UI follows: `Đề nghị sửa` is a top-level
+  nav item for editor and admin, not a sub-tab of the admin panel.
+- **The proposal form is the edit form.** The contract deliberately keeps `changes` in
+  `PATCH /persons/{id}` body shape so one form serves both. §7.7 is reused wholesale
+  rather than a parallel "suggestion" form being invented.
+- **Refusing to draw the button was the right call and it is now the precedent.** The
+  same test applied to the rest of this spec found `Xuất PDF` failing it (§9-J22): a
+  control drawn from a permission row with no endpoint. It has been removed.
+
+*Original entry (2026-08-02, superseded):* "Don't show viewers disabled
 buttons" is easy; "give viewers a way to contribute" is not, because no
 change-request/suggestion endpoint exists (it is on the DB roadmap, not built). The
 honest design is: remove all write affordances, state the role once in plain language,
@@ -1305,11 +2147,132 @@ eyebrow labels actively damages Vietnamese legibility at small sizes. Caps is re
 to short, mark-free words; everywhere else the eyebrow keeps its tracking and drops the
 caps.
 
+### Round two — judgement calls from §§7.9–7.15
+
+**J13 — Three values, shown only when the third means something.** The reviewer's diff
+(§7.9d) has `base`, `proposed` and `current` for every field, and the obvious design
+renders all three every time. On a 360dp phone that is three columns of which one is
+usually redundant, because on the common path `current == base`. So `FieldDiff` renders
+per merge verdict: two values when nobody touched the field, a deemphasised "already
+fixed" line when someone made the same correction, and all three — with `current`
+visually dominant — only on a genuine conflict. The information is never withheld; it
+is shown when it changes the decision. The risk accepted is that a reviewer cannot see
+`base` on the common path; the mitigation is that on the common path `base` *is* the
+displayed current value.
+
+**J14 — `is_stale` is not a warning.** The API's own word for "the record moved" is
+*stale*, and the instinct is to paint it amber. But `is_stale: true` with
+`conflicts: []` is the **normal, harmless, approvable** case — somebody edited a
+different field — and ADR-037 chose a loose three-way merge precisely so those
+proposals stay applicable. Colouring it as a warning would train reviewers to hesitate
+over a non-event, and a queue people hesitate over is a queue that rots. So stale-
+without-conflicts is an `info` line with `Duyệt` still primary, and the triage pill
+still reads `Sẵn sàng duyệt`. Only `conflicts` and `is_deleted` change the affordance.
+
+**J15 — A rejected suggestion is not an error.** The requester's list (§7.9b) shows
+rejections on `surface-container-high` with the reviewer's note, not in `danger`. A
+relative who reported a wrong birth date and was told "no" has participated correctly;
+red would read as "you did something wrong" and is the single most likely reason they
+never report anything again. Red is reserved for states the system considers broken.
+
+**J16 — Promising a notification the platform cannot send.** The natural copy after
+submitting a proposal is "chúng tôi sẽ báo cho bạn khi có kết quả". ADR-037 explicitly
+defers notification, and §7.13 confirms the only push that exists is the anniversary
+cron. So the confirmation says where to *look*, not that we will *tell*. Same reason
+there is no `Thu hồi` button on a pending proposal: no endpoint. Both are recorded as
+backend follow-ups, not designed around with fiction.
+
+**J17 — One component knows about the write date shape.** Everywhere else in the product
+a date is a `HistoricalDate` object rendered by §3.1. Inside `changes` and
+`target.conflicts` it is the scalar `birth_date` + `_precision` + `_display` triple —
+a deliberate, frozen contract exception so a reviewer's client can feed the payload
+straight back into `PATCH /persons/{id}`. Rather than leak that exception across the
+review screens, `FieldDiff` is the **only** component that accepts the write shape, and
+it adapts to `HistoricalDateDisplay` internally. If a second component ever needs it,
+that is the signal the exception has spread too far.
+
+**J18 — An approval queue that cannot show who it is approving.** Both
+`GET /clans/me/users/pending` and `GET /clans/me/users` return
+`{id, user_id, role, person_id, created_at}` — **no name and no email**. Approving grants
+a stranger read access to hundreds of living relatives' records, and it is an identity
+decision made against a UUID. `person_id` helps only when the user has already been
+linked to a person; for a fresh registrant it is `null`, which is exactly the case an
+admin most needs to judge.
+
+Three options were weighed: design as if names existed (dishonest), design against the
+UUID (ships a dangerous screen), or design what the decision requires and name the gap.
+This spec takes the third: §7.10a specifies the row with `full_name` and `email`, and
+until those exist the interim row's primary action is `Xem chi tiết`, not `Duyệt`.
+
+**The backend fix is nearly free, which raises the priority rather than lowering it.**
+Verified in `app/api/v1/clans.py` (lines 95–143): `user_profile` is *already* eager-loaded
+on both endpoints via the same LEFT JOIN, and `UserProfile` already carries `email` and
+`display_name`. The values are in memory and simply not serialised — both handlers build
+their dict by hand and omit them. This is two lines per endpoint, not a query change.
+
+*(Corrected during review: an earlier draft of this entry claimed the pending list lacks
+`person_id`. It does not — both lists carry it. The missing fields are `email` and
+`display_name`, and they are missing from both.)*
+
+**J19 — There is no way to leave a clan.** `clan.cannot_remove_self` blocks an admin
+removing themselves regardless of admin count, and no leave/transfer endpoint exists for
+any role. So no `Rời dòng họ` action appears anywhere in the product. A user who wants
+out has to ask another admin. This is stated rather than hidden, and flagged as a
+product gap: transfer-then-leave is the missing flow.
+
+**J20 — A status field that lies.** An invitation past `expires_at` keeps
+`status: "pending"` until the next create for that email lazily flips it; there is no
+sweep. Trusting `status` would show an admin `Đang chờ` for a dead link they are waiting
+on. So §7.10c derives the row state client-side from `expires_at` and offers `Mời lại`,
+which reliably succeeds. The general rule this establishes: **when a server field and a
+timestamp disagree, the timestamp wins in the UI.**
+
+**J21 — No switch for an unenforced setting.** `clan_settings` carries
+`allow_public_tree`, `privacy_level`, `tree_display_mode` and `max_upload_size_mb`, and
+essentially nothing enforces them (`max_upload_size_mb`'s default of 10 even contradicts
+the domain's real 50 MB limit). It would be easy to render them as a settings form. A
+privacy toggle that does not restrict anything is the most harmful control in this
+product — a trưởng họ could set `riêng tư` and reasonably believe the tree is private.
+None of them ship until enforcement does.
+
+**J22 — I drew a button with no endpoint, in the same document that refused to.** The
+first draft put `Xuất PDF` on the tree toolbar, available to every role, sourced from
+the `Export tree as PDF` row in `rbac.md`. That row has no endpoint: PDF export is out
+of scope per ADR-020, depends on ADR-005's unbuilt worker and ADR-004's unbuilt Redis,
+and would 422 today. It also contradicted the only real export endpoint, which is
+admin-only. Removed and replaced with `Xuất gia phả` (§7.14, admin-only, JSON/GEDCOM).
+Recorded rather than quietly fixed, because the lesson generalises: **a permission
+matrix is not evidence that an endpoint exists.** When PDF export does land it will be
+asynchronous — request, job, notify, download — which is a different screen from §7.14,
+not a third card on it.
+
+**J23 — An undo that cannot be a trash can.** Documents soft-delete with a 30-day
+restore window, but reads filter deleted rows out and there is no endpoint to list them,
+so `POST /{id}/restore` is reachable only by someone who still holds the id. A
+`Thùng rác` screen would be permanently and invisibly incomplete. §7.12c ships a
+session-scoped `Vừa xóa` tray instead, explicitly labelled as session-only. The 30-day
+window is still stated in the delete confirmation, because the user should know the file
+is recoverable even when this UI cannot recover it. **Open question:** a
+`GET /documents?is_deleted=true` filter would turn this into a real screen.
+
+**J24 — Removing the bell.** The first dashboard mockups drew a notification bell. There
+is no notifications API at all — no list, no read/unread, no history — and the only push
+that exists is a daily anniversary cron whose payload `data` is empty, so a tap cannot
+even deep-link. A bell opening a permanently empty inbox is worse than no bell. It is
+removed, its app-bar slot goes to the change-request queue (a real queue with a real
+count), and §7.13 replaces the notification-settings screen with an honest per-device
+switch plus a precise statement of what the platform does and does not send. **Open
+questions for the backend:** `data` keys (`event_id`, `clan_id`) so a tap can navigate;
+translations for `clan_ceremony` and `custom`, which currently push a raw i18n key as
+their title.
+
 ### Deferred (not designed here)
 
-Admin panel (approvals, roles, invitations), identity claims, documents library,
-notification settings, platform/super-admin surfaces, export/PDF layout, onboarding
-tour, and the change-request feature from J5.
+Onboarding tour, password-reset landing detail, PDF gia phả book (§9-J22 — deferred
+backend-side, and asynchronous when it lands), document import / archive restore (no
+endpoint, export is one-way), a devices list for push tokens (no read endpoint), and
+change requests for marriages, parent-child edges, events and documents (ADR-037 scoped
+v1 to person updates; widening is additive).
 
 ---
 
@@ -1322,3 +2285,10 @@ tour, and the change-request feature from J5.
 - `docs/contracts/README.md` — envelope, `HistoricalDate`
 - `docs/contracts/frontend-integration-guide.md` — client states and error handling
 - `docs/contracts/error-codes.md` — full error catalogue
+- `docs/contracts/rest-change-requests-api.md` + `docs/decisions/037-change-requests-workflow.md`
+  — §7.9; the three-way merge and the `target` block
+- `docs/contracts/rest-clans-api.md`, `rest-invitations-api.md`, `rest-claims-api.md` — §§7.10–7.11
+- `docs/contracts/rest-documents-api.md` (+ ADR-019) — §7.12
+- `docs/contracts/push-notifications.md`, `rest-notifications-api.md` — §7.13
+- `docs/contracts/rest-exports-api.md` (+ ADR-020) — §7.14
+- `docs/contracts/rest-platform-admin-api.md` (+ ADR-030) — §7.15
