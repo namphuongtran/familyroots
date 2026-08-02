@@ -9,7 +9,7 @@ outside any document.
 item. When an item is finished, move it to *Landed* with its merge commit, and delete
 it once the git history and the ADRs tell the story on their own.
 
-Last updated: 2026-08-02.
+Last updated: 2026-08-02 (end of the four-agent session).
 
 ---
 
@@ -45,85 +45,143 @@ Re-check all three when the upstream packages move.
 
 ---
 
+### 1.2 Owner actions outstanding — these block shipped code
+
+Neither can be done from the repository. Both are recorded here because the code that
+needs them is already on `main`.
+
+**A. Create the public avatars bucket in Supabase, per environment.** ADR-036 / #132 is
+merged, so `PATCH /documents/{id}/set-avatar` currently returns
+**`503 storage_bucket_not_configured`** in every environment and writes nothing.
+
+| Setting | Value |
+|---|---|
+| Name | `family-roots-avatars` (matches `SUPABASE_AVATAR_BUCKET`; **must not** be `family-roots-files`) |
+| Public bucket | on, public read — the adapter calls `get_bucket()` and refuses to copy if `public` is false |
+| Allowed MIME | `image/jpeg, image/png, image/webp, image/heic` |
+| Size limit | ≥ `MAX_UPLOAD_SIZE_MB` (50 MB) |
+| Write access | service-role key only; no anonymous write policy |
+
+No CORS rule is needed — clients render via `<img src>`. Remember the accepted
+consequence: **publishing is one-way.** Soft-delete and the retention purge remove only
+the private blob, so the public object and `avatar_url` survive and anyone holding the
+URL keeps access. Deleting a photo in the app does not remove it from the internet.
+
+**B. Report the Supabase email-template link format.** Blocks the real email-verification
+flow. Not knowable from this repo — it depends on project configuration.
+
+1. Authentication → Emails (or *Email Templates*) → open **Confirm signup**, and report
+   whether the link uses `{{ .ConfirmationURL }}` or `{{ .TokenHash }}`.
+2. Authentication → URL Configuration → report **Site URL** and the **Redirect URLs** list.
+
+Do not send a real verification email or a live token — only the template shape is needed.
+
+This does **not** block mobile M0: deep links are out of scope per the mobile spec §7, and
+the verification screen there needs only `POST /auth/resend-verification`.
+
+---
+
 ## 2. Queued
 
 ### 2.1 Sub-project A — web architecture spine + observability
 
-- **Spec:** `docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md` (approved)
-- **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — **13 tasks** (0–12), Task 0 done
-- **Status:** executing. The zod-4 recheck flagged in §1.1 is done.
+- **Spec:** `docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md`
+- **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — 13 tasks (0–12)
+- **Status: Tasks 0–10 landed. Tasks 11 and 12 remain.**
 
-**Task 0 landed** (`8f7abb4`): Node floor raised to 22 — `web/.nvmrc`, `engines.node
->=22.12.0`, `pnpm.onlyBuiltDependencies: ["@sentry/cli"]`, and `node-version: 22` in both
-`web-ci.yml` jobs. Verified on Node 24.15.0: install, `type-check`, `lint` and `build` all
-green, lockfile unchanged (so `--frozen-lockfile` still holds). **Open owner action:**
-confirm the Vercel project runtime is Node 22.x or 24.x — the repo has no `vercel.json`,
-so the runtime comes from the dashboard setting plus this new `engines.node` range.
+| Task | What | PR |
+|---|---|---|
+| 0 | Node 22 floor | #122 |
+| 1 | Vitest harness + `HistoricalDate` | #127 |
+| 2–4 | OpenAPI types, envelope + error taxonomy, request context | #129 |
+| 5–7 | traceparent, single-flight refresh, `apiFetch` | #134 |
+| 8–10 | Sentry + Web Vitals, component harness, dependency-cruiser | #139 |
+| **11** | **Playwright harness and CI wiring — NOT STARTED** | — |
+| **12** | **Documentation sync — NOT STARTED** | — |
 
-**Second verification pass, 2026-08-02.** Every implementation module and test body in
-the plan was executed in a throwaway project carrying the exact installed toolchain:
-**8 files, 55 tests, all passing, `tsc --noEmit` clean.** The OpenAPI generator, the
-Sentry + Next 16 build, the dependency-cruiser rules, and the Playwright harness were
-each run for real. Twelve defects were found and fixed in the plan — including three
-that would have failed on the first run: CI pins Node 20 while `jsdom@30`,
-`jest-dom@7` and `dependency-cruiser@18` all require ≥22 (now **Task 0**); six
-`vi.fn` mocks in Task 7 that do not compile; and an E2E assertion of `lang="vi"`
-against an app that serves `lang="en"`. The plan's "Verification status — second pass"
-and "Defects found and fixed" sections carry the evidence.
+**Resume here:** Task 11 is next. Two things inside it are load-bearing and easy to
+lose: it adds `backend/app/**` to the `api-types-fresh` job's `paths:` triggers (without
+that edit the anti-drift gate can never fire on the only case it exists for), and it
+ships a `test.fail()` in `web/e2e/smoke.spec.ts` that pins R-lang (§3.2) — it goes red
+the moment that bug is fixed, which is the intent.
 
-Decisions taken during design that live nowhere else:
+Current web state on main: 55 unit tests + 3 component tests, `depcruise` clean at
+0 errors / 3 warnings (all orphan modules, within the plan's carve-out).
 
-| Question | Decision |
-|---|---|
-| Sub-project order | A → B → D, with C (observability) folded into A |
-| Restructure depth | Real domain layer + typed repositories; no port-interface or use-case class per CRUD operation |
-| UI scope inside A | Move components into feature slices, keep the current look |
-| Trace propagation | W3C `traceparent`, exported through Sentry |
-| DTO drift protection | Generate types from OpenAPI, hand-write zod schemas at the boundary |
-| Test harness | Vitest + React Testing Library + MSW + Playwright |
-| Scope | The whole restructure, split into sequential per-slice PRs |
-| Rendering | Server-fetch the first page, client-side for interaction |
-
-**What is still unverified:** `pnpm build` of the real `web/` tree with Sentry added
-(the composition was proved on a minimal Next 16 app); Playwright inside GitHub Actions;
-and the component project under CI's Node rather than local Node 24. Everything else was
-executed. Implementers should still fix a test that does not work rather than contorting
-the implementation to satisfy a bad assertion.
+Two plan defects were found by executing it and are already corrected in the plan file:
+the Vitest config must be `.mts` (and `tsconfig` must glob `**/*.mts` or it silently
+stops being type-checked), and dependency-cruiser exits **1** on a violation, not 2.
 
 ### 2.2 Sub-project B — design system and UX for all ages
 
-Not yet specced. Follows A. Interacts with the `tailwindcss` 4 migration in §1.1.
+- **Spec:** `docs/superpowers/specs/2026-08-02-design-system-and-screens.md`
+- **Artifact:** https://claude.ai/code/artifact/2b97d988-12af-4614-8148-294869ffb532
+- **Status:** tokens, components, accessibility rules and 15 screen groups specced
+  (#130, #137). No implementation started — B implements against the mobile and web
+  architectures rather than the other way round.
+
+Deferred and blocked backend-side: onboarding tour, PDF book, import, a devices list,
+and change requests beyond `person`-update.
+
+Design rules recorded there that constrain future backend work, worth knowing before
+someone builds the thing that contradicts them:
+- **No privacy control ships until enforcement does.** `clan_settings.allow_public_tree`
+  and `privacy_level` exist and enforce nothing; a toggle that restricts nothing is the
+  most dangerous control in the product.
+- **When a server field and a timestamp disagree, the timestamp wins** — invitations keep
+  `status: "pending"` past `expires_at` with no sweep.
+- No copy promises a notification, because no notification exists for any queue event.
 
 ### 2.3 Sub-project D — mobile rebuild
 
-**Brought forward ahead of B** (2026-08-02, owner decision). The design-system work
-in B should land against a real architecture, not against a mock scaffold.
-
-- **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md` (approved)
+- **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`
 - **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
-- **Status:** M0 not yet planned
+- **Plan:** `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md` — 20 tasks
+- **Status: M0 Tasks 1–5 landed. Tasks 6–20 remain.**
 
-The existing `mobile/` tree is being deleted, not refactored. After five months it
-still makes no HTTP call to the backend — the Dio client and auth interceptor are
-`Prompt 2` stubs and every repository is bound to `lib/domain/mocks/`. Only the
-`.arb` files, the Arbor Heritage mandates, `l10n.yaml` and `assets/` are carried
-forward.
+| Task | What | PR |
+|---|---|---|
+| 1 | Delete the scaffold, stand up the project | #136 |
+| 2 | Import-boundary ratchet | #136 |
+| 3–5 | Domain kernel, error taxonomy, envelope | #138 |
+| **6–10** | **Interceptors, refresh, secure storage, cache, ApiClient** | — |
+| **11–12** | **Fonts/theme, l10n** (independent of the network stack; can run in parallel) | — |
+| **13–17** | **Auth slice, session controller, clan slice, cache wiring, screens** | — |
+| **18** | **Router + Dio + bootstrap — the first point where the pieces meet** | — |
+| **19** | **CI rewrite** | — |
+| **20** | **Run on a real device against the real backend; sync docs** | — |
 
-New stack: Riverpod 3 for state **and** DI, plain Dio with hand-written
-repositories, freezed, `flutter_secure_storage` for the session, `sqflite` for a
-read-only offline cache, bundled fonts instead of `google_fonts`. Layer boundaries
-enforced by an import-scanning test — the mobile counterpart of the backend's
-`lint-imports` ratchet.
+**Resume here:** Task 6. Current state on main is 38 tests, `flutter analyze` clean.
 
-Milestones, each with its own plan: **M0** spine + login + clan resolution ·
-**M1** persons · **M2** tree · **M3** events + documents · **M4** push + admin.
+**The app does not run yet** — there is no `lib/main.dart` until Task 18. Mobile CI's
+APK step is guarded on `hashFiles('mobile/lib/main.dart')` and reactivates by itself when
+that file lands; Task 19 still owns the full CI rewrite (format gate, coverage,
+generated-code freshness check).
 
-**Two owner actions block specific screens** (spec §8): the Supabase email-template
-link format, which is not knowable from this repo and blocks the verification
-screen in M0; and what belongs in `persons.avatar_url`, undefined by the backend,
-which blocks avatar handling in M2/M3.
+Flutter 3.44.8 / Dart 3.12.2 is installed locally at `~/development/flutter/bin` — the
+exact version `subosito/flutter-action@v2` resolves for `channel: stable`. Mobile changes
+are verified before push, not by CI round-trip.
 
----
+**Three things the plan learned the hard way — do not undo them:**
+- The version pins in spec §4.7 are an *all-stable line that resolves*, not each
+  package's newest release. `freezed 3.2.5` needs `analyzer >=9 <11`, `riverpod_lint
+  3.1.8` needs `^13`, and Flutter hard-pins `meta 1.18.0`. Letting pub choose freely
+  selects `freezed 3.2.6-dev.1`, a prerelease. Re-check when Flutter stable ships a
+  newer `meta`/`analyzer`.
+- `custom_lint` is deliberately absent — `riverpod_lint 3.1.3` no longer routes through it.
+- The boundary ratchet also bans `part '*.g.dart'` under `domain/`, because
+  `freezed_annotation` re-exports all of `json_annotation`, so the import ban alone was
+  demonstrably bypassable.
+
+**Open plan questions, unanswered:**
+1. **Golden images** — macOS-generated goldens may not match Linux CI, and CI pins
+   `channel: stable` with no version, so it drifts. Recommendation on the table:
+   generate inside `ghcr.io/cirruslabs/flutter:stable` locally and pin
+   `flutter-version: 3.44.8` in the workflow. Decide before Task 11 writes goldens.
+2. **Locale seed** — owner chose `vi` on first run. Note that spec R3 is now **stale**:
+   ADR-035/#128 confirmed the backend *does* echo `preferred_locale`, so the app should
+   adopt the server value at login rather than ignoring it. The residual is that locale
+   rides in the JWT, so a `PATCH` is only visible after the next token refresh.
 
 ## 3. Open gaps — knowingly unfixed
 
@@ -156,7 +214,18 @@ of the documented web gate (`pnpm type-check && pnpm lint`), so CI stays green.
 Running `pnpm format` would fix it in one sweep at the cost of a 112-file diff —
 worth folding into sub-project A rather than doing standalone.
 
-### 3.4 Stale remote branches
+### 3.4 The integration test database name is hardcoded
+
+`backend/tests/integration/conftest.py` sets `TEST_DB_NAME = "family_roots_schema_test"`
+as a constant with no environment override. Two `pytest` runs in parallel — two agents in
+separate worktrees, or a developer alongside one — drop each other's database with
+`DROP DATABASE … WITH (FORCE)`, producing `psycopg.AsyncConnection [BAD]` and a wave of
+spurious failures. One run during this session lost 182 tests to it.
+
+Harmless when work is serial, and a hard blocker on parallel backend work. Making the
+name configurable (env var with the current value as the default) is a few lines.
+
+### 3.5 Stale remote branches
 
 107 branches on `origin`. 100 local branches were deleted on 2026-08-02 — 94 that git
 could prove merged, plus 6 squash-merged ones whose content was verified present in
@@ -164,7 +233,7 @@ could prove merged, plus 6 squash-merged ones whose content was verified present
 those calls was wrong. Sweep the remote once enough time has passed, or enable
 delete-branch-on-merge.
 
-### 3.5 Pre-existing platform debt
+### 3.6 Pre-existing platform debt
 
 Carried from `CLAUDE.md` — none of these are scheduled:
 
@@ -186,3 +255,11 @@ Carried from `CLAUDE.md` — none of these are scheduled:
 | Software Architecture Document (arc42 + C4) | `docs/sad/` | PR #121 |
 | Backend production-readiness backlog | — | complete per owner sign-off |
 | C1–C3 seam-review fixes | `docs/superpowers/plans/2026-07-04-seam-review-critical-fixes.md` | #22, #23, #24 |
+| Web spine Tasks 0–10 | `web/src/{domain,shared,generated}` | #122, #127, #129, #134, #139 |
+| Mobile rebuild M0 Tasks 1–5 | `mobile/` | #136, #138 |
+| Backend client-blocking gaps + ADR-035 | `docs/contracts/` | #128 |
+| Public avatar URLs (ADR-036) | `app/application/document/` | #132 |
+| Change requests (ADR-037) | `app/domain/change_request/` | #133 |
+| persons RLS `RETURNING` fix (ADR-038) | `app/models/person.py` | #135 |
+| Clan user-list identity fields (ADR-039) | `app/api/v1/clans.py` | #140 |
+| Design system + 15 screen groups | `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` | #130, #137 |
