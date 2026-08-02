@@ -6,8 +6,10 @@ import { useTranslations } from 'next-intl'
 import { useCapabilities } from '@/lib/hooks/useCapabilities'
 import {
   marriageSchema,
+  type MarriageFormInput,
   type MarriageFormValues,
   parentChildSchema,
+  type ParentChildFormInput,
   type ParentChildFormValues,
 } from '@/lib/validations/relationship.schema'
 import { useMarriageMutations, useParentChildMutations } from '@/lib/hooks/useRelationships'
@@ -28,7 +30,9 @@ export function MarriageForm({ personId, onSuccess, onCancel }: MarriageFormProp
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<MarriageFormValues>({
+    // <input, context, output>: the fields bind to the pre-default input shape,
+    // while handleSubmit hands the parsed output shape to onSubmit.
+  } = useForm<MarriageFormInput, unknown, MarriageFormValues>({
     resolver: zodResolver(marriageSchema),
     defaultValues: { person1_id: personId, status: 'married' },
   })
@@ -114,7 +118,7 @@ export function ParentChildForm({ personId, role, onSuccess, onCancel }: ParentC
   const { canEditRelationships } = useCapabilities()
   const { create } = useParentChildMutations(personId)
 
-  const defaultValues: Partial<ParentChildFormValues> =
+  const defaultValues: Partial<ParentChildFormInput> =
     role === 'parent'
       ? { parent_id: personId, relationship_type: 'biological' }
       : { child_id: personId, relationship_type: 'biological' }
@@ -123,7 +127,7 @@ export function ParentChildForm({ personId, role, onSuccess, onCancel }: ParentC
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<ParentChildFormValues>({
+  } = useForm<ParentChildFormInput, unknown, ParentChildFormValues>({
     resolver: zodResolver(parentChildSchema),
     defaultValues,
   })
