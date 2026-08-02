@@ -46,8 +46,15 @@ Re-check all three when the upstream packages move.
 ### 2.1 Sub-project A — web architecture spine + observability
 
 - **Spec:** `docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md` (approved)
-- **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — **13 tasks** (0–12), not started
-- **Status:** verified and ready to execute. The zod-4 recheck flagged in §1.1 is done.
+- **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — **13 tasks** (0–12), Task 0 done
+- **Status:** executing. The zod-4 recheck flagged in §1.1 is done.
+
+**Task 0 landed** (`8f7abb4`): Node floor raised to 22 — `web/.nvmrc`, `engines.node
+>=22.12.0`, `pnpm.onlyBuiltDependencies: ["@sentry/cli"]`, and `node-version: 22` in both
+`web-ci.yml` jobs. Verified on Node 24.15.0: install, `type-check`, `lint` and `build` all
+green, lockfile unchanged (so `--frozen-lockfile` still holds). **Open owner action:**
+confirm the Vercel project runtime is Node 22.x or 24.x — the repo has no `vercel.json`,
+so the runtime comes from the dashboard setting plus this new `engines.node` range.
 
 **Second verification pass, 2026-08-02.** Every implementation module and test body in
 the plan was executed in a throwaway project carrying the exact installed toolchain:
