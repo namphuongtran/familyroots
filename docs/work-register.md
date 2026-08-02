@@ -35,10 +35,9 @@ rather than by our code:
 
 Re-check all three when the upstream packages move.
 
-**Consequence for sub-project A (§2.1):** the web spine plan predates zod 4 and
-Tailwind 4. Its pinned versions and its hand-written zod boundary schemas must be
-re-checked before Task 1 — `z.infer` is now the *output* type, and any schema using
-`.default()` needs the `z.input`/`z.output` split the relationship schemas now use.
+**Consequence for sub-project A (§2.1):** resolved. The spine plan was re-verified on
+2026-08-02 against the upgraded tree; its Global Constraints now state the zod-4
+`z.input`/`z.output` rule for the slice PRs that will write boundary schemas.
 
 ---
 
@@ -47,8 +46,19 @@ re-checked before Task 1 — `z.infer` is now the *output* type, and any schema 
 ### 2.1 Sub-project A — web architecture spine + observability
 
 - **Spec:** `docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md` (approved)
-- **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — 12 tasks, **not started**
-- **Status:** ready to execute, subject to the zod-4 recheck in §1.1.
+- **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — **13 tasks** (0–12), not started
+- **Status:** verified and ready to execute. The zod-4 recheck flagged in §1.1 is done.
+
+**Second verification pass, 2026-08-02.** Every implementation module and test body in
+the plan was executed in a throwaway project carrying the exact installed toolchain:
+**8 files, 55 tests, all passing, `tsc --noEmit` clean.** The OpenAPI generator, the
+Sentry + Next 16 build, the dependency-cruiser rules, and the Playwright harness were
+each run for real. Twelve defects were found and fixed in the plan — including three
+that would have failed on the first run: CI pins Node 20 while `jsdom@30`,
+`jest-dom@7` and `dependency-cruiser@18` all require ≥22 (now **Task 0**); six
+`vi.fn` mocks in Task 7 that do not compile; and an E2E assertion of `lang="vi"`
+against an app that serves `lang="en"`. The plan's "Verification status — second pass"
+and "Defects found and fixed" sections carry the evidence.
 
 Decisions taken during design that live nowhere else:
 
@@ -63,10 +73,11 @@ Decisions taken during design that live nowhere else:
 | Scope | The whole restructure, split into sequential per-slice PRs |
 | Rendering | Server-fetch the first page, client-side for interaction |
 
-**Known plan defects to warn implementers about:** the test bodies in Tasks 1 and 3 are
-unverified. Implementers should fix a test that does not work rather than contorting the
-implementation to satisfy a bad assertion. The plan's "Verification status (2026-08-02)"
-section lists which claims were checked and which were not.
+**What is still unverified:** `pnpm build` of the real `web/` tree with Sentry added
+(the composition was proved on a minimal Next 16 app); Playwright inside GitHub Actions;
+and the component project under CI's Node rather than local Node 24. Everything else was
+executed. Implementers should still fix a test that does not work rather than contorting
+the implementation to satisfy a bad assertion.
 
 ### 2.2 Sub-project B — design system and UX for all ages
 
@@ -88,7 +99,20 @@ configured token, and rate limiting — failed attempts are silent 404s that sit
 the rate limiter, so the endpoint can be brute-forced without trace. Recorded in
 `docs/ops/monitoring.md`. **Decide before anything scrapes the endpoint.**
 
-### 3.2 `pnpm format:check` fails on 112 web files
+### 3.2 R-lang — every page declares the wrong language
+
+`src/app/layout.tsx` hardcodes `<html lang="en">`, and `src/app/[locale]/layout.tsx`
+renders a `<div>`, so the selected locale never reaches the `lang` attribute. Screen
+readers apply English pronunciation rules to Vietnamese content across the whole
+product. Confirmed by request: `/vi/login` serves `<html lang="en">`.
+
+The fix is structural — `<html>`/`<body>` must move into a locale-aware layout while
+`src/app/page.tsx` and `src/app/api/*` still sit outside the `[locale]` segment.
+**Owner: sub-project A, PR 1 (auth)**, which already rewrites the locale, cookie and
+middleware machinery. A `test.fail()` in `web/e2e/smoke.spec.ts` (added by spine
+Task 11) keeps CI green while the bug exists and turns red the moment it is fixed.
+
+### 3.3 `pnpm format:check` fails on 112 web files
 
 Pre-existing prettier drift in files no recent branch has touched
 (`src/middleware.ts`, `src/store/auth.store.ts`, `tsconfig.json`, …). It is not part
@@ -96,7 +120,7 @@ of the documented web gate (`pnpm type-check && pnpm lint`), so CI stays green.
 Running `pnpm format` would fix it in one sweep at the cost of a 112-file diff —
 worth folding into sub-project A rather than doing standalone.
 
-### 3.3 Stale remote branches
+### 3.4 Stale remote branches
 
 107 branches on `origin`. 100 local branches were deleted on 2026-08-02 — 94 that git
 could prove merged, plus 6 squash-merged ones whose content was verified present in
@@ -104,7 +128,7 @@ could prove merged, plus 6 squash-merged ones whose content was verified present
 those calls was wrong. Sweep the remote once enough time has passed, or enable
 delete-branch-on-merge.
 
-### 3.4 Pre-existing platform debt
+### 3.5 Pre-existing platform debt
 
 Carried from `CLAUDE.md` — none of these are scheduled:
 
