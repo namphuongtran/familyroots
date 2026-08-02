@@ -1,4 +1,4 @@
-# ADR-033: W3C trace context for correlation, exported through Sentry
+# ADR-033: W3C Trace Context for Correlation, Exported Through Sentry
 
 ## Status
 Accepted — 2026-08-02
@@ -31,7 +31,9 @@ Adopt **W3C Trace Context** (`traceparent`) as the correlation identifier.
   the `sentry-trace` / `baggage` headers the web SDK sends. We additionally tag Sentry
   events with `trace_id`, which is the pivot from a Sentry issue to log search.
 - RED metrics are exposed at `GET /internal/metrics`, disabled by default and guarded
-  by `X-Metrics-Token`; failures return 404 per ADR-021.
+  by `X-Metrics-Token`; failures return 404 per ADR-021. The endpoint is
+  envelope-exempt — Prometheus `text/plain` exposition, not `{"data": ...}` — like
+  `GET /health` and `GET /exports/clan` (`docs/contracts/README.md`).
 
 ## Consequences
 - A user-visible error can be traced to an exact log line without reproducing it.
@@ -58,5 +60,4 @@ Adopt **W3C Trace Context** (`traceparent`) as the correlation identifier.
 
 ## Related
 - ADR-021 (non-enumerating auth surfaces) — why the metrics endpoint 404s
-- ADR-024 (non-canonical envelope exceptions) — `/internal/metrics` joins that list
 - Spec: `docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md`

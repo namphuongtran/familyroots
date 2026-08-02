@@ -51,6 +51,7 @@ graph TB
   subgraph runtime[Runtime and ops]
     a028[028 no external I/O holding a DB connection]:::comp
     a032[032 transient DB failure returns 503]:::comp
+    a033[033 W3C trace context via traceparent]:::comp
     a016[016 real-Postgres test harness]:::comp
     a020[020 export formats · JSON and GEDCOM]:::comp
   end
