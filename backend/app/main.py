@@ -43,6 +43,7 @@ from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.request_meta_middleware import RequestMetaMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
+from app.middleware.trace_middleware import TraceContextMiddleware
 from app.services.notification import init_firebase
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.translator import load_translations
@@ -185,9 +186,12 @@ def create_app() -> FastAPI:
 
     # Middleware order matters. Starlette wraps the LAST-added middleware OUTERMOST,
     # so we add in reverse of the desired execution order. Desired (outermost →
-    # innermost): TrustedHost → CORS → Language → RequestMeta → Sentry → RateLimit. This means:
+    # innermost): TrustedHost → CORS → TraceContext →
+    # Language → RequestMeta → Sentry → RateLimit. This means:
     #   - TrustedHost rejects a bad Host header before anything else runs;
     #   - CORS wraps the rate limiter, so even a 429 carries CORS headers;
+    #   - TraceContext sits directly inside CORS so every log line emitted during the
+    #     request — including the rate limiter's localized 429 — carries the trace id;
     #   - Language sets the locale before RateLimit builds its (localized) 429 envelope;
     #   - RequestMeta populates the ip/user-agent ContextVar for every request so
     #     AuditLogHandler can enrich audit rows regardless of path.
@@ -207,12 +211,15 @@ def create_app() -> FastAPI:
         RequestMetaMiddleware, trust_forwarded_for=settings.trust_forwarded_for
     )
     application.add_middleware(LanguageMiddleware)
+    application.add_middleware(TraceContextMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Browsers hide non-safelisted response headers from JS unless named here.
+        expose_headers=["traceparent"],
     )
     # outermost
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
