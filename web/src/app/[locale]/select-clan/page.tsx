@@ -47,7 +47,7 @@ export default function SelectClanPage() {
 
   return (
     <div className="min-h-screen bg-cream px-4 py-12">
-      <div className="mx-auto max-w-xl rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
+      <div className="mx-auto max-w-xl rounded-3xl border border-gray-100 bg-white p-8 shadow-xs">
         <div className="space-y-2">
           <h1 className="font-serif text-3xl text-gray-900">Choose your clan</h1>
           <p className="text-sm text-gray-500">

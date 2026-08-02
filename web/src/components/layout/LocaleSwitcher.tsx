@@ -33,7 +33,7 @@ export function LocaleSwitcher() {
       onChange={handleChange}
       className={cn(
         'text-sm border border-cream-200 rounded-md px-2 py-1',
-        'bg-white text-gray-700 hover:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-500',
+        'bg-white text-gray-700 hover:border-primary-400 focus:outline-hidden focus:ring-1 focus:ring-primary-500',
         'cursor-pointer',
       )}
       aria-label="Select language"

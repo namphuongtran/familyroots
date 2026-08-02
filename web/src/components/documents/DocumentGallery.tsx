@@ -86,7 +86,7 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
           </div>
 
           {canDeleteDocuments && (
-            <div className="absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="absolute inset-x-0 bottom-0 flex justify-end bg-linear-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
               {confirmDeleteId === doc.id ? (
                 <button
                   onClick={() => { deleteDocument.mutate(doc.id); setConfirmDeleteId(null) }}

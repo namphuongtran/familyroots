@@ -28,7 +28,7 @@ export default function EditMemberPage() {
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-md" />)}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs">
           <MemberForm
             member={member}
             onSuccess={() => router.push(`/${locale}/members/${id}`)}

@@ -60,7 +60,7 @@ export function MarriageForm({ personId, onSuccess, onCancel }: MarriageFormProp
         <input
           {...register('person2_id')}
           placeholder={t('spouse_id_placeholder')}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
         />
         {errors.person2_id && (
           <p className="text-xs text-red-500 mt-1">{errors.person2_id.message}</p>
@@ -73,7 +73,7 @@ export function MarriageForm({ personId, onSuccess, onCancel }: MarriageFormProp
         </label>
         <select
           {...register('status')}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
         >
           {MARRIAGE_STATUS_OPTIONS.map(s => (
             <option key={s} value={s}>{t(`status.${s}`)}</option>
@@ -84,11 +84,11 @@ export function MarriageForm({ personId, onSuccess, onCancel }: MarriageFormProp
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('marriage_date')}</label>
-          <input type="date" {...register('marriage_date')} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+          <input type="date" {...register('marriage_date')} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('divorce_date')}</label>
-          <input type="date" {...register('divorce_date')} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+          <input type="date" {...register('divorce_date')} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500" />
         </div>
       </div>
 
@@ -158,7 +158,7 @@ export function ParentChildForm({ personId, role, onSuccess, onCancel }: ParentC
         <input
           {...register(otherIdField)}
           placeholder={t(`${otherIdField}_placeholder`)}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
         />
         {errors[otherIdField] && (
           <p className="text-xs text-red-500 mt-1">{errors[otherIdField]?.message}</p>
@@ -171,7 +171,7 @@ export function ParentChildForm({ personId, role, onSuccess, onCancel }: ParentC
         </label>
         <select
           {...register('relationship_type')}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
         >
           {PARENT_CHILD_TYPE_OPTIONS.map(opt => (
             <option key={opt} value={opt}>{t(`type.${opt}`)}</option>

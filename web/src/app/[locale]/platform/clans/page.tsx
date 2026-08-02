@@ -15,7 +15,7 @@ export default function PlatformClansPage() {
       {isLoading ? (
         <p className="text-sm text-gray-400">Đang tải…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs divide-y divide-gray-50">
           {(data ?? []).map(clan => (
             <div key={clan.id} className="flex items-center justify-between px-4 py-3">
               <div>

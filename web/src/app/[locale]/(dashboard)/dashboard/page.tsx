@@ -24,7 +24,7 @@ export default async function DashboardPage() {
           <Link
             key={href}
             href={href}
-            className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 transition-all"
+            className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white border border-gray-100 shadow-xs hover:shadow-md hover:border-gray-200 transition-all"
           >
             <div className={`p-3 rounded-xl ${color}`}>
               <Icon className="h-5 w-5" />

@@ -36,7 +36,7 @@ export function MemberDetailClient({ personId }: { personId: string }) {
   return (
     <div className="space-y-6">
       {/* Header card */}
-      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-start gap-4">
+      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex items-start gap-4">
         <MemberAvatar
           avatarUrl={member.avatar_url}
           fullName={member.full_name}
@@ -58,7 +58,7 @@ export function MemberDetailClient({ personId }: { personId: string }) {
       </div>
 
       {/* Details */}
-      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-3">
+      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs space-y-3">
         <h3 className="text-sm font-semibold text-gray-600">{t('details')}</h3>
         {member.birth_place && (
           <Detail label={t('birth_place')} value={member.birth_place} />
@@ -73,7 +73,7 @@ export function MemberDetailClient({ personId }: { personId: string }) {
 
       {/* Marriages */}
       {marriages && marriages.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-3">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs space-y-3">
           <h3 className="text-sm font-semibold text-gray-600">{t('marriages')}</h3>
           <ul className="space-y-2">
             {marriages.map(m => (
@@ -90,7 +90,7 @@ export function MemberDetailClient({ personId }: { personId: string }) {
 
       {/* Parent-Child */}
       {parentChildRels && parentChildRels.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-3">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs space-y-3">
           <h3 className="text-sm font-semibold text-gray-600">{t('relationships')}</h3>
           <ul className="space-y-2">
             {parentChildRels.map(rel => (

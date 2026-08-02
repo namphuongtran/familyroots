@@ -71,7 +71,7 @@ export default async function BackofficeDashboardPage({
           return (
             <div
               key={stat.label}
-              className="overflow-hidden rounded-xl bg-white shadow-sm border border-gray-200"
+              className="overflow-hidden rounded-xl bg-white shadow-xs border border-gray-200"
             >
               <div className="p-5">
                 <div className="flex items-center gap-4">
@@ -134,7 +134,7 @@ function QuickAction({
   return (
     <a
       href={href}
-      className="relative flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:border-amber-400 hover:shadow transition-all"
+      className="relative flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-xs hover:border-amber-400 hover:shadow-sm transition-all"
     >
       {badge && (
         <span className="absolute top-4 right-4 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-xs font-medium text-white">

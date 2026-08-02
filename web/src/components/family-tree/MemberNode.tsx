@@ -26,7 +26,7 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
       onClick={() => router.push(`/persons/${data.id}`)}
       className={cn(
         'relative flex flex-col items-center gap-1 p-2 rounded-xl border-2 cursor-pointer',
-        'bg-white shadow-sm hover:shadow-md transition-all w-36',
+        'bg-white shadow-xs hover:shadow-md transition-all w-36',
         borderColor,
         selected && 'ring-2 ring-primary-400 ring-offset-1',
         isDeceased && 'opacity-70',
@@ -36,7 +36,7 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
         <span className="absolute -top-2 text-gold-500 text-xs">👑</span>
       )}
 
-      <Handle type="target" position={Position.Top} className="!bg-gray-400 !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="bg-gray-400! w-2! h-2!" />
 
       <MemberAvatar
         avatarUrl={data.avatar_url ?? undefined}
@@ -58,7 +58,7 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-gray-400 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="bg-gray-400! w-2! h-2!" />
     </div>
   )
 })

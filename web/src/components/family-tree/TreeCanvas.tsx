@@ -66,7 +66,7 @@ function TreeFlowInner({ rootPersonId }: { rootPersonId?: string }) {
             n.data?.gender === 'male' ? '#93c5fd' : n.data?.gender === 'female' ? '#f9a8d4' : '#d1d5db'
           }
           maskColor="rgba(0,0,0,.04)"
-          className="!rounded-lg !border !border-gray-200"
+          className="rounded-lg! border! border-gray-200!"
         />
         <TreeControls />
       </ReactFlow>

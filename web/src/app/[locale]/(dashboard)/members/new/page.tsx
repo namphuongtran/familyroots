@@ -20,7 +20,7 @@ export default function NewMemberPage() {
         <h1 className="font-serif text-xl text-gray-800">{t('new_title')}</h1>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs">
         <MemberForm
           onSuccess={id => router.push(`/${locale}/members/${id}`)}
           onCancel={() => router.back()}

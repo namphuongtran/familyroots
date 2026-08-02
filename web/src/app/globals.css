@@ -1,32 +1,151 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-:root {
-  --background: #F8F4EC;
-  --foreground: #1a1a1a;
+@custom-variant dark (&:is(.dark *));
 
-  /* Design tokens */
-  --primary: #C41E3A;
-  --primary-foreground: #ffffff;
-  --gold: #D4AF37;
-  --cream: #F8F4EC;
+@theme {
+  --color-primary-50: #fff5f5;
+  --color-primary-100: #ffe3e3;
+  --color-primary-200: #ffbdbd;
+  --color-primary-300: #ff9b9b;
+  --color-primary-400: #e86060;
+  --color-primary-500: #c41e3a;
+  --color-primary-600: #a31830;
+  --color-primary-700: #8b0000;
+  --color-primary-800: #6b0000;
+  --color-primary-900: #4a0000;
+  --color-primary: #c41e3a;
+  --color-primary-foreground: #ffffff;
 
-  /* shadcn/ui compatible tokens */
-  --card: #ffffff;
-  --card-foreground: #1a1a1a;
-  --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
-  --accent: #fef3c7;
-  --accent-foreground: #92400e;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #e5e7eb;
-  --input: #e5e7eb;
-  --ring: #C41E3A;
-  --radius: 0.5rem;
+  --color-gold-100: #fdf6dc;
+  --color-gold-200: #faeebc;
+  --color-gold-300: #f0d060;
+  --color-gold-400: #dfc030;
+  --color-gold-500: #d4af37;
+  --color-gold-600: #b89a2e;
+  --color-gold-700: #a07828;
+  --color-gold-800: #7a5c1e;
+  --color-gold-900: #544012;
+
+  --color-cream-50: #fdfbf7;
+  --color-cream-100: #f8f4ec;
+  --color-cream-200: #efe8d8;
+  --color-cream-300: #e2d5be;
+  --color-cream-400: #ceb99e;
+  --color-cream: #fdfbf7;
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --font-serif: Playfair Display, Noto Serif, Georgia, serif;
+  --font-sans: Inter, Noto Sans Vietnamese, system-ui, sans-serif;
+  --font-mono: JetBrains Mono, Menlo, monospace;
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-fade-in: fade-in 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@layer utilities {
+  :root {
+    --background: #f8f4ec;
+    --foreground: #1a1a1a;
+
+    /* Design tokens */
+    --primary: #c41e3a;
+    --primary-foreground: #ffffff;
+    --gold: #d4af37;
+    --cream: #f8f4ec;
+
+    /* shadcn/ui compatible tokens */
+    --card: #ffffff;
+    --card-foreground: #1a1a1a;
+    --popover: #ffffff;
+    --popover-foreground: #1a1a1a;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
+    --accent: #fef3c7;
+    --accent-foreground: #92400e;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --border: #e5e7eb;
+    --input: #e5e7eb;
+    --ring: #c41e3a;
+    --radius: 0.5rem;
+  }
 }
 
 @layer base {
@@ -42,29 +161,25 @@
   }
 }
 
-/* Smooth scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-/* ReactFlow overrides */
-.react-flow__attribution {
-  display: none;
-}
-
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  /* Smooth scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+
+  /* ReactFlow overrides */
+  .react-flow__attribution {
+    display: none;
   }
 }

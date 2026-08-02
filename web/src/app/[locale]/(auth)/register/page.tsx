@@ -98,7 +98,7 @@ export default function RegisterPage() {
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream px-4">
-        <div className="max-w-sm w-full text-center bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+        <div className="max-w-sm w-full text-center bg-white rounded-2xl p-8 shadow-xs border border-gray-100">
           <div className="text-4xl mb-3">OK</div>
           <h2 className="font-serif text-xl text-gray-800 mb-2">{t('register_title')}</h2>
           <p className="text-sm text-gray-500">{success}</p>
@@ -120,7 +120,7 @@ export default function RegisterPage() {
 
         <SupabaseSetupNotice />
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-800">
             {isOAuthMode ? t('oauth_onboarding_title') : t('register_title')}
           </h2>
@@ -157,7 +157,7 @@ export default function RegisterPage() {
               required
               value={fullName}
               onChange={e => setFullName(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -170,7 +170,7 @@ export default function RegisterPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               disabled={isOAuthMode}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -184,7 +184,7 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
               />
             </div>
           )}
@@ -219,7 +219,7 @@ export default function RegisterPage() {
                 value={clanId}
                 onChange={e => setClanId(e.target.value)}
                 placeholder="UUID"
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
               />
             </div>
           ) : (
@@ -230,7 +230,7 @@ export default function RegisterPage() {
                   required
                   value={clanName}
                   onChange={e => setClanName(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
@@ -239,7 +239,7 @@ export default function RegisterPage() {
                   required
                   value={clanSlug}
                   onChange={e => setClanSlug(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                 />
               </div>
             </>

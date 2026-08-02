@@ -100,7 +100,7 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
               value={title}
               onChange={e => setTitle(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <button

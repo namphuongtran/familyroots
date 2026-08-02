@@ -25,7 +25,7 @@ export function MemberSearch() {
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder={t('search_placeholder')}
-          className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
         />
         {query && (
           <button
