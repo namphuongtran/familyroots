@@ -9,6 +9,7 @@ Per-service developer docs live next to the code in `backend/CLAUDE.md`, `web/CL
 ```
 docs/
 ├── README.md           # this index
+├── sad/                # Software Architecture Document (arc42 + C4) — start here for the big picture
 ├── architecture/       # cross-cutting design
 ├── contracts/          # public API + event contracts (one file per surface)
 ├── decisions/          # ADRs (architecture decision records, numbered)
@@ -29,6 +30,13 @@ Before starting a task, read the docs that own the surface you're touching:
 | Genealogy business rules | [architecture/domain-rules.md](architecture/domain-rules.md) |
 | An architectural choice (or breaking change) | [decisions/README.md](decisions/README.md) — and add an ADR in the same PR |
 | Deploy / infra / incidents | [ops/README.md](ops/README.md) |
+
+## Software Architecture Document (SAD)
+
+The whole-system view, **arc42** structure with **C4** diagrams (Context → Container →
+Component → Code), covering backend, web, mobile, and database. Start at
+[sad/README.md](sad/README.md) — it is a synthesis; the per-surface docs below stay
+authoritative.
 
 ## Architecture
 
