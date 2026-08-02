@@ -2191,17 +2191,28 @@ review screens, `FieldDiff` is the **only** component that accepts the write sha
 it adapts to `HistoricalDateDisplay` internally. If a second component ever needs it,
 that is the signal the exception has spread too far.
 
-**J18 — An approval queue that cannot show who it is approving.** `PendingClanUser` is
-`{id, user_id, role, created_at}` — no name, no email, and not even the `person_id` its
-sibling list carries. Approving grants a stranger read access to hundreds of living
-relatives' records; it is an identity decision made against a UUID. Three options were
-weighed: design the screen as if names existed (dishonest), design against the UUID
-(ships a dangerous screen), or design the screen the decision requires and name the gap.
+**J18 — An approval queue that cannot show who it is approving.** Both
+`GET /clans/me/users/pending` and `GET /clans/me/users` return
+`{id, user_id, role, person_id, created_at}` — **no name and no email**. Approving grants
+a stranger read access to hundreds of living relatives' records, and it is an identity
+decision made against a UUID. `person_id` helps only when the user has already been
+linked to a person; for a fresh registrant it is `null`, which is exactly the case an
+admin most needs to judge.
+
+Three options were weighed: design as if names existed (dishonest), design against the
+UUID (ships a dangerous screen), or design what the decision requires and name the gap.
 This spec takes the third: §7.10a specifies the row with `full_name` and `email`, and
 until those exist the interim row's primary action is `Xem chi tiết`, not `Duyệt`.
-**Open question for the backend:** add `full_name` and `email` to `PendingClanUser` and
-`ClanUserSummary`, and close the ADR-024 divergence where only the approved list carries
-`person_id`.
+
+**The backend fix is nearly free, which raises the priority rather than lowering it.**
+Verified in `app/api/v1/clans.py` (lines 95–143): `user_profile` is *already* eager-loaded
+on both endpoints via the same LEFT JOIN, and `UserProfile` already carries `email` and
+`display_name`. The values are in memory and simply not serialised — both handlers build
+their dict by hand and omit them. This is two lines per endpoint, not a query change.
+
+*(Corrected during review: an earlier draft of this entry claimed the pending list lacks
+`person_id`. It does not — both lists carry it. The missing fields are `email` and
+`display_name`, and they are missing from both.)*
 
 **J19 — There is no way to leave a clan.** `clan.cannot_remove_self` blocks an admin
 removing themselves regardless of admin count, and no leave/transfer endpoint exists for
