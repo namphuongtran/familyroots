@@ -159,12 +159,18 @@ graph LR
 
 - **Correlation:** every request carries a W3C `traceparent` — `TraceContextMiddleware`
   continues an inbound one or generates a new one, and sits just inside `CORS` in the
-  chain (outermost → innermost: `TrustedHost → CORS → TraceContext → Language →
-  RequestMeta → Sentry → RateLimit`) so every log line for the request, including a
-  localized 429 from the rate limiter, carries it.
+  chain (outermost → innermost: `Prometheus → TrustedHost → CORS → TraceContext →
+  Language → RequestMeta → Sentry → RateLimit`) so every log line for the request,
+  including a localized 429 from the rate limiter, carries it. Prometheus is outermost
+  so RED latency covers the whole stack — `TrustedHost` rejections included. An
+  unhandled 500 is the exception to the chain: Starlette hoists the catch-all
+  `Exception` handler into `ServerErrorMiddleware`, outside all of the above, so the
+  context is re-read from the request scope's `state` there.
 - **Logs:** JSON log lines gain `trace_id`/`span_id`, plus `route`/`clan_id` where known,
-  while inside a request. Outside one (scheduler, purge jobs) those keys are **absent**,
-  not null, so a trace-id log search never matches system-initiated work.
+  while inside a request. `route` is the **raw request path** (UUIDs and all), not a route
+  template; `clan_id` is the **claimed** `X-Current-Clan-Id` header, truncated to 64
+  chars — not an authorized clan. Outside a request (scheduler, purge jobs) those keys
+  are **absent**, not null, so a trace-id log search never matches system-initiated work.
 - **Response/CORS:** the response echoes `traceparent`, and CORS exposes it — browsers
   hide non-safelisted response headers from JS otherwise — so a web client can show the
   user a trace id to quote to an admin.

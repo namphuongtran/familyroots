@@ -188,10 +188,18 @@ def create_app() -> FastAPI:
     application.add_exception_handler(Exception, unhandled_exception_handler)
 
     # Middleware order matters. Starlette wraps the LAST-added middleware OUTERMOST,
-    # so we add in reverse of the desired execution order. Desired (outermost →
-    # innermost): TrustedHost → CORS → TraceContext →
-    # Language → RequestMeta → Sentry → RateLimit. This means:
-    #   - TrustedHost rejects a bad Host header before anything else runs;
+    # so we add in reverse of the desired execution order.
+    #
+    #   Desired, outermost → innermost:
+    #     Prometheus → TrustedHost → CORS → TraceContext
+    #       → Language → RequestMeta → Sentry → RateLimit
+    #
+    # Every add_middleware call belongs in this block — including the one hidden
+    # inside Instrumentator.instrument() at the end — or the real order silently
+    # diverges from the documented one. This means:
+    #   - Prometheus is truly outermost, so RED latency measures the whole stack;
+    #     the trade-off is that TrustedHost rejections are counted too;
+    #   - TrustedHost rejects a bad Host header before any of our middleware runs;
     #   - CORS wraps the rate limiter, so even a 429 carries CORS headers;
     #   - TraceContext sits directly inside CORS so every log line emitted during the
     #     request — including the rate limiter's localized 429 — carries the trace id;
@@ -224,8 +232,21 @@ def create_app() -> FastAPI:
         # Browsers hide non-safelisted response headers from JS unless named here.
         expose_headers=["traceparent"],
     )
-    # outermost
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+    # RED metrics into an app-owned registry (not the process-global default) so
+    # building several apps in one test session cannot raise Duplicated timeseries.
+    # instrument() is itself an add_middleware call, so it lives here, last:
+    # truly outermost — metrics time the whole stack, including TrustedHost rejections.
+    # excluded_handlers are re.search patterns against the route template (or, when
+    # unmatched, the raw path), so anchor them — a bare "/health" would also swallow
+    # something like /healthz-probe.
+    metrics_registry = CollectorRegistry()
+    application.state.metrics_registry = metrics_registry
+    Instrumentator(
+        registry=metrics_registry,
+        excluded_handlers=["^/health$", "^/internal/metrics$"],
+    ).instrument(application)
+    # outermost
 
     # NOTE: No tenant middleware — clan isolation is enforced in the
     # application/repository layer (every clan-scoped read takes clan_id).
@@ -235,15 +256,6 @@ def create_app() -> FastAPI:
 
     # Include API v1 routes
     application.include_router(api_v1_router, prefix="/api/v1")
-
-    # RED metrics into an app-owned registry (not the process-global default) so
-    # building several apps in one test session cannot raise Duplicated timeseries.
-    metrics_registry = CollectorRegistry()
-    application.state.metrics_registry = metrics_registry
-    Instrumentator(
-        registry=metrics_registry,
-        excluded_handlers=["/health", "/internal/metrics"],
-    ).instrument(application)
 
     @application.get("/internal/metrics", include_in_schema=False)
     async def internal_metrics(request: Request) -> Response:

@@ -78,9 +78,15 @@ Never bypass these checks for convenience.
 
 Middleware order matters — Starlette wraps the **last-added** middleware **outermost**,
 so `create_app` registers in reverse of the desired execution order. Actual order
-(outermost → innermost): `TrustedHost → CORS → TraceContext → Language → RequestMeta →
-Sentry → RateLimit`. `TraceContext` sits just inside `CORS` so every log line for the
-request — including the rate limiter's localized 429 — carries the trace id.
+(outermost → innermost): `Prometheus → TrustedHost → CORS → TraceContext → Language →
+RequestMeta → Sentry → RateLimit` (asserted by
+`tests/unit/test_metrics_endpoint.py::test_documented_middleware_order_matches_reality`).
+`Prometheus` is added by `Instrumentator(...).instrument(application)` — a *hidden*
+`add_middleware` call — and is deliberately outermost so RED latency measures the whole
+stack, at the cost of counting `TrustedHost` rejections too; keep it inside the ordering
+block or the real order silently drifts from this one. `TraceContext` sits just inside
+`CORS` so every log line for the request — including the rate limiter's localized 429 —
+carries the trace id.
 
 **Observability (ADR-033):** `TraceContextMiddleware` continues an inbound
 `traceparent` header or starts a new W3C trace, storing it in a ContextVar

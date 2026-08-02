@@ -69,13 +69,65 @@ def test_correct_token_returns_prometheus_exposition(
 ) -> None:
     monkeypatch.setattr(settings, "METRICS_ENABLED", True)
     monkeypatch.setattr(settings, "METRICS_TOKEN", "s3cret")
-    client.get("/health")  # generate at least one sample
+    # Must NOT be /health or /internal/metrics — both are in excluded_handlers, so
+    # they record nothing and the exposition would contain only the #HELP/#TYPE
+    # preamble of an empty metric. A 401 still counts as a recorded request.
+    assert client.get("/api/v1/persons").status_code in {401, 403, 404, 422}
     response = client.get("/internal/metrics", headers={"X-Metrics-Token": "s3cret"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/plain")
-    assert "http_request" in response.text
+    samples = [
+        line for line in response.text.splitlines() if line.startswith("http_requests_total{")
+    ]
+    assert samples, response.text
+
+
+def test_excluded_handlers_are_anchored(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`excluded_handlers` are unanchored `re.search` patterns, so a bare "/health"
+    would silently drop every route merely containing it from the metrics."""
+    application = create_app()
+
+    @application.get("/healthz-probe")
+    async def probe() -> dict[str, str]:
+        return {"status": "ok"}
+
+    local = TestClient(application, raise_server_exceptions=False)
+    monkeypatch.setattr(settings, "METRICS_ENABLED", True)
+    monkeypatch.setattr(settings, "METRICS_TOKEN", "s3cret")
+    assert local.get("/healthz-probe").status_code == 200
+    body = local.get("/internal/metrics", headers={"X-Metrics-Token": "s3cret"}).text
+    assert 'handler="/healthz-probe"' in body
+
+
+def test_health_itself_stays_excluded(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The anchors must still exclude what they were added for — /health is polled
+    every few seconds by the platform and would dominate the series."""
+    monkeypatch.setattr(settings, "METRICS_ENABLED", True)
+    monkeypatch.setattr(settings, "METRICS_TOKEN", "s3cret")
+    client.get("/health")
+    body = client.get("/internal/metrics", headers={"X-Metrics-Token": "s3cret"}).text
+    assert 'handler="/health"' not in body
 
 
 def test_metrics_route_is_hidden_from_openapi(client: TestClient) -> None:
     """The public schema is the client contract; an ops endpoint does not belong in it."""
     assert "/internal/metrics" not in client.get("/openapi.json").json()["paths"]
+
+
+def test_documented_middleware_order_matches_reality() -> None:
+    """`Instrumentator.instrument()` is a hidden `add_middleware` call; when it sat
+    outside the ordering block in `create_app`, three documents described an order
+    the app did not have. Lock the real one in."""
+    # getattr: Starlette types `cls` as _MiddlewareFactory, which has no __name__.
+    order = [getattr(m.cls, "__name__", repr(m.cls)) for m in create_app().user_middleware]
+    expected = [
+        "PrometheusInstrumentatorMiddleware",
+        "TrustedHostMiddleware",
+        "CORSMiddleware",
+        "TraceContextMiddleware",
+        "LanguageMiddleware",
+        "RequestMetaMiddleware",
+        *(["SentryMiddleware"] if settings.SENTRY_DSN else []),
+        "RateLimitMiddleware",
+    ]
+    assert order == expected
