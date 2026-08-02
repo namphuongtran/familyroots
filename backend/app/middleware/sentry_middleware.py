@@ -5,6 +5,10 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.trace_context import get_trace_context
+
+__all__ = ["SentryMiddleware", "sentry_sdk"]
+
 
 class SentryMiddleware(BaseHTTPMiddleware):
     """Attach request context to Sentry scope for richer error reports."""
@@ -13,6 +17,12 @@ class SentryMiddleware(BaseHTTPMiddleware):
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("path", request.url.path)
             scope.set_tag("method", request.method)
+
+            # Pivot from a Sentry issue to the JSON log lines for the same request.
+            # Populated by TraceContextMiddleware, which is registered outside this one.
+            trace = get_trace_context()
+            if trace is not None:
+                scope.set_tag("trace_id", trace.trace_id)
 
             clan_id = request.headers.get("X-Current-Clan-Id")
             if clan_id:
