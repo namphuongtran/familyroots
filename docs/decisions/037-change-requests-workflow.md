@@ -236,4 +236,42 @@ blind, and it is batched so it never becomes N+1.
 unproposable. `change_requests` is still outside the RLS rollout, so its isolation is
 single-layer (application) rather than defense-in-depth — a candidate for a future
 RLS phase. And there is no notification when a proposal is submitted or reviewed:
-reviewers must visit the queue. Both are additive follow-ups, neither blocks this.
+reviewers must visit the queue. All three are additive follow-ups, none blocks this.
+
+## Incidental finding — person *creation* is broken under a live RLS session
+
+Verified while adding the non-bypass-session tests below (`TestUnderRlsSession`).
+This is **pre-existing and unrelated to change requests** — it reproduces with a bare
+`POST /api/v1/persons` and no change-request code involved — but it is recorded here
+because it is the first place it was measured.
+
+With `RLS_ENABLED=True` (the default) on a request session, `POST /api/v1/persons`
+fails with `InsufficientPrivilege: new row violates row-level security policy for
+table "persons"`. Isolated with a minimal probe on one session and one transaction,
+with `current_user = familyroots_app` and `app.clan_id` correctly set:
+
+| statement | result |
+|---|---|
+| `INSERT INTO persons (…, created_by_clan_id = <GUC>, …)` | **succeeds** |
+| the same INSERT plus `RETURNING created_at` | **fails** |
+
+So it is not the `persons_ins` `WITH CHECK` (migration 029 handles that by keying it
+on `created_by_clan_id`, not membership). It is the `RETURNING` clause: PostgreSQL
+evaluates the returned row against the **SELECT** policy, and `persons_sel` requires a
+`clan_memberships` row that does not exist yet — `save_with_membership` inserts
+`persons` before `clan_memberships`, exactly the ordering migration 029's own
+docstring calls out for the INSERT check but does not follow through to `RETURNING`.
+The ORM always emits `RETURNING created_at, updated_at` because those columns have
+server defaults, so every ORM person-create hits it.
+
+It is invisible today because no test drives an HTTP write through `RlsSession` — the
+Phase 1–4 RLS tests all exercise repositories directly, and every route-level test
+overrides `get_db` with a privileged sessionmaker.
+
+Not fixed here: it is ADR-008 / migration-029 territory, needs its own migration
+(likely a membership-independent SELECT policy for the just-inserted row, or dropping
+the server defaults so no `RETURNING` is emitted), and fixing it inside this change
+would be unscoped. `TestUnderRlsSession` therefore seeds its target person through a
+privileged session and says so, so the RLS coverage it *does* provide — that
+`change_requests` has the grants it needs and that approval's person UPDATE satisfies
+`persons_upd` — is honest about its boundary.

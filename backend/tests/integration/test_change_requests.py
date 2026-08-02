@@ -13,7 +13,7 @@ for. ``TestNegativeControl`` proves that suite would actually catch a regression
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
 import pytest
@@ -22,7 +22,8 @@ from fastapi import Header
 from httpx2 import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.database import get_db
+from app.core.database import RlsSession, get_db
+from app.core.rls import set_request_clan_id
 from app.core.security import get_current_user
 from app.main import create_app
 
@@ -839,6 +840,122 @@ class TestListContract:
         detail = (await client.get(f"{CR}/{cr_id}", headers=editor)).text
         assert "0900000000" not in detail
         assert "cu.to@example.com" not in detail
+
+
+# ── Under the real RLS request session ───────────────────────────────────────
+
+
+class TestUnderRlsSession:
+    """The flow on a NON-BYPASS request session, as production runs it (ADR-008).
+
+    Every other test here overrides ``get_db`` with a plain sessionmaker, so it runs
+    as the privileged migration role and never exercises the RLS seam. That would
+    hide two real risks specific to this feature:
+
+    - ``change_requests`` is not in the RLS rollout and has no policy, but the
+      request role still needs table grants on it (inherited from migration 002's
+      ``GRANT … ON ALL TABLES IN SCHEMA public``, which ran after 001 created the
+      table). Without them every endpoint here would 500 in production.
+    - Approval's write to ``persons`` must satisfy migration 029's Phase-4
+      ``persons_upd USING (membership)`` policy.
+
+    The target person is seeded through a privileged session rather than
+    ``POST /api/v1/persons`` **deliberately**: person *creation* is currently broken
+    under a real RLS session for reasons unrelated to change requests (the ORM's
+    ``INSERT … RETURNING`` is evaluated against ``persons_sel``, whose membership
+    predicate cannot hold yet because ``clan_memberships`` is inserted after
+    ``persons``). Seeding around it keeps this test honest about what it covers.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset_clan_context(self) -> Generator[None]:
+        set_request_clan_id(None)
+        yield
+        set_request_clan_id(None)
+
+    @pytest.fixture()
+    async def rls_client(self, migrated_db_url: str) -> AsyncGenerator[AsyncClient]:
+        engine = create_async_engine(migrated_db_url)
+        factory = async_sessionmaker(engine, sync_session_class=RlsSession, expire_on_commit=False)
+        app = create_app()
+
+        async def _override_db() -> AsyncGenerator[AsyncSession]:
+            async with factory() as session:
+                yield session
+
+        app.dependency_overrides[get_db] = _override_db
+        app.dependency_overrides[get_current_user] = _override_current_user
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+            yield ac
+        await engine.dispose()
+
+    @staticmethod
+    async def _seed_person(
+        session_factory: async_sessionmaker[AsyncSession], seed: dict[str, Any]
+    ) -> uuid.UUID:
+        person_id = uuid.uuid4()
+        async with session_factory() as s:
+            await s.execute(
+                sa.text(
+                    "INSERT INTO persons "
+                    "(id, full_name, birth_place, created_by_clan_id, created_by) "
+                    "VALUES (:i, 'Cụ Tổ', 'Hà Nội', :c, :a)"
+                ),
+                {"i": person_id, "c": seed["clan_id"], "a": seed["editor_id"]},
+            )
+            await s.execute(
+                sa.text("INSERT INTO clan_memberships (person_id, clan_id) VALUES (:p, :c)"),
+                {"p": person_id, "c": seed["clan_id"]},
+            )
+            await s.commit()
+        return person_id
+
+    async def test_submit_list_and_approve_survive_the_non_bypass_role(
+        self,
+        rls_client: AsyncClient,
+        clan_a: dict[str, Any],
+        session_factory: async_sessionmaker[AsyncSession],
+    ) -> None:
+        person_id = await self._seed_person(session_factory, clan_a)
+        editor, viewer = _headers(clan_a, "editor"), _headers(clan_a, "viewer")
+
+        submitted = await _submit(rls_client, viewer, str(person_id), {"birth_place": "Nam Định"})
+        assert submitted.status_code == 201, submitted.text
+        cr_id = submitted.json()["data"]["id"]
+
+        listed = await rls_client.get(CR, headers=editor)
+        assert [row["id"] for row in listed.json()["data"]] == [cr_id]
+
+        resp = await rls_client.post(f"{CR}/{cr_id}/approve", headers=editor, json={})
+        assert resp.status_code == 200, resp.text
+        after = (await rls_client.get(f"/api/v1/persons/{person_id}", headers=viewer)).json()[
+            "data"
+        ]
+        assert after["birth_place"] == "Nam Định"
+
+    async def test_clan_b_still_cannot_reach_clan_a_request(
+        self,
+        rls_client: AsyncClient,
+        clan_a: dict[str, Any],
+        clan_b: dict[str, Any],
+        session_factory: async_sessionmaker[AsyncSession],
+    ) -> None:
+        person_id = await self._seed_person(session_factory, clan_a)
+        cr_id = (
+            await _submit(rls_client, _headers(clan_a, "viewer"), str(person_id), {"notes": "n"})
+        ).json()["data"]["id"]
+
+        resp = await rls_client.post(
+            f"{CR}/{cr_id}/approve", headers=_headers(clan_b, "admin"), json={}
+        )
+        assert resp.status_code == 404
+        assert resp.json()["error"]["code"] == "change_request_not_found"
+
+        ok = await rls_client.post(
+            f"{CR}/{cr_id}/approve", headers=_headers(clan_a, "admin"), json={}
+        )
+        assert ok.status_code == 200, ok.text
 
 
 # ── Negative control ─────────────────────────────────────────────────────────
