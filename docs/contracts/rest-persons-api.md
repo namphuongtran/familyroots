@@ -71,6 +71,29 @@ array under `data` (no `meta` — these are not cursor-paginated).
 - NOTE: `created_by_clan_id` is **not** accepted on create/update — it is provenance,
   always stamped from the active clan (see the 2026-06-28 design review, C5).
 
+### `avatar_url` is read-only (ADR-036) — **breaking for writers**
+
+`avatar_url` is returned on every person projection (`PersonResponse`, `PersonSummary`,
+`PersonMini`, `PersonDetail`, search results) and is **rejected on write**:
+
+- `POST /persons` or `PATCH /persons/{id}` carrying an `avatar_url` key — any value,
+  including `null` and `""` — returns **422** `validation_error` with
+  `detail.fields` containing `body.avatar_url`. It is *not* silently ignored: a silent
+  drop would leave a client believing it had set an avatar.
+- This applies to every role. There is no admin or self-edit carve-out.
+
+Set an avatar with **`PATCH /documents/{document_id}/set-avatar`** instead
+([rest-documents-api.md](rest-documents-api.md)); that endpoint publishes the image and
+returns the permanent URL, which is the same value subsequently echoed here.
+
+The value is a **permanent, unauthenticated public URL** — no expiry, no token,
+fetchable by anyone who has it, regardless of clan or login. Safe to cache and persist
+on the client. Never construct or guess one; only ever render what the API returned.
+
+Migration for clients that were writing this field: drop `avatar_url` from person
+create/update payloads (leaving it in will now fail the whole request), and move the
+avatar-setting UI onto the document upload → set-avatar flow.
+
 ### Optimistic concurrency (ADR-017)
 
 - Every person response (`GET /persons/{id}`, list/search/batch items, and the
@@ -104,6 +127,11 @@ Example error shape:
 }
 
 ## Versioning & Compatibility Rules
+- **2026-08-02 (ADR-036), breaking for writers**: `avatar_url` moved from
+  client-writable to server-managed; sending it on create/update is now a 422. It
+  remains present and unchanged on every read. Shipped without a version bump because
+  no backend code ever populated the field and its meaning was documented as undefined
+  — there was no working write behaviour to preserve.
 - Non-breaking: add optional fields, add new include profile values, add new optional query params.
 - Breaking: remove/rename fields, change required headers, change error envelope.
 - Breaking changes require either:

@@ -47,6 +47,12 @@ class FakeStorage:
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return "https://signed/" + storage_path
 
+    async def publish_public(
+        self, *, source_path: str, destination_path: str, content_type: str | None
+    ) -> str:
+        # ADR-036 avatar publish — not exercised by this module.
+        raise AssertionError("publish_public called unexpectedly")
+
 
 class FakeRepo:
     def __init__(self, rec: Recorder, existing: Document | None = None) -> None:
@@ -72,6 +78,14 @@ class FakeRepo:
 
     async def get_person_avatars(self, *args: object, **kwargs: object) -> list[Document]:
         return []
+
+
+class FakePersonRepo:
+    """PersonRepository stand-in. Only `set_avatar` touches it (ADR-036) and no test
+    in this module calls that, so any access here means the wiring drifted."""
+
+    def __getattr__(self, name: str) -> object:
+        raise AssertionError(f"unexpected person-repository call: {name}")
 
 
 class FakeUow:
@@ -140,7 +154,7 @@ async def test_upload_storage_key_cannot_escape_clan_prefix() -> None:
     rec = Recorder()
     storage = FakeStorage(rec)
     clan_id = uuid.uuid4()
-    handler = DocumentCommandHandler(FakeRepo(rec), storage, FakeUow(rec))
+    handler = DocumentCommandHandler(FakeRepo(rec), storage, FakeUow(rec), FakePersonRepo())  # type: ignore[arg-type]
 
     await handler.upload(
         file_content=b"x",
@@ -163,7 +177,12 @@ async def test_upload_storage_key_cannot_escape_clan_prefix() -> None:
 async def test_upload_deletes_blob_when_commit_fails() -> None:
     rec = Recorder()
     storage = FakeStorage(rec)
-    handler = DocumentCommandHandler(FakeRepo(rec), storage, FakeUow(rec, fail_commit=True))
+    handler = DocumentCommandHandler(
+        FakeRepo(rec),
+        storage,
+        FakeUow(rec, fail_commit=True),
+        FakePersonRepo(),  # type: ignore[arg-type]
+    )
 
     with pytest.raises(RuntimeError, match="commit failed"):
         await handler.upload(
@@ -191,7 +210,7 @@ async def test_delete_soft_deletes_and_never_touches_storage() -> None:
     doc = _doc(clan_id)
     storage = FakeStorage(rec)
     repo = FakeRepo(rec, existing=doc)
-    handler = DocumentCommandHandler(repo, storage, FakeUow(rec))
+    handler = DocumentCommandHandler(repo, storage, FakeUow(rec), FakePersonRepo())  # type: ignore[arg-type]
 
     await handler.delete(document_id=doc.id, clan_id=clan_id, actor=_actor())
 
@@ -212,7 +231,7 @@ async def test_delete_succeeds_even_if_storage_would_have_failed() -> None:
     repo = FakeRepo(rec, existing=doc)
     uow = FakeUow(rec)
     storage = FakeStorage(rec, fail_delete=True)
-    handler = DocumentCommandHandler(repo, storage, uow)
+    handler = DocumentCommandHandler(repo, storage, uow, FakePersonRepo())  # type: ignore[arg-type]
 
     await handler.delete(document_id=doc.id, clan_id=clan_id, actor=_actor())
 

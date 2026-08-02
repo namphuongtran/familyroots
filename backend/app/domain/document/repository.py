@@ -75,6 +75,20 @@ class StorageNotFoundError(StorageError):
     """The requested storage object does not exist — surfaced as HTTP 404."""
 
 
+class StorageBucketNotConfiguredError(StorageError):
+    """The target bucket is missing, inaccessible, or not public — HTTP 503
+    ``storage_bucket_not_configured`` (ADR-036).
+
+    Distinct from ``StorageUnavailableError`` on purpose: this is not a transient
+    provider outage but an infrastructure gap the operator must close by hand (the
+    public avatars bucket is created in the Supabase dashboard, not by this code).
+    Distinct from ``StorageNotFoundError`` too — a missing *bucket* is our
+    misconfiguration, a missing *object* is the caller's 404. Surfacing it as its
+    own code is what keeps a misconfigured deployment from either 500-ing or,
+    worse, "succeeding" while writing a URL that will never resolve.
+    """
+
+
 class StoragePort(Protocol):
     """Abstract storage contract — decouples from Supabase."""
 
@@ -100,4 +114,24 @@ class StoragePort(Protocol):
         self, storage_path: str, expires_in: int = DEFAULT_PRESIGN_TTL
     ) -> str:
         """Generate a time-limited presigned URL."""
+        ...
+
+    async def publish_public(
+        self, *, source_path: str, destination_path: str, content_type: str | None
+    ) -> str:
+        """Copy a private object into the provider's PUBLIC bucket; return its URL.
+
+        The returned URL must be **permanent and unauthenticated** — no signature,
+        no expiry, no query string (ADR-036). It is stored in ``persons.avatar_url``,
+        so an expiring URL would silently rot the column; ``Person.set_avatar_url``
+        rejects anything carrying a query string as a second line of defence.
+
+        ``destination_path`` is built by the application from the acting clan id, so
+        the public object stays inside that clan's prefix exactly like the private one.
+
+        Raises ``StorageBucketNotConfiguredError`` when the public bucket is missing
+        or is not public-read, ``StorageNotFoundError`` when ``source_path`` is gone,
+        and ``StorageUnavailableError`` for provider/transport failures. It never
+        returns a URL it could not actually publish.
+        """
         ...

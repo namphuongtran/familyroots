@@ -38,6 +38,7 @@ from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.export_query_port import SqlAlchemyExportQueryPort
+from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.services.clan_export import build_clan_export, to_json_bytes
 from app.services.gedcom_export import build_gedcom
@@ -70,6 +71,12 @@ class TxnRecordingStorage:
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         self.presign_in_txn.append(self._session.in_transaction())
         return f"https://signed.example/{storage_path}"
+
+    async def publish_public(
+        self, *, source_path: str, destination_path: str, content_type: str | None
+    ) -> str:
+        # ADR-036 avatar publish — not exercised by this module.
+        raise AssertionError("publish_public called unexpectedly")
 
 
 @pytest.fixture()
@@ -164,7 +171,7 @@ async def test_upload_holds_no_connection_during_blob_upload(
         uow = SqlAlchemyUnitOfWork(session, dispatcher)
         repo = SqlAlchemyDocumentRepository(uow)
         storage = TxnRecordingStorage(session)
-        handler = DocumentCommandHandler(repo, storage, uow)
+        handler = DocumentCommandHandler(repo, storage, uow, SqlAlchemyPersonRepository(uow))
 
         await handler.upload(
             file_content=_PNG_BYTES,
@@ -196,7 +203,7 @@ async def test_upload_validates_before_uploading(
         uow = SqlAlchemyUnitOfWork(session, dispatcher)
         repo = SqlAlchemyDocumentRepository(uow)
         storage = TxnRecordingStorage(session)
-        handler = DocumentCommandHandler(repo, storage, uow)
+        handler = DocumentCommandHandler(repo, storage, uow, SqlAlchemyPersonRepository(uow))
 
         with pytest.raises(EntityNotFoundError) as exc_info:
             await handler.upload(
@@ -226,7 +233,7 @@ async def test_upload_happy_path_persists_and_returns_presigned(
         uow = SqlAlchemyUnitOfWork(session, dispatcher)
         repo = SqlAlchemyDocumentRepository(uow)
         storage = TxnRecordingStorage(session)
-        handler = DocumentCommandHandler(repo, storage, uow)
+        handler = DocumentCommandHandler(repo, storage, uow, SqlAlchemyPersonRepository(uow))
 
         response = await handler.upload(
             file_content=_PNG_BYTES,

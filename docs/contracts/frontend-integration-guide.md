@@ -446,20 +446,41 @@ Code: `app/infrastructure/storage/supabase_adapter.py`,
   that timestamp; do not hardcode a TTL client-side (the server may shorten it).
 - `GET /documents` (list) returns summaries **without** URLs — so also without an
   expiry — fetch the detail endpoint for a downloadable/displayable URL.
-- `PATCH /documents/{id}/set-avatar` internally presigns a 30-day URL
-  (`expires_in=86400*30`) but the route response contains only
-  `{"message", "document_id"}` — the URL never reaches the client.
+- `PATCH /documents/{id}/set-avatar` does **not** presign at all any more (ADR-036);
+  see "Avatars" below.
 
 **Rule: presigned URLs are ephemeral.** Never persist them (DB, Hive, localStorage)
 or bake them into cached view models beyond the TTL. When an image URL starts
 failing (403/expired), re-fetch `GET /documents/{id}` for a fresh one.
 
-**⚠️ UNDEFINED — needs backend decision**: `persons.avatar_url` (and the `avatar_url`
-echoed on tree/person/event responses) is a plain client-writable string column
-(max 500 chars); no backend code populates it from the set-avatar flow. If a client
-writes a presigned URL into it, it silently expires after the TTL. What clients
-should store there (a permanent public URL? nothing, resolving avatars via the
-avatar document instead?) is not defined by the backend today.
+### Avatars are the one exception — permanent public URLs (ADR-036)
+
+`persons.avatar_url` (and the `avatar_url` echoed on person, tree, search and event
+responses) is now defined: it is a **permanent, publicly fetchable URL** into a
+dedicated public avatars bucket that the backend writes.
+
+- **Read**: safe to cache and persist indefinitely — DB, Hive, localStorage, an
+  `<img src>`. It has no expiry, no token and no query string, and it is fetchable
+  without an `Authorization` header. This is the opposite of the presign rule above,
+  and the only field it applies to.
+- **Write**: only `PATCH /documents/{document_id}/set-avatar` sets it. That response
+  now returns the URL:
+  `{"data": {"message", "document_id", "avatar_url"}}`.
+- **Do not send `avatar_url` to `POST /persons` or `PATCH /persons/{id}`.** Any value
+  — including `null` or `""` — is rejected with **422** `validation_error`,
+  `detail.fields: ["body.avatar_url"]`, and fails the whole request. If your person
+  form currently round-trips the field, strip it from the payload.
+- Never construct or guess an avatar URL; render only what the API returned.
+- The object path is stable per person, so **replacing an avatar reuses the same URL**.
+  Expect up to ~5 minutes (`AVATAR_CACHE_CONTROL_SECONDS`) before caches pick up a new
+  portrait; append your own cache-busting query parameter if you need an instant swap.
+- New failure to handle on set-avatar: **503 `storage_bucket_not_configured`** means
+  the environment's public avatars bucket has not been created yet — an operator
+  action, not something a retry fixes. Surface it as "avatars are not available in
+  this environment" rather than a generic retry prompt.
+- Privacy, so the UI does not over-promise: an avatar is readable by **anyone with the
+  link, without logging in, regardless of clan**, and stays readable after the
+  underlying document is deleted. Do not describe avatars as private or clan-only.
 
 ---
 

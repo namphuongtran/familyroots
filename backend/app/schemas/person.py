@@ -4,11 +4,26 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.historical_date import HistoricalDate, coerce_response_dates
 
 _PERSON_DATE_FIELDS = {"birth_date": "lunar_birth_date", "death_date": "lunar_death_date"}
+
+# ADR-036: avatar_url is server-managed. It is declared on the write schemas (so the
+# rejection is discoverable in OpenAPI and the 422 names the offending field) but
+# `exclude=True` keeps it out of model_dump(), so it can never reach a command DTO.
+_AVATAR_URL_REJECTED = (
+    "avatar_url is server-managed and cannot be set directly. "
+    "Use PATCH /documents/{document_id}/set-avatar, which publishes the image to the "
+    "public avatars bucket and stamps the resulting permanent URL."
+)
+_AVATAR_URL_FIELD = Field(
+    None,
+    max_length=500,
+    exclude=True,
+    description=f"Read-only. {_AVATAR_URL_REJECTED}",
+)
 
 
 class PersonCreateRequest(BaseModel):
@@ -45,8 +60,13 @@ class PersonCreateRequest(BaseModel):
     email: str | None = Field(None, max_length=255)
 
     biography: str | None = None
-    avatar_url: str | None = Field(None, max_length=500)
+    avatar_url: str | None = _AVATAR_URL_FIELD
     notes: str | None = None
+
+    @field_validator("avatar_url")
+    @classmethod
+    def _reject_client_avatar_url(cls, value: str | None) -> str | None:
+        raise ValueError(_AVATAR_URL_REJECTED)
 
     # created_by_clan_id is provenance, not client-settable: the handler always
     # stamps it from the active clan (X-Current-Clan-Id). Accepting it from the
@@ -91,8 +111,17 @@ class PersonUpdateRequest(BaseModel):
     email: str | None = Field(None, max_length=255)
 
     biography: str | None = None
-    avatar_url: str | None = Field(None, max_length=500)
+    avatar_url: str | None = _AVATAR_URL_FIELD
     notes: str | None = None
+
+    @field_validator("avatar_url")
+    @classmethod
+    def _reject_client_avatar_url(cls, value: str | None) -> str | None:
+        # Fires only when the client actually sends the key (Pydantic does not run
+        # field validators for unset defaults), so an ordinary PATCH is unaffected
+        # and a PATCH that tries to write an avatar gets a 422 naming the field —
+        # rather than the pre-ADR-036 behaviour of accepting a URL nothing maintains.
+        raise ValueError(_AVATAR_URL_REJECTED)
 
     # Optimistic concurrency (ADR-017): required so a stale client can't silently
     # clobber a concurrent edit. The route pops this out of `changes` before it

@@ -93,7 +93,6 @@ class PersonCommandHandler:
             phone=cmd.phone,
             email=cmd.email,
             biography=cmd.biography,
-            avatar_url=cmd.avatar_url,
             notes=cmd.notes,
             created_by_clan_id=cmd.created_by_clan_id or cmd.clan_id,
         )
@@ -126,7 +125,8 @@ class PersonCommandHandler:
             allowed_fields = {
                 "phone",
                 "email",
-                "avatar_url",
+                # avatar_url is NOT here (ADR-036): nobody, viewer or admin, writes it
+                # through PATCH /persons — it is stamped by the set-avatar use case.
                 "residence_place",
                 "biography",
                 "notes",

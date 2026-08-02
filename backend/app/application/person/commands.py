@@ -53,8 +53,10 @@ class CreatePerson:
     email: str | None = None
 
     biography: str | None = None
-    avatar_url: str | None = None
     notes: str | None = None
+    # No avatar_url: it is server-managed (ADR-036) and reaches persons only via the
+    # set-avatar use case. The request schema excludes it from model_dump(), so the
+    # route's `CreatePerson(**dumped)` cannot smuggle one in.
     created_by_clan_id: uuid.UUID | None = None
 
     # Membership-specific
