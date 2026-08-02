@@ -72,11 +72,15 @@ the whole ASGI stack. **Disabled by default**; there is no scraper deployed yet.
 
 ## Correlation — `traceparent`
 Every response carries a W3C `traceparent`, continued from the caller's if it sent one,
-and CORS exposes it so a browser can show a user the trace id. JSON log lines inside a
-request carry `trace_id`/`span_id`, plus `route` (the **raw** request path) and `clan_id`
-(the **claimed** `X-Current-Clan-Id`, truncated to 64 chars — not an authorized clan).
-Sentry events are tagged with `trace_id`: that is the pivot from a Sentry issue to a log
-search. → ADR-033.
+and CORS exposes it so a browser can show a user the trace id — **except on an
+unhandled 500**: `ServerErrorMiddleware` sits outside `CORSMiddleware`, so that response
+bypasses CORS's header injection; `traceparent` is still present but not CORS-exposed,
+so a browser can't read it. JSON log lines inside a request carry `trace_id`/`span_id`,
+plus `route` (the **raw** request path) and `clan_id` (the **claimed**
+`X-Current-Clan-Id`, truncated to 64 chars — not an authorized clan). Sentry events are
+tagged with `trace_id`: that, plus the log line, is the pivot from a Sentry issue to a
+log search — and is how a 500 gets correlated in practice, since the browser can't read
+the header for that case. → ADR-033.
 
 ## What to watch
 - 5xx rate and the `internal_error` code (unhandled exceptions).

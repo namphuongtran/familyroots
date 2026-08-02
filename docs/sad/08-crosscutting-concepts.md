@@ -173,7 +173,15 @@ graph LR
   are **absent**, not null, so a trace-id log search never matches system-initiated work.
 - **Response/CORS:** the response echoes `traceparent`, and CORS exposes it — browsers
   hide non-safelisted response headers from JS otherwise — so a web client can show the
-  user a trace id to quote to an admin.
+  user a trace id to quote to an admin. **This does not hold on an unhandled 500**:
+  `ServerErrorMiddleware` wraps `CORSMiddleware` (it is Starlette's true outermost
+  layer, ahead of even `Prometheus` in the chain above), so the 500 response is sent
+  through the raw ASGI `send`, never through CORS's header-injecting wrapper. The
+  `traceparent` header is still on the response — `unhandled_exception_handler` sets it
+  from the state-stashed context — but with no `access-control-expose-headers`, so JS in
+  a browser cannot read it. Pre-existing Starlette structure, not introduced by this
+  design. Correlation for a 500 in practice comes from the backend log line and the
+  Sentry event tag, not the browser.
 - **Errors/tracing:** Sentry keeps its own distributed tracing (FastAPI integration,
   `sentry-trace` / `baggage` headers) on backend, web, and mobile (mobile init still
   TODO); we additionally tag events with `trace_id`, the pivot from a Sentry issue to

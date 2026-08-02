@@ -38,7 +38,15 @@ Adopt **W3C Trace Context** (`traceparent`) as the correlation identifier.
   request scope's `state`, and `unhandled_exception_handler` reads it back so the 500
   still logs a `trace_id` and still returns a `traceparent`.
 - The response echoes `traceparent`, and CORS exposes it so the browser can show the
-  user a trace id to quote to an admin.
+  user a trace id to quote to an admin — **except on an unhandled 500**: Starlette's
+  `ServerErrorMiddleware` sits outside `CORSMiddleware` (see above), so the response it
+  sends bypasses CORS's header-injecting wrapper entirely. The `traceparent` header is
+  still present on that response (`unhandled_exception_handler` sets it from the
+  stashed context), but with no `access-control-expose-headers`, so a browser cannot
+  read it via JS. This is pre-existing Starlette structure, not something this ADR's
+  implementation changed. In that case the trace id still reaches the backend log line
+  and the tagged Sentry event, which is how a 500 gets correlated in practice — the
+  browser-readable path is for handled error responses, not this one.
 - Sentry continues to do its own distributed tracing via the FastAPI integration and
   the `sentry-trace` / `baggage` headers the web SDK sends. We additionally tag Sentry
   events with `trace_id`, which is the pivot from a Sentry issue to log search.

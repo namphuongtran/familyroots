@@ -91,7 +91,11 @@ carries the trace id.
 **Observability (ADR-033):** `TraceContextMiddleware` continues an inbound
 `traceparent` header or starts a new W3C trace, storing it in a ContextVar
 (`app/core/trace_context.py`); the response echoes `traceparent`, and CORS
-`expose_headers` it so browsers can surface it to a user. `JsonFormatter`
+`expose_headers` it so browsers can surface it to a user — except on an unhandled
+500, where `ServerErrorMiddleware` (Starlette's true outermost layer, ahead of
+`Prometheus`) sends the response outside `CORSMiddleware`'s wrapper: `traceparent`
+is still on that response but not CORS-exposed, so a browser can't read it; the log
+line and tagged Sentry event are the correlation path for that case. `JsonFormatter`
 (`app/core/logging.py`) adds `trace_id`/`span_id` to every log line emitted inside a
 request, plus `route`/`clan_id` where known — outside a request (scheduler, purge)
 these keys are absent entirely, not null. `SentryMiddleware` additionally tags
