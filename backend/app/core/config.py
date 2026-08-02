@@ -40,6 +40,20 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_STORAGE_BUCKET: str = "family-roots-files"
 
+    # Public avatar bucket (ADR-036). Deliberately a SECOND bucket: everything in
+    # SUPABASE_STORAGE_BUCKET is private and read through short-lived presigned URLs,
+    # while objects published here are world-readable forever by design. Keeping the
+    # two apart is what stops "make avatars public" from making every document public.
+    # The bucket itself is created by hand in the Supabase dashboard (public read,
+    # see docs/architecture/storage.md); when it is missing the avatar write path
+    # fails with a mapped 503 rather than storing a URL that never resolves.
+    SUPABASE_AVATAR_BUCKET: str = "family-roots-avatars"
+
+    # Cache-Control max-age (seconds) stamped on published avatar objects. The object
+    # path is stable per person, so a replaced avatar keeps its URL and only becomes
+    # visible to a cache after this window — short by default for that reason.
+    AVATAR_CACHE_CONTROL_SECONDS: int = 300
+
     # Firebase FCM
     FIREBASE_CREDENTIALS_PATH: str = "./firebase-credentials.json"
 

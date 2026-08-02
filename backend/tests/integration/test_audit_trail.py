@@ -30,6 +30,7 @@ from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
+from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -43,6 +44,12 @@ class _FakeStorage:
 
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return f"https://example.test/{storage_path}"
+
+    async def publish_public(
+        self, *, source_path: str, destination_path: str, content_type: str | None
+    ) -> str:
+        # ADR-036 avatar publish — not exercised by this module.
+        raise AssertionError("publish_public called unexpectedly")
 
     async def delete(self, storage_path: str) -> bool:
         return True
@@ -138,7 +145,9 @@ async def test_document_upload_writes_audit_log(async_engine: AsyncEngine) -> No
     async with maker() as s:
         await _seed_clan(s, clan_id)
         uow = _uow(s)
-        handler = DocumentCommandHandler(SqlAlchemyDocumentRepository(uow), _FakeStorage(), uow)
+        handler = DocumentCommandHandler(
+            SqlAlchemyDocumentRepository(uow), _FakeStorage(), uow, SqlAlchemyPersonRepository(uow)
+        )
         result: Any = await handler.upload(
             file_content=b"x",
             filename="p.jpg",

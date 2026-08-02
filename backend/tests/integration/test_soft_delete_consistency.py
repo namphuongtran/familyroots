@@ -54,6 +54,7 @@ from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRep
 from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
+from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
 from app.infrastructure.persistence.relationship_repository import (
     SqlAlchemyMarriageRepository,
     SqlAlchemyParentChildRepository,
@@ -146,6 +147,12 @@ class FakeStorage:
 
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return f"https://signed.example/{storage_path}"
+
+    async def publish_public(
+        self, *, source_path: str, destination_path: str, content_type: str | None
+    ) -> str:
+        # ADR-036 avatar publish — not exercised by this module.
+        raise AssertionError("publish_public called unexpectedly")
 
 
 def _platform_today() -> date:
@@ -299,7 +306,9 @@ async def test_document_upload_blocked_for_soft_deleted_person(
     clan_id = await _clan(async_session)
     storage = FakeStorage()
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = DocumentCommandHandler(SqlAlchemyDocumentRepository(uow), storage, uow)
+    handler = DocumentCommandHandler(
+        SqlAlchemyDocumentRepository(uow), storage, uow, SqlAlchemyPersonRepository(uow)
+    )
     actor = ActorInfo(user_id=creator, role="editor")
 
     # Restore-symmetry control.

@@ -166,6 +166,26 @@ async def storage_unavailable_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
+async def storage_bucket_not_configured_handler(request: Request, exc: Exception) -> JSONResponse:
+    """The target bucket is missing / not public — 503 with its own code (ADR-036).
+
+    Separate from ``storage_unavailable`` so an operator reading the log or the client
+    reading the envelope can tell "the provider is down, retry" apart from "the public
+    avatars bucket was never created, go create it". The alternative — letting a
+    missing bucket 500, or letting the write "succeed" with an unresolvable URL —
+    is exactly what this code exists to prevent."""
+    from app.services.translator import t
+
+    logger.error(
+        "Storage bucket not configured on %s %s: %s", request.method, request.url.path, exc
+    )
+    code = "storage_bucket_not_configured"
+    return JSONResponse(
+        status_code=503,
+        content={"error": {"code": code, "message": t(f"error.{code}"), "detail": {}}},
+    )
+
+
 async def storage_not_found_handler(request: Request, exc: Exception) -> JSONResponse:
     """A referenced storage object does not exist — surface as 404, not 500."""
     from app.services.translator import t

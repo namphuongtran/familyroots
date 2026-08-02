@@ -33,6 +33,12 @@ class _NoStorage:
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return storage_path
 
+    async def publish_public(
+        self, *, source_path: str, destination_path: str, content_type: str | None
+    ) -> str:
+        # ADR-036 avatar publish — not exercised by this module.
+        raise AssertionError("publish_public called unexpectedly")
+
     async def delete(self, storage_path: str) -> bool:
         return True
 

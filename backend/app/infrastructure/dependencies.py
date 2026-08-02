@@ -253,7 +253,14 @@ def get_branch_query_handler(db: AsyncSession = Depends(get_db)) -> BranchQueryH
 
 def get_document_command_handler(db: AsyncSession = Depends(get_db)) -> DocumentCommandHandler:
     uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
-    return DocumentCommandHandler(SqlAlchemyDocumentRepository(uow), SupabaseStorageAdapter(), uow)
+    # The person repository shares the same UoW/session, so set-avatar's document
+    # flags and its persons.avatar_url write commit as one transaction (ADR-036).
+    return DocumentCommandHandler(
+        SqlAlchemyDocumentRepository(uow),
+        SupabaseStorageAdapter(),
+        uow,
+        SqlAlchemyPersonRepository(uow),
+    )
 
 
 def get_document_query_handler(db: AsyncSession = Depends(get_db)) -> DocumentQueryHandler:

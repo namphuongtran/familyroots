@@ -21,7 +21,8 @@ from app.domain.document.repository import (
     StorageError,
     StoragePort,
 )
-from app.domain.shared.exceptions import EntityNotFoundError
+from app.domain.person.repository import PersonRepository
+from app.domain.shared.exceptions import BusinessRuleViolation, EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 from app.schemas.document import DocumentResponse, DocumentSummary
@@ -57,6 +58,22 @@ def _presign_expiry(expires_in: int = DEFAULT_PRESIGN_TTL) -> datetime:
     return datetime.now(UTC) + timedelta(seconds=expires_in)
 
 
+def _avatar_object_path(clan_id: uuid.UUID, person_id: uuid.UUID) -> str:
+    """The public avatars bucket key for one person, as seen by one clan (ADR-036).
+
+    Clan-prefixed exactly like the private document keys, so the storage tenancy
+    boundary is identical in both buckets — a public bucket is the last place a path
+    should stop being clan-scoped. Both ids come from server state (the authenticated
+    clan header and the document's own person link), never from client input, so
+    there is nothing to sanitize the way ``_safe_extension`` must.
+
+    Deliberately extension-less and stable per person: replacing someone's avatar
+    upserts the same object, so the stored URL never changes and no orphan copies
+    accumulate. The browser gets the format from the stored Content-Type.
+    """
+    return f"clans/{clan_id}/avatars/{person_id}"
+
+
 class DocumentCommandHandler:
     """Handles document write operations."""
 
@@ -65,10 +82,16 @@ class DocumentCommandHandler:
         repo: DocumentRepository,
         storage: StoragePort,
         uow: UnitOfWork,
+        person_repo: PersonRepository,
     ) -> None:
         self._repo = repo
         self._storage = storage
         self._uow = uow
+        # set_avatar writes persons.avatar_url, which belongs to the Person aggregate.
+        # It goes through the Person repository + Person domain method (not a raw
+        # UPDATE from here) so the write still emits PersonUpdated and lands in the
+        # same UoW transaction as the document change.
+        self._person_repo = person_repo
 
     async def upload(
         self,
@@ -219,26 +242,71 @@ class DocumentCommandHandler:
         document_id: uuid.UUID,
         clan_id: uuid.UUID,
         actor: ActorInfo,
-    ) -> str | None:
-        """Set a photo document as the person's avatar. Returns presigned URL."""
+    ) -> str:
+        """Publish a photo document as the person's avatar; return its permanent URL.
+
+        ADR-036. This is the ONLY writer of ``persons.avatar_url``. It publishes the
+        image into the dedicated public avatars bucket under a stable clan-scoped
+        path and stamps the resulting durable URL onto the person.
+
+        It deliberately no longer mints a 30-day presigned URL. A presigned URL is
+        exactly what must never land in that column: it expires, and the column then
+        rots silently with nothing to notice or repair it.
+
+        Ordering, and why it changed: the publish now gates the DB write, so a
+        storage failure is a 503 and the avatar is simply not set. Previously
+        set-avatar was a pure-DB write that tolerated a storage outage — it can't be
+        any more, because "``is_avatar = true`` but no published object" is a
+        half-applied state with a permanently wrong URL (or none) attached to a
+        person. Failing closed is the only consistent option.
+        """
         doc = await self._get_or_raise(document_id, clan_id)
         doc.set_avatar()  # validates person linkage and type
+        person_id = doc.person_id
+        assert person_id is not None  # guaranteed by Document.set_avatar()
 
-        # Clear old avatars
-        old_avatars = await self._repo.get_person_avatars(
-            clan_id,
-            doc.person_id,  # type: ignore[arg-type]
-            doc.id,
+        # Clan-isolation backstop before anything becomes world-readable. get_by_id is
+        # already clan-scoped, so reaching here with a foreign clan_id or a storage key
+        # outside this clan's prefix means the row is inconsistent with its own path —
+        # refuse rather than copy another clan's object into a public bucket, where the
+        # mistake would be irreversible and visible to strangers.
+        if doc.clan_id != clan_id or not doc.storage_path.startswith(f"clans/{clan_id}/"):
+            raise BusinessRuleViolation(
+                "document.avatar_source_outside_clan", {"document_id": str(doc.id)}
+            )
+
+        # The person must be a live member of the acting clan (clan-scoped read). This
+        # is also what stops clan B from stamping a URL onto a person it cannot see.
+        person = await self._person_repo.get_in_clan(person_id, clan_id)
+        if not person:
+            raise EntityNotFoundError("person_not_found", {"person_id": str(person_id)})
+
+        # ADR-028: release the pooled connection before the blob copy below. Nothing
+        # is pending — everything so far was a read — so rollback is the cheap release.
+        await self._uow.rollback()
+
+        avatar_url = await self._storage.publish_public(
+            source_path=doc.storage_path,
+            destination_path=_avatar_object_path(clan_id, person_id),
+            content_type=doc.mime_type,
         )
+
+        # Blob is live and permanently addressable; now record it in one transaction.
+        old_avatars = await self._repo.get_person_avatars(clan_id, person_id, doc.id)
         for old in old_avatars:
             old.unset_avatar()
             await self._repo.save(old)
-
         await self._repo.save(doc)
 
-        # Commit the avatar change (audit + doc + old-avatar clears) FIRST — a
-        # pure-DB write must not be gated on a read-side storage call. Then fetch
-        # the presigned URL best-effort; a storage outage returns None, not a 503.
+        # Person aggregate + domain event (PersonUpdated), not a raw column write, so
+        # the avatar change is audited like every other person edit. set_avatar_url
+        # re-checks that the URL is permanent — a presigned URL cannot get in even if
+        # a future storage adapter returned one.
+        person.set_avatar_url(avatar_url, actor, clan_id)
+        await self._person_repo.save(person)
+
+        # emit_audit_event commits: the document flags, the person URL, the
+        # PersonUpdated audit row and this one all land in the same transaction.
         await emit_audit_event(
             self._uow,
             action="document.set_avatar",
@@ -246,13 +314,13 @@ class DocumentCommandHandler:
             resource_id=doc.id,
             actor=actor,
             clan_id=clan_id,
-            new_value={"is_avatar": True, "person_id": str(doc.person_id)},
+            new_value={
+                "is_avatar": True,
+                "person_id": str(person_id),
+                "avatar_url": avatar_url,
+            },
         )
-        try:
-            return await self._storage.get_presigned_url(doc.storage_path, expires_in=86400 * 30)
-        except StorageError:
-            logger.warning("Avatar set but presign failed for %s", doc.storage_path)
-            return None
+        return avatar_url
 
     async def _get_or_raise(self, doc_id: uuid.UUID, clan_id: uuid.UUID) -> Document:
         doc = await self._repo.get_by_id(doc_id, clan_id)

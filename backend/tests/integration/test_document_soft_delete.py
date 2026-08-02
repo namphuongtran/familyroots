@@ -59,6 +59,12 @@ class FakeStorage:
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return f"https://signed.example/{storage_path}"
 
+    async def publish_public(
+        self, *, source_path: str, destination_path: str, content_type: str | None
+    ) -> str:
+        # ADR-036 avatar publish — not exercised by this module.
+        raise AssertionError("publish_public called unexpectedly")
+
 
 @pytest.fixture()
 async def session_factory(
@@ -112,6 +118,7 @@ async def client(
 ) -> AsyncGenerator[AsyncClient]:
     from app.infrastructure.event_dispatcher import create_event_dispatcher
     from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
+    from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
     from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
     app = create_app()
@@ -132,7 +139,12 @@ async def client(
 
         async with session_factory() as db:
             uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
-            yield DocumentCommandHandler(SqlAlchemyDocumentRepository(uow), fake_storage, uow)
+            yield DocumentCommandHandler(
+                SqlAlchemyDocumentRepository(uow),
+                fake_storage,
+                uow,
+                SqlAlchemyPersonRepository(uow),
+            )
 
     async def _make_query_handler() -> AsyncGenerator[Any]:
         from app.application.document.handlers import DocumentQueryHandler

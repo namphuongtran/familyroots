@@ -30,6 +30,7 @@ from app.core.exceptions import (
     identity_email_not_verified_handler,
     identity_unavailable_handler,
     integrity_error_handler,
+    storage_bucket_not_configured_handler,
     storage_not_found_handler,
     storage_unavailable_handler,
     unhandled_exception_handler,
@@ -41,7 +42,11 @@ from app.domain.auth.identity_provider import (
     IdentityEmailNotVerifiedError,
     IdentityUnavailableError,
 )
-from app.domain.document.repository import StorageNotFoundError, StorageUnavailableError
+from app.domain.document.repository import (
+    StorageBucketNotConfiguredError,
+    StorageNotFoundError,
+    StorageUnavailableError,
+)
 from app.domain.shared.exceptions import DomainError
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.request_meta_middleware import RequestMetaMiddleware
@@ -174,6 +179,9 @@ def create_app() -> FastAPI:
     )
     application.add_exception_handler(StorageUnavailableError, storage_unavailable_handler)
     application.add_exception_handler(StorageNotFoundError, storage_not_found_handler)
+    application.add_exception_handler(
+        StorageBucketNotConfiguredError, storage_bucket_not_configured_handler
+    )
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
     application.add_exception_handler(StarletteHTTPException, http_exception_handler)
     # More specific than the catch-all Exception handler: a DB constraint violation
