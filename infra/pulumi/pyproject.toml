@@ -3,14 +3,16 @@ name = "familyroots-infra"
 version = "0.1.0"
 description = "FamilyRoots platform infrastructure as code"
 requires-python = ">=3.12"
+dependencies = [
+    "pulumi>=3.0.0",
+    "pulumi-github>=6.0.0",
+]
 
+# This is a Pulumi program, not a distributable library — there is nothing to
+# build or install. `package = false` keeps `uv sync` from handing the project
+# to a build backend that would have no package layout to find.
 [tool.uv]
-dev-dependencies = []
+package = false
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project.dependencies]
-pulumi = ">=3.0.0"
-pulumi-github = ">=6.0.0"
+[dependency-groups]
+dev = []

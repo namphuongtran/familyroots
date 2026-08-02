@@ -7,7 +7,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/l10n/app_localizations.dart';
 import '../../../../shared/widgets/event_card.dart';
 import '../../../../core/di/injection.dart';
-import '../../../../domain/entities/entities.dart';
 import '../bloc/event_list_cubit.dart';
 import '../bloc/event_list_state.dart';
 
@@ -70,7 +69,7 @@ class _HomeView extends StatelessWidget {
                             ),
                           ],
                         ),
-                        Positioned(
+                        const Positioned(
                           top: -40,
                           right: -40,
                           child: Opacity(
