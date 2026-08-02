@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Providers } from '@/components/providers'
 import { routing, type Locale } from '@/i18n/routing'
+import { WebVitalsReporter } from '@/shared/telemetry/web-vitals'
 
 const inter = Inter({ subsets: ['latin', 'vietnamese'], variable: '--font-inter' })
 
@@ -31,6 +32,7 @@ export default async function LocaleLayout({
 
   return (
     <div className={`${inter.variable} antialiased`}>
+      <WebVitalsReporter />
       <NextIntlClientProvider locale={locale} messages={messages}>
         <Providers>{children}</Providers>
       </NextIntlClientProvider>
