@@ -57,6 +57,12 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 | Soft-delete person             | ✅           | ✅     | ❌      | ❌      |
 | Restore deleted person         | ✅           | ✅     | ❌      | ❌      |
 | Hard-delete person             | ✅           | ❌     | ❌      | ❌      |
+| **CHANGE REQUESTS** (ADR-037)  |             |       |        |        |
+| Submit a change request (`POST /change-requests`) | ✅ | ✅ | ✅ | ✅ |
+| View own change requests        | ✅           | ✅     | ✅      | ✅      |
+| View the clan's change-request queue | ✅      | ✅     | ✅      | ❌      |
+| Approve a change request (applies the edit) | ✅ | ✅ | ✅  | ❌      |
+| Reject a change request         | ✅           | ✅     | ✅      | ❌      |
 | **MARRIAGES & PARENT-CHILD**   |             |       |        |        |
 | View relationships             | ✅           | ✅     | ✅      | ✅      |
 | Create marriage/parent-child   | ✅           | ✅     | ✅      | ❌      |
@@ -93,6 +99,23 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 | **NOTIFICATIONS**              |             |       |        |        |
 | Receive push notifications     | ✅           | ✅     | ✅      | ✅      |
 | Configure notification settings| ✅           | ✅     | ✅      | ✅      |
+
+### Why change-request review is editor-and-admin, not admin-only
+
+An `editor` can already make the identical person edit unilaterally via
+`PATCH /persons/{id}`. Routing the same edit through an admin because it arrived as a
+proposal would protect nothing — it only adds latency, and a clan with one busy admin
+would stall the whole correction queue. So approve/reject use the hierarchical
+`RequireEditor` (editor **or** admin) rather than an explicit admin set.
+
+For the same reason there is no self-approval ban: an editor who submits and then
+approves their own proposal has done exactly what they could have done in one PATCH,
+and both the submission and the approval are separately audit-logged. See ADR-037.
+
+Submitting is open to every approved member (`RequireViewer`), but in practice
+viewers are the users — everybody else can just make the edit. A viewer's list and
+detail responses are scoped to their own proposals; another member's proposal returns
+404, not 403 (ADR-021).
 
 ## Implementation
 

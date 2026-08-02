@@ -634,27 +634,60 @@ table the runtime actually uses (migration `004_fcm_tokens`); the earlier
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `change_requests`
-Configurable cross-approval workflow. Uses `clan_settings.approval_config`.
+Propose-and-review corrections to clan data / Đề nghị sửa gia phả.
 
-> ⚠️ **Status (2026-07-02) — dormant / not implemented.** The table + ORM model +
-> Pydantic schema exist, but **no runtime code** references them (no domain context,
-> handler, or route). This is a planned feature (cross-clan propose-and-approve)
-> on the roadmap (D1).
+> ✅ **Status (2026-08-02) — live (ADR-037).** Dormant since migration 001; woken up
+> as-is with **no migration** — the table, its CHECK vocabularies and its indexes were
+> adopted exactly as they stood. Served by `/api/v1/change-requests`
+> ([contract](../contracts/rest-change-requests-api.md)).
+>
+> **Executed scope is narrower than the CHECK constraints on purpose**:
+> `action='update'` on `resource_type='person'` only. The constraints stay wide
+> because they are the storage vocabulary — widening the *executed* set later needs
+> no migration and no contract change.
+>
+> `clan_settings.approval_config` is **not** consulted; the reviewer set is fixed at
+> editor-or-admin (see ADR-037 for why, and `rbac.md` for the matrix). Not part of
+> the RLS rollout (ADR-008) — the explicit `clan_id` predicate in
+> `change_request_repository` is the only isolation layer for this table.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | |
+| `clan_id` | UUID | FK → clans.id (RESTRICT), NOT NULL | Owning clan — the isolation basis |
 | `requester_id` | UUID | NOT NULL | User who proposed the change / Người đề xuất thay đổi |
-| `action` | VARCHAR(20) | NOT NULL | create, update, delete |
-| `resource_type` | VARCHAR(50) | NOT NULL | person, marriage, parent_child, event, document / Loại dữ liệu |
+| `action` | VARCHAR(20) | NOT NULL, CHECK | create, update, delete — **only `update` is executed today** |
+| `resource_type` | VARCHAR(50) | NOT NULL, CHECK | person, marriage, parent_child, event, document — **only `person` is executed today** |
 | `resource_id` | UUID | | NULL for create; existing id for update/delete |
-| `payload` | JSONB | | The proposed data / Dữ liệu đề xuất (JSON) |
-| `status` | VARCHAR(20) | DEFAULT 'pending' | pending, approved, rejected |
-| `reviewed_by` | UUID | | Người duyệt / Admin thực hiện duyệt |
+| `payload` | JSONB | | The proposal body / Dữ liệu đề xuất — see the storage contract below |
+| `status` | VARCHAR(20) | DEFAULT 'pending', CHECK | pending, approved, rejected |
+| `reviewed_by` | UUID | | Người duyệt (editor or admin) |
 | `reviewed_at` | TIMESTAMPTZ | | |
 | `review_notes` | TEXT | | Lý do từ chối/duyệt |
-| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+| `created_at` | TIMESTAMPTZ | NOT NULL, auto | Cursor key with `id`, ASC |
+
+**`payload` storage contract** (`change_request_mapper.py`, read defensively):
+
+```json
+{
+  "changes":     { "birth_date": "1920-05-03" },
+  "base_values": { "birth_date": "1919-01-01" },
+  "base_version": 7,
+  "note": "Gia phả cũ ghi năm Canh Thân"
+}
+```
+
+`base_values` snapshots **only the proposed fields** (never the whole row: it would be
+a second, staler mirror of `persons` and would drag contact PII into the payload), and
+`base_version` is the target's OCC `version` at submission. Together they are the
+three-way merge's baseline — the reason a week-old correction can still be applied
+after unrelated edits, and the reason a competing edit to the *same* field is refused
+instead of silently overwritten. Values are JSON-normalized (dates are ISO strings) so
+they compare directly against the live row. The payload is **immutable after
+submission**; a review writes only `status`/`reviewed_by`/`reviewed_at`/`review_notes`.
+
+> **Note:** migration 008 dropped this table's `updated_at` trigger (it has no
+> `updated_at` column) and it stays dropped — nothing in the workflow needs one.
 
 ### `branches`
 Chi/phái/nhánh within a clan. Supports nested hierarchy.
