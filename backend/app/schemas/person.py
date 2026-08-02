@@ -77,8 +77,15 @@ class PersonCreateRequest(BaseModel):
     # PATCH updates the schema can't see); the schema only validates individual fields.
 
 
-class PersonUpdateRequest(BaseModel):
-    """Request body for updating a person. All fields optional."""
+class PersonChangeFields(BaseModel):
+    """Every client-settable person field, all optional — the shape of an edit.
+
+    Shared by ``PersonUpdateRequest`` (which adds the required OCC token) and by the
+    change-request payload, so a proposed edit is validated and normalized by exactly
+    the same field definitions as a direct PATCH. Keeping one declaration is the
+    point: a field added here is immediately proposable and immediately updatable,
+    with identical bounds, rather than drifting between two copies.
+    """
 
     full_name: str | None = Field(None, min_length=1, max_length=255)
     birth_name: str | None = Field(None, max_length=255)
@@ -121,17 +128,26 @@ class PersonUpdateRequest(BaseModel):
         # field validators for unset defaults), so an ordinary PATCH is unaffected
         # and a PATCH that tries to write an avatar gets a 422 naming the field —
         # rather than the pre-ADR-036 behaviour of accepting a URL nothing maintains.
+        #
+        # Living on PersonChangeFields rather than on PersonUpdateRequest is
+        # deliberate: the change-request payload validates against the same base, so
+        # ADR-036's rejection covers a proposed edit too, with no second rule to keep
+        # in step.
         raise ValueError(_AVATAR_URL_REJECTED)
+
+    # created_by_clan_id is provenance and is NOT settable here — reassigning it
+    # would transfer claim-review control of the person to another clan.
+    # (death_date >= birth_date is enforced in the Person domain entity — see the note
+    # on PersonCreateRequest.)
+
+
+class PersonUpdateRequest(PersonChangeFields):
+    """Request body for updating a person. All content fields optional."""
 
     # Optimistic concurrency (ADR-017): required so a stale client can't silently
     # clobber a concurrent edit. The route pops this out of `changes` before it
     # reaches the aggregate — it is never itself a client-updatable field.
     expected_version: int = Field(..., ge=1)
-
-    # created_by_clan_id is provenance and is NOT updatable — reassigning it would
-    # transfer claim-review control of the person to another clan.
-    # (death_date >= birth_date is enforced in the Person domain entity — see the note
-    # on PersonCreateRequest.)
 
 
 class PersonBatchGetRequest(BaseModel):

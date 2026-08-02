@@ -197,5 +197,12 @@
   "event.deleted": "Événement supprimé",
   "branch.deleted": "Branche supprimée",
   "document.deleted": "Document supprimé",
-  "document.avatar_set": "Avatar défini"
+  "document.avatar_set": "Avatar défini",
+  "error.change_request_not_found": "Demande de correction introuvable",
+  "error.change_request.not_pending": "Cette demande de correction n'est plus en attente",
+  "error.change_request.target_conflict": "L'enregistrement a changé depuis l'envoi de cette demande. Vérifiez les champs en conflit.",
+  "error.change_request.target_deleted": "L'enregistrement visé par cette demande a été supprimé. Restaurez-le avant d'approuver.",
+  "error.change_request.unsupported_operation": "Ce type de demande de correction n'est pas encore pris en charge",
+  "error.change_request.no_changes": "Une demande de correction doit proposer au moins un champ",
+  "error.change_request.field_not_submittable": "Un ou plusieurs champs ne peuvent pas faire l'objet d'une demande de correction"
 }

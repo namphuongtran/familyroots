@@ -197,5 +197,12 @@
   "event.deleted": "Event deleted",
   "branch.deleted": "Branch deleted",
   "document.deleted": "Document deleted",
-  "document.avatar_set": "Avatar set"
+  "document.avatar_set": "Avatar set",
+  "error.change_request_not_found": "Change request not found",
+  "error.change_request.not_pending": "This change request is no longer pending",
+  "error.change_request.target_conflict": "The record changed since this request was submitted. Review the conflicting fields.",
+  "error.change_request.target_deleted": "The record this request targets was deleted. Restore it before approving.",
+  "error.change_request.unsupported_operation": "This kind of change request is not supported yet",
+  "error.change_request.no_changes": "A change request must propose at least one field",
+  "error.change_request.field_not_submittable": "One or more fields cannot be proposed in a change request"
 }
