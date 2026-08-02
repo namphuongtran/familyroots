@@ -10,7 +10,7 @@ backend
 - web (Next.js 16 / React 19)
 - mobile (Flutter / Dio)
 
-Every claim below is verified against backend code as of 2026-07-12 (files cited per
+Every claim below is verified against backend code as of 2026-08-02 (files cited per
 section). Where the backend leaves something genuinely undefined it is marked
 **⚠️ UNDEFINED — needs backend decision** instead of guessed at.
 
@@ -48,21 +48,29 @@ Field semantics (from `AuthCommandHandler.login` + `auth_repository.get_login_pr
   `role: null`.
 - `is_approved` — whether that membership is approved.
 - `person_id` — the person record linked to the user (identity claim), or null.
-- **⚠️ `has_pending_membership` is always `false` in the login response** — the login
-  handler never computes it (only `GET /auth/me` does). Call `GET /auth/me` right after
-  login and use *that* value for routing to the pending screen.
-- **⚠️ `preferred_locale` is always the default `"vi"` in login and `GET /auth/me`
-  responses** — the backend never populates it from Supabase `user_metadata`, even
-  after a successful `PATCH /auth/me`. Until fixed, read the user's locale from the
-  Supabase session (`user_metadata.preferred_locale`) or your own storage, not from
-  this field. (Backend gap; `PATCH /auth/me` *does* persist the value server-side.)
-- **⚠️ Multi-clan users**: the login profile query is `LIMIT 1` with no `ORDER BY`, so
-  *which* membership appears as `user.clan_id` is **UNDEFINED — needs backend
-  decision**. Do not use `user.clan_id` as the active clan for multi-clan users; use
-  the clan-resolution flow below.
+- `has_pending_membership` — **computed at login** (since 2026-07-16): true when the
+  user has *any* membership row with `is_approved = false`. Login and `GET /auth/me`
+  read it from the same query port, so they agree for the same user — no follow-up
+  `GET /auth/me` call is needed just for this boolean.
+- `preferred_locale` — echoed from the identity metadata of the session being returned
+  (`user_metadata.preferred_locale`, validated against `vi|en|zh|fr`; anything else,
+  or absent, → `"vi"`). `GET /auth/me` echoes the same claim off the **current access
+  token**, so a `PATCH /auth/me {"preferred_locale": …}` is visible in the profile
+  response from the next token refresh onward, not on the very next call with the old
+  token. Clients that switch locale should apply it locally at once and treat this
+  field as the server's record of the saved choice, not as a live echo of the last
+  PATCH.
+- **Multi-clan users**: which membership lands in `user.clan_id` is **deterministic**
+  ([ADR-035](../decisions/035-deterministic-login-membership-selection.md)) — approved
+  memberships beat pending ones, then oldest `joined_at` (the membership row's
+  `created_at`, the same value `GET /me/clans` returns as `joined_at`), then lowest
+  `clan_id` as the final tiebreak. It is a *login landing hint*, not a stored active
+  clan: the user may switch, and the client still owns clan selection via the
+  clan-resolution flow below.
 
 `GET /auth/me` returns the same profile shape directly under `data`, but joined on
-**approved** memberships only, and with a real `has_pending_membership`.
+**approved** memberships only (same ordering, minus the approval preference, which is
+implicit).
 
 ### 1.2 Clan resolution
 
@@ -287,11 +295,12 @@ request awaits a clan admin — **can** call anything gated only by `get_current
 Everything clan-scoped (persons, tree, events, documents, …) fails with
 403 `no_approved_clan_membership` (from `get_current_clan_id`).
 
-Client routing rule: after login call `GET /auth/me`; if `is_approved` is false and
-`has_pending_membership` is true → pending-approval screen (web:
-`/{locale}/pending-approval`). If both are false and `clan_id` is null → onboarding
-(`POST /auth/onboard`). Do **not** rely on the login response's
-`has_pending_membership` (§1.1 caveat).
+Client routing rule: if `is_approved` is false and `has_pending_membership` is true →
+pending-approval screen (web: `/{locale}/pending-approval`). If both are false and
+`clan_id` is null → onboarding (`POST /auth/onboard`). The **login response carries
+both flags correctly** (§1.1), so this decision can be made without a second call;
+re-fetch `GET /auth/me` when you want a fresher answer (e.g. polling while the user
+waits on an admin's approval).
 
 ### 5.1 Founder designation (thủy tổ) / tree onboarding
 
@@ -429,14 +438,14 @@ Code: `app/infrastructure/storage/supabase_adapter.py`,
 `app/domain/document/repository.py`, `app/application/document/handlers.py`.
 
 - Presign TTL: `DEFAULT_PRESIGN_TTL = 3600` seconds (1 hour) — used by document
-  upload and `GET /documents/{id}`.
-- `POST /documents` (upload) returns `presigned_url` **and**
-  `presigned_url_expires_at` (now + 3600 s).
-- `GET /documents/{id}` returns a fresh `presigned_url` but **⚠️ its
-  `presigned_url_expires_at` is `null`** (the query handler never sets it — backend
-  inconsistency). Assume the 1-hour TTL.
-- `GET /documents` (list) returns summaries **without** URLs — fetch the detail
-  endpoint for a downloadable/displayable URL.
+  upload, `GET /documents/{id}`, and restore.
+- **Every response that carries a `presigned_url` also carries
+  `presigned_url_expires_at`** — an absolute, timezone-aware UTC timestamp
+  (`<url minted at> + TTL`). This holds for `POST /documents` (upload),
+  `GET /documents/{id}`, and `POST /documents/{id}/restore`. Schedule refreshes off
+  that timestamp; do not hardcode a TTL client-side (the server may shorten it).
+- `GET /documents` (list) returns summaries **without** URLs — so also without an
+  expiry — fetch the detail endpoint for a downloadable/displayable URL.
 - `PATCH /documents/{id}/set-avatar` internally presigns a 30-day URL
   (`expires_in=86400*30`) but the route response contains only
   `{"message", "document_id"}` — the URL never reaches the client.
@@ -477,8 +486,12 @@ fallback `vi`):
 
 The user's saved locale: `PATCH /auth/me {"preferred_locale": "vi|en|zh|fr"}` writes
 Supabase `user_metadata.preferred_locale`; on each authenticated request the backend
-syncs it into `user_profiles.language`. Remember the §1.1 caveat: the profile
-*responses* do not echo it back yet.
+syncs it into `user_profiles.language` (which is what server-sent notifications use).
+Both profile responses **do** echo the value back (§1.1) — `POST /auth/login` from the
+freshly-signed-in session, `GET /auth/me` from the presented access token. Because the
+locale rides in the token's claims, a PATCH is reflected in `GET /auth/me` (and in
+notification locale) once the token is refreshed; apply the new locale in the UI
+immediately rather than waiting to read it back.
 
 ---
 

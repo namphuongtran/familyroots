@@ -71,8 +71,10 @@ and by clan-scoped repository reads.
 
 Blobs are never public; reads go through time-limited signed URLs:
 
-- `GET /documents/{id}` and the upload response include `presigned_url` +
-  `presigned_url_expires_at`.
+- `GET /documents/{id}`, the upload response, and `POST /documents/{id}/restore`
+  include `presigned_url` + `presigned_url_expires_at` (computed by
+  `_presign_expiry()` in `app/application/document/handlers.py` — one helper, so a
+  URL-bearing response can never again ship without its deadline).
 - TTL constant: **`DEFAULT_PRESIGN_TTL = 3600` seconds** in
   `app/domain/document/repository.py` (the port owns the default).
 - Avatar presigns are the exception: `set_avatar` returns a **30-day** URL

@@ -30,6 +30,18 @@ List response envelope (cursor pagination):
 ```
 - `meta.cursor` is null on the last page; pass it back as `?cursor=` to fetch the next.
 
+### Presigned URLs always state their expiry
+
+Every response that includes a `presigned_url` also includes
+`presigned_url_expires_at` — an absolute, timezone-aware UTC timestamp equal to
+the moment the URL was minted plus the presign TTL (`DEFAULT_PRESIGN_TTL`, 3600 s).
+That covers `POST /` (upload), `GET /{id}`, and `POST /{id}/restore`. Clients
+schedule refreshes off this timestamp instead of hardcoding the TTL. Corrected
+2026-08-02: `GET /{id}` and restore previously returned `null` here while still
+returning a fresh URL.
+
+`GET /` (list) returns summaries with neither a URL nor an expiry.
+
 Upload expectations:
 - multipart/form-data upload
 - file, title, document_type required
@@ -50,7 +62,8 @@ reads immediately, exactly as if it had been hard-deleted, while its blob
 remains presignable until the retention purge removes it.
 
 `POST /{id}/restore` (admin, new): 200 with the full `DocumentResponse`
-(including a fresh `presigned_url`) on success; 404 `document_not_found` if
+(including a fresh `presigned_url` + its `presigned_url_expires_at`) on
+success; 404 `document_not_found` if
 the document doesn't exist or isn't currently soft-deleted (mirrors
 `POST /persons/{id}/restore`). Restoring is a pure metadata flip — no storage
 round-trip, since the blob was never touched by delete.

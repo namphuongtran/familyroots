@@ -36,6 +36,7 @@
 | [032](032-db-outage-503.md) | Transient DB Operational Failures Surface as 503, Not 500 | Accepted (2026-08-01) |
 | [033](033-w3c-trace-context-sentry.md) | W3C Trace Context for Correlation, Exported Through Sentry | Accepted (2026-08-02) |
 | [034](034-mobile-riverpod-rebuild.md) | Rebuild the Flutter App on Riverpod, Deleting the Mock Scaffold | Accepted (2026-08-02) |
+| [035](035-deterministic-login-membership-selection.md) | Deterministic Membership Selection in the Login/Profile Response | Accepted (2026-08-02) |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural

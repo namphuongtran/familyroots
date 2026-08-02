@@ -45,6 +45,18 @@ def _safe_extension(filename: str | None) -> str:
     return cleaned or "bin"
 
 
+def _presign_expiry(expires_in: int = DEFAULT_PRESIGN_TTL) -> datetime:
+    """Absolute expiry of a presigned URL minted *now*.
+
+    Every response that carries a `presigned_url` must carry the matching
+    `presigned_url_expires_at`: the provider signs relative to generation time,
+    so only the backend can state the wall-clock deadline. Before this helper
+    only the upload path computed it and the read paths returned `null`, which
+    forced clients to hardcode a guessed TTL (frontend-integration-guide §8).
+    """
+    return datetime.now(UTC) + timedelta(seconds=expires_in)
+
+
 class DocumentCommandHandler:
     """Handles document write operations."""
 
@@ -137,9 +149,7 @@ class DocumentCommandHandler:
             description=doc.description,
             storage_path=doc.storage_path,
             presigned_url=presigned,
-            presigned_url_expires_at=(
-                datetime.now(UTC) + timedelta(seconds=DEFAULT_PRESIGN_TTL)
-            ).isoformat(),
+            presigned_url_expires_at=_presign_expiry(),
             file_size_bytes=doc.file_size_bytes,
             mime_type=doc.mime_type,
             original_filename=doc.original_filename,
@@ -191,6 +201,7 @@ class DocumentCommandHandler:
             description=doc.description,
             storage_path=doc.storage_path,
             presigned_url=presigned,
+            presigned_url_expires_at=_presign_expiry(),
             file_size_bytes=doc.file_size_bytes,
             mime_type=doc.mime_type,
             original_filename=doc.original_filename,
@@ -273,6 +284,7 @@ class DocumentQueryHandler:
             description=doc.description,
             storage_path=doc.storage_path,
             presigned_url=presigned,
+            presigned_url_expires_at=_presign_expiry(),
             file_size_bytes=doc.file_size_bytes,
             mime_type=doc.mime_type,
             original_filename=doc.original_filename,
