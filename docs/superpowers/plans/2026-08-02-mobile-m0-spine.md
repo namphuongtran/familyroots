@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Tasks:** 20.
+
 **Goal:** Delete the five-month-old mock scaffold under `mobile/` and rebuild it as a real Flutter application whose spine — transport, envelope, error policy, session, clan context, routing, theme, l10n, cache, observability — is proven by signing in to the real backend from a real device and listing the user's clans from `GET /me/clans`.
 
 **Architecture:** One Flutter package. Riverpod 3 is both state manager and DI container. Plain Dio with hand-written repositories; DTOs via `json_serializable`; entities and state unions via `freezed`. A pure-Dart `domain/` layer that imports no framework, machine-enforced by an import-boundary test. The response envelope is unwrapped in exactly one function, `policyActionFor(code)` is the only error-code→routing mapping, and `HistoricalDate` owns its own render rule.
@@ -55,20 +57,22 @@ Four of the findings below (V25–V28) are defects this plan's own first drafts 
 | V33 | Presentation: `vi` by default and `en` on locale switch, plural `=0/=1/other`, an ARB placeholder, tap-to-select, and **200% text scale with `tester.takeException()` null** (no RenderFlex overflow) | 7 tests |
 | V34 | `AppLocalizations.localizationsDelegates` and `.supportedLocales` are static members of the generated class; `flutter gen-l10n` with `template-arb-file: app_vi.arb` produces them | generated + used in every widget test |
 | V35 | `ThemeExtension<ArborTokens>` + `context.tokens` resolves, and the mandate values survive into the widget tree (`#1d1b16` not `#000000`, 9999/32 radii, 0.8/20 glass) | theme test |
+| V36 | **`inMemoryDatabasePath` is shared across opens in one test process.** Test A wrote a key; test B, opening a "fresh" in-memory database, read `from-A`. `databaseFactory.deleteDatabase(inMemoryDatabasePath)` in `setUp` fixes it. This made an "offline with an empty cache" test pass spuriously. | isolated leak test: `B saw: from-A` → after the fix, `All tests passed!` |
+| V37 | Cache-backed stale reads: a network read populates the cache and reports fresh; a transport failure re-serves it with a timestamp; an empty cache still fails; an `ApiException` propagates rather than being masked by stale data | 4 tests |
 
 ### NOT VERIFIED — stated honestly
 
 | # | Not verified | Why / what the implementer must do |
 |---|---|---|
-| N1 | **Any real call to the FamilyRoots backend.** Every network test uses a mock transport. No login, no `GET /auth/me`, no `GET /me/clans` was executed against a live server. | M0's definition of done is exactly this. Task 18 is the manual device run; it is the first moment the spine meets the real backend. Expect surprises there, not in the unit tests. |
+| N1 | **Any real call to the FamilyRoots backend.** Every network test uses a mock transport. No login, no `GET /auth/me`, no `GET /me/clans` was executed against a live server. | M0's definition of done is exactly this. Task 20 is the manual device run; it is the first moment the spine meets the real backend. Expect surprises there, not in the unit tests. |
 | N2 | `flutter build apk --debug` | Requires the Android SDK/toolchain, which was not exercised. CI runs it; if it fails it will fail on Android config, not Dart. |
-| N3 | On-device iOS Keychain / Android Keystore behaviour of `flutter_secure_storage` | Plugin channels are unavailable in `flutter test`. The `LocalStorage` contract conformance is verified; the platform round-trip is not. Task 18 covers it implicitly (a session that survives an app restart). |
+| N3 | On-device iOS Keychain / Android Keystore behaviour of `flutter_secure_storage` | Plugin channels are unavailable in `flutter test`. The `LocalStorage` contract conformance is verified; the platform round-trip is not. Task 20 covers it implicitly (a session that survives an app restart). |
 | N4 | Sentry actually delivering an event, and the `traceparent` span joining a backend trace | `SentryFlutter.init` compiles against 9.26.0; no DSN was exercised. |
 | N5 | Golden **images**. `loadAppFonts` is verified; no golden file was committed or compared. | First golden run must be `--update-goldens`, then reviewed by eye. Goldens are host-font-sensitive; CI and local must both run Linux or goldens must be tagged. |
 | N6 | The exact Supabase email-link parameter format (spec R2) | Unknowable from this repo. **M0 does not need it** — spec §7 puts deep links out of scope, and the verification screen only needs `POST /auth/resend-verification`. Recorded as an open question below. |
 | N7 | `firebase_messaging` 16.4.3 | M4 scope; deliberately not added to the pubspec in M0. |
 | N8 | That `riverpod_lint`'s analyzer plugin actually reports Riverpod misuse | It is wired via `plugins: - riverpod_lint` and `flutter analyze` runs clean, but no deliberate Riverpod misuse was written to confirm the plugin fires. Note `riverpod_lint` 3.1.3 uses the native `analysis_server_plugin`, **not** `custom_lint`. |
-| N9 | The **full app wiring** — `main.dart`, `bootstrap()`, `dio_provider`'s five interceptors composed on one Dio, and the `ref.listen` bridge from `sessionControllerProvider` onto the router's `ChangeNotifier`. | Each piece is verified in isolation (interceptors V6, refresh V7, bootstrap compiles V9–V12, router V13, session V31), but they were never assembled and run together. Task 17 is where that first happens; Task 19 is where a device proves it. |
+| N9 | The **full app wiring** — `main.dart`, `bootstrap()`, `dio_provider`'s five interceptors composed on one Dio, and the `ref.listen` bridge from `sessionControllerProvider` onto the router's `ChangeNotifier`. | Each piece is verified in isolation (interceptors V6, refresh V7, bootstrap compiles V9–V12, router V13, session V31), but they were never assembled and run together. Task 18 is where that first happens; Task 20 is where a device proves it. |
 | N10 | The l10n "unsupported locale falls back to `vi`" assertion in Task 12 | Written from the documented `MaterialApp` resolution rule, not observed. The task tells the implementer to assert what actually happens if it differs. |
 | N11 | `ClanPickerView`, `LoginPage`, `MessagePage`, `ErrorView` | Only `MyClansView` was built and tested in the probe. The other four are the same shape and use only verified APIs, but they were not compiled. Treat their snippets as close drafts, not as verified code. |
 
@@ -200,7 +204,7 @@ git rm -r --quiet lib test android ios web macos linux windows \
 git clean -nd .          # REVIEW the list first — never run git clean -fd blindly
 ```
 
-Delete only what `git rm` reported. Do not remove `mobile/CLAUDE.md` (rewritten in Task 19) or `mobile/assets/`.
+Delete only what `git rm` reported. Do not remove `mobile/CLAUDE.md` (rewritten in Task 20) or `mobile/assets/`.
 
 - [ ] **Step 3: Recreate the Flutter project in place**
 
@@ -2090,7 +2094,7 @@ EOF
 
 - [ ] **Step 1: Write the failing test**
 
-Platform channels are unavailable under `flutter test`, so this injects a fake `FlutterSecureStorage` and asserts the `LocalStorage` contract. Real Keychain/Keystore behaviour is N3 and is covered by the device run in Task 18.
+Platform channels are unavailable under `flutter test`, so this injects a fake `FlutterSecureStorage` and asserts the `LocalStorage` contract. Real Keychain/Keystore behaviour is N3 and is covered by the device run in Task 20.
 
 `mobile/test/core/storage/secure_session_store_test.dart`:
 
@@ -2347,6 +2351,9 @@ void main() {
   late SqfliteCacheStore store;
 
   setUp(() async {
+    // `inMemoryDatabasePath` is SHARED across opens within one test process —
+    // without this delete, data written by one test is visible to the next.
+    await databaseFactory.deleteDatabase(inMemoryDatabasePath);
     final db = await databaseFactory.openDatabase(
       inMemoryDatabasePath,
       options: OpenDatabaseOptions(
@@ -4556,7 +4563,7 @@ export 'data/clan_repository.dart' show ClanRepository;
 export 'presentation/my_clans_page.dart' show MyClansView;
 ```
 
-> `presentation/my_clans_page.dart` arrives in Task 16. Add that export line only once the file exists, or the build will fail.
+> `presentation/my_clans_page.dart` arrives in Task 17. Add that export line only once the file exists, or the build will fail.
 
 - [ ] **Step 8: Generate and run**
 
@@ -4592,7 +4599,259 @@ EOF
 
 ---
 
-## Task 16: Screens — login, clan picker, my clans, and the blocked states
+## Task 16: Wire the read cache — serve stale data when the network fails
+
+Task 9 built the cache and Task 15 reads the network; nothing yet connects them. Spec §4.5 requires that "when the network fails, the notifier serves the cached payload with an `isStale` flag and the UI shows a 'dữ liệu ngày …' banner". This is that glue.
+
+**Files:**
+- Create: `mobile/lib/features/clan/application/cached_clans.dart`
+- Test: `mobile/test/features/clan/cached_clans_test.dart`
+
+**Interfaces:**
+- Consumes: `ClanRepository` (Task 15), `CacheStore` (Task 9), the taxonomy (Task 4)
+- Produces:
+  - `class Stale<T>(T value, DateTime? asOf)` with `bool get isStale`
+  - `class CachedClanReader(ClanRepository repo, CacheStore cache)` with `static const cacheKey`, `Future<Stale<List<ClanMembership>>> myClans()`
+
+> **Only transport failures fall back to the cache.** An `ApiException` is an *answer* — `403 account_deactivated` must not be papered over with a stale list. Only `NetworkException` and `TimeoutException` trigger the fallback.
+>
+> **Verified gotcha (V36):** `inMemoryDatabasePath` is **shared across opens** in a single test process. Without `deleteDatabase` in `setUp`, one test's writes are visible to the next — the "offline with an empty cache" test passed spuriously until this was found.
+
+- [ ] **Step 1: Write the failing test**
+
+`mobile/test/features/clan/cached_clans_test.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/core/network/api_exception.dart';
+import 'package:family_roots_mobile/core/storage/cache_store.dart';
+import 'package:family_roots_mobile/features/clan/application/cached_clans.dart';
+import 'package:family_roots_mobile/features/clan/data/clan_repository.dart';
+
+import '../../support/sequence_adapter.dart';
+
+ClanRepository _repo(List<Canned> canned) => ClanRepository(
+  ApiClient(
+    Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))
+      ..httpClientAdapter = SequenceAdapter(canned),
+  ),
+);
+
+/// A transport that always fails, to simulate being offline.
+class _OfflineAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions o,
+    Stream<dynamic>? s,
+    Future<void>? c,
+  ) => throw DioException(
+    requestOptions: o,
+    type: DioExceptionType.connectionError,
+  );
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ClanRepository _offline() => ClanRepository(
+  ApiClient(
+    Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))
+      ..httpClientAdapter = _OfflineAdapter(),
+  ),
+);
+
+const _clansOk = Canned(200, <String, Object?>{
+  'data': <Object?>[
+    <String, Object?>{
+      'clan_id': 'c1',
+      'clan_name': 'Họ Nguyễn',
+      'clan_slug': 'ho-nguyen',
+      'role': 'admin',
+      'joined_at': '2026-01-15T08:30:00Z',
+    },
+  ],
+});
+
+void main() {
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
+  late SqfliteCacheStore cache;
+
+  setUp(() async {
+    // inMemoryDatabasePath is SHARED across opens in one test process.
+    await databaseFactory.deleteDatabase(inMemoryDatabasePath);
+    final db = await databaseFactory.openDatabase(
+      inMemoryDatabasePath,
+      options: OpenDatabaseOptions(
+        version: 1,
+        onCreate: (d, _) => d.execute(SqfliteCacheStore.createTableSql),
+      ),
+    );
+    cache = SqfliteCacheStore(db);
+  });
+
+  test('a network read is fresh and populates the cache', () async {
+    final r = await CachedClanReader(
+      _repo(<Canned>[_clansOk]),
+      cache,
+    ).myClans();
+
+    expect(r.isStale, isFalse);
+    expect(r.asOf, isNull);
+    expect(r.value.single.clanName, 'Họ Nguyễn');
+    expect(await cache.get(CachedClanReader.cacheKey), isNotNull);
+  });
+
+  test('offline serves the cached payload flagged stale', () async {
+    await CachedClanReader(_repo(<Canned>[_clansOk]), cache).myClans();
+
+    final r = await CachedClanReader(_offline(), cache).myClans();
+    expect(r.isStale, isTrue);
+    expect(r.asOf, isNotNull);
+    expect(r.value.single.clanName, 'Họ Nguyễn');
+    expect(r.value.single.joinedAt, DateTime.utc(2026, 1, 15, 8, 30));
+  });
+
+  test('offline with an empty cache still fails', () async {
+    await expectLater(
+      CachedClanReader(_offline(), cache).myClans(),
+      throwsA(isA<NetworkException>()),
+    );
+  });
+
+  test('an ApiException propagates — a 403 is an answer, not an outage', () async {
+    await CachedClanReader(_repo(<Canned>[_clansOk]), cache).myClans();
+
+    final forbidden = _repo(<Canned>[
+      const Canned(403, <String, Object?>{
+        'error': <String, Object?>{
+          'code': 'account_deactivated',
+          'message': 'Tài khoản đã bị khoá',
+          'detail': <String, Object?>{},
+        },
+      }),
+    ]);
+    await expectLater(
+      CachedClanReader(forbidden, cache).myClans(),
+      throwsA(isA<ApiException>()),
+    );
+  });
+}
+```
+
+- [ ] **Step 2: Run to confirm it fails**
+
+```bash
+cd mobile && flutter test test/features/clan/cached_clans_test.dart
+```
+Expected: FAIL — `cached_clans.dart` does not exist.
+
+- [ ] **Step 3: Write the implementation**
+
+`mobile/lib/features/clan/application/cached_clans.dart`:
+
+```dart
+import '../../../core/network/api_exception.dart';
+import '../../../core/storage/cache_store.dart';
+import '../../../domain/clan/clan_membership.dart';
+import '../data/clan_dto.dart';
+import '../data/clan_repository.dart';
+
+class Stale<T> {
+  const Stale(this.value, this.asOf);
+
+  final T value;
+
+  /// Null when the value came from the network.
+  final DateTime? asOf;
+
+  bool get isStale => asOf != null;
+}
+
+/// Every successful read is cached; when the network fails the cached payload
+/// is served with an isStale flag so the UI can show the "dữ liệu ngày …"
+/// banner. Writes always require the network — there is no write queue.
+class CachedClanReader {
+  CachedClanReader(this._repo, this._cache);
+
+  static const cacheKey = 'GET /me/clans';
+
+  final ClanRepository _repo;
+  final CacheStore _cache;
+
+  Future<Stale<List<ClanMembership>>> myClans() async {
+    try {
+      final clans = await _repo.myClans();
+      await _cache.put(
+        cacheKey,
+        clans
+            .map(
+              (c) => <String, Object?>{
+                'clan_id': c.clanId.value,
+                'clan_name': c.clanName,
+                'clan_slug': c.clanSlug,
+                'role': c.role.name,
+                'joined_at': c.joinedAt?.toIso8601String(),
+              },
+            )
+            .toList(),
+      );
+      return Stale<List<ClanMembership>>(clans, null);
+    } on NetworkException {
+      return _fromCache();
+    } on TimeoutException {
+      return _fromCache();
+    }
+    // An ApiException deliberately propagates: a 403 is an answer, not an
+    // outage, and must never be papered over with a stale list.
+  }
+
+  Future<Stale<List<ClanMembership>>> _fromCache() async {
+    final hit = await _cache.get(cacheKey);
+    if (hit == null) throw const NetworkException('no cached clans');
+    final rows = (hit.body! as List<Object?>).map(clanMembershipFromJson);
+    return Stale<List<ClanMembership>>(rows.toList(), hit.storedAt);
+  }
+}
+```
+
+- [ ] **Step 4: Run the tests**
+
+```bash
+cd mobile && flutter test test/features/clan/cached_clans_test.dart
+```
+Expected: `All tests passed!` (4 tests).
+
+- [ ] **Step 5: Full gate and commit**
+
+```bash
+cd mobile && dart format --set-exit-if-changed lib test \
+  && flutter analyze && flutter test
+git add mobile/lib/features/clan/application/cached_clans.dart mobile/test/features/clan/cached_clans_test.dart
+git commit -m "$(cat <<'EOF'
+feat(mobile): serve cached clans when the network fails
+
+Implements the read-cache half of spec 4.5: a successful read populates
+the cache, a transport failure re-serves it with an isStale timestamp for
+the "dữ liệu ngày …" banner. An ApiException still propagates — a 403 is
+an answer, not an outage.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U2cTqEcXrcJYo3qkKSUheT
+EOF
+)"
+```
+
+---
+
+## Task 17: Screens — login, clan picker, my clans, and the blocked states
 
 **Files:**
 - Create: `mobile/lib/features/auth/presentation/login_page.dart`, `verify_email_page.dart`, `pending_approval_page.dart`, `blocked_page.dart`; `mobile/lib/features/clan/presentation/my_clans_page.dart`, `clan_picker_page.dart`; `mobile/lib/shared/widgets/error_view.dart`
@@ -5163,14 +5422,14 @@ EOF
 
 ---
 
-## Task 17: Router, guards and the app shell
+## Task 18: Router, guards and the app shell
 
 **Files:**
 - Create: `mobile/lib/app/router/routes.dart`, `app_router.dart`; `mobile/lib/app/app.dart`, `bootstrap.dart`; `mobile/lib/main.dart`; `mobile/lib/core/network/dio_provider.dart`
 - Test: `mobile/test/app/router_test.dart`
 
 **Interfaces:**
-- Consumes: the auth slice (Task 14), the clan slice (Task 15), theme (11), l10n (12), stores (8, 9)
+- Consumes: the auth slice (Task 14), the clan slice (Task 15), screens (Task 17), theme (11), l10n (12), stores (8, 9)
 - Produces: `class AuthRouteState extends ChangeNotifier`, `GoRouter buildRouter(AuthRouteState auth)`, `Future<void> bootstrap()`, `class FamilyRootsApp extends ConsumerWidget`
 
 > **Verified go_router 17 semantics (V13):** `refreshListenable` re-runs `redirect` for the **current** location. If `redirect` returns null the router stays put — clearing a guard does **not** pull the user forward. The clan picker must therefore call `context.go('/clans')` itself after a selection.
@@ -5267,7 +5526,7 @@ Expected: FAIL — `app_router.dart` does not exist.
 
 - [ ] **Step 3: Write `app_router.dart`**
 
-The route builders below render bare text so the guard logic is testable in isolation. Swap each `Text('...')` for the real page from Task 16 in step 5 — the test asserts routing, not chrome.
+The route builders below render bare text so the guard logic is testable in isolation. Swap each `Text('...')` for the real page from Task 17 in step 5 — the test asserts routing, not chrome.
 
 ```dart
 import 'package:flutter/material.dart';
@@ -5355,7 +5614,7 @@ Expected: `All tests passed!` (5 tests).
 
 - [ ] **Step 5: Swap the placeholder builders for the real pages**
 
-Replace each `builder:` with the corresponding widget from Task 16 (`LoginPage`, `MessagePage` for verify/pending, `ClanPickerView` and `MyClansView` wired through `ConsumerWidget`s that read `myClansProvider`). Keep the router test green by asserting on a `Key` instead of the text, e.g. add `key: const Key('route-clans')` to each page and change the finders to `find.byKey`.
+Replace each `builder:` with the corresponding widget from Task 17 (`LoginPage`, `MessagePage` for verify/pending, `ClanPickerView` and `MyClansView` wired through `ConsumerWidget`s that read `myClansProvider`). Keep the router test green by asserting on a `Key` instead of the text, e.g. add `key: const Key('route-clans')` to each page and change the finders to `find.byKey`.
 
 Then re-run:
 
@@ -5549,6 +5808,7 @@ const _apiBaseUrl = String.fromEnvironment(
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await PrefsStore.open();
+  final cache = await SqfliteCacheStore.open();
 
   await bootstrap(
     supabaseUrl: _supabaseUrl,
@@ -5558,6 +5818,33 @@ Future<void> main() async {
       overrides: [
         apiBaseUrlProvider.overrideWithValue(_apiBaseUrl),
         prefsStoreProvider.overrideWithValue(prefs),
+        cacheStoreProvider.overrideWithValue(cache),
+
+        // The Dio seams. Each reads live state at request time, which is why
+        // they are closures rather than values.
+        accessTokenProvider.overrideWithValue(
+          () => Supabase.instance.client.auth.currentSession?.accessToken,
+        ),
+        currentClanIdProvider.overrideWithValue(prefs.readClanId),
+        currentLocaleProvider.overrideWithValue(
+          () => prefs.readLocale() ?? 'vi',
+        ),
+        tokenRefresherProvider.overrideWithValue(
+          TokenRefresher(() async {
+            final res = await Supabase.instance.client.auth.refreshSession();
+            return res.session?.accessToken;
+          }),
+        ),
+
+        // Repositories are built from apiClientProvider, which is built from
+        // dioProvider. Overriding the base URL above is enough to redirect
+        // the whole stack.
+        authRepositoryProvider.overrideWith(
+          (ref) => AuthRepository(ref.watch(apiClientProvider)),
+        ),
+        clanRepositoryProvider.overrideWith(
+          (ref) => ClanRepository(ref.watch(apiClientProvider)),
+        ),
       ],
       child: const FamilyRootsApp(),
     ),
@@ -5565,10 +5852,20 @@ Future<void> main() async {
 }
 ```
 
+`onSignOutProvider` cannot be overridden with a plain value because it needs the container: override it with `(ref) => () => ref.read(sessionControllerProvider.notifier).signOut()`. Add the imports for `AuthRepository`/`ClanRepository` via the slice surfaces (`features/auth/auth.dart`, `features/clan/clan.dart`), `TokenRefresher` from `core/network/token_refresher.dart`, `SqfliteCacheStore` from `core/storage/cache_store.dart`, and `supabase_flutter`.
+
+Add `cacheStoreProvider` to `dio_provider.dart` alongside the others:
+
+```dart
+final cacheStoreProvider = Provider<CacheStore>(
+  (ref) => throw UnimplementedError('override in ProviderScope'),
+);
+```
+
 > `10.0.2.2` is the Android emulator's alias for the host machine's localhost. On a physical device pass your machine's LAN address:
 > `flutter run --dart-define=API_BASE_URL=http://192.168.1.x:8000/api/v1 ...`
 
-The remaining `dio_provider` overrides (`accessTokenProvider`, `currentClanIdProvider`, `currentLocaleProvider`, `tokenRefresherProvider`, `onSignOutProvider`) are wired in the same `overrides:` list, reading from `Supabase.instance.client.auth.currentSession`, `prefs.readClanId()`, `prefs.readLocale() ?? 'vi'`, a `TokenRefresher` around `Supabase.instance.client.auth.refreshSession()`, and a closure calling `signOut()`.
+> **Not verified (N9).** This wiring was never assembled and run — only its parts were. Expect the first `flutter run` to surface an unoverridden provider or a missing import; that is what Task 20 step 2 is for. If a provider throws `UnimplementedError` at startup, the message names it.
 
 - [ ] **Step 8: Full gate and commit**
 
@@ -5595,7 +5892,7 @@ EOF
 
 ---
 
-## Task 18: Rewrite Mobile CI
+## Task 19: Rewrite Mobile CI
 
 **Files:**
 - Modify: `.github/workflows/mobile-ci.yml`
@@ -5708,7 +6005,7 @@ git checkout -- .
 
 - [ ] **Step 4: Decide the golden-image policy**
 
-If the Task 16 goldens were generated on macOS they may not match Linux CI (N5). Either regenerate them in a Linux container, or tag them and skip on CI by adding `--exclude-tags golden` to the test step. Record which you chose in `mobile/CLAUDE.md` (Task 19).
+If the Task 17 goldens were generated on macOS they may not match Linux CI (N5). Either regenerate them in a Linux container, or tag them and skip on CI by adding `--exclude-tags golden` to the test step. Record which you chose in `mobile/CLAUDE.md` (Task 20).
 
 - [ ] **Step 5: Commit**
 
@@ -5730,7 +6027,7 @@ EOF
 
 ---
 
-## Task 19: Prove it against the real backend, then sync the docs
+## Task 20: Prove it against the real backend, then sync the docs
 
 This is the task that makes M0 done. Everything before it is verified only against mocks (N1).
 
@@ -5831,10 +6128,21 @@ EOF
 
 ---
 
+## Spec coverage — what is deliberately not in M0
+
+M0's scope is "everything in §3–§5". Two things in those sections have no task, on purpose:
+
+- **`PaginatedNotifier<T>` (§4.5).** "One shared `PaginatedNotifier<T>` serves every cursor list" — but M0 has **no cursor list**. `GET /me/clans` returns a plain canonical array with no `meta` (rest-me-api.md is explicit: "a clan switcher is not paginated"). Building a generic paginated notifier with no caller would be speculative; `Page<T>`, opaque-cursor forwarding in `ApiClient.getPage`, and the `invalid_cursor` → `dropCursorRefetch` policy are all in place, so M1's person list has everything it needs to add it against a real consumer.
+- **đời, `depth`, and polygyny grouping (§4.4).** These are tree-rendering rules and the tree screen is M2. The one §4.4 rule reachable in M0 — `HistoricalDate` owning its render rule — is Task 3. The others are recorded here so M2's plan does not have to rediscover them: `generation` is backend-computed and never derived, `null` renders as "đời ?", `depth` is not a nesting level, and `pedigree_collapse_ref: true` renders but never descends.
+
+Everything else in §3–§5 maps to a task: §3 structure → Tasks 1–2; §3.1 dependency rules → Task 2; §4.1 network stack → Tasks 5, 6, 7, 10; §4.2 error taxonomy → Task 4; §4.3 session/clan/routing → Tasks 8, 15, 18; §4.4 `HistoricalDate` → Task 3; §4.5 provider kinds and read cache → Tasks 14, 15, 16; §4.6 theme/l10n/observability → Tasks 11, 12, 17, 18; §4.7 packages → Task 1; §5 testing and CI → every task plus Task 19. The M0 acceptance path is Tasks 13–18, proven on a device in Task 20.
+
+---
+
 ## Open questions the spec did not settle
 
 1. **Package versions (blocking, needs owner sign-off before Task 1).** Spec §4.7 does not resolve on Flutter 3.44.8. This plan proposes the all-stable analyzer-9 line, which keeps `freezed` at the spec's 3.2.5 but moves `flutter_riverpod` to 3.3.1 and drops `custom_lint`. The alternative keeps Riverpod newer at the cost of a prerelease freezed. Someone must choose.
-2. **Golden-image host (N5).** Goldens generated on macOS may not match Linux CI. Regenerate in a container, or exclude them from CI? Decided in Task 18 step 4 but the spec does not say.
+2. **Golden-image host (N5).** Goldens generated on macOS may not match Linux CI. Regenerate in a container, or exclude them from CI? Decided in Task 19 step 4 but the spec does not say.
 3. **Spec R2, the email-link format.** Genuinely unknowable from this repo — but it does **not** block M0, because spec §7 puts deep links out of scope and the verification screen only needs `POST /auth/resend-verification`. The owner action stands for M1+.
 4. **`persons.avatar_url` (spec R4).** Still undefined; irrelevant to M0, blocks M2/M3 as the spec says.
 5. **Locale source of truth on first run.** The spec says the app owns its locale and must not trust `preferred_locale`. It does not say what to seed it with. This plan seeds from `PrefsStore`, falling back to `vi` — *not* to the device locale, since `vi` is the documented default and most users are Vietnamese. If the owner prefers the device locale when it is one of the supported set, that is a one-line change in `main.dart`.
