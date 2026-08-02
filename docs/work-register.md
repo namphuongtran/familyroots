@@ -214,7 +214,14 @@ of the documented web gate (`pnpm type-check && pnpm lint`), so CI stays green.
 Running `pnpm format` would fix it in one sweep at the cost of a 112-file diff —
 worth folding into sub-project A rather than doing standalone.
 
-### 3.4 The integration test database name is hardcoded
+### 3.4 Branch hygiene has no automation
+
+The remote was swept to a single `main` on 2026-08-02, but nothing stops it refilling:
+**delete-branch-on-merge is not enabled** on the repository. Every future PR leaves its
+branch behind. Turning it on in Settings → General is a one-click owner action and
+removes this class of debt permanently.
+
+### 3.5 The integration test database name is hardcoded
 
 `backend/tests/integration/conftest.py` sets `TEST_DB_NAME = "family_roots_schema_test"`
 as a constant with no environment override. Two `pytest` runs in parallel — two agents in
@@ -224,14 +231,6 @@ spurious failures. One run during this session lost 182 tests to it.
 
 Harmless when work is serial, and a hard blocker on parallel backend work. Making the
 name configurable (env var with the current value as the default) is a few lines.
-
-### 3.5 Stale remote branches
-
-107 branches on `origin`. 100 local branches were deleted on 2026-08-02 — 94 that git
-could prove merged, plus 6 squash-merged ones whose content was verified present in
-`main`. Four of those 6 still exist on `origin` and are the recovery path if any of
-those calls was wrong. Sweep the remote once enough time has passed, or enable
-delete-branch-on-merge.
 
 ### 3.6 Pre-existing platform debt
 
@@ -263,3 +262,4 @@ Carried from `CLAUDE.md` — none of these are scheduled:
 | persons RLS `RETURNING` fix (ADR-038) | `app/models/person.py` | #135 |
 | Clan user-list identity fields (ADR-039) | `app/api/v1/clans.py` | #140 |
 | Design system + 15 screen groups | `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` | #130, #137 |
+| Remote branch sweep — 108 branches deleted, `main` only | `origin` | 2026-08-02, no merge commit |
