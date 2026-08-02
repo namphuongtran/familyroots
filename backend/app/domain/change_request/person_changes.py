@@ -12,8 +12,11 @@ Two rules live here, both pure and framework-agnostic:
      to any editor through the queue, bypassing the redaction on the person read
      path. Contact details are not gia phả content and are not corrected by
      relatives, so excluding them costs nothing.
-   - ``avatar_url`` is set by the document/avatar flow, not typed by a human, so it
-     is not a "this fact is wrong" correction.
+   ``avatar_url`` is absent for a different reason and is deliberately NOT listed
+   below: ADR-036 made it server-managed and removed it from ``Person``'s updatable
+   whitelist entirely, so it is not in the superset this set subtracts from. Listing
+   it here would assert that a field which cannot be edited at all is merely
+   not-proposable, and the pinning test would fail. It is unreachable either way.
 
    The set is written out rather than derived from ``Person``'s private whitelist so
    production code never reads a private name; a unit test pins it against the
@@ -65,7 +68,7 @@ SUBMITTABLE_PERSON_FIELDS: frozenset[str] = frozenset(
 
 # Excluded on purpose — see the module docstring. Kept explicit so the pinning test
 # can assert the exclusion is deliberate rather than an oversight.
-EXCLUDED_PERSON_FIELDS: frozenset[str] = frozenset({"phone", "email", "avatar_url"})
+EXCLUDED_PERSON_FIELDS: frozenset[str] = frozenset({"phone", "email"})
 
 
 @dataclass(frozen=True)
