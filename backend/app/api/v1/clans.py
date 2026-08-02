@@ -33,6 +33,7 @@ from app.schemas.clan import (
 )
 from app.schemas.clan_membership import (
     ClanUserSummary,
+    PendingClanUserSummary,
     UserActionResponse,
     UserRoleChangeResponse,
 )
@@ -106,6 +107,12 @@ async def list_clan_users(
                 if u.user_profile is not None and u.user_profile.person_id
                 else None
             ),
+            # display_name only. NO email here: this endpoint is RequireViewer, so
+            # adding email would broadcast every member's login address to the whole
+            # clan. The admin-only /pending sibling below carries it; that asymmetry
+            # is deliberate — see ADR-039 before "tidying" these two into one
+            # serialiser. display_name is itself nullable on user_profiles.
+            "display_name": (u.user_profile.display_name if u.user_profile is not None else None),
             "created_at": u.created_at.isoformat(),
         }
         for u in page["data"]
@@ -113,7 +120,7 @@ async def list_clan_users(
     return page
 
 
-@router.get("/me/users/pending", responses=page(ClanUserSummary))
+@router.get("/me/users/pending", responses=page(PendingClanUserSummary))
 async def list_pending_users(
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
@@ -136,6 +143,14 @@ async def list_pending_users(
                 if u.user_profile is not None and u.user_profile.person_id
                 else None
             ),
+            # display_name AND email. This route is RequireAdmin: approving a join
+            # request grants read access to hundreds of living relatives' records,
+            # and person_id is null for exactly the fresh registrant an admin most
+            # needs to identify. The email is the account holder's own registration
+            # address, shown to someone who already holds approve/reject powers.
+            # It must NOT be copied to the viewer-readable list above — ADR-039.
+            "display_name": (u.user_profile.display_name if u.user_profile is not None else None),
+            "email": (u.user_profile.email if u.user_profile is not None else None),
             "created_at": u.created_at.isoformat(),
         }
         for u in page["data"]

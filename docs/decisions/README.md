@@ -40,6 +40,7 @@
 | [036](036-public-avatar-urls.md) | `persons.avatar_url` Is a Permanent Public URL, Written Only by set-avatar | Accepted (2026-08-02) |
 | [037](037-change-requests-workflow.md) | Change Requests — Adopt the Dormant Table, Editor-or-Admin Review, Three-Way Merge on Approval | Accepted, shipped (2026-08-02) |
 | [038](038-persons-returning-vs-membership-rls.md) | `persons` RLS — Fix the RETURNING/`persons_sel` Collision in the ORM, Not in the Policy | Accepted, shipped (2026-08-02, amends ADR-008 Phase 4) |
+| [039](039-clan-user-list-identity-asymmetry.md) | Clan User Lists — `display_name` on Both, `email` Only on the Admin Pending Queue | Accepted, shipped (2026-08-02) |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural

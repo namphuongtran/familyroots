@@ -16,8 +16,8 @@ Base route: /api/v1/clans
 Core operations:
 - GET /me — viewer; supports `?include=stats` (adds a nested `stats` object)
 - PATCH /me — admin
-- GET /me/users — viewer; cursor-paginated (`cursor`, `limit` 1–100)
-- GET /me/users/pending — admin; cursor-paginated
+- GET /me/users — viewer; cursor-paginated (`cursor`, `limit` 1–100) — see [User list rows](#user-list-rows) below
+- GET /me/users/pending — admin; cursor-paginated — see [User list rows](#user-list-rows) below
 - POST /me/users/{user_id}/approve — admin
 - POST /me/users/{user_id}/reject — admin
 - PATCH /me/users/{user_id}/role — admin; `role` is a **query parameter**, not a body field
@@ -29,6 +29,66 @@ Behavior:
 - Admin-only operations mutate clan membership and role state.
 - Paginated lists return the standard `{"data", "meta": {cursor, has_more, limit}}` envelope.
 - Response shapes should remain consistent with user-facing admin workflows.
+
+### User list rows
+
+The two user lists return **different row shapes**, because they have different guards.
+The difference is deliberate and load-bearing — see
+[ADR-039](../decisions/039-clan-user-list-identity-asymmetry.md).
+
+**`GET /me/users` — viewer** (`ClanUserSummary`). Readable by every approved member of
+the clan:
+
+```jsonc
+{
+  "data": [
+    {
+      "id": "uuid",             // the user_clan_roles row id
+      "user_id": "uuid",        // the account (user_profiles.id / Supabase auth sub)
+      "role": "admin|editor|viewer",
+      "person_id": "uuid|null", // linked person, null when the account isn't linked
+      "display_name": "string|null", // user_profiles.display_name (nullable)
+      "created_at": "ISO-8601"
+    }
+  ],
+  "meta": { "cursor": "string|null", "has_more": false, "limit": 20 }
+}
+```
+
+**`GET /me/users/pending` — admin** (`PendingClanUserSummary`). Same fields **plus
+`email`**:
+
+```jsonc
+{
+  "data": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "role": "admin|editor|viewer",  // the role being requested
+      "person_id": "uuid|null",       // null for a fresh registrant
+      "display_name": "string|null",
+      "email": "string|null",         // ADMIN-ONLY — see below
+      "created_at": "ISO-8601"
+    }
+  ],
+  "meta": { "cursor": "string|null", "has_more": false, "limit": 20 }
+}
+```
+
+**`email` is on the pending queue only, and must stay that way.** `GET /me/users` is
+`RequireViewer`, so an `email` field there would publish every member's login address to
+the whole clan — the same exposure ADR-037 closed by keeping `phone`/`email` out of the
+change-request review surface. The pending queue is `RequireAdmin`, the reader already
+holds approve/reject/role powers, the decision it supports is an identity decision (approval
+grants read access to hundreds of living relatives' records), and the address is the account
+holder's own registration email rather than a genealogy record about a third party.
+
+The key is **absent** from approved rows, not null. Clients must not assume the two rows are
+the same type. Both `display_name` and `email` may be `null` — `user_profiles.display_name`
+is nullable, and the profile join is a LEFT JOIN.
+
+Pinned by
+`backend/tests/integration/test_clan_users_identity_fields.py::test_email_is_on_pending_and_never_on_approved`.
 
 ### Last-admin invariant
 

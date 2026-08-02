@@ -44,12 +44,45 @@ class ClanMembershipResponse(BaseModel):
 
 
 class ClanUserSummary(BaseModel):
-    """One approved member in GET /clans/me/users."""
+    """One approved member in GET /clans/me/users (viewer-readable).
+
+    Carries ``display_name`` but deliberately **no** ``email``: this list is
+    readable by every approved member of the clan, so an ``email`` field here
+    would broadcast each member's login address to the whole clan. The
+    admin-only pending queue uses the separate ``PendingClanUserSummary``.
+    See ADR-039 before adding any contact field to this model.
+    """
 
     id: str
     user_id: str
     role: str
     person_id: str | None = None
+    display_name: str | None = None
+    created_at: str
+
+
+class PendingClanUserSummary(BaseModel):
+    """One pending join request in GET /clans/me/users/pending (admin-only).
+
+    Intentionally NOT a subclass of :class:`ClanUserSummary`, and intentionally
+    duplicating its fields: subclassing would mean any field added to the
+    viewer-readable model silently widens this one too — and, worse, invites the
+    inverse "tidy-up" that merges the two and leaks ``email`` to every viewer.
+    The asymmetry is the point; see ADR-039.
+
+    ``email`` is justified here and only here: the admin is making an identity
+    decision (approving grants read access to hundreds of living relatives'
+    records), already holds approve/reject/role powers, and the address is the
+    account holder's own registration email — not a genealogy record about a
+    third party.
+    """
+
+    id: str
+    user_id: str
+    role: str
+    person_id: str | None = None
+    display_name: str | None = None
+    email: str | None = None
     created_at: str
 
 
