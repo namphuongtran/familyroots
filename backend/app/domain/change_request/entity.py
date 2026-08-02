@@ -180,6 +180,15 @@ class ChangeRequest(AggregateRoot):
             )
         )
 
+    def ensure_pending(self) -> None:
+        """Assert reviewability BEFORE the caller touches the target.
+
+        ``approve()`` runs after the target write, so without this the second
+        approval of an already-approved proposal would re-apply the edit and only
+        then discover it was not pending.
+        """
+        self._require_pending()
+
     def _require_pending(self) -> None:
         if self.status != STATUS_PENDING:
             raise ConflictError("change_request.not_pending", detail={"status": self.status})

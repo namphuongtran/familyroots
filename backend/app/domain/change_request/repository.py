@@ -30,6 +30,15 @@ class PersonTargetSnapshot:
 
 
 @dataclass(frozen=True)
+class ChangeRequestPage:
+    """One cursor page of the queue: the rows plus the opaque next-page token."""
+
+    items: list[ChangeRequest]
+    cursor: str | None
+    has_more: bool
+
+
+@dataclass(frozen=True)
 class ChangeRequestFilters:
     """Filter criteria for the clan's change-request queue."""
 
@@ -48,16 +57,17 @@ class ChangeRequestRepository(Protocol):
         """Fetch a change request only if it belongs to the given clan."""
         ...
 
-    async def list_in_clan(
+    async def list_page_in_clan(
         self,
         clan_id: uuid.UUID,
         filters: ChangeRequestFilters,
         cursor: str | None = None,
         limit: int = 20,
-    ) -> list[ChangeRequest]:
-        """List a clan's change requests, ``(created_at, id)`` ASC cursor-paginated.
+    ) -> ChangeRequestPage:
+        """One page of a clan's queue, ``(created_at, id)`` ASC (ADR-010).
 
-        Returns ``limit + 1`` rows at most so the caller can detect a further page.
+        The adapter owns cursor encoding/decoding so the application layer needs no
+        pagination helper import (the import-linter ratchet must not grow).
         """
         ...
 

@@ -12,10 +12,62 @@ shape used by ``PATCH /persons/{id}`` — scalar ``birth_date`` plus
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+from pydantic import ValidationError as PydanticValidationError
+
+from app.domain.shared.exceptions import ValidationError as DomainValidationError
+from app.schemas.person import PersonChangeFields
+
+# ── Person value normalization ───────────────────────────────────────────────
+#
+# The three-way merge (ADR-037) compares the proposal, the values captured at
+# submission, and the target's values today. Those come from three different places
+# — client JSON, a JSONB column, and an ORM row — so they MUST be reduced to one
+# representation first or `"1920-05-03"` and `date(1920, 5, 3)` would read as a
+# conflict. JSON is that representation: it is the one the JSONB payload can store
+# and the one the API echoes back.
+
+
+def normalize_person_values(source: Mapping[str, Any], fields: Iterable[str]) -> dict[str, Any]:
+    """Project *fields* out of *source* into the canonical JSON representation.
+
+    Accepts either Python-typed values (an ORM row / domain entity) or already-JSON
+    ones (a stored payload), because ``PersonChangeFields`` parses both.
+    """
+    wanted = list(fields)
+    subset = {name: source.get(name) for name in wanted}
+    model = _parse_person_changes(subset)
+    return model.model_dump(mode="json", include=set(wanted))
+
+
+def to_person_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
+    """Parse a stored/submitted JSON change set into Python types for the aggregate.
+
+    ``Person.update`` sets attributes straight onto the aggregate and then re-checks
+    its date invariants, so ``birth_date`` has to arrive as a ``date``, not the ISO
+    string the payload holds.
+    """
+    model = _parse_person_changes(dict(changes))
+    return model.model_dump(exclude_unset=True)
+
+
+def _parse_person_changes(changes: dict[str, Any]) -> PersonChangeFields:
+    """Validate against the person write schema, as a domain-shaped error.
+
+    A bad value here is a 422 like any other malformed edit; without the translation
+    a raw ``pydantic.ValidationError`` would escape the handler as a 500.
+    """
+    try:
+        return PersonChangeFields.model_validate(changes)
+    except PydanticValidationError as exc:
+        fields = sorted(
+            {".".join(str(part) for part in err.get("loc", ())) for err in exc.errors()}
+        )
+        raise DomainValidationError("validation_error", detail={"fields": fields}) from exc
 
 
 class ChangeRequestCreateRequest(BaseModel):
