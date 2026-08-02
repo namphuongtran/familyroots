@@ -74,7 +74,7 @@ def _crashing_client() -> TestClient:
 
 
 @contextmanager
-def _captured_json_logs(logger_name: str) -> Iterator[list[dict]]:
+def _captured_json_logs(logger_name: str) -> Iterator[list[dict[str, str]]]:
     """Attach a JsonFormatter handler; the yielded list is filled with the parsed
     records on exit. Asserting on the real formatter's output is the point: the
     trace fields come from the ContextVar it reads, not from the record itself."""
@@ -83,14 +83,18 @@ def _captured_json_logs(logger_name: str) -> Iterator[list[dict]]:
     handler.setFormatter(JsonFormatter())
     logger = logging.getLogger(logger_name)
     logger.addHandler(handler)
-    previous = logger.level
+    previous_level, previous_disabled = logger.level, logger.disabled
     logger.setLevel(logging.ERROR)
-    records: list[dict] = []
+    # Alembic's fileConfig() disables every logger it does not name; integration
+    # tests run it in-process, so this logger may arrive here already disabled.
+    logger.disabled = False
+    records: list[dict[str, str]] = []
     try:
         yield records
     finally:
         logger.removeHandler(handler)
-        logger.setLevel(previous)
+        logger.setLevel(previous_level)
+        logger.disabled = previous_disabled
         records.extend(json.loads(line) for line in stream.getvalue().splitlines() if line)
 
 
@@ -113,6 +117,18 @@ def test_unhandled_500_log_line_carries_the_same_trace_id():
     assert logged, records
     assert logged[0]["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
     assert logged[0]["route"] == "/__boom__"
+
+
+def test_claimed_clan_id_is_truncated_before_it_reaches_the_logs():
+    """X-Current-Clan-Id is attacker-controlled and unbounded, and lands verbatim in
+    every log line of the request. Nothing authorizes off it, but it must not be a
+    log-volume amplifier."""
+    with _captured_json_logs("app.core.exceptions") as records:
+        _crashing_client().get("/__boom__", headers={"X-Current-Clan-Id": "A" * 500})
+
+    logged = [r for r in records if r["message"].startswith("Unhandled exception")]
+    assert logged, records
+    assert logged[0]["clan_id"] == "A" * 64
 
 
 def test_cors_exposes_traceparent_to_browsers():
