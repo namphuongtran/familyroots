@@ -7,7 +7,6 @@ import 'package:family_roots_mobile/domain/entities/entities.dart';
 import 'package:family_roots_mobile/features/members/presentation/bloc/member_list_cubit.dart';
 import 'package:family_roots_mobile/features/members/presentation/bloc/member_list_state.dart';
 import 'package:family_roots_mobile/features/members/presentation/pages/member_directory_page.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:family_roots_mobile/shared/l10n/app_localizations.dart';
 
 class MockMemberListCubit extends MockCubit<MemberListState> implements MemberListCubit {}
