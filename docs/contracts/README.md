@@ -42,6 +42,9 @@ across all routers):
 - **`GET /exports/clan` is exempt** — it returns the raw archive/GEDCOM file as
   an attachment (`Content-Disposition`), not `{"data": ...}`; see
   [rest-exports-api.md](rest-exports-api.md).
+- **`GET /internal/metrics` is exempt** — Prometheus exposition (`text/plain`), not a
+  data endpoint. Disabled by default; returns 404 unless enabled and correctly
+  tokened (ADR-033).
 - **Error envelope** (unchanged, already standard): every non-2xx JSON body is
   ```json
   { "error": { "code": "...", "message": "...", "detail": { ... } } }

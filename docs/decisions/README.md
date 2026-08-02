@@ -34,6 +34,7 @@
 | [030](030-platform-audit-newest-first-retention.md) | Platform Audit Log Newest-First (Opt-In DESC) + Audit Retention by Design | Accepted, shipped (2026-07-25) |
 | [031](031-cross-clan-edges-app-layer.md) | Cross-Clan Edge Prevention Is an Application-Layer Guarantee (No DB Trigger) | Accepted (2026-07-25) |
 | [032](032-db-outage-503.md) | Transient DB Operational Failures Surface as 503, Not 500 | Accepted (2026-08-01) |
+| [033](033-w3c-trace-context-sentry.md) | W3C trace context for correlation, exported through Sentry | Accepted (2026-08-02) |
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural

@@ -74,7 +74,25 @@ Never bypass these checks for convenience.
 
 ### App startup
 
-`app/main.py::create_app` wires: custom exception handlers (`AppError`, `DomainError` → structured envelopes via `app/core/exceptions.py`), CORS, `LanguageMiddleware` (Accept-Language → locale context for i18n), optional `SentryMiddleware`, `RequestMetaMiddleware` (captures client IP/User-Agent into a ContextVar for audit-log enrichment — see `app/core/request_meta.py`), and a `RateLimitMiddleware` scoped to `/api/v1/auth` and `/api/v1/invitations` (20 req/min/IP, same bucket; ADR-021). Lifespan initializes Sentry, loads translations, inits Firebase Admin, starts APScheduler (used for anniversary notification jobs — see `NOTIFICATION_CRON_HOUR` in `Settings`), and disposes the async engine on shutdown.
+`app/main.py::create_app` wires: custom exception handlers (`AppError`, `DomainError` → structured envelopes via `app/core/exceptions.py`), CORS, `LanguageMiddleware` (Accept-Language → locale context for i18n), optional `SentryMiddleware`, `RequestMetaMiddleware` (captures client IP/User-Agent into a ContextVar for audit-log enrichment — see `app/core/request_meta.py`), `TraceContextMiddleware` (W3C `traceparent` correlation — see below), and a `RateLimitMiddleware` scoped to `/api/v1/auth` and `/api/v1/invitations` (20 req/min/IP, same bucket; ADR-021). Lifespan initializes Sentry, loads translations, inits Firebase Admin, starts APScheduler (used for anniversary notification jobs — see `NOTIFICATION_CRON_HOUR` in `Settings`), and disposes the async engine on shutdown.
+
+Middleware order matters — Starlette wraps the **last-added** middleware **outermost**,
+so `create_app` registers in reverse of the desired execution order. Actual order
+(outermost → innermost): `TrustedHost → CORS → TraceContext → Language → RequestMeta →
+Sentry → RateLimit`. `TraceContext` sits just inside `CORS` so every log line for the
+request — including the rate limiter's localized 429 — carries the trace id.
+
+**Observability (ADR-033):** `TraceContextMiddleware` continues an inbound
+`traceparent` header or starts a new W3C trace, storing it in a ContextVar
+(`app/core/trace_context.py`); the response echoes `traceparent`, and CORS
+`expose_headers` it so browsers can surface it to a user. `JsonFormatter`
+(`app/core/logging.py`) adds `trace_id`/`span_id` to every log line emitted inside a
+request, plus `route`/`clan_id` where known — outside a request (scheduler, purge)
+these keys are absent entirely, not null. `SentryMiddleware` additionally tags
+Sentry events with `trace_id` for the pivot from an issue to log search. RED metrics
+are exposed at `GET /internal/metrics` (Prometheus exposition, envelope-exempt),
+gated by `METRICS_ENABLED` + `METRICS_TOKEN` (`app/core/config.py`) and the request's
+`X-Metrics-Token` header; every failure path 404s (never 401/403) per ADR-021.
 
 Docs (`/docs`, `/redoc`) are only mounted when `APP_DEBUG=true`.
 
