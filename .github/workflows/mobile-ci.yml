@@ -5,12 +5,12 @@ on:
     branches: [main, develop]
     paths:
       - "mobile/**"
-      - "packages/**"
+      - ".github/workflows/mobile-ci.yml"
   pull_request:
     branches: [main, develop]
     paths:
       - "mobile/**"
-      - "packages/**"
+      - ".github/workflows/mobile-ci.yml"
 
 jobs:
   analyze-and-test:
@@ -24,11 +24,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Get dependencies (shared package)
-        working-directory: packages/family_roots_core
-        run: dart pub get
-
-      - name: Get dependencies (mobile)
+      - name: Get dependencies
         working-directory: mobile
         run: flutter pub get
 
