@@ -1519,14 +1519,16 @@ at a family gathering, not at a desk. Tabs scroll horizontally; each tab is a
 `POST …/{user_id}/approve` and `…/reject`.
 
 **Row content, and a blocker.** Approving a membership grants a stranger access to
-several hundred living relatives' records. It is an identity decision, and the API does
-not currently return an identity: `PendingClanUser` is `{id, user_id, role, created_at}`
-— no name, no email, and (unlike the sibling approved-members list) not even
-`person_id`. **A screen that asks "Duyệt `d95c1ee7-…`?" is not a screen we should
-ship.** So this spec designs the row the decision needs and names the gap precisely
-rather than papering over it. See §9-J18.
+several hundred living relatives' records. It is an identity decision, and the API did
+not, when this spec was written, return an identity: the pending row was
+`{id, user_id, role, person_id, created_at}` — no name and no email, and `person_id` is
+`null` for exactly the fresh registrant an admin most needs to judge. **A screen that asks
+"Duyệt `d95c1ee7-…`?" is not a screen we should ship.** So this spec designed the row the
+decision needs and named the gap precisely rather than papering over it. The gap was
+closed on 2026-08-02 — see §9-J18 and
+[ADR-039](../../decisions/039-clan-user-list-identity-asymmetry.md).
 
-Row, as designed (requires the gap closed):
+Row, as designed (the gap is now closed, so this is what ships):
 
 ```
 Nguyễn Văn Hải                          [Xin làm Người xem]
@@ -1535,10 +1537,18 @@ Gửi yêu cầu 2 ngày trước
                                     [Từ chối]  [Duyệt]
 ```
 
-Interim rendering, until `full_name`/`email` are added: the row leads with
+~~Interim rendering, until `full_name`/`email` are added: the row leads with
 `Yêu cầu tham gia` and the join date, shows a short id chip, and the primary action is
 **not** `Duyệt` but `Xem chi tiết`, which is honest about the admin needing to identify
-the person out of band. `Duyệt` appears only where an identity is shown.
+the person out of band. `Duyệt` appears only where an identity is shown.~~
+
+**No longer needed — the gap is closed** (2026-08-02,
+[ADR-039](../../decisions/039-clan-user-list-identity-asymmetry.md)).
+`GET /clans/me/users/pending` now returns `display_name` and `email`, so the row above
+renders as designed and `Duyệt` is the primary action. Both fields are **nullable**:
+render `display_name` when present, otherwise lead with `email`; if a request somehow has
+neither, fall back to the interim treatment above for that row only. The interim rendering
+is kept struck-through as the record of what shipped before the fields existed.
 
 **Role select.** The requested role is shown as a chip; the admin can change it before
 approving via a `Duyệt với quyền…` menu (`Người xem` / `Biên tập viên` / `Quản trị`),
@@ -2213,6 +2223,40 @@ their dict by hand and omit them. This is two lines per endpoint, not a query ch
 *(Corrected during review: an earlier draft of this entry claimed the pending list lacks
 `person_id`. It does not — both lists carry it. The missing fields are `email` and
 `display_name`, and they are missing from both.)*
+
+**RESOLVED — 2026-08-02, backend shipped.
+[ADR-039](../../decisions/039-clan-user-list-identity-asymmetry.md).**
+
+The fix landed, but **not as this entry recommended.** The recommendation above — add both
+fields to both endpoints — was written from the shape of the payloads and missed that the
+two endpoints have different guards:
+
+| Endpoint | Guard | Shipped |
+|---|---|---|
+| `GET /clans/me/users/pending` | `RequireAdmin` | `display_name` **and** `email` |
+| `GET /clans/me/users` | `RequireViewer` | `display_name` **only** |
+
+`GET /clans/me/users` is readable by **every approved member of the clan**, so putting
+`email` there would have published every member's login address clan-wide. That is also the
+exposure [ADR-037](../../decisions/037-change-requests-workflow.md) already closed
+deliberately: the change-request review surface excludes `phone` and `email` from
+`SUBMITTABLE_PERSON_FIELDS` precisely to keep contact PII out of a shared queue.
+
+`email` on the admin-only pending queue is a different case and is justified: the admin is
+making an identity decision, already holds approve/reject/role powers over that account, and
+the address is the account holder's own registration email — not a genealogy record about a
+third party who never consented.
+
+Consequences for §7.10a: the designed row ships as drawn and `Duyệt` is the primary action;
+the interim `Xem chi tiết` treatment is retired (kept struck-through there as the record).
+Both new fields are nullable — render `display_name`, else `email`, else fall back.
+
+The asymmetry is pinned by
+`backend/tests/integration/test_clan_users_identity_fields.py::test_email_is_on_pending_and_never_on_approved`,
+which asserts `email` is present on the pending payload and **absent** (not null) on the
+approved one — the guard against a future refactor merging the two handlers into one shared
+serialiser and quietly leaking email to every viewer. Contract:
+[`docs/contracts/rest-clans-api.md` §User list rows](../../contracts/rest-clans-api.md#user-list-rows).
 
 **J19 — There is no way to leave a clan.** `clan.cannot_remove_self` blocks an admin
 removing themselves regardless of admin count, and no leave/transfer endpoint exists for

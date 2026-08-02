@@ -470,12 +470,11 @@ def test_journey_multiuser_collaboration(
     pending = _envelope(
         client.get("/api/v1/clans/me/users/pending", headers=admin_hdr), has_meta=True
     )
-    # ClanUserSummary (app/schemas/clan_membership.py) carries no `email` — its
-    # fields are id/user_id/role/person_id/created_at only, and
-    # SqlAlchemyClanRepository.list_users never joins the email column. This
-    # freshly-created clan has exactly one pending membership (the invitee above
-    # was approved immediately in Stage 2), so the joiner is identified by
-    # clan-scoped uniqueness instead of an email field that doesn't exist.
+    # This freshly-created clan has exactly one pending membership (the invitee
+    # above was approved immediately in Stage 2), so the joiner is identified by
+    # clan-scoped uniqueness. The pending row also carries display_name/email now
+    # (PendingClanUserSummary, ADR-039) — pinned in
+    # test_clan_users_identity_fields.py, not re-asserted here.
     assert len(pending) == 1, pending
     joiner_row = pending[0]
     assert "person_id" in joiner_row  # ADR-024: key present (null is fine)
