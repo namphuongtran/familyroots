@@ -19,10 +19,14 @@ Last updated: 2026-08-02.
 
 Backend and web are done (see §4). What is left:
 
-- **Mobile:** blocked — no Flutter/Dart toolchain on this machine.
-  `mobile/pubspec.yaml` still carries `flutter_bloc ^8`, `get_it ^7`, `go_router ^14`,
-  `dio ^5`, `retrofit >=4 <5`, `hive ^2`, `intl ^0.20`. Run `flutter pub outdated` on
-  a machine that has the SDK.
+- **Mobile:** closed — obsoleted by the rebuild (§2.3, ADR-034). `flutter_bloc ^8`,
+  `get_it ^7`, `go_router ^14`, `retrofit >=4 <5` and `hive ^2` are not carried into
+  the new project, so there is nothing left to upgrade. The blocker itself is also
+  gone: Flutter 3.44.8 stable (Dart 3.12.2) — the version
+  `subosito/flutter-action@v2` resolves in CI — was installed locally on 2026-08-02,
+  so mobile changes are now verified before they are pushed rather than by CI
+  round-trip. First local run of the existing suite: `flutter analyze` clean,
+  28/28 tests passing.
 
 Three upgrades were attempted and deliberately not taken, each blocked upstream
 rather than by our code:
@@ -90,9 +94,34 @@ the implementation to satisfy a bad assertion.
 
 Not yet specced. Follows A. Interacts with the `tailwindcss` 4 migration in §1.1.
 
-### 2.3 Sub-project D — mobile
+### 2.3 Sub-project D — mobile rebuild
 
-Not yet specced. Follows B.
+**Brought forward ahead of B** (2026-08-02, owner decision). The design-system work
+in B should land against a real architecture, not against a mock scaffold.
+
+- **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md` (approved)
+- **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
+- **Status:** M0 not yet planned
+
+The existing `mobile/` tree is being deleted, not refactored. After five months it
+still makes no HTTP call to the backend — the Dio client and auth interceptor are
+`Prompt 2` stubs and every repository is bound to `lib/domain/mocks/`. Only the
+`.arb` files, the Arbor Heritage mandates, `l10n.yaml` and `assets/` are carried
+forward.
+
+New stack: Riverpod 3 for state **and** DI, plain Dio with hand-written
+repositories, freezed, `flutter_secure_storage` for the session, `sqflite` for a
+read-only offline cache, bundled fonts instead of `google_fonts`. Layer boundaries
+enforced by an import-scanning test — the mobile counterpart of the backend's
+`lint-imports` ratchet.
+
+Milestones, each with its own plan: **M0** spine + login + clan resolution ·
+**M1** persons · **M2** tree · **M3** events + documents · **M4** push + admin.
+
+**Two owner actions block specific screens** (spec §8): the Supabase email-template
+link format, which is not knowable from this repo and blocks the verification
+screen in M0; and what belongs in `persons.avatar_url`, undefined by the backend,
+which blocks avatar handling in M2/M3.
 
 ---
 
