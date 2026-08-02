@@ -14,8 +14,9 @@ export default function RegisterPage() {
   const searchParams = useSearchParams()
   const { signUp, signInWithGoogle, completeOnboarding } = useAuthActions()
   const { user, isLoading: isAuthLoading, isAuthenticated, isPendingApproval, needsOnboarding } = useAuth()
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
+  // null = untouched, so the OAuth profile can supply the initial value.
+  const [fullNameInput, setFullName] = useState<string | null>(null)
+  const [emailInput, setEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [clanAction, setClanAction] = useState<'join' | 'create'>('join')
   const [clanId, setClanId] = useState('')
@@ -27,12 +28,14 @@ export default function RegisterPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const isOAuthMode = searchParams.get('mode') === 'oauth' && isAuthenticated
 
-  useEffect(() => {
-    if (isOAuthMode && user) {
-      setFullName((value) => value || user.full_name || '')
-      setEmail((value) => value || user.email || '')
-    }
-  }, [isOAuthMode, user])
+  // Prefill from the OAuth profile by deriving during render rather than pushing
+  // state from an effect: that is what eslint's react-hooks/set-state-in-effect
+  // (new in eslint-config-next 16.2) flags, and it drops a cascading render.
+  // Using ?? rather than the old || also means clearing a prefilled field now
+  // sticks, instead of being refilled the next time `user` changes identity.
+  const oauthProfile = isOAuthMode ? user : null
+  const fullName = fullNameInput ?? oauthProfile?.full_name ?? ''
+  const email = emailInput ?? oauthProfile?.email ?? ''
 
   useEffect(() => {
     if (isAuthLoading) {
