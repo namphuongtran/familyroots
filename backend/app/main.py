@@ -265,16 +265,36 @@ def create_app() -> FastAPI:
         Envelope-exempt like /health: the body is text/plain exposition format.
         """
         token = request.headers.get("X-Metrics-Token")
-        # Compare BYTES, not str: Starlette decodes header bytes as latin-1, so any
-        # byte >= 0x80 yields a non-ASCII str and compare_digest(str, str) raises
-        # TypeError -> an unauthenticated 500 that distinguishes this endpoint from a
-        # nonexistent path, defeating the ADR-021 non-enumeration property.
+        # Compare BYTES, not str, on both sides -- and reconstruct the *exact* wire
+        # bytes on each, not a re-encoding of the decoded str.
+        #
+        # Header side: Starlette decodes header bytes as latin-1, so every byte
+        # 0x00-0xFF round-trips losslessly through str <-> latin-1. token.encode
+        # ("latin-1") is therefore always defined and reproduces the raw bytes the
+        # client sent. (Re-encoding as UTF-8 -- the previous approach -- cannot
+        # raise either, since latin-1-decoded code points are always <= U+00FF, but
+        # it silently compares mojibake instead of the wire bytes, so a non-ASCII
+        # token could never match.)
+        #
+        # Configured side: METRICS_TOKEN is read from os.environ, which decodes
+        # with surrogateescape (PEP 383) -- a value holding bytes that are not
+        # valid UTF-8 becomes a str containing surrogate code points. Re-encoding
+        # that with plain .encode("utf-8") raises UnicodeEncodeError, which is an
+        # unauthenticated 500 that distinguishes this endpoint from a nonexistent
+        # path -- the same ADR-021 existence oracle this comparison exists to
+        # close, just operator-triggered instead of attacker-triggered.
+        # .encode("utf-8", "surrogateescape") mirrors os.environ's own decoding
+        # step, so it round-trips the exact configured bytes and cannot raise --
+        # and, as a side effect, a non-ASCII METRICS_TOKEN can now actually
+        # authenticate (see .env.example for the byte-exactness caveat that still
+        # applies to how it's typed into the environment).
         if (
             not settings.METRICS_ENABLED
             or not settings.METRICS_TOKEN
             or token is None
             or not secrets.compare_digest(
-                token.encode("utf-8"), settings.METRICS_TOKEN.encode("utf-8")
+                token.encode("latin-1"),
+                settings.METRICS_TOKEN.encode("utf-8", "surrogateescape"),
             )
         ):
             raise StarletteHTTPException(status_code=404)

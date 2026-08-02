@@ -53,6 +53,43 @@ def test_non_ascii_token_is_404_not_500(
     assert response.status_code == 404
 
 
+def test_surrogate_configured_token_is_404_not_500(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A METRICS_TOKEN holding bytes that are not valid UTF-8 must not crash the
+    comparison either.
+
+    os.environ decodes with surrogateescape (PEP 383): a raw env var byte >= 0x80
+    that isn't part of a valid UTF-8 sequence surfaces as a surrogate code point in
+    the Python str. Re-encoding that with plain .encode("utf-8") raises
+    UnicodeEncodeError, which -- same as the header-side TypeError this endpoint
+    already guards against -- would 500 for any request carrying a token header
+    and 404 for one without, letting an operator misconfiguration reopen the
+    ADR-021 existence oracle this handler exists to close.
+    """
+    monkeypatch.setattr(settings, "METRICS_ENABLED", True)
+    monkeypatch.setattr(settings, "METRICS_TOKEN", "s3cr\udcff")
+    response = client.get("/internal/metrics", headers={"X-Metrics-Token": "anything"})
+    assert response.status_code == 404
+
+
+def test_non_ascii_configured_token_can_authenticate(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Comparing exact bytes on both sides (latin-1 for the wire header, utf-8 with
+    surrogateescape for the configured value) means a non-ASCII token that the
+    scraper sends as the identical raw bytes now matches -- unlike the previous
+    utf-8-on-both-sides comparison, which compared mojibake against the original
+    string and could never match a non-ASCII token."""
+    monkeypatch.setattr(settings, "METRICS_ENABLED", True)
+    monkeypatch.setattr(settings, "METRICS_TOKEN", "café")
+    # "café".encode("utf-8") == b"caf\xc3\xa9"; sent as raw bytes because httpx
+    # refuses a non-ASCII str header client-side (same constraint as the existing
+    # non-ASCII-header test above).
+    response = client.get("/internal/metrics", headers={b"X-Metrics-Token": b"caf\xc3\xa9"})
+    assert response.status_code == 200
+
+
 def test_enabled_with_an_empty_token_setting_is_404(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
