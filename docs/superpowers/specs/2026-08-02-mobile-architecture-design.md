@@ -284,26 +284,48 @@ URLs are excluded from the cache by rule (§1.2).
 
 | Package | Version | Role |
 |---|---|---|
-| `flutter_riverpod` | 3.4.2 | state + DI |
-| `riverpod_annotation` / `riverpod_generator` | 4.0.6 / 4.0.8 | provider codegen |
-| `riverpod_lint` + `custom_lint` | 3.1.8 / 0.8.1 | Riverpod-specific correctness lints |
+| `flutter_riverpod` | 3.3.1 | state + DI |
+| `riverpod_annotation` / `riverpod_generator` | 4.0.2 / 4.0.3 | provider codegen |
+| `riverpod_lint` | 3.1.3 | Riverpod-specific correctness lints |
 | `go_router` | 17.3.0 | routing + guards |
 | `dio` | 5.11.0 | HTTP |
 | `freezed` | 3.2.5 | entities, DTOs, state unions |
-| `json_serializable` | 6.14.1 | DTO (de)serialisation |
+| `json_serializable` | 6.13.0 | DTO (de)serialisation |
 | `supabase_flutter` | 2.16.0 | auth session |
 | `flutter_secure_storage` | 10.3.1 | session at rest |
 | `sqflite` | 2.4.3 | read cache |
 | `sentry_flutter` | 9.26.0 | crash + tracing |
-| `firebase_messaging` | 16.4.3 | push (M4) |
-| `intl` | 0.20.3 | date/number formatting |
+| `firebase_messaging` | (M4) | push — pinned when M4 is planned, not before |
+| `intl` | 0.20.2 | date/number formatting |
 | `flutter_lints` | 6.0.0 | lint baseline |
 | `mocktail` / `http_mock_adapter` | 1.0.5 / 0.6.1 | test doubles |
-| `build_runner` | 2.16.0 | codegen driver |
+| `build_runner` | 2.15.1 | codegen driver |
 
-All verified against pub.dev on 2026-08-02 and all compatible with Dart 3.12
-(Flutter 3.44.8 stable, the version `subosito/flutter-action@v2` resolves in CI
-and the version installed locally).
+**Corrected 2026-08-02, after the M0 plan was written.** The original table listed
+each package's newest release, checked individually against the Dart SDK
+constraint. That is not the same as checking that they resolve *together*, and
+they do not: `flutter pub get` fails outright, because `freezed 3.2.5` needs
+`analyzer >=9 <11` while `custom_lint 0.8.1` needs `analyzer ^8` — mutually
+exclusive — and `riverpod_lint 3.1.8` needs `analyzer ^13`, excluding both.
+Three further pins were also unreachable: `intl 0.20.3` is forbidden by
+`flutter_localizations`, which pins `0.20.2`; `riverpod_generator 4.0.8` is
+incompatible with `flutter_test`; and `build_runner 2.16.0` requires
+`meta ^1.18.3` while Flutter 3.44.8 hard-pins `meta 1.18.0`.
+
+The table above is an **all-stable line, resolved and executed**: `flutter pub get`
+succeeds and `dart run build_runner build` produces freezed, `json_serializable`
+and Riverpod outputs together. Letting pub choose freely instead selects
+`freezed 3.2.6-dev.1`, a prerelease; that is rejected as a project baseline, at the
+price of slightly older `riverpod_lint` and `json_serializable`. One prerelease
+remains unavoidable — `riverpod_analyzer_utils`, pulled transitively by
+`riverpod_generator` — and is upstream's choice, not ours.
+
+`custom_lint` is **removed**, not downgraded: `riverpod_lint 3.1.3` no longer
+depends on it, so declaring it adds a constraint with nothing behind it.
+
+The lesson generalises beyond this table: a version is only verified when the
+whole set resolves and the toolchain runs on it. Individual pub.dev lookups are
+necessary and not sufficient.
 
 ---
 
@@ -319,8 +341,8 @@ and the version installed locally).
 | architecture | the import-boundary scan (D9) |
 
 `analysis_options.yaml` enables `strict-casts`, `strict-inference` and
-`strict-raw-types` on top of `flutter_lints`, plus `custom_lint` with
-`riverpod_lint`.
+`strict-raw-types` on top of `flutter_lints`, plus `riverpod_lint`. `custom_lint`
+is not declared: `riverpod_lint 3.1.3` no longer routes through it (see §4.7).
 
 **Generated code is committed.** `*.g.dart` and `*.freezed.dart` are checked into
 git rather than gitignored, so a fresh clone analyses, tests and opens in an IDE
