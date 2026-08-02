@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.branches import router as branches_router
+from app.api.v1.change_requests import router as change_requests_router
 from app.api.v1.claims import admin_claims_router, user_claims_router
 from app.api.v1.clans import router as clans_router
 from app.api.v1.documents import router as documents_router
@@ -29,6 +30,9 @@ api_v1_router.include_router(documents_router, prefix="/documents", tags=["docum
 api_v1_router.include_router(events_router, prefix="/events", tags=["events"])
 api_v1_router.include_router(tree_router, prefix="/tree", tags=["tree"])
 api_v1_router.include_router(exports_router, prefix="/exports", tags=["exports"])
+api_v1_router.include_router(
+    change_requests_router, prefix="/change-requests", tags=["change-requests"]
+)
 
 # Claims
 api_v1_router.include_router(user_claims_router, prefix="/claims", tags=["claims"])

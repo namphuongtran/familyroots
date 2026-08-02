@@ -78,7 +78,11 @@ Clients render `date` when `precision == "exact"`, otherwise `display` (falling 
 to `date`). Write DTOs accept the scalar `*_date` plus optional `*_precision`
 (default `"exact"`) and `*_display`. Exceptions that stay scalar dates: document
 `taken_date`, tree `SpouseNode.marriage_date`/`divorce_date`, `/events/upcoming`
-`next_occurrence` (derived). See ADR-011.
+`next_occurrence` (derived), and the change-request `changes` / `target.conflicts`
+maps, which echo a *proposed request body* rather than a rendered record and
+therefore keep the write shape (`*_date` + `*_precision` + `*_display`) so a client
+can feed them straight into `PATCH /persons/{id}` — see
+[rest-change-requests-api.md](rest-change-requests-api.md). See ADR-011.
 
 ## Rules
 - One file per public contract surface.
@@ -100,6 +104,7 @@ to `date`). Write DTOs accept the scalar `*_date` plus optional `*_precision`
 - [rest-exports-api.md](rest-exports-api.md) — clan JSON archive + GEDCOM export, envelope-exempt
 - [rest-events-api.md](rest-events-api.md)
 - [rest-claims-api.md](rest-claims-api.md)
+- [rest-change-requests-api.md](rest-change-requests-api.md) — propose-and-review corrections to a person; `changes` keeps the write date shape (documented `HistoricalDate` exception)
 - [rest-invitations-api.md](rest-invitations-api.md)
 - [rest-platform-admin-api.md](rest-platform-admin-api.md)
 - [rest-notifications-api.md](rest-notifications-api.md)

@@ -78,6 +78,23 @@ distinguishing payload fields, the `action` code, and the trigger.
 | `PersonDeleted` | `person.delete` | `person_id` | `Person.soft_delete()` |
 | `PersonRestored` | `person.restore` | `person_id` | `Person.restore()` |
 
+### change_request
+All use `resource_type = change_request`; `resource_id` is the change-request id (the
+*target* is carried in the payload). Approving a person proposal emits
+`ChangeRequestApproved` **and** the ordinary `PersonUpdated` in the same transaction —
+the approval and the edit it caused are separately attributable, and both are the
+reviewer's. See ADR-037.
+
+| Event | `action` | Key payload | Trigger |
+|-------|----------|-------------|---------|
+| `ChangeRequestSubmitted` | `change_request.submit` | `target_resource_type`, `target_resource_id`, `fields` | `ChangeRequest.submit_person_update()` |
+| `ChangeRequestApproved` | `change_request.approve` | `target_resource_type`, `target_resource_id`, `changes`, `base_version`, `applied_version` | `ChangeRequest.approve()` |
+| `ChangeRequestRejected` | `change_request.reject` | `target_resource_type`, `target_resource_id`, `review_notes` | `ChangeRequest.reject()` |
+
+`base_version` (what the proposal was written against) and `applied_version` (what it
+actually landed on) are both recorded so the three-way merge is reconstructable from
+the audit log after the fact.
+
 ### relationship
 | Event | `action` | Key payload | Trigger |
 |-------|----------|-------------|---------|

@@ -197,5 +197,12 @@
   "event.deleted": "Đã xóa sự kiện",
   "branch.deleted": "Đã xóa chi họ",
   "document.deleted": "Đã xóa tài liệu",
-  "document.avatar_set": "Đã đặt ảnh đại diện"
+  "document.avatar_set": "Đã đặt ảnh đại diện",
+  "error.change_request_not_found": "Không tìm thấy đề nghị sửa",
+  "error.change_request.not_pending": "Đề nghị sửa này không còn ở trạng thái chờ duyệt",
+  "error.change_request.target_conflict": "Dữ liệu đã thay đổi kể từ khi đề nghị được gửi. Vui lòng xem lại các trường bị xung đột.",
+  "error.change_request.target_deleted": "Bản ghi được đề nghị sửa đã bị xóa. Hãy khôi phục trước khi duyệt.",
+  "error.change_request.unsupported_operation": "Loại đề nghị sửa này chưa được hỗ trợ",
+  "error.change_request.no_changes": "Đề nghị sửa phải có ít nhất một trường thay đổi",
+  "error.change_request.field_not_submittable": "Một hoặc nhiều trường không thể đề nghị sửa"
 }

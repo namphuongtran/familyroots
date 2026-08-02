@@ -127,7 +127,14 @@ and `expected_version` is a **required** field on the matching PATCH request bod
 
 | code | HTTP | raised when | detail keys | client handling |
 |---|---|---|---|---|
-| `stale_write` | 409 | `PATCH /persons/{id}`, `PATCH /relationships/marriages/{id}`, or `PATCH /relationships/parent-child/{id}` sent an `expected_version` that no longer matches the row's current `version` (someone else updated, deleted, or restored it first) | `current_version` (int — the row's actual current version) | Re-fetch the record (or read `current_version` directly), re-apply the user's edit on top of the fresh data, resubmit with the new `version` |
+| `stale_write` | 409 | `PATCH /persons/{id}`, `PATCH /relationships/marriages/{id}`, or `PATCH /relationships/parent-child/{id}` sent an `expected_version` that no longer matches the row's current `version` (someone else updated, deleted, or restored it first). Also reachable on `POST /change-requests/{id}/approve` when a concurrent writer commits between the merge check and the write — a genuine race, not the week-old-proposal case, which is `change_request.target_conflict` | `current_version` (int — the row's actual current version) | Re-fetch the record (or read `current_version` directly), re-apply the user's edit on top of the fresh data, resubmit with the new `version` |
+
+Change requests carry an **age-tolerant** variant of the same protection: a proposal
+records the target's `version` *and* its per-field values at submission, and approval
+runs a three-way merge instead of a bare version equality check — so a week-old
+correction to `birth_date` still applies after somebody rewrote `biography`, while a
+competing edit to `birth_date` itself is refused with `change_request.target_conflict`
+(ADR-037).
 
 ### Invitations
 
@@ -157,6 +164,27 @@ and `expected_version` is a **required** field on the matching PATCH request bod
 | `person_not_controlled_by_this_clan` | 403 | Unlink/admin-link on a person another clan controls | — | Explain cross-clan restriction |
 | `person_has_no_controlling_clan` | 403 | Reviewing a claim for a person with no controlling clan | — | Contact-support notice |
 | `only_clan_admin_can_review_claims` | 403 | Non-admin of the controlling clan reviews a claim | — | Hide action |
+
+### Change requests (propose-and-review corrections) — ADR-037
+
+Scope today is `action=update` on `resource_type=person`. See
+[rest-change-requests-api.md](rest-change-requests-api.md).
+
+| code | HTTP | raised when | detail keys | client handling |
+|---|---|---|---|---|
+| `change_request_not_found` | 404 | Change-request id does not exist, belongs to another clan, or a `viewer` asked for a proposal they did not submit (viewers are scoped to their own; the 404 rather than 403 keeps the queue non-enumerating, ADR-021) | — | Refresh the queue |
+| `change_request.not_pending` | 409 | Approve/reject on a proposal already approved or rejected. Checked **before** any target write, so a double-approve cannot re-apply the edit | `status` (the current status) | Refresh state |
+| `change_request.target_conflict` | 409 | Approval blocked by the three-way merge: a proposed field's current value is **neither** the value captured at submission **nor** the value proposed — i.e. somebody wrote a different value there in the meantime. Movement on fields the proposal does *not* touch never raises this. Nothing is written (all-or-nothing) and the proposal stays `pending` | `conflicts` (list of `{field, base, current, proposed}`), `base_version`, `current_version` | Render the diff; either reject, or apply a merged value via `PATCH /persons/{id}` and then reject. There is no force-approve |
+| `change_request.target_deleted` | 409 | Approving a proposal whose target person is currently soft-deleted. Rejection is still allowed | `person_id` | Offer restore-then-approve, or reject |
+| `change_request.unsupported_operation` | 422 | An `action`/`resource_type` combination this build does not execute (anything but `update`+`person`). Re-checked at review time, not only at submit | `action`, `resource_type`, `supported` (list of `{action, resource_type}`) | Hide the affordance for unsupported types |
+| `change_request.no_changes` | 422 | Submitted with an empty `changes` map | — | Form validation |
+| `change_request.field_not_submittable` | 422 | `changes` names a field that is not proposable: `phone`/`email` (contact PII, excluded so the review surface cannot leak it), `avatar_url`, anything the Person aggregate never allows, or an unknown field name — unknown keys are rejected, never silently dropped | `fields` (list of offenders), `allowed` (list) | Show which fields are rejected |
+
+Also raised on these routes: `person_not_found` (404 — target absent from the acting
+clan, or soft-deleted at submit time), `validation_error` (422 — a malformed value in
+`changes`, or `resource_id` omitted on an update), `stale_write` (409 — a concurrent
+writer committed between the merge check and the write), `insufficient_permissions`
+(403 — a viewer calling approve/reject), and `invalid_cursor` (400).
 
 ### Persons
 
@@ -259,10 +287,12 @@ validation codes which are 422. Branch on the code, not the status.
 `Retry-After: <seconds>` response header and `detail.retry_after` (same value).
 Clients should wait that long before retrying; do not sign the user out.
 
-## Footnotes: i18n cross-check (as of 2026-07-12)
+## Footnotes: i18n cross-check (as of 2026-08-02)
 
 - Every code above has an `error.<code>` translation in all four locale files
-  (`vi`, `en`, `fr`, `zh`), and the locale files are key-identical.
+  (`vi`, `en`, `fr`, `zh`), and the locale files are key-identical. Enforced by
+  `tests/unit/test_i18n_coverage.py` (both directions: every raised code has a `vi`
+  key, and no locale lags the union).
 - Orphan keys — present in i18n but never raised by any code path (likely legacy;
   do not branch on them): `error.document_not_linked_to_member`,
   `error.member_not_found`, `error.relationship.already_married`,

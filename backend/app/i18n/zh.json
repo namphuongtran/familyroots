@@ -197,5 +197,12 @@
   "event.deleted": "已删除事件",
   "branch.deleted": "已删除支系",
   "document.deleted": "已删除文档",
-  "document.avatar_set": "已设置头像"
+  "document.avatar_set": "已设置头像",
+  "error.change_request_not_found": "未找到修改申请",
+  "error.change_request.not_pending": "该修改申请已不在待审核状态",
+  "error.change_request.target_conflict": "自提交申请以来记录已被更改。请查看冲突的字段。",
+  "error.change_request.target_deleted": "该申请指向的记录已被删除。请先恢复再审核。",
+  "error.change_request.unsupported_operation": "暂不支持此类修改申请",
+  "error.change_request.no_changes": "修改申请至少须包含一个字段",
+  "error.change_request.field_not_submittable": "一个或多个字段不可通过修改申请提交"
 }

@@ -22,6 +22,10 @@ from app.application.auth.handlers import (
     FCMTokenHandler,
 )
 from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
+from app.application.change_request.handlers import (
+    ChangeRequestCommandHandler,
+    ChangeRequestQueryHandler,
+)
 from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
 from app.application.event.handlers import EventCommandHandler, EventQueryHandler
@@ -51,6 +55,9 @@ from app.infrastructure.persistence.auth_repository import (
     SqlAlchemyFCMTokenRepository,
 )
 from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
+from app.infrastructure.persistence.change_request_repository import (
+    SqlAlchemyChangeRequestRepository,
+)
 from app.infrastructure.persistence.claim_repository import (
     SqlAlchemyClaimQueryPort,
     SqlAlchemyClaimRepository,
@@ -101,6 +108,30 @@ def get_person_command_handler(db: AsyncSession = Depends(get_db)) -> PersonComm
 def get_person_query_handler(db: AsyncSession = Depends(get_db)) -> PersonQueryHandler:
     repo = SqlAlchemyPersonRepository(_repo_uow(db))
     return PersonQueryHandler(repo, SqlAlchemyPersonQueryPort(db))
+
+
+# ── Change-request handlers ─────────────────────────────────────
+#
+# Both repositories are built on the SAME UoW (and therefore the same request
+# session), which is what lets approval apply the person edit and flip the request's
+# status in one transaction with one event dispatch (ADR-037).
+
+
+def get_change_request_command_handler(
+    db: AsyncSession = Depends(get_db),
+) -> ChangeRequestCommandHandler:
+    uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+    return ChangeRequestCommandHandler(
+        SqlAlchemyChangeRequestRepository(uow),
+        SqlAlchemyPersonRepository(uow),
+        uow,
+    )
+
+
+def get_change_request_query_handler(
+    db: AsyncSession = Depends(get_db),
+) -> ChangeRequestQueryHandler:
+    return ChangeRequestQueryHandler(SqlAlchemyChangeRequestRepository(_repo_uow(db)))
 
 
 # ── Claim handlers ──────────────────────────────────────────────
