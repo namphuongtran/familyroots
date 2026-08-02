@@ -11,6 +11,9 @@ it once the git history and the ADRs tell the story on their own.
 
 Last updated: 2026-08-02 (end of the four-agent session).
 
+For the coarse view — which streams exist, which have plans, and what is next — see
+[roadmap.md](roadmap.md). This file is the fine-grained state underneath it.
+
 ---
 
 ## 1. In flight
