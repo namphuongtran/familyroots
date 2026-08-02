@@ -7,8 +7,6 @@ from starlette.responses import Response
 
 from app.core.trace_context import get_trace_context
 
-__all__ = ["SentryMiddleware", "sentry_sdk"]
-
 
 class SentryMiddleware(BaseHTTPMiddleware):
     """Attach request context to Sentry scope for richer error reports."""

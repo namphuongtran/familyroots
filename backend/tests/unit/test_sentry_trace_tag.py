@@ -8,10 +8,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 import pytest
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.middleware import sentry_middleware as sentry_module
 from app.middleware.sentry_middleware import SentryMiddleware
 from app.middleware.trace_middleware import TraceContextMiddleware
 
@@ -32,7 +32,7 @@ def recorded_tags(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     def _fake_push_scope() -> Iterator[_RecordingScope]:
         yield scope
 
-    monkeypatch.setattr(sentry_module.sentry_sdk, "push_scope", _fake_push_scope)
+    monkeypatch.setattr(sentry_sdk, "push_scope", _fake_push_scope)
     return scope.tags
 
 
