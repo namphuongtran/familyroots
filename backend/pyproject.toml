@@ -19,6 +19,7 @@ dependencies = [
     "python-multipart>=0.0.22",
     "apscheduler>=3.11.2",
     "sentry-sdk[fastapi]>=2.54.0",
+    "prometheus-fastapi-instrumentator>=7.1.0",
 ]
 
 [project.optional-dependencies]
@@ -84,6 +85,7 @@ module = [
     "supabase.*",
     "jose.*",
     "apscheduler.*",
+    "prometheus_fastapi_instrumentator",
 ]
 ignore_missing_imports = true
 

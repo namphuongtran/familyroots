@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: str = ""
 
+    # Metrics — opt-in RED metrics for a Prometheus scraper. Off by default because
+    # nothing scrapes it yet; the token keeps route names and request volumes from
+    # being readable by anyone who finds the path.
+    METRICS_ENABLED: bool = False
+    METRICS_TOKEN: str = ""
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
     ALLOWED_HOSTS: list[str] = ["*"]
@@ -138,6 +144,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Settings:
+        if self.METRICS_ENABLED and not self.METRICS_TOKEN:
+            raise ValueError("METRICS_TOKEN must be set when METRICS_ENABLED is true")
         if self.APP_ENV == "production":
             if self.APP_SECRET_KEY == "change-me-in-production":
                 raise ValueError("APP_SECRET_KEY must be set to a real secret in production")

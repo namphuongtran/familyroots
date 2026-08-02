@@ -86,3 +86,15 @@ def test_production_accepts_explicit_forwarded_for_false():
 def test_dev_unset_forwarded_for_resolves_false():
     s = _build(APP_ENV="development")
     assert s.trust_forwarded_for is False
+
+
+def test_metrics_enabled_without_a_token_is_rejected():
+    """Enabled-but-unprotected would publish request volumes and route names to
+    anyone — reject it in every environment, not just production."""
+    with pytest.raises(ValidationError):
+        _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN="")
+
+
+def test_metrics_enabled_with_a_token_is_accepted():
+    s = _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN="s3cret")
+    assert s.METRICS_ENABLED is True

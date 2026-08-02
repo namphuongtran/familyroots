@@ -1,14 +1,17 @@
 """FamilyRoots FastAPI application factory."""
 
 import logging
+import secrets as _secrets
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -232,6 +235,35 @@ def create_app() -> FastAPI:
 
     # Include API v1 routes
     application.include_router(api_v1_router, prefix="/api/v1")
+
+    # RED metrics into an app-owned registry (not the process-global default) so
+    # building several apps in one test session cannot raise Duplicated timeseries.
+    metrics_registry = CollectorRegistry()
+    application.state.metrics_registry = metrics_registry
+    Instrumentator(
+        registry=metrics_registry,
+        excluded_handlers=["/health", "/internal/metrics"],
+    ).instrument(application)
+
+    @application.get("/internal/metrics", include_in_schema=False)
+    async def internal_metrics(request: Request) -> Response:
+        """Prometheus exposition. 404 — never 401 — on every failure path so an
+        unauthenticated scan cannot confirm the endpoint exists (ADR-021).
+
+        Envelope-exempt like /health: the body is text/plain exposition format.
+        """
+        token = request.headers.get("X-Metrics-Token")
+        if (
+            not settings.METRICS_ENABLED
+            or not settings.METRICS_TOKEN
+            or token is None
+            or not _secrets.compare_digest(token, settings.METRICS_TOKEN)
+        ):
+            raise StarletteHTTPException(status_code=404)
+        return Response(
+            generate_latest(request.app.state.metrics_registry),
+            media_type=CONTENT_TYPE_LATEST,
+        )
 
     # Health check with DB connectivity probe
     @application.get("/health", tags=["health"], response_model=None)
