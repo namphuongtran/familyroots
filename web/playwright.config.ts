@@ -22,7 +22,11 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 5'] } },
   ],
   webServer: {
-    command: `pnpm dev --port ${PORT}`,
+    // Bind the dev server to the same host the tests navigate to. With the default
+    // bind, Next treats 127.0.0.1 as a cross-origin dev client and blocks
+    // /_next/webpack-hmr on every run — harmless noise now, but noise that would
+    // hide a real cross-origin problem once the slices add journeys.
+    command: `pnpm dev --port ${PORT} --hostname 127.0.0.1`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -48,18 +48,19 @@ Two trees coexist during the migration described in
   ├── domain/                 # plain TypeScript: no React, Next, fetch, zod, tanstack,
   │                           # zustand, or supabase — shared/, date/, and (as features
   │                           # land) person/, kinship/, capability/
-  ├── features/<slice>/       # persons · relationships · tree · events · documents ·
-  │   ├── api/                # auth · admin · platform · backoffice (added per slice PR)
-  │   ├── model/               # zod DTOs constrained to generated OpenAPI types,
-  │   ├── server/               # repository (fetch → parse → map to domain), query keys
-  │   ├── hooks/
-  │   ├── ui/
-  │   └── index.ts             # PUBLIC SURFACE — the only import path for other code
+  ├── features/<slice>/       # one per slice PR: persons, relationships, tree, events,
+  │   │                       # documents, auth, admin, platform, backoffice
+  │   ├── api/                # transport only — calls apiFetch, no React
+  │   ├── model/              # zod DTOs constrained to the generated OpenAPI types
+  │   ├── server/             # repository: fetch → parse → map to domain; query keys
+  │   ├── hooks/              # TanStack Query hooks
+  │   ├── ui/                 # components — never import this slice's own api/
+  │   └── index.ts            # PUBLIC SURFACE — the only import path for other code
   ├── shared/
-  │   ├── http/                # api-client, request-context, envelope, errors, refresh
-  │   ├── telemetry/            # logger, trace, Sentry, Web Vitals
-  │   └── testing/               # MSW + RTL harness
-  └── generated/api-types.ts   # generated from /openapi.json, committed, CI-verified
+  │   ├── http/               # api-client, request-context, envelope, errors, refresh
+  │   ├── telemetry/          # logger, trace, Sentry, Web Vitals
+  │   └── testing/            # MSW + RTL harness
+  └── generated/api-types.ts  # generated from /openapi.json, committed, CI-verified
   ```
 
   `src/features/` does not exist yet — it lands with the first feature slice PR. New code
@@ -68,17 +69,37 @@ Two trees coexist during the migration described in
 
 Path alias `@/*` → `./src/*` (tsconfig).
 
-### Dependency rules (machine-enforced by `pnpm depcruise`, `.dependency-cruiser.cjs`)
+### Dependency rules
 
-| Layer | May import | Must not import |
+**What the machine actually checks.** `.dependency-cruiser.cjs` holds nine rules, run by
+`pnpm depcruise` and gated in CI. Every one of them *forbids* something — dependency-cruiser
+has no allow-list concept — so a rule name is the thing to grep for when a build fails:
+
+| Rule | Forbids | Severity |
 |---|---|---|
-| `domain/**` | `domain/**` only | react, next, zod, fetch, tanstack, zustand, supabase |
-| `features/*/api` | `domain`, `shared/http`, `generated` | react, ui, hooks, other features |
-| `features/*/hooks`, `server`, `model` | own `api` + `domain`, `shared/**` | other features' internals |
-| `features/*/ui` | own `hooks`/`model`, `domain`, `shared/ui` | `api` (no direct transport) |
-| `features/A` | `features/B` **via `index.ts` only** | `features/B/api/...` |
-| `app/**` | `features/*/index.ts`, `shared/**` | `api` directly |
-| anything | — | `app/**` |
+| `domain-is-pure` | `src/domain/**` importing any npm package except `typescript` / `@types/*` — which covers react, next, zod, tanstack, zustand and supabase | error |
+| `domain-imports-only-domain` | `src/domain/**` importing anything under `src/` that is not `src/domain/` | error |
+| `api-layer-has-no-react` | `features/*/api/**` importing `react`, `react-dom` or `@tanstack/react-query` | error |
+| `ui-does-not-call-transport` | `features/X/ui/**` importing `features/X/api/**` | error |
+| `cross-feature-only-via-index` | reaching into another feature's internals; `features/B` is importable only through `features/B/index.ts` | error |
+| `app-does-not-call-transport` | `src/app/**` importing `features/*/api/**` | error |
+| `nothing-imports-app` | anything outside `src/app/` importing `src/app/**` | error |
+| `no-circular` | import cycles | error |
+| `no-orphans` | modules nothing imports — 3 known and accepted today | **warn** |
+
+The exit code is the count of error-level violations, so one error returns 1. Warnings do
+not fail the build.
+
+**What is convention, not a gate.** The permitted direction of imports — `api` reaching
+`domain`/`shared/http`/`generated`, `hooks`/`server`/`model` reaching their own `api` plus
+`shared/**`, `ui` reaching its own `hooks`/`model`, `app/**` reaching `features/*/index.ts`
+— is architecture, not a rule. Nothing stops you importing `shared/telemetry` from a
+`model`. Follow it anyway; the rules above only catch the directions that were worth the
+cost of encoding.
+
+`src/shared/` is `http/`, `telemetry/` and `testing/`. There is no `shared/ui/` — reusable
+presentational components currently live in `src/components/ui/`, and moving them is a
+sub-project B decision that has not been made.
 
 The legacy trees (`src/lib/api`, `src/lib/hooks`, `src/application`, `src/infrastructure`,
 `src/types`) are excluded from these rules — they are being deleted, not refactored into

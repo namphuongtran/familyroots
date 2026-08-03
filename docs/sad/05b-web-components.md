@@ -75,18 +75,26 @@ trees this diagram excludes; see `docs/sad/11-risks-and-technical-debt.md` R3/R1
 
 ## 5.2.2 Layer rules
 
-Machine-enforced by `pnpm depcruise` (`.dependency-cruiser.cjs`) — the frontend
-counterpart of the backend's `lint-imports` ratchet (ADR-013):
+The intended import directions — the frontend counterpart of the backend's `lint-imports`
+ratchet (ADR-013):
 
 | Layer | May import | Must not import |
 |---|---|---|
 | `domain/**` | `domain/**` only | react, next, zod, fetch, tanstack, zustand, supabase |
 | `features/*/api` | `domain`, `shared/http`, `generated` | react, ui, hooks, other features |
 | `features/*/hooks`, `server`, `model` | own `api` + `domain`, `shared/**` | other features' internals |
-| `features/*/ui` | own `hooks`/`model`, `domain`, `shared/ui` | `api` (no direct transport) |
+| `features/*/ui` | own `hooks`/`model`, `domain`, shared presentational components | `api` (no direct transport) |
 | `features/A` | `features/B` **via `index.ts` only** | `features/B/api/...` |
 | `app/**` | `features/*/index.ts`, `shared/**` | `api` directly |
 | anything | — | `app/**` |
+
+**Only the third column is machine-enforced.** `pnpm depcruise` runs nine rules in
+`.dependency-cruiser.cjs`, and dependency-cruiser can only forbid — it has no allow-list —
+so the *May import* column is architecture we hold ourselves to, not a gate that will catch
+us. The rule names and exactly what each one forbids are listed in `web/CLAUDE.md`;
+consult that before assuming a boundary is protected. `src/shared/` is `http/`,
+`telemetry/` and `testing/` — there is no `shared/ui/` yet, and where reusable
+presentational components should live is an open sub-project B decision.
 
 The legacy trees (`src/lib/api`, `src/lib/hooks`, `src/application`, `src/infrastructure`,
 `src/types`) are excluded from these rules — they are being deleted, not refactored into
