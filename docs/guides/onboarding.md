@@ -49,7 +49,16 @@ Integration tests require a local Postgres (`docker compose up -d pgdb`).
 `tests/integration/conftest.py` drops/creates a throwaway database
 `family_roots_schema_test` and applies the full Alembic chain. Override the
 admin DSN via `TEST_PG_ADMIN_URL` (default
-`postgresql+psycopg://postgres:postgres@localhost:5432/postgres`).
+`postgresql+psycopg://postgres:postgres@localhost:5432/postgres`) and the
+database name via `TEST_PG_DB_NAME`.
+
+If someone else might be running the suite against the same Postgres, give your
+run its own database — teardown is `DROP DATABASE … WITH (FORCE)`, so two runs
+sharing the name drop each other's schema mid-suite:
+
+```bash
+export TEST_PG_DB_NAME=family_roots_schema_test_$USER
+```
 
 ```bash
 cd backend

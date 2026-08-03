@@ -1,10 +1,12 @@
 """Integration-test fixtures that run the real Alembic migration against Postgres.
 
 Requires a running Postgres (see backend/docker-compose: `docker compose up -d pgdb`).
-Override the admin DSN via TEST_PG_ADMIN_URL if your local Postgres differs.
+Override the admin DSN via TEST_PG_ADMIN_URL if your local Postgres differs, and the
+throwaway database name via TEST_PG_DB_NAME if a second suite may run concurrently.
 """
 
 import os
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -38,7 +40,44 @@ def _reset_settings(dsn: str) -> None:
 ADMIN_URL = os.environ.get(
     "TEST_PG_ADMIN_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
 )
-TEST_DB_NAME = "family_roots_schema_test"
+
+TEST_DB_NAME_ENV = "TEST_PG_DB_NAME"
+DEFAULT_TEST_DB_NAME = "family_roots_schema_test"
+
+# Postgres unquoted-identifier alphabet, and nothing else. The name below is
+# interpolated straight into DROP/CREATE DATABASE, which cannot take a bind
+# parameter -- when the value was a literal constant that was safe by
+# construction, but an environment variable is attacker-adjacent input the
+# moment it comes from a CI matrix, a Makefile or a shell someone else wrote.
+_SAFE_DB_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# Postgres NAMEDATALEN-1. Longer identifiers are silently truncated, so two
+# runs whose names agree on the first 63 characters would still collide -- the
+# exact failure this override exists to prevent. Reject rather than truncate.
+_MAX_DB_NAME_LENGTH = 63
+
+
+def resolve_test_db_name() -> str:
+    """Return the throwaway database name, overridable via ``TEST_PG_DB_NAME``.
+
+    The session fixture below drops this database with ``WITH (FORCE)``, which
+    terminates other backends' connections. Two suites sharing one name
+    therefore destroy each other's schema mid-run (``AsyncConnection [BAD]``
+    and a wave of spurious failures). Anything that may run concurrently --
+    a second agent in another worktree, a developer alongside CI -- must set
+    ``TEST_PG_DB_NAME`` to a distinct value. The default is unchanged, so an
+    invocation that sets nothing behaves exactly as before.
+    """
+    name = os.environ.get(TEST_DB_NAME_ENV, DEFAULT_TEST_DB_NAME)
+    if not _SAFE_DB_NAME.fullmatch(name) or len(name) > _MAX_DB_NAME_LENGTH:
+        raise ValueError(
+            f"{TEST_DB_NAME_ENV}={name!r} is not a usable Postgres database name: "
+            f"expected 1-{_MAX_DB_NAME_LENGTH} characters matching "
+            f"{_SAFE_DB_NAME.pattern!r}"
+        )
+    return name
+
+
+TEST_DB_NAME = resolve_test_db_name()
 
 
 def _sync_dsn(db_name: str) -> str:

@@ -116,6 +116,8 @@ Single-schema Alembic, one linear chain (no branches). `migrations/env.py` impor
 
 `tests/integration/` runs against a **real Postgres**: `tests/integration/conftest.py` drops/creates a throwaway `family_roots_schema_test` database and applies the full Alembic chain (session-scoped `migrated_db_url` fixture). It needs `docker compose up -d pgdb` running; override the admin DSN with `TEST_PG_ADMIN_URL` if your local Postgres differs. Prefer these real-DB tests for anything touching migrations, SQL functions, or clan isolation — and test isolation **two-sided** (clan A sees its rows; clan B does not).
 
+**Running two suites at once**: the teardown is `DROP DATABASE … WITH (FORCE)`, which terminates other backends' connections, so two runs sharing the database name destroy each other's schema mid-suite (`AsyncConnection [BAD]` and ~100 spurious failures). Set **`TEST_PG_DB_NAME`** to a distinct value in each — one per worktree/agent, e.g. `TEST_PG_DB_NAME=family_roots_schema_test_$(basename $PWD)`. Unset, it defaults to `family_roots_schema_test`, so a single serial run needs no change. The name must be a plain unquoted Postgres identifier (`[A-Za-z_][A-Za-z0-9_]*`, ≤63 chars); anything else fails collection rather than being interpolated into the DROP.
+
 ### mypy specifics
 
 Strict mode is on globally, but `pyproject.toml` relaxes it for `app.services.*`, several handler/persistence modules, and tests. When touching those modules, don't reintroduce strict-mode failures *elsewhere* to "fix" them locally — check the per-module overrides first.
