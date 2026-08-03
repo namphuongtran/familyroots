@@ -9,6 +9,7 @@ Per-service developer docs live next to the code in `backend/CLAUDE.md`, `web/CL
 ```
 docs/
 ├── README.md           # this index
+├── roadmap.md          # the shape of the work: where each stream stands, what is next
 ├── work-register.md    # what is in flight, queued, and knowingly unfixed
 ├── sad/                # Software Architecture Document (arc42 + C4) — start here for the big picture
 ├── architecture/       # cross-cutting design
@@ -32,6 +33,7 @@ Before starting a task, read the docs that own the surface you're touching:
 | An architectural choice (or breaking change) | [decisions/README.md](decisions/README.md) — and add an ADR in the same PR |
 | Deploy / infra / incidents | [ops/README.md](ops/README.md) |
 | Picking up work, or wondering what is already in flight | [work-register.md](work-register.md) |
+| Planning: what is left overall, and what still needs a plan | [roadmap.md](roadmap.md) |
 
 ## Software Architecture Document (SAD)
 
