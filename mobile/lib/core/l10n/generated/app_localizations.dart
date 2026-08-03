@@ -94,8 +94,8 @@ abstract class AppLocalizations {
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
-    Locale('en'),
     Locale('vi'),
+    Locale('en'),
   ];
 
   /// No description provided for @appName.
@@ -421,6 +421,114 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Dương lịch'**
   String get solarCalendar;
+
+  /// No description provided for @myClansTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Dòng họ của tôi'**
+  String get myClansTitle;
+
+  /// No description provided for @clanPickerTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chọn dòng họ'**
+  String get clanPickerTitle;
+
+  /// No description provided for @clanCount.
+  ///
+  /// In vi, this message translates to:
+  /// **'{count, plural, =0{Chưa có dòng họ} =1{1 dòng họ} other{{count} dòng họ}}'**
+  String clanCount(int count);
+
+  /// No description provided for @staleDataBanner.
+  ///
+  /// In vi, this message translates to:
+  /// **'Dữ liệu ngày {date}'**
+  String staleDataBanner(String date);
+
+  /// No description provided for @signOutAction.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đăng xuất'**
+  String get signOutAction;
+
+  /// No description provided for @retryAction.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thử lại'**
+  String get retryAction;
+
+  /// No description provided for @errorOffline.
+  ///
+  /// In vi, this message translates to:
+  /// **'Không có kết nối mạng'**
+  String get errorOffline;
+
+  /// No description provided for @errorTimeout.
+  ///
+  /// In vi, this message translates to:
+  /// **'Máy chủ phản hồi quá chậm'**
+  String get errorTimeout;
+
+  /// No description provided for @errorUnexpected.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đã xảy ra lỗi không mong muốn'**
+  String get errorUnexpected;
+
+  /// No description provided for @errorTraceId.
+  ///
+  /// In vi, this message translates to:
+  /// **'Mã lỗi: {traceId}'**
+  String errorTraceId(String traceId);
+
+  /// No description provided for @pendingApprovalTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đang chờ duyệt'**
+  String get pendingApprovalTitle;
+
+  /// No description provided for @pendingApprovalBody.
+  ///
+  /// In vi, this message translates to:
+  /// **'Yêu cầu tham gia của bạn đang chờ quản trị viên dòng họ duyệt.'**
+  String get pendingApprovalBody;
+
+  /// No description provided for @verifyEmailTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Xác thực email'**
+  String get verifyEmailTitle;
+
+  /// No description provided for @verifyEmailBody.
+  ///
+  /// In vi, this message translates to:
+  /// **'Vui lòng mở email và bấm liên kết xác thực.'**
+  String get verifyEmailBody;
+
+  /// No description provided for @resendVerificationAction.
+  ///
+  /// In vi, this message translates to:
+  /// **'Gửi lại email xác thực'**
+  String get resendVerificationAction;
+
+  /// No description provided for @onboardingTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Tham gia dòng họ'**
+  String get onboardingTitle;
+
+  /// No description provided for @accountBlockedTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Tài khoản đã bị khoá'**
+  String get accountBlockedTitle;
+
+  /// No description provided for @clanSuspendedTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Dòng họ đã bị tạm ngưng'**
+  String get clanSuspendedTitle;
 }
 
 class _AppLocalizationsDelegate

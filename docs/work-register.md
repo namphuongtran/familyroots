@@ -151,7 +151,7 @@ someone builds the thing that contradicts them:
 - **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`
 - **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
 - **Plan:** `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md` — 20 tasks
-- **Status: M0 Tasks 1–10 landed. Tasks 11–20 remain.**
+- **Status: M0 Tasks 1–12 landed. Tasks 13–20 remain.**
 
 | Task | What | PR |
 |---|---|---|
@@ -159,15 +159,23 @@ someone builds the thing that contradicts them:
 | 2 | Import-boundary ratchet | #136 |
 | 3–5 | Domain kernel, error taxonomy, envelope | #138 |
 | 6–10 | Interceptors, refresh, secure storage, cache, ApiClient | #147 |
-| **11–12** | **Fonts/theme, l10n** (independent of the network stack; can run in parallel) | — |
+| 11–12 | Fonts/theme, l10n | #148 |
 | **13–17** | **Auth slice, session controller, clan slice, cache wiring, screens** | — |
 | **18** | **Router + Dio + bootstrap — the first point where the pieces meet** | — |
 | **19** | **CI rewrite** | — |
 | **20** | **Run on a real device against the real backend; sync docs** | — |
 
-**Resume here:** Tasks 11–12 (fonts/theme, l10n) — independent of the network stack, so
-they can run in parallel. State once #147 lands is 80 tests, `flutter analyze` clean,
-`build_runner` producing no diff.
+**Resume here:** Task 13 — the auth slice (domain, DTOs, repository), then 14–17 (session
+controller, clan slice, cache wiring, screens). These are the first tasks that consume the
+network stack and the theme rather than building infrastructure. State once #148 lands is
+88 tests, `flutter analyze` clean, `build_runner` and `gen-l10n` producing no diff.
+
+**A fallback trap worth not re-introducing** (found by #148): `gen-l10n` emits
+`supportedLocales` alphabetically, and `MaterialApp` resolves an unsupported locale to
+`supportedLocales.first` — so making `app_vi.arb` the *template* does not make `vi` the
+*fallback*. `preferred-supported-locales` in `l10n.yaml` is what orders the list. Any new
+locale must be added there too, or it silently changes which language a `zh`/`fr` user
+sees.
 
 **The app does not run yet** — there is no `lib/main.dart` until Task 18. Mobile CI's
 APK step is guarded on `hashFiles('mobile/lib/main.dart')` and reactivates by itself when

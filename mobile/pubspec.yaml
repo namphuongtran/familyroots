@@ -46,3 +46,22 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/fonts/
+
+  # Bundled, never fetched at runtime: google_fonts falls back to the system
+  # font offline, which violates the Arbor Heritage typography mandate
+  # (ADR-034 D4). Only variable fonts exist upstream, so the same TTF is
+  # declared twice and the wght axis supplies the weight.
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 700
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
+          weight: 400
+        - asset: assets/fonts/Manrope.ttf
+          weight: 700

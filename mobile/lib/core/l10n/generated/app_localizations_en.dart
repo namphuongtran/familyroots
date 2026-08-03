@@ -189,4 +189,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get solarCalendar => 'Solar';
+
+  @override
+  String get myClansTitle => 'My clans';
+
+  @override
+  String get clanPickerTitle => 'Choose a clan';
+
+  @override
+  String clanCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count clans',
+      one: '1 clan',
+      zero: 'No clans',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String staleDataBanner(String date) {
+    return 'Data from $date';
+  }
+
+  @override
+  String get signOutAction => 'Sign out';
+
+  @override
+  String get retryAction => 'Retry';
+
+  @override
+  String get errorOffline => 'No network connection';
+
+  @override
+  String get errorTimeout => 'The server took too long to respond';
+
+  @override
+  String get errorUnexpected => 'Something went wrong';
+
+  @override
+  String errorTraceId(String traceId) {
+    return 'Error id: $traceId';
+  }
+
+  @override
+  String get pendingApprovalTitle => 'Awaiting approval';
+
+  @override
+  String get pendingApprovalBody =>
+      'Your join request is waiting for a clan admin to approve it.';
+
+  @override
+  String get verifyEmailTitle => 'Verify your email';
+
+  @override
+  String get verifyEmailBody =>
+      'Open your email and tap the verification link.';
+
+  @override
+  String get resendVerificationAction => 'Resend verification email';
+
+  @override
+  String get onboardingTitle => 'Join a clan';
+
+  @override
+  String get accountBlockedTitle => 'Account blocked';
+
+  @override
+  String get clanSuspendedTitle => 'Clan suspended';
 }
