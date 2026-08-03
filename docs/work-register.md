@@ -151,7 +151,7 @@ someone builds the thing that contradicts them:
 - **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`
 - **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
 - **Plan:** `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md` — 20 tasks
-- **Status: M0 Tasks 1–17 landed. Tasks 18–20 remain.**
+- **Status: M0 Tasks 1–19 landed. Task 20 remains — and it is the one that makes M0 done.**
 
 | Task | What | PR |
 |---|---|---|
@@ -161,15 +161,28 @@ someone builds the thing that contradicts them:
 | 6–10 | Interceptors, refresh, secure storage, cache, ApiClient | #147 |
 | 11–12 | Fonts/theme, l10n | #148 |
 | 13–17 | Auth slice, session controller, clan slice, cache wiring, screens | #149 |
-| **18** | **Router + Dio + bootstrap — the first point where the pieces meet** | — |
-| **19** | **CI rewrite** | — |
+| 18 | Router + Dio + bootstrap — the app first runs | #150 |
+| 19 | CI rewrite | #150 |
 | **20** | **Run on a real device against the real backend; sync docs** | — |
 
-**Resume here:** Task 18 — router, guards, Dio wiring and bootstrap. **This is the task
-where the app first runs at all**, and where `lib/main.dart` finally lands, which also
-reactivates Mobile CI's APK step by itself. Then 19 (CI rewrite) and 20 (device run against
-the real backend + doc sync) close M0. State once #149 lands is 118 tests, `flutter
-analyze` clean, `build_runner` and `gen-l10n` producing no diff.
+**Resume here: Task 20 — and it is blocked on things the repository cannot provide.**
+Tasks 1–19 are on `main`. The app compiles: CI now builds `app-debug.apk` (#150). What is
+*not* done is the only thing that makes M0 genuinely done — running it on a device against
+the real backend and walking the acceptance list in the plan's Task 20 step 3.
+
+**Why it is blocked, precisely.** All three are owner-side:
+
+1. **No device or emulator.** The dev machine has no Android SDK and an incomplete Xcode
+   (`flutter devices` and `flutter emulators` both find nothing). Needs Android Studio +
+   an AVD, or a full Xcode + simulator, or a physical phone.
+2. **No Supabase credentials.** Only `.env.example` files are in the repo, correctly.
+   `--dart-define=SUPABASE_URL=… SUPABASE_PUBLISHABLE_KEY=…` needs real values.
+3. **No real approved account.** The acceptance walk needs a verified user with an approved
+   membership, plus a second multi-clan account, plus an unverified one.
+
+Everything up to Task 19 is verified against canned transports and a fake-async widget
+tester. Supabase and Sentry initialisation have therefore **never executed** — they need
+platform channels. Treat "M0 works" as unproven until that walk happens.
 
 **Two traps worth not re-introducing:**
 
@@ -183,6 +196,19 @@ analyze` clean, `build_runner` and `gen-l10n` producing no diff.
   provider that also watches it deadlocks the container — it hangs ~30s then fails with
   "disposed during loading state, yet no value could be emitted".
   `clanResolutionProvider` stays pure and read-only.
+- **No network call before sign-in** (found by #150): the app shell must watch
+  `clanPickRequiredProvider`, not `clanResolutionProvider`. Watching the latter fired
+  `GET /me/clans` at launch — unauthenticated, so it 401s, and the refresh interceptor then
+  finds no session and signs the user out. Opening the app could sign you out. Pinned by a
+  test asserting zero HTTP calls on the login screen.
+- **Escaping the clan picker needs both halves, in order** (#150): go_router 17 re-runs
+  `redirect` for the *current* location, so navigating while the guard still holds bounces
+  straight back, and clearing the guard alone leaves the user in place. `onSelect` must
+  clear `needsClanPick` and *then* `context.go`.
+- **`testWidgets` bodies run in a fake-async zone** (#150), where sqflite's FFI I/O never
+  completes: opening a real database inside a widget test **hangs** rather than failing.
+  Use an in-memory `CacheStore` fake there. Plain `test()` bodies are unaffected.
+- **Riverpod 3.2.1 has no `AsyncValue.valueOrNull`** — the nullable accessor is `value`.
 
 **Goldens do not run in CI, deliberately** (#149, plan caveat N5). Golden images are
 host-renderer sensitive and the baselines in `mobile/test/goldens/goldens/` were rendered on
