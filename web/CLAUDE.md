@@ -13,31 +13,100 @@ pnpm build && pnpm start                       # production build + serve
 pnpm type-check                                # tsc --noEmit (strict)
 pnpm lint                                      # eslint .
 pnpm lint:fix
-pnpm format                                    # prettier --write .
+pnpm format                                    # prettier --write . — DO NOT run: 112 pre-existing files have drift (§3.3 of the work register); it would bury any real diff
 pnpm format:check
-pnpm test:behavior                             # node --test on tests/behavior/*.test.ts (TS via --experimental-strip-types)
-pnpm test:contracts                            # node --test on tests/contracts/*.test.mjs
-node --test --experimental-strip-types tests/behavior/auth-and-invalidation.test.ts   # single behavior test
+pnpm depcruise                                 # dependency-cruiser — enforces the layer rules below, CI-gated
+pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)
+pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/)
+pnpm test:component                            # vitest --project component (jsdom, *.test.tsx, RTL + MSW)
+pnpm test:e2e                                  # playwright test — boots `next dev` on :3100 itself
+pnpm test:e2e:ui                                # playwright test --ui
+pnpm test:behavior                             # legacy: node --test on tests/behavior/*.test.ts (TS via --experimental-strip-types)
+pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
-There is no Jest/Vitest — tests use the Node built-in test runner only.
+Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
 
-Env vars in `.env.local` (see `.env.example`): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+Env vars in `.env.local` (see `.env.example`): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Architecture
 
-The app is mid-migration to **layered frontend architecture (DDD + Clean)**. Treat new code as the target shape; legacy code under `src/lib/api` and `src/lib/hooks` is being thinned but is still load-bearing.
+Two trees coexist during the migration described in
+`docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md`:
 
-### Layers and dependency rules
+- **Legacy, pre-envelope** — `src/lib/api/`, `src/lib/hooks/`, `src/application/<feature>/`,
+  `src/infrastructure/<feature>/` (feature slices: `admin`, `auth`, `documents`, `events`,
+  `persons`, `relationships`, `tree`) plus the `axios` dependency. Scaffolded against
+  unwrapped bodies, `next_cursor`, scalar dates and `*_approx` flags — **not** the frozen
+  contract. Being deleted slice by slice by the feature PRs that follow this one. Do not add
+  to it.
+- **Target (the spine)** — built by this PR, landed on by every feature PR after it:
 
-- `src/domain/` — framework-agnostic types, value objects, business rules. **Must not import** from React, Next, Axios, Supabase, Zustand, or TanStack Query.
-- `src/application/<feature>/` — use-cases and repository **ports**. May import domain; must not import infrastructure implementations directly.
-- `src/infrastructure/<feature>/` — HTTP adapters, DTO mappers, Supabase adapters; implements application ports. `src/infrastructure/http/request-context.ts` is the single source for `Accept-Language` + `X-Current-Clan-Id` resolution.
-- Presentation: `src/app/` (App Router routes), `src/components/`, `src/lib/hooks/` (TanStack Query hooks), `src/store/` (Zustand stores). Calls application use-cases; keep business logic thin.
+  ```
+  web/src/
+  ├── app/[locale]/…          # routing only: layout, page, loading, error, not-found
+  ├── domain/                 # plain TypeScript: no React, Next, fetch, zod, tanstack,
+  │                           # zustand, or supabase — shared/, date/, and (as features
+  │                           # land) person/, kinship/, capability/
+  ├── features/<slice>/       # persons · relationships · tree · events · documents ·
+  │   ├── api/                # auth · admin · platform · backoffice (added per slice PR)
+  │   ├── model/               # zod DTOs constrained to generated OpenAPI types,
+  │   ├── server/               # repository (fetch → parse → map to domain), query keys
+  │   ├── hooks/
+  │   ├── ui/
+  │   └── index.ts             # PUBLIC SURFACE — the only import path for other code
+  ├── shared/
+  │   ├── http/                # api-client, request-context, envelope, errors, refresh
+  │   ├── telemetry/            # logger, trace, Sentry, Web Vitals
+  │   └── testing/               # MSW + RTL harness
+  └── generated/api-types.ts   # generated from /openapi.json, committed, CI-verified
+  ```
+
+  `src/features/` does not exist yet — it lands with the first feature slice PR. New code
+  that isn't a feature slice belongs in `src/domain/` or `src/shared/http/`, never in the
+  legacy trees above.
 
 Path alias `@/*` → `./src/*` (tsconfig).
 
-Feature slices currently present in both `application/` and `infrastructure/`: `admin`, `auth`, `documents`, `events`, `persons`, `relationships`, `tree` (plus `application/tree`). Use these as templates when adding a feature.
+### Dependency rules (machine-enforced by `pnpm depcruise`, `.dependency-cruiser.cjs`)
+
+| Layer | May import | Must not import |
+|---|---|---|
+| `domain/**` | `domain/**` only | react, next, zod, fetch, tanstack, zustand, supabase |
+| `features/*/api` | `domain`, `shared/http`, `generated` | react, ui, hooks, other features |
+| `features/*/hooks`, `server`, `model` | own `api` + `domain`, `shared/**` | other features' internals |
+| `features/*/ui` | own `hooks`/`model`, `domain`, `shared/ui` | `api` (no direct transport) |
+| `features/A` | `features/B` **via `index.ts` only** | `features/B/api/...` |
+| `app/**` | `features/*/index.ts`, `shared/**` | `api` directly |
+| anything | — | `app/**` |
+
+The legacy trees (`src/lib/api`, `src/lib/hooks`, `src/application`, `src/infrastructure`,
+`src/types`) are excluded from these rules — they are being deleted, not refactored into
+compliance.
+
+### The spine (`src/shared/http/`, `src/shared/telemetry/`, `src/domain/date/`)
+
+- `apiFetch` (`src/shared/http/api-client.ts`) is the **only** way to reach the backend.
+  It attaches `Authorization`, `Accept-Language`, `X-Current-Clan-Id`, and a `traceparent`;
+  applies a timeout via `AbortSignal.timeout`; and distinguishes a caller-initiated abort
+  from a transport failure.
+- Request context (`RequestContext`) is always **passed in**, never read from a global —
+  `context.server.ts` builds it from `cookies()` + Supabase SSR in an RSC,
+  `context.client.ts` builds it from the auth store + Supabase browser client. The same
+  repository function runs, and is tested, in both runtimes.
+- `unwrapData` / `unwrapPage` (`src/shared/http/envelope.ts`) are the **only** readers of
+  the `{"data": ...}` / `{"data": ..., "meta": {...}}` envelope. No component ever sees the
+  wrapped shape. `unwrapPage` rejects the pre-envelope `{data, next_cursor, has_more}` shape
+  outright. Cursors are opaque — never parsed or constructed; on `400 invalid_cursor`, drop
+  the cursor and refetch page one.
+- The UI branches on the error **`code`**, never on `message` — `message` arrives already
+  localized from the backend (`src/shared/http/errors.ts`, `ApiError` / `NetworkError` /
+  `MalformedResponseError`).
+- 401 triggers a single-flight refresh-then-retry (`src/shared/http/refresh.ts`); 403 never
+  refreshes — it is a policy decision, not a stale credential.
+- `HistoricalDate` (`src/domain/date/historical-date.ts`) owns its own render rule (`date`
+  when `precision === 'exact'`, else `display`, falling back to `date`); no component
+  re-implements it.
 
 ### Routing, locales, auth gating
 
@@ -53,7 +122,16 @@ All clan-scoped requests must send:
 - `Accept-Language`
 - `X-Current-Clan-Id`
 
-The shared Axios client `src/lib/api/axios.ts` attaches all three via interceptors. On `401` it signs out and redirects to `/<locale>/login`. The clan id comes from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which reads in order: `useAuthStore.currentClanId` → `user.clan_id` → `localStorage.current_clan_id`. SSR returns a minimal context (`{ locale: 'vi' }`). When adding new HTTP adapters, route through this Axios instance or call `getRequestContext()` — do not assemble the headers ad-hoc.
+**New code:** route through `apiFetch` (`src/shared/http/api-client.ts`), which builds these
+headers plus `traceparent` from a `RequestContext` (`src/shared/http/request-context.ts`,
+`context.server.ts`, `context.client.ts`) — never assemble them ad-hoc.
+
+**Legacy code only:** the shared Axios client `src/lib/api/axios.ts` attaches all three via
+interceptors. On `401` it signs out and redirects to `/<locale>/login`. The clan id comes
+from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which reads in
+order: `useAuthStore.currentClanId` → `user.clan_id` → `localStorage.current_clan_id`. SSR
+returns a minimal context (`{ locale: 'vi' }`). Do not extend this path — it is being
+deleted by the slice PRs.
 
 Query semantics that must be preserved when touching list/detail endpoints:
 
@@ -78,10 +156,38 @@ Tailwind + Radix primitives. Reusable primitives in `src/components/ui/`; featur
 
 ### Testing
 
-- `tests/behavior/` — Node test runner with `--experimental-strip-types` for `.ts`. Focused on auth + query invalidation flows; use this for cross-layer behavior tests.
-- `tests/contracts/` — `.mjs` contract tests that pin API client shapes. When you change a request/response shape on the backend, update the matching contract test.
+Four harnesses, one gate each:
+
+- `pnpm test:unit` — Vitest, node environment, `*.test.ts` under `src/`. Pure domain and
+  `shared/http` logic: `HistoricalDate`, envelope unwrapping, the error taxonomy, request
+  context, trace id generation, single-flight refresh, `apiFetch`, the logger.
+- `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
+  (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
+  response shape.
+- `pnpm test:e2e` — Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots `next dev` on
+  `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. Currently smoke-only: locale
+  redirect, the login form renders, and a `test.fail()` ratchet on `R-lang` (see
+  `docs/sad/11-risks-and-technical-debt.md`) that turns red the day `<html lang>` is fixed.
+  Real user journeys arrive with the feature slices, once there is a backend to talk to.
+- `tests/behavior/` (legacy) — Node test runner with `--experimental-strip-types` for `.ts`.
+  Focused on auth + query invalidation flows against the legacy trees; not part of the CI
+  gate for new code.
+- `tests/contracts/` (legacy) — `.mjs` contract tests that pin the legacy API client shapes.
+
+CI (`.github/workflows/web-ci.yml`) runs type-check, lint, `depcruise`, unit, component,
+build, e2e, and `api-types-fresh` (regenerates `src/generated/api-types.ts` from the
+backend's OpenAPI schema and fails the build if it drifts — the anti-R3 gate). The
+freshness job is triggered by changes under either `web/**` or `backend/app/**`, so a
+backend-only PR that changes response shapes cannot skip it.
 
 ## Migration notes
 
-- `src/lib/api/*.ts` (legacy HTTP helpers) and `src/lib/hooks/use*.ts` predate the hexagonal split. New features should put transport in `src/infrastructure/<feature>/` and expose use-cases from `src/application/<feature>/`; the React Query hooks can stay in `src/lib/hooks/` but should call the application layer rather than `lib/api` directly.
-- `src/domain/` is currently mostly `shared/`. As features migrate, domain types move out of `src/types/` and `src/lib/types/` into `src/domain/<feature>/`.
+- `src/lib/api/*.ts`, `src/lib/hooks/use*.ts`, `src/application/<feature>/`, and
+  `src/infrastructure/<feature>/` predate the envelope contract and the spine built above.
+  They are frozen, not extended: no new feature should add to them, and each is deleted
+  outright when the matching feature slice PR lands (§3.2 of the architecture spec).
+- `src/domain/` is currently `shared/` plus `date/` (the `HistoricalDate` model added by the
+  spine PR). As features land, domain types move out of `src/types/` and `src/lib/types/`
+  into `src/domain/<feature>/`.
+- New transport code goes in `src/shared/http/` (or, once a feature slice PR lands,
+  `src/features/<slice>/api/`) — never in `src/lib/api/` or `src/infrastructure/`.

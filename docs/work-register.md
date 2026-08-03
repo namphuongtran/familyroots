@@ -22,7 +22,7 @@ For the coarse view — which streams exist, which have plans, and what is next 
 
 Backend and web are done (see §4). What is left:
 
-- **Mobile:** closed — obsoleted by the rebuild (§2.3, ADR-034). `flutter_bloc ^8`,
+- **Mobile:** closed — obsoleted by the rebuild (§2.2, ADR-034). `flutter_bloc ^8`,
   `get_it ^7`, `go_router ^14`, `retrofit >=4 <5` and `hive ^2` are not carried into
   the new project, so there is nothing left to upgrade. The blocker itself is also
   gone: Flutter 3.44.8 stable (Dart 3.12.2) — the version
@@ -42,7 +42,7 @@ rather than by our code:
 
 Re-check all three when the upstream packages move.
 
-**Consequence for sub-project A (§2.1):** resolved. The spine plan was re-verified on
+**Consequence for sub-project A (§1.3):** resolved. The spine plan was re-verified on
 2026-08-02 against the upgraded tree; its Global Constraints now state the zod-4
 `z.input`/`z.output` rule for the slice PRs that will write boundary schemas.
 
@@ -84,38 +84,37 @@ the verification screen there needs only `POST /auth/resend-verification`.
 
 ---
 
-## 2. Queued
-
-### 2.1 Sub-project A — web architecture spine + observability
+### 1.3 Sub-project A — web architecture spine + observability
 
 - **Spec:** `docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md`
 - **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — 13 tasks (0–12)
-- **Status: Tasks 0–10 landed. Tasks 11 and 12 remain.**
+- **Status: all 13 tasks landed on `feat/web-spine-tasks-11-12` (not yet merged to `main`).**
+  PR 0 of sub-project A is closed by Task 12; feature slice PRs (persons, relationships,
+  tree, events, documents, auth, admin, platform, backoffice) build on top of it next.
 
-| Task | What | PR |
+| Task | What | PR / branch |
 |---|---|---|
 | 0 | Node 22 floor | #122 |
 | 1 | Vitest harness + `HistoricalDate` | #127 |
 | 2–4 | OpenAPI types, envelope + error taxonomy, request context | #129 |
 | 5–7 | traceparent, single-flight refresh, `apiFetch` | #134 |
 | 8–10 | Sentry + Web Vitals, component harness, dependency-cruiser | #139 |
-| **11** | **Playwright harness and CI wiring — NOT STARTED** | — |
-| **12** | **Documentation sync — NOT STARTED** | — |
+| 11 | Playwright harness and CI wiring (incl. `api-types-fresh` triggers) | `feat/web-spine-tasks-11-12` |
+| 12 | Documentation sync (this entry, `web/CLAUDE.md`, `docs/sad/`) | `feat/web-spine-tasks-11-12` |
 
-**Resume here:** Task 11 is next. Two things inside it are load-bearing and easy to
-lose: it adds `backend/app/**` to the `api-types-fresh` job's `paths:` triggers (without
-that edit the anti-drift gate can never fire on the only case it exists for), and it
-ships a `test.fail()` in `web/e2e/smoke.spec.ts` that pins R-lang (§3.2) — it goes red
-the moment that bug is fixed, which is the intent.
+Full gate green on that branch: `pnpm type-check && pnpm lint && pnpm depcruise &&
+pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build` — 55 unit tests,
+3 component tests, 6 e2e tests (3 specs × 2 projects; 2 of the 6 are the deliberate
+`test.fail()` pinning R-lang, §3.2), `depcruise` clean at 0 errors / 3 warnings (orphan
+modules, within the plan's carve-out).
 
-Current web state on main: 55 unit tests + 3 component tests, `depcruise` clean at
-0 errors / 3 warnings (all orphan modules, within the plan's carve-out).
+The plan's own record of what was verified by execution — including the defects it found
+and fixed along the way — is in the plan file's "Verification status — second pass" and
+"Defects found and fixed" sections, not duplicated here.
 
-Two plan defects were found by executing it and are already corrected in the plan file:
-the Vitest config must be `.mts` (and `tsconfig` must glob `**/*.mts` or it silently
-stops being type-checked), and dependency-cruiser exits **1** on a violation, not 2.
+## 2. Queued
 
-### 2.2 Sub-project B — design system and UX for all ages
+### 2.1 Sub-project B — design system and UX for all ages
 
 - **Spec:** `docs/superpowers/specs/2026-08-02-design-system-and-screens.md`
 - **Artifact:** https://claude.ai/code/artifact/2b97d988-12af-4614-8148-294869ffb532
@@ -135,7 +134,7 @@ someone builds the thing that contradicts them:
   `status: "pending"` past `expires_at` with no sweep.
 - No copy promises a notification, because no notification exists for any queue event.
 
-### 2.3 Sub-project D — mobile rebuild
+### 2.2 Sub-project D — mobile rebuild
 
 - **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`
 - **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
@@ -243,7 +242,9 @@ Carried from `CLAUDE.md` — none of these are scheduled:
 - The in-process event dispatcher has no durable delivery guarantee. Do not treat
   in-process events as integration events without explicit mitigation.
 - Prompt-2 TODO scaffolds remain across mobile, infra, and helper scripts.
-- The web test harness is thinner than backend/mobile — sub-project A (§2.1) is the fix.
+- The web test harness (§1.3) now has all four kinds (unit, component, e2e, dependency
+  boundaries) but only covers the spine — no feature slice has tests yet. Each slice PR
+  is expected to add its own.
 
 ---
 
