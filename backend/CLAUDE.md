@@ -104,6 +104,17 @@ are exposed at `GET /internal/metrics` (Prometheus exposition, envelope-exempt),
 gated by `METRICS_ENABLED` + `METRICS_TOKEN` (`app/core/config.py`) and the request's
 `X-Metrics-Token` header; every failure path 404s (never 401/403) per ADR-021.
 
+**`METRICS_TOKEN` hardening (ADR-040):** `metrics_token_weakness`
+(`app/core/config.py`) imposes a **length** floor — ≥32 characters, ≥8 distinct —
+enforced in `Settings` validation (boot fails, every environment) *and* re-checked in
+the handler so a bypassed validation fails closed rather than serving a guessable
+endpoint. It is not an entropy measurement; `"abcdefgh" * 4` passes. Failed attempts
+run through `MetricsFailureThrottle` (`app/core/metrics_guard.py`): 5 failures per
+client IP per 60s, checked **before** the token comparison so guesses stop being
+evaluated. Over budget the response stays the **same bare 404** — never a 429, which
+would itself confirm the endpoint exists. Only failures count, so a scraper holding
+the token is never throttled. Not middleware: the ordering block above is untouched.
+
 Docs (`/docs`, `/redoc`) are only mounted when `APP_DEBUG=true`.
 
 ### Migrations

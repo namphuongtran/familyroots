@@ -187,14 +187,6 @@ are verified before push, not by CI round-trip.
 
 ## 3. Open gaps — knowingly unfixed
 
-### 3.1 `METRICS_TOKEN` hardening
-
-`/internal/metrics` compares a bearer token with `secrets.compare_digest` and returns
-404 on every failure (ADR-021 non-enumeration). Missing: an entropy floor on the
-configured token, and rate limiting — failed attempts are silent 404s that sit outside
-the rate limiter, so the endpoint can be brute-forced without trace. Recorded in
-`docs/ops/monitoring.md`. **Decide before anything scrapes the endpoint.**
-
 ### 3.2 R-lang — every page declares the wrong language
 
 `src/app/layout.tsx` hardcodes `<html lang="en">`, and `src/app/[locale]/layout.tsx`
@@ -267,3 +259,4 @@ Carried from `CLAUDE.md` — none of these are scheduled:
 | Clan user-list identity fields (ADR-039) | `app/api/v1/clans.py` | #140 |
 | Design system + 15 screen groups | `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` | #130, #137 |
 | Remote branch sweep — 108 branches deleted, `main` only | `origin` | 2026-08-02, no merge commit |
+| `METRICS_TOKEN` length floor + 404-preserving failure throttle (ADR-040) | `app/core/metrics_guard.py`, `app/core/config.py` | `chore/backend-metrics-and-test-db` |
