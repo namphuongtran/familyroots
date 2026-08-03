@@ -39,7 +39,7 @@ Last updated: 2026-08-02.
 Playwright harness and CI wiring. Two things inside it are load-bearing and easy to skip:
 it adds `backend/app/**` to the `api-types-fresh` job's `paths:` trigger — without that
 edit the anti-drift gate can never fire on the only case it exists for — and it ships a
-`test.fail()` that pins R-lang (work-register §3.2) and turns red the moment that bug is
+`test.fail()` that pins R-lang (work-register §3.1) and turns red the moment that bug is
 fixed. Then Task 12 (documentation sync) closes sub-project A's PR 0.
 
 **Mobile — Task 6 of [`plans/2026-08-02-mobile-m0-spine.md`](superpowers/plans/2026-08-02-mobile-m0-spine.md).**
@@ -90,9 +90,12 @@ Four reusable agent definitions live in [`.claude/agents/`](../.claude/agents/):
 `backend-engineer`, `web-engineer`, `flutter-engineer`, `product-designer`. Each carries
 this project's gates and guardrails, so a dispatch only needs to say *what*, not *how*.
 
-**Do not run more than one backend agent at a time** until work-register §3.5 is fixed:
-`tests/integration/conftest.py` hardcodes the test database name, and two parallel `pytest`
-runs drop each other's database. It cost 182 spurious failures in one session.
+**Parallel backend agents must each set `TEST_PG_DB_NAME`.** The integration harness
+drops its throwaway database `WITH (FORCE)`, so two runs sharing the name drop each
+other's — it cost 182 spurious failures in one session. Since 2026-08-03 the name is an
+env var (ADR-016), which makes concurrent runs safe *provided each dispatch sets it*; two
+agents that both leave it unset still collide on the default. Give every worktree its own
+value, e.g. `TEST_PG_DB_NAME=family_roots_schema_test_backend`.
 
 The rules that made parallel work safe, learned the hard way:
 

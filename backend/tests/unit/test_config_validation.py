@@ -96,5 +96,60 @@ def test_metrics_enabled_without_a_token_is_rejected():
 
 
 def test_metrics_enabled_with_a_token_is_accepted():
-    s = _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN="s3cret")
+    s = _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN=_STRONG_METRICS_TOKEN)
     assert s.METRICS_ENABLED is True
+
+
+# ─── METRICS_TOKEN length floor (ADR-040) ─────────────────────────────────────
+
+# 49 characters, 23 distinct — well past the floor. Assembled rather than
+# written out: a single 32-char hex literal is indistinguishable from a leaked
+# credential, and gitleaks flagged the first version of this line as `generic-api-key`.
+# An allowlist entry would train everyone to wave through exactly the shape the scanner
+# exists to catch, so the fixture is built from obviously-synthetic pieces instead.
+_STRONG_METRICS_TOKEN = "not-a-real-token-" + "0123456789abcdef" * 2
+
+
+def test_metrics_enabled_rejects_a_short_token():
+    """Refusing to boot is the primary guarantee. Settings are read once per process
+    (@lru_cache, no reload path), so the blast radius is a failed deploy — on Render
+    the previous release keeps serving — never a running instance dropped mid-flight.
+    The alternative, booting and quietly serving route names and request volumes
+    behind a guessable token, is strictly worse."""
+    with pytest.raises(ValidationError):
+        _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN="s3cret")
+
+
+def test_metrics_enabled_rejects_a_single_character_token():
+    """The value §3.1 named: a one-character METRICS_TOKEN used to be accepted."""
+    with pytest.raises(ValidationError):
+        _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN="x")
+
+
+def test_metrics_enabled_rejects_a_long_but_degenerate_token():
+    """A length floor alone accepts 64 identical characters. Not entropy — see
+    ADR-040 — but the likeliest way a compliant-looking token is worthless."""
+    with pytest.raises(ValidationError):
+        _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN="a" * 64)
+
+
+def test_metrics_disabled_does_not_police_the_token():
+    """A leftover value in a .env with the endpoint switched off protects nothing and
+    exposes nothing; failing boot over it would be noise, and would punish exactly
+    the safe configuration."""
+    s = _build(APP_ENV="development", METRICS_ENABLED=False, METRICS_TOKEN="x")
+    assert s.METRICS_ENABLED is False
+
+
+def test_production_with_metrics_enabled_and_a_real_token_ok():
+    s = _build(**_PROD_SAFE, METRICS_ENABLED=True, METRICS_TOKEN=_STRONG_METRICS_TOKEN)
+    assert s.METRICS_TOKEN == _STRONG_METRICS_TOKEN
+
+
+def test_the_error_names_the_setting_and_the_remedy():
+    """A boot failure an operator cannot act on is an outage, not a guardrail."""
+    with pytest.raises(ValidationError) as exc:
+        _build(APP_ENV="development", METRICS_ENABLED=True, METRICS_TOKEN="s3cret")
+    message = str(exc.value)
+    assert "METRICS_TOKEN" in message
+    assert "openssl rand -hex 32" in message

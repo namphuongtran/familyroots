@@ -19,7 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_v1_router
-from app.core.config import settings
+from app.core.config import metrics_token_weakness, settings
 from app.core.database import AsyncRequestSessionLocal, AsyncSessionLocal, get_db
 from app.core.exceptions import (
     AppError,
@@ -37,6 +37,7 @@ from app.core.exceptions import (
     validation_exception_handler,
 )
 from app.core.logging import configure_logging
+from app.core.metrics_guard import MetricsFailureThrottle
 from app.core.readiness import MIGRATIONS_CURRENT, migration_status
 from app.domain.auth.identity_provider import (
     IdentityEmailNotVerifiedError,
@@ -250,6 +251,11 @@ def create_app() -> FastAPI:
     # something like /healthz-probe.
     metrics_registry = CollectorRegistry()
     application.state.metrics_registry = metrics_registry
+    # Per-app so building several apps in one test session keeps separate budgets,
+    # and so the throttle dies with the app rather than leaking across them.
+    application.state.metrics_guard = MetricsFailureThrottle(
+        trust_forwarded_for=settings.trust_forwarded_for
+    )
     Instrumentator(
         registry=metrics_registry,
         excluded_handlers=["^/health$", "^/internal/metrics$"],
@@ -271,7 +277,52 @@ def create_app() -> FastAPI:
         unauthenticated scan cannot confirm the endpoint exists (ADR-021).
 
         Envelope-exempt like /health: the body is text/plain exposition format.
+
+        Every rejection below raises the *same* bare 404, which is byte-identical
+        to the framework's 404 for a path that does not exist (both become
+        `StarletteHTTPException(404, "Not Found")` through the one exception
+        handler). That is the ADR-021 property, and the failure throttle added in
+        ADR-040 deliberately does not get a status code of its own: a 429 here
+        would tell an unauthenticated scanner both that the path exists and that
+        it is worth guarding. The attacker's guesses simply stop being evaluated.
         """
+        guard: MetricsFailureThrottle = request.app.state.metrics_guard
+        not_found = StarletteHTTPException(status_code=404)
+
+        # Switched off: nothing exists to guess, so answer exactly like an unknown
+        # path and record nothing. Internet background noise on this path must not
+        # be able to grow the throttle's table while the feature is disabled --
+        # which is its default state.
+        if not settings.METRICS_ENABLED:
+            raise not_found
+
+        # Enabled, but the configured token is empty or below the ADR-040 floor.
+        # Settings validation rejects that at boot, so getting here means the gate
+        # was bypassed (a test monkeypatch, a directly-constructed Settings, some
+        # future config path). Fail closed: a skipped validation must never be the
+        # reason a guessable endpoint starts serving. Reported once per app, at
+        # error level, because a silent 404 is indistinguishable from "switched
+        # off" to whoever is debugging the scrape.
+        if metrics_token_weakness(settings.METRICS_TOKEN):
+            if not guard.weak_token_reported:
+                guard.weak_token_reported = True
+                logger.error(
+                    "METRICS_ENABLED is true but METRICS_TOKEN does not meet the minimum "
+                    "length; /internal/metrics is serving 404 to every request. Set a "
+                    "token from `openssl rand -hex 32`."
+                )
+            raise not_found
+
+        # Budget check BEFORE the comparison. Evaluating the guess and merely
+        # withholding the body would leave the guessing itself unthrottled, which
+        # is the thing being throttled. Successful scrapes never consume budget,
+        # so a scraper holding the right token can never be locked out by this.
+        client_ip = guard.client_ip(
+            request.headers.get, request.client.host if request.client else None
+        )
+        if guard.is_exhausted(client_ip):
+            raise not_found
+
         token = request.headers.get("X-Metrics-Token")
         # Compare BYTES, not str, on both sides -- and reconstruct the *exact* wire
         # bytes on each, not a re-encoding of the decoded str.
@@ -296,16 +347,26 @@ def create_app() -> FastAPI:
         # and, as a side effect, a non-ASCII METRICS_TOKEN can now actually
         # authenticate (see .env.example for the byte-exactness caveat that still
         # applies to how it's typed into the environment).
-        if (
-            not settings.METRICS_ENABLED
-            or not settings.METRICS_TOKEN
-            or token is None
-            or not secrets.compare_digest(
-                token.encode("latin-1"),
-                settings.METRICS_TOKEN.encode("utf-8", "surrogateescape"),
-            )
+        if token is None or not secrets.compare_digest(
+            token.encode("latin-1"),
+            settings.METRICS_TOKEN.encode("utf-8", "surrogateescape"),
         ):
-            raise StarletteHTTPException(status_code=404)
+            # The trace §3.1 was missing: a failed attempt used to be a silent 404,
+            # so a brute-force campaign left no record anywhere. Log volume is
+            # bounded by construction -- the exhaustion check above returns before
+            # this line -- to at most max_failures lines per IP per window, so the
+            # logging cannot itself be amplified into a cost attack. The attempted
+            # token is deliberately NOT logged: a near-miss in a log file is a
+            # credential leak.
+            attempts = guard.record_failure(client_ip)
+            logger.warning(
+                "Rejected /internal/metrics token (%d/%d failed attempts in %ds) from %s",
+                attempts,
+                guard.max_failures,
+                guard.window_seconds,
+                client_ip,
+            )
+            raise not_found
         return Response(
             generate_latest(request.app.state.metrics_registry),
             media_type=CONTENT_TYPE_LATEST,

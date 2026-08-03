@@ -9,7 +9,7 @@ outside any document.
 item. When an item is finished, move it to *Landed* with its merge commit, and delete
 it once the git history and the ADRs tell the story on their own.
 
-Last updated: 2026-08-02 (end of the four-agent session).
+Last updated: 2026-08-03 (§3.1 METRICS_TOKEN and §3.5 test-DB name closed).
 
 For the coarse view — which streams exist, which have plans, and what is next — see
 [roadmap.md](roadmap.md). This file is the fine-grained state underneath it.
@@ -88,9 +88,9 @@ the verification screen there needs only `POST /auth/resend-verification`.
 
 - **Spec:** `docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md`
 - **Plan:** `docs/superpowers/plans/2026-08-02-web-spine.md` — 13 tasks (0–12)
-- **Status: all 13 tasks landed on `feat/web-spine-tasks-11-12` (not yet merged to `main`).**
-  PR 0 of sub-project A is closed by Task 12; feature slice PRs (persons, relationships,
-  tree, events, documents, auth, admin, platform, backoffice) build on top of it next.
+- **Status: all 13 tasks landed on `main` (#144).** PR 0 of sub-project A is closed by
+  Task 12; feature slice PRs (persons, relationships, tree, events, documents, auth,
+  admin, platform, backoffice) build on top of it next.
 
 | Task | What | PR / branch |
 |---|---|---|
@@ -99,14 +99,18 @@ the verification screen there needs only `POST /auth/resend-verification`.
 | 2–4 | OpenAPI types, envelope + error taxonomy, request context | #129 |
 | 5–7 | traceparent, single-flight refresh, `apiFetch` | #134 |
 | 8–10 | Sentry + Web Vitals, component harness, dependency-cruiser | #139 |
-| 11 | Playwright harness and CI wiring (incl. `api-types-fresh` triggers) | `feat/web-spine-tasks-11-12` |
-| 12 | Documentation sync (this entry, `web/CLAUDE.md`, `docs/sad/`) | `feat/web-spine-tasks-11-12` |
+| 11 | Playwright harness and CI wiring (incl. `api-types-fresh` triggers) | #144 |
+| 12 | Documentation sync (this entry, `web/CLAUDE.md`, `docs/sad/`) | #144 |
 
 Full gate green on that branch: `pnpm type-check && pnpm lint && pnpm depcruise &&
 pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build` — 55 unit tests,
 3 component tests, 6 e2e tests (3 specs × 2 projects; 2 of the 6 are the deliberate
-`test.fail()` pinning R-lang, §3.2), `depcruise` clean at 0 errors / 3 warnings (orphan
+`test.fail()` pinning R-lang, §3.1), `depcruise` clean at 0 errors / 3 warnings (orphan
 modules, within the plan's carve-out).
+
+Task 11's own gate found the drift it was built to catch: `api-types-fresh` failed on
+first run because `src/generated/api-types.ts` predated ADR-036, ADR-037 and ADR-039 —
+the whole `/change-requests` surface was missing. Regenerated in #144.
 
 The plan's own record of what was verified by execution — including the defects it found
 and fixed along the way — is in the plan file's "Verification status — second pass" and
@@ -121,6 +125,14 @@ and fixed along the way — is in the plan file's "Verification status — secon
 - **Status:** tokens, components, accessibility rules and 15 screen groups specced
   (#130, #137). No implementation started — B implements against the mobile and web
   architectures rather than the other way round.
+- **Blocking finding (#146, spec §2.8.1):** the `@theme` block already in
+  `web/src/app/globals.css` mostly does not work. All thirteen semantic colour tokens are
+  declared `hsl(var(--x))` over hex values, so every one is invalid and dropped; there is
+  no `.dark` block at all; the Vietnamese-subsetted Inter is loaded and then never
+  referenced, `Playfair Display` is referenced and never loaded, and neither is the
+  mandated typeface; and four colour pairs fail WCAG AA, including `destructive` in both
+  directions. Measured in a browser, not read. Nothing can be implemented against these
+  tokens until they resolve — fix order is in §2.8.1.
 
 Deferred and blocked backend-side: onboarding tour, PDF book, import, a devices list,
 and change requests beyond `person`-update.
@@ -187,15 +199,7 @@ are verified before push, not by CI round-trip.
 
 ## 3. Open gaps — knowingly unfixed
 
-### 3.1 `METRICS_TOKEN` hardening
-
-`/internal/metrics` compares a bearer token with `secrets.compare_digest` and returns
-404 on every failure (ADR-021 non-enumeration). Missing: an entropy floor on the
-configured token, and rate limiting — failed attempts are silent 404s that sit outside
-the rate limiter, so the endpoint can be brute-forced without trace. Recorded in
-`docs/ops/monitoring.md`. **Decide before anything scrapes the endpoint.**
-
-### 3.2 R-lang — every page declares the wrong language
+### 3.1 R-lang — every page declares the wrong language
 
 `src/app/layout.tsx` hardcodes `<html lang="en">`, and `src/app/[locale]/layout.tsx`
 renders a `<div>`, so the selected locale never reaches the `lang` attribute. Screen
@@ -208,7 +212,7 @@ The fix is structural — `<html>`/`<body>` must move into a locale-aware layout
 middleware machinery. A `test.fail()` in `web/e2e/smoke.spec.ts` (added by spine
 Task 11) keeps CI green while the bug exists and turns red the moment it is fixed.
 
-### 3.3 `pnpm format:check` fails on 112 web files
+### 3.2 `pnpm format:check` fails on 112 web files
 
 Pre-existing prettier drift in files no recent branch has touched
 (`src/middleware.ts`, `src/store/auth.store.ts`, `tsconfig.json`, …). It is not part
@@ -216,25 +220,14 @@ of the documented web gate (`pnpm type-check && pnpm lint`), so CI stays green.
 Running `pnpm format` would fix it in one sweep at the cost of a 112-file diff —
 worth folding into sub-project A rather than doing standalone.
 
-### 3.4 Branch hygiene has no automation
+### 3.3 Branch hygiene has no automation
 
 The remote was swept to a single `main` on 2026-08-02, but nothing stops it refilling:
 **delete-branch-on-merge is not enabled** on the repository. Every future PR leaves its
 branch behind. Turning it on in Settings → General is a one-click owner action and
 removes this class of debt permanently.
 
-### 3.5 The integration test database name is hardcoded
-
-`backend/tests/integration/conftest.py` sets `TEST_DB_NAME = "family_roots_schema_test"`
-as a constant with no environment override. Two `pytest` runs in parallel — two agents in
-separate worktrees, or a developer alongside one — drop each other's database with
-`DROP DATABASE … WITH (FORCE)`, producing `psycopg.AsyncConnection [BAD]` and a wave of
-spurious failures. One run during this session lost 182 tests to it.
-
-Harmless when work is serial, and a hard blocker on parallel backend work. Making the
-name configurable (env var with the current value as the default) is a few lines.
-
-### 3.6 Pre-existing platform debt
+### 3.4 Pre-existing platform debt
 
 Carried from `CLAUDE.md` — none of these are scheduled:
 
@@ -267,3 +260,4 @@ Carried from `CLAUDE.md` — none of these are scheduled:
 | Clan user-list identity fields (ADR-039) | `app/api/v1/clans.py` | #140 |
 | Design system + 15 screen groups | `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` | #130, #137 |
 | Remote branch sweep — 108 branches deleted, `main` only | `origin` | 2026-08-02, no merge commit |
+| `METRICS_TOKEN` length floor + 404-preserving failure throttle (ADR-040) | `app/core/metrics_guard.py`, `app/core/config.py` | `chore/backend-metrics-and-test-db` |

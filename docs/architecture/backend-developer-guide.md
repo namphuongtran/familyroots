@@ -281,7 +281,10 @@ annotations the field name shadows the import and raises
 - The real-DB harness: `tests/integration/conftest.py` drops/creates
   `family_roots_schema_test` and applies the full Alembic chain (session-scoped
   `migrated_db_url` fixture). Needs `docker compose up -d pgdb`; override the admin DSN
-  with `TEST_PG_ADMIN_URL`.
+  with `TEST_PG_ADMIN_URL` and the database name with `TEST_PG_DB_NAME`. **Set
+  `TEST_PG_DB_NAME` whenever a second suite may run at the same time** — teardown is
+  `DROP DATABASE … WITH (FORCE)`, so two runs sharing the name drop each other's schema
+  mid-suite (ADR-016).
 - Markers `unit` / `integration` / `slow` are registered in pyproject; asyncio mode is
   `auto`.
 - **Two-sided isolation pattern**: create data in clan A and clan B, assert clan A sees

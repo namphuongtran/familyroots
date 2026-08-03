@@ -104,6 +104,17 @@ are exposed at `GET /internal/metrics` (Prometheus exposition, envelope-exempt),
 gated by `METRICS_ENABLED` + `METRICS_TOKEN` (`app/core/config.py`) and the request's
 `X-Metrics-Token` header; every failure path 404s (never 401/403) per ADR-021.
 
+**`METRICS_TOKEN` hardening (ADR-040):** `metrics_token_weakness`
+(`app/core/config.py`) imposes a **length** floor — ≥32 characters, ≥8 distinct —
+enforced in `Settings` validation (boot fails, every environment) *and* re-checked in
+the handler so a bypassed validation fails closed rather than serving a guessable
+endpoint. It is not an entropy measurement; `"abcdefgh" * 4` passes. Failed attempts
+run through `MetricsFailureThrottle` (`app/core/metrics_guard.py`): 5 failures per
+client IP per 60s, checked **before** the token comparison so guesses stop being
+evaluated. Over budget the response stays the **same bare 404** — never a 429, which
+would itself confirm the endpoint exists. Only failures count, so a scraper holding
+the token is never throttled. Not middleware: the ordering block above is untouched.
+
 Docs (`/docs`, `/redoc`) are only mounted when `APP_DEBUG=true`.
 
 ### Migrations
@@ -115,6 +126,8 @@ Single-schema Alembic, one linear chain (no branches). `migrations/env.py` impor
 `pytest-asyncio` in `auto` mode with function-scoped loops. Markers `unit`, `integration`, `slow` are registered in `pyproject.toml`. `tests/conftest.py` provides factories for mock DB rows (`make_person_row`, etc.) used by tree-builder unit tests. Layout mirrors the app: `tests/unit/{api,domain,infrastructure}/` plus top-level integration-style `test_*.py`.
 
 `tests/integration/` runs against a **real Postgres**: `tests/integration/conftest.py` drops/creates a throwaway `family_roots_schema_test` database and applies the full Alembic chain (session-scoped `migrated_db_url` fixture). It needs `docker compose up -d pgdb` running; override the admin DSN with `TEST_PG_ADMIN_URL` if your local Postgres differs. Prefer these real-DB tests for anything touching migrations, SQL functions, or clan isolation — and test isolation **two-sided** (clan A sees its rows; clan B does not).
+
+**Running two suites at once**: the teardown is `DROP DATABASE … WITH (FORCE)`, which terminates other backends' connections, so two runs sharing the database name destroy each other's schema mid-suite (`AsyncConnection [BAD]` and ~100 spurious failures). Set **`TEST_PG_DB_NAME`** to a distinct value in each — one per worktree/agent, e.g. `TEST_PG_DB_NAME=family_roots_schema_test_$(basename $PWD)`. Unset, it defaults to `family_roots_schema_test`, so a single serial run needs no change. The name must be a plain unquoted Postgres identifier (`[A-Za-z_][A-Za-z0-9_]*`, ≤63 chars); anything else fails collection rather than being interpolated into the DROP.
 
 ### mypy specifics
 

@@ -40,7 +40,7 @@ Verify lint with plain `pnpm lint` — its success output is **empty**, which is
 misread as a failure to run.
 
 **Never run `pnpm format`.** 112 files carry pre-existing prettier drift (work-register
-§3.3) and reformatting them buries your diff. Run `pnpm exec prettier --write` on only the
+§3.2) and reformatting them buries your diff. Run `pnpm exec prettier --write` on only the
 files you created.
 
 ## When a plan is wrong

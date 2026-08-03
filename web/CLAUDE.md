@@ -13,7 +13,7 @@ pnpm build && pnpm start                       # production build + serve
 pnpm type-check                                # tsc --noEmit (strict)
 pnpm lint                                      # eslint .
 pnpm lint:fix
-pnpm format                                    # prettier --write . — DO NOT run: 112 pre-existing files have drift (§3.3 of the work register); it would bury any real diff
+pnpm format                                    # prettier --write . — DO NOT run: 112 pre-existing files have drift (§3.2 of the work register); it would bury any real diff
 pnpm format:check
 pnpm depcruise                                 # dependency-cruiser — enforces the layer rules below, CI-gated
 pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)

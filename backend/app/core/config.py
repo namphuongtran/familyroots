@@ -10,6 +10,44 @@ from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES
 
 _CANONICAL_DB_DRIVER = "postgresql+psycopg"
 
+# METRICS_TOKEN floor (ADR-040). This is a LENGTH floor, not an entropy floor --
+# entropy is a property of how a string was generated, and nothing here can
+# observe that. 32 characters of `openssl rand -hex 32` output carries 128 bits;
+# 32 characters of "abcdabcdabcd..." carries about four, and passes. The floor's
+# real guarantee is narrow and worth stating plainly: a token produced by the
+# documented random generator clears it, and a hand-typed one almost never does.
+MIN_METRICS_TOKEN_LENGTH = 32
+# The one genuinely low-entropy shape a length floor lets through unaided is the
+# padded-repetition token ("aaaa...", "00000000...", "secretsecretsecret..."), so
+# reject the degenerate end of it. Also not an entropy measurement: this catches
+# fewer than N distinct characters, and "abcdefgh" repeated four times still
+# passes. It is a cheap guard against the likeliest lazy value, nothing more.
+MIN_METRICS_TOKEN_DISTINCT_CHARS = 8
+
+
+def metrics_token_weakness(token: str) -> str | None:
+    """Return why *token* is unusable as a ``METRICS_TOKEN``, or ``None`` if it clears
+    the floor.
+
+    Used in two places on purpose (ADR-040): settings validation rejects a weak
+    token at boot, and the ``/internal/metrics`` handler re-checks at request time
+    so that a bypassed validation fails closed instead of serving a guessable
+    endpoint.
+    """
+    if not token:
+        return "it is empty"
+    if len(token) < MIN_METRICS_TOKEN_LENGTH:
+        return (
+            f"it is {len(token)} characters long; at least {MIN_METRICS_TOKEN_LENGTH} are required"
+        )
+    distinct = len(set(token))
+    if distinct < MIN_METRICS_TOKEN_DISTINCT_CHARS:
+        return (
+            f"it uses only {distinct} distinct characters; at least "
+            f"{MIN_METRICS_TOKEN_DISTINCT_CHARS} are required"
+        )
+    return None
+
 
 class Settings(BaseSettings):
     """Application settings loaded from .env file and environment variables."""
@@ -158,8 +196,20 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Settings:
-        if self.METRICS_ENABLED and not self.METRICS_TOKEN:
-            raise ValueError("METRICS_TOKEN must be set when METRICS_ENABLED is true")
+        # Refuse to boot with metrics enabled behind a guessable token (ADR-040).
+        # Enforced in every environment, not just production, because the pair is
+        # opt-in: nothing reaches this branch unless someone deliberately set
+        # METRICS_ENABLED=true, and a dev .env that trains a weak token gets copied.
+        # Settings are read once per process (@lru_cache, no reload path), so the
+        # blast radius is a failed deploy -- on Render the previous release keeps
+        # serving -- not a running instance dropped mid-flight.
+        if self.METRICS_ENABLED:
+            weakness = metrics_token_weakness(self.METRICS_TOKEN)
+            if weakness:
+                raise ValueError(
+                    f"METRICS_TOKEN is unusable while METRICS_ENABLED is true: {weakness}. "
+                    "Generate one with `openssl rand -hex 32`."
+                )
         if self.APP_ENV == "production":
             if self.APP_SECRET_KEY == "change-me-in-production":
                 raise ValueError("APP_SECRET_KEY must be set to a real secret in production")
