@@ -286,6 +286,128 @@ Flutter — one `ThemeExtension` per token family (`ArborColors`, `ArborType`,
 `Theme.of(context).extension<ArborColors>()!.heritage` — never a `const Color` literal.
 `ColorScheme` is populated from the same values so Material widgets inherit correctly.
 
+### 2.8.1 What the web app actually has today — measured, 2026-08-03
+
+`web/src/app/globals.css` already carries a Tailwind v4 `@theme` block, written before
+this document existed. It was never reconciled against §2, and it is not a naming
+mismatch: **the two disagree about what the primary colour is, and most of what the file
+declares does not reach the browser.**
+
+Everything below was measured, not read — a dev server on `127.0.0.1:3210`, Chromium via
+Playwright, `getComputedStyle` on a probe element, and WCAG ratios computed from the hex
+values in the file. Reproduce with `pnpm dev` and the probe described at the end.
+
+**A. Every semantic colour token is dead.** `@theme` defines thirteen of them as
+`hsl(var(--x))` — `background`, `foreground`, `border`, `input`, `ring`, `secondary`,
+`secondary-foreground`, `destructive`, `muted`, `muted-foreground`, `accent`, `popover`,
+`card` — while `:root` defines those variables as **hex strings** (`--background: #f8f4ec`).
+`hsl()` takes hue/saturation/lightness, so `hsl(#f8f4ec)` is invalid and the declaration is
+dropped. This is the shadcn convention applied with the wrong value format: shadcn stores
+bare channels (`45 33% 95%`), not hex.
+
+Proof that they are dropped rather than merely wrong: probed in the browser, all thirteen
+resolve to the *same* computed value — the inherited body colour — including
+`secondary`, whose `--secondary` is **never defined anywhere in the file**. If `hsl(#hex)`
+were being parsed, `border` (`#e5e7eb`) and `destructive` (`#ef4444`) could not agree.
+
+So `bg-background`, `text-foreground`, `border-border`, `bg-card`, `bg-muted`,
+`text-muted-foreground`, `text-destructive`, `bg-popover`, `bg-accent` and `ring-ring` all
+do nothing today. Anything that looks correct on screen looks correct by inheritance.
+
+**B. There is no dark theme.** `@custom-variant dark (&:is(.dark *))` is declared, and no
+`.dark` block exists anywhere in the stylesheet — confirmed by walking every loaded
+`CSSRule`. Every `dark:` utility in the codebase resolves against light values. §2.2 of
+this document specifies a full dark palette; none of it is implemented, and because of (A)
+there is no working light palette to invert either.
+
+**C. The one font that loads is never used, and both fonts are the wrong fonts.**
+`src/app/[locale]/layout.tsx` loads `Inter` through `next/font/google` with the Vietnamese
+subset and exposes it as `--font-inter`. Nothing references `--font-inter`. `globals.css`
+instead hardcodes `body { font-family: 'Inter', 'Noto Sans', sans-serif }` — a literal
+family name, which is *not* the obfuscated name `next/font` generates. Measured body font:
+`Inter, "Noto Sans", sans-serif`, resolved from the hardcoded rule. So the correctly
+subsetted Vietnamese Inter is downloaded and discarded, and the text renders in whatever
+the device happens to have — precisely the silent-fallback failure the Arbor Heritage
+mandate forbids, on precisely the device (§1) we designed for.
+
+`Playfair Display` is named for headings and is **never loaded at all** — no `next/font`
+call, no `@font-face`, no dependency. Every heading falls back to Noto Serif or Georgia.
+
+And neither is the specified typeface. The mandate is **Plus Jakarta Sans** for headings
+and **Manrope** for body. Neither string appears anywhere in the repository.
+
+The font class is also applied to a `<div>` in the `[locale]` layout, the same structural
+defect as R-lang — see §9.
+
+**D. Three names for "primary", and the app's primary is not this document's primary.**
+`--color-primary-500`, a bare `--color-primary`, and `:root --primary` all hold `#c41e3a`.
+The third is consumed by nothing: unlike the other semantics, `--color-primary` is a
+literal, not an `hsl(var(--primary))` indirection, so `:root --primary` and
+`--primary-foreground` are dead code. **Use `--color-primary`**; it is the one that
+generates `bg-primary`.
+
+The deeper conflict: `#c41e3a` is a red, and §2.1 of this document makes primary a green
+(`#3E5C38`) with red reserved as `--color-heritage` (`#A3182F`). The app's "primary" is
+therefore this document's *accent*, and this document's actual primary does not exist in
+the app. **This document is correct and the app is the bug** — §2.1's rationale is that a
+red-dominant UI reads as alarm in a product whose most common actions are neutral, and red
+must stay affordable for `heritage` moments and destructive confirmation. Renaming is a
+sub-project B implementation task, and it is not cosmetic: `bg-primary` currently paints
+things red across the app.
+
+**E. Two different backgrounds are both called the background.** Measured body background
+is `#fdfbf7` (`--color-cream`), while `--background` says `#f8f4ec` and `--cream` in
+`:root` says `#f8f4ec` too. Three names, two values, and the body uses the one the
+semantic token disagrees with. `--color-cream-50` is also `#fdfbf7` and `--color-cream-100`
+is `#f8f4ec`, so both values exist in the ramp under different indices.
+
+**F. Contrast — computed, not assumed.** Ratios against the hex values actually in the file:
+
+| Pair | Ratio | Verdict |
+|---|---|---|
+| `foreground #1a1a1a` on `background #f8f4ec` | 15.87 | passes |
+| `primary-700 #8b0000` on white | 10.01 | passes |
+| `accent-foreground #92400e` on `accent #fef3c7` | 6.37 | passes |
+| `primary #c41e3a` on white | 5.84 | passes |
+| `muted-foreground #6b7280` on `card #ffffff` | 4.83 | passes |
+| **`muted-foreground #6b7280` on `background #f8f4ec`** | **4.41** | **fails AA normal text** |
+| **`destructive-foreground #ffffff` on `destructive #ef4444`** | **3.76** | **fails AA normal text** |
+| **`destructive #ef4444` on white** | **3.76** | **fails AA normal text** |
+| **`gold-500 #d4af37` on white** | **2.10** | **fails everything for text** |
+| **`gold-500 #d4af37` on `cream #fdfbf7`** | **2.03** | **fails everything for text** |
+| `border #e5e7eb` on `background #f8f4ec` | 1.13 | below 3:1 for non-text |
+
+Four real failures, and note the shape of the first: `muted-foreground` **passes on cards
+and fails on the page background**. Secondary text is exactly what that token is for, so
+the same helper text is compliant inside a card and non-compliant beside it. A reviewer
+checking one screen would call it fine.
+
+`destructive` failing matters more than it looks: 3.76 means both red error text *and* the
+white label on a red confirm button are non-compliant, so the destructive path — the one
+place a 78-year-old trưởng họ most needs to read what is about to happen — is the least
+legible thing in the palette. Darken it; `#b91c1c` and below clears 4.5.
+
+`gold` is unusable for text at any size and must be restricted to non-text ornament. That
+is consistent with §2.1 treating gold as ornament, but nothing in the app enforces it and
+`text-gold-500` is a class someone will reach for.
+
+`border` at 1.13 is *not* a defect by itself — the Arbor Heritage mandate says not to use
+1px borders for section separation and to express boundaries with background shifts. The
+token exists mainly for inputs, where a 3:1 boundary is required. It needs a darker value
+for that use, or inputs need a filled treatment instead.
+
+**Nothing here is fixable in this document.** Every item is application code. The order
+that matters, for whoever implements it: (A) first, because until the semantic tokens
+resolve, nothing else can be verified on screen; then (C), because a fallback font changes
+every measurement in §2.3 and §6; then (F); then (D) and (E) together as one renaming.
+(B) last — a dark palette built on a broken light one cannot be checked.
+
+**How this was measured**, so it can be re-run after a fix: start the dev server, then in
+Chromium set `color: hsl(var(--<name>))` on a probe element and read
+`getComputedStyle`. All thirteen returning one identical value — and matching the
+inherited body colour — is the signature of the invalid-declaration failure. When the
+tokens are fixed, they must return thirteen *different* values.
+
 ---
 
 ## 3. Domain presentation primitives
