@@ -32,9 +32,15 @@ jobs:
         working-directory: mobile
         run: flutter analyze
 
+      # Golden images are host-renderer sensitive: the baselines in
+      # mobile/test/goldens/goldens/ were rendered on macOS and do not match
+      # this Linux runner, so they would fail here for a reason that says
+      # nothing about the code. They run locally with plain `flutter test`.
+      # M0 Task 19 owns the CI rewrite and can bring them back by generating
+      # baselines in a Linux container.
       - name: Run tests
         working-directory: mobile
-        run: flutter test
+        run: flutter test --exclude-tags golden
 
       # The Riverpod rebuild (ADR-034) deletes the old app and reassembles it task
       # by task; there is no `lib/main.dart` until M0 Task 18 wires the router, Dio

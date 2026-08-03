@@ -11,5 +11,5 @@ export 'application/clan_context.dart'
         prefsStoreProvider,
         selectedClanProvider;
 export 'data/clan_repository.dart' show ClanRepository;
-
-// presentation/ exports are added in Task 17, once those files exist.
+export 'presentation/clan_picker_page.dart' show ClanPickerView;
+export 'presentation/my_clans_page.dart' show MyClansView;

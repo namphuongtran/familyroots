@@ -1,0 +1,8 @@
+# Declaring the tag keeps `flutter test` from warning about an unknown tag.
+#
+# Golden tests are excluded from CI because golden images are host-renderer
+# sensitive: the baselines in test/goldens/goldens/ were rendered on macOS and
+# do not match Linux CI's renderer. They run locally with plain `flutter test`.
+tags:
+  golden:
+    description: Golden-image tests; host-renderer sensitive, excluded from CI.
