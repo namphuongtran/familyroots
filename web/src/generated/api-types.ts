@@ -878,6 +878,11 @@ export interface paths {
         /**
          * Set Document As Avatar
          * @description Set a photo document as the person's avatar.
+         *
+         *     Publishes the image to the public avatars bucket and stamps the resulting
+         *     permanent URL onto `persons.avatar_url` (ADR-036). `avatar_url` is returned so a
+         *     client can render immediately without re-reading the person; it is the same value
+         *     every person/tree response now carries.
          */
         patch: operations["set_document_as_avatar_api_v1_documents__document_id__set_avatar_patch"];
         trace?: never;
@@ -1084,6 +1089,90 @@ export interface paths {
         get: operations["export_clan_api_v1_exports_clan_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/change-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Change Requests
+         * @description List change requests: the clan queue for reviewers, own proposals for viewers.
+         */
+        get: operations["list_change_requests_api_v1_change_requests_get"];
+        put?: never;
+        /**
+         * Submit Change Request
+         * @description Propose a correction to a person in the active clan.
+         */
+        post: operations["submit_change_request_api_v1_change_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/change-requests/{change_request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Request
+         * @description Get one change request, including the live state of the record it targets.
+         */
+        get: operations["get_change_request_api_v1_change_requests__change_request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/change-requests/{change_request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Change Request
+         * @description Approve a change request and apply it to the target record.
+         */
+        post: operations["approve_change_request_api_v1_change_requests__change_request_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/change-requests/{change_request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Change Request
+         * @description Reject a change request. The target record is left untouched.
+         */
+        post: operations["reject_change_request_api_v1_change_requests__change_request_id__reject_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1557,6 +1646,150 @@ export interface components {
             branch_order?: number | null;
         };
         /**
+         * ChangeRequestConflict
+         * @description One proposed field whose target value moved to something else since submission.
+         */
+        ChangeRequestConflict: {
+            /** Field */
+            field: string;
+            /** Base */
+            base?: unknown;
+            /** Current */
+            current?: unknown;
+            /** Proposed */
+            proposed?: unknown;
+        };
+        /**
+         * ChangeRequestCreateRequest
+         * @description Request body for proposing a change.
+         *
+         *     ``action``/``resource_type`` are accepted (and constrained to the persisted
+         *     CHECK-constraint vocabulary) rather than implied, so adding marriage/event/
+         *     document proposals later needs no request-shape change. Anything outside the
+         *     combination this build executes is rejected with
+         *     ``change_request.unsupported_operation`` (422) by the domain, not by this schema
+         *     — one code, one place, whatever the caller sends.
+         */
+        ChangeRequestCreateRequest: {
+            /**
+             * Action
+             * @default update
+             */
+            action: string;
+            /**
+             * Resource Type
+             * @default person
+             */
+            resource_type: string;
+            /** Resource Id */
+            resource_id?: string | null;
+            /**
+             * Changes
+             * @description Proposed field values, same field names and value shapes as the PATCH /persons/{id} body (minus expected_version).
+             */
+            changes?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Note
+             * @description Optional free-text explanation from the requester.
+             */
+            note?: string | null;
+        };
+        /**
+         * ChangeRequestResponse
+         * @description Response schema for a change request.
+         */
+        ChangeRequestResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Clan Id
+             * Format: uuid
+             */
+            clan_id: string;
+            /**
+             * Requester Id
+             * Format: uuid
+             */
+            requester_id: string;
+            /** Action */
+            action: string;
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id?: string | null;
+            /** Changes */
+            changes?: {
+                [key: string]: unknown;
+            };
+            /** Note */
+            note?: string | null;
+            /** Status */
+            status: string;
+            /** Reviewed By */
+            reviewed_by?: string | null;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Review Notes */
+            review_notes?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            target: components["schemas"]["ChangeRequestTarget"];
+        };
+        /**
+         * ChangeRequestReviewRequest
+         * @description Request body for approving or rejecting a change request.
+         */
+        ChangeRequestReviewRequest: {
+            /** Review Notes */
+            review_notes?: string | null;
+        };
+        /**
+         * ChangeRequestTarget
+         * @description Live state of the resource a proposal points at (ADR-037).
+         *
+         *     Present so a reviewer is never asked to approve blind: ``is_stale`` says the
+         *     record moved at all, and ``conflicts`` says whether any of *these* fields moved
+         *     — the only kind of movement that blocks approval.
+         */
+        ChangeRequestTarget: {
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id?: string | null;
+            /**
+             * Exists
+             * @default false
+             */
+            exists: boolean;
+            /**
+             * Is Deleted
+             * @default false
+             */
+            is_deleted: boolean;
+            /**
+             * Base Version
+             * @default 1
+             */
+            base_version: number;
+            /** Current Version */
+            current_version?: number | null;
+            /**
+             * Is Stale
+             * @default false
+             */
+            is_stale: boolean;
+            /** Conflicts */
+            conflicts?: components["schemas"]["ChangeRequestConflict"][];
+        };
+        /**
          * ClanDetailResponse
          * @description Detail projection for a single clan, with aggregate stats.
          */
@@ -1697,7 +1930,13 @@ export interface components {
         };
         /**
          * ClanUserSummary
-         * @description One approved member in GET /clans/me/users.
+         * @description One approved member in GET /clans/me/users (viewer-readable).
+         *
+         *     Carries ``display_name`` but deliberately **no** ``email``: this list is
+         *     readable by every approved member of the clan, so an ``email`` field here
+         *     would broadcast each member's login address to the whole clan. The
+         *     admin-only pending queue uses the separate ``PendingClanUserSummary``.
+         *     See ADR-039 before adding any contact field to this model.
          */
         ClanUserSummary: {
             /** Id */
@@ -1708,6 +1947,8 @@ export interface components {
             role: string;
             /** Person Id */
             person_id?: string | null;
+            /** Display Name */
+            display_name?: string | null;
             /** Created At */
             created_at: string;
         };
@@ -1797,6 +2038,10 @@ export interface components {
         /** Envelope[BranchResponse] */
         Envelope_BranchResponse_: {
             data: components["schemas"]["BranchResponse"];
+        };
+        /** Envelope[ChangeRequestResponse] */
+        Envelope_ChangeRequestResponse_: {
+            data: components["schemas"]["ChangeRequestResponse"];
         };
         /** Envelope[ClanDetailResponse] */
         Envelope_ClanDetailResponse_: {
@@ -2598,6 +2843,12 @@ export interface components {
             data: components["schemas"]["AuditLogEntryResponse"][];
             meta: components["schemas"]["ListMeta"];
         };
+        /** PageEnvelope[ChangeRequestResponse] */
+        PageEnvelope_ChangeRequestResponse_: {
+            /** Data */
+            data: components["schemas"]["ChangeRequestResponse"][];
+            meta: components["schemas"]["ListMeta"];
+        };
         /** PageEnvelope[ClanSummaryResponse] */
         PageEnvelope_ClanSummaryResponse_: {
             /** Data */
@@ -2626,6 +2877,12 @@ export interface components {
         PageEnvelope_IdentityClaimResponse_: {
             /** Data */
             data: components["schemas"]["IdentityClaimResponse"][];
+            meta: components["schemas"]["ListMeta"];
+        };
+        /** PageEnvelope[PendingClanUserSummary] */
+        PageEnvelope_PendingClanUserSummary_: {
+            /** Data */
+            data: components["schemas"]["PendingClanUserSummary"][];
             meta: components["schemas"]["ListMeta"];
         };
         /** PageEnvelope[PersonResponse] */
@@ -2754,6 +3011,38 @@ export interface components {
             edge_type?: string | null;
             /** Avatar Url */
             avatar_url?: string | null;
+        };
+        /**
+         * PendingClanUserSummary
+         * @description One pending join request in GET /clans/me/users/pending (admin-only).
+         *
+         *     Intentionally NOT a subclass of :class:`ClanUserSummary`, and intentionally
+         *     duplicating its fields: subclassing would mean any field added to the
+         *     viewer-readable model silently widens this one too — and, worse, invites the
+         *     inverse "tidy-up" that merges the two and leaks ``email`` to every viewer.
+         *     The asymmetry is the point; see ADR-039.
+         *
+         *     ``email`` is justified here and only here: the admin is making an identity
+         *     decision (approving grants read access to hundreds of living relatives'
+         *     records), already holds approve/reject/role powers, and the address is the
+         *     account holder's own registration email — not a genealogy record about a
+         *     third party.
+         */
+        PendingClanUserSummary: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Person Id */
+            person_id?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Created At */
+            created_at: string;
         };
         /**
          * PersonBatchEnvelope
@@ -2891,7 +3180,10 @@ export interface components {
             email?: string | null;
             /** Biography */
             biography?: string | null;
-            /** Avatar Url */
+            /**
+             * Avatar Url
+             * @description Read-only. avatar_url is server-managed and cannot be set directly. Use PATCH /documents/{document_id}/set-avatar, which publishes the image to the public avatars bucket and stamps the resulting permanent URL.
+             */
             avatar_url?: string | null;
             /** Notes */
             notes?: string | null;
@@ -3002,7 +3294,7 @@ export interface components {
         };
         /**
          * PersonUpdateRequest
-         * @description Request body for updating a person. All fields optional.
+         * @description Request body for updating a person. All content fields optional.
          */
         PersonUpdateRequest: {
             /** Full Name */
@@ -3059,7 +3351,10 @@ export interface components {
             email?: string | null;
             /** Biography */
             biography?: string | null;
-            /** Avatar Url */
+            /**
+             * Avatar Url
+             * @description Read-only. avatar_url is server-managed and cannot be set directly. Use PATCH /documents/{document_id}/set-avatar, which publishes the image to the public avatars bucket and stamps the resulting permanent URL.
+             */
             avatar_url?: string | null;
             /** Notes */
             notes?: string | null;
@@ -4791,7 +5086,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PageEnvelope_ClanUserSummary_"];
+                    "application/json": components["schemas"]["PageEnvelope_PendingClanUserSummary_"];
                 };
             };
             /** @description Missing/invalid token */
@@ -8182,6 +8477,364 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_change_requests_api_v1_change_requests_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by review status. */
+                status?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                "x-current-clan-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_ChangeRequestResponse_"];
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    submit_change_request_api_v1_change_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-current-clan-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRequestCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ChangeRequestResponse_"];
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_change_request_api_v1_change_requests__change_request_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-current-clan-id"?: string | null;
+            };
+            path: {
+                change_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ChangeRequestResponse_"];
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    approve_change_request_api_v1_change_requests__change_request_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-current-clan-id"?: string | null;
+            };
+            path: {
+                change_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRequestReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ChangeRequestResponse_"];
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reject_change_request_api_v1_change_requests__change_request_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-current-clan-id"?: string | null;
+            };
+            path: {
+                change_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRequestReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ChangeRequestResponse_"];
                 };
             };
             /** @description Missing/invalid token */

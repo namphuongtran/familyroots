@@ -5,10 +5,15 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      # A backend shape change is precisely what api-types-fresh must catch, so it
+      # has to be able to trigger this workflow. Without it the anti-R3 gate only
+      # runs when the frontend changes — which is never the failing case.
+      - "backend/app/**"
   pull_request:
     branches: [main]
     paths:
       - "web/**"
+      - "backend/app/**"
 
 jobs:
   build-and-test:
@@ -40,6 +45,15 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Dependency boundaries
+        run: pnpm depcruise
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Component tests
+        run: pnpm test:component
+
       - name: Build
         run: pnpm build
         env:
@@ -47,8 +61,96 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
 
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: pnpm test:e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
+  api-types-fresh:
+    # The anti-drift gate (risk R3): if the backend changed shape and the web
+    # client did not regenerate, this job fails instead of production breaking.
+    #
+    # No Postgres service, no uvicorn, no readiness poll. FastAPI prints the same
+    # OpenAPI document straight from the app object, and the TypeScript generated
+    # from it is byte-identical to the TypeScript generated over HTTP — verified by
+    # diff. Booting a web server to read a static document was pure cost, and the
+    # database it waited on was never touched.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Dump the OpenAPI schema
+        working-directory: backend
+        # Same values backend-ci.yml uses. Nothing connects: settings are read at
+        # import time, so they must parse, but no query runs.
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/family_roots_test
+          APP_ENV: testing
+          APP_SECRET_KEY: test-secret-key
+        run: |
+          uv sync --frozen
+          uv run python -c "import json; from app.main import create_app; print(json.dumps(create_app().openapi()))" \
+            > "$RUNNER_TEMP/openapi.json"
+
+      - name: Regenerate and diff
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm gen:api "$RUNNER_TEMP/openapi.json"
+          git diff --exit-code src/generated \
+            || { echo "::error::src/generated is stale — run 'pnpm gen:api' and commit"; exit 1; }
+
   deploy:
-    needs: build-and-test
+    needs: [build-and-test, e2e, api-types-fresh]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
