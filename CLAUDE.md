@@ -38,7 +38,7 @@ Growing, with strong architectural foundations and active scaffold-to-build work
 |---------|---------------|------|------|
 | backend | Canonical business logic, persistence, auth context validation, contracts | FastAPI, SQLAlchemy async, PostgreSQL | 8000 |
 | web | Browser UX and admin workflows over backend contracts | Next.js 16, React 19, TypeScript | 3000 |
-| mobile | Native UX and app interactions over backend contracts | Flutter, Dart, BLoC, Dio/Retrofit | N/A |
+| mobile | Native UX and app interactions over backend contracts | Flutter, Dart, Riverpod 3, Dio | N/A |
 
 ## Shared Infrastructure
 - PostgreSQL (Supabase managed and local Docker)
@@ -76,11 +76,12 @@ When code and docs disagree, the code is the truth — fix the doc in the same P
 - Backend full quality gate (run before claiming done): cd backend && uv run pytest -q && uvx ruff check . && uvx ruff format --check . && uv run mypy app/ tests/ && uv run lint-imports
 - Web dev: cd web && pnpm dev
 - Web quality: cd web && pnpm type-check && pnpm lint
-- Mobile dev: cd mobile && flutter run
-- Mobile quality: cd mobile && flutter test && dart analyze .
+- Mobile dev: cd mobile && flutter run (secrets via --dart-define; see mobile/CLAUDE.md)
+- Mobile full quality gate (run before claiming done): cd mobile && dart format --set-exit-if-changed lib test && dart run build_runner build && git diff --exit-code && flutter analyze && flutter test
 
 ## Known Pain Points
-- Multiple Prompt 2 TODO scaffolds still exist across mobile, infra, and helper scripts.
+- Prompt 2 TODO scaffolds remain in infra and helper scripts (mobile's were deleted by the ADR-034 rebuild).
+- Mobile M0 has never run on a device: it compiles and CI builds an APK, but Supabase/Sentry init needs platform channels, so login against real Supabase is unverified (work-register §2.2).
 - Pulumi resources are currently stubs, which can create deployment drift.
 - In-process event dispatcher lacks durable delivery guarantees.
 - Web testing harness appears less complete than backend/mobile test posture.

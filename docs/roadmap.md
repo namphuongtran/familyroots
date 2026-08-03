@@ -44,7 +44,7 @@ PR 0 is closed. PR 1 (auth) is the natural next planning job and it carries R-la
 never *run*: there is no device or emulator on the dev machine, no Supabase credentials
 outside `.env.example`, and no real approved account. Until the plan's Task 20 step-3
 acceptance walk happens on a device, "M0 works" is unproven — everything so far is verified
-against canned transports. See [work-register.md](work-register.md) §2.3 for the exact
+against canned transports. See [work-register.md](work-register.md) §2.2 for the exact
 blockers and the commands to run.
 
 Both plans are executable as written: every snippet in them was compiled and run before
@@ -84,7 +84,7 @@ Full detail in [work-register.md](work-register.md) §1.2. In one line each:
 - **`delete-branch-on-merge` is off** → the remote refills one PR at a time. One click.
 - **Mobile M0 cannot be signed off from the repo** → needs a device/emulator, real Supabase
   credentials, and test accounts (approved, multi-clan, unverified). Detail in
-  [work-register.md](work-register.md) §2.3.
+  [work-register.md](work-register.md) §2.2.
 
 ---
 
