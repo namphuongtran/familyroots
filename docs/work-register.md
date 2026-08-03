@@ -151,7 +151,7 @@ someone builds the thing that contradicts them:
 - **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`
 - **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
 - **Plan:** `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md` — 20 tasks
-- **Status: M0 Tasks 1–12 landed. Tasks 13–20 remain.**
+- **Status: M0 Tasks 1–17 landed. Tasks 18–20 remain.**
 
 | Task | What | PR |
 |---|---|---|
@@ -160,15 +160,37 @@ someone builds the thing that contradicts them:
 | 3–5 | Domain kernel, error taxonomy, envelope | #138 |
 | 6–10 | Interceptors, refresh, secure storage, cache, ApiClient | #147 |
 | 11–12 | Fonts/theme, l10n | #148 |
-| **13–17** | **Auth slice, session controller, clan slice, cache wiring, screens** | — |
+| 13–17 | Auth slice, session controller, clan slice, cache wiring, screens | #149 |
 | **18** | **Router + Dio + bootstrap — the first point where the pieces meet** | — |
 | **19** | **CI rewrite** | — |
 | **20** | **Run on a real device against the real backend; sync docs** | — |
 
-**Resume here:** Task 13 — the auth slice (domain, DTOs, repository), then 14–17 (session
-controller, clan slice, cache wiring, screens). These are the first tasks that consume the
-network stack and the theme rather than building infrastructure. State once #148 lands is
-88 tests, `flutter analyze` clean, `build_runner` and `gen-l10n` producing no diff.
+**Resume here:** Task 18 — router, guards, Dio wiring and bootstrap. **This is the task
+where the app first runs at all**, and where `lib/main.dart` finally lands, which also
+reactivates Mobile CI's APK step by itself. Then 19 (CI rewrite) and 20 (device run against
+the real backend + doc sync) close M0. State once #149 lands is 118 tests, `flutter
+analyze` clean, `build_runner` and `gen-l10n` producing no diff.
+
+**Two traps worth not re-introducing:**
+
+- **The l10n fallback** (found by #148): `gen-l10n` emits `supportedLocales` alphabetically,
+  and `MaterialApp` resolves an unsupported locale to `supportedLocales.first` — so making
+  `app_vi.arb` the *template* does not make `vi` the *fallback*.
+  `preferred-supported-locales` in `l10n.yaml` is what orders the list. Any new locale must
+  be added there too, or it silently changes which language a `zh`/`fr` user sees.
+- **The Riverpod deadlock** (plan V27, held in #149): auto-selecting a clan must stay a
+  notifier *method* (`SelectedClan.resolve()`). Writing to `selectedClanProvider` from a
+  provider that also watches it deadlocks the container — it hangs ~30s then fails with
+  "disposed during loading state, yet no value could be emitted".
+  `clanResolutionProvider` stays pure and read-only.
+
+**Goldens do not run in CI, deliberately** (#149, plan caveat N5). Golden images are
+host-renderer sensitive and the baselines in `mobile/test/goldens/goldens/` were rendered on
+macOS, so CI runs `flutter test --exclude-tags golden`; they still run locally with a plain
+`flutter test`. Task 19 can restore them by generating baselines in a Linux container.
+Mobile CI also still resolves `channel: stable` rather than pinning
+`flutter-version: 3.44.8`, which the plan's Global Constraints require — Task 19 owns that
+fix too.
 
 **A fallback trap worth not re-introducing** (found by #148): `gen-l10n` emits
 `supportedLocales` alphabetically, and `MaterialApp` resolves an unsupported locale to
