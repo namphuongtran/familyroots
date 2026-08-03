@@ -65,8 +65,11 @@ guessing it if other agents are running.
 - **Do not `git push` and do not create a pull request.** Commit to your worktree branch
   and stop; integration is the coordinator's job.
 - Do not run `git clean`.
-- **Only one backend agent may run at a time.** `tests/integration/conftest.py` hardcodes
-  the test database name, so a concurrent `pytest` run drops yours mid-suite.
+- **Set `TEST_PG_DB_NAME` to a value unique to your worktree** before running `pytest`, e.g.
+  `TEST_PG_DB_NAME=family_roots_schema_test_$(basename $PWD)`. Teardown is
+  `DROP DATABASE … WITH (FORCE)`, so two suites sharing the name drop each other's database
+  mid-run — it cost 182 spurious failures once. Unset, it falls back to the shared default,
+  which is safe only if you are certain nothing else is running (ADR-040 / ADR-016).
 
 ## Report back
 
