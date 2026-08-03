@@ -26,7 +26,7 @@ Last updated: 2026-08-02.
 |---|---|---|---|
 | **Web spine** (sub-project A, PR 0) | yes — 13 tasks | Tasks 0–10 | **Task 11** — Playwright + CI |
 | **Web feature slices** (PR 1–7) | **no — sketched only** | — | needs a plan per slice |
-| **Mobile M0** (spine + login) | yes — 20 tasks | Tasks 1–5 | **Task 6** — Dio interceptors |
+| **Mobile M0** (spine + login) | yes — 20 tasks | Tasks 1–10 | **Tasks 11–12** — theme, l10n |
 | **Mobile M1–M4** | **no — milestones named only** | — | plan after M0 lands |
 | **Design system** (sub-project B) | specced, 15 screen groups | spec only | implement inside the slices |
 | **Backend** | no active plan | ADR-035 → ADR-039 shipped | driven by client needs + gaps |
@@ -42,9 +42,11 @@ edit the anti-drift gate can never fire on the only case it exists for — and i
 `test.fail()` that pins R-lang (work-register §3.2) and turns red the moment that bug is
 fixed. Then Task 12 (documentation sync) closes sub-project A's PR 0.
 
-**Mobile — Task 6 of [`plans/2026-08-02-mobile-m0-spine.md`](superpowers/plans/2026-08-02-mobile-m0-spine.md).**
-Dio interceptors, then 7–10 (refresh, secure storage, cache, ApiClient). Tasks 11–12
-(fonts/theme, l10n) are independent of the network stack and can run in parallel with them.
+**Mobile — Tasks 11–12 of [`plans/2026-08-02-mobile-m0-spine.md`](superpowers/plans/2026-08-02-mobile-m0-spine.md).**
+Tasks 6–10 (interceptors, refresh, secure storage, cache, ApiClient) landed in #147. Next
+are bundled fonts + Arbor Heritage theme tokens and localisation; both are independent of
+the network stack, so they can run in parallel. Then 13–17 build the auth and clan slices
+on top of the stack #147 provides.
 
 Both plans are executable as written: every snippet in them was compiled and run before
 it was written down, and the defects that found are recorded in each plan's *Verification
