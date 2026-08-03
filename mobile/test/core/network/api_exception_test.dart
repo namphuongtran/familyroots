@@ -119,4 +119,25 @@ void main() {
       expect(e.retryAfter, 30);
     });
   });
+
+  test('a wrong password is displayed, not treated as a stale token', () {
+    // auth.invalid_credentials is a real backend code (401, AuthenticationError
+    // in app/application/auth/handlers.py). Without an explicit case it fell
+    // through to the `status == 401 -> refreshThenRetry` default, which is the
+    // wrong instruction: there is no token to refresh when the login itself is
+    // what failed. The server message is already localised — show it.
+    expect(
+      policyActionFor('auth.invalid_credentials', status: 401),
+      PolicyAction.none,
+    );
+  });
+
+  test('an unknown 401 code still asks for a refresh', () {
+    // The default must survive the case above: a genuinely unknown 401 on an
+    // authenticated route most likely IS an expired token.
+    expect(
+      policyActionFor('some_future_code', status: 401),
+      PolicyAction.refreshThenRetry,
+    );
+  });
 }

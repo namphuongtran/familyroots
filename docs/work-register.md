@@ -216,6 +216,39 @@ machine's LAN address as `API_BASE_URL`.
   completes: opening a real database inside a widget test **hangs** rather than failing.
   Use an in-memory `CacheStore` fake there. Plain `test()` bodies are unaffected.
 - **Riverpod 3.2.1 has no `AsyncValue.valueOrNull`** — the nullable accessor is `value`.
+- **A 401 is not always a stale token.** Five `/auth/*` endpoints carry no bearer token
+  (`login`, `refresh`, `register`, `forgot-password`, `resend-verification` — confirmed
+  from the backend's generated OpenAPI, where `security` is absent). `RefreshInterceptor`
+  used to attempt a refresh on any 401, so **a mistyped password triggered a refresh and
+  then a sign-out**. `isUnauthenticatedEndpoint()` now exempts them, and
+  `policyActionFor('auth.invalid_credentials')` returns `none` instead of falling through
+  to the `status == 401 → refreshThenRetry` default.
+
+#### How the client was checked against the real backend, without a device
+
+Task 20 needs a device, but part of its value does not. The backend's OpenAPI schema can be
+generated straight from the code with no server and no Supabase:
+
+```bash
+cd backend && DATABASE_URL=… SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
+  SUPABASE_ANON_KEY=… SECRET_KEY=… METRICS_TOKEN=<32+ chars> \
+  uv run python -c "from app.main import app; import json; print(json.dumps(app.openapi()))"
+```
+
+Dummy values are fine — nothing connects. What that established:
+
+- **All five mobile endpoints exist** at the paths the client calls, and every one of the
+  **17 error codes `policyActionFor` maps is real** in the backend source.
+- **Every DTO mapper is equal-or-more-lenient than the API** — no field the client requires
+  is optional server-side.
+- **`full_name` is `str`, non-nullable**, so the backend cannot emit null for it. A Task 13
+  fixture was sending `null`, i.e. testing a response the backend cannot produce; fixed.
+  The mapper stays nullable on purpose — tolerance, not a contract reading.
+- **Which endpoints are public**, which is what exposed the 401 bug above.
+
+This is not a substitute for the device walk: it verifies *shapes and codes against the
+real code*, not behaviour against a running system. Auth, storage and rendering remain
+unproven.
 
 #### Known CI gaps, both owned by a future task
 

@@ -186,5 +186,50 @@ void main() {
       );
       expect(refresher.refreshCallCount, 0);
     });
+    test('a 401 from an unauthenticated endpoint is an answer, not a stale '
+        'token', () async {
+      // Verified against the backend's own OpenAPI: /auth/login, /auth/refresh,
+      // /auth/register, /auth/forgot-password and /auth/resend-verification
+      // declare NO bearer requirement. A 401 from them cannot mean "the access
+      // token expired" — there is no token in the request to expire. Refreshing
+      // would be a wasted round-trip, and signing out on its failure means a
+      // mistyped password can log you out.
+      const invalidCredentials = <String, Object?>{
+        'error': <String, Object?>{
+          'code': 'auth.invalid_credentials',
+          'message': 'Sai email hoặc mật khẩu',
+          'detail': <String, Object?>{},
+        },
+      };
+      final a = SequenceAdapter(<Canned>[
+        const Canned(401, invalidCredentials),
+      ]);
+      final dio = _dio(a);
+      var signedOut = false;
+      final refresher = TokenRefresher(() async => 'fresh');
+      dio.interceptors.add(
+        RefreshInterceptor(
+          refresher: refresher,
+          retryDio: dio,
+          onSignOut: () => signedOut = true,
+        ),
+      );
+
+      await expectLater(
+        dio.post<Object?>(
+          '/auth/login',
+          data: <String, Object?>{'email': 'a@b.c', 'password': 'wrong'},
+        ),
+        throwsA(isA<DioException>()),
+      );
+
+      expect(refresher.refreshCallCount, 0);
+      expect(
+        signedOut,
+        isFalse,
+        reason: 'a bad password must not sign you out',
+      );
+      expect(a.callCount, 1, reason: 'and must not be retried');
+    });
   });
 }
