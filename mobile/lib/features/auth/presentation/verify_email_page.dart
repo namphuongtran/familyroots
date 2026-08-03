@@ -9,18 +9,24 @@ import 'message_page.dart';
 /// of scope, so this screen offers POST /auth/resend-verification plus "open
 /// your email" — both fully knowable without the owner action on R2.
 class VerifyEmailPage extends ConsumerWidget {
-  const VerifyEmailPage({super.key, required this.email});
+  const VerifyEmailPage({super.key, this.email});
 
-  final String email;
+  /// Null when we do not know the address — a 403 `email_not_verified` at login
+  /// means there is no session to read it from. Resend is then unavailable
+  /// rather than sent to a guess; "open your email" still applies.
+  final String? email;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final address = email;
     return MessagePage(
       title: l10n.verifyEmailTitle,
       body: l10n.verifyEmailBody,
-      actionLabel: l10n.resendVerificationAction,
-      action: () => ref.read(authRepositoryProvider).resendVerification(email),
+      actionLabel: address == null ? null : l10n.resendVerificationAction,
+      action: address == null
+          ? null
+          : () => ref.read(authRepositoryProvider).resendVerification(address),
     );
   }
 }
