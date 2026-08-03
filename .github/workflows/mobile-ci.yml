@@ -15,43 +15,58 @@ on:
 jobs:
   analyze-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          # Pinned, not bare `channel: stable`. This dependency set is version
+          # sensitive: the analyzer/meta/test_api constraints that ship with the
+          # SDK decide which riverpod and freezed versions can resolve at all.
+          # Letting the channel drift silently changes that resolution.
+          flutter-version: 3.44.8
           channel: stable
           cache: true
 
       - name: Get dependencies
-        working-directory: mobile
         run: flutter pub get
 
-      - name: Analyze
-        working-directory: mobile
-        run: flutter analyze
+      - name: Check formatting
+        run: dart format --set-exit-if-changed lib test
+
+      - name: Regenerate code
+        # --delete-conflicting-outputs was REMOVED in build_runner 2.15.x; it
+        # now errors with "These options have been removed and were ignored".
+        run: dart run build_runner build
+
+      - name: Fail if generated code is stale
+        # Riverpod and freezed codegen is committed, so "forgot to run
+        # build_runner" becomes a named CI failure instead of a mysterious
+        # local error (spec R1). Verified to fail on a corrupted .g.dart.
+        run: git diff --exit-code
 
       # Golden images are host-renderer sensitive: the baselines in
       # mobile/test/goldens/goldens/ were rendered on macOS and do not match
-      # this Linux runner, so they would fail here for a reason that says
-      # nothing about the code. They run locally with plain `flutter test`.
-      # M0 Task 19 owns the CI rewrite and can bring them back by generating
-      # baselines in a Linux container.
+      # this Linux runner, so they would fail for a reason that says nothing
+      # about the code. They run locally with a plain `flutter test`. To bring
+      # them back here, regenerate the baselines in a Linux container.
       - name: Run tests
-        working-directory: mobile
-        run: flutter test --exclude-tags golden
+        run: flutter test --exclude-tags golden --coverage
 
-      # The Riverpod rebuild (ADR-034) deletes the old app and reassembles it task
-      # by task; there is no `lib/main.dart` until M0 Task 18 wires the router, Dio
-      # and bootstrap together, so `flutter build apk` fails with
-      # `Target file "lib/main.dart" not found.` Guarding on the file keeps CI
-      # honest in the meantime and makes the step reactivate by itself the moment
-      # an entry point lands — nobody has to remember to switch it back on.
-      #
-      # M0 Task 19 rewrites this workflow properly (format gate, coverage,
-      # generated-code freshness check). This is the minimum to stop main being red.
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-coverage
+          path: mobile/coverage/lcov.info
+          if-no-files-found: warn
+
+      # Reactivated by lib/main.dart landing in M0 Task 18; the previous
+      # hashFiles guard is no longer needed. This step was never rehearsed
+      # locally — the dev machine has no Android SDK — so CI is where it first
+      # runs.
       - name: Build APK (debug — validate build)
-        if: hashFiles('mobile/lib/main.dart') != ''
-        working-directory: mobile
         run: flutter build apk --debug
