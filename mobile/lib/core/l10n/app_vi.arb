@@ -98,5 +98,33 @@
   "relationDaughter": "Con gái",
   "profileStatusDeceased": "Đã mất",
   "lunarCalendar": "Âm lịch",
-  "solarCalendar": "Dương lịch"
+  "solarCalendar": "Dương lịch",
+
+  "myClansTitle": "Dòng họ của tôi",
+  "clanPickerTitle": "Chọn dòng họ",
+  "clanCount": "{count, plural, =0{Chưa có dòng họ} =1{1 dòng họ} other{{count} dòng họ}}",
+  "@clanCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "staleDataBanner": "Dữ liệu ngày {date}",
+  "@staleDataBanner": {
+    "placeholders": { "date": { "type": "String" } }
+  },
+  "signOutAction": "Đăng xuất",
+  "retryAction": "Thử lại",
+  "errorOffline": "Không có kết nối mạng",
+  "errorTimeout": "Máy chủ phản hồi quá chậm",
+  "errorUnexpected": "Đã xảy ra lỗi không mong muốn",
+  "errorTraceId": "Mã lỗi: {traceId}",
+  "@errorTraceId": {
+    "placeholders": { "traceId": { "type": "String" } }
+  },
+  "pendingApprovalTitle": "Đang chờ duyệt",
+  "pendingApprovalBody": "Yêu cầu tham gia của bạn đang chờ quản trị viên dòng họ duyệt.",
+  "verifyEmailTitle": "Xác thực email",
+  "verifyEmailBody": "Vui lòng mở email và bấm liên kết xác thực.",
+  "resendVerificationAction": "Gửi lại email xác thực",
+  "onboardingTitle": "Tham gia dòng họ",
+  "accountBlockedTitle": "Tài khoản đã bị khoá",
+  "clanSuspendedTitle": "Dòng họ đã bị tạm ngưng"
 }

@@ -188,4 +188,72 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get solarCalendar => 'Dương lịch';
+
+  @override
+  String get myClansTitle => 'Dòng họ của tôi';
+
+  @override
+  String get clanPickerTitle => 'Chọn dòng họ';
+
+  @override
+  String clanCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dòng họ',
+      one: '1 dòng họ',
+      zero: 'Chưa có dòng họ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String staleDataBanner(String date) {
+    return 'Dữ liệu ngày $date';
+  }
+
+  @override
+  String get signOutAction => 'Đăng xuất';
+
+  @override
+  String get retryAction => 'Thử lại';
+
+  @override
+  String get errorOffline => 'Không có kết nối mạng';
+
+  @override
+  String get errorTimeout => 'Máy chủ phản hồi quá chậm';
+
+  @override
+  String get errorUnexpected => 'Đã xảy ra lỗi không mong muốn';
+
+  @override
+  String errorTraceId(String traceId) {
+    return 'Mã lỗi: $traceId';
+  }
+
+  @override
+  String get pendingApprovalTitle => 'Đang chờ duyệt';
+
+  @override
+  String get pendingApprovalBody =>
+      'Yêu cầu tham gia của bạn đang chờ quản trị viên dòng họ duyệt.';
+
+  @override
+  String get verifyEmailTitle => 'Xác thực email';
+
+  @override
+  String get verifyEmailBody => 'Vui lòng mở email và bấm liên kết xác thực.';
+
+  @override
+  String get resendVerificationAction => 'Gửi lại email xác thực';
+
+  @override
+  String get onboardingTitle => 'Tham gia dòng họ';
+
+  @override
+  String get accountBlockedTitle => 'Tài khoản đã bị khoá';
+
+  @override
+  String get clanSuspendedTitle => 'Dòng họ đã bị tạm ngưng';
 }

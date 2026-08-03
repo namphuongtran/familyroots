@@ -4,3 +4,13 @@ output-localization-file: app_localizations.dart
 output-class: AppLocalizations
 output-dir: lib/core/l10n/generated
 nullable-getter: false
+
+# vi must come FIRST in supportedLocales, not just be the template.
+# gen-l10n otherwise emits them alphabetically — [en, vi] — and
+# MaterialApp resolves an unsupported locale to supportedLocales.first,
+# so a zh or fr user would silently get English instead of Vietnamese.
+# Add new locales here as their ARB files land; do not assume this list
+# stays at two.
+preferred-supported-locales:
+  - vi
+  - en

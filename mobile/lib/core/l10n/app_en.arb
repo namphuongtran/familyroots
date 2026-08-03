@@ -191,5 +191,24 @@
   "@lunarCalendar": { "description": "Lunar calendar tag" },
 
   "solarCalendar": "Solar",
-  "@solarCalendar": { "description": "Solar calendar tag" }
+  "@solarCalendar": { "description": "Solar calendar tag" },
+
+  "myClansTitle": "My clans",
+  "clanPickerTitle": "Choose a clan",
+  "clanCount": "{count, plural, =0{No clans} =1{1 clan} other{{count} clans}}",
+  "staleDataBanner": "Data from {date}",
+  "signOutAction": "Sign out",
+  "retryAction": "Retry",
+  "errorOffline": "No network connection",
+  "errorTimeout": "The server took too long to respond",
+  "errorUnexpected": "Something went wrong",
+  "errorTraceId": "Error id: {traceId}",
+  "pendingApprovalTitle": "Awaiting approval",
+  "pendingApprovalBody": "Your join request is waiting for a clan admin to approve it.",
+  "verifyEmailTitle": "Verify your email",
+  "verifyEmailBody": "Open your email and tap the verification link.",
+  "resendVerificationAction": "Resend verification email",
+  "onboardingTitle": "Join a clan",
+  "accountBlockedTitle": "Account blocked",
+  "clanSuspendedTitle": "Clan suspended"
 }
