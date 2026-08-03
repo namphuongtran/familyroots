@@ -80,7 +80,10 @@ void main() {
         'data': <String, Object?>{
           'id': 'u2',
           'email': 'new@example.com',
-          'full_name': null,
+          // NOT null: the backend declares `full_name: str` (non-nullable) on
+          // UserProfile, so it cannot emit null here. Verified against the
+          // generated OpenAPI schema, not the prose docs.
+          'full_name': 'Người Mới',
           'clan_id': null,
           'clan_name': null,
           'role': null,

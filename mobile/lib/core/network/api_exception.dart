@@ -79,6 +79,11 @@ PolicyAction policyActionFor(String code, {int? status}) {
       return PolicyAction.refreshThenRetry;
     case 'auth.invalid_refresh_token':
       return PolicyAction.signOut;
+    // 401, but NOT a stale token: the login itself is what failed, so there is
+    // nothing to refresh. The server message is already localised — show it.
+    // Without this case it fell through to the `status == 401` default below.
+    case 'auth.invalid_credentials':
+      return PolicyAction.none;
     case 'email_not_verified':
       return PolicyAction.resendVerification;
     case 'account_deactivated':
