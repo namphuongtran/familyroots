@@ -18,11 +18,13 @@ For the coarse view — which streams exist, which have plans, and what is next 
 
 ## 1. In flight
 
-### 1.1 Dependency upgrade sweep — mobile remainder
+### 1.1 Dependency upgrade sweep — closed
 
-Backend and web are done (see §4). What is left:
+Backend, web and mobile are all done (see §4).
 
-- **Mobile:** closed — obsoleted by the rebuild (§2.2, ADR-034). `flutter_bloc ^8`,
+- **Mobile:** closed — obsoleted by the rebuild (§2.2, ADR-034). The new project pins an
+  explicit, resolvable package set; the pins and *why each one cannot move* are in
+  `mobile/CLAUDE.md`. `flutter_bloc ^8`,
   `get_it ^7`, `go_router ^14`, `retrofit >=4 <5` and `hive ^2` are not carried into
   the new project, so there is nothing left to upgrade. The blocker itself is also
   gone: Flutter 3.44.8 stable (Dart 3.12.2) — the version
@@ -151,56 +153,61 @@ someone builds the thing that contradicts them:
 - **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`
 - **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
 - **Plan:** `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md` — 20 tasks
-- **Status: M0 Tasks 1–19 landed. Task 20 remains — and it is the one that makes M0 done.**
 
-| Task | What | PR |
-|---|---|---|
-| 1 | Delete the scaffold, stand up the project | #136 |
-| 2 | Import-boundary ratchet | #136 |
-| 3–5 | Domain kernel, error taxonomy, envelope | #138 |
-| 6–10 | Interceptors, refresh, secure storage, cache, ApiClient | #147 |
-| 11–12 | Fonts/theme, l10n | #148 |
-| 13–17 | Auth slice, session controller, clan slice, cache wiring, screens | #149 |
-| 18 | Router + Dio + bootstrap — the app first runs | #150 |
-| 19 | CI rewrite | #150 |
-| **20** | **Run on a real device against the real backend; sync docs** | — |
+**M0 Tasks 1–19 have landed** (#136, #138, #147, #148, #149, #150): the old scaffold is
+gone, the app assembles, and CI builds `app-debug.apk`. 128 tests, `flutter analyze`
+clean, `build_runner` and `gen-l10n` producing no diff.
 
-**Resume here: Task 20 — and it is blocked on things the repository cannot provide.**
-Tasks 1–19 are on `main`. The app compiles: CI now builds `app-debug.apk` (#150). What is
-*not* done is the only thing that makes M0 genuinely done — running it on a device against
-the real backend and walking the acceptance list in the plan's Task 20 step 3.
+| | Scope | Done means | State |
+|---|---|---|---|
+| **M0** | Delete the old tree; new project; everything in spec §3–§5; **plus** login → `GET /auth/me` → clan resolution → an authenticated screen listing the user's clans | You can sign in to the real backend from a real device. The spine is proven end to end, not only by tests. | **Tasks 1–19 landed; Task 20 outstanding — see below** |
+| **M1** | Persons: cursor list, search, detail, create, edit, `409 stale_write` handling | Full member CRUD | not planned |
+| **M2** | Tree: full tree, đời, polygyny grouping, focus view, founder-404 onboarding | The gia phả is viewable | not planned |
+| **M3** | Events and documents, including presigned-URL handling | Giỗ chạp, photos, records | not planned |
+| **M4** | FCM push and clan administration | Notifications, member approval, role assignment | not planned |
 
-**Why it is blocked, precisely.** All three are owner-side:
+Each milestone gets its own plan and PR sequence. **Plan M1 only after Task 20** — M0's
+own definition of done is "proven on a device", and planning M1 against an unproven spine
+is how you inherit its mistakes.
 
-1. **No device or emulator.** The dev machine has no Android SDK and an incomplete Xcode
-   (`flutter devices` and `flutter emulators` both find nothing). Needs Android Studio +
-   an AVD, or a full Xcode + simulator, or a physical phone.
-2. **No Supabase credentials.** Only `.env.example` files are in the repo, correctly.
-   `--dart-define=SUPABASE_URL=… SUPABASE_PUBLISHABLE_KEY=…` needs real values.
-3. **No real approved account.** The acceptance walk needs a verified user with an approved
-   membership, plus a second multi-clan account, plus an unverified one.
+#### M0 is not done: Task 20 is blocked, and the blockers are owner-side
 
-Everything up to Task 19 is verified against canned transports and a fake-async widget
-tester. Supabase and Sentry initialisation have therefore **never executed** — they need
-platform channels. Treat "M0 works" as unproven until that walk happens.
+Everything above is verified against **canned transports and a fake-async widget tester**.
+`Supabase.initialize` and `SentryFlutter.init` need platform channels and have therefore
+**never executed**. Login against real Supabase, token refresh, and session survival
+across a relaunch are **unverified**.
 
-**Two traps worth not re-introducing:**
+Three blockers, none solvable from the repository:
 
-- **The l10n fallback** (found by #148): `gen-l10n` emits `supportedLocales` alphabetically,
-  and `MaterialApp` resolves an unsupported locale to `supportedLocales.first` — so making
+1. **No device or emulator.** The dev machine has no Android SDK and an incomplete Xcode;
+   `flutter devices` and `flutter emulators` both find nothing. Needs Android Studio + an
+   AVD, a full Xcode + simulator, or a physical phone.
+2. **No Supabase credentials.** Only `.env.example` files are committed, correctly. The
+   run needs real `--dart-define=SUPABASE_URL=… SUPABASE_PUBLISHABLE_KEY=…`.
+3. **No test accounts.** The acceptance walk needs a verified user with an approved
+   membership, a second multi-clan account, and an unverified one.
+
+The acceptance checklist to walk is the plan's Task 20 step 3. Start the backend with
+`--host 0.0.0.0` (the default binds loopback and a phone cannot reach it) and pass the
+machine's LAN address as `API_BASE_URL`.
+
+#### Traps found by execution — do not re-introduce these
+
+- **The l10n fallback** (#148): `gen-l10n` emits `supportedLocales` alphabetically, and
+  `MaterialApp` resolves an unsupported locale to `supportedLocales.first` — so making
   `app_vi.arb` the *template* does not make `vi` the *fallback*.
-  `preferred-supported-locales` in `l10n.yaml` is what orders the list. Any new locale must
-  be added there too, or it silently changes which language a `zh`/`fr` user sees.
+  `preferred-supported-locales` in `l10n.yaml` orders the list. Any new locale must be
+  added there too, or it silently changes which language a `zh`/`fr` user sees.
 - **The Riverpod deadlock** (plan V27, held in #149): auto-selecting a clan must stay a
   notifier *method* (`SelectedClan.resolve()`). Writing to `selectedClanProvider` from a
   provider that also watches it deadlocks the container — it hangs ~30s then fails with
   "disposed during loading state, yet no value could be emitted".
   `clanResolutionProvider` stays pure and read-only.
-- **No network call before sign-in** (found by #150): the app shell must watch
+- **No network call before sign-in** (#150): the app shell must watch
   `clanPickRequiredProvider`, not `clanResolutionProvider`. Watching the latter fired
-  `GET /me/clans` at launch — unauthenticated, so it 401s, and the refresh interceptor then
-  finds no session and signs the user out. Opening the app could sign you out. Pinned by a
-  test asserting zero HTTP calls on the login screen.
+  `GET /me/clans` at launch — unauthenticated, so it 401s, and the refresh interceptor
+  then finds no session and signs the user out. Opening the app could sign you out.
+  Pinned by a test asserting zero HTTP calls on the login screen.
 - **Escaping the clan picker needs both halves, in order** (#150): go_router 17 re-runs
   `redirect` for the *current* location, so navigating while the guard still holds bounces
   straight back, and clearing the guard alone leaves the user in place. `onSelect` must
@@ -210,50 +217,15 @@ platform channels. Treat "M0 works" as unproven until that walk happens.
   Use an in-memory `CacheStore` fake there. Plain `test()` bodies are unaffected.
 - **Riverpod 3.2.1 has no `AsyncValue.valueOrNull`** — the nullable accessor is `value`.
 
-**Goldens do not run in CI, deliberately** (#149, plan caveat N5). Golden images are
-host-renderer sensitive and the baselines in `mobile/test/goldens/goldens/` were rendered on
-macOS, so CI runs `flutter test --exclude-tags golden`; they still run locally with a plain
-`flutter test`. Task 19 can restore them by generating baselines in a Linux container.
-Mobile CI also still resolves `channel: stable` rather than pinning
-`flutter-version: 3.44.8`, which the plan's Global Constraints require — Task 19 owns that
-fix too.
+#### Known CI gaps, both owned by a future task
 
-**A fallback trap worth not re-introducing** (found by #148): `gen-l10n` emits
-`supportedLocales` alphabetically, and `MaterialApp` resolves an unsupported locale to
-`supportedLocales.first` — so making `app_vi.arb` the *template* does not make `vi` the
-*fallback*. `preferred-supported-locales` in `l10n.yaml` is what orders the list. Any new
-locale must be added there too, or it silently changes which language a `zh`/`fr` user
-sees.
+- **Goldens are excluded from CI** (`flutter test --exclude-tags golden`). Golden images
+  are host-renderer sensitive and the baselines were rendered on macOS, so on the Linux
+  runner they would fail for a reason unrelated to the code. They run locally. Restoring
+  them needs baselines generated in a Linux container.
+- **`flutter build apk --debug` is only ever exercised in CI**, because the dev machine
+  has no Android SDK. It passes there.
 
-**The app does not run yet** — there is no `lib/main.dart` until Task 18. Mobile CI's
-APK step is guarded on `hashFiles('mobile/lib/main.dart')` and reactivates by itself when
-that file lands; Task 19 still owns the full CI rewrite (format gate, coverage,
-generated-code freshness check).
-
-Flutter 3.44.8 / Dart 3.12.2 is installed locally at `~/development/flutter/bin` — the
-exact version `subosito/flutter-action@v2` resolves for `channel: stable`. Mobile changes
-are verified before push, not by CI round-trip.
-
-**Three things the plan learned the hard way — do not undo them:**
-- The version pins in spec §4.7 are an *all-stable line that resolves*, not each
-  package's newest release. `freezed 3.2.5` needs `analyzer >=9 <11`, `riverpod_lint
-  3.1.8` needs `^13`, and Flutter hard-pins `meta 1.18.0`. Letting pub choose freely
-  selects `freezed 3.2.6-dev.1`, a prerelease. Re-check when Flutter stable ships a
-  newer `meta`/`analyzer`.
-- `custom_lint` is deliberately absent — `riverpod_lint 3.1.3` no longer routes through it.
-- The boundary ratchet also bans `part '*.g.dart'` under `domain/`, because
-  `freezed_annotation` re-exports all of `json_annotation`, so the import ban alone was
-  demonstrably bypassable.
-
-**Open plan questions, unanswered:**
-1. **Golden images** — macOS-generated goldens may not match Linux CI, and CI pins
-   `channel: stable` with no version, so it drifts. Recommendation on the table:
-   generate inside `ghcr.io/cirruslabs/flutter:stable` locally and pin
-   `flutter-version: 3.44.8` in the workflow. Decide before Task 11 writes goldens.
-2. **Locale seed** — owner chose `vi` on first run. Note that spec R3 is now **stale**:
-   ADR-035/#128 confirmed the backend *does* echo `preferred_locale`, so the app should
-   adopt the server value at login rather than ignoring it. The residual is that locale
-   rides in the JWT, so a `PATCH` is only visible after the next token refresh.
 
 ## 3. Open gaps — knowingly unfixed
 

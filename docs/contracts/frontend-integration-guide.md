@@ -116,9 +116,13 @@ Every API request after login:
 
 Web reference implementation: `web/src/lib/api/axios.ts` attaches all three via a
 request interceptor; the clan id resolves through `getRequestContext()`
-(`web/src/infrastructure/http/request-context.ts`). Mobile: the Dio
-`auth_interceptor.dart` is still a scaffold (see `mobile/CLAUDE.md`) — implement the
-same three headers there.
+(`web/src/infrastructure/http/request-context.ts`).
+
+Mobile reference implementation: `mobile/lib/core/network/interceptors/` — one
+interceptor per header (`auth`, `clan`, `locale`, `trace`), assembled onto the single
+Dio in `core/network/dio_provider.dart`. `isClanScoped(path)` in
+`clan_interceptor.dart` is the single source of truth for which routes are exempt
+from `X-Current-Clan-Id`.
 
 ---
 
@@ -164,9 +168,13 @@ implement the reactive single-flight strategy above itself.
   state (profile, current clan, memberships) lives in the persisted Zustand store
   (`web/src/store/auth.store.ts` — persists non-sensitive fields only). Do not
   duplicate tokens into localStorage.
-- **Mobile**: use `supabase_flutter` session management, or if storing backend-issued
-  tokens manually, use platform secure storage (iOS Keychain / Android Keystore) —
-  never plain shared preferences/Hive for tokens.
+- **Mobile**: satisfied. `supabase_flutter` is configured with a `LocalStorage`
+  backed by `flutter_secure_storage` (`mobile/lib/core/storage/secure_session_store.dart`),
+  so the session sits in the iOS Keychain / Android Keystore, never in shared
+  preferences. The **PKCE code verifier has its own secure store** in the same file:
+  leaving it on the default `GotrueAsyncStorage` writes it to SharedPreferences in
+  plaintext. Clan selection and locale are not secrets and stay in ordinary
+  preferences (`prefs_store.dart`).
 
 ---
 
@@ -503,7 +511,7 @@ fallback `vi`):
   (e.g. "khoảng 1750", "15/08 Nhâm Tý"), returned verbatim in every locale.
 - All UI chrome (labels, buttons, navigation, empty states) — client-side:
   next-intl (`web/messages/*.json`) on web, `AppLocalizations` (ARB files under
-  `mobile/lib/shared/l10n/`) on mobile.
+  `mobile/lib/core/l10n/`, template `app_vi.arb`) on mobile.
 
 The user's saved locale: `PATCH /auth/me {"preferred_locale": "vi|en|zh|fr"}` writes
 Supabase `user_metadata.preferred_locale`; on each authenticated request the backend
