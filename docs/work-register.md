@@ -151,21 +151,23 @@ someone builds the thing that contradicts them:
 - **Spec:** `docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`
 - **Decision:** [ADR-034](decisions/034-mobile-riverpod-rebuild.md)
 - **Plan:** `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md` — 20 tasks
-- **Status: M0 Tasks 1–5 landed. Tasks 6–20 remain.**
+- **Status: M0 Tasks 1–10 landed. Tasks 11–20 remain.**
 
 | Task | What | PR |
 |---|---|---|
 | 1 | Delete the scaffold, stand up the project | #136 |
 | 2 | Import-boundary ratchet | #136 |
 | 3–5 | Domain kernel, error taxonomy, envelope | #138 |
-| **6–10** | **Interceptors, refresh, secure storage, cache, ApiClient** | — |
+| 6–10 | Interceptors, refresh, secure storage, cache, ApiClient | #147 |
 | **11–12** | **Fonts/theme, l10n** (independent of the network stack; can run in parallel) | — |
 | **13–17** | **Auth slice, session controller, clan slice, cache wiring, screens** | — |
 | **18** | **Router + Dio + bootstrap — the first point where the pieces meet** | — |
 | **19** | **CI rewrite** | — |
 | **20** | **Run on a real device against the real backend; sync docs** | — |
 
-**Resume here:** Task 6. Current state on main is 38 tests, `flutter analyze` clean.
+**Resume here:** Tasks 11–12 (fonts/theme, l10n) — independent of the network stack, so
+they can run in parallel. State once #147 lands is 80 tests, `flutter analyze` clean,
+`build_runner` producing no diff.
 
 **The app does not run yet** — there is no `lib/main.dart` until Task 18. Mobile CI's
 APK step is guarded on `hashFiles('mobile/lib/main.dart')` and reactivates by itself when
