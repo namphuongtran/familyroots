@@ -63,9 +63,19 @@
   --color-card: #ffffff;
   --color-card-foreground: #1a1a1a;
 
-  --font-serif: Playfair Display, Noto Serif, Georgia, serif;
-  --font-sans: Inter, Noto Sans Vietnamese, system-ui, sans-serif;
-  --font-mono: JetBrains Mono, Menlo, monospace;
+  /*
+    The two mandated typefaces, read through the variables that
+    `web/src/app/layout.tsx` sets on the document element with
+    `next/font/local`. `--font-serif` carries Plus Jakarta Sans, which is a sans
+    face despite the token name: the name is what every `font-serif` class in
+    `web/src` already spells, and renaming the token is not this seed's work.
+    No literal family name belongs in this file. `next/font` generates the name,
+    so a literal name downloads the file and then discards it.
+    That defect cost this app both of its fonts. See `.claude/rules/tailwind.md` § 8.
+  */
+  --font-serif: var(--font-plus-jakarta-sans), system-ui, sans-serif;
+  --font-sans: var(--font-manrope), system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -143,11 +153,10 @@
     @apply border-border;
   }
   body {
-    @apply bg-cream text-gray-900 antialiased;
-    font-family: 'Inter', 'Noto Sans', sans-serif;
+    @apply bg-cream font-sans text-gray-900 antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', 'Noto Serif', serif;
+    @apply font-serif;
   }
 }
 

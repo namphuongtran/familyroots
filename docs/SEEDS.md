@@ -11,8 +11,17 @@ milestone order and no work.
 **This file decides nothing.** Every seed points at the ADR, spec, contract, or source file that
 owns its subject. Where a seed and its owner disagree, the seed is the bug.
 
-**Opened 2026-08-13.** 33 seeds, 0 done, 12 open, and 21 blocked. The four figures were taken by
-reading the board's own `Status` cell, with:
+**Opened 2026-08-13** with 33 seeds, 0 done, 12 open, and 21 blocked.
+
+**Re-taken 2026-08-13, after S-001 and S-002 landed: 34 seeds, 2 done, 14 open, and 18 blocked.**
+All four moved, and here is each one:
+
+- **Seeds, 33 to 34.** S-002 opened S-034 while verifying its own work.
+- **Done, 0 to 2.** S-001 and S-002.
+- **Open, 12 to 14.** S-003, S-007, and S-034 became open. S-001 and S-002 left for `done`.
+- **Blocked, 21 to 18.** S-002, S-003, and S-007 left it. Nothing became blocked.
+
+The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
 awk -F'|' '/^\| S-[0-9]/ {gsub(/^ +| +$/,"",$4); c[$4]++; n++} \
@@ -29,11 +38,19 @@ the critical path.
 
 ## Where the work stands
 
-**Front of the work: S-001, and it is done as of 2026-08-13.** Nothing on a screen could be verified
-until the semantic colour tokens resolved, which is the design spec's own ordering at
+**Front of the work: S-001 and S-002, both done as of 2026-08-13.** Nothing on a screen could be
+verified until the semantic colour tokens resolved and the real typefaces loaded, which is the design
+spec's own ordering at
 [`superpowers/specs/2026-08-02-design-system-and-screens.md`](superpowers/specs/2026-08-02-design-system-and-screens.md)
-§ 2.8.1, line 400. It sat at the head of M0's seven seeds and transitively blocked the other six.
-**S-002 and S-007 opened when it closed**, and the rest of M0 still runs behind S-002.
+§ 2.8.1, line 400: tokens first, then fonts, "because a fallback font changes every measurement".
+They sat at the head of M0 and transitively blocked the rest of it. **S-003 is now the front of the
+chain**, and S-004, S-005, and S-006 run behind it in that order.
+
+**S-002 opened S-034, and that is the honest cost of measuring something.** Verifying the fonts at
+200% text scale, which the seed required, found that `/vi/login` and `/vi/register` scroll
+horizontally at 320 px: the `FamilyRoots` wordmark is one unbreakable word in a `max-w-sm` column. It
+fails design spec § 5 `T-04`, it is pre-existing, and the mandated font makes it worse rather than
+causes it. The measurement is in the S-002 record and the fix is S-034.
 
 **The widest thing open is S-022, and it is one structural edit.** It moves `<html>` and `<body>`
 into the locale-aware layout. **It transitively blocks ten seeds**, every one of PR 1 and PR 2, so
@@ -134,6 +151,7 @@ graph LR
   S025 --> S027[S-027 delete legacy auth transport]
   S026 --> S027
   S028[S-028 prettier sweep]
+  S034[S-034 wordmark at 200% scale]
   S027 --> S029[S-029 persons model + api]
   S029 --> S030[S-030 persons repository + hooks]
   S030 --> S031[S-031 persons list + detail]
@@ -146,8 +164,8 @@ graph LR
 | ID | Title | Status | Blocked by |
 |---|---|---|---|
 | S-001 | Make the seventeen dead semantic colour tokens resolve | done | none |
-| S-002 | Load the two mandated typefaces and reference them | open | S-001, done |
-| S-003 | Bring the four failing colour pairs to WCAG AA | blocked | S-002 |
+| S-002 | Load the two mandated typefaces and reference them | done | S-001, done |
+| S-003 | Bring the four failing colour pairs to WCAG AA | open | S-002, done |
 | S-004 | Decide the primary colour and the heritage family, in ADR-041 | blocked | S-003 |
 | S-005 | Rename primary to the decided value across `web/src` | blocked | S-004 |
 | S-006 | Add the `.dark` block, and settle which dark mechanism wins | blocked | S-005 |
@@ -178,17 +196,19 @@ graph LR
 | S-031 | Land the persons list and detail screens | blocked | S-030 |
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | blocked | S-031 |
 | S-033 | Delete the legacy persons code | blocked | S-032 |
+| S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | open | none |
 
-**Twelve seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
-S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, and S-028. Each was read on
+**Thirteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
+S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, and S-034. Each was read on
 2026-08-13, and for each one no second decision from the maintainer stands between an agent and its
-end state. **S-001 is now done**, so eleven of the twelve are open, and S-002 and S-007 joined them
-by having their only blocker satisfied rather than by carrying `none`. **Four of the twelve are themselves the decision**: S-011, S-013, and S-016 produce an
+end state. **S-001 is done**, so twelve of the thirteen are open, and S-003 and S-007 joined them by
+having their only blocker satisfied rather than by carrying `none`. **Four of the thirteen are
+themselves the decision**: S-011, S-013, and S-016 produce an
 ADR and nothing else, and S-020 produces seeds and register rows. Those are actionable because
 writing the decision down is the work. S-004 is the fourth decision seed and it is blocked, on
 S-003.
 
-**Two of the twelve carry a warning that they may split.** S-009 and S-010 each depend on which
+**Two of the thirteen carry a warning that they may split.** S-009 and S-010 each depend on which
 database role a read runs as, and if that read happens before a clan is selected then the seed
 contains a decision and must be split. That is the normal outcome the rule describes, and both seed
 bodies say so rather than leaving it to be found.
@@ -202,12 +222,16 @@ The design spec fixed its own repair order at
 lines 399 to 403: tokens first, "because until the semantic tokens resolve, nothing else can be
 verified on screen"; then fonts, "because a fallback font changes every measurement"; then contrast;
 then the primary rename; then dark mode last, because "a dark palette built on a broken light one
-cannot be checked". These seven seeds follow that order.
+cannot be checked". S-001 to S-007 follow that order. **S-034 sits at the end of this section and
+breaks the numbering on purpose**: it was opened on 2026-08-13 by S-002, and a seed ID is allocated
+when the seed is written and never renumbered, so it carries 034 while belonging to M0's subject.
 
 **Read `.claude/rules/tailwind.md` before the spec, where the two disagree.** The rule was measured
 2026-08-13 and the spec § 2.8.1 was measured 2026-08-03. The rule is newer on three points and all
 three matter here: the count of dead tokens was **seventeen** and not thirteen, the mandated
-typefaces **are** already in the repository, and S-001 closed the token defect later on 2026-08-13.
+typefaces **are** already in the repository, and S-001 and S-002 closed the token and font defects
+later on 2026-08-13. The rule's § 8 is now the record of how the fonts are wired and of the five
+traps that setup carries.
 The spec's § 2.8.1 A is a dated measurement and is left as the record of that date, so it still
 reads as if the tokens were dead. **Do not read § 2.8.1 A as current.** Its § 2.8.1 D and F, on the
 primary conflict and the contrast failures, are still true.
@@ -309,7 +333,7 @@ it resolve: this seed makes the existing intent work, and repainting is a decisi
 
 ## S-002. Load the two mandated typefaces and reference them
 
-**Status:** open · **Blocked by:** S-001, done 2026-08-13 · **Unblocks:** S-003
+**Status:** done, 2026-08-13 · **Blocked by:** S-001, done 2026-08-13 · **Unblocks:** S-003
 
 **Three separate font defects, and the app renders in none of the fonts anyone chose.**
 
@@ -345,15 +369,113 @@ font tokens, `:157` and `:160` for the hardcoded families; `.claude/rules/tailwi
 three defects and for the correction to the spec; `mobile/pubspec.yaml` for the declared font files;
 `superpowers/specs/2026-08-02-design-system-and-screens.md` § 2.3 for the type scale.
 
+**Three of those line numbers had moved by the time the seed was worked**, because S-001 rewrote the
+same file in between. Read at the parent commit `bf661c5` on 2026-08-13, the `@theme` font tokens
+were `globals.css:66-68` and the two hardcoded families were `:147` and `:150`. The seed's numbers
+were taken before S-001 landed. Nothing else in the seed changed, and the defect was where the seed
+said it was.
+
 **Out of scope.** `web/src/app/fonts/GeistVF.woff` and `GeistMonoVF.woff`. They are project-template
 leftovers that nothing references, and `.claude/rules/tailwind.md` § 8 says not to wire them up.
 Deleting them is its own small change and needs no seed.
+
+**What was done, 2026-08-13.** Both families load through `next/font/local` in
+`web/src/app/layout.tsx`, which is the layout that renders `<html>`, so the two variables sit on the
+document element. `globals.css` reads them through `@theme`: `--font-serif` carries Plus Jakarta Sans
+and `--font-sans` carries Manrope, and the `body` and `h1`-to-`h6` rules in `@layer base` now
+`@apply font-sans` and `@apply font-serif`. The dead `next/font/google` call for `Inter` and its
+unread `--font-inter` variable are deleted. No family name is spelled anywhere in `globals.css`:
+`--font-mono` also lost its `JetBrains Mono` and `Menlo` names, which no file loads, and each font
+token's fallbacks are now generic keywords only.
+
+**The files are copies, and a test holds them to the originals.**
+`web/src/app/fonts/PlusJakartaSans.ttf` and `Manrope.ttf` are byte-for-byte copies of
+`mobile/assets/fonts/`, with `OFL.txt` beside them because the licence requires it.
+`web/src/app/fonts/fonts-in-sync-with-mobile.test.ts` compares SHA-256 hashes in the unit gate.
+Pointing `next/font/local` at the mobile path instead was rejected: it builds here and in CI, but it
+depends on the deployment uploading files outside the project root, which is a Vercel setting nobody
+in this repository can read. The seed's "the two clients cannot drift" is therefore held by the test
+rather than by a shared path.
+
+**Both files are variable fonts, and that changed the wiring.** Read with `fontTools` on 2026-08-13:
+each carries a `wght` axis from 200 to 800, and Manrope's name table reads `Manrope ExtraLight` with
+its default instance at 200. So both faces declare `weight: '200 800'`. Without the range the browser
+paints body text at the ExtraLight default. This is the trap most likely to be reintroduced, and it
+is now in `.claude/rules/tailwind.md` § 8.
+
+**Measured 2026-08-13**, Chromium via Playwright, against a **production** build (`pnpm build` then
+`pnpm start`), page `/vi/login`:
+
+| Read | Value |
+|---|---|
+| computed `font-family` on `body` | `manrope, "manrope Fallback", system-ui, sans-serif` |
+| computed `font-family` on the `h1` | `plusJakartaSans, "plusJakartaSans Fallback", system-ui, sans-serif` |
+| `document.fonts` entries | `plusJakartaSans: loaded, 200 800` and `manrope: loaded, 200 800` |
+| `document.fonts.check` on each first family | `true` for both |
+
+**The family name is generated from the JavaScript constant**, not from the file or the family in the
+font, so the readable name is `manrope` rather than `Manrope`. **Defect row 2 above calls that name
+"obfuscated" and it is not**, at least not under the Turbopack build this repo uses: it is readable
+and it tracks the constant. The row is left as written because it is a dated reading, and the defect
+it describes was real. Only the word is wrong. `document.fonts.check` against the
+whole stack returns `false`, because `next/font` also registers an unused metric-adjusted
+`… Fallback` face and `check` is false for any list holding an unloaded face. Both facts cost a test
+rewrite and are recorded in `web/e2e/fonts.spec.ts` so the next reader does not pay for them again.
+
+**Vietnamese coverage, checked at source rather than assumed.** `fontTools` reports 721 glyphs in
+Plus Jakarta Sans and 678 in Manrope, and neither is missing any character of the string the seed
+promised to record:
+
+```
+Nguyễn Trần Đỗ Phạm Hưng Việt ạảãăắằẳẵặâấầẩẫậđêếềểễệôốồổỗộơớờởỡợưứừửữựỳỵỷỹý
+```
+
+plus its uppercase forms `ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯ`. Rendered at 200% text scale in Chromium at 320 px
+width, every mark paints in both the 400 and 700 weights with no missing glyph box and no clipped
+tone mark.
+
+**The negative controls were run, and both halves of the fix are pinned.** Three controls, in the
+order they were run:
+
+| The fix removed | What happened |
+|---|---|
+| body rule back to `font-family: 'Inter', 'Noto Sans', sans-serif` | 3 of the 4 tests then in `web/e2e/fonts.spec.ts` failed, reporting the received value `Inter, "Noto Sans", sans-serif`. The heading test stayed green, correctly: only the body rule was touched |
+| `h1`-to-`h6` rule back to `font-family: 'Playfair Display', 'Noto Serif', serif` | **all 4 passed**, which is a hole in the test rather than a passing fix |
+| `--font-serif` back to `Playfair Display, Noto Serif, Georgia, serif` | the 3 heading assertions failed and the 2 body ones stayed green |
+| one byte appended to `web/src/app/fonts/Manrope.ttf` | the drift test failed and named the file |
+
+**The second control is why there are five tests and not four.** The utilities layer beats the base
+layer, so every heading in `web/src` carrying `font-serif` reads the token directly and renders
+correctly even when the base rule names a dead font. A fifth test injects a heading with no class,
+which is the only way to reach the base rule. It fails under the third control above, so the base
+rule is now pinned too.
+
+**What was checked in a browser, and what was not.** Only `/vi/login` and `/vi/register` were opened,
+in Chromium and in the Pixel 5 viewport. Every other route redirects to login without a Supabase
+session, so no dashboard, tree, or member screen was seen in either font. Firefox and Safari were
+not opened at all. The e2e suite reads `/vi/login` only.
+
+**This seed found a T-04 failure that it did not fix, and S-034 owns it.** At 320 px width with the
+root font size at 200%, `/vi/login` and `/vi/register` both scroll horizontally: page `scrollWidth`
+382 against a `clientWidth` of 320, measured against the production build on 2026-08-13. The
+overflowing box is the `FamilyRoots` wordmark, `h1.font-serif.text-3xl`, at `clientWidth` 256 and
+`scrollWidth` 350. **It is pre-existing and this change makes it worse.** Re-measured on the same
+page with the two tokens forced back to the old literal names, so the browser paints a system
+fallback, the page `scrollWidth` is 342 rather than 382: Plus Jakarta Sans is wider than the fallback
+at that size. Fixing it is layout work on a wordmark, not font work, so it is its own seed.
+
+**The font payload grew, and no seed owns that.** The production build emits both files whole,
+176 KB and 165 KB, measured in `.next/static/media/` on 2026-08-13. `next/font/local` neither
+subsets nor converts. Subsetting to woff2 would cut most of the 341 KB, and it is an
+[Owed](#owed-with-an-owner-and-a-trigger) row rather than a seed: a derived file cannot be
+hash-compared to the mobile original, so the drift test needs a different mechanism first, and that
+is a decision.
 
 ---
 
 ## S-003. Bring the four failing colour pairs to WCAG AA
 
-**Status:** blocked · **Blocked by:** S-002 · **Unblocks:** S-004
+**Status:** open · **Blocked by:** S-002, done 2026-08-13 · **Unblocks:** S-004
 
 **Four real failures, computed rather than assumed.** Design spec § 2.8.1 F, at
 `design-system-and-screens.md:366-378`, holds ratios computed from the hex values in the file:
@@ -544,6 +666,66 @@ likely mechanism.
 
 **Out of scope.** Contrast checking in CI, which needs a rendered page and a decision about which
 pairs are in scope. Token naming rules. Dark mode.
+
+---
+
+## S-034. Make the `FamilyRoots` wordmark survive 200% text scale at 320 px
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-13 by S-002**, which measured this while verifying the fonts and did not fix it,
+because it is layout work on a wordmark rather than font work.
+
+**The measurement, taken against a production build.** `pnpm build` then `pnpm start`, Chromium via
+Playwright, viewport 320 px wide, `document.documentElement.style.fontSize` set to `32px`, which is
+200% of the 16 px default:
+
+| Page | `scrollWidth` at 100% | `scrollWidth` at 200% | `clientWidth` |
+|---|---|---|---|
+| `/vi/login` | 320 | 382 | 320 |
+| `/vi/register` | 320 | 382 | 320 |
+
+The only overflowing box on either page is the wordmark, `h1.font-serif.text-3xl.text-primary-700`,
+at `clientWidth` 256 and `scrollWidth` 350. `FamilyRoots` is one unbreakable word inside a
+`max-w-sm` column, so it cannot wrap. Every other element on both pages fits.
+
+**This is a `T-04` failure.** Design spec § 5 requires no clipped glyph, no overlap, and **no
+horizontal page scroll at 320 dp width** at 200% text scale. `.claude/rules/tailwind.md` § 7 names
+`T-04` as one of the requirements most often missed. Horizontal scroll on the first screen a member
+ever sees is the worst place to have it.
+
+**Pre-existing, and S-002 made it worse.** Measured on the same page with `--font-sans` and
+`--font-serif` forced back to the old literal family names, so the browser paints a system fallback:
+page `scrollWidth` 342 rather than 382, and the wordmark box 310 rather than 350. So the defect
+existed before the mandated fonts landed, and Plus Jakarta Sans is wider than the fallback at
+`text-3xl`. Do not read this seed as a regression from S-002, and do not "fix" it by changing the
+font.
+
+**End state.** At 320 px width and 200% root font size, `/vi/login` and `/vi/register` have
+`document.documentElement.scrollWidth` equal to `clientWidth`, and the wordmark is still legible and
+still reads as the product name. An e2e test asserts the no-overflow condition at that width and
+scale, and it is watched failing against the current markup before it is believed.
+
+**Two shapes are worth weighing before you pick one**, and the seed does not decide: a fluid size
+that shrinks the wordmark at small widths, for example `text-2xl sm:text-3xl` or a `clamp()`, or
+letting the mark break across two lines. The first keeps one line and costs size, the second keeps
+size and costs a line. Whichever you choose, the mandate at `.claude/rules/tailwind.md` § 5 forbids
+solving it with a fixed height.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, plus the new e2e assertion, plus the
+planted-failure run: revert the layout fix, watch the named test fail, restore it.
+
+**Sources.** `web/src/app/[locale]/(auth)/login/page.tsx:48` and
+`web/src/app/[locale]/(auth)/register/page.tsx:117` for the two wordmarks;
+`superpowers/specs/2026-08-02-design-system-and-screens.md` § 5 for `T-04`;
+`.claude/rules/tailwind.md` § 7 for the requirement list and § 5 for the fixed-height ban; the S-002
+record above for the measurement and the fallback comparison.
+
+**Out of scope.** Every other screen at 200% scale. Only the two public pages were measured, because
+every other route redirects to login without a Supabase session. A wider sweep needs a session and is
+its own seed. Also out of scope: the sidebar and header wordmarks at
+`components/layout/Sidebar.tsx:65` and `components/backoffice/BackofficeSidebar.tsx:33`, which were
+not measured.
 
 ---
 
@@ -1474,9 +1656,9 @@ a trigger that is **not met**. It carries no end state and no verification, beca
 actionable. When a trigger is met, the row becomes one or more seeds above and **the row is deleted
 in the same change**. A second place recording completion is a second place to be wrong.
 
-**Twelve rows, counted 2026-08-13.** Four are owner actions that nobody working in this repository
-can perform. Four are milestones waiting on a named seed. Four are deferred work whose dependency
-does not exist.
+**Thirteen rows, counted 2026-08-13.** Four are owner actions that nobody working in this repository
+can perform. Four are milestones waiting on a named seed. Five are deferred work whose dependency
+does not exist. The thirteenth was added the same day by S-002.
 
 | Item | Owner | Trigger |
 |---|---|---|
@@ -1492,6 +1674,7 @@ does not exist.
 | Change requests beyond `person`-update. The table supports marriages, parent-child, events, and documents with no schema change | backend-engineer | The change-requests slice, which is part of PR 7 |
 | A notifications API. None exists, and the design spec refuses to draw a bell for one. No copy anywhere promises a notification, because none exists for any queue event | backend-engineer | Whenever a queue event needs to reach a user outside the app |
 | PDF export. Deferred by ADR-020 and depends on the export worker ADR-005 describes and the Redis events ADR-004 describes, neither of which is built. `scripts/export_tree_pdf.py` is a stub that raises `NotImplementedError` | backend-engineer | The worker exists |
+| **Subset the two typefaces to woff2 and cut the font payload.** The production build emits both `.ttf` files whole, 176 KB plus 165 KB, measured in `.next/static/media/` on 2026-08-13. `next/font/local` neither subsets nor converts. Vietnamese needs a wide Latin range, so this is a subset rather than a Latin-only cut. **It is a register row and not a seed because it contains a decision**: a converted file cannot be hash-compared to `mobile/assets/fonts/`, so `web/src/app/fonts/fonts-in-sync-with-mobile.test.ts` needs a different anti-drift mechanism first, and choosing one is the work. Do not convert the files and delete the test | web-engineer | A Web Vitals or bundle measurement that names the font payload, or the first performance pass before launch. Nothing has measured it on a real connection yet |
 
 **Two citation defects were left alone on purpose, and both are recorded here rather than repaired.**
 
@@ -1532,6 +1715,14 @@ been read or run, and the row that replaces it says where.
   landed.
 - **`flutter build apk --debug` is only ever exercised in CI**, because the machine that writes the
   code has no Android SDK. It passes there. Nobody has run it locally.
+- **Whether the Flutter app renders Manrope at weight 400.** `mobile/pubspec.yaml:62-67` declares
+  one file for both weight 400 and weight 700, and `fontTools` read on 2026-08-13 reports
+  `mobile/assets/fonts/Manrope.ttf` as a variable font whose `wght` axis runs 200 to 800 with its
+  **default instance at 200**, named `Manrope ExtraLight`. On the web this is handled by declaring
+  the range, and S-002 records why. Whether Flutter applies the axis or paints the default instance
+  was **not tested**: `flutter` and `dart` are absent from this machine. If it paints the default,
+  every body string in the mobile app is ExtraLight. Do not repair `pubspec.yaml` from this row.
+  Read it on a machine with Flutter first.
 - **Whether a `paths:` glob in `.claude/rules/` loads the file when a matching file is edited.**
   `nextjs.md` and `tailwind.md` both carry the field and both scope to `web/**`. The whole value of
   the scoping depends on this and it has not been tested here. Treat both files as best-effort.

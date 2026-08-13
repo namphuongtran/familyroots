@@ -2,12 +2,9 @@ import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import { Providers } from '@/components/providers'
 import { routing, type Locale } from '@/i18n/routing'
 import { WebVitalsReporter } from '@/shared/telemetry/web-vitals'
-
-const inter = Inter({ subsets: ['latin', 'vietnamese'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
   title: 'FamilyRoots – Gia phả Việt Nam',
@@ -31,7 +28,7 @@ export default async function LocaleLayout({
   const messages = await getMessages()
 
   return (
-    <div className={`${inter.variable} antialiased`}>
+    <div className="antialiased">
       <WebVitalsReporter />
       <NextIntlClientProvider locale={locale} messages={messages}>
         <Providers>{children}</Providers>

@@ -48,7 +48,7 @@ milestone holds which seeds, so a reader knows where to look.
 
 | Milestone | Seeds | What it is for |
 |---|---|---|
-| **M0** Make the surface verifiable | S-001 to S-007 | The colour tokens, the fonts, contrast, the primary-colour decision, dark mode, and a gate so the class of defect cannot return |
+| **M0** Make the surface verifiable | S-001 to S-007, plus S-034 | The colour tokens, the fonts, contrast, the primary-colour decision, dark mode, a gate so the class of defect cannot return, and the 200%-text-scale defect S-002 found |
 | **M1** Finish clan isolation and the data rules | S-008 to S-021 | Row-level security on the eight uncovered tables, the two privacy toggles, invitation expiry, a re-measurement of the dormant database-review items, and the first dated restore drill |
 | **M2** The web slices | S-022 to S-033 | Auth, then persons as the reference slice. Relationships, tree, events, documents, and admin become seeds when persons lands |
 | **M3** Deploy and operate | none yet | The Pulumi decision and the monitoring set are rows in [Owed](SEEDS.md#owed-with-an-owner-and-a-trigger), because each needs a decision or an environment first |

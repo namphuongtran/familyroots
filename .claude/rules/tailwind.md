@@ -183,25 +183,61 @@ same pull request.
 - `T-16` says every screen must stay usable with all images blocked. An avatar falls back to
   initials. Reserve the space so nothing moves.
 
-**Fonts.** The font setup is broken. Do not copy it.
+**Fonts.** Fixed on 2026-08-13 by seed S-002. The two mandated families now load and reach
+the screen. Read the five traps below before you touch any of it, because four of them cost
+this app both of its fonts once already.
 
-- `web/src/app/[locale]/layout.tsx:10` loads `Inter` through `next/font/google` with the
-  Vietnamese subset and exposes `--font-inter`. Nothing reads `--font-inter`.
-- `globals.css` instead hardcodes `font-family: 'Inter', 'Noto Sans', sans-serif` on `body`.
-  A literal family name does not match the obfuscated name `next/font` generates. So the
-  subsetted font is downloaded and then discarded.
-- `Playfair Display` is named for headings in `globals.css` and is never loaded at all.
-- `web/src/app/fonts/` holds `GeistVF.woff` and `GeistMonoVF.woff`. No file references them.
-  They are leftovers from the project template. Do not wire them up.
-- The mandate is **Plus Jakarta Sans** for headings and **Manrope** for body. Neither is used
-  in `web/`. The mobile app does use them, and the files are already in the repository at
-  `mobile/assets/fonts/PlusJakartaSans.ttf` and `mobile/assets/fonts/Manrope.ttf`, declared in
-  `mobile/pubspec.yaml`. Design spec § 2.8.1 says these strings appear nowhere in the
-  repository. That was true on 2026-08-03 and is no longer true.
-- Do not add another `next/font` call as a drive-by fix. Fixing fonts means the mandated
-  families, loaded through `next/font/local`, referenced through the CSS variable, applied on
-  the document element. Check Vietnamese diacritic coverage in whichever files you ship. That
-  is its own task.
+What the setup is now:
+
+- **The mandate is `Plus Jakarta Sans` for headings and `Manrope` for body.** Both load
+  through `next/font/local` in `web/src/app/layout.tsx`, which is the layout that renders
+  `<html>`, and both variables are set on that element.
+- `globals.css` reads them through `@theme`: `--font-serif` carries the heading face and
+  `--font-sans` carries the body face. The `body` and `h1`-to-`h6` rules in `@layer base`
+  apply `font-sans` and `font-serif`, so no rule names a family.
+- Measured against a production build on 2026-08-13, Chromium, `/vi/login`: computed
+  `font-family` is `manrope, "manrope Fallback", system-ui, sans-serif` on `body` and
+  `plusJakartaSans, …` on the `h1`, both faces report `status: loaded` and a `200 800` weight
+  range. `web/e2e/fonts.spec.ts` re-runs that reading in the e2e gate.
+
+The five traps:
+
+1. **Never write a literal family name.** `next/font` generates the family name, so a literal
+   name matches nothing: the file downloads and the browser then paints a system fallback.
+   That was the defect, and it is invisible to type-check, lint, and every unit test. Read the
+   face through `--font-sans` or `--font-serif`.
+2. **The generated name follows the JavaScript constant**, not the file and not the family in
+   the font. `const manrope = localFont(…)` produces the family `manrope`. So never assert on
+   a family string; match case-insensitively on the readable part, as `fonts.spec.ts` does.
+3. **Both files are variable fonts with a `wght` axis from 200 to 800, so declare
+   `weight: '200 800'`.** Manrope's default instance is ExtraLight, and its name table reads
+   `Manrope ExtraLight`. A face declared without the range renders body text far too thin.
+4. **`--font-serif` carries a sans face.** Plus Jakarta Sans is not a serif. The token name is
+   what every `font-serif` class in `web/src` already spells, and renaming it is a separate
+   change. Do not "fix" the token by pointing it at a serif.
+5. **The utilities layer beats the base layer.** A heading that carries `font-serif` takes the
+   token directly, so it renders correctly even when the `h1`-to-`h6` base rule names a dead
+   font. Any check of the base rule has to use a heading with no class. `fonts.spec.ts` covers
+   both paths for that reason.
+
+Two more facts worth knowing before you change the files:
+
+- **The `.ttf` files are copies, and a test holds them to the originals.**
+  `web/src/app/fonts/PlusJakartaSans.ttf` and `Manrope.ttf` are byte-for-byte copies of the
+  ones the Flutter app ships at `mobile/assets/fonts/`, so the two clients render the same
+  shapes. `web/src/app/fonts/fonts-in-sync-with-mobile.test.ts` compares SHA-256 hashes in the
+  unit gate. If it fails, copy the changed file rather than editing either copy. `OFL.txt`
+  ships beside them because the licence requires it.
+- **The build emits both files whole: 176 KB plus 165 KB, measured 2026-08-13** in
+  `.next/static/media/`. `next/font/local` does not subset or convert, so a Vietnamese page
+  carries 341 KB of font. Subsetting to woff2 would cut most of it and is an `Owed` row in
+  `docs/SEEDS.md`, not a drive-by change: a derived file cannot be hash-compared to the mobile
+  original, so the drift test above needs a different mechanism first.
+- `web/src/app/fonts/` also holds `GeistVF.woff` and `GeistMonoVF.woff`. No file references
+  them. They are leftovers from the project template. Do not wire them up.
+- Vietnamese coverage is not a worry with these two files. Checked 2026-08-13 with
+  `fontTools`: 721 glyphs in Plus Jakarta Sans, 678 in Manrope, and neither is missing any
+  character of `ạảãăắằẳẵặâấầẩẫậđêếềểễệôốồổỗộơớờởỡợưứừửữựỳỵỷỹý` or its uppercase forms.
 
 ## 9. How to write the classes
 
