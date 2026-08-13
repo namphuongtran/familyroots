@@ -15,6 +15,10 @@ This repo differs in several places, and the differences are listed below. When 
 the upstream guide disagree, this file wins. `web/CLAUDE.md` owns the full architecture
 description; do not duplicate it here.
 
+Styling is owned by a separate rule: `.claude/rules/tailwind.md` covers Tailwind v4, the
+design tokens, dark mode, responsive layout, accessibility, images, and fonts. Read it before
+you write a `className`. Several tokens in `globals.css` do not work, so guessing is costly.
+
 Facts about the repo in this file were checked on 2026-08-13. Re-check before you trust one.
 
 ## 1. Where code goes
