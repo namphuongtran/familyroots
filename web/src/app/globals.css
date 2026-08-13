@@ -16,6 +16,16 @@
   --color-primary: #c41e3a;
   --color-primary-foreground: #ffffff;
 
+  /*
+    Gold is ornament: fills, strokes, and rules only, never text. Spec § 2.1
+    splits it in two for that reason, `gilt-decor` #d4af37 for ornament and
+    `gilt` #8a6a16 for the rare gold text. Measured 2026-08-13, the darkest
+    value here that clears 4.5 for text is gold-800; gold-500 gives 2.10 on a
+    white card. So `text-gold-*` is a lint error: see the
+    `no-restricted-syntax` block in `web/eslint.config.mjs`. `bg-gold-*` and
+    `border-gold-*` stay legal. Tailwind v4 generates all three utilities from
+    one variable, so a ramp entry cannot be removed from the text scale alone.
+  */
   --color-gold-100: #fdf6dc;
   --color-gold-200: #faeebc;
   --color-gold-300: #f0d060;
@@ -39,8 +49,18 @@
     and the browser dropped the whole declaration. See `.claude/rules/tailwind.md` § 2.
     Do not reintroduce the indirection: put the value here.
   */
+
+  /*
+    `border` is the decorative default and stays light on purpose. The `*` rule
+    near the end of this file applies `border-border` to every element, so
+    darkening it would draw a visible 1px line around everything, which the
+    Arbor Heritage no-line rule forbids (`.claude/rules/tailwind.md` § 5).
+    Spec § 2.8.1 F says the same: border at 1.13 "is not a defect by itself".
+    `input` is the token that carries an input's boundary, so `input` is the one
+    that clears 3:1. Do not collapse the two values back together.
+  */
   --color-border: #e5e7eb;
-  --color-input: #e5e7eb;
+  --color-input: #8a8072;
   --color-ring: #c41e3a;
   --color-background: #f8f4ec;
   --color-foreground: #1a1a1a;
@@ -48,11 +68,24 @@
   --color-secondary: #7a6248;
   --color-secondary-foreground: #ffffff;
 
-  --color-destructive: #ef4444;
+  /*
+    `destructive` is spec § 2.1's `danger`. It is one digit from `heritage`
+    #a3182f, which is the ceremonial red for the thủy tổ marker and giỗ and is a
+    different family on purpose (spec § 9-J1). Do not swap one for the other.
+    The old #ef4444 gave 3.76 in both directions, so red error text and the
+    white label on a red confirm button were both unreadable.
+  */
+  --color-destructive: #a32218;
   --color-destructive-foreground: #ffffff;
 
+  /*
+    `muted-foreground` is spec § 2.1's `on-surface-muted`: tertiary text,
+    timestamps, helper text. The old #6b7280 cleared 4.5 on a white card and
+    failed on both `background` (4.41) and `muted` (4.39), so the same helper
+    text was compliant inside a card and not beside it.
+  */
   --color-muted: #f3f4f6;
-  --color-muted-foreground: #6b7280;
+  --color-muted-foreground: #6e6653;
 
   --color-accent: #fef3c7;
   --color-accent-foreground: #92400e;

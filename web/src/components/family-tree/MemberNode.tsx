@@ -32,9 +32,14 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
         isDeceased && 'opacity-70',
       )}
     >
-      {isFounder && (
-        <span className="absolute -top-2 text-gold-500 text-xs">👑</span>
-      )}
+      {/*
+        The crown carries the founder state as a glyph, not as a colour, which is
+        what T-06 asks for. It used to carry `text-gold-500` as well; that class
+        was removed by S-003 because gold is never a text colour, and it painted
+        nothing anyway: a colour emoji font supplies its own colours and ignores
+        `color`.
+      */}
+      {isFounder && <span className="absolute -top-2 text-xs">👑</span>}
 
       <Handle type="target" position={Position.Top} className="bg-gray-400! w-2! h-2!" />
 

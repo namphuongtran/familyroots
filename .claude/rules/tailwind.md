@@ -48,10 +48,32 @@ example `--border: #e5e7eb`. `hsl()` takes hue, saturation, and lightness, so `h
 not valid CSS and the browser dropped the whole declaration. All seventeen inherited the body
 colour instead. `--secondary` and `--secondary-foreground` were never defined at all.
 
-The seventeen now hold literal values in `@theme` on lines 42 to 64, and the duplicate `:root`
-block is gone. Measured in Chromium on 2026-08-13, each of the seventeen resolves to exactly the
-hex the file declares. The same probe run against the previous commit returned one identical
-value for all seventeen, which is the failure signature.
+The seventeen now hold literal values in `@theme`, and the duplicate `:root` block is gone.
+
+**A browser probe cannot check this, and S-001's record says it can. Read this before you trust
+either.** Tailwind v4 emits an `@theme` variable only when some generated rule references it. A
+token that no class in `web/src` uses is therefore **absent** from the built CSS, and
+`color: var(--color-destructive)` then falls back to the inherited colour. Measured 2026-08-13 on
+`/vi/login`, both `next dev` on `:3210` and a production build: only `border` and `foreground`
+return their declared hex, and the other fifteen return `lab(8.11897 0.811279 -12.254)`, which is
+the body colour. `border` survives because the `*` rule applies `border-border`, and `foreground`
+because an emitted rule sets `accent-color` from it.
+
+That value is the **same** value S-001 recorded as its negative control, so the probe does not
+discriminate: "no class asks for it yet" and "the declaration was dropped" look identical. The
+table of seventeen computed values in the S-001 record at `docs/SEEDS.md` could not be reproduced
+on this tree on 2026-08-13. Treat it as not reproducible rather than as a measurement.
+
+Two rules follow, and the second one is the one that costs time:
+
+- **Check a token by reading `globals.css`, not by reading a computed style.** The stylesheet holds
+  the value unconditionally. `web/src/app/contrast.test.ts` does this, in the unit gate.
+- **To see a token in a browser at all, a source file must use its class first.** Verified
+  2026-08-13: with a throwaway file carrying `text-muted-foreground bg-destructive border-input`,
+  the production build emitted `--color-muted-foreground:#6e6653`, `--color-destructive:#a32218`,
+  and `--color-input:#8a8072`, each with the matching `.class{…var(--color-x)}` rule. So the values
+  are correct and on demand, not dead. **S-007 is the seed for gating this**, and it must not be
+  built on a runtime probe for the reason above.
 
 **These classes work now:** `bg-background`, `text-foreground`, `border-border`, `bg-card`,
 `bg-muted`, `text-muted-foreground`, `bg-popover`, `bg-accent`, `bg-secondary`,
@@ -61,23 +83,65 @@ variant of the seventeen names. So do `bg-primary` and the `primary-50` to `prim
 `font-serif`, `font-sans`, `font-mono`, `rounded-sm`, `rounded-md`, `rounded-lg`, and the three
 `animate-*` values. Note that § 5 forbids `rounded-sm` on design grounds even though it resolves.
 
-**Not fixed, and larger than the above.** The values themselves still disagree with the design
-spec, and S-001 deliberately did not repaint anything:
+**Contrast was fixed on 2026-08-13 by seed S-003, and it is now gated.** Three token values moved,
+each to the value spec § 2.1 already names for that role:
+
+| Token | Was | Is | Worst ratio, over the four grounds | Spec role |
+|---|---|---|---|---|
+| `muted-foreground` | `#6b7280` | `#6e6653` | 5.17 | `on-surface-muted` |
+| `destructive` | `#ef4444` | `#a32218` | 7.50, both directions | `danger` |
+| `input` | `#e5e7eb` | `#8a8072` | 3.53 | none: derived, see below |
+
+The four grounds are `card` `#ffffff`, `cream` `#fdfbf7`, `background` `#f8f4ec`, and `muted`
+`#f3f4f6`. A foreground has to clear all four, because `body` paints `cream` while the semantic
+token calls the page `background`, and that disagreement is still open as part of S-004's renaming.
+
+Four things to know before you touch these:
+
+- **`destructive` is one digit from `heritage` `#a3182f`.** They are different families on purpose:
+  `heritage` is ceremonial, for the thủy tổ marker and giỗ. Do not swap one for the other.
+- **`border` stays light at `#e5e7eb`, and that is not an oversight.** The `*` rule in `globals.css`
+  applies `border-border` to every element, so darkening it draws a line around everything and
+  breaks the no-line rule in § 5. `input` is the token that carries a control's boundary, so `input`
+  is the one held to 3:1. Spec § 2.8.1 F reasons the same way. Do not collapse the two values.
+- **`input` `#8a8072` is derived, not quoted.** Spec § 2.1 offers no bordered-input value because it
+  specifies a filled field instead, `surface-container-low` `#F4EFE4`. Spec § 2.8.1 F allows either
+  branch, and S-003 took the darker-border branch as the smaller change. If S-005 adopts the fill,
+  this token goes away.
+- **`text-gold-*` is a lint error.** Gold is ornament: `gold-500` measures 2.10:1 on a white card,
+  and the ramp does not clear 4.5 for text until `gold-800`. Tailwind v4 generates the text, fill,
+  and border utilities from one variable, so the text scale cannot be trimmed on its own. The ban
+  lives in `web/eslint.config.mjs` as `no-restricted-syntax`, matching any string literal, so
+  `cn('text-gold-500')` is caught too. `bg-gold-*` and `border-gold-*` stay legal. For genuine gold
+  text, spec § 2.1 names `gilt` `#8a6a16`, and it arrives with the S-005 rename.
+
+**`web/src/app/contrast.test.ts` holds all of it in the unit gate.** It parses the hex values out of
+`globals.css` and computes 30 pairs, so a value that drops below AA fails `pnpm test:unit`. Move the
+token, never the threshold. It throws rather than skipping when a token is renamed, because a pair
+table that silently resolves to nothing passes every assertion.
+
+**Not fixed, and larger than the above.** The values still disagree with the design spec on the
+biggest one, and S-001 deliberately did not repaint anything:
 
 - `globals.css` makes primary the red `#c41e3a`. Spec § 2.1 makes primary the green `#3E5C38`,
   and puts red in a separate reserved family, `heritage: #A3182F`, for the thủy tổ marker and
   giỗ. Reconciling the two is a design-system change. Write an ADR under `docs/decisions/`
   first. That is seed S-004.
-- Four colour pairs still fail WCAG AA. Spec § 2.8.1 F names them. That is seed S-003.
 - `--secondary` and `--secondary-foreground` had no value at all, so S-001 gave them
-  `#7a6248` and `#ffffff` from spec § 2.1's `secondary` row. No other token's value changed.
+  `#7a6248` and `#ffffff` from spec § 2.1's `secondary` row.
+- **No screen uses the three tokens S-003 moved.** Counted 2026-08-13 across `web/src`, excluding
+  `globals.css`: zero files reference `muted-foreground`, `bg-muted`, `bg-background`,
+  `border-input`, `ring-ring`, or any `*-destructive` class. Forms draw their own boundary with
+  `border-gray-300`, which measures 1.47:1 on white and fails WCAG 1.4.11. So S-003 changed no
+  pixel, and the screens still have to be moved onto the tokens. That is seed S-035.
 
 Rules that follow from this:
 
 - **Do not add a new token in the `hsl(var(--x))` form. Put the value straight in `@theme`.**
   This is the defect that cost seventeen tokens, and nothing in the build catches it yet.
 - Prefer the semantic token over Tailwind's own palette for new work, for example
-  `text-muted-foreground` rather than `text-gray-500`.
+  `text-muted-foreground` rather than `text-gray-500`. On a form boundary use `border-input`; it is
+  the only value in the file that clears 3:1.
 - A resolving token is not an approved colour. Check the value against spec § 2.1 before you
   build a screen on it, and expect S-004 to move `primary`.
 
@@ -165,7 +229,17 @@ screen. The ones that most often get missed:
 
 `web/src` contains 2 `aria-*` attributes in total. There is no accessibility floor to inherit.
 
-**`T-04` is the one of the eighteen that has a test, and the test found a real defect.**
+**Three of the eighteen have a test. `T-01`, `T-02`, and `T-04`.**
+
+`T-01` text contrast and `T-02` non-text contrast are held by `web/src/app/contrast.test.ts`, added
+2026-08-13 by seed S-003, in the unit gate. `T-01`'s own pass criteria asks for exactly that shape:
+"a token-pair audit script over the approved pairs list, not spot-checking screenshots". The pairs
+list is the `CASES` table in that file. **Add a row when you add a token**, because the gate can only
+check the pairs somebody wrote down. Two limits worth knowing: it checks token **pairs**, so a screen
+that puts `text-gray-500` on `bg-cream` is invisible to it, and it reads the stylesheet rather than a
+rendered page, for the reason § 2 gives.
+
+**`T-04` was the first of the eighteen to get a test, and the test found a real defect.**
 `web/e2e/text-scale.spec.ts`, added 2026-08-13 by seed S-034, sets the viewport to 320 px, injects
 `:root { font-size: 32px }`, and asserts that `document.documentElement.scrollWidth` equals
 `clientWidth` on `/vi/login` and `/vi/register`. Four traps came out of writing it, and all four cost

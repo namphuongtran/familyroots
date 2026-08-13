@@ -28,6 +28,16 @@ the four moved:
 - **Open, 14 to 13.** S-034 left for `done`. Nothing became open, because S-034 unblocked nothing.
 - **Seeds** stayed 34 and **blocked** stayed 18.
 
+**Re-taken again 2026-08-13, after S-003 landed: 36 seeds, 4 done, 15 open, and 17 blocked.** All
+four moved:
+
+- **Seeds, 34 to 36.** S-003 opened S-035 and S-036 while verifying its own work, the same way S-002
+  opened S-034.
+- **Done, 3 to 4.** S-003.
+- **Open, 13 to 15.** S-004 became open, because S-003 was its only blocker. S-035 and S-036 arrived
+  open. S-003 left for `done`. Net plus two.
+- **Blocked, 18 to 17.** S-004 left it. Nothing became blocked.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -50,8 +60,17 @@ verified until the semantic colour tokens resolved and the real typefaces loaded
 spec's own ordering at
 [`superpowers/specs/2026-08-02-design-system-and-screens.md`](superpowers/specs/2026-08-02-design-system-and-screens.md)
 § 2.8.1, line 400: tokens first, then fonts, "because a fallback font changes every measurement".
-They sat at the head of M0 and transitively blocked the rest of it. **S-003 is now the front of the
-chain**, and S-004, S-005, and S-006 run behind it in that order.
+They sat at the head of M0 and transitively blocked the rest of it. **S-003 is done as of 2026-08-13
+too, so S-004 is now the front of the chain**, and S-005 and S-006 run behind it in that order.
+
+**S-003 moved three token values and changed no pixel, and both halves of that matter.**
+`muted-foreground`, `destructive`, and `input` now clear WCAG AA, each taking the value design spec
+§ 2.1 already names for its role. The floor is now gated rather than conventional:
+`web/src/app/contrast.test.ts` recomputes 30 pairs from `globals.css` in `pnpm test:unit`, which is
+the shape spec § 5 `T-01` asks for. Recomputing found two failing pairs the seed did not name, so
+**six pairs failed, not four**. But no screen
+references any of the three tokens, so nothing on screen improved. Forms still draw their boundary
+with `border-gray-300` at 1.47:1. That gap is S-035.
 
 **S-002 opened S-034, and that is the honest cost of measuring something.** Verifying the fonts at
 200% text scale, which the seed required, found that `/vi/login` and `/vi/register` scroll
@@ -60,6 +79,19 @@ fails design spec § 5 `T-04`, it is pre-existing, and the mandated font makes i
 causes it. The measurement is in the S-002 record and the fix was S-034, **done 2026-08-13**: both
 wordmarks now carry a `<wbr>` break opportunity, so the mark spends a second line rather than the page
 scrolling, and `web/e2e/text-scale.spec.ts` holds the condition at 320 px and 200% scale.
+
+**S-003 withdrew a measurement S-001 recorded, and S-007 has to be rewritten around it.** Tailwind v4
+emits an `@theme` variable only when a generated rule references it. So a token that no class in
+`web/src` uses is absent from the built CSS, and a `color: var(--color-x)` probe returns the inherited
+body colour instead of the value. Re-measured 2026-08-13 on `/vi/login`, in `next dev` and in a
+production build: fifteen of the seventeen return `lab(8.11897 0.811279 -12.254)`, **which is the
+exact value the S-001 record names as its negative control**. The two states are indistinguishable to
+that probe, so the control pinned nothing and S-001's table of seventeen computed values cannot be
+reproduced. **S-001's fix is intact**: each token reaches the browser with its declared hex as soon as
+a class asks for it, confirmed from build output. What is withdrawn is the reading, not the repair.
+The consequence lands on **S-007**, whose job is a gate for exactly this and whose `Sources` line
+named that probe as the likely mechanism. Its seed body now carries the warning and two mechanisms
+that do work.
 
 **The widest thing open is S-022, and it is one structural edit.** It moves `<html>` and `<body>`
 into the locale-aware layout. **It transitively blocks ten seeds**, every one of PR 1 and PR 2, so
@@ -159,6 +191,8 @@ graph LR
   S025 --> S026
   S025 --> S027[S-027 delete legacy auth transport]
   S026 --> S027
+  S003 --> S035[S-035 form boundaries]
+  S036[S-036 calendar event marker]
   S028[S-028 prettier sweep]
   S034[S-034 wordmark at 200% scale]
   S027 --> S029[S-029 persons model + api]
@@ -174,8 +208,8 @@ graph LR
 |---|---|---|---|
 | S-001 | Make the seventeen dead semantic colour tokens resolve | done | none |
 | S-002 | Load the two mandated typefaces and reference them | done | S-001, done |
-| S-003 | Bring the four failing colour pairs to WCAG AA | open | S-002, done |
-| S-004 | Decide the primary colour and the heritage family, in ADR-041 | blocked | S-003 |
+| S-003 | Bring the four failing colour pairs to WCAG AA | done | S-002, done |
+| S-004 | Decide the primary colour and the heritage family, in ADR-041 | open | S-003, done |
 | S-005 | Rename primary to the decided value across `web/src` | blocked | S-004 |
 | S-006 | Add the `.dark` block, and settle which dark mechanism wins | blocked | S-005 |
 | S-007 | Gate: fail the build when an `@theme` token cannot resolve | open | S-001, done |
@@ -206,18 +240,20 @@ graph LR
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | blocked | S-031 |
 | S-033 | Delete the legacy persons code | blocked | S-032 |
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
+| S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
+| S-036 | Give the calendar's event marker a channel other than gold | open | none |
 
-**Thirteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
-S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, and S-034. Each was read on
-2026-08-13, and for each one no second decision from the maintainer stands between an agent and its
-end state. **S-001 and S-034 are done**, so eleven of the thirteen are open, and S-003 and S-007
-joined them by having their only blocker satisfied rather than by carrying `none`. **Four of the thirteen are
-themselves the decision**: S-011, S-013, and S-016 produce an
+**Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
+S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
+on 2026-08-13, and for each one no second decision from the maintainer stands between an agent and its
+end state. **S-001 and S-034 are done**, so twelve of the fourteen are open. **S-004, S-007, and
+S-035 are also open** without carrying `none`: each had its only blocker satisfied rather than never
+having one. **Four seeds are themselves the decision**: S-011, S-013, and S-016 produce an
 ADR and nothing else, and S-020 produces seeds and register rows. Those are actionable because
-writing the decision down is the work. S-004 is the fourth decision seed and it is blocked, on
-S-003.
+writing the decision down is the work. S-004 is the fourth decision seed, and as of 2026-08-13 it is
+open rather than blocked, because S-003 landed.
 
-**Two of the thirteen carry a warning that they may split.** S-009 and S-010 each depend on which
+**Two of the fourteen carry a warning that they may split.** S-009 and S-010 each depend on which
 database role a read runs as, and if that read happens before a clan is selected then the seed
 contains a decision and must be split. That is the normal outcome the rule describes, and both seed
 bodies say so rather than leaving it to be found.
@@ -321,6 +357,23 @@ for normal text, so this adds no work to S-003. No other token's value changed.
 Eleven distinct values across the seventeen, which matches the eleven the file declares. The
 negative control was run on the same server with the fix stashed: all seventeen returned
 `lab(8.11897 0.811279 -12.254)`, the inherited body colour, and the probe exited non-zero.
+
+> **Corrected 2026-08-13 by S-003. The table above could not be reproduced, and the probe it was
+> taken with cannot decide the question it was asked.** Tailwind v4 emits an `@theme` variable only
+> when a generated rule references it, so a token no class in `web/src` uses is absent from the
+> built CSS and `color: var(--color-x)` falls back to the inherited colour. Re-measured on
+> `/vi/login` in `next dev` on `:3210` and again in a production build: only `border` and
+> `foreground` return their declared hex, and the other fifteen return
+> `lab(8.11897 0.811279 -12.254)`. `border` survives because the `*` rule applies `border-border`,
+> and `foreground` because an emitted rule sets `accent-color` from it.
+>
+> **That is the same value this record names as the negative control**, so a passing probe and a
+> failing one are indistinguishable, and the control pinned nothing. What S-001 actually fixed is
+> real and still holds: the seventeen carry hex literals in `@theme`, and each reaches the browser
+> with its declared value as soon as a class asks for it, verified by build output on 2026-08-13.
+> **What is withdrawn is the measurement, not the fix.** Check a token by reading `globals.css`, as
+> `web/src/app/contrast.test.ts` does. `.claude/rules/tailwind.md` § 2 carries the full account, and
+> S-007 carries the warning for whoever builds the gate.
 
 **What was checked in a browser, and what was not.** Only `/vi/login` was opened. Every other route
 redirects to it without a Supabase session, so no dashboard, tree, or member screen was seen. On
@@ -484,7 +537,7 @@ is a decision.
 
 ## S-003. Bring the four failing colour pairs to WCAG AA
 
-**Status:** open · **Blocked by:** S-002, done 2026-08-13 · **Unblocks:** S-004
+**Status:** done, 2026-08-13 · **Blocked by:** S-002, done 2026-08-13 · **Unblocks:** S-004, S-035
 
 **Four real failures, computed rather than assumed.** Design spec § 2.8.1 F, at
 `design-system-and-screens.md:366-378`, holds ratios computed from the hex values in the file:
@@ -515,9 +568,96 @@ identifies as the one place a boundary is required.
 message, with the date. A ratio is a measurement, so a number carried forward from the spec is not
 evidence about the tree after two token seeds have landed.
 
+**What was done, 2026-08-13.** Three token values moved, and each moved to a value design spec § 2.1
+already names for that role rather than to one invented here:
+
+| Token | Was | Is | Spec § 2.1 role | `design-system-and-screens.md` |
+|---|---|---|---|---|
+| `muted-foreground` | `#6b7280` | `#6e6653` | `on-surface-muted`, "Tertiary text, timestamps, helper text" | `:89` |
+| `destructive` | `#ef4444` | `#a32218` | `danger` | `:124` |
+
+`destructive` was taken from spec § 2.1 rather than from § 2.8.1 F's floor of `#b91c1c`, which also
+clears 4.5 at 6.47. The spec value is the one the S-005 rename will land on, so taking it now avoids
+moving the token twice. **It is one digit from `heritage` `#a3182f`**, which is the ceremonial red
+for the thủy tổ marker and giỗ and is a separate family on purpose per § 9-J1, so `globals.css`
+carries a comment saying do not swap them.
+
+**`input` gained `#8a8072`, and `border` deliberately did not move.** The seed's end state names the
+`border` token, and that is the one place this record departs from it. `globals.css` applies
+`border-border` to `*`, so darkening `border` draws a visible 1px line around every element, which
+the Arbor Heritage no-line rule forbids (`.claude/rules/tailwind.md` § 5). Spec § 2.8.1 F agrees that
+`border` at 1.13 "is *not* a defect by itself" and locates the requirement on inputs, and `input` is
+the token an input's boundary reads. So `input` is the one held to 3:1. **The value is derived, not
+quoted:** spec § 2.1 offers no bordered-input colour because it specifies a filled field instead,
+`surface-container-low #F4EFE4`. § 2.8.1 F allows either branch; this seed took the darker border as
+the smaller change, and if S-005 adopts the fill then `input` goes away.
+
+**Gold is banned by a lint rule, which is the answer to the seed's "say which".** Removing gold from
+the text scale is not available: Tailwind v4 generates `text-gold-500`, `bg-gold-500`, and
+`border-gold-500` from the single `--color-gold-500` variable, so trimming the text utility would
+also remove the fills § 2.1 wants. `web/eslint.config.mjs` therefore carries a `no-restricted-syntax`
+pair matching `text-gold-` in any string literal, so `cn('text-gold-500')` is caught as well as a
+`className` attribute. It cannot see a class assembled at runtime. `bg-gold-*` and `border-gold-*`
+stay legal. The ramp does not clear 4.5 for text until `gold-800` at 6.22; for genuine gold text
+§ 2.1 names `gilt #8a6a16`, which arrives with S-005. **The rule found exactly one violation**,
+`components/family-tree/MemberNode.tsx:36`, a `text-gold-500` on a 👑 glyph. It was removed: a colour
+emoji font supplies its own colours and ignores `color`, so the class had never painted anything, and
+the crown already carries the founder state as a glyph, which is what T-06 asks for.
+
+**Six pairs failed, not four, and eleven cases failed.** Recomputed 2026-08-13 from
+`globals.css` at the parent commit `268e61e`, which is after S-001 and S-002 landed. The seed's own
+table came from the spec and was one commit stale. The two the seed did not name:
+
+| Pair | Ratio | Why it was missed |
+|---|---|---|
+| `muted-foreground #6b7280` on `muted #f3f4f6` | 4.39 | The spec table pairs `muted-foreground` with `card` and `background` but never with `muted`, which is the surface named after it. It is the worst of the three |
+| `destructive #ef4444` on `cream #fdfbf7` | 3.64 | `body` paints `cream`, not `background`. The spec measured `background` |
+
+`cream` is why the `muted-foreground` defect never showed on screen: at 4.68 it passes on the ground
+`body` actually paints, and fails only on the two tokens no screen uses. **Counted 33 pairs, 11
+failing before and 0 after.** The full before-and-after table is in the commit message.
+
+**`web/src/app/contrast.test.ts` is the gate, and this is the requirement's own shape.** T-01 asks
+for "a token-pair audit script over the approved pairs list, not spot-checking screenshots"
+(`design-system-and-screens.md:767`). The test parses the hex values out of `globals.css` and
+computes 30 asserted pairs, 4.5:1 for text and 3:1 for `input` and `ring` under T-02. It throws
+rather than skipping when a token is renamed, because a pair table that silently resolves to nothing
+passes every assertion. **Negative control run 2026-08-13:** with the three old values restored,
+`pnpm vitest run --project unit src/app/contrast.test.ts` failed 11 of 31, and they were the 11 the
+recomputation named. With the new values, 31 pass.
+
+**The test reads the stylesheet, and that is a finding, not a shortcut.** Tailwind v4 emits an
+`@theme` variable only when a generated rule references it. No screen uses these tokens, so they are
+**absent from the built CSS**, and a `var(--color-x)` probe returns the inherited body colour
+instead. Measured 2026-08-13 on `/vi/login`, in `next dev` on `:3210` and in a production build:
+only `border` and `foreground` return their declared hex; the other fifteen return
+`lab(8.11897 0.811279 -12.254)`, the body colour. **That is the same value S-001 recorded as its
+negative control**, so the probe cannot tell "no class asks for it yet" from "the declaration was
+dropped". See the correction added to the S-001 record below, and the warning added to S-007.
+
+**What was checked in a browser, and what was not.** The values were confirmed to reach a real
+build, by adding a throwaway file carrying `text-muted-foreground bg-destructive border-input`,
+running `pnpm build`, and reading the output: `--color-muted-foreground:#6e6653`,
+`--color-destructive:#a32218`, and `--color-input:#8a8072`, each with its
+`.class{…var(--color-x)}` rule. The file was deleted in the same step. **No screen was inspected
+for a visual change, because there is nothing to see:** counted across `web/src` excluding
+`globals.css`, zero files reference `muted-foreground`, `bg-muted`, `bg-background`, `border-input`,
+`ring-ring`, or any `*-destructive` class. **So this seed changed no pixel.** Moving the screens onto
+the tokens is S-035, and the gold event dot is S-036.
+
 **Sources.** `superpowers/specs/2026-08-02-design-system-and-screens.md:366-378` for the ratio table
-and `:385-397` for the destructive, gold, and border reasoning; § 5 requirement `T-06` for the rule
-that colour is never the only channel; `web/src/app/globals.css:124-147` for the current values.
+and `:385-397` for the destructive, gold, and border reasoning; `:767-768` for `T-01` and `T-02`, and
+`:772` for `T-06`, the rule that colour is never the only channel; `:89` for `on-surface-muted`,
+`:114-115` for `gilt` and `gilt-decor`, and `:124` for `danger`.
+
+**The `globals.css` citation on this line was wrong, and it is worth saying how.** It read
+`web/src/app/globals.css:124-147` "for the current values". Read 2026-08-13 at the parent commit
+`268e61e`, lines 124 to 147 held `@layer base`, the `@utility text-balance` block, and the four
+`:root` design tokens. **None of the seventeen semantic values was in that range**; they were in
+`@theme` at `:42-64`, which is where S-001 put them. After this seed added comments they sit at
+`:62-97`. The citation resolved to a real file and a real range, which is why nothing caught it, and
+that is the failure mode `.claude/rules/evidence.md` names: a pointer that resolves is not a pointer
+that holds the claim.
 
 **Out of scope.** Dark-mode contrast, which cannot be computed until S-006 exists. The primary
 colour itself, which S-004 decides. Auditing every screen: this seed fixes the token values, and a
@@ -527,13 +667,19 @@ screen that composes them wrongly is that screen's own defect.
 
 ## S-004. Decide the primary colour and the heritage family, in ADR-041
 
-**Status:** blocked · **Blocked by:** S-003 · **Unblocks:** S-005
+**Status:** open · **Blocked by:** S-003, done 2026-08-13 · **Unblocks:** S-005
 
 **This is a decision seed, and it is here because the answer repaints the product.** One agent
 cannot reach the end state without the maintainer, which is the rule's own test at
 `.claude/rules/seeds.md`.
 
-**Two sources disagree about what the primary colour is.** `web/src/app/globals.css:128` and the
+> **Line numbers in this seed were re-read 2026-08-13, while S-003 was being closed, and three
+> claims below were repaired.** They described `globals.css` as it was **before** S-001 deleted the
+> duplicate `:root` block, and S-003 then moved every line below the gold ramp by adding comments.
+> The repairs are marked inline. The reasoning in this seed was not touched: the conflict it names is
+> real and still unresolved. **Grep for the token rather than trusting a line number here.**
+
+**Two sources disagree about what the primary colour is.** `web/src/app/globals.css:16` and the
 `--color-primary` ramp make primary the red `#c41e3a`. Design spec § 2.1 makes primary the green
 `#3E5C38`, and reserves red as a separate family, `heritage: #A3182F`, for the thủy tổ marker and
 giỗ. So the app's "primary" is the spec's *accent*, and the spec's actual primary does not exist in
@@ -545,15 +691,18 @@ neutral, and red has to stay affordable for heritage moments and for destructive
 concludes "this document is correct and the app is the bug".
 
 **Three names for one value, and two of the three are dead.** `--color-primary-500` at
-`globals.css:11`, a bare `--color-primary` at `:16`, and `:root --primary` at `:128` all hold
-`#c41e3a`. Only `--color-primary` generates `bg-primary`; the `:root` pair at `:128-129` is dead
+`globals.css:11`, a bare `--color-primary` at `:16`, and `:root --primary` at `:174` all hold
+`#c41e3a`. Only `--color-primary` generates `bg-primary`; the `:root` pair at `:174-175` is dead
 code, because `--color-primary` is a literal rather than an `hsl(var(...))` indirection and so
 nothing consumes `--primary`.
 
-**Two different values are both called the background.** `--color-cream` at `:34` is `#fdfbf7` and
-the body uses it. `--background` at `:124` and `--cream` at `:131` are both `#f8f4ec`. So the
-semantic token disagrees with the colour actually on screen, and both values also exist in the ramp
-under different indices. Spec § 2.8.1 E measured this.
+**Two different values are both called the background, and this seed used to name a third that does
+not exist.** `--color-cream` at `:44` is `#fdfbf7` and the body paints it. `--color-background` at
+`:65` and `:root --cream` at `:177` are both `#f8f4ec`. **There is no unprefixed `--background`**:
+this seed cited one at `:124`, and S-001 deleted the whole duplicate `:root` block that would have
+held it, so the token has not existed since 2026-08-13. Two names for two values under three labels
+is still the defect, and both values also exist in the cream ramp under different indices, at `:39`
+and `:40`. Spec § 2.8.1 E measured this.
 
 **End state.** `docs/decisions/041-*.md` exists and decides four things: which colour is primary,
 whether `heritage` becomes a token family, which of the two background values is the background, and
@@ -565,8 +714,9 @@ here: 040 was the highest on `main` on 2026-08-13.
 The check is that `docs/decisions/README.md` lists the new ADR, which the root `CLAUDE.md` requires
 in the same pull request.
 
-**Sources.** `web/src/app/globals.css:11`, `:16`, and `:128` for the three primary names, `:34`,
-`:124`, and `:131` for the two background values;
+**Sources**, all re-read 2026-08-13. `web/src/app/globals.css:11`, `:16`, and `:174` for the three
+primary names; `:44` and `:65` for the two background values, with `:177` for the third label and
+`:39-40` for the same two values inside the cream ramp;
 `superpowers/specs/2026-08-02-design-system-and-screens.md` § 2.1 for the green and the heritage
 family, § 2.8.1 D and E for the conflict and the argument; `.claude/rules/tailwind.md` § 2, which
 already says to write this ADR before touching a token.
@@ -590,14 +740,22 @@ value under one name. If ADR-041 created a `heritage` family, it exists in `@the
 marker and giỗ surfaces use it. `.claude/rules/tailwind.md` § 2 is updated in the same change,
 because its dead-class list and its "working tokens" list are both wrong once this lands.
 
-**Verification.** The full web gate. Plus the browser probe from S-001 re-run, because the rename
-touches the same block. Plus the S-003 ratio table recomputed against the new values, since a changed
-primary changes every pair it appears in.
+**Verification.** The full web gate, and note that `pnpm test:unit` now recomputes the contrast pairs
+for you: `web/src/app/contrast.test.ts` holds `primary` and `ring` against every ground, so a primary
+that fails AA fails the gate rather than needing a table re-run by hand. **Do not re-run the browser
+probe from the S-001 record.** It was withdrawn on 2026-08-13 for the reason in the corrected note
+under that seed, and a token this rename touches will read as broken when it is not. Add a row to
+`contrast.test.ts` for any new token this seed creates, `heritage` included, because the gate only
+checks pairs somebody wrote down.
 
-**Sources.** `docs/decisions/041-*.md`, which does not exist yet and which this seed reads as its
-authority; `web/src/app/globals.css:6-17` for the primary ramp, `:16` and `:128` for the two
-surviving duplicates, and `:34`, `:124`, `:131` for the backgrounds;
-`.claude/rules/tailwind.md` § 2 for the two lists that go stale.
+**Sources**, re-read 2026-08-13 after S-003 added comments to `globals.css` and moved every line
+below the gold ramp. `docs/decisions/041-*.md`, which does not exist yet and which this seed reads as
+its authority; `web/src/app/globals.css:6-17` for the primary ramp; `:16` and `:174` for the two
+surviving duplicates; `:44` `--color-cream: #fdfbf7`, `:65` `--color-background: #f8f4ec`, and `:177`
+`--cream: #f8f4ec` for the three names holding two background values. **Two of the three numbers this
+line used to carry were wrong before S-003 touched the file**: it cited `:124` and `:131`, which held
+`@layer base {` and its closing brace. Grep for the token, not the line. `.claude/rules/tailwind.md`
+§ 2 for the two lists that go stale.
 
 **Out of scope.** Dark mode. Any screen's composition. Moving `src/components/ui/` to
 `src/shared/ui/`, which `web/CLAUDE.md` records as an undecided sub-project B question.
@@ -668,13 +826,33 @@ runs it in the `build-and-test` job.
 **Verification.** The full web gate, plus the new check. Plus the planted-defect run described above.
 A gate that has never been seen to fail pins nothing.
 
-**Sources.** `.github/workflows/web-ci.yml` for the job list; `web/CLAUDE.md`, "Testing", for the
-four existing harnesses; `web/src/app/globals.css:42-64` for the defect to plant;
-`superpowers/specs/2026-08-02-design-system-and-screens.md:405-409` for the probe, which is the most
-likely mechanism.
+**Do not build this on a runtime probe. Read this first, added 2026-08-13 by S-003.** The `Sources`
+line below calls the spec's browser probe "the most likely mechanism". It is the wrong mechanism, and
+it would produce a gate that reports a defect on a healthy tree. Tailwind v4 emits an `@theme`
+variable only when a generated rule references it, so a token that no class in `web/src` uses is
+**absent** from the built CSS, and `color: var(--color-x)` then returns the inherited body colour.
+Measured on `/vi/login` in `next dev` on `:3210` and in a production build: fifteen of the seventeen
+return `lab(8.11897 0.811279 -12.254)` today, and every one of the fifteen is healthy. A probe cannot
+tell "no class asks for it yet" from "the declaration was dropped", because both produce that value.
 
-**Out of scope.** Contrast checking in CI, which needs a rendered page and a decision about which
-pairs are in scope. Token naming rules. Dark mode.
+So this seed's end state has to be reached another way, and the choice is the seed's to make. Two
+that do work: parse the `@theme` block and fail on any value that is not a literal, which is what
+`web/src/app/contrast.test.ts` already does for the pairs it checks; or generate a probe source file
+carrying every token's utility class, build, and assert on the emitted CSS, which is how S-003
+confirmed its three values reached a real build. **The second is closer to what this seed asks for**,
+because it catches an invalid value that is still a literal. Whichever is chosen, the planted-defect
+control stays mandatory, and the planted defect must be watched failing on the **shipped** class set
+rather than on a probe page.
+
+**Sources.** `.github/workflows/web-ci.yml` for the job list; `web/CLAUDE.md`, "Testing", for the
+four existing harnesses; `web/src/app/globals.css` for the defect to plant;
+`superpowers/specs/2026-08-02-design-system-and-screens.md:405-409` for the probe, **which the
+paragraph above withdraws**; `.claude/rules/tailwind.md` § 2 for the emission rule and the
+measurement behind it.
+
+**Out of scope.** Contrast checking in CI, which S-003 landed for token pairs in
+`web/src/app/contrast.test.ts` and which this seed does not extend to rendered screens. Token naming
+rules. Dark mode.
 
 ---
 
@@ -793,6 +971,92 @@ one mark is still one unbreakable word, it carries `text-xs` rather than `text-3
 a Supabase session, so this seed could not measure it. Fixing it blind would be a change nobody has
 watched fail. The correction is also in `.claude/rules/tailwind.md` § 7, which is where the next agent
 looks.
+
+---
+
+## S-035. Draw form boundaries with `border-input` rather than `border-gray-300`
+
+**Status:** open · **Blocked by:** S-003, done 2026-08-13 · **Unblocks:** nothing yet
+
+**S-003 gave `input` a value that clears 3:1 and no control asks for it.** Counted 2026-08-13 across
+`web/src`, excluding `globals.css`: `border-input` appears in zero files. Every form draws its own
+boundary with `border-gray-300` `#d1d5db`, which measures **1.47:1 on a white card**. WCAG 1.4.11
+wants 3:1 for the boundary of a control a user has to find, and spec § 5 `T-02` restates it. So the
+token is compliant and every form on screen is not.
+
+**This is a screen sweep, which is why it is not part of S-003.** That seed's `Out of scope` says
+plainly that it fixes token values and that "a screen that composes them wrongly is that screen's own
+defect". Doing the sweep inside it would also have changed the look of every form in the app inside a
+commit whose stated job was to move three hex values.
+
+**Read this before choosing how.** Spec § 2.1 does not specify a bordered input at all. It specifies
+a **filled** field, `surface-container-low #F4EFE4`, and it puts `outline-variant #B3A98F` behind
+high-contrast mode only. Spec § 2.8.1 F offers both branches: "It needs a darker value for that use,
+or inputs need a filled treatment instead." S-003 built the darker-border branch because it was the
+smaller change. If this seed prefers the fill, then `--color-input` in `globals.css` becomes dead and
+must be deleted in the same change, along with its row in `web/src/app/contrast.test.ts`. **Either
+branch is a design choice, so if it is not obvious after reading § 2.1, stop and make it S-004's
+business rather than deciding it in a form.**
+
+**End state.** No `<input>`, `<textarea>`, or `<select>` in `web/src` carries `border-gray-*`. Each
+one either carries `border-input` or the filled treatment spec § 2.1 names, and whichever branch was
+taken, the boundary or the fill measures at least 3:1 against the surface behind it. `contrast.test.ts`
+still passes and its `input` rows agree with the branch taken. If the fill branch won, `--color-input`
+is gone rather than left unused.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. Plus a browser reading of one form at 320 px,
+because no command in that gate reads a computed colour: open `/vi/login`, read the computed
+`border-color` or `background-color` of the email field, and record the measured ratio with the date.
+Note that a `var(--color-input)` probe on a page whose classes do not use the token returns the
+inherited colour, not the value; `.claude/rules/tailwind.md` § 2 explains why, and the fix for this
+seed is exactly what makes the probe start working.
+
+**Sources.** `web/src/app/[locale]/(auth)/login/page.tsx:97` and `:109` for `border-gray-300` on the
+two login fields; `web/src/app/[locale]/(auth)/register/page.tsx:161` for the register form;
+`web/src/app/[locale]/(dashboard)/admin/clan/page.tsx:30` and `:38` for an input and a textarea;
+`web/src/app/globals.css` for `--color-input: #8a8072`;
+`superpowers/specs/2026-08-02-design-system-and-screens.md:83` for `surface-container-low`, `:90` for
+`outline-variant`, `:392-395` for the two branches, and `:768` for `T-02`.
+
+**Out of scope.** The focus ring, which is `--color-ring` and moves with S-004's primary decision.
+Touch-target size (`T-03`) and form semantics (`T-13`) on the same fields: both are real and both are
+their own work. Any component extraction: this seed changes classes on the forms that exist, and
+moving them into a shared `Input` primitive is a `src/shared/ui/` decision that `web/CLAUDE.md`
+records as open.
+
+---
+
+## S-036. Give the calendar's event marker a channel other than gold
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**A 4 px gold dot is the only thing that says a day has an event.** `bg-gold-500` `#d4af37` on the
+`cream` `#fdfbf7` ground measures **2.03:1**, recomputed 2026-08-13. It carries information, so WCAG
+1.4.11 asks for 3:1, and it is the sole channel, so spec § 5 `T-06` is failed as well: "Every state
+carries text or an icon in addition to colour," verified by rendering in greyscale. In greyscale that
+dot nearly disappears.
+
+**S-003 banned gold text and left this alone on purpose.** `bg-gold-*` is legal and should stay
+legal, because spec § 2.1 keeps `gilt-decor #d4af37` for exactly this kind of ornament. The defect is
+not the colour on its own. It is that ornament is being asked to carry meaning.
+
+**End state.** A day with an event is identifiable without colour, checked by viewing the month grid
+in greyscale. Whatever marks it measures at least 3:1 against the ground behind it if it is a
+graphic, or 4.5:1 if it is text. The count of events on a day is available to a screen reader rather
+than implied by a dot, which is what `T-06` and `T-13` together ask for.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. Plus the greyscale reading `T-06` names,
+recorded with the date: a screenshot of the month grid with a CSS `grayscale(1)` filter, and a
+statement that a day with an event is still identifiable. The calendar sits behind a Supabase
+session, so say plainly whether it was reached with a real session or rendered in a component test.
+
+**Sources.** `web/src/components/events/EventCalendar.tsx:77` for the dot;
+`superpowers/specs/2026-08-02-design-system-and-screens.md:115` for `gilt-decor` being fills only,
+and `:772` for `T-06`.
+
+**Out of scope.** The rest of the events screen, and whether the calendar is the right shape at all.
+Gold as a text colour, which S-003 already made a lint error. The lunar calendar rules, which
+`docs/architecture/domain-rules.md` owns.
 
 ---
 
