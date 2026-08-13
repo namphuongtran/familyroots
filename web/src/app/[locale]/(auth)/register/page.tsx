@@ -114,7 +114,12 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-cream px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <h1 className="font-serif text-3xl text-primary-700">FamilyRoots</h1>
+          {/* `<wbr />` is load-bearing — see the note on the login page (T-04, seed S-034). */}
+          <h1 className="font-serif text-3xl text-primary-700">
+            Family
+            <wbr />
+            Roots
+          </h1>
           <p className="text-sm text-gray-500 mt-1">{t('register_subtitle')}</p>
         </div>
 

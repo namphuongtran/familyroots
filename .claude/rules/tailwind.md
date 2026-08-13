@@ -165,6 +165,46 @@ screen. The ones that most often get missed:
 
 `web/src` contains 2 `aria-*` attributes in total. There is no accessibility floor to inherit.
 
+**`T-04` is the one of the eighteen that has a test, and the test found a real defect.**
+`web/e2e/text-scale.spec.ts`, added 2026-08-13 by seed S-034, sets the viewport to 320 px, injects
+`:root { font-size: 32px }`, and asserts that `document.documentElement.scrollWidth` equals
+`clientWidth` on `/vi/login` and `/vi/register`. Four traps came out of writing it, and all four cost
+time:
+
+1. **A long unbreakable word scrolls the whole page, and no gate sees it.** `FamilyRoots` in a
+   `max-w-sm` column measured 350 px against a 256 px box, so both public pages scrolled sideways.
+   Type-check, lint, and the component suite all pass over it: jsdom has no layout engine, so only a
+   real browser measures a box. Copy the e2e shape when you add a screen, do not assume the CSS is
+   right because it reads right.
+2. **`Family<wbr />Roots` is the fix, and it looks like a typo.** `<wbr>` is a break *opportunity*:
+   the browser uses it only when the line does not fit, so the mark stays on one line at every normal
+   size, and `textContent` stays one word, so nothing a screen reader announces changes. Both
+   wordmarks carry a comment saying it is load-bearing. Do not delete it as noise, and do not replace
+   it with `break-words`, which would break inside a half.
+3. **Shrinking the type does not reach, so do not reach for it first.** `px-4` doubles with the root
+   font size too, which is why the column is 256 px. Fitting 350 px into it needs `text-xl` or
+   smaller, three steps down from `text-3xl`. Spending a line usually costs less than shrinking the
+   thing being read. A `clamp()` on `vw` is worse than either: `vw` does not grow with text zoom, so
+   it passes the measurement by opting the text out of scaling.
+4. **Do not set the scale with `documentElement.style.fontSize` in a Playwright test.** `<html>` is
+   React-owned, so writing to it before hydration finishes prints a hydration attribute mismatch in
+   the dev-server log — noise the test itself produces, which reads like an app defect. Use
+   `page.addStyleTag` with a `:root` rule. `e2e/fonts.spec.ts` still uses the inline form and still
+   emits that warning.
+
+**One on-screen wordmark is still one unbreakable word**, at
+`components/backoffice/BackofficeSidebar.tsx:35`. It sits behind a Supabase session, so nobody has
+measured it at 320 px and 200% scale. It carries `text-xs`, so it is far less likely to overflow than
+the `text-3xl` mark was, but "less likely" is not a measurement. Treat it as unverified, not as fixed.
+
+**S-034 named a third wordmark that does not exist, and its line number for the second one was one
+place off.** The seed's `Out of scope` line cites `components/layout/Sidebar.tsx:65` as a
+`FamilyRoots` wordmark and `BackofficeSidebar.tsx:33` as the other. Read on 2026-08-13:
+`Sidebar.tsx:65` holds `Gia Phả`, not `FamilyRoots`, and `grep -rn FamilyRoots src/` finds no match
+in that file at all; the backoffice mark is on line 35. Nothing in the fix rested on either number,
+which is precisely why nobody would have caught them. Grep for the string before you trust a cited
+line here.
+
 Known defect, so do not be surprised by it: `web/src/app/layout.tsx` hardcodes
 `<html lang="en">`, and `web/src/app/[locale]/layout.tsx` renders a `<div>` instead of the
 document element. That breaks `T-12`. `web/e2e/smoke.spec.ts:44` pins the current broken state

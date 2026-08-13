@@ -45,7 +45,18 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         {/* Logo / Brand */}
         <div className="text-center">
-          <h1 className="font-serif text-3xl text-primary-700">FamilyRoots</h1>
+          {/*
+            `<wbr />` is load-bearing, not a typo: `FamilyRoots` is one unbreakable
+            word, so at 320dp and 200% text scale it overflowed the `max-w-sm`
+            column and scrolled the whole page sideways (T-04, seed S-034). A break
+            opportunity is used only when the line does not fit, so the mark stays
+            on one line at every normal size, and the text content stays one word.
+          */}
+          <h1 className="font-serif text-3xl text-primary-700">
+            Family
+            <wbr />
+            Roots
+          </h1>
           <p className="text-sm text-gray-500 mt-1">{t('login_subtitle')}</p>
         </div>
 

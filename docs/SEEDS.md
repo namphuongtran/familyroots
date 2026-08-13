@@ -21,6 +21,13 @@ All four moved, and here is each one:
 - **Open, 12 to 14.** S-003, S-007, and S-034 became open. S-001 and S-002 left for `done`.
 - **Blocked, 21 to 18.** S-002, S-003, and S-007 left it. Nothing became blocked.
 
+**Re-taken again 2026-08-13, after S-034 landed: 34 seeds, 3 done, 13 open, and 18 blocked.** Two of
+the four moved:
+
+- **Done, 2 to 3.** S-034.
+- **Open, 14 to 13.** S-034 left for `done`. Nothing became open, because S-034 unblocked nothing.
+- **Seeds** stayed 34 and **blocked** stayed 18.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -50,7 +57,9 @@ chain**, and S-004, S-005, and S-006 run behind it in that order.
 200% text scale, which the seed required, found that `/vi/login` and `/vi/register` scroll
 horizontally at 320 px: the `FamilyRoots` wordmark is one unbreakable word in a `max-w-sm` column. It
 fails design spec § 5 `T-04`, it is pre-existing, and the mandated font makes it worse rather than
-causes it. The measurement is in the S-002 record and the fix is S-034.
+causes it. The measurement is in the S-002 record and the fix was S-034, **done 2026-08-13**: both
+wordmarks now carry a `<wbr>` break opportunity, so the mark spends a second line rather than the page
+scrolling, and `web/e2e/text-scale.spec.ts` holds the condition at 320 px and 200% scale.
 
 **The widest thing open is S-022, and it is one structural edit.** It moves `<html>` and `<body>`
 into the locale-aware layout. **It transitively blocks ten seeds**, every one of PR 1 and PR 2, so
@@ -196,13 +205,13 @@ graph LR
 | S-031 | Land the persons list and detail screens | blocked | S-030 |
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | blocked | S-031 |
 | S-033 | Delete the legacy persons code | blocked | S-032 |
-| S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | open | none |
+| S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
 
 **Thirteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, and S-034. Each was read on
 2026-08-13, and for each one no second decision from the maintainer stands between an agent and its
-end state. **S-001 is done**, so twelve of the thirteen are open, and S-003 and S-007 joined them by
-having their only blocker satisfied rather than by carrying `none`. **Four of the thirteen are
+end state. **S-001 and S-034 are done**, so eleven of the thirteen are open, and S-003 and S-007
+joined them by having their only blocker satisfied rather than by carrying `none`. **Four of the thirteen are
 themselves the decision**: S-011, S-013, and S-016 produce an
 ADR and nothing else, and S-020 produces seeds and register rows. Those are actionable because
 writing the decision down is the work. S-004 is the fourth decision seed and it is blocked, on
@@ -671,7 +680,7 @@ pairs are in scope. Token naming rules. Dark mode.
 
 ## S-034. Make the `FamilyRoots` wordmark survive 200% text scale at 320 px
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-13 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-13 by S-002**, which measured this while verifying the fonts and did not fix it,
 because it is layout work on a wordmark rather than font work.
@@ -726,6 +735,64 @@ every other route redirects to login without a Supabase session. A wider sweep n
 its own seed. Also out of scope: the sidebar and header wordmarks at
 `components/layout/Sidebar.tsx:65` and `components/backoffice/BackofficeSidebar.tsx:33`, which were
 not measured.
+
+**What was done, 2026-08-13. The mark keeps its size and spends a line.** The seed offered two shapes
+and left the choice open. Both `h1` bodies became `Family<wbr />Roots`, at
+`web/src/app/[locale]/(auth)/login/page.tsx:48` and `register/page.tsx:117`. `<wbr>` is a break
+**opportunity**: the browser uses it only when the line does not fit, so the mark is one line at every
+normal size and two lines only when it has to be. Nothing about the type size, the font, or the
+column changed.
+
+**Why not the fluid size, which was the other shape offered.** It does not reach. The column is
+256 px wide at this width and scale, `px-4` having doubled with the root font size, and the mark
+measures 350 px at `text-3xl`. `text-2xl` would still measure about 280 px, so it would leave the
+page scrolling; only `text-xl` or smaller would fit. Shrinking the product name to a third of the
+surrounding heading scale to satisfy a scale requirement inverts the requirement. A `clamp()` on `vw`
+was rejected for a second reason: `vw` does not grow with text zoom, so it fixes the measurement by
+opting the wordmark out of scaling at all.
+
+**Measured against a production build, 2026-08-13.** `pnpm build` then `pnpm start` on port 3210,
+Chromium via Playwright, viewport 320 px, `:root { font-size: 32px }`:
+
+| Page | Root size | Page `scrollWidth` / `clientWidth` | Wordmark `scrollWidth` / `clientWidth` | Lines |
+|---|---|---|---|---|
+| `/vi/login` | 16 px | 320 / 320 | 288 / 288 | 1 |
+| `/vi/login` | 32 px | 320 / 320 | 256 / 256 | 2 |
+| `/vi/register` | 16 px | 320 / 320 | 288 / 288 | 1 |
+| `/vi/register` | 32 px | 320 / 320 | 256 / 256 | 2 |
+
+The seed's failing figures were page 382 and wordmark 350 on both pages. `textContent` reads
+`FamilyRoots` in all four rows, so nothing a screen reader announces or a copy-paste yields changed.
+
+**Looked at in a browser, and this is what was and was not checked.** Screenshots at both scales on
+`/vi/login`: at 100% the mark is one centred line, at 200% it reads `Family` over `Roots`, centred,
+with no clipped glyph and nothing overlapping it. That is an eye on two screenshots of one page, not
+the per-release screenshot set `T-04` asks for. `/vi/register` was measured but not looked at, and no
+other route was either.
+
+**`web/e2e/text-scale.spec.ts` holds the condition**, four tests over two pages, and both Playwright
+projects run it, so eight. It asserts the page total and the wordmark box separately: the total alone
+reports that something overflows and leaves the next reader to find out what.
+
+**The negative control was run, and the test file was not touched between the two runs.** With both
+`<wbr />`s reverted by `git checkout` the eight failed, at page 382 against 320 and wordmark 350
+against 256, which are the seed's own figures. Restoring them turned all eight green.
+
+**One trap the test carries, because it cost a confusing log line.** Setting the scale with
+`documentElement.style.fontSize`, which is what `e2e/fonts.spec.ts` does, raises a React hydration
+attribute mismatch in the dev-server log: `<html>` is React-owned and the test writes to it before
+hydration finishes. The warning is produced by the test and says nothing about the app, which is
+exactly how a later reader would misread it. This spec injects a `:root` rule with
+`page.addStyleTag` instead, and the log is clean.
+
+**Left undone on purpose, and the `Out of scope` line above is wrong about it.** It names two sidebar
+wordmarks. There is one. Read 2026-08-13, `grep -rn FamilyRoots web/src/`:
+`components/layout/Sidebar.tsx:65` holds `Gia Phả` and the file contains no `FamilyRoots` anywhere,
+and the backoffice mark is at `components/backoffice/BackofficeSidebar.tsx:35` rather than `:33`. That
+one mark is still one unbreakable word, it carries `text-xs` rather than `text-3xl`, and it sits behind
+a Supabase session, so this seed could not measure it. Fixing it blind would be a change nobody has
+watched fail. The correction is also in `.claude/rules/tailwind.md` § 7, which is where the next agent
+looks.
 
 ---
 
