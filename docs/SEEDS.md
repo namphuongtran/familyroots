@@ -38,6 +38,16 @@ four moved:
   open. S-003 left for `done`. Net plus two.
 - **Blocked, 18 to 17.** S-004 left it. Nothing became blocked.
 
+**Re-taken again 2026-08-14, after S-004 landed: 37 seeds, 5 done, 16 open, and 16 blocked.** All
+four moved:
+
+- **Seeds, 36 to 37.** S-004 opened S-037, the mobile half of its own decision, the same way S-002
+  opened S-034 and S-003 opened S-035 and S-036.
+- **Done, 4 to 5.** S-004.
+- **Open, 15 to 16.** S-005 became open, because S-004 was its only blocker. S-037 arrived open.
+  S-004 left for `done`. Net plus one.
+- **Blocked, 17 to 16.** S-005 left it. Nothing became blocked.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -61,7 +71,8 @@ spec's own ordering at
 [`superpowers/specs/2026-08-02-design-system-and-screens.md`](superpowers/specs/2026-08-02-design-system-and-screens.md)
 § 2.8.1, line 400: tokens first, then fonts, "because a fallback font changes every measurement".
 They sat at the head of M0 and transitively blocked the rest of it. **S-003 is done as of 2026-08-13
-too, so S-004 is now the front of the chain**, and S-005 and S-006 run behind it in that order.
+too, and **S-004 closed on 2026-08-14 as ADR-041, so S-005 is now the front of the chain**, with
+S-006 behind it.
 
 **S-003 moved three token values and changed no pixel, and both halves of that matter.**
 `muted-foreground`, `destructive`, and `input` now clear WCAG AA, each taking the value design spec
@@ -98,13 +109,18 @@ into the locale-aware layout. **It transitively blocks ten seeds**, every one of
 nothing in M2 starts before it. Counted from the board's own `Blocked by` cells on 2026-08-13, not
 estimated: S-023 through S-027 and S-029 through S-033.
 
-**The most expensive open seed is S-004, and it is not the widest.** It repaints the product:
-`web/src/app/globals.css:16` makes primary the red `#c41e3a`, design spec § 2.1 makes primary the
-green `#3E5C38` and reserves red as a separate `heritage` family, and `bg-primary` paints things red
-across the app today. **It transitively blocks two seeds**, S-005 and S-006. So its cost is in the
-rename it forces rather than in the chain behind it, and `.claude/rules/tailwind.md` § 2 already says
-an ADR must come first. **Width and cost are different measures**, and saying so here stops a reader
-ordering the work by the wrong one.
+**The most expensive open seed is S-005, and it is not the widest.** It repaints the product. ADR-041
+decided on 2026-08-14 that primary is the green `#3E5C38`, that red becomes a four-token `heritage`
+family, and that the page ground is one value, `#FBF8F1`. S-005 carries that into `web/src`.
+**It transitively blocks one seed**, S-006. So its cost is in the rename rather than in the chain
+behind it. **Width and cost are different measures**, and saying so here stops a reader ordering the
+work by the wrong one.
+
+**A sentence that stood here until 2026-08-14 was wrong, and it is worth knowing why nobody caught
+it.** It said `bg-primary` "paints things red across the app today". Counted while closing S-004:
+`bg-primary` appears **zero** times in `web/src`. What paints red is the indexed ramp, 78 times
+across 20 files, `ring-primary-500` alone accounting for 28. The claim was plausible, cited the
+right file, and named the wrong class. Grep for the class before you size a repaint.
 
 **Read this before writing any isolation seed.** Six of the fourteen clan-owned tables carry a
 row-level security policy, measured 2026-08-13 from `backend/migrations/versions/`. Two of the eight
@@ -169,6 +185,7 @@ graph LR
   S002 --> S003[S-003 contrast AA]
   S003 --> S004[S-004 decide primary]
   S004 --> S005[S-005 rename primary]
+  S004 --> S037[S-037 mobile primary]
   S005 --> S006[S-006 dark block]
   S008[S-008 change_requests]
   S009[S-009 invitations + memberships]
@@ -209,8 +226,8 @@ graph LR
 | S-001 | Make the seventeen dead semantic colour tokens resolve | done | none |
 | S-002 | Load the two mandated typefaces and reference them | done | S-001, done |
 | S-003 | Bring the four failing colour pairs to WCAG AA | done | S-002, done |
-| S-004 | Decide the primary colour and the heritage family, in ADR-041 | open | S-003, done |
-| S-005 | Rename primary to the decided value across `web/src` | blocked | S-004 |
+| S-004 | Decide the primary colour and the heritage family, in ADR-041 | done | S-003, done |
+| S-005 | Rename primary to the decided value across `web/src` | open | S-004, done |
 | S-006 | Add the `.dark` block, and settle which dark mechanism wins | blocked | S-005 |
 | S-007 | Gate: fail the build when an `@theme` token cannot resolve | open | S-001, done |
 | S-008 | Enable clan-isolation RLS on `change_requests` | open | none |
@@ -242,6 +259,7 @@ graph LR
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
 | S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
 | S-036 | Give the calendar's event marker a channel other than gold | open | none |
+| S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -667,7 +685,33 @@ screen that composes them wrongly is that screen's own defect.
 
 ## S-004. Decide the primary colour and the heritage family, in ADR-041
 
-**Status:** open · **Blocked by:** S-003, done 2026-08-13 · **Unblocks:** S-005
+**Status:** done, 2026-08-14 · **Blocked by:** S-003, done 2026-08-13 · **Unblocks:** S-005, S-037
+
+> **Closed 2026-08-14 by
+> [`docs/decisions/041-primary-green-heritage-family-single-background.md`](decisions/041-primary-green-heritage-family-single-background.md).**
+> The four questions were answered by the maintainer that day: primary is the leaf green `#3E5C38`;
+> `heritage` becomes a four-token family; the page ground is the spec's `#FBF8F1`, so **neither** of
+> the two values this seed asked between wins; and the rename lands in one change.
+>
+> **The ADR decides a fifth thing this seed did not ask, and S-005 cannot start without it.** The
+> nine-entry `--color-primary-*` ramp is deleted rather than recoloured, because spec § 2.1
+> publishes no nine-step green and an agent told only "rename primary to green" would have to invent
+> eight values. The spec's tonal set replaces it, hover and pressed are derived by darkening (spec
+> § 4.1 line 582), and `--color-ring` becomes `#1D1B16` rather than the new primary.
+>
+> **Two claims in the body below were measured false while closing this seed.** They are left
+> standing, because a seed is a record of what was believed when it was written, and the corrections
+> are here:
+> - It says `bg-primary` "is used across the app". It is used **zero** times in `web/src`. The red
+>   comes from the indexed ramp, 78 uses across 20 files.
+> - It counts "two different values both called the background". There are **four** warm whites in
+>   play once the other client is read: `#fdfbf7`, `#f8f4ec`, the spec's `#FBF8F1`, and mobile's
+>   `#FDFCF7` at `mobile/lib/core/theme/tokens.dart:29`.
+>
+> **A third correction lands on the spec, not on this seed.** Spec § 9-J1 names two mobile theme
+> files that ADR-034 deleted; `ls` finds neither on 2026-08-14. And spec § 2.1 claims the focus ring
+> `#1D1B16` "guarantees ≥3:1 against every ground in the system, including `primary` and `heritage`
+> fills". Measured 2026-08-14: 2.29 and 2.24. The ADR keeps the decision and explains what saves it.
 
 **This is a decision seed, and it is here because the answer repaints the product.** One agent
 cannot reach the end state without the maintainer, which is the rule's own test at
@@ -728,10 +772,14 @@ animation tokens, which nothing disputes.
 
 ## S-005. Rename primary to the decided value across `web/src`
 
-**Status:** blocked · **Blocked by:** S-004 · **Unblocks:** S-006
+**Status:** open · **Blocked by:** S-004, done 2026-08-14 · **Unblocks:** S-006
 
 **Read ADR-041 first, and take the values from it rather than from the spec.** The spec is the input
-to that decision, not its record.
+to that decision, not its record. It exists as of 2026-08-14 at
+[`decisions/041-primary-green-heritage-family-single-background.md`](decisions/041-primary-green-heritage-family-single-background.md),
+and its "What seed S-005 must do" section lists the six edits with their line numbers. Two things in
+it are load-bearing and easy to skip: the ramp is **deleted**, not recoloured, and the focus ring
+ships with its 2px offset, because the ring measures 2.29:1 directly on a filled button.
 
 **End state.** Every occurrence of the old primary is gone from `web/src`, in all three of the forms
 S-004 found: the `@theme` ramp, the bare `--color-primary`, and the dead `:root` pair. `bg-primary`
@@ -1057,6 +1105,55 @@ and `:772` for `T-06`.
 **Out of scope.** The rest of the events screen, and whether the calendar is the right shape at all.
 Gold as a text colour, which S-003 already made a lint error. The lunar calendar rules, which
 `docs/architecture/domain-rules.md` owns.
+
+---
+
+## S-037. Move the mobile `ArborTokens` primary onto ADR-041's leaf green
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Created 2026-08-14 by S-004, and it is not blocked by S-005.** Both seeds read ADR-041 and neither
+reads the other. They are separate seeds rather than one because they land in different languages
+under different quality gates, and the seeds rule forbids one pull request closing two seeds unless
+they are the same change. These are not.
+
+**The two clients disagree about the primary colour, and the disagreement is newer than the spec
+says.** `mobile/lib/core/theme/tokens.dart:32` declares `primary: Color(0xFF7A5C2E)`, a bark bronze.
+ADR-041 decided on 2026-08-14 that primary is the leaf green `#3E5C38`, which binds both clients:
+the Arbor Heritage mandates bind both, per the root `CLAUDE.md`, and a design system that is true on
+one client is not one.
+
+**Do not use spec § 9-J1 as the source for what mobile holds.** It names
+`mobile/lib/app/theme/colors.dart` `#4A6741` and `mobile/lib/core/theme/app_colors.dart` `#37563B`.
+`ls` found neither file on 2026-08-14; ADR-034 deleted both in the Riverpod rebuild. The live value
+is the one in `tokens.dart`, and it is neither of those two greens.
+
+**The mobile file is smaller than the web one, and that is the whole reason this seed is cheap.**
+`tokens.dart` holds seven colours in one `ArborTokens.light()` factory, and `mobile/CLAUDE.md`
+records that `ThemeData` is built *from* the tokens, so no widget hardcodes a colour. Counted
+2026-08-14, `mobile/lib` holds seven `0xFF` literals in total, all seven in that one file.
+
+**End state.** `ArborTokens.light()` carries ADR-041's `primary` `#3E5C38` with `onPrimary`
+`#FFFFFF`. `surface` is reconciled with ADR-041's `background` `#FBF8F1` or the seed records, in its
+own text, why mobile keeps `#FDFCF7`. No `0xFF` literal exists outside `tokens.dart`. Whether
+mobile also gains the `heritage` family is this seed's call to make and to write down: no mobile
+screen renders a thủy tổ marker yet, so adding the four tokens with no consumer is defensible only
+if the seed says so.
+
+**Verification.** The mobile full quality gate, `CLAUDE.md:80`. Note the two traps that gate
+carries: `dart run build_runner build` then `git diff --exit-code`, because generated code is
+committed, and goldens are excluded from CI but **must be re-baselined locally** if any golden
+renders a primary-coloured surface. Look at the 2.0-scale image before accepting it.
+
+**Sources**, all read 2026-08-14. `mobile/lib/core/theme/tokens.dart:32` for the bronze and `:29`
+for mobile's `surface` `#FDFCF7`; `docs/decisions/041-primary-green-heritage-family-single-background.md`
+for the decision this seed carries; `superpowers/specs/2026-08-02-design-system-and-screens.md`
+§ 9-J1 for the two deleted paths, and § 2.1 for the values; `mobile/CLAUDE.md` § "UI: Arbor Heritage
+design system" for tokens being the only place a colour may live.
+
+**Out of scope.** The dark palette, spec § 2.2, on either client. Any mobile screen's composition.
+The web rename, which is S-005. Reconciling `onSurface` `#1D1B16` with web's `foreground` `#1a1a1a`,
+which ADR-041 names and deliberately leaves open.
 
 ---
 
@@ -2081,4 +2178,5 @@ been read or run, and the row that replaces it says where.
 - The four counts in the head of this file are a measurement. Re-take them by reading the board's own
   `Status` cell rather than by adding one to the previous figures, and say which of the four moved.
 - Every ADR number a seed allocates is written in that seed. 041 through 044 are taken by S-004,
-  S-011, S-013, and S-016. The next free number is 045.
+  S-011, S-013, and S-016. **041 was written on 2026-08-14 when S-004 closed**; 042 through 044 are
+  still allocations rather than files. The next free number is 045.
