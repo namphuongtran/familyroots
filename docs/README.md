@@ -9,8 +9,8 @@ Per-service developer docs live next to the code in `backend/CLAUDE.md`, `web/CL
 ```
 docs/
 ├── README.md           # this index
-├── roadmap.md          # the shape of the work: where each stream stands, what is next
-├── work-register.md    # what is in flight, queued, and knowingly unfixed
+├── roadmap.md          # the milestone order, and the reason for each boundary
+├── SEEDS.md            # the only tracker: seeds, items owed, and claims not verified
 ├── sad/                # Software Architecture Document (arc42 + C4) — start here for the big picture
 ├── architecture/       # cross-cutting design
 ├── contracts/          # public API + event contracts (one file per surface)
@@ -32,8 +32,9 @@ Before starting a task, read the docs that own the surface you're touching:
 | Genealogy business rules | [architecture/domain-rules.md](architecture/domain-rules.md) |
 | An architectural choice (or breaking change) | [decisions/README.md](decisions/README.md) — and add an ADR in the same PR |
 | Deploy / infra / incidents | [ops/README.md](ops/README.md) |
-| Picking up work, or wondering what is already in flight | [work-register.md](work-register.md) |
-| Planning: what is left overall, and what still needs a plan | [roadmap.md](roadmap.md) |
+| Picking up work: which ticket to take next | [SEEDS.md](SEEDS.md) — start at any seed whose `Blocked by` is `none` |
+| Planning: what order the milestones run in, and why | [roadmap.md](roadmap.md) |
+| How a ticket is written here | [../.claude/rules/seeds.md](../.claude/rules/seeds.md) |
 
 ## Software Architecture Document (SAD)
 
@@ -53,7 +54,7 @@ System-wide design that touches more than one service.
 - [API Design](architecture/api-design.md) — REST conventions, endpoint inventory, pagination, sparse fields, includes
 - [Data Model](architecture/data-model.md) — database schema reference
 - [RBAC](architecture/rbac.md) — clan roles, permission model, hierarchy
-- [Multi-Tenancy](architecture/multi-tenancy.md) — clan-scoped isolation (`X-Current-Clan-Id`; RLS inert pilot)
+- [Multi-Tenancy](architecture/multi-tenancy.md) — clan-scoped isolation (`X-Current-Clan-Id`; row-level security live on 6 of 14 clan-owned tables, measured 2026-08-13 — the other 8 are seeds S-008 to S-014)
 - [Auth Flow](architecture/auth-flow.md) — JWT/JWKS pipeline, email verification, authorization gates
 - [Tree Read-Model](architecture/tree-read-model.md) — computed đời, đa thê mother attribution, SQL tree functions
 - [Backend i18n](architecture/i18n.md) — locale resolution, `t()` fallback chain, key namespaces, coverage guard

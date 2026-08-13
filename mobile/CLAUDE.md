@@ -19,8 +19,8 @@ transports and a fake-async widget tester**. `Supabase.initialize` and
 `SentryFlutter.init` need platform channels and have therefore **never executed**.
 Treat login, token refresh against real Supabase, and session survival across a
 relaunch as *unverified* until that walk happens.
-[`docs/work-register.md`](../docs/work-register.md) §2.2 lists the blockers — no
-device or emulator, no credentials, no test accounts.
+[`docs/SEEDS.md`](../docs/SEEDS.md#owed-with-an-owner-and-a-trigger) holds the Task 20
+row and lists the blockers — no device or emulator, no credentials, no test accounts.
 
 Authoritative sources, in order:
 
@@ -28,7 +28,7 @@ Authoritative sources, in order:
 |---|---|
 | [`docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`](../docs/superpowers/specs/2026-08-02-mobile-architecture-design.md) | the design and its rationale (decisions D1–D9) |
 | [`docs/superpowers/plans/2026-08-02-mobile-m0-spine.md`](../docs/superpowers/plans/2026-08-02-mobile-m0-spine.md) | the 20 M0 tasks, with literal code and verified gotchas |
-| [`docs/work-register.md`](../docs/work-register.md) §2.2 | which tasks have landed, and where to resume |
+| [`docs/SEEDS.md`](../docs/SEEDS.md) | what is scheduled, what is owed, and what is not verified. The Task 20 row is in its `Owed` register |
 
 ## R1: run `build_runner` or CI will fail — read this before editing anything
 

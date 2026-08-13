@@ -6,6 +6,16 @@ FamilyRoots is a Vietnamese genealogy platform that lets clans maintain accurate
 ## Current Stage
 Growing, with strong architectural foundations and active scaffold-to-build work in selected areas (mobile modules, infra automation, and auxiliary scripts).
 
+## How Work Is Planned Here
+Work is tracked as **seeds**: one issue, sized for one agent in one sitting, carrying its own
+evidence and naming what blocks it and what it unblocks.
+
+- **Picking up work:** open docs/SEEDS.md and take any seed whose `Blocked by` is `none`.
+- **The rule itself** (what a seed is, its nine fields, where prose goes): .claude/rules/seeds.md.
+- **Milestone order and the reason for each boundary:** docs/roadmap.md. It holds no work.
+- **One pull request per seed.** Do not close two seeds in one PR unless they are the same change.
+- Work that nobody in this repo can do is an `Owed` row in docs/SEEDS.md, not a seed.
+
 ## How to Use This Second Brain
 - Before planning any feature: run /project:before-plan
 - After finishing any session: run /project:update-knowledge
@@ -81,7 +91,7 @@ When code and docs disagree, the code is the truth — fix the doc in the same P
 
 ## Known Pain Points
 - Prompt 2 TODO scaffolds remain in infra and helper scripts (mobile's were deleted by the ADR-034 rebuild).
-- Mobile M0 has never run on a device: it compiles and CI builds an APK, but Supabase/Sentry init needs platform channels, so login against real Supabase is unverified (work-register §2.2).
+- Mobile M0 has never run on a device: it compiles and CI builds an APK, but Supabase/Sentry init needs platform channels, so login against real Supabase is unverified (the Task 20 row in docs/SEEDS.md).
 - Pulumi resources are currently stubs, which can create deployment drift.
 - In-process event dispatcher lacks durable delivery guarantees.
 - Web testing harness appears less complete than backend/mobile test posture.

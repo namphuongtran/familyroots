@@ -39,9 +39,9 @@ Plus `pnpm test:component` and `pnpm depcruise` once those exist. All clean.
 Verify lint with plain `pnpm lint` — its success output is **empty**, which is easy to
 misread as a failure to run.
 
-**Never run `pnpm format`.** 112 files carry pre-existing prettier drift (work-register
-§3.2) and reformatting them buries your diff. Run `pnpm exec prettier --write` on only the
-files you created.
+**Never run `pnpm format`.** 112 files carry pre-existing prettier drift (seed S-028 in
+`docs/SEEDS.md`) and reformatting them buries your diff. Run `pnpm exec prettier --write` on
+only the files you created. This stops being true when S-028 lands.
 
 ## When a plan is wrong
 

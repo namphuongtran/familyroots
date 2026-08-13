@@ -1,133 +1,94 @@
 # Roadmap
 
-**What this is:** the one page that answers *"where do I pick up, and what is left?"*
-It holds the shape of the work. It deliberately holds no detail — every row links down
-to the document that owns it.
+**What to build first, and why.** This file holds the **milestone order** and the reason for each
+boundary. It holds no work. What is scheduled today, what is owed, and what is not verified are all
+in [`SEEDS.md`](SEEDS.md), which is the only tracker.
 
-**The three planning layers, and which file owns which question:**
+**Rewritten 2026-08-13.** It held a status board until then, alongside a second state file,
+`work-register.md`. Two places recording the same state is two places to be wrong, and both went
+stale: on 2026-08-13 this file still listed audit `ip_address`/`user_agent` as dormant work when
+`backend/app/models/audit_log.py:36-37` had already declared both columns.
+[`../.claude/rules/seeds.md`](../.claude/rules/seeds.md) is the rule that replaced that shape.
 
-| Question | File |
-|---|---|
-| What is the shape of the whole thing, and what is next? | **this file** |
-| What is in flight *right now*, and what is knowingly broken? | [work-register.md](work-register.md) |
-| How exactly do I build one thing? | `superpowers/specs/*` (the design) → `superpowers/plans/*` (the tasks) |
+**This file decides nothing, and three of the boundaries below rest on no source.** Where that is
+true it says so. A boundary marked "not verified" is the maintainer's order and is real; what is
+missing is a written reason, and writing one is a decision that would get an ADR.
 
-Keep this file coarse. When a row's detail changes, the plan changes; when a row's
-*state* changes, the work register changes. This page changes only when a stream starts,
-finishes, or is re-scoped.
+## The target
 
-Last updated: 2026-08-03 (web spine complete; mobile M0 through Task 19).
+**One real Vietnamese clan uses the web app for real data.** Chosen by the maintainer on 2026-08-13.
+Mobile M1 through M4 lands after that, and only mobile's device-walk unblock is on the critical path.
 
----
+That target is what orders the milestones below. A different target reorders them: shipping both
+clients together would put mobile M1 alongside the web slices and add store-release work, and a
+dogfood-only target would drop the polish and keep the isolation and backup work.
 
-## 1. Where each stream stands
+## The order, and what each step rests on
 
-| Stream | Planned in detail? | Done | Next action |
-|---|---|---|---|
-| **Web spine** (sub-project A, PR 0) | yes — 13 tasks | **all 13 (#144)** | complete — slices next |
-| **Web feature slices** (PR 1–7) | **no — sketched only** | — | **plan PR 1 (auth)** — carries R-lang |
-| **Mobile M0** (spine + login) | yes — 20 tasks | Tasks 1–19 | **Task 20** — device walk (owner-blocked) |
-| **Mobile M1–M4** | **no — milestones named only** | — | plan after M0 lands |
-| **Design system** (sub-project B) | specced, 15 screen groups | spec only | implement inside the slices |
-| **Backend** | no active plan | ADR-035 → ADR-039 shipped | driven by client needs + gaps |
+| Step | Because | Read |
+|---|---|---|
+| **M0** first: make the surface verifiable | "Until the semantic tokens resolve, nothing else can be verified on screen." Seventeen semantic colour tokens are dropped by the browser today, so any screen built now would be looked at twice | [design spec § 2.8.1](superpowers/specs/2026-08-02-design-system-and-screens.md), line 400 for the ordering, and [`../.claude/rules/tailwind.md`](../.claude/rules/tailwind.md) § 2 for the current count |
+| **M1** before **M2**: finish clan isolation before building screens over it | Clan isolation is the one defect that cannot ship, and the root `CLAUDE.md:29` forbids bypassing it. Eight of fourteen clan-owned tables carry no policy. A table gaining one after a slice is built changes what that slice sees | [ADR-008](decisions/008-rls-defense-in-depth.md), [`architecture/multi-tenancy.md`](architecture/multi-tenancy.md) |
+| Inside **M1**, the two privacy toggles come before any screen that shows them | A privacy control that restricts nothing is the most dangerous control in the product: the operator believes the tree is private and it is not. `clan_settings.allow_public_tree` and `privacy_level` are read by no code today | [design spec](superpowers/specs/2026-08-02-design-system-and-screens.md), the design rules it fixes for backend work; `backend/app/models/clan_settings.py:28,30` |
+| **M2** runs the web slices in the spec's own order | The sequence is already decided and dated: auth, persons, relationships, tree, events, documents, then admin. Each pull request migrates its slice **and** deletes the matching legacy code | [web architecture spec, lines 208-219](superpowers/specs/2026-08-02-web-architecture-observability-design.md) |
+| Inside **M2**, auth is first and persons is second | Auth gives every later slice a trustworthy clan context. Persons is the reference slice the other five copy, so no later slice can be planned until it lands | [web architecture spec, lines 211-212](superpowers/specs/2026-08-02-web-architecture-observability-design.md) |
+| Inside **M2**, the tree slice is last among the read slices | It is the heaviest: XYFlow plus the tree read-model plus performance on a clan of several thousand people. Scheduled once the pattern is stable | [web architecture spec, line 258](superpowers/specs/2026-08-02-web-architecture-observability-design.md) |
+| **M3**, deploy and operate, before real data arrives | **Not verified.** No source read on 2026-08-13 orders the restore drill against the first real clan. The reasoning is the maintainer's: a backup nobody has restored is not a backup | |
+| **M4**, mobile M1 through M4, after the web slices | The maintainer's decision of 2026-08-13, from the target above. **Not verified** as a technical constraint: nothing makes mobile depend on the web app | |
+| Inside **M4**, no mobile milestone is planned before the M0 device walk | M0's own definition of done is "proven on a device". Planning M1 against an unproven spine inherits its mistakes | [`SEEDS.md`](SEEDS.md#owed-with-an-owner-and-a-trigger), the Task 20 row |
 
----
+**Three of the nine rows say "not verified", and that is the finding rather than a gap in the work.**
+The order is the maintainer's and is real. The reasons behind three of its boundaries are written
+down nowhere.
 
-## 2. Tomorrow: start here
+## Where each milestone stands
 
-**Web — the spine is done (#144); the next job is *planning*, not building.** All 13 tasks
-of [`plans/2026-08-02-web-spine.md`](superpowers/plans/2026-08-02-web-spine.md) landed, so
-PR 0 is closed. PR 1 (auth) is the natural next planning job and it carries R-lang — see §3.
+No status lives here. [`SEEDS.md`](SEEDS.md) owns it, in one board. This table says only which
+milestone holds which seeds, so a reader knows where to look.
 
-**Mobile — Task 20, and it needs you, not an agent.** Tasks 1–19 are on `main`
-(#147, #148, #149, #150) and CI now builds `app-debug.apk`, so the app compiles. It has
-never *run*: there is no device or emulator on the dev machine, no Supabase credentials
-outside `.env.example`, and no real approved account. Until the plan's Task 20 step-3
-acceptance walk happens on a device, "M0 works" is unproven — everything so far is verified
-against canned transports. See [work-register.md](work-register.md) §2.2 for the exact
-blockers and the commands to run.
+| Milestone | Seeds | What it is for |
+|---|---|---|
+| **M0** Make the surface verifiable | S-001 to S-007 | The colour tokens, the fonts, contrast, the primary-colour decision, dark mode, and a gate so the class of defect cannot return |
+| **M1** Finish clan isolation and the data rules | S-008 to S-021 | Row-level security on the eight uncovered tables, the two privacy toggles, invitation expiry, a re-measurement of the dormant database-review items, and the first dated restore drill |
+| **M2** The web slices | S-022 to S-033 | Auth, then persons as the reference slice. Relationships, tree, events, documents, and admin become seeds when persons lands |
+| **M3** Deploy and operate | none yet | The Pulumi decision and the monitoring set are rows in [Owed](SEEDS.md#owed-with-an-owner-and-a-trigger), because each needs a decision or an environment first |
+| **M4** Mobile M1 to M4 | none yet | A row in [Owed](SEEDS.md#owed-with-an-owner-and-a-trigger), triggered by the M0 device walk |
 
-Both plans are executable as written: every snippet in them was compiled and run before
-it was written down, and the defects that found are recorded in each plan's *Verification
-status* section.
+**Later milestones deliberately carry no seeds.** A seed with no `Blocked by` entry claims to be
+actionable today, and that claim has to be true. Work whose trigger is not met is a register row
+instead.
 
----
+## The three shapes of blocker, and why they are tracked differently
 
-## 3. What still needs planning before it can be built
+| Shape | Where it lives | Example |
+|---|---|---|
+| Work one agent can finish | a seed in [`SEEDS.md`](SEEDS.md) | S-008, a policy on `change_requests` |
+| Work that needs a decision first | a decision seed that blocks the rest | S-004, which repaints the product |
+| Work nobody in this repository can do | an [`Owed`](SEEDS.md#owed-with-an-owner-and-a-trigger) row | Creating the Supabase avatars bucket |
 
-This is the honest gap. Two streams have a destination but no route.
+**Four owner actions block shipped code right now**, and all four are `Owed` rows with the full
+detail: the missing avatars bucket, which makes `set-avatar` return `503` in every environment; the
+unknown Supabase email-template format; `delete-branch-on-merge` being off; and the mobile M0 device
+walk. None can be done from a terminal in this repository, so none is a seed.
 
-**Web slices, PR 1–7.** The sequence is fixed in
-[`specs/2026-08-02-web-architecture-observability-design.md`](superpowers/specs/2026-08-02-web-architecture-observability-design.md) §5.1
-— auth, persons, relationships, tree, events, documents, admin — and each PR migrates its
-slice *and deletes the corresponding legacy code*. But only PR 0 (the spine) has a
-task-level plan. PR 1 is the natural next planning job, and it carries R-lang.
+## Restarting the agent team
 
-**Mobile M1–M4.** M1 persons, M2 tree, M3 events + documents, M4 push + admin. Named in
-[`specs/2026-08-02-mobile-architecture-design.md`](superpowers/specs/2026-08-02-mobile-architecture-design.md) §6,
-no task detail. Plan M1 once M0 proves the spine against the real backend at Task 20.
+Four agent definitions live in [`../.claude/agents/`](../.claude/agents/): `backend-engineer`,
+`web-engineer`, `flutter-engineer`, and `product-designer`. Each carries this project's gates, so a
+dispatch only needs to say *what*, not *how*.
 
-A stream without a plan is not ready for an implementer agent. Plan first, then build —
-the two plans that exist caught real defects precisely because writing them meant running
-the code.
+The rules for running more than one at a time are in
+[`../.claude/rules/seeds.md`](../.claude/rules/seeds.md), under "Running more than one agent at a
+time", and they are not repeated here. The shortest version: every parallel backend dispatch sets its
+own `TEST_PG_DB_NAME`, agents never push, and the gate is re-run on the combined tree.
 
----
+**Give each dispatch one seed.** That is the whole point of the shape: a seed carries its own
+evidence, its own end state, and its own verification, so a dispatch is one line plus a seed ID.
 
-## 4. Owner actions that block shipped code
+## What this file is not
 
-Full detail in [work-register.md](work-register.md) §1.2. In one line each:
-
-- **Supabase avatars bucket does not exist** → `set-avatar` returns `503` in every
-  environment right now, because ADR-036 is already merged.
-- **Supabase email-template link format unknown** → blocks the real verification flow.
-  Does *not* block mobile M0.
-- **`delete-branch-on-merge` is off** → the remote refills one PR at a time. One click.
-- **Mobile M0 cannot be signed off from the repo** → needs a device/emulator, real Supabase
-  credentials, and test accounts (approved, multi-clan, unverified). Detail in
-  [work-register.md](work-register.md) §2.2.
-
----
-
-## 5. Restarting the agent team
-
-Four reusable agent definitions live in [`.claude/agents/`](../.claude/agents/):
-`backend-engineer`, `web-engineer`, `flutter-engineer`, `product-designer`. Each carries
-this project's gates and guardrails, so a dispatch only needs to say *what*, not *how*.
-
-**Parallel backend agents must each set `TEST_PG_DB_NAME`.** The integration harness
-drops its throwaway database `WITH (FORCE)`, so two runs sharing the name drop each
-other's — it cost 182 spurious failures in one session. Since 2026-08-03 the name is an
-env var (ADR-016), which makes concurrent runs safe *provided each dispatch sets it*; two
-agents that both leave it unset still collide on the default. Give every worktree its own
-value, e.g. `TEST_PG_DB_NAME=family_roots_schema_test_backend`.
-
-The rules that made parallel work safe, learned the hard way:
-
-- **Agents never push and never open PRs.** They commit to a worktree branch and stop.
-  This caught a defect no single agent could see — two backend branches, each green
-  alone, red together.
-- **Always re-run the gate on the *combined* tree.** Per-branch green proves nothing
-  about the composition.
-- **Pre-allocate ADR numbers in the dispatch**, or every agent picks the same next free
-  number.
-- **Fence file territory** when two agents touch adjacent surfaces, and rebase them the
-  moment `main` moves underneath.
-- **Demand a negative control and re-run it yourself.** Delete the fix, watch the named
-  tests fail. Every claim verified this way held; the discipline is why they are
-  trustworthy.
-
----
-
-## 6. Beyond the current streams
-
-Not scheduled, no plan, listed so they are not forgotten:
-
-- **Backend roadmap items** from the 2026-07-02 DB review that remain dormant:
-  `clan_settings` enforcement (several knobs inert), audit `ip_address`/`user_agent`,
-  field-level visibility, edge cascade-delete on person soft-delete.
-- **Change requests beyond `person`-update** — the table already supports marriages,
-  parent-child, events and documents with no schema change (ADR-037).
-- **Notifications API** — none exists; the design spec refuses to draw a bell for it.
-- **PDF export** — deferred by ADR-020, depends on the unbuilt worker (ADR-005) and
-  Redis (ADR-004).
-- Known gaps and debt: [work-register.md](work-register.md) §3.
+- **Not a status board.** [`SEEDS.md`](SEEDS.md) is, in one place.
+- **Not a plan.** A seed holds the end state and the verification for one unit of work.
+  `superpowers/specs/` holds the designs. `superpowers/plans/` receives nothing new.
+- **Not binding.** The order above is reported, with its author named per row. Where a row disagrees
+  with the ADR or spec it cites, this file is the bug.
