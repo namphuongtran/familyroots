@@ -97,12 +97,12 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-cream px-4">
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="max-w-sm w-full text-center bg-white rounded-2xl p-8 shadow-xs border border-gray-100">
           <div className="text-4xl mb-3">OK</div>
           <h2 className="font-serif text-xl text-gray-800 mb-2">{t('register_title')}</h2>
           <p className="text-sm text-gray-500">{success}</p>
-          <Link href={`/${locale}/login`} className="mt-4 inline-flex text-sm text-primary-600 hover:underline">
+          <Link href={`/${locale}/login`} className="mt-4 inline-flex text-sm text-primary hover:underline">
             {t('login_link')}
           </Link>
         </div>
@@ -111,11 +111,11 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cream px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           {/* `<wbr />` is load-bearing — see the note on the login page (T-04, seed S-034). */}
-          <h1 className="font-serif text-3xl text-primary-700">
+          <h1 className="font-serif text-3xl text-primary">
             Family
             <wbr />
             Roots
@@ -162,7 +162,7 @@ export default function RegisterPage() {
               required
               value={fullName}
               onChange={e => setFullName(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
 
@@ -175,7 +175,7 @@ export default function RegisterPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               disabled={isOAuthMode}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
 
@@ -189,7 +189,7 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
               />
             </div>
           )}
@@ -224,7 +224,7 @@ export default function RegisterPage() {
                 value={clanId}
                 onChange={e => setClanId(e.target.value)}
                 placeholder="UUID"
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
               />
             </div>
           ) : (
@@ -235,7 +235,7 @@ export default function RegisterPage() {
                   required
                   value={clanName}
                   onChange={e => setClanName(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 />
               </div>
               <div>
@@ -244,7 +244,7 @@ export default function RegisterPage() {
                   required
                   value={clanSlug}
                   onChange={e => setClanSlug(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 />
               </div>
             </>
@@ -253,7 +253,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-2.5 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="w-full py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             {isLoading
               ? isOAuthMode
@@ -270,7 +270,7 @@ export default function RegisterPage() {
             ) : (
               <>
                 {t('have_account')}{' '}
-                <Link href={`/${locale}/login`} className="text-primary-600 hover:underline">
+                <Link href={`/${locale}/login`} className="text-primary hover:underline">
                   {t('login_link')}
                 </Link>
               </>

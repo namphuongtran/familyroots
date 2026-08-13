@@ -28,7 +28,7 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
         'relative flex flex-col items-center gap-1 p-2 rounded-xl border-2 cursor-pointer',
         'bg-white shadow-xs hover:shadow-md transition-all w-36',
         borderColor,
-        selected && 'ring-2 ring-primary-400 ring-offset-1',
+        selected && 'ring-2 ring-ring ring-offset-1',
         isDeceased && 'opacity-70',
       )}
     >

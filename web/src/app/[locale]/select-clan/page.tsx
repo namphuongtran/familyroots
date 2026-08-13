@@ -46,7 +46,7 @@ export default function SelectClanPage() {
   }, [clanMemberships, isAuthenticated, isLoading, isPendingApproval, needsOnboarding, locale, router, selectClan])
 
   return (
-    <div className="min-h-screen bg-cream px-4 py-12">
+    <div className="min-h-screen bg-background px-4 py-12">
       <div className="mx-auto max-w-xl rounded-3xl border border-gray-100 bg-white p-8 shadow-xs">
         <div className="space-y-2">
           <h1 className="font-serif text-3xl text-gray-900">Choose your clan</h1>
@@ -61,7 +61,7 @@ export default function SelectClanPage() {
               key={membership.clan_id}
               className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-4 transition-colors ${
                 selectedClanId === membership.clan_id
-                  ? 'border-primary-500 bg-primary-50'
+                  ? 'border-primary bg-primary-container'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
@@ -105,7 +105,7 @@ export default function SelectClanPage() {
                 }
               })
             }}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
           >
             {isSubmitting ? t('loading') : 'Continue'}
           </button>

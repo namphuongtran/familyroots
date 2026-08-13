@@ -37,10 +37,10 @@ Facts about the repo in this file were checked on 2026-08-13. Re-check one befor
 - Theme values go in the `@theme` block in `globals.css`. Custom utilities go in `@utility`.
 - Do not add a second `.css` file for a component. Use utility classes.
 
-## 2. The semantic colour tokens resolve, and the values are still the wrong values
+## 2. The semantic colour tokens resolve, and the values are the decided values
 
-Read this before you pick a colour class. Two different things were wrong here. One is fixed
-and one is not, and mixing them up costs a rebuild.
+Read this before you pick a colour class. Three different things were wrong here, and all
+three are now fixed. The history is kept because each fix left a trap behind.
 
 **Fixed on 2026-08-13 by seed S-001.** `globals.css` used to define seventeen semantic colours
 in `@theme` as `hsl(var(--x))` while defining those variables in `:root` as **hex strings**, for
@@ -78,10 +78,22 @@ Two rules follow, and the second one is the one that costs time:
 **These classes work now:** `bg-background`, `text-foreground`, `border-border`, `bg-card`,
 `bg-muted`, `text-muted-foreground`, `bg-popover`, `bg-accent`, `bg-secondary`,
 `text-destructive`, `bg-destructive`, `ring-ring`, `border-input`, and every `*-foreground`
-variant of the seventeen names. So do `bg-primary` and the `primary-50` to `primary-900` ramp,
-`text-primary-foreground`, `bg-cream` and `cream-50` to `cream-400`, `gold-100` to `gold-900`,
+variant of the seventeen names. So do the primary family `bg-primary`,
+`text-primary-foreground`, `bg-primary-container`, `text-primary-container-foreground` and
+their `hover:` twins `bg-primary-hover` and `bg-primary-container-hover`; the heritage family
+`bg-heritage`, `text-heritage-foreground`, `bg-heritage-container`,
+`text-heritage-container-foreground`; `cream-50` to `cream-400`, `gold-100` to `gold-900`,
 `font-serif`, `font-sans`, `font-mono`, `rounded-sm`, `rounded-md`, `rounded-lg`, and the three
 `animate-*` values. Note that § 5 forbids `rounded-sm` on design grounds even though it resolves.
+
+**Three class names that used to work are gone, and a grep will still find them in old
+branches.** Seed S-005 deleted them on 2026-08-14, per ADR-041:
+
+| Gone | Use instead |
+|---|---|
+| `primary-50` to `primary-900`, the nine-step red ramp | `primary`, `primary-container`, and the two `-hover` twins |
+| `bg-cream`, the bare token | `bg-background`. The `cream-50` to `cream-400` **ramp stays** |
+| `ring-primary-*` | `ring-ring`, and see the offset rule below |
 
 **Contrast was fixed on 2026-08-13 by seed S-003, and it is now gated.** Three token values moved,
 each to the value spec § 2.1 already names for that role:
@@ -92,9 +104,11 @@ each to the value spec § 2.1 already names for that role:
 | `destructive` | `#ef4444` | `#a32218` | 7.50, both directions | `danger` |
 | `input` | `#e5e7eb` | `#8a8072` | 3.53 | none: derived, see below |
 
-The four grounds are `card` `#ffffff`, `cream` `#fdfbf7`, `background` `#f8f4ec`, and `muted`
-`#f3f4f6`. A foreground has to clear all four, because `body` paints `cream` while the semantic
-token calls the page `background`, and that disagreement is still open as part of S-004's renaming.
+The grounds were four when S-003 measured them. **They are three since 2026-08-14**: `card`
+`#ffffff`, `background` `#fbf8f1`, and `muted` `#f3f4f6`. `cream` left the set because seed
+S-005 deleted the bare token, so `body` and the semantic token now name the same value. The
+worst ratios above were measured against the old four and did not move: `background` got
+lighter, and a lighter ground raises the ratio for dark text.
 
 Four things to know before you touch these:
 
@@ -106,34 +120,58 @@ Four things to know before you touch these:
   is the one held to 3:1. Spec § 2.8.1 F reasons the same way. Do not collapse the two values.
 - **`input` `#8a8072` is derived, not quoted.** Spec § 2.1 offers no bordered-input value because it
   specifies a filled field instead, `surface-container-low` `#F4EFE4`. Spec § 2.8.1 F allows either
-  branch, and S-003 took the darker-border branch as the smaller change. If S-005 adopts the fill,
-  this token goes away.
+  branch, and S-003 took the darker-border branch as the smaller change. **S-005 did not adopt the
+  fill**, so the token stays: ADR-041 decides `primary`, `heritage`, `background`, and `ring`, and
+  says nothing about the field. Whether the field becomes filled is still open, and S-035 is the
+  seed that would take it.
 - **`text-gold-*` is a lint error.** Gold is ornament: `gold-500` measures 2.10:1 on a white card,
   and the ramp does not clear 4.5 for text until `gold-800`. Tailwind v4 generates the text, fill,
   and border utilities from one variable, so the text scale cannot be trimmed on its own. The ban
   lives in `web/eslint.config.mjs` as `no-restricted-syntax`, matching any string literal, so
   `cn('text-gold-500')` is caught too. `bg-gold-*` and `border-gold-*` stay legal. For genuine gold
-  text, spec § 2.1 names `gilt` `#8a6a16`, and it arrives with the S-005 rename.
+  text, spec § 2.1 names `gilt` `#8a6a16`. **It did not arrive with S-005**, and the sentence here
+  that said it would was wrong: ADR-041 decides four things and the gold family is not one of them.
+  No token holds `#8a6a16` today, so there is still no legal way to draw gold text.
 
 **`web/src/app/contrast.test.ts` holds all of it in the unit gate.** It parses the hex values out of
 `globals.css` and computes 30 pairs, so a value that drops below AA fails `pnpm test:unit`. Move the
 token, never the threshold. It throws rather than skipping when a token is renamed, because a pair
 table that silently resolves to nothing passes every assertion.
 
-**Not fixed, and larger than the above.** The values still disagree with the design spec on the
-biggest one, and S-001 deliberately did not repaint anything:
+**Primary is the leaf green, since 2026-08-14.** This is the third fix, and it is the one that
+changed what is on screen. ADR-041 decided it and seed S-005 landed it in one change:
 
-- `globals.css` makes primary the red `#c41e3a`. Spec § 2.1 makes primary the green `#3E5C38`,
-  and puts red in a separate reserved family, `heritage: #A3182F`, for the thủy tổ marker and
-  giỗ. Reconciling the two is a design-system change. Write an ADR under `docs/decisions/`
-  first. That is seed S-004.
-- `--secondary` and `--secondary-foreground` had no value at all, so S-001 gave them
+- **`primary` is `#3e5c38`.** The red `#c41e3a` is gone from `web/src`. Red did not disappear
+  from the palette: it moved to `heritage` `#a3182f`, its own four-token family for the thủy tổ
+  marker, giỗ, and ancestral emphasis. `destructive` `#a32218` is a third red and a third job.
+  Three reds, three families, one digit apart in two cases. Read the token name, not the swatch.
+- **The nine-step ramp was deleted, not recoloured.** Spec § 2.1 publishes no nine-step green, so
+  a recolour meant inventing eight values. Four tokens carry every job the thirteen ramp classes
+  did: `primary`, `primary-foreground`, `primary-container`, `primary-container-foreground`.
+- **Hover is derived, never a second hex.** `--color-primary-hover` is
+  `color-mix(in oklab, var(--color-primary) 94%, black)`, which is spec § 4.1 line 582's "fill
+  darkened 6%". Tailwind v4 resolves the mix at build time and emits an sRGB fallback beside it.
+  `contrast.test.ts` asserts the derivation, because a `color-mix` is not a hex and the pair
+  table cannot measure one.
+- **The page ground is one value under one name**, `background` `#fbf8f1`, spec § 2.1's
+  `surface`. Two values used to claim the name.
+- **`--secondary` and `--secondary-foreground`** had no value at all, so S-001 gave them
   `#7a6248` and `#ffffff` from spec § 2.1's `secondary` row.
-- **No screen uses the three tokens S-003 moved.** Counted 2026-08-13 across `web/src`, excluding
-  `globals.css`: zero files reference `muted-foreground`, `bg-muted`, `bg-background`,
-  `border-input`, `ring-ring`, or any `*-destructive` class. Forms draw their own boundary with
-  `border-gray-300`, which measures 1.47:1 on white and fails WCAG 1.4.11. So S-003 changed no
-  pixel, and the screens still have to be moved onto the tokens. That is seed S-035.
+
+**The focus ring is the on-surface colour, and its offset is load-bearing.** `--color-ring` is
+`#1d1b16`, not an accent. Measured 2026-08-14: the ring is **2.29:1** drawn straight onto a
+filled `primary` button and **16.22:1** against `background`, so `focus:ring-ring` without
+`focus:ring-offset-2` is non-compliant under WCAG 1.4.11 whatever the token says. Ship the
+offset. `web/src/app/focus-ring.test.ts` fails the unit gate if a `focus:ring-ring` appears
+without one; it deliberately ignores a bare `ring-ring`, because a selection indicator is not a
+focus ring and needs no offset.
+- **The screens are half onto the tokens, and the half that is left is the accessible half.**
+  Re-counted 2026-08-14 across `web/src`, excluding `globals.css` and the tests: `bg-background`
+  in **6** files and `ring-ring` in **10**, both arriving with S-005. Still **zero** for
+  `muted-foreground`, `bg-muted`, `border-input`, and every `*-destructive` class. Forms draw
+  their own boundary with `border-gray-300` in **10** files, which measures 1.47:1 on white and
+  fails WCAG 1.4.11. So S-003 still changed no pixel, and S-035 is still the seed that moves the
+  forms.
 
 Rules that follow from this:
 
@@ -143,7 +181,15 @@ Rules that follow from this:
   `text-muted-foreground` rather than `text-gray-500`. On a form boundary use `border-input`; it is
   the only value in the file that clears 3:1.
 - A resolving token is not an approved colour. Check the value against spec § 2.1 before you
-  build a screen on it, and expect S-004 to move `primary`.
+  build a screen on it. Since ADR-041, `primary`, `heritage`, `background`, and `ring` are
+  decided, so read the ADR rather than the spec for those four: where the two differ, the ADR is
+  the record and the spec is its input.
+- **Do not read a colour off a mid-transition element.** A button carrying `transition-colors`
+  returns an interpolated value from `getComputedStyle` for the length of the transition, and
+  Chrome serializes an interpolation as `oklab(...)` rather than `rgb(...)`. Measured while
+  closing S-005: read immediately after `.hover()`, the hovered fill came back as the *original*
+  colour spelled in oklab, which reads exactly like "the hover class did nothing". Wait for the
+  transition, then read.
 
 ## 3. Dark mode is declared but not built
 
@@ -157,12 +203,18 @@ Rules that follow from this:
 So:
 
 - Do not write `dark:` classes. No `.dark` class is ever set, so they cannot work. The light
-  palette does resolve since S-001, but § 2 says its values are still the wrong values, so
-  there is nothing settled to invert yet either.
+  palette is now both resolving and settled, since S-001 and S-005, so there **is** something to
+  invert. That is the point of doing it in its own seed rather than in a component.
 - Building dark mode is a deliberate task, not a side effect of a feature. Spec § 2.2 holds
   the dark palette. Spec § 2.8 asks for `@media (prefers-color-scheme: dark)` **and**
-  `:root[data-theme="dark"]`, which contradicts the class-based variant on line 3. Settle
-  that contradiction in the ADR, not in a component.
+  `:root[data-theme="dark"]`, which contradicts the class-based variant on line 3. **ADR-041
+  did not settle that**: it says so itself, and hands the mechanism to seed S-006. So the ADR
+  that settles it is not written yet. Settle it there, not in a component.
+- **One dark surface exists already and it is hand-built**, the backoffice aside at
+  `components/backoffice/BackofficeSidebar.tsx:30`, `bg-gray-950`. It is not the dark palette
+  and S-006 should expect to replace it. Until then, a token chosen for a light ground can fail
+  on it: measured 2026-08-14, `primary` `#3e5c38` on `#030712` is **2.68:1**, which is why that
+  file's brand mark takes `primary-container` at 15.19:1 instead.
 - Components must never branch on the theme in TypeScript. The theme is a CSS concern.
 
 ## 4. Where styling code goes

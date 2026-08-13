@@ -69,12 +69,14 @@ const contrast = (a: string, b: string): number => {
 }
 
 /**
- * Every ground a screen can paint under text today. `cream` is what `body`
- * actually sets, `background` is what the semantic token says the page is, and
- * the two disagree (spec § 2.8.1 E, still open as S-004's renaming). Until that
- * resolves, a foreground has to clear both, so both are listed.
+ * Every ground a screen can paint under text today. `cream` used to be here
+ * because `body` painted it while the semantic token called the page
+ * `background`, and a foreground had to clear both. ADR-041 § 3 ended that on
+ * 2026-08-14: the page is one value under one name, `background` #fbf8f1, and
+ * the bare `--color-cream` is gone. Seed S-005 removed the fourth entry here in
+ * the same change, which is why `token('cream')` now throws.
  */
-const GROUNDS = ['card', 'cream', 'background', 'muted'] as const
+const GROUNDS = ['card', 'background', 'muted'] as const
 
 type Case = { readonly text: string; readonly on: string; readonly floor: number }
 
@@ -87,14 +89,27 @@ const CASES: readonly Case[] = [
   ...everyGround('foreground', AA_NORMAL_TEXT),
   ...everyGround('muted-foreground', AA_NORMAL_TEXT),
 
-  // Red error text, and coloured link/action text.
+  // Red error text, and coloured link/action text. `heritage` is the ceremonial
+  // red (thủy tổ, giỗ), added with the family by seed S-005.
   ...everyGround('destructive', AA_NORMAL_TEXT),
   ...everyGround('primary', AA_NORMAL_TEXT),
+  ...everyGround('heritage', AA_NORMAL_TEXT),
 
   // A label on a filled surface: the pair is fixed, so no ground sweep.
+  //
+  // `primary-container` and `heritage-container` appear only on the `on` side,
+  // and that is deliberate (ADR-041, "Two rows must not be added"). They are
+  // grounds, not boundaries. Sweeping them as foregrounds against the page
+  // measures 1.25 and 1.20 (2026-08-14), and that failure would mean nothing:
+  // WCAG 1.4.11
+  // governs boundaries and meaningful graphics, not the ground colour of a
+  // tonal card.
   { text: 'card-foreground', on: 'card', floor: AA_NORMAL_TEXT },
   { text: 'popover-foreground', on: 'popover', floor: AA_NORMAL_TEXT },
   { text: 'primary-foreground', on: 'primary', floor: AA_NORMAL_TEXT },
+  { text: 'primary-container-foreground', on: 'primary-container', floor: AA_NORMAL_TEXT },
+  { text: 'heritage-foreground', on: 'heritage', floor: AA_NORMAL_TEXT },
+  { text: 'heritage-container-foreground', on: 'heritage-container', floor: AA_NORMAL_TEXT },
   { text: 'secondary-foreground', on: 'secondary', floor: AA_NORMAL_TEXT },
   { text: 'destructive-foreground', on: 'destructive', floor: AA_NORMAL_TEXT },
   { text: 'accent-foreground', on: 'accent', floor: AA_NORMAL_TEXT },
@@ -118,5 +133,36 @@ describe('every token pair the app can compose clears WCAG AA', () => {
     // Guards the regex above. A parse that matches nothing makes every case
     // throw, but a parse that matches only the primary ramp would not.
     expect(declared.size).toBeGreaterThanOrEqual(17)
+  })
+})
+
+/**
+ * The hover fills are the one part of the palette this table cannot measure: a
+ * `color-mix` is not a hex, so `declared` never sees them. Nothing else would
+ * notice if they were deleted either — Tailwind simply stops generating
+ * `bg-primary-hover`, the class becomes inert, and the button loses its hover
+ * state silently. So the derivation is asserted here instead of the value.
+ *
+ * Spec § 4.1 line 582: hover is the fill darkened 6%. Keep these derived from
+ * the base token. A literal hex here is a second value to keep in sync, which
+ * is the defect ADR-041 § 5 was written to avoid.
+ */
+describe('the hover fills stay derived from the fill they darken', () => {
+  const derived = new Map<string, string>()
+  for (const [, name, value] of css.matchAll(
+    /--color-([a-z0-9-]+):\s*(color-mix\([^;]+\))\s*;/g,
+  )) {
+    derived.set(name, value)
+  }
+
+  it.each([
+    ['primary-hover', 'primary'],
+    ['primary-container-hover', 'primary-container'],
+  ])('%s mixes black into %s', (hover, base) => {
+    const value = derived.get(hover)
+
+    expect(value, `globals.css declares no --color-${hover}`).toBeDefined()
+    expect(value).toContain(`var(--color-${base})`)
+    expect(value).toContain('black')
   })
 })

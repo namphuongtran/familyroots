@@ -20,7 +20,7 @@ export function MemberCard({ member, className }: MemberCardProps) {
     <Link
       href={`/persons/${member.id}`}
       className={cn(
-        'flex items-center gap-3 p-3 rounded-lg border border-cream-200 hover:border-primary-300',
+        'flex items-center gap-3 p-3 rounded-lg border border-cream-200 hover:border-primary',
         'hover:shadow-xs transition-all bg-white cursor-pointer',
         className,
       )}

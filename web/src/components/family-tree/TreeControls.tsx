@@ -49,9 +49,9 @@ export function TreeControls() {
           step={1}
           value={treeMaxGenerations}
           onChange={e => setTreeMaxGenerations(Number(e.target.value))}
-          className="accent-primary-600 w-full"
+          className="accent-primary w-full"
         />
-        <div className="text-center font-semibold text-primary-700">{treeMaxGenerations}</div>
+        <div className="text-center font-semibold text-primary">{treeMaxGenerations}</div>
       </div>
     </div>
   )

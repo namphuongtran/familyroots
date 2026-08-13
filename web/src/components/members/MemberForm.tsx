@@ -76,7 +76,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
         </label>
         <input
           {...register('full_name')}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
           placeholder={t('full_name_placeholder')}
         />
         {errors.full_name && (
@@ -91,7 +91,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
         </label>
         <select
           {...register('gender')}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <option value="">{t('select_gender')}</option>
           <option value="male">{t('male')}</option>
@@ -112,7 +112,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
           <input
             type="date"
             {...register('birth_date')}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
           />
           {errors.birth_date && (
             <p className="text-xs text-red-500 mt-1">{errors.birth_date.message}</p>
@@ -135,7 +135,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
           <input
             type="date"
             {...register('death_date')}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
           />
           {errors.death_date && (
             <p className="text-xs text-red-500 mt-1">{errors.death_date.message}</p>
@@ -157,7 +157,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
           </label>
           <input
             {...register('birth_place')}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
           />
         </div>
         <div>
@@ -166,7 +166,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
           </label>
           <input
             {...register('death_place')}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
           />
         </div>
       </div>
@@ -179,7 +179,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
         <textarea
           rows={3}
           {...register('notes')}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 resize-none"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
         />
       </div>
 
@@ -197,7 +197,7 @@ export function MemberForm({ member, onSuccess, onCancel }: MemberFormProps) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="px-4 py-2 text-sm rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? t('saving') : isEdit ? t('save_changes') : t('create_member')}
         </button>

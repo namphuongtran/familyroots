@@ -78,7 +78,7 @@ export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
           <div className="flex gap-2 pt-1">
             <Link
               href={`/persons/${member.id}`}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-md bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-md bg-primary-container text-primary-container-foreground hover:bg-primary-container-hover transition-colors"
             >
               <Users className="h-3 w-3" />
               {t('view_profile')}

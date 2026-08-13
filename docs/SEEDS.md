@@ -48,6 +48,16 @@ four moved:
   S-004 left for `done`. Net plus one.
 - **Blocked, 17 to 16.** S-005 left it. Nothing became blocked.
 
+**Re-taken again 2026-08-14, after S-005 landed: 37 seeds, 6 done, 16 open, and 15 blocked.** Two of
+the four moved:
+
+- **Done, 5 to 6.** S-005.
+- **Blocked, 16 to 15.** S-006 left it, because S-005 was its only blocker.
+- **Open** stayed 16: S-006 arrived and S-005 left. **Seeds** stayed 37, because S-005 opened
+  nothing. S-034 is the only other seed that opened nothing. The reason here is that S-005 found
+  its one surprise, the backoffice dark ground, inside its own scope, so the fix went in the same
+  change rather than into a new seed.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -71,8 +81,9 @@ spec's own ordering at
 [`superpowers/specs/2026-08-02-design-system-and-screens.md`](superpowers/specs/2026-08-02-design-system-and-screens.md)
 § 2.8.1, line 400: tokens first, then fonts, "because a fallback font changes every measurement".
 They sat at the head of M0 and transitively blocked the rest of it. **S-003 is done as of 2026-08-13
-too, and **S-004 closed on 2026-08-14 as ADR-041, so S-005 is now the front of the chain**, with
-S-006 behind it.
+too, and S-004 and S-005 both closed on 2026-08-14**, the first as ADR-041 and the second as the
+rename that carried it into `web/src`. **S-006 is the front of that chain now**, and it is the last
+seed in it.
 
 **S-003 moved three token values and changed no pixel, and both halves of that matter.**
 `muted-foreground`, `destructive`, and `input` now clear WCAG AA, each taking the value design spec
@@ -109,12 +120,20 @@ into the locale-aware layout. **It transitively blocks ten seeds**, every one of
 nothing in M2 starts before it. Counted from the board's own `Blocked by` cells on 2026-08-13, not
 estimated: S-023 through S-027 and S-029 through S-033.
 
-**The most expensive open seed is S-005, and it is not the widest.** It repaints the product. ADR-041
-decided on 2026-08-14 that primary is the green `#3E5C38`, that red becomes a four-token `heritage`
-family, and that the page ground is one value, `#FBF8F1`. S-005 carries that into `web/src`.
-**It transitively blocks one seed**, S-006. So its cost is in the rename rather than in the chain
-behind it. **Width and cost are different measures**, and saying so here stops a reader ordering the
-work by the wrong one.
+**S-005 is done as of 2026-08-14, and the product is repainted.** It was the most expensive open
+seed and never the widest: it carried ADR-041 into `web/src`, replacing 78 uses of the red ramp
+across 20 files and 8 uses of `bg-cream`, and it unblocked exactly one seed, S-006. **Width and cost
+are different measures**, and saying so here stops a reader ordering the work by the wrong one.
+
+**What is on screen now, read in Chromium on 2026-08-14 rather than inferred from class names:** the
+page ground is `#fbf8f1`, the wordmark and the primary button are the leaf green `#3e5c38`, and a
+focused field draws a white 2px offset then the `#1d1b16` ring. The full record, including the four
+traps the seed hit, is under [S-005](#s-005-rename-primary-to-the-decided-value-across-websrc).
+
+**The `heritage` family ships unused, and that is deliberate.** Four tokens exist in `@theme` and no
+screen paints one, because the thủy tổ marker is a colour emoji and no giỗ surface exists yet. The
+ADR's reasoning is that deferring the family is what put red in `primary` to begin with: a marker
+with no token takes the nearest token instead.
 
 **A sentence that stood here until 2026-08-14 was wrong, and it is worth knowing why nobody caught
 it.** It said `bg-primary` "paints things red across the app today". Counted while closing S-004:
@@ -227,8 +246,8 @@ graph LR
 | S-002 | Load the two mandated typefaces and reference them | done | S-001, done |
 | S-003 | Bring the four failing colour pairs to WCAG AA | done | S-002, done |
 | S-004 | Decide the primary colour and the heritage family, in ADR-041 | done | S-003, done |
-| S-005 | Rename primary to the decided value across `web/src` | open | S-004, done |
-| S-006 | Add the `.dark` block, and settle which dark mechanism wins | blocked | S-005 |
+| S-005 | Rename primary to the decided value across `web/src` | done | S-004, done |
+| S-006 | Add the `.dark` block, and settle which dark mechanism wins | open | S-005, done |
 | S-007 | Gate: fail the build when an `@theme` token cannot resolve | open | S-001, done |
 | S-008 | Enable clan-isolation RLS on `change_requests` | open | none |
 | S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | open | none |
@@ -264,12 +283,14 @@ graph LR
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
 on 2026-08-13, and for each one no second decision from the maintainer stands between an agent and its
-end state. **S-001 and S-034 are done**, so twelve of the fourteen are open. **S-004, S-007, and
-S-035 are also open** without carrying `none`: each had its only blocker satisfied rather than never
-having one. **Four seeds are themselves the decision**: S-011, S-013, and S-016 produce an
-ADR and nothing else, and S-020 produces seeds and register rows. Those are actionable because
-writing the decision down is the work. S-004 is the fourth decision seed, and as of 2026-08-13 it is
-open rather than blocked, because S-003 landed.
+end state. **S-001 and S-034 are done**, so twelve of the fourteen are open. **S-037 is a fifteenth**,
+added 2026-08-14 by ADR-041 and carrying `none` too, so the count in the heading is the 2026-08-13
+count and not today's. **S-006, S-007, and S-035 are also open** without carrying `none`: each had its
+only blocker satisfied rather than never having one. That trio said "S-004, S-007, and S-035" until
+2026-08-14, when S-004 and S-005 both went to `done` and S-006 took the place they left. **Four seeds are themselves the
+decision**: S-011, S-013, and S-016 produce an ADR and nothing else, and S-020 produces seeds and
+register rows. Those are actionable because writing the decision down is the work. S-004 was the
+fourth decision seed and closed on 2026-08-14 as ADR-041.
 
 **Two of the fourteen carry a warning that they may split.** S-009 and S-010 each depend on which
 database role a read runs as, and if that read happens before a clan is selected then the seed
@@ -772,7 +793,65 @@ animation tokens, which nothing disputes.
 
 ## S-005. Rename primary to the decided value across `web/src`
 
-**Status:** open · **Blocked by:** S-004, done 2026-08-14 · **Unblocks:** S-006
+**Status:** done, 2026-08-14 · **Blocked by:** S-004, done 2026-08-14 · **Unblocks:** S-006
+
+> **Closed 2026-08-14. The full web gate passes, all seven commands, and the paint was read in a
+> browser rather than inferred from the class names.** Measured that day in Chromium on `/vi/login`,
+> against `next dev` on `:3100`: `body` paints `rgb(251, 248, 241)` `#fbf8f1`, the wordmark and the
+> submit button both paint `rgb(62, 92, 56)` `#3e5c38`, the button label is `#ffffff`, and focusing
+> the email field draws `rgb(255, 255, 255)` at 2px then `rgb(29, 27, 22)` `#1d1b16` at 4px, which
+> is the ring with its offset. Hovering the button settles on `oklab(0.414437 -0.0487442 0.0404288)`,
+> `#385433`, identical to a direct `color-mix(in oklab, #3e5c38 94%, black)` probe. **78 ramp uses
+> across 20 files and 8 `bg-cream` uses are gone**, re-counted after the change.
+>
+> **Four things this seed learned, each of which would have shipped a defect quietly:**
+>
+> - **A blanket rename would have broken the one dark surface.** `components/backoffice/BackofficeSidebar.tsx:30`
+>   is `bg-gray-950`, and its brand mark carried `text-primary-400`. Measured 2026-08-14 against
+>   `#030712`, which is what Tailwind v4's `gray-950` resolves to: the old red gave **6.01:1**,
+>   `primary` `#3e5c38` gives **2.68:1**, and `primary-container` `#d6e4ce` gives **15.19:1**. That
+>   mark takes `primary-container`, and the file carries the measurement. No gate can see this: the
+>   ground is a Tailwind palette colour, not a token, so `contrast.test.ts` never sweeps it.
+> - **`getComputedStyle` on a mid-transition element returns the old colour spelled in `oklab`.**
+>   Read immediately after `.hover()`, the hovered fill came back as `oklab(0.44089 …)`, which
+>   converts to exactly `#3e5c38`, the unhovered value. It reads precisely like "the hover class did
+>   nothing". Wait for `transition-colors` to finish. The trap is now in `.claude/rules/tailwind.md`
+>   § 2.
+> - **The derived hover fills are invisible to every gate this repository runs.** A `color-mix` is
+>   not a hex, so the pair table cannot parse one, and deleting the token makes Tailwind stop
+>   generating `bg-primary-hover` silently. `contrast.test.ts` now asserts the *derivation* instead:
+>   that each `-hover` token mixes black into the token it darkens.
+> - **The offset is a class, not a token, so the token gate cannot hold it.** ADR-041 requires the
+>   2px offset because the ring is 2.29:1 on a filled button. `web/src/app/focus-ring.test.ts` is
+>   new: it fails when a `focus:ring-ring` appears without `focus:ring-offset-`. It ignores a bare
+>   `ring-ring`, because a selection indicator is not a focus ring; `MemberNode.tsx` and
+>   `EventCalendar.tsx` are the two.
+>
+> **Each of the four checks was seen to fail before it was trusted.** Run 2026-08-14: `primary` moved
+> to `#8fbf85` failed 4 contrast cases; `--color-heritage-container` deleted made `token()` throw;
+> the derived hover replaced by the literal `#3a5634` failed the derivation case; and one
+> `focus:ring-offset-2` removed from `login/page.tsx:97` failed that file's row in the new gate.
+>
+> **Two claims elsewhere were measured wrong while closing this, and neither is repaired at source.**
+> ADR-041 says sweeping `primary-container` and `heritage-container` against the page measures "1.20
+> and 1.20"; recomputed 2026-08-14 they are **1.25 and 1.20**. The ADR is a dated record, so the
+> corrected pair sits in `contrast.test.ts` beside the rows it explains. And
+> `.claude/rules/tailwind.md` said `gilt` `#8a6a16` "arrives with the S-005 rename": it did not, and
+> could not, because ADR-041 does not decide the gold family. That sentence is corrected in place,
+> because a rule file is not a dated record.
+>
+> **The S-003 record above predicts the same two things, and its text is left standing.** It says
+> `gilt` "arrives with S-005" and that "if S-005 adopts the fill then `input` goes away". Neither
+> happened: ADR-041 decides `primary`, `heritage`, `background`, and `ring`, and says nothing about
+> the gold family or the filled field. `input` `#8a8072` stays, and S-035 is the seed that would
+> revisit it. A seed record is what was believed when it was written, so the correction lives here
+> rather than there.
+>
+> **What this seed did not do, though its own text allows a reader to expect it.** The `heritage`
+> family exists in `@theme` and **no screen paints it**. The end state below asks for the thủy tổ
+> marker and giỗ surfaces to use it; neither surface has a colour to move. The marker at
+> `components/family-tree/MemberNode.tsx:42` is a colour emoji, which ignores `color`, and S-003
+> already removed the dead `text-gold-500` beside it. No giỗ surface exists in `web/src` at all.
 
 **Read ADR-041 first, and take the values from it rather than from the spec.** The spec is the input
 to that decision, not its record. It exists as of 2026-08-14 at
@@ -812,7 +891,16 @@ line used to carry were wrong before S-003 touched the file**: it cited `:124` a
 
 ## S-006. Add the `.dark` block, and settle which dark mechanism wins
 
-**Status:** blocked · **Blocked by:** S-005 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-005, done 2026-08-14 · **Unblocks:** nothing yet
+
+> **Two things S-005 left on this seed's desk, both measured 2026-08-14.** First, ADR-041 did not
+> settle the mechanism contradiction and says so: this seed still owns the choice between the
+> class-based variant on `globals.css:3`, `prefers-color-scheme`, and `data-theme`. Second, one dark
+> surface already exists and it is hand-built, not the dark palette: the backoffice aside at
+> `components/backoffice/BackofficeSidebar.tsx:30` is `bg-gray-950`. `primary` `#3e5c38` measures
+> **2.68:1** on it, so its brand mark had to take `primary-container` at **15.19:1** instead. Expect
+> to replace that surface, and note that the light-palette contrast gate cannot see it, because
+> `gray-950` is a Tailwind palette colour rather than a token.
 
 **Dark mode is declared and not built.** `web/src/app/globals.css:3` declares
 `@custom-variant dark (&:is(.dark *))`, which is the class-based form. No `.dark` selector exists

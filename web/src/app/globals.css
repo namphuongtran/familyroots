@@ -3,18 +3,48 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --color-primary-50: #fff5f5;
-  --color-primary-100: #ffe3e3;
-  --color-primary-200: #ffbdbd;
-  --color-primary-300: #ff9b9b;
-  --color-primary-400: #e86060;
-  --color-primary-500: #c41e3a;
-  --color-primary-600: #a31830;
-  --color-primary-700: #8b0000;
-  --color-primary-800: #6b0000;
-  --color-primary-900: #4a0000;
-  --color-primary: #c41e3a;
+  /*
+    `primary` is the leaf green, decided by ADR-041 on 2026-08-14 and landed by
+    seed S-005. The nine-entry red ramp that stood here was deleted rather than
+    recoloured: spec § 2.1 publishes no nine-step green, so a recolour would
+    have meant inventing eight values. These four tokens carry every job the
+    thirteen ramp classes were doing. Values are spec § 2.1's, written lower
+    case to match the rest of this file.
+  */
+  --color-primary: #3e5c38;
   --color-primary-foreground: #ffffff;
+  --color-primary-container: #d6e4ce;
+  --color-primary-container-foreground: #14260f;
+
+  /*
+    Hover is derived from the fill, not a second hex. Spec § 4.1 line 582 asks
+    for the fill darkened 6% on hover and 12% on press. Tailwind v4 resolves the
+    `color-mix` at build time and emits an sRGB fallback beside it, so
+    `hover:bg-primary-hover` needs no second value to keep in sync. Do not
+    replace either line with a literal hex. There is no pressed token because no
+    component has a pressed state today; derive it the same way when one does.
+  */
+  --color-primary-hover: color-mix(in oklab, var(--color-primary) 94%, black);
+  --color-primary-container-hover: color-mix(in oklab, var(--color-primary-container) 94%, black);
+
+  /*
+    `heritage` is the ceremonial red: the thủy tổ marker, giỗ, and ancestral
+    emphasis (ADR-041 § 2, spec § 2.1). It is one digit from `destructive`
+    #a32218 and they are different families on purpose, so do not swap one for
+    the other. The spec spells the last two `on-heritage` and
+    `on-heritage-container`; this file keeps the `-foreground` suffix that the
+    other sixteen semantic tokens already use.
+
+    Nothing in `web/src` paints these yet. The thủy tổ marker at
+    `components/family-tree/MemberNode.tsx:42` is a colour emoji, which supplies
+    its own colours, and no giỗ surface exists. The family ships before a screen
+    needs it because the opposite is what put red in `primary`: a marker with no
+    token takes the nearest token instead.
+  */
+  --color-heritage: #a3182f;
+  --color-heritage-foreground: #ffffff;
+  --color-heritage-container: #f6dfe0;
+  --color-heritage-container-foreground: #4a0a14;
 
   /*
     Gold is ornament: fills, strokes, and rules only, never text. Spec § 2.1
@@ -41,7 +71,13 @@
   --color-cream-200: #efe8d8;
   --color-cream-300: #e2d5be;
   --color-cream-400: #ceb99e;
-  --color-cream: #fdfbf7;
+  /*
+    The bare `--color-cream` is gone. It held #fdfbf7 and `body` painted it,
+    while the semantic token called the page #f8f4ec, so two values were both
+    the background. ADR-041 § 3 made the page one value under one name,
+    `background` #fbf8f1, which is spec § 2.1's `surface`. The cream *ramp*
+    above stays: 17 uses across 7 files, mostly `border-cream-200`.
+  */
 
   /*
     The seventeen semantic colours hold literal values, not `hsl(var(--x))`.
@@ -61,8 +97,16 @@
   */
   --color-border: #e5e7eb;
   --color-input: #8a8072;
-  --color-ring: #c41e3a;
-  --color-background: #f8f4ec;
+  /*
+    The focus ring is the on-surface colour, not an accent (spec § 2.1,
+    ADR-041 § 5). Ship it with `ring-offset-2`, always: measured 2026-08-14, the
+    ring is 2.29:1 directly on a filled `primary` button and 16.22:1 against
+    `background`, so the offset is what makes it visible, not decoration. An
+    accent ring is worse in every direction: the old red on the new green
+    measures 1.29:1.
+  */
+  --color-ring: #1d1b16;
+  --color-background: #fbf8f1;
   --color-foreground: #1a1a1a;
 
   --color-secondary: #7a6248;
@@ -170,11 +214,15 @@
 
 @layer utilities {
   :root {
-    /* Design tokens */
-    --primary: #c41e3a;
-    --primary-foreground: #ffffff;
+    /*
+      `--primary`, `--primary-foreground`, and `--cream` were removed here by
+      seed S-005. They were a third label on values `@theme` already held, and
+      nothing read them: `--color-primary` is a literal, not an
+      `hsl(var(--primary))` indirection, so the pair had no consumer. `--gold`
+      is the same shape and is left alone only because ADR-041 does not decide
+      the gold family. Do not add a token here; `@theme` is where a colour goes.
+    */
     --gold: #d4af37;
-    --cream: #f8f4ec;
 
     /* Read by --radius-lg, --radius-md, and --radius-sm in @theme. */
     --radius: 0.5rem;
@@ -186,7 +234,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-cream font-sans text-gray-900 antialiased;
+    @apply bg-background font-sans text-gray-900 antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;

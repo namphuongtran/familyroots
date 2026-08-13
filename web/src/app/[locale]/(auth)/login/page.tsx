@@ -41,7 +41,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cream px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         {/* Logo / Brand */}
         <div className="text-center">
@@ -52,7 +52,7 @@ export default function LoginPage() {
             opportunity is used only when the line does not fit, so the mark stays
             on one line at every normal size, and the text content stays one word.
           */}
-          <h1 className="font-serif text-3xl text-primary-700">
+          <h1 className="font-serif text-3xl text-primary">
             Family
             <wbr />
             Roots
@@ -94,7 +94,7 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
 
@@ -106,21 +106,21 @@ export default function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-2.5 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="w-full py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             {isLoading ? t('signing_in') : t('sign_in')}
           </button>
 
           <p className="text-center text-xs text-gray-500">
             {t('no_account')}{' '}
-            <Link href={`/${locale}/register`} className="text-primary-600 hover:underline">
+            <Link href={`/${locale}/register`} className="text-primary hover:underline">
               {t('register_link')}
             </Link>
           </p>

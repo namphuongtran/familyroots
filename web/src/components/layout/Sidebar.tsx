@@ -62,7 +62,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center h-16 px-3 border-b border-cream-200">
         {sidebarOpen && (
-          <span className="font-serif font-bold text-primary-700 text-lg truncate ml-1">
+          <span className="font-serif font-bold text-primary text-lg truncate ml-1">
             Gia Phả
           </span>
         )}
@@ -83,7 +83,7 @@ export function Sidebar() {
       {sidebarOpen && user?.clan_name && (
         <div className="px-4 py-2 border-b border-cream-200">
           <p className="text-xs text-gray-500 uppercase tracking-wide">Dòng họ</p>
-          <p className="text-sm font-medium text-primary-700 truncate">
+          <p className="text-sm font-medium text-primary truncate">
             {user.clan_name}
           </p>
         </div>
@@ -103,7 +103,7 @@ export function Sidebar() {
               className={cn(
                 'flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary-100 text-primary-700'
+                  ? 'bg-primary-container text-primary-container-foreground'
                   : 'text-gray-600 hover:bg-cream-200 hover:text-gray-900',
               )}
             >

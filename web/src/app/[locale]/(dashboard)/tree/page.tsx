@@ -13,7 +13,7 @@ export default function TreePage() {
 
   return (
     <div className="h-[calc(100vh-5rem)] relative">
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 bg-cream/80 backdrop-blur-xs border-b border-gray-100">
+      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 bg-background/80 backdrop-blur-xs border-b border-gray-100">
         <h1 className="font-serif text-lg text-gray-800">{t('page_title')}</h1>
       </div>
 

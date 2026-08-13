@@ -30,7 +30,16 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
     <aside className="w-60 h-screen flex flex-col bg-gray-950 text-gray-100 shrink-0 fixed left-0 top-0">
       {/* Brand */}
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-gray-800">
-        <span className="text-primary-400 font-bold text-lg font-serif">FR</span>
+        {/*
+          This mark takes `primary-container`, not `primary`, and the reason is
+          the ground. This aside is `bg-gray-950`, the one dark surface in the
+          app, and it is hand-built rather than the dark palette (that is seed
+          S-006). Measured 2026-08-14 against #030712: the old `primary-400`
+          red gave 6.01:1, `primary` #3e5c38 gives 2.68:1, and
+          `primary-container` #d6e4ce gives 15.19:1. A straight rename to
+          `text-primary` would have dropped this below AA.
+        */}
+        <span className="text-primary-container font-bold text-lg font-serif">FR</span>
         <div className="leading-tight">
           <p className="text-xs font-semibold">FamilyRoots</p>
           <p className="text-[10px] text-gray-400">Backoffice</p>
@@ -49,7 +58,7 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                 active
-                  ? 'bg-primary-600 text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100',
               )}
             >

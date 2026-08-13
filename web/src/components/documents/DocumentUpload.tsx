@@ -65,7 +65,7 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
         onClick={() => inputRef.current?.click()}
         className={cn(
           'flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-8 cursor-pointer transition-colors',
-          isDragging ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-gray-300',
+          isDragging ? 'border-primary bg-primary-container' : 'border-gray-200 hover:border-gray-300',
         )}
       >
         <Upload className="h-8 w-8 text-gray-300" />
@@ -100,13 +100,13 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
               value={title}
               onChange={e => setTitle(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
           <button
             type="submit"
             disabled={uploadDocument.isPending}
-            className="w-full py-2 text-sm rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+            className="w-full py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 transition-colors"
           >
             {uploadDocument.isPending ? t('uploading') : t('upload')}
           </button>

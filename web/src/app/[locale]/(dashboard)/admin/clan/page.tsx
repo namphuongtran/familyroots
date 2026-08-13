@@ -29,7 +29,7 @@ export default function AdminClanPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('clan_name')}</label>
           <input
             {...register('name', { required: true })}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
           />
         </div>
 
@@ -38,7 +38,7 @@ export default function AdminClanPage() {
           <textarea
             rows={3}
             {...register('description')}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 resize-none"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
           />
         </div>
 
@@ -48,14 +48,14 @@ export default function AdminClanPage() {
             <input
               type="number"
               {...register('founded_year', { valueAsNumber: true })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('origin_location')}</label>
             <input
               {...register('origin_place')}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
         </div>
@@ -63,7 +63,7 @@ export default function AdminClanPage() {
         <button
           type="submit"
           disabled={isSubmitting || updateMutation.isPending}
-          className="px-4 py-2 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+          className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 transition-colors"
         >
           {isSubmitting || updateMutation.isPending ? t('saving') : t('save_changes')}
         </button>

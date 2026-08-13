@@ -67,8 +67,8 @@ export function EventCalendar() {
               className={cn(
                 'h-8 flex flex-col items-center justify-center rounded text-xs relative',
                 !isSameMonth(day, currentMonth) && 'text-gray-300',
-                isToday(day) && 'text-primary-600 font-bold',
-                isSelected && 'bg-primary-100 ring-1 ring-primary-400',
+                isToday(day) && 'text-primary font-bold',
+                isSelected && 'bg-primary-container ring-1 ring-ring',
                 !isSelected && 'hover:bg-gray-100',
               )}
             >
