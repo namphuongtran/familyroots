@@ -37,44 +37,49 @@ Facts about the repo in this file were checked on 2026-08-13. Re-check one befor
 - Theme values go in the `@theme` block in `globals.css`. Custom utilities go in `@utility`.
 - Do not add a second `.css` file for a component. Use utility classes.
 
-## 2. Most semantic colour tokens do nothing today
+## 2. The semantic colour tokens resolve, and the values are still the wrong values
 
-This is the most important thing on this page. Read it before you pick a colour class.
+Read this before you pick a colour class. Two different things were wrong here. One is fixed
+and one is not, and mixing them up costs a rebuild.
 
-`globals.css` defines seventeen semantic colours in `@theme` as `hsl(var(--x))`, on lines 36 to
-58: `accent`, `accent-foreground`, `background`, `border`, `card`, `card-foreground`,
-`destructive`, `destructive-foreground`, `foreground`, `input`, `muted`, `muted-foreground`,
-`popover`, `popover-foreground`, `ring`, `secondary`, and `secondary-foreground`. It then
-defines those variables in `:root` as **hex strings**, on lines 124 to 147, for example
-`--border: #e5e7eb`. `hsl()` takes hue, saturation, and lightness. So `hsl(#e5e7eb)` is not
-valid CSS and the browser drops the declaration. `--secondary` is never defined at all.
+**Fixed on 2026-08-13 by seed S-001.** `globals.css` used to define seventeen semantic colours
+in `@theme` as `hsl(var(--x))` while defining those variables in `:root` as **hex strings**, for
+example `--border: #e5e7eb`. `hsl()` takes hue, saturation, and lightness, so `hsl(#e5e7eb)` is
+not valid CSS and the browser dropped the whole declaration. All seventeen inherited the body
+colour instead. `--secondary` and `--secondary-foreground` were never defined at all.
 
-The design spec § 2.8.1 measured this in a real browser on 2026-08-03. It probed thirteen of
-the seventeen, and all thirteen resolved to the same inherited value. The shadcn convention
-this was copied from stores bare channels, such as `45 33% 95%`, not hex.
+The seventeen now hold literal values in `@theme` on lines 42 to 64, and the duplicate `:root`
+block is gone. Measured in Chromium on 2026-08-13, each of the seventeen resolves to exactly the
+hex the file declares. The same probe run against the previous commit returned one identical
+value for all seventeen, which is the failure signature.
 
-**Dead. Do not use these classes:** `bg-background`, `text-foreground`, `border-border`,
-`bg-card`, `bg-muted`, `text-muted-foreground`, `bg-popover`, `bg-accent`, `bg-secondary`,
-`text-destructive`, `bg-destructive`, `ring-ring`, `border-input`. Every `*-foreground` variant
-of those seventeen names is dead too, for example `text-card-foreground`.
+**These classes work now:** `bg-background`, `text-foreground`, `border-border`, `bg-card`,
+`bg-muted`, `text-muted-foreground`, `bg-popover`, `bg-accent`, `bg-secondary`,
+`text-destructive`, `bg-destructive`, `ring-ring`, `border-input`, and every `*-foreground`
+variant of the seventeen names. So do `bg-primary` and the `primary-50` to `primary-900` ramp,
+`text-primary-foreground`, `bg-cream` and `cream-50` to `cream-400`, `gold-100` to `gold-900`,
+`font-serif`, `font-sans`, `font-mono`, `rounded-sm`, `rounded-md`, `rounded-lg`, and the three
+`animate-*` values. Note that § 5 forbids `rounded-sm` on design grounds even though it resolves.
 
-**Working, because `@theme` holds a valid value and not an `hsl()` wrapper:** `bg-primary` and
-the `primary-50` to `primary-900` ramp, `text-primary-foreground`, `bg-cream` and `cream-50` to
-`cream-400`, `gold-100` to `gold-900`, `font-serif`, `font-sans`, `font-mono`, `rounded-sm`,
-`rounded-md`, `rounded-lg`, and the three `animate-*` values. Note that § 5 forbids
-`rounded-sm` on design grounds even though it resolves.
+**Not fixed, and larger than the above.** The values themselves still disagree with the design
+spec, and S-001 deliberately did not repaint anything:
+
+- `globals.css` makes primary the red `#c41e3a`. Spec § 2.1 makes primary the green `#3E5C38`,
+  and puts red in a separate reserved family, `heritage: #A3182F`, for the thủy tổ marker and
+  giỗ. Reconciling the two is a design-system change. Write an ADR under `docs/decisions/`
+  first. That is seed S-004.
+- Four colour pairs still fail WCAG AA. Spec § 2.8.1 F names them. That is seed S-003.
+- `--secondary` and `--secondary-foreground` had no value at all, so S-001 gave them
+  `#7a6248` and `#ffffff` from spec § 2.1's `secondary` row. No other token's value changed.
 
 Rules that follow from this:
 
-- Style with the working tokens plus Tailwind's own palette, for example `text-gray-900`.
-- Do not add a new token in the `hsl(var(--x))` form. Put the value straight in `@theme`.
-- Do not "fix" one dead token on its own. The two blocks disagree in a systematic way, and the
-  disagreement with the spec is larger than a naming mismatch. `globals.css` makes primary the
-  red `#c41e3a`. Spec § 2.1 makes primary the green `#3E5C38`, and puts red in a separate
-  reserved family, `heritage: #A3182F`, for the thủy tổ marker and giỗ. Reconciling the two is a
-  design-system change. Write an ADR under `docs/decisions/` first.
-- If a screen looks right today while using a dead class, it looks right by inheritance.
-  Do not read that as proof the class works.
+- **Do not add a new token in the `hsl(var(--x))` form. Put the value straight in `@theme`.**
+  This is the defect that cost seventeen tokens, and nothing in the build catches it yet.
+- Prefer the semantic token over Tailwind's own palette for new work, for example
+  `text-muted-foreground` rather than `text-gray-500`.
+- A resolving token is not an approved colour. Check the value against spec § 2.1 before you
+  build a screen on it, and expect S-004 to move `primary`.
 
 ## 3. Dark mode is declared but not built
 
@@ -87,8 +92,9 @@ Rules that follow from this:
 
 So:
 
-- Do not write `dark:` classes. They cannot work, and § 2 means there is no working light
-  palette to invert either.
+- Do not write `dark:` classes. No `.dark` class is ever set, so they cannot work. The light
+  palette does resolve since S-001, but § 2 says its values are still the wrong values, so
+  there is nothing settled to invert yet either.
 - Building dark mode is a deliberate task, not a side effect of a feature. Spec § 2.2 holds
   the dark palette. Spec § 2.8 asks for `@media (prefers-color-scheme: dark)` **and**
   `:root[data-theme="dark"]`, which contradicts the class-based variant on line 3. Settle

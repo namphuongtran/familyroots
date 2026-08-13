@@ -33,29 +33,35 @@
   --color-cream-400: #ceb99e;
   --color-cream: #fdfbf7;
 
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
+  /*
+    The seventeen semantic colours hold literal values, not `hsl(var(--x))`.
+    `hsl()` takes hue, saturation, and lightness, so `hsl(#e5e7eb)` is invalid
+    and the browser dropped the whole declaration. See `.claude/rules/tailwind.md` § 2.
+    Do not reintroduce the indirection: put the value here.
+  */
+  --color-border: #e5e7eb;
+  --color-input: #e5e7eb;
+  --color-ring: #c41e3a;
+  --color-background: #f8f4ec;
+  --color-foreground: #1a1a1a;
 
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary: #7a6248;
+  --color-secondary-foreground: #ffffff;
 
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
 
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #6b7280;
 
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent: #fef3c7;
+  --color-accent-foreground: #92400e;
 
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a1a1a;
 
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1a1a;
 
   --font-serif: Playfair Display, Noto Serif, Georgia, serif;
   --font-sans: Inter, Noto Sans Vietnamese, system-ui, sans-serif;
@@ -121,29 +127,13 @@
 
 @layer utilities {
   :root {
-    --background: #f8f4ec;
-    --foreground: #1a1a1a;
-
     /* Design tokens */
     --primary: #c41e3a;
     --primary-foreground: #ffffff;
     --gold: #d4af37;
     --cream: #f8f4ec;
 
-    /* shadcn/ui compatible tokens */
-    --card: #ffffff;
-    --card-foreground: #1a1a1a;
-    --popover: #ffffff;
-    --popover-foreground: #1a1a1a;
-    --muted: #f3f4f6;
-    --muted-foreground: #6b7280;
-    --accent: #fef3c7;
-    --accent-foreground: #92400e;
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
-    --border: #e5e7eb;
-    --input: #e5e7eb;
-    --ring: #c41e3a;
+    /* Read by --radius-lg, --radius-md, and --radius-sm in @theme. */
     --radius: 0.5rem;
   }
 }

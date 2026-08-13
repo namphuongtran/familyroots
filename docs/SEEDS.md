@@ -29,10 +29,11 @@ the critical path.
 
 ## Where the work stands
 
-**Front of the work: S-001.** Nothing on a screen can be verified until the semantic colour tokens
-resolve, which is the design spec's own ordering at
+**Front of the work: S-001, and it is done as of 2026-08-13.** Nothing on a screen could be verified
+until the semantic colour tokens resolved, which is the design spec's own ordering at
 [`superpowers/specs/2026-08-02-design-system-and-screens.md`](superpowers/specs/2026-08-02-design-system-and-screens.md)
-§ 2.8.1, line 400. It sits at the head of M0's seven seeds and transitively blocks the other six.
+§ 2.8.1, line 400. It sat at the head of M0's seven seeds and transitively blocked the other six.
+**S-002 and S-007 opened when it closed**, and the rest of M0 still runs behind S-002.
 
 **The widest thing open is S-022, and it is one structural edit.** It moves `<html>` and `<body>`
 into the locale-aware layout. **It transitively blocks ten seeds**, every one of PR 1 and PR 2, so
@@ -144,13 +145,13 @@ graph LR
 
 | ID | Title | Status | Blocked by |
 |---|---|---|---|
-| S-001 | Make the seventeen dead semantic colour tokens resolve | open | none |
-| S-002 | Load the two mandated typefaces and reference them | blocked | S-001 |
+| S-001 | Make the seventeen dead semantic colour tokens resolve | done | none |
+| S-002 | Load the two mandated typefaces and reference them | open | S-001, done |
 | S-003 | Bring the four failing colour pairs to WCAG AA | blocked | S-002 |
 | S-004 | Decide the primary colour and the heritage family, in ADR-041 | blocked | S-003 |
 | S-005 | Rename primary to the decided value across `web/src` | blocked | S-004 |
 | S-006 | Add the `.dark` block, and settle which dark mechanism wins | blocked | S-005 |
-| S-007 | Gate: fail the build when an `@theme` token cannot resolve | blocked | S-001 |
+| S-007 | Gate: fail the build when an `@theme` token cannot resolve | open | S-001, done |
 | S-008 | Enable clan-isolation RLS on `change_requests` | open | none |
 | S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | open | none |
 | S-010 | Enable clan-isolation RLS on `user_clan_roles` and `clan_settings` | open | none |
@@ -181,7 +182,8 @@ graph LR
 **Twelve seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, and S-028. Each was read on
 2026-08-13, and for each one no second decision from the maintainer stands between an agent and its
-end state. **Four of the twelve are themselves the decision**: S-011, S-013, and S-016 produce an
+end state. **S-001 is now done**, so eleven of the twelve are open, and S-002 and S-007 joined them
+by having their only blocker satisfied rather than by carrying `none`. **Four of the twelve are themselves the decision**: S-011, S-013, and S-016 produce an
 ADR and nothing else, and S-020 produces seeds and register rows. Those are actionable because
 writing the decision down is the work. S-004 is the fourth decision seed and it is blocked, on
 S-003.
@@ -203,13 +205,16 @@ then the primary rename; then dark mode last, because "a dark palette built on a
 cannot be checked". These seven seeds follow that order.
 
 **Read `.claude/rules/tailwind.md` before the spec, where the two disagree.** The rule was measured
-2026-08-13 and the spec § 2.8.1 was measured 2026-08-03. The rule is newer on two points and both
-matter here: the count of dead tokens is **seventeen** and not thirteen, and the mandated typefaces
-**are** already in the repository.
+2026-08-13 and the spec § 2.8.1 was measured 2026-08-03. The rule is newer on three points and all
+three matter here: the count of dead tokens was **seventeen** and not thirteen, the mandated
+typefaces **are** already in the repository, and S-001 closed the token defect later on 2026-08-13.
+The spec's § 2.8.1 A is a dated measurement and is left as the record of that date, so it still
+reads as if the tokens were dead. **Do not read § 2.8.1 A as current.** Its § 2.8.1 D and F, on the
+primary conflict and the contrast failures, are still true.
 
 ## S-001. Make the seventeen dead semantic colour tokens resolve
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-002, S-007
+**Status:** done, 2026-08-13 · **Blocked by:** none · **Unblocks:** S-002, S-007
 
 **The defect is systematic, not a typo, which is why this is one seed and not seventeen.**
 `web/src/app/globals.css:36-58` declares seventeen semantic colours in `@theme` in the form
@@ -218,8 +223,11 @@ strings**, for example `--border: #e5e7eb`. `hsl()` takes hue, saturation, and l
 `hsl(#e5e7eb)` is invalid CSS and the browser drops the whole declaration. The shadcn convention
 this was copied from stores bare channels such as `45 33% 95%`, not hex.
 
-**One of the seventeen is worse than dead.** `--secondary` is never defined anywhere in the file, so
-`--color-secondary: hsl(var(--secondary))` at `:42` resolves against nothing.
+**Two of the seventeen are worse than dead.** Neither `--secondary` nor `--secondary-foreground` is
+defined anywhere in the file, so `--color-secondary` at `:42` and `--color-secondary-foreground` at
+`:43` both resolve against nothing. This seed said "one" when it was written, and the count was
+corrected on 2026-08-13 by reading `:root` at `globals.css:124-147` at the parent commit `53f121d`:
+it defines fifteen of the seventeen, and both `secondary` names are missing.
 
 **The count is seventeen and two sources say thirteen.** `.claude/rules/tailwind.md` § 2 counted
 seventeen on 2026-08-13 and names them. Design spec § 2.8.1 A says thirteen, because it probed
@@ -229,15 +237,64 @@ the spec missed are `*-foreground` variants, which is exactly where a partial fi
 unreadable on a repaired background.
 
 **End state.** All seventeen names in `@theme` hold a value the browser accepts, and probing each
-one in Chromium returns **seventeen different computed values**. The spec gives the probe at
+one in Chromium returns **exactly the value the file declares for that name**, with the seventeen
+no longer collapsing to one identical value. The spec gives the probe at
 `design-system-and-screens.md:405-409`: set `color: hsl(var(--<name>))` on an element and read
 `getComputedStyle`. All of them returning one identical value is the signature of the current
 failure. `--secondary` either gains a value or the token is deleted, and the seed says which.
 
+**This end state said "seventeen different computed values" and that was not reachable.** Counted
+from `globals.css:124-147` at the parent commit `53f121d`, the fifteen defined tokens hold only ten
+distinct hex values: `#ffffff` is shared by `card`, `popover`, and `destructive-foreground`;
+`#1a1a1a` by `foreground`, `card-foreground`, and `popover-foreground`; `#e5e7eb` by `border` and
+`input`. Seventeen distinct results would therefore require repainting, which this seed's own
+**Out of scope** forbids. The corrected assertion above is what the spec's probe was actually for,
+and it is stronger: it pins each token to its own declared value rather than only counting them.
+
 **Verification.** The full web gate in `web/CLAUDE.md`. Plus the browser probe above, re-run, with
 the seventeen computed values recorded in the commit message. **The gate does not check this**: no
 command in it reads a computed colour, so the probe is the evidence and the gate is only proof
-nothing else broke.
+nothing else broke. **Run the probe against the parent commit as a negative control**, and record
+that it returns one identical value for all seventeen.
+
+**What was done, 2026-08-13.** The `hsl(var(--x))` indirection was removed rather than repaired:
+each of the seventeen now carries its hex literal directly in `@theme`, and the duplicate `:root`
+block was deleted. Converting the hex values to the bare HSL channels shadcn expects was rejected,
+because rounding to HSL changes the value and this seed may not change a value.
+`.claude/rules/tailwind.md` § 2 already told a new token to put its value straight in `@theme`, so
+this makes the existing seventeen follow the rule the repository had already written.
+
+`--secondary` **gained a value**, and so did `--secondary-foreground`: `#7a6248` and `#ffffff`,
+taken from the `secondary` row of design spec § 2.1 at `design-system-and-screens.md:101`. Deleting
+the two tokens was the alternative. Adopting the spec value was chosen because the spec is the named
+authority for this file, no source file uses `bg-secondary` today so nothing changes on screen, and
+S-004 will need the token to exist. `#ffffff` on `#7a6248` computes to 5.72:1, which clears WCAG AA
+for normal text, so this adds no work to S-003. No other token's value changed.
+
+**Measured 2026-08-13**, Chromium via Playwright, `next dev` on `127.0.0.1:3210`, page `/vi/login`:
+
+| Token | Computed | Token | Computed |
+|---|---|---|---|
+| `border` | `rgb(229, 231, 235)` | `accent` | `rgb(254, 243, 199)` |
+| `input` | `rgb(229, 231, 235)` | `accent-foreground` | `rgb(146, 64, 14)` |
+| `ring` | `rgb(196, 30, 58)` | `destructive` | `rgb(239, 68, 68)` |
+| `background` | `rgb(248, 244, 236)` | `destructive-foreground` | `rgb(255, 255, 255)` |
+| `foreground` | `rgb(26, 26, 26)` | `popover` | `rgb(255, 255, 255)` |
+| `secondary` | `rgb(122, 98, 72)` | `popover-foreground` | `rgb(26, 26, 26)` |
+| `secondary-foreground` | `rgb(255, 255, 255)` | `card` | `rgb(255, 255, 255)` |
+| `muted` | `rgb(243, 244, 246)` | `card-foreground` | `rgb(26, 26, 26)` |
+| `muted-foreground` | `rgb(107, 114, 128)` | | |
+
+Eleven distinct values across the seventeen, which matches the eleven the file declares. The
+negative control was run on the same server with the fix stashed: all seventeen returned
+`lab(8.11897 0.811279 -12.254)`, the inherited body colour, and the probe exited non-zero.
+
+**What was checked in a browser, and what was not.** Only `/vi/login` was opened. Every other route
+redirects to it without a Supabase session, so no dashboard, tree, or member screen was seen. On
+`/vi/login`, full-page screenshots before and after the change are byte-identical
+(SHA-256 `a812e073d8f9…`), and the four elements that paint a border kept the same computed
+`border-color`, because each sets its own `border-gray-*` class. That matters because
+`* { @apply border-border }` at `globals.css:143` was dead and is now live.
 
 **Sources.** `web/src/app/globals.css:36-58` for the `@theme` block, `:42` for `--secondary`,
 `:124-147` for the `:root` hex values; `.claude/rules/tailwind.md` § 2 for the count of seventeen
@@ -252,7 +309,7 @@ it resolve: this seed makes the existing intent work, and repainting is a decisi
 
 ## S-002. Load the two mandated typefaces and reference them
 
-**Status:** blocked · **Blocked by:** S-001 · **Unblocks:** S-003
+**Status:** open · **Blocked by:** S-001, done 2026-08-13 · **Unblocks:** S-003
 
 **Three separate font defects, and the app renders in none of the fonts anyone chose.**
 
@@ -456,12 +513,17 @@ theme in TypeScript, which `.claude/rules/tailwind.md` § 3 forbids outright.
 
 ## S-007. Gate: fail the build when an `@theme` token cannot resolve
 
-**Status:** blocked · **Blocked by:** S-001 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-001, done 2026-08-13 · **Unblocks:** nothing yet
 
 **Seventeen dead tokens survived every gate this repository runs, and that is the finding.** On
 2026-08-13 `pnpm type-check`, `pnpm lint`, `pnpm depcruise`, and `pnpm build` all pass over
 `globals.css` as it stands. CSS that the browser drops is not a build error. So the class of defect
 is invisible, and S-001 fixes the instance while this seed closes the class.
+
+**S-001 left you a working probe to start from.** Its commit message carries the script: Playwright
+against `next dev`, injecting one `<span class="text-<name>">` per token and reading
+`getComputedStyle`. It needs one temporary source file so Tailwind generates the utilities, which is
+the part this seed has to make permanent rather than throwaway.
 
 **Blocked by S-001 and not the reverse, deliberately.** A gate landed first would be red on arrival,
 and a red gate gets disabled.
@@ -476,7 +538,7 @@ runs it in the `build-and-test` job.
 A gate that has never been seen to fail pins nothing.
 
 **Sources.** `.github/workflows/web-ci.yml` for the job list; `web/CLAUDE.md`, "Testing", for the
-four existing harnesses; `web/src/app/globals.css:36-58` for the defect to plant;
+four existing harnesses; `web/src/app/globals.css:42-64` for the defect to plant;
 `superpowers/specs/2026-08-02-design-system-and-screens.md:405-409` for the probe, which is the most
 likely mechanism.
 
