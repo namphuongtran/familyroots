@@ -46,10 +46,12 @@
 | [042](042-identity-claims-app-layer-isolation-system-session-lockout.md) | `identity_claims` Keeps Application-Layer Clan Isolation, and Its RLS Policy Denies the Request Role | Accepted (2026-08-22, seed S-011) — decision only; seed S-012 implements it |
 | [043](043-audit-notification-rls-posture.md) | `audit_logs` Is Inside RLS Layer 2 with Per-Command Policies, `notification_log` Takes the Template Unchanged | Accepted (2026-08-22, seed S-013) — decision only; seed S-014 implements it |
 | [045](045-dark-mode-prefers-color-scheme-only.md) | Dark Mode Switches on `prefers-color-scheme` Alone, and the Dark Palette Is a Token Override | Accepted, shipped (2026-08-21, seed S-006) |
+| [047](047-rls-seam-sets-clan-id-only.md) | The RLS Seam Sets `app.clan_id` Only, and ADR-008's `app.user_id` Clause Is Corrected by Dated Amendment | Accepted (2026-08-22, seed S-040) — decision only; amends ADR-008 § 2, no code change |
 
 **044 and 046 are allocated and not written.** Seed S-016 carries 044 and seed S-039 carries 046,
 both in [`../SEEDS.md`](../SEEDS.md). The gap is deliberate, so that four agents picking work at
-once cannot pick the same number. The next free number is **047**.
+once cannot pick the same number. The next free number is **048**, which is what
+[`../SEEDS.md`](../SEEDS.md) has said since 2026-08-22; 047 was taken by seed S-040 on that day.
 
 > **This paragraph is a merge point, so re-read it rather than editing it from memory.** It was
 > resolved by hand on 2026-08-22 after seeds S-011 and S-013 ran in parallel and each narrowed the

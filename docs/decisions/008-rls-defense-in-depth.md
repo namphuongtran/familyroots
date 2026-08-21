@@ -153,6 +153,21 @@ Implement it as follows (incrementally, pilot-first):
    `request.jwt.claims`/`auth.uid()` which require Supabase's `auth` schema.
    `SET LOCAL` is transaction-scoped, so it is pgbouncer-safe and cannot leak
    across pooled clients.
+
+   > **Amended 2026-08-22 by [ADR-047](047-rls-seam-sets-clan-id-only.md), seed S-040 — read
+   > this clause as `SET LOCAL app.clan_id = …` alone.** The `app.user_id` half was never
+   > built and is not going to be. The shipped seam sets `SET LOCAL ROLE` plus `app.clan_id`
+   > and nothing else (`backend/app/core/rls.py:63-65`), `get_current_clan_id` re-applies the
+   > same single GUC mid-request (`backend/app/core/security.py:290`), and every policy in the
+   > tree reads `app.clan_id` only: `grep -rho "current_setting('[^']*'"
+   > backend/migrations/versions/*.py | sort | uniq -c` returned `6 current_setting('app.clan_id'`
+   > and nothing else on 2026-08-22, while `grep -rn "app\.user_id" backend/ --include='*.py'`
+   > returned nothing the same day. **The rest of § 2 stands unchanged**: app-specific GUCs
+   > rather than Supabase-native `request.jwt.claims`/`auth.uid()`, and `SET LOCAL`'s
+   > transaction scope, are both shipped and both still the reason for this clause. The
+   > original sentence is left in place on purpose, because this file is a dated record of what
+   > was decided in 2026-06 and ADR-047 § 2 explains why erasing it would be the worse defect.
+   > ADR-047 also lists the five things a later seed must show before adding `app.user_id`.
 3. **Default-deny.** Policies treat an unset GUC as no access
    (`nullif(current_setting('app.clan_id', true), '')::uuid` → NULL → zero rows),
    so a code path that forgets to set context fails **closed**, never open.
@@ -188,5 +203,7 @@ Harder:
 ## Related
 - [ADR-002: Single Schema Clan-Scoped Multitenancy](002-clan-scoped-multitenancy.md)
 - [ADR-038: `persons` RLS — Fix the RETURNING/`persons_sel` Collision in the ORM, Not in the Policy](038-persons-returning-vs-membership-rls.md) — amends Phase 4
+- [ADR-047: The RLS Seam Sets `app.clan_id` Only](047-rls-seam-sets-clan-id-only.md) — amends
+  Decision § 2 (2026-08-22, seed S-040); the `app.user_id` GUC was never built and is not added
 - Backend production-hardening effort: application-layer isolation (SP-2B) is the
   primary mechanism; this RLS layer is SP-3C.
