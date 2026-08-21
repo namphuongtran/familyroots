@@ -23,7 +23,7 @@ Separate-schema multi-tenancy was considered and rejected:
 - **Breaks Supabase connection pooling** — PgBouncer and Supabase's built-in pooler don't work well with `SET search_path` switching per request.
 - **Alembic becomes painful** — Running migrations across N schemas requires custom `env.py` logic, per-schema migration tracking, and slow sequential execution.
 - **Infra complexity** — Tenant provisioner, per-tenant storage buckets, schema creation scripts — all unnecessary.
-- **RLS is purpose-built as a future layer-2** — Row Level Security can enforce isolation at the database engine level as defense-in-depth behind the application layer (planned; ADR-008), without the operational cost of separate schemas.
+- **RLS is purpose-built as layer 2** — Row Level Security enforces isolation at the database engine level as defense-in-depth behind the application layer (ADR-008), without the operational cost of separate schemas. This line said "a **future** layer-2 … (planned)" until 2026-08-22, four migrations after the first policy shipped, while the paragraph at the top of this file already listed seven covered tables. It is a reason to choose one schema, and the reason held; what went stale was the tense.
 
 ## Schema layout
 

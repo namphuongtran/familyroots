@@ -70,6 +70,28 @@ of the four moved:
 - **Blocked** stayed 15, because S-006 unblocked nothing. It was the last seed in the M0 palette
   chain, and the two seeds it opened are actionable today.
 
+**Re-taken again 2026-08-22, after four seeds landed in one parallel batch: 42 seeds, 11 done, 17
+open, and 14 blocked.** Three of the four moved, and this is the first entry here covering more
+than one seed:
+
+- **Seeds, 39 to 42.** S-040, S-041, and S-042 arrived. All three came out of the batch rather than
+  out of planning: two agents found the same class of thing, which is a claim in a document that
+  the code contradicts.
+- **Done, 7 to 11.** S-007, S-008, S-011, and S-013, run in parallel in four worktrees.
+- **Open stayed 17**, and the stillness hides four movements that cancel. The four seeds left for
+  `done`, minus four. S-012 and S-014 became open, because S-011 and S-013 were their only
+  blockers, plus two. S-040 and S-041 arrived open, plus two. S-042 arrived `blocked`, so it is
+  not counted here.
+- **Blocked, 15 to 14.** S-012 and S-014 left it, minus two. S-042 arrived blocked by S-041, plus
+  one. Net minus one.
+
+**One thing this batch proved, and it is worth more than the four seeds.** Per-branch green
+proved nothing about the composition, exactly as `.claude/rules/seeds.md` warns. The two
+documentation seeds each edited `docs/decisions/README.md` to narrow the same sentence, and git
+could not merge them. That conflict was resolved by hand on the integration branch, and the
+sentence now carries a note saying it is a merge point. The fence that failed was mine: both
+agents were told to add their own row to that index, which guarantees both touch it.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -260,14 +282,14 @@ graph LR
 | S-004 | Decide the primary colour and the heritage family, in ADR-041 | done | S-003, done |
 | S-005 | Rename primary to the decided value across `web/src` | done | S-004, done |
 | S-006 | Add the `.dark` block, and settle which dark mechanism wins | done | S-005, done |
-| S-007 | Gate: fail the build when an `@theme` token cannot resolve | open | S-001, done |
-| S-008 | Enable clan-isolation RLS on `change_requests` | open | none |
+| S-007 | Gate: fail the build when an `@theme` token cannot resolve | done | S-001, done |
+| S-008 | Enable clan-isolation RLS on `change_requests` | done | none |
 | S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | open | none |
 | S-010 | Enable clan-isolation RLS on `user_clan_roles` and `clan_settings` | open | none |
-| S-011 | Decide the policy shape for `identity_claims`, which has no `clan_id`, in ADR-042 | open | none |
-| S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | blocked | S-011 |
-| S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | open | none |
-| S-014 | Enable RLS on the two tables S-013 decides for | blocked | S-013 |
+| S-011 | Decide the policy shape for `identity_claims`, which has no `clan_id`, in ADR-042 | done | none |
+| S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | open | S-011, done |
+| S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
+| S-014 | Enable RLS on the two tables S-013 decides for | open | S-013, done |
 | S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008, S-009, S-010, S-012, S-014 |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
 | S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
@@ -293,6 +315,9 @@ graph LR
 | S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | open | none |
 | S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | open | S-006, done |
 | S-039 | Decide what the backoffice aside is made of, in ADR-046 | open | S-006, done |
+| S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | open | none |
+| S-041 | Make the web e2e gate supply its own environment | open | none |
+| S-042 | Make the missing-Supabase banner survive 200% text scale at 320 px | blocked | S-041 |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -1034,7 +1059,51 @@ theme in TypeScript, which `.claude/rules/tailwind.md` § 3 forbids outright.
 
 ## S-007. Gate: fail the build when an `@theme` token cannot resolve
 
-**Status:** open · **Blocked by:** S-001, done 2026-08-13 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-001, done 2026-08-13 · **Unblocks:** nothing yet
+
+> **Closed 2026-08-22. The full web gate passes, all seven commands, and the gate was watched
+> failing four separate ways before it was believed.** `web/src/app/theme-tokens.test.ts` is new
+> and holds **171 cases**. `pnpm test:unit` went from 157 to **328** in 12 files.
+>
+> **Mechanism 2 was taken, and mechanism 1 was rejected for a reason worth keeping.** The check
+> reads `globals.css`, generates one utility candidate per declared token, feeds them to Tailwind
+> through `@source inline(...)` with `source(none)`, and asserts on the emitted CSS. Parsing the
+> `@theme` source, which is what `contrast.test.ts` does, only judges the text an author typed: it
+> cannot see a token that never reaches the build, cannot see what Lightning CSS did to a value on
+> the way out, and cannot see an invalid value that is still a literal.
+>
+> **No probe file lands in `web/src`, and that is what removes the ambiguity the seed warns
+> about.** The candidate list is built in memory, so every token is referenced by construction.
+> Once that is true, absence from the build means the build dropped it, and no longer means "no
+> class asks for it yet". That distinction is the whole reason this seed could not use the S-001
+> browser probe. Compile cost is about 25 ms and the unit gate still finishes under 400 ms.
+>
+> **`.github/workflows/web-ci.yml` gained a comment and no step.** `pnpm test:unit` in
+> `build-and-test` already runs the check; a second step would run the same 328 cases twice. The
+> comment names the three stylesheet gates that live inside that step and nowhere else, because a
+> gate hidden inside another command is a gate the next reader deletes by accident.
+>
+> **Four planted defects, each run and reverted 2026-08-22, and a fifth for the namespace guard:**
+> `--color-input: hsl(var(--input))`, the exact S-001 shape, 4 failed; the same with `--input`
+> restored beside it so the value is a literal that is still not a colour, 4 failed; the same
+> defect in the **dark** scope, proving the second palette is gated too, 9 failed; and `bg-input`
+> dropped from the candidate list, which is what "no class asks for it yet" looks like, 2 failed.
+> Adding `--spacing-huge: 99px` makes the whole file refuse to collect rather than silently
+> covering four namespaces out of five. Every plant was on the shipped stylesheet.
+>
+> **Re-planted by the coordinator on the merged tree, 2026-08-22**, because per-branch green
+> proves nothing about the composition. `--color-input: hsl(var(--input))` turned **two** gates
+> red at once, which is the shape you want: S-003's pair table threw on the renamed token, and
+> S-007's new check named it and said why. Restored to 328 passing.
+>
+> **One finding that is not this seed's, and it changes how you read a green e2e run.**
+> `pnpm test:e2e` fails 4 of 36 in a workspace with no `web/.env.local`, and it is **not** a
+> regression: the same 4 fail on bare `a955248`. Without the two Supabase variables the app
+> renders a "Supabase environment is not configured" banner, and the unbreakable
+> `NEXT_PUBLIC_SUPABASE_URL` string inside it measures `scrollWidth` 504 in a 190 px paragraph, so
+> `text-scale.spec.ts` fails on both public routes in both projects. `web/.env.local` is
+> **untracked**, confirmed with `git ls-files`. So the gate's result depends on a file git does
+> not carry, and the banner does not hold `T-04`. Those are **S-041** and **S-042**.
 
 **Seventeen dead tokens survived every gate this repository runs, and that is the finding.** On
 2026-08-13 `pnpm type-check`, `pnpm lint`, `pnpm depcruise`, and `pnpm build` all pass over
@@ -1464,6 +1533,143 @@ scale — a real open item, and a different one. A theme switch.
 
 ---
 
+## S-040. Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**A document and the code disagree about the shape of the RLS seam, and the document is the one an
+agent reads first.** Found 2026-08-22 by S-011, re-read at source by the coordinator the same day.
+
+`docs/decisions/008-rls-defense-in-depth.md:150` describes the seam as setting
+`SET LOCAL app.clan_id = …` **and** `SET LOCAL app.user_id = …`.
+`backend/app/core/rls.py:63-65` sets `SET LOCAL ROLE` and `app.clan_id`, and nothing else.
+`grep -rn "app.user_id" backend/ --include='*.py'` returns nothing. **The code is the truth**, so
+either the ADR line is wrong or the GUC is missing.
+
+**Line numbers in this seed will move.** S-008 added seventeen lines to that ADR on 2026-08-22, and
+the same claim was at `:135` before that. Grep for `app.user_id`, do not trust the number.
+
+**This is not tidying, and that is why it is a seed rather than a one-line doc fix.** A user-keyed
+policy is the one shape that could have served `GET /m/claims`, which resolves no clan
+(ADR-042 § the routes section). S-011 rejected RLS for `identity_claims` partly because that GUC
+does not exist. So the answer changes what a later seed can build, and it therefore contains a
+decision: correct the ADR to match the shipped seam, or add `app.user_id` to `rls.py` and say what
+reads it.
+
+**End state.** `docs/decisions/047-*.md` exists and chooses one. If the choice is to add the GUC,
+the ADR names at least one policy that would read it and says which seed builds that; adding a
+setting nothing reads is the dead-token defect in another form. If the choice is to correct
+ADR-008, the correction lands as a dated amendment rather than a silent rewrite, because an ADR is
+a dated record. Either way `.claude/rules/` gains nothing: this belongs in the ADR. The ADR number
+is **047**, allocated here.
+
+**Verification.** If the choice is documentation only, say so plainly and run no gate. If the GUC
+is added, the backend full quality gate at `CLAUDE.md:76`, plus a test that reads the setting back
+inside a real `RlsSession` transaction and a negative control showing it absent outside one. Set
+your own `TEST_PG_DB_NAME`.
+
+**Sources.** `docs/decisions/008-rls-defense-in-depth.md:150`, read 2026-08-22;
+`backend/app/core/rls.py:63-65`; the empty `grep` above;
+`docs/decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md` for why the
+absent GUC mattered to a real decision.
+
+**Out of scope.** Any new policy. `identity_claims`, which is S-012. The absent
+`SYSTEM_DATABASE_URL` that ADR-008 Decision § 1 also promises and that the shipped design dropped
+on purpose: ADR-043 records that one, and it is a different disagreement.
+
+---
+
+## S-041. Make the web e2e gate supply its own environment
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-042
+
+**The web e2e result depends on a file git does not carry, so two people running the same gate on
+the same commit get different answers.** Found 2026-08-22 by the S-007 agent, reproduced by the
+coordinator the same day.
+
+- `web/.env.local` is **untracked**. `git ls-files web/.env.local` returns nothing.
+- It exists in the primary checkout and is absent in every `git worktree`.
+- With it, `pnpm test:e2e` reports **36 passed**. Without it, **4 of 36 fail**, and the same 4 fail
+  on bare `a955248`, so it is not a regression.
+- The cause is the missing-Supabase banner. Without `NEXT_PUBLIC_SUPABASE_URL` and
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` the app renders `missing_supabase_config_title`
+  (`web/messages/en.json:176`), and `text-scale.spec.ts` then measures
+  `documentElement.scrollWidth` 569 against `clientWidth` 320 on both public routes in both
+  projects.
+- CI sets the two variables on the e2e job, so CI never sees it.
+
+**Why this is worth a seed and not a note.** `web/CLAUDE.md` names the seven-command gate as the
+thing that decides whether work is done, and four of its cases currently answer a question about
+the runner's filesystem rather than about the code. Every seed that touches `web/` reports that
+gate. A gate whose result depends on an untracked file cannot be cited, and it has already produced
+two contradictory-looking measurements in one day.
+
+**End state.** `pnpm test:e2e` gives the same result on a fresh clone, in a `git worktree`, and in
+CI, with no `web/.env.local` present. The values live somewhere git carries, and they are obvious
+placeholders rather than anything that could be mistaken for a credential. `playwright.config.ts`
+already owns the `webServer` block, which is the natural place. `web/CLAUDE.md` records what the
+gate now guarantees.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. Plus the control that defines this seed:
+run `pnpm test:e2e` in a **fresh `git worktree` with no `web/.env.local`** and get the same count
+as in the primary checkout. Move the file aside in the primary checkout and confirm the same. A run
+that only passes where the file already exists proves nothing.
+
+**Sources.** `git ls-files web/.env.local`, empty, 2026-08-22; `web/playwright.config.ts:24-33` for
+the `webServer` block; `web/src/lib/supabase/config.ts:2-5` for the two variables and the guard;
+`web/messages/en.json:176` for the banner copy; `web/.env.example` for the names;
+`.github/workflows/web-ci.yml` for what CI supplies today; `web/e2e/text-scale.spec.ts` for the
+cases that fail.
+
+**Out of scope.** The banner's own text-scale defect, which is **S-042** and which this seed must
+not hide by accident: supplying the variables makes the banner stop rendering, and a defect that
+stops being rendered is not a defect that is fixed. Real Supabase credentials. Any test that needs
+a live backend.
+
+---
+
+## S-042. Make the missing-Supabase banner survive 200% text scale at 320 px
+
+**Status:** blocked · **Blocked by:** S-041 · **Unblocks:** nothing yet
+
+**A `T-04` failure exists on a real screen and no gate can currently see it.** The missing-Supabase
+banner renders only when the two `NEXT_PUBLIC_SUPABASE_*` variables are absent. CI always supplies
+them, so the banner never renders there, and the defect has never been in front of a gate.
+
+Measured 2026-08-22 by the S-007 agent, at 320 px width and 200% root font size: the unbreakable
+string `NEXT_PUBLIC_SUPABASE_URL` inside the banner measures `scrollWidth` 504 in a 190 px
+paragraph, and the page total is 569 against a 320 px client width. That is the same defect shape
+S-034 fixed on the `FamilyRoots` wordmark: one long unbreakable token in a narrow column scrolls
+the whole page sideways.
+
+**Blocked by S-041, and the direction is worth stating because it looks backwards.** S-041 makes
+the e2e run supply the variables, which makes the banner **stop** rendering. So S-041 must land
+first and establish a deterministic baseline; then this seed adds a case that deliberately removes
+the variables for one spec, which is the only way the banner can be measured by a gate at all.
+Doing this one first would produce a fix nothing watches.
+
+**End state.** With both Supabase variables unset, `/vi/login` and `/vi/register` produce no
+horizontal page scroll at 320 px and 200% root font size, and the banner still names both missing
+variables so it stays useful to whoever hit it. A spec case renders the banner on purpose and
+asserts `scrollWidth === clientWidth`. It is watched failing before the fix is believed.
+
+**Read `.claude/rules/tailwind.md` § 7 before choosing the fix.** It records the four traps S-034
+paid for, including that `<wbr>` is the working shape and that shrinking the type does not reach,
+because horizontal padding doubles with the root font size too.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, plus the new spec case, plus the negative
+control: revert the wrapping fix, watch that case fail, restore it.
+
+**Sources.** The measurements above, all 2026-08-22; `web/messages/en.json:176` for the banner
+copy; `web/src/lib/supabase/config.ts:2-5` for the guard that renders it;
+`web/e2e/text-scale.spec.ts` for the harness to extend; `.claude/rules/tailwind.md` § 7 for the
+`T-04` traps; spec § 5 `T-04` for the requirement.
+
+**Out of scope.** Whether the banner should exist at all. The other seventeen accessibility
+requirements. Making the app work without Supabase.
+
+---
+
 ## M1. Finish clan isolation, and settle the data rules
 
 **Six of fourteen clan-owned tables carry a policy, measured 2026-08-13.** Read from
@@ -1491,7 +1697,46 @@ discipline.
 
 ## S-008. Enable clan-isolation RLS on `change_requests`
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-015
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-015
+
+> **Closed 2026-08-22. The backend full quality gate passes, the migration is reversible in both
+> directions, and the policy was read back out of `pg_policies` rather than assumed.** Migration
+> `030_rls_change_requests` enables RLS and creates one policy `change_requests_clan_isolation`
+> with the 027 predicate on both `USING` and `WITH CHECK`. Read back after upgrade: `cmd = ALL`,
+> and `qual` and `with_check` are both
+> `(clan_id = (NULLIF(current_setting('app.clan_id'::text, true), ''::text))::uuid)`.
+>
+> **Seven integration tests, all against real Postgres through `RlsSession` at the database
+> layer.** Two-sided reads, a targeted read by id in both directions, a cross-clan INSERT
+> rejected, an UPDATE that reassigns a row to another clan rejected, a cross-clan review UPDATE
+> touching no row (checked with a privileged read, so the policy cannot hide its own damage),
+> default-deny with the GUC unset, and an ORM insert with `RETURNING`.
+>
+> **The planted inversion, run 2026-08-22 with the predicate set to `true`:** six of the seven
+> failed, `DID NOT RAISE DBAPIError` and `assert [UUID(...)] == []`. The seventh,
+> `test_orm_insert_with_returning_succeeds`, correctly stayed green: a policy that protects
+> nothing still admits its own insert. The agent said so rather than trimming the test.
+>
+> **Gate, with `TEST_PG_DB_NAME=familyroots_test_s008`:** 1247 passed, `ruff check` "All checks
+> passed!", `ruff format --check` 448 files, mypy clean on 415 files, `lint-imports` 6 kept 0
+> broken. Migration drilled `upgrade` then `downgrade` then `upgrade` on a throwaway database.
+> **Re-run on the merged tree** with `TEST_PG_DB_NAME=familyroots_test_combined`: 1247 passed, and
+> `alembic heads` shows a single head, `030_rls_change_requests`.
+>
+> **The ADR-038 `RETURNING` trap does not bite here, and that was checked rather than reasoned.**
+> One permissive `ALL` policy means the predicate that accepted the INSERT also admits the row it
+> returns. On `persons` the same trap was invisible until a test drove a real write through an
+> `RlsSession`.
+>
+> **`backend/CLAUDE.md` was stale by four phases** and is fixed in the same commit. It claimed RLS
+> was "Phase-1 active for `documents`" while phases 2 to 4 shipped on 2026-07-25. That is the file
+> an agent reads first.
+>
+> **A warning for S-009, from the agent that did this one.** `change_requests` needed no bypass
+> and no decision, and it is the only one of the remainder like that: both its handlers are wired
+> on `get_db`, and no system session, scheduler, or unauthenticated path reads it.
+> `clan_invitations` is read by the unauthenticated accept-by-token path, which is exactly the
+> split-into-a-decision case S-009's own body warns about. Do not assume the template fits.
 
 **The simplest of the group, and the template fits without a decision.**
 `backend/app/models/change_request.py:19` declares `clan_id` as a non-optional
@@ -1590,7 +1835,45 @@ assignment surfaces. The platform-admin role, which is not clan-scoped.
 
 ## S-011. Decide the policy shape for `identity_claims`, which has no `clan_id`, in ADR-042
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-012
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-012
+
+> **Closed 2026-08-22 by ADR-042. No gate applies: the change is one Markdown file and one index
+> row, and that is stated here rather than left blank.**
+>
+> **The third option won: the application layer stays the only clan isolation on this table.** Not
+> because it is cheapest, but because RLS cannot deliver isolation here at all. Both claim handlers
+> are wired on `get_system_db` (`backend/app/infrastructure/dependencies.py:144`, `:149`), which
+> keeps the privileged connection, so any policy added today is inert. `GET /m/claims` and
+> `DELETE /m/claims/{id}` depend only on `require_active_user`, which resolves no clan. And
+> `POST /persons/{id}/claim` runs under the **claimant's** active clan, not the person's, so a
+> clan-keyed policy would reject the insert the feature exists to perform.
+>
+> **A deny-all policy ships with it, and the ADR refuses to call it a second layer.**
+> `identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`. It catches a
+> mis-wired session. It does not catch a missing filter on the right session, and the ADR says so
+> in those words.
+>
+> **What it gives up, in the ADR's own terms.** This table has one isolation layer where six
+> covered tables have two. A future read path that forgets `created_by_clan_id` leaks one clan's
+> claims to another clan's admin: user id, person id, and both note fields.
+>
+> **The constraint the seed flagged is what a clan-keyed policy would actually break, and not in
+> the way the seed expected.** The one-pending-claim index survives, because integrity checks
+> bypass RLS. What breaks is `has_pending_claims`: it would go blind to another clan's pending
+> claim, so the clean `409` becomes an integrity error at flush. The invariant would hold and stop
+> being **checkable where the product checks it**.
+>
+> **This seed's own text carried a predicate that cannot be written, and it is corrected in place
+> below.** Option A said `person_id IN (SELECT id FROM persons WHERE clan_id = <setting>)`.
+> **`persons` has no `clan_id` column.** Verified 2026-08-22: `backend/app/models/person.py:38`
+> declares the nullable `created_by_clan_id`, and `backend/migrations/versions/029_rls_persons.py:45-48`
+> reaches a clan through an `EXISTS` over `clan_memberships`. A seed is not a dated record the way
+> an ADR is, so the line is fixed rather than annotated.
+>
+> **S-012 now has seven named obligations**, listed in ADR-042. The one most likely to be missed:
+> split the coverage guard at `backend/tests/integration/test_rls_activation.py:180-187` so
+> `identity_claims` is enumerated as **request-role-denied** rather than counted as covered. A
+> deny-all policy passes a "has at least one policy" check and means nothing by it.
 
 **This is a decision seed, and the reason is a missing column.**
 `backend/app/models/identity_claim.py` declares `user_id` at `:27` and `person_id` at `:32` and no
@@ -1602,7 +1885,7 @@ one chosen.
 
 | Option | Cost |
 |---|---|
-| A subquery policy: `person_id IN (SELECT id FROM persons WHERE clan_id = <setting>)` | It runs per row, and `persons` itself carries a policy from migration 029, so the interaction has to be reasoned about rather than assumed |
+| A subquery policy over `persons` | **Corrected 2026-08-22 by S-011.** This row used to read `person_id IN (SELECT id FROM persons WHERE clan_id = <setting>)`. **`persons` has no `clan_id` column**: `backend/app/models/person.py:38` declares the nullable `created_by_clan_id`, and `backend/migrations/versions/029_rls_persons.py:45-48` reaches a clan through `EXISTS (SELECT 1 FROM clan_memberships m WHERE m.person_id = persons.id AND m.clan_id = <setting>)`. So the real form nests that `EXISTS`, it runs per row, and it meets the `persons` policy rather than avoiding it |
 | Add a denormalized `clan_id` to `identity_claims` | A schema change, a backfill, and a new invariant keeping it equal to the person's clan |
 | Leave the table to the application layer | Honest, and it means clan isolation on this table has one layer where every other clan-owned table has two |
 
@@ -1655,7 +1938,50 @@ Plus the planted inversion.
 
 ## S-013. Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-014
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-014
+
+> **Closed 2026-08-22 by ADR-043. No gate applies: one Markdown file and one index row.**
+>
+> **The general answer, and it is the sentence to carry forward: the reader decides membership of
+> layer 2, not the writer.** The writer's privilege only decides the shape of the policy. Both
+> tables are inside layer 2, by two different shapes:
+>
+> | Table | Shape |
+> |---|---|
+> | `notification_log` | the 027 template unchanged. `clan_id` is `NOT NULL` and its only accessor is the scheduler, which bypasses, so the template is correct and free |
+> | `audit_logs` | per command: `SELECT` on `clan_id = GUC`, `INSERT` with `WITH CHECK (true)`, and **no** `UPDATE` or `DELETE` policy |
+>
+> **NULL-`clan_id` audit rows are retained, never filtered at write, invisible to every clan under
+> the request role, and fully visible to the platform-admin surface.** `NULL = anything` is NULL,
+> so the SELECT predicate hides them with no special case. ADR-030 is untouched because
+> `get_audit_log` runs on `get_system_db`, which never issues `SET LOCAL ROLE`. The ADR explicitly
+> rejects `USING (clan_id = GUC OR clan_id IS NULL)`, which is the predicate a reader reaches for
+> on seeing "nullable on purpose" and which would make every platform action readable by every
+> clan.
+>
+> **This seed's premise was half wrong, and the ADR records that rather than working around it.**
+> S-013 said "both tables are written by privileged paths, not by request handlers". True for
+> `notification_log`. **False for `audit_logs`**, where most rows are written by the non-bypass
+> request role `familyroots_app`, measured 2026-08-22 at thirteen `Depends(get_db)` sites in
+> `backend/app/infrastructure/dependencies.py`. The premise is corrected in the body below.
+>
+> **"Privileged" here does not mean a second credential.** `grep -rn SYSTEM_DATABASE_URL backend/`
+> returns nothing. ADR-008 Decision § 1 promises one; the shipped design dropped it. It means the
+> login role with no `SET LOCAL ROLE` applied.
+>
+> **The single thing most likely to make S-014 fail in a way no unit test sees.** The ADR-038
+> `RETURNING` collision is live on `audit_logs` today: `eager_defaults` resolves to true for this
+> mapper and `created_at` carries a `server_default`, so every ORM insert appends
+> `RETURNING created_at` and Postgres matches the returned row against the SELECT policy. Adding
+> `audit_logs_sel` without `__mapper_args__ = {"eager_defaults": False}` **in the same commit**
+> would reject exactly the writes the permissive INSERT policy was shaped to allow. Verified
+> 2026-08-22 that `backend/app/models/person.py:33` is still the only `__mapper_args__` in
+> `backend/app/`, and that `backend/app/models/audit_log.py:39` carries the server default.
+>
+> **Three routes write audit rows with no clan GUC at all:** `POST /api/v1/auth/register`, which
+> is fully unauthenticated, `POST /api/v1/auth/onboard`, and
+> `POST /api/v1/invitations/{token}/accept`. That is why the INSERT policy is permissive rather
+> than clan-keyed.
 
 **This is a decision seed, and both tables break the template for a different reason each.**
 
@@ -1665,9 +1991,14 @@ Plus the planted inversion.
 whose clan was deleted. That is not a bug in the predicate; it is the wrong predicate for this
 table. ADR-030 owns the platform audit surface and ADR-009 owns clan-deletion restriction.
 
-**Both tables are written by privileged paths, not by request handlers.**
-`backend/app/infrastructure/event_dispatcher.py:87` writes `audit_logs` from the dispatcher, and the
-anniversary scheduler writes `notification_log` across clans. `027_rls_events_branches.py:1-10`
+**Both tables are written by privileged paths, not by request handlers. Half of that is wrong, and
+S-013 measured it on 2026-08-22 rather than inheriting it.** It holds for `notification_log`, which
+the anniversary scheduler writes across clans on a bare session with no RLS seam. It does **not**
+hold for `audit_logs`: `backend/app/infrastructure/event_dispatcher.py:87` writes it, but thirteen
+of the fifteen dispatcher sites in `backend/app/infrastructure/dependencies.py` sit under
+`Depends(get_db)`, which is the non-bypass request role `familyroots_app`. Most audit rows are
+written by the request role. ADR-043 is the record; this paragraph is kept only so the correction
+has something to point at. `027_rls_events_branches.py:1-10`
 records that the cross-clan scheduler reads through a privileged session with no seam, so it already
 scans all clans. A policy that assumes a request role will either break those paths or protect
 nothing, depending on which role they run as.
@@ -1740,6 +2071,14 @@ repository calls clan-owned has row-level security disabled or carries no policy
 clan-owned tables lives in one place the check reads, so adding a table is a deliberate act rather
 than an omission. The check names the offending table in its output. It is watched failing: drop one
 policy, see the named failure, restore it.
+
+**"Carries a policy" is not enough, and this line was added 2026-08-22 after S-011 landed.**
+ADR-042 gives `identity_claims` a deny-all policy, `FOR ALL USING (false) WITH CHECK (false)`, which
+is a tripwire rather than isolation. A check that only asks "is there at least one policy" passes
+that table and **means nothing by it**, which is the same silent pass this seed exists to stop. So
+the list the check reads has to record, per table, which posture is expected: clan-keyed, deny-all,
+or per-command as ADR-043 gives `audit_logs`. A table whose posture does not match its recorded one
+fails. Read ADR-042 and ADR-043 before writing the list; each names the obligation it puts here.
 
 **Verification.** The backend full quality gate. Plus the planted-defect run above. Plus a run
 against a tree with a **new** clan-owned table added and no policy, which is the case the check
@@ -2484,7 +2823,10 @@ been read or run, and the row that replaces it says where.
   same change that creates the seed replacing it.
 - The four counts in the head of this file are a measurement. Re-take them by reading the board's own
   `Status` cell rather than by adding one to the previous figures, and say which of the four moved.
-- Every ADR number a seed allocates is written in that seed. 041 through 046 are taken by S-004,
-  S-011, S-013, S-016, S-006, and S-039, in that order. **041 was written on 2026-08-14 when S-004
-  closed, and 045 on 2026-08-21 when S-006 closed**; 042 through 044 and 046 are still allocations
-  rather than files. The next free number is **047**.
+- Every ADR number a seed allocates is written in that seed. 041 through 047 are taken by S-004,
+  S-011, S-013, S-016, S-006, S-039, and S-040, in that order. **Written so far: 041 on 2026-08-14
+  by S-004, 045 on 2026-08-21 by S-006, and 042 and 043 on 2026-08-22 by S-011 and S-013.** 044,
+  046, and 047 are still allocations rather than files. The next free number is **048**.
+- **`docs/decisions/README.md` is not the authority on which numbers are taken.** It said 046 was
+  free on 2026-08-21 while this file had already given 046 to S-039. A seed allocates its number in
+  its own text, so this file wins and the index is the bug. That index now carries a note saying so.
