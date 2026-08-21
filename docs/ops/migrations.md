@@ -51,7 +51,7 @@ Single linear chain:
 `023_one_founder_per_clan` → `024_kinship_exclude_divorced` →
 `025_audit_logs_created_at_index` → `026_rls_activation_grants` →
 `027_rls_events_branches` → `028_rls_edges` →
-`029_rls_persons` → `030_rls_change_requests`.
+`029_rls_persons` → `030_rls_change_requests` → `031_rls_clan_memberships`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -65,6 +65,12 @@ ADR-008); grants only, no table/RLS change, reversible.
 
 `030_rls_change_requests` enables the clan-isolation RLS policy on `change_requests` (SP-3 Phase 5, S-008); reversible (drop policy + disable).
 
+`031_rls_clan_memberships` enables the clan-isolation RLS policy on `clan_memberships`
+(SP-3 Phase 6, S-009); reversible (drop policy + disable). `clan_invitations`, the other
+table S-009 named, is deliberately left uncovered — the accept-by-token path has no clan
+context, so a policy there locks every invitee out; see `data-model.md` and
+`backend/tests/integration/test_invitation_accept_no_clan_context.py`.
+
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
@@ -72,7 +78,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `030_rls_change_requests`; verify with `cd backend && uv run alembic history`.
+Head = `031_rls_clan_memberships`; verify with `cd backend && uv run alembic history`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

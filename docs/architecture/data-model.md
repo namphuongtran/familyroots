@@ -494,6 +494,23 @@ M:N link between persons and clans. Determines which persons appear in which cla
 > is deprecated as a display source, ADR-012); it is not kept in sync with the
 > computed value.
 
+> ✅ **RLS (2026-08-22, migration `031_rls_clan_memberships`, ADR-008 Phase 6, seed S-009).**
+> The explicit `clan_id` predicate in every repository that joins this table stays the
+> primary guarantee, and `clan_memberships_clan_isolation` is now the layer-2 backstop
+> behind it: `clan_id = <app.clan_id GUC>` on both USING and WITH CHECK. A shared person
+> (member of two clans) therefore has one visible membership row per clan, not two.
+> Note the composition with `persons_sel` (migration `029_rls_persons`), whose predicate
+> is an `EXISTS` over this table: the two predicates are the same clan equality, so the
+> nesting is a no-op. Pinned by
+> `backend/tests/integration/test_rls_phase6_clan_memberships.py`.
+
+> ⛔ **`clan_invitations` is deliberately NOT RLS-enabled**, although seed S-009 named it
+> alongside this table. `POST /invitations/{token}/accept` has no clan context — the
+> invitee is not a member yet — but runs on the RLS request session, so the policy would
+> make `get_by_token` return zero rows and every accept answer `invitation.not_found`.
+> Covering it needs a decision about which session the accept path runs on, and an ADR.
+> Pinned by `backend/tests/integration/test_invitation_accept_no_clan_context.py`.
+
 ### `marriages`
 Global edge linking two persons. Supports polygamy, divorce, remarriage.
 
