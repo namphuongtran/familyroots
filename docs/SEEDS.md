@@ -58,6 +58,18 @@ the four moved:
   its one surprise, the backoffice dark ground, inside its own scope, so the fix went in the same
   change rather than into a new seed.
 
+**Re-taken again 2026-08-21, after S-006 landed: 39 seeds, 7 done, 17 open, and 15 blocked.** Three
+of the four moved:
+
+- **Seeds, 37 to 39.** S-006 opened S-038 and S-039 while verifying its own work, the same way
+  S-002 opened S-034 and S-003 opened S-035 and S-036. Both are what S-006 found once the palette
+  was real: the app has 393 hardcoded palette utilities that no token override can reach, and the
+  one hand-built dark surface now needs a role the spec does not publish.
+- **Done, 6 to 7.** S-006.
+- **Open, 16 to 17.** S-038 and S-039 arrived open. S-006 left for `done`. Net plus one.
+- **Blocked** stayed 15, because S-006 unblocked nothing. It was the last seed in the M0 palette
+  chain, and the two seeds it opened are actionable today.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -247,7 +259,7 @@ graph LR
 | S-003 | Bring the four failing colour pairs to WCAG AA | done | S-002, done |
 | S-004 | Decide the primary colour and the heritage family, in ADR-041 | done | S-003, done |
 | S-005 | Rename primary to the decided value across `web/src` | done | S-004, done |
-| S-006 | Add the `.dark` block, and settle which dark mechanism wins | open | S-005, done |
+| S-006 | Add the `.dark` block, and settle which dark mechanism wins | done | S-005, done |
 | S-007 | Gate: fail the build when an `@theme` token cannot resolve | open | S-001, done |
 | S-008 | Enable clan-isolation RLS on `change_requests` | open | none |
 | S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | open | none |
@@ -279,6 +291,8 @@ graph LR
 | S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
 | S-036 | Give the calendar's event marker a channel other than gold | open | none |
 | S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | open | none |
+| S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | open | S-006, done |
+| S-039 | Decide what the backoffice aside is made of, in ADR-046 | open | S-006, done |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -891,7 +905,89 @@ line used to carry were wrong before S-003 touched the file**: it cited `:124` a
 
 ## S-006. Add the `.dark` block, and settle which dark mechanism wins
 
-**Status:** open · **Blocked by:** S-005, done 2026-08-14 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-21 · **Blocked by:** S-005, done 2026-08-14 · **Unblocks:** S-038, S-039
+
+> **Closed 2026-08-21. The full web gate passes, all seven commands, and the flip was measured in a
+> real browser rather than inferred from the stylesheet.** ADR-045 is the decision this seed owed.
+> **The mechanism is `prefers-color-scheme`, alone**, and the class-based variant on
+> `globals.css:3` is deleted: the Tailwind v4 default `dark:` variant *is* the media query, so
+> deleting the override makes the default the decision, and palette and variant switch on one
+> signal. `data-theme` was never added. The reason the choice was one-sided rather than a matter of
+> taste: a class and an attribute are both inert until something sets the marker, that something is
+> a theme switch, and a switch is out of this seed's scope. Either would have shipped thirty
+> declarations of CSS that never activate on any device.
+>
+> **Twenty-five tokens are overridden** — the seventeen semantic names plus the `primary` and
+> `heritage` families — in one unlayered `@media` block. `contrast.test.ts` runs its whole pair
+> table twice, once per scope: **157 unit tests, up from 119, zero failures.** Worst dark ratio
+> 6.07:1 against the 4.5 floor and 6.07:1 against the 3 floor. `e2e/dark-theme.spec.ts` is new and
+> holds `body` on `/vi/login` and `/vi/register` under both emulated schemes; e2e is now 36 tests
+> in 4 files, up from 24 in 3.
+>
+> **The seed's own verification line asked for something that does not work, and this is the
+> substitution.** It asked for "the S-001 probe run twice, once light and once dark, returning
+> seventeen distinct values each time". That probe was withdrawn on 2026-08-13 for the reason
+> recorded under S-007: Tailwind v4 omits an `@theme` variable no class references, so fifteen of
+> the seventeen return the inherited colour on a healthy tree and a probe cannot tell that from a
+> dropped declaration. **The probe was not run.** What replaced it is the source-level table run
+> per scope, which is strictly stronger for "does the token resolve", plus a browser assertion on
+> a real screen for the one question a browser answers better, which is who won the cascade.
+>
+> **Five things this seed learned, and the first two are the ones that would have shipped
+> quietly:**
+>
+> - **A file-wide token read does not fail when it reads the wrong theme. It agrees with you.**
+>   The pair table matched `--color-x: #hex` over the whole stylesheet, which was correct only
+>   while one scope declared colours. Planted on 2026-08-21 — `hexTokens(css)` for
+>   `hexTokens(LIGHT_SCOPE)` — **all 156 cases still passed**, because each palette is internally
+>   consistent, so grading dark against dark clears AA exactly as light against light does. The
+>   note first written on the parser claimed the reader would see a failure naming a light pair;
+>   that claim was wrong and is corrected in the file. The gate is a new case, `reads light and
+>   dark as two different palettes`, which lists all 25 tokens when the read goes file-wide.
+> - **`var()` inside a `color-mix` is resolved against the wrong scope when the sRGB fallback is
+>   emitted.** Measured on a production build, 2026-08-21: with `var(--color-primary)` in the dark
+>   block, Lightning CSS emitted the dark fallback as `#4d6948`, the *light* primary lightened, and
+>   `primary-foreground` `#12280d` on it measures **2.57:1**. So every browser with a dark
+>   preference and no `color-mix()` support, roughly 2019 to 2023, got an unreadable hover label,
+>   and no source-level check could see it. Naming the literal `#a3c398` lets the build resolve the
+>   mix outright to `#aac8a0` with no fallback branch at all: **8.60:1**. The literal duplicates a
+>   value, which ADR-041 § 5 warns about, so it is gated rather than trusted.
+> - **Spec § 4.1 line 582 has a dark half that S-005 did not need and this seed did.** Hover is
+>   the fill "darkened 6% (light) / **lightened 8% (dark)**". Darkening `#a3c398` moves it toward
+>   the ground and reads as the button receding under the pointer.
+> - **`body` painted the page with a token and its text with a Tailwind grey.** `text-gray-900`
+>   #111827 on the new #15140f page. So the ground flipped and the ink did not, and the browser
+>   reported the ink as `lab(8.11897 0.811279 -12.254)` — the same value `.claude/rules/tailwind.md`
+>   § 2 records as the inherited body colour, which is what made it recognisable. It is
+>   `text-foreground` now. The e2e case asserts ground and ink in one expectation so this cannot
+>   come back half-fixed.
+> - **A checker that forbids naming a rejected mechanism is the wrong checker.** The mechanism
+>   cases look for `.dark` and `data-theme` in `globals.css`, and `globals.css` explains at length
+>   which mechanisms lost. The fix was to strip comments before parsing, not to delete the
+>   explanation. A mention is not a mechanism.
+>
+> **Six negative controls, each watched failing on 2026-08-21 and then reverted:** the file-wide
+> read (names all 25 tokens); the dark hover literal moved one digit off its token (names both
+> hexes); a class-based variant restored (`not to contain '.dark'`); one dark override deleted
+> (4 failures — the coverage case plus three contrast cases now measuring a light value on dark
+> grounds); a dark value pushed under AA (3 failures, 2.10 to 2.43); and the media query made
+> unmatchable, which turned the browser spec red on both routes while the two light cases stayed
+> green.
+>
+> **What this seed did not do, though its own text lets a reader expect it.** The end state says
+> "the dark palette from spec § 2.2 is implemented", and it is — as *tokens*. **The screens are
+> not dark.** Counted 2026-08-21 across `web/src`: **393 hardcoded palette utilities in 41 files**,
+> `text-gray-*` 187, `border-gray-*` 82, `bg-gray-*` 33, `divide-gray-*` 2, and 89 in the red,
+> amber, blue, green, purple, rose, pink, and orange families. A palette colour has no dark value,
+> so none of them flips. **S-038 owns that**, and it is the honest size of what is left: this seed
+> made dark mode possible and did not make the app dark. A screenshot in dark mode today shows a
+> dark page with light grey boxes on it.
+>
+> **And the surface this seed was told to expect to replace is still there.** The backoffice aside
+> at `components/backoffice/BackofficeSidebar.tsx:30` is still `bg-gray-950` `#030712`, and it is
+> now worse than before rather than better: against the new `#15140f` page the boundary nearly
+> vanishes. Replacing it properly needs an inverse-surface role that neither spec § 2.1 nor § 2.2
+> publishes, so it is a decision and not an edit. **S-039 owns it, and carries ADR-046.**
 
 > **Two things S-005 left on this seed's desk, both measured 2026-08-14.** First, ADR-041 did not
 > settle the mechanism contradiction and says so: this seed still owns the choice between the
@@ -1242,6 +1338,129 @@ design system" for tokens being the only place a colour may live.
 **Out of scope.** The dark palette, spec § 2.2, on either client. Any mobile screen's composition.
 The web rename, which is S-005. Reconciling `onSurface` `#1D1B16` with web's `foreground` `#1a1a1a`,
 which ADR-041 names and deliberately leaves open.
+
+---
+
+## S-038. Move the 393 hardcoded palette utilities onto the semantic tokens
+
+**Status:** open · **Blocked by:** S-006, done 2026-08-21 · **Unblocks:** nothing yet
+
+**This is the gap between "dark mode works" and "the app is dark", and it is most of the app.**
+S-006 landed a dark palette that every gate confirms and that flips nothing but `body`, because a
+Tailwind palette colour is not a token and has no dark value. Counted 2026-08-21 across `web/src`
+with `grep -rnoE '(text|bg|border|divide)-gray-[0-9]{2,3}'` and the same shape for the other
+families:
+
+| Utility | Uses |
+|---|---|
+| `text-gray-*` | 187 |
+| `border-gray-*` | 82 |
+| `bg-gray-*` | 33 |
+| `divide-gray-*` | 2 |
+| red, amber, blue, green, purple, rose, pink, orange | 89 |
+| **total, across 41 files** | **393** |
+
+**This seed is a sweep and it still contains no decision, which is what makes it one seed rather
+than three.** Every one of the 393 has a semantic token that already exists and already clears AA
+in both themes: `text-gray-500` becomes `text-muted-foreground`, `text-gray-900` becomes
+`text-foreground`, `border-gray-300` becomes `border-input` on a control boundary and
+`border-border` on a decoration, `bg-gray-50` becomes `bg-muted` or `bg-card` by which job it does.
+Where a colour family carries state, `red` becomes `destructive` and `amber` becomes `accent`.
+
+**Two overlaps to know about before starting.** S-035 owns moving form boundaries off
+`border-gray-300` specifically, and it is a subset of this seed: **do S-035 first and let it set
+the pattern**, or fold it in and mark it done here, but do not do both. S-039 owns the backoffice
+aside, whose `bg-gray-950` and `text-gray-100` are deliberate and must be left alone by this sweep
+until that decision lands.
+
+**Two raw hexes in `globals.css` come with it**, the scrollbar thumb `#d1d5db` and its hover
+`#9ca3af`, in the `@layer utilities` block. Both stay visible on a dark ground, so they are
+untidiness rather than a defect, and they are cheap to take while you are here.
+
+**End state.** No `-gray-` utility remains in `web/src` outside
+`components/backoffice/BackofficeSidebar.tsx`, and no red, amber, blue, green, purple, rose, pink,
+or orange palette utility remains anywhere in `web/src`. The two scrollbar hexes read tokens. Every
+screen that a browser can reach without a Supabase session renders correctly under both colour
+schemes, read in a browser and said so plainly, per `.claude/rules/tailwind.md` § 11.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. Plus a browser reading under both emulated
+schemes, because no command in that gate checks how anything looks and the pair table cannot see a
+screen that puts a palette colour on a token ground. **Extend `e2e/dark-theme.spec.ts` rather than
+adding a spec**: it already emulates both schemes on the two reachable routes, so a case per screen
+region is the cheap addition. Watch one planted `text-gray-500` fail it before believing it.
+
+**Sources.** The counts above, re-run before you start because they move with every merge;
+`web/src/app/globals.css` for the token set and the two scrollbar hexes;
+`docs/decisions/045-dark-mode-prefers-color-scheme-only.md`, "What this decision does not buy you",
+for why this is a separate seed; `.claude/rules/tailwind.md` § 2 for which tokens resolve and § 3
+for the dark mechanism; spec § 2.1 and § 2.2 for the role each token names.
+
+**Out of scope.** The backoffice aside, which is S-039. Any new token: if a use has no token, that
+is a finding for a new seed, not a value to invent here. A theme switch. Renaming `accent`, which
+ADR-045 leaves open. The 304-to-393 gap between this seed's figure and any older one: older counts
+covered `gray` only.
+
+---
+
+## S-039. Decide what the backoffice aside is made of, in ADR-046
+
+**Status:** open · **Blocked by:** S-006, done 2026-08-21 · **Unblocks:** nothing yet
+
+**This is a decision seed, and the decision is that the design system has no name for a
+permanently-inverted surface.** `web/src/components/backoffice/BackofficeSidebar.tsx:30` is
+`bg-gray-950 text-gray-100`, with `border-gray-800` on its brand row at `:32`. It is the one dark
+surface in the app and it is hand-built. S-006's own text told it to "expect to replace that
+surface"; S-006 did not, and this seed exists because of what it found when it looked.
+
+**Replacing it is not an edit, for two reasons.**
+
+- **In light, this aside is dark on purpose.** Pointing it at `bg-background` would make it light,
+  which is a visual redesign of the backoffice rather than a token migration. So the value cannot
+  simply become a token.
+- **The role does not exist.** Spec § 2.1 and § 2.2 publish `surface` through
+  `surface-container-highest`, `on-surface` and its variants, `outline-variant`, and `scrim`. None
+  of them names "a surface that is dark in both themes". Material 3, whose role naming § 2 says it
+  follows, calls this `inverse-surface` / `on-inverse-surface`, and this design system does not
+  carry it.
+
+**S-006 made it worse rather than better, and that is measured.** `gray-950` resolves to `#030712`.
+Against the old light page `#fbf8f1` the aside read as a strong, deliberate boundary. Against the
+new dark page `#15140f` the two are nearly the same darkness, so the aside stops reading as a
+separate region at all. Nothing gates this, because `gray-950` is a Tailwind palette colour and
+`contrast.test.ts` only sweeps tokens.
+
+**One thing inside it is already right and must not be changed by accident.** The brand mark takes
+`primary-container`, not `primary`, and the file carries the measurement: against `#030712`,
+measured 2026-08-14, `primary` `#3e5c38` gives **2.68:1** and `primary-container` `#d6e4ce` gives
+**15.19:1**. If the ground moves, that measurement is void and the mark has to be re-measured.
+
+**End state.** ADR-046 exists and decides one of: the aside adopts an `inverse-surface` pair added
+to `@theme` and gated in `contrast.test.ts`; or the aside stops being inverted and takes the normal
+surface tokens, which is a design change and needs saying so; or the aside is documented as a
+deliberate palette-colour exception with the reason, in which case `.claude/rules/tailwind.md` § 3
+and S-038's out-of-scope line both say so and nothing else changes. Whichever it is, the aside's
+ground and its brand mark are measured against each other in both themes, and the numbers are in
+the ADR with their date.
+
+**ADR number 046 is pre-allocated to this seed.** 042 to 044 belong to S-011, S-013, and S-016; 045
+was written by S-006.
+
+**Verification.** The full web gate in `web/CLAUDE.md` if any code changes; documentation only, and
+no gate, if the decision is to document the exception. Say which plainly. If a token is added,
+`contrast.test.ts` gets a row for it in the same change, because the gate only checks pairs somebody
+wrote down. **The aside sits behind a Supabase session**, so it cannot be reached by
+`e2e/dark-theme.spec.ts` as that spec stands: say how you measured it rather than reasoning from
+the hex values.
+
+**Sources.** `web/src/components/backoffice/BackofficeSidebar.tsx:30` for the ground, `:32` for the
+border, `:35` for the mark and its comment carrying the 2026-08-14 measurements;
+`docs/decisions/045-dark-mode-prefers-color-scheme-only.md`, "What this decision does not buy you",
+for why it was left; `.claude/rules/tailwind.md` § 3 for the same, and § 5 for the no-line rule that
+`border-gray-800` sits against; spec § 2.1 and § 2.2 for the role list that has no entry for this.
+
+**Out of scope.** The other 393 palette utilities, which are S-038. The wordmark inside this aside
+at `:35`, which `.claude/rules/tailwind.md` § 7 records as never measured at 320 px and 200% text
+scale — a real open item, and a different one. A theme switch.
 
 ---
 
@@ -2265,6 +2484,7 @@ been read or run, and the row that replaces it says where.
   same change that creates the seed replacing it.
 - The four counts in the head of this file are a measurement. Re-take them by reading the board's own
   `Status` cell rather than by adding one to the previous figures, and say which of the four moved.
-- Every ADR number a seed allocates is written in that seed. 041 through 044 are taken by S-004,
-  S-011, S-013, and S-016. **041 was written on 2026-08-14 when S-004 closed**; 042 through 044 are
-  still allocations rather than files. The next free number is 045.
+- Every ADR number a seed allocates is written in that seed. 041 through 046 are taken by S-004,
+  S-011, S-013, S-016, S-006, and S-039, in that order. **041 was written on 2026-08-14 when S-004
+  closed, and 045 on 2026-08-21 when S-006 closed**; 042 through 044 and 046 are still allocations
+  rather than files. The next free number is **047**.

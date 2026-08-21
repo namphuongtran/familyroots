@@ -148,11 +148,12 @@ changed what is on screen. ADR-041 decided it and seed S-005 landed it in one ch
 - **The nine-step ramp was deleted, not recoloured.** Spec § 2.1 publishes no nine-step green, so
   a recolour meant inventing eight values. Four tokens carry every job the thirteen ramp classes
   did: `primary`, `primary-foreground`, `primary-container`, `primary-container-foreground`.
-- **Hover is derived, never a second hex.** `--color-primary-hover` is
+- **Hover is derived, never a second hex — in light.** `--color-primary-hover` is
   `color-mix(in oklab, var(--color-primary) 94%, black)`, which is spec § 4.1 line 582's "fill
   darkened 6%". Tailwind v4 resolves the mix at build time and emits an sRGB fallback beside it.
   `contrast.test.ts` asserts the derivation, because a `color-mix` is not a hex and the pair
-  table cannot measure one.
+  table cannot measure one. **The dark scope names a literal hex instead, on purpose**, and § 3
+  holds the measurement that forced it. Do not make the two scopes match.
 - **The page ground is one value under one name**, `background` `#fbf8f1`, spec § 2.1's
   `surface`. Two values used to claim the name.
 - **`--secondary` and `--secondary-foreground`** had no value at all, so S-001 gave them
@@ -177,9 +178,11 @@ Rules that follow from this:
 
 - **Do not add a new token in the `hsl(var(--x))` form. Put the value straight in `@theme`.**
   This is the defect that cost seventeen tokens, and nothing in the build catches it yet.
-- Prefer the semantic token over Tailwind's own palette for new work, for example
-  `text-muted-foreground` rather than `text-gray-500`. On a form boundary use `border-input`; it is
-  the only value in the file that clears 3:1.
+- **Use the semantic token, not Tailwind's own palette**, for example `text-muted-foreground`
+  rather than `text-gray-500`. Since 2026-08-21 this has a second and harder reason than contrast:
+  a palette colour has no dark value, so `text-gray-500` is a screen that does not follow the
+  theme. See § 3. On a form boundary use `border-input`; it is the only value in the file that
+  clears 3:1.
 - A resolving token is not an approved colour. Check the value against spec § 2.1 before you
   build a screen on it. Since ADR-041, `primary`, `heritage`, `background`, and `ring` are
   decided, so read the ADR rather than the spec for those four: where the two differ, the ADR is
@@ -191,31 +194,67 @@ Rules that follow from this:
   colour spelled in oklab, which reads exactly like "the hover class did nothing". Wait for the
   transition, then read.
 
-## 3. Dark mode is declared but not built
+## 3. Dark mode is built, on one mechanism, and most screens do not follow it yet
 
-- Line 3 of `globals.css` declares `@custom-variant dark (&:is(.dark *))`. That is the
-  class-based form.
-- No `.dark` selector exists anywhere in the stylesheet. Nothing in `web/src` sets a `dark`
-  class.
-- There are **zero** `dark:` utilities in `web/src` today. Measured 2026-08-13 across `.ts`,
-  `.tsx`, and `.css`.
+**Rewritten 2026-08-21 by seed S-006.** This section used to say dark mode was declared and not
+built. It is built. What is *not* done is the screens, and that distinction is the whole of this
+section.
 
-So:
+**The mechanism is `prefers-color-scheme`, and it is the only one.** ADR-045 decided it.
+`globals.css` holds one unlayered `@media (prefers-color-scheme: dark)` block with a `:root` rule
+overriding twenty-five `--color-*` tokens: the seventeen semantic names, the `primary` family, and
+the `heritage` family. The `@custom-variant dark (&:is(.dark *))` that used to sit on line 3 is
+**deleted**, so the Tailwind v4 default `dark:` variant applies, and the default is the media
+query. Palette and variant now switch on one signal.
 
-- Do not write `dark:` classes. No `.dark` class is ever set, so they cannot work. The light
-  palette is now both resolving and settled, since S-001 and S-005, so there **is** something to
-  invert. That is the point of doing it in its own seed rather than in a component.
-- Building dark mode is a deliberate task, not a side effect of a feature. Spec § 2.2 holds
-  the dark palette. Spec § 2.8 asks for `@media (prefers-color-scheme: dark)` **and**
-  `:root[data-theme="dark"]`, which contradicts the class-based variant on line 3. **ADR-041
-  did not settle that**: it says so itself, and hands the mechanism to seed S-006. So the ADR
-  that settles it is not written yet. Settle it there, not in a component.
-- **One dark surface exists already and it is hand-built**, the backoffice aside at
-  `components/backoffice/BackofficeSidebar.tsx:30`, `bg-gray-950`. It is not the dark palette
-  and S-006 should expect to replace it. Until then, a token chosen for a light ground can fail
-  on it: measured 2026-08-14, `primary` `#3e5c38` on `#030712` is **2.68:1**, which is why that
-  file's brand mark takes `primary-container` at 15.19:1 instead.
-- Components must never branch on the theme in TypeScript. The theme is a CSS concern.
+- **You may write `dark:` classes now**, and they will work. There were **zero** in `web/src` on
+  2026-08-21, so you would be the first; prefer overriding a token to writing one, because a token
+  flips every screen at once.
+- **Do not add a `.dark` class or a `data-theme` attribute.** `contrast.test.ts` fails if either
+  string appears in `globals.css`. Both are inert without a theme switch, which does not exist.
+  A switch is a real want and it revisits ADR-045, rather than adding a fourth mechanism.
+- **Never branch on the theme in TypeScript.** Unchanged, and now enforced by there being nothing
+  to branch on: no class, no attribute, nothing a component can read.
+- **Do not move the dark block into a layer.** `@theme` emits into `@layer theme`, and unlayered
+  CSS beats every layer. Inside `@layer base` the block loses and the app stays light **with no
+  error anywhere**. `web/e2e/dark-theme.spec.ts` is what catches it, because a stylesheet shows
+  you both declarations and not which one won.
+
+**The palette is correct and the screens are not. Counted 2026-08-21 across `web/src`: 393
+hardcoded palette utilities in 41 files** — `text-gray-*` 187, `border-gray-*` 82, `bg-gray-*` 33,
+`divide-gray-*` 2, plus 89 in the red, amber, blue, green, purple, rose, pink, and orange
+families. A palette colour has no dark value, so none of them flips. **Seed S-038 owns moving
+them.** Do not report a dark screenshot full of light grey boxes as a new defect; it is this.
+
+**The dark hover fill names a literal hex where the light one names the token, and that asymmetry
+must not be "fixed".** Lightning CSS resolves a `var()` inside a `color-mix` against the top-level
+`:root`, not the block the declaration sits in, when it emits the pre-`color-mix()` sRGB fallback.
+Measured on a production build 2026-08-21: with the token, the dark fallback came out `#4d6948`,
+the *light* primary lightened, and the label on it measures **2.57:1**. With the literal, the
+build resolves the mix outright to `#aac8a0` and the label measures 8.60:1. `contrast.test.ts`
+fails if the literal stops matching its token, so the duplication is gated rather than trusted.
+
+**The backoffice aside is still hand-built and is now the odd one out.**
+`components/backoffice/BackofficeSidebar.tsx:30` is `bg-gray-950` `#030712`, and in dark it sits
+against a `#15140f` page, so the boundary nearly vanishes. Expressing it properly needs an
+inverse-surface role that spec § 2.1 and § 2.2 do not publish, so it is a decision rather than an
+edit: **seed S-039**. The `primary-container` brand mark inside it is still right for the same
+reason as before, measured 2026-08-14 against `#030712`: `primary` `#3e5c38` gives 2.68:1 and
+`primary-container` `#d6e4ce` gives 15.19:1.
+
+**Both themes are gated, in two places.** `web/src/app/contrast.test.ts` runs its whole pair table
+twice, once per scope, and it parses the stylesheet with comments stripped so that `globals.css`
+can name the rejected mechanisms in prose without tripping the mechanism cases. Worst dark ratios
+on 2026-08-21: 6.07:1 against the 4.5 floor and 6.07:1 against the 3 floor, zero failures.
+`web/e2e/dark-theme.spec.ts` measures `body` in Chromium under both emulated schemes on
+`/vi/login` and `/vi/register`.
+
+**One trap from writing those gates, worth more than the rest of this section.** A file-wide
+`--color-x: #hex` match over `globals.css` now reads the dark values, because they come later in
+the file. S-006 planted exactly that and **all 156 cases still passed**: each palette is
+internally consistent, so grading dark against dark clears AA just as light against light does.
+A parser that reads the wrong theme does not fail, it agrees with you. Scope any read of that file
+to a block, and keep the `two different palettes` case that catches it.
 
 ## 4. Where styling code goes
 

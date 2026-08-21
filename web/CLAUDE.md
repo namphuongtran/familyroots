@@ -186,8 +186,8 @@ Four harnesses, one gate each:
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
   response shape.
 - `pnpm test:e2e` — Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots `next dev` on
-  `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. Three specs, and
-  `pnpm test:e2e --list` counted 24 tests on 2026-08-13 (12 cases across the two projects):
+  `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. Four specs, and
+  `pnpm test:e2e --list` counted 36 tests on 2026-08-21 (18 cases across the two projects):
   - `smoke.spec.ts` — locale redirect, the login form renders, and a `test.fail()` ratchet on
     `R-lang` (see `docs/sad/11-risks-and-technical-debt.md`) that turns red the day
     `<html lang>` is fixed.
@@ -195,8 +195,11 @@ Four harnesses, one gate each:
     style in a real browser is the only thing that can see a dead `font-family`.
   - `text-scale.spec.ts` — `T-04`: no horizontal page scroll at 320 px width and 200% root
     font size (seed S-034). jsdom has no layout engine, so no other harness can measure a box.
+  - `dark-theme.spec.ts` — the dark palette reaches `body` under an emulated dark colour
+    scheme, and no class or attribute is involved (seed S-006, ADR-045). The stylesheet holds
+    both palettes and cannot tell you which one won the cascade; only an engine can.
 
-  These three cover what only a browser can measure. Real user journeys arrive with the
+  These four cover what only a browser can measure. Real user journeys arrive with the
   feature slices, once there is a backend to talk to.
 - `tests/behavior/` (legacy) — Node test runner with `--experimental-strip-types` for `.ts`.
   Focused on auth + query invalidation flows against the legacy trees; not part of the CI

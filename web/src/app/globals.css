@@ -1,6 +1,20 @@
 @import 'tailwindcss';
 
-@custom-variant dark (&:is(.dark *));
+/*
+  There was a `@custom-variant dark (&:is(.dark *))` here. Seed S-006 deleted it,
+  and ADR-045 is why. Three mechanisms were declared for one behaviour: that
+  class-based variant, plus the colour-scheme media query and
+  `:root[data-theme="dark"]` that spec § 2.8 asks for. Two of the three need
+  something to set a class or an attribute, and that something is a theme switch
+  this app does not have, so either one would have shipped a palette that never
+  activates. The media query below is the one mechanism, and deleting this line
+  is what makes a `dark:` utility use it: the Tailwind v4 default variant is the
+  media query, so the default is now the decision.
+
+  Do not add a class or an attribute mechanism back here. `contrast.test.ts`
+  fails if you do. A theme switch is a real want and a separate decision; it
+  revisits ADR-045 rather than adding a fourth mechanism beside it.
+*/
 
 @theme {
   /*
@@ -191,6 +205,177 @@
 }
 
 /*
+  The dark palette, from spec § 2.2, landed by seed S-006 and decided by ADR-045.
+
+  It is not layered on purpose. `@theme` emits its variables into `@layer theme`,
+  and unlayered CSS beats every layer, so this block wins the cascade wherever it
+  sits in the file. Do not move it inside `@layer base` or `@layer utilities`:
+  there it would lose to `@theme` and the app would stay light with no error
+  anywhere. `e2e/dark-theme.spec.ts` is what measures that in a real engine,
+  because the stylesheet alone cannot show you who won.
+
+  It redefines only the `--color-*` group. Every utility already reads its colour
+  through the variable, so no component and no `dark:` utility is needed for a
+  screen to flip. That is spec § 2.8's rule: "components never branch on theme
+  themselves".
+
+  **What flips and what does not, measured 2026-08-21.** These tokens flip.
+  The 393 hardcoded palette utilities in `web/src` do not: `text-gray-*` 187,
+  `border-gray-*` 82, `bg-gray-*` 33, `divide-gray-*` 2, plus 89 in the red,
+  amber, blue, green, purple, rose, pink, and orange families, across 41 files.
+  A palette colour is not a token and has no dark value. Seed S-038 owns moving
+  them. Until it lands, this palette is correct and most screens are not, and
+  that is a known open state rather than an oversight.
+
+  **Two values here are derived rather than quoted, and both are marked below.**
+  Spec § 2.2 publishes no "on" colour for its dark status or heritage fills, so
+  where a label sits on one of those fills the value is derived and the ratio is
+  measured in `contrast.test.ts`. Do not read a derived value as spec text.
+
+  The gold ramp and the cream ramp are absent, and that is deliberate. They are
+  palette ramps rather than semantic roles, ADR-041 explicitly does not decide
+  the gold family, and § 2.2 keeps `gilt-decor` at #d4af37 in both themes. A
+  nine-step dark green-gold would be nine invented values, which is the mistake
+  ADR-041 refused when it deleted the red ramp instead of recolouring it.
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    /*
+      Leaf on ink: the leaf lifts rather than inverting (§ 2.2's own words). All
+      four are quoted from § 2.2, where they are named `primary`, `on-primary`,
+      `primary-container`, and `on-primary-container`.
+    */
+    --color-primary: #a3c398;
+    --color-primary-foreground: #12280d;
+    --color-primary-container: #2b4526;
+    --color-primary-container-foreground: #cbe3c2;
+
+    /*
+      Hover mixes **white** here, not black, and the direction is the whole
+      point. Spec § 4.1 line 582 gives both halves: the fill is "darkened 6%
+      (light) / lightened 8% (dark)". S-005 wrote the light half only, because
+      light was all it needed. Darkening #a3c398 would move it toward the ground
+      and read as the button receding under the pointer. 92% keeps the 8%.
+
+      **These two name a literal hex where the light pair names the token, and
+      that is not an oversight. Do not "fix" it back to `var(--color-primary)`.**
+      Lightning CSS resolves a `var()` inside a `color-mix` when it emits the
+      pre-`color-mix()` sRGB fallback, and it resolves it against the top-level
+      `:root`, not this block. Measured on a production build 2026-08-21: with
+      the token here, the emitted dark fallback was #4d6948, the *light* primary
+      lightened, and `primary-foreground` #12280d on it measures 2.57:1. So every
+      browser with a dark preference and no `color-mix()` support, roughly 2019
+      to 2023, got an unreadable hover label, and nothing in the source could see
+      it. With the literal, the same build resolves the mix outright to #aac8a0,
+      emits no fallback branch, and the label measures 8.60:1.
+
+      The literal is a second copy of a value, which ADR-041 § 5 warns about. It
+      is gated rather than trusted: `contrast.test.ts` fails if either hex here
+      stops matching the token above it.
+    */
+    --color-primary-hover: color-mix(in oklab, #a3c398 92%, white);
+    --color-primary-container-hover: color-mix(in oklab, #2b4526 92%, white);
+
+    /*
+      Ceremonial lacquer, desaturated so it does not vibrate on dark (§ 2.2).
+      `heritage`, `heritage-container`, and the container's ink are § 2.2's
+      `heritage`, `heritage-container`, and `on-heritage-container`.
+
+      `heritage-foreground` is **derived**: § 2.2 publishes no dark `on-heritage`,
+      and the dark fill #f0a0a8 is light, so a white label would be unreadable on
+      it. It takes the container ink #4e1520, which measures 7.09:1 on the fill
+      (2026-08-21). The two tokens holding one hex is a consequence of that, not
+      a copy-paste.
+    */
+    --color-heritage: #f0a0a8;
+    --color-heritage-foreground: #4e1520;
+    --color-heritage-container: #4e1520;
+    --color-heritage-container-foreground: #ffd9dc;
+
+    /*
+      Grounds and ink. `background` is § 2.2's `surface` and every `*-foreground`
+      here is its `on-surface`: warm ink, never #000000, which is the same
+      mandate the light theme reads as "never #000000" in § 2.1.
+
+      `card` and `popover` take `surface-container-low` #1d1b15 and **not**
+      `surface-container-lowest` #100f0b, which is a deliberate departure from
+      § 2.1's label for that role. § 2.1 calls `surface-container-lowest` "cards
+      that must lift off the page", and in light it is #fffdf9, lighter than the
+      page. In dark § 2.2 makes it #100f0b, *darker* than `surface` #15140f, so
+      the same role would make a card read as recessed. The role names a
+      relationship, so this keeps the relationship and changes the value.
+      ADR-045 § 4 records the conflict; the spec is the owner if it wants to
+      overrule it.
+
+      `muted` is § 2.2's `surface-container` #24221a, which § 2.1 calls "grouped
+      rows, list section grounds" — the job light's #f3f4f6 does.
+      `muted-foreground` is `on-surface-muted`.
+    */
+    --color-background: #15140f;
+    --color-foreground: #f1ebde;
+    --color-card: #1d1b15;
+    --color-card-foreground: #f1ebde;
+    --color-popover: #1d1b15;
+    --color-popover-foreground: #f1ebde;
+    --color-muted: #24221a;
+    --color-muted-foreground: #a99f89;
+
+    /*
+      `border` stays decorative in dark for the same reason it does in light: the
+      `*` rule near the end of this file paints it on every element, so a value
+      with real contrast would draw a visible 1px line around everything, which
+      the no-line rule forbids. It measures 1.11 to 1.29 across the three
+      grounds (2026-08-21), against light's 1.13. It is **derived**: § 2.2's
+      `outline-variant` is reserved by § 2.1 for high-contrast mode at 15%
+      opacity, so the spec offers no default border in either theme, and this is
+      `surface-container-high` #2d2a20 used as a background step.
+
+      `input` carries an input's boundary and clears 3:1, at 6.07 to 7.03. It is
+      § 2.2's `on-surface-muted`, the same hex as `muted-foreground`; they are
+      one value doing two jobs here, and light keeps them apart only because
+      light's #8a8072 had to clear 3:1 without going dark enough to read as text.
+
+      `ring` is quoted: § 2.1's focus entry publishes both halves, "#1D1B16
+      (light) / #F1EBDE (dark)". It is the on-surface colour rather than an
+      accent so that it clears 3:1 on every fill in the system, and it still
+      ships with `ring-offset-2`.
+    */
+    --color-border: #2d2a20;
+    --color-input: #a99f89;
+    --color-ring: #f1ebde;
+
+    /*
+      `secondary` is § 2.2's bark accent #d3bc9e. `secondary-foreground` is
+      **derived**: § 2.2 publishes no dark `on-secondary`, and the dark fill is a
+      light tan, so it takes light's `on-secondary-container` #2a2013 and
+      measures 8.72:1 (2026-08-21).
+    */
+    --color-secondary: #d3bc9e;
+    --color-secondary-foreground: #2a2013;
+
+    /*
+      Status. § 2.2's status line gives a token and a container per family:
+      "danger #F0A79C / #4A1811" and "warning #E8B563 / #3E2A06".
+
+      `destructive` is dark `danger`. `destructive-foreground` is **derived** from
+      that line's container value, because a white label on #f0a79c would fail;
+      it measures 7.49:1.
+
+      `accent` and `accent-foreground` are the dark warning pair, read in the
+      order the light theme uses them: light's `accent` #fef3c7 is a warning
+      *container* under `accent-foreground` #92400e, so dark takes the container
+      #3e2a06 as the ground and the token #e8b563 as the ink. 7.29:1.
+      ADR-041 left `accent` undecided as a token; this maps it without renaming
+      it, which is a smaller change than the rename that seed does not own.
+    */
+    --color-destructive: #f0a79c;
+    --color-destructive-foreground: #4a1811;
+    --color-accent: #3e2a06;
+    --color-accent-foreground: #e8b563;
+  }
+}
+
+/*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
   looks the same as it did with Tailwind CSS v3.
@@ -204,7 +389,16 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    /*
+      Was `var(--color-gray-200, currentcolor)`. Seed S-006 pointed it at the
+      token. The `*` rule further down applies `border-border` and so covers
+      elements, but not these four pseudo-element selectors, which were left
+      painting a palette grey with no dark value: a light hairline on a dark
+      page. In light the two are the same colour to the eye, gray-200 and
+      `border` #e5e7eb, so this changes nothing you can see today and one thing
+      you can see in dark.
+    */
+    border-color: var(--color-border, currentcolor);
   }
 }
 
@@ -234,7 +428,20 @@
     @apply border-border;
   }
   body {
-    @apply bg-background font-sans text-gray-900 antialiased;
+    /*
+      `text-foreground`, not `text-gray-900`. Seed S-006 changed it, and this is
+      the line that decided whether dark mode worked at all: `body` painted the
+      page with the `background` token and its text with a Tailwind palette
+      grey, so the ground flipped and the ink did not. Measured 2026-08-21 in
+      Chromium under an emulated dark colour scheme, body text computed to
+      `lab(8.11897 0.811279 -12.254)`, which is gray-900 #111827, on the new
+      #15140f page. `e2e/dark-theme.spec.ts` asserts the ground and the ink in
+      one expectation so that this cannot come back half-fixed.
+
+      In light this moves body text from #111827 to `foreground` #1a1a1a. Both
+      clear AA on all three grounds, and #1a1a1a is the value ADR-041 settled.
+    */
+    @apply bg-background text-foreground font-sans antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;
