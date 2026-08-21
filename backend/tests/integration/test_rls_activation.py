@@ -161,8 +161,9 @@ async def test_role_grants_allow_calling_functions(engine: AsyncEngine) -> None:
 async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncEngine) -> None:
     """CI guard (ADR-008): every table with RLS ENABLEd must have at least one policy
     (else it is a silent lockout) AND familyroots_app must hold table privileges. Also
-    pins Phase-1 scope: only `documents` is RLS-enabled — a later phase updates this set
-    deliberately when it adds a table."""
+    pins the CURRENT scope, table by table — a later phase updates this set deliberately
+    when it adds one. `clan_invitations` is absent on purpose; see
+    test_invitation_accept_no_clan_context for why it cannot join the set yet."""
     async with engine.connect() as conn:
         rls_tables = set(
             (
@@ -185,6 +186,7 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
             "marriages",
             "persons",
             "change_requests",
+            "clan_memberships",
         }, f"RLS scope drifted: {rls_tables}"
 
         for table in rls_tables:
