@@ -52,8 +52,8 @@ ignored". Do not add it back.
 
 ```bash
 flutter pub get                                    # install deps
-flutter test                                       # full suite (128 tests)
-flutter test --exclude-tags golden                 # what CI runs (126)
+flutter test                                       # full suite (131 tests)
+flutter test --exclude-tags golden                 # what CI runs (129)
 flutter test test/core/network/api_client_test.dart   # single file
 flutter test --plain-name "describes the case"     # single test by name
 flutter test --update-goldens test/goldens/        # re-baseline goldens (macOS only)
@@ -351,8 +351,53 @@ hardcodes a colour or a radius. Reach them with `context.tokens`.
   opacity). Glass rule: floating cards and nav bars are `surface` at 80% opacity
   with 20px backdrop blur.
 - **Color** — never `#000000`. Primary text is `on_surface` (`#1d1b16`).
+  `primary` is the leaf green `#3E5C38` and the page ground is `#FBF8F1`. Both are
+  [ADR-041](../docs/decisions/041-primary-green-heritage-family-single-background.md)'s
+  values and they bind web too. See the three notes below.
 - **Layout** — no rigid grids unless the data is tabular. Layouts must survive
   **200% text scale**; goldens run at scale 1.0 and 2.0.
+
+### The palette is ADR-041's, and three things about it are load-bearing
+
+Landed by seed S-037 on 2026-08-22. Each note exists because the obvious move is wrong.
+
+**1. `surface` is `#FBF8F1`, not the `#FDFCF7` mobile used to hold.** ADR-041 decision 3
+picked the spec's value over *both* incumbents on purpose, so that no client has to
+re-open the question. Mobile's `#FDFCF7` was sourced by nothing: it appears in no spec
+section and in no ADR. Web's `background` is now the same `#FBF8F1` under the same name,
+so the two clients paint one page ground. Contrast is unharmed — `on_surface` `#1D1B16`
+measures 16.22:1 on it, `primary` measures 7.09:1, and `error` measures 8.59:1, all
+computed 2026-08-22 with the WCAG 2.1 relative-luminance formula.
+
+**2. `ColorScheme.fromSeed` does not return the seed, so every token it owns is passed
+explicitly.** This is the trap that made the primary change nearly cosmetic. `fromSeed`
+re-derives its argument into a Material tonal palette. Measured 2026-08-22: the bronze
+seed `#7A5C2E` produced `scheme.primary` `#7E570F`, and the new green seed `#3E5C38`
+produced `#3E6837`. Both are colours that exist in no token file, on an app whose whole
+rule is that colours live in `tokens.dart` only. `buildAppTheme` therefore passes
+`primary`, `onPrimary`, `surface`, `onSurface` and `error` as named overrides; the seed
+now only fills the tones no token names. Spec §2.8 already required this —
+"`ColorScheme` is populated from the same values so Material widgets inherit correctly" —
+and `test/core/theme/theme_test.dart` pins it, so removing an override turns red.
+
+**3. Mobile has no `heritage` family yet, and adding one before a screen needs it was
+rejected.** ADR-041 decision 2 creates `heritage` `#A3182F`, `heritage-foreground`
+`#FFFFFF`, `heritage-container` `#F6DFE0` and `heritage-container-foreground` `#4A0A14`,
+and it argues the container pair should ship ahead of its first consumer. That argument
+is web-shaped and does not transfer: web's rename *removes* red from `primary`, so
+without the family a ceremonial red would have no token at all the day S-005 lands.
+Mobile's `primary` was a bronze, so this change takes no red away from anything. Against
+that, a Flutter token is not a CSS variable — each colour must be threaded through a
+hand-written `copyWith` and `lerp`, no screen renders it, and mobile has no equivalent of
+web's `contrast.test.ts` sweep, so a wrong value would be invisible to every gate. Four
+values no gate can check and no screen can show are the dead-token defect.
+
+**So the rule is written here instead of in the code.** When the first thủy tổ marker,
+giỗ chip, or ancestral-emphasis surface is built, that seed adds the four fields to
+`ArborTokens` *with* the widget and the golden that renders them, at ADR-041's values
+above. **Never reach for `error` `#8C1D18` for a ceremonial red.** It is one job away and
+one hue away, and reaching for the nearest token is exactly what put red in web's
+`primary` and cost an ADR to undo.
 
 The design system itself — tokens, components, accessibility rules and the 15
 screen groups — is specced in

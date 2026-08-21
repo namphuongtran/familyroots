@@ -1,13 +1,62 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:family_roots_mobile/core/theme/app_theme.dart';
 import 'package:family_roots_mobile/core/theme/tokens.dart';
 
 import '../../support/load_app_fonts.dart';
 
+/// Any `Color(0x...)` literal, however it is spelled.
+final _colorLiteral = RegExp(r'Color\(\s*0x[0-9a-fA-F]{6,8}');
+
 void main() {
   setUpAll(loadAppFonts);
+
+  test('ADR-041: the tokens carry the leaf green on the one warm ground', () {
+    final t = ArborTokens.light();
+    // Decision 1. The bronze #7A5C2E it replaced collided with `secondary`.
+    expect(t.primary, const Color(0xFF3E5C38));
+    expect(t.onPrimary, const Color(0xFFFFFFFF));
+    // Decision 3. One value under one name, shared with web.
+    expect(t.surface, const Color(0xFFFBF8F1));
+  });
+
+  test('the painted primary is the token, not a re-derived tone', () {
+    // `ColorScheme.fromSeed` returns a tonal palette, not the seed. Without an
+    // explicit override the app paints a green that is in no token file.
+    final t = ArborTokens.light();
+    final scheme = buildAppTheme().colorScheme;
+    expect(scheme.primary, t.primary);
+    expect(scheme.onPrimary, t.onPrimary);
+    expect(scheme.surface, t.surface);
+    expect(scheme.onSurface, t.onSurface);
+  });
+
+  test('no colour literal lives outside tokens.dart', () {
+    final libDir = Directory('lib');
+    expect(libDir.existsSync(), isTrue, reason: 'run from the package root');
+
+    final offenders = <String>[];
+    for (final entity in libDir.listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      final rel = p.relative(entity.path, from: 'lib');
+      if (rel == p.join('core', 'theme', 'tokens.dart')) continue;
+      if (_colorLiteral.hasMatch(entity.readAsStringSync())) {
+        offenders.add(rel);
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'A colour may only be declared in core/theme/tokens.dart. '
+          'Reach it with `context.tokens`.',
+    );
+  });
 
   testWidgets('tokens honour the Arbor Heritage mandates', (tester) async {
     late ArborTokens t;
