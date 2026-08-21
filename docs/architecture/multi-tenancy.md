@@ -8,8 +8,9 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > layer** — this is the primary, tested guarantee. Row-Level Security is the
 > **defense-in-depth layer-2** (ADR-008) and is **ACTIVE**: request traffic runs under
 > the non-bypass `familyroots_app` role with a per-request `app.clan_id` GUC, so
-> `documents`, `events`, `branches`, `parent_child`, `marriages`, and `persons` are
-> RLS-enforced at the DB layer (other clan-scoped tables are added table-by-table).
+> `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`, and
+> `change_requests` are RLS-enforced at the DB layer (other clan-scoped tables are added
+> table-by-table).
 > `persons` carries two extra rules — see point 6 below and
 > [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
 > describe the application-layer mechanism that remains the primary guarantee.
@@ -38,7 +39,7 @@ PostgreSQL instance
     ├── documents          (filtered by clan_id in the app layer; RLS-enforced)
     ├── events             (filtered by clan_id in the app layer; RLS-enforced)
     ├── user_clan_roles    (which user belongs to which clan, with what role)
-    ├── change_requests    (approval workflow queue, filtered by clan_id)
+    ├── change_requests    (approval workflow queue, filtered by clan_id; RLS-enforced)
     └── audit_log          (cross-clan audit trail)
 ```
 
@@ -66,7 +67,7 @@ PostgreSQL instance
    `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
 6. **RLS layer-2 (ACTIVE for `documents`, `events`, `branches`, `parent_child`,
-   `marriages`, `persons`).** The request path drops to the non-bypass `familyroots_app`
+   `marriages`, `persons`, `change_requests`).** The request path drops to the non-bypass `familyroots_app`
    role and sets the transaction-local `app.clan_id` GUC (an `after_begin` seam on the
    request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
    RLS-enforced at the DB layer behind the primary application filters. System paths

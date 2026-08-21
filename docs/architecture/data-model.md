@@ -647,9 +647,13 @@ Propose-and-review corrections to clan data / Đề nghị sửa gia phả.
 > no migration and no contract change.
 >
 > `clan_settings.approval_config` is **not** consulted; the reviewer set is fixed at
-> editor-or-admin (see ADR-037 for why, and `rbac.md` for the matrix). Not part of
-> the RLS rollout (ADR-008) — the explicit `clan_id` predicate in
-> `change_request_repository` is the only isolation layer for this table.
+> editor-or-admin (see ADR-037 for why, and `rbac.md` for the matrix).
+>
+> ✅ **RLS (2026-08-22, migration `030_rls_change_requests`, ADR-008 Phase 5, seed S-008).**
+> The explicit `clan_id` predicate in `change_request_repository` stays the primary
+> guarantee, and `change_requests_clan_isolation` is now the layer-2 backstop behind it:
+> `clan_id = <app.clan_id GUC>` on both USING and WITH CHECK. This paragraph said the
+> repository predicate was the *only* isolation layer until that migration landed.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|

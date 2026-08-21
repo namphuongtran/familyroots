@@ -1,9 +1,11 @@
 """SQLAlchemy implementation of ChangeRequestRepository.
 
 Clan isolation is an explicit ``clan_id`` predicate on every statement here — the
-PRIMARY guarantee (``change_requests`` is not yet in the RLS table rollout, ADR-008,
-so there is no layer-2 backstop for it; see ADR-037). A change request belongs to
-exactly one clan and is invisible, unfetchable and unreviewable from any other.
+PRIMARY guarantee (see ADR-037). ``change_requests`` also carries the layer-2 RLS
+backstop as of migration ``030_rls_change_requests`` (ADR-008 Phase 5): every statement
+below runs on the RLS request session, so a missed predicate is caught at the database.
+A change request belongs to exactly one clan and is invisible, unfetchable and
+unreviewable from any other.
 """
 
 from __future__ import annotations

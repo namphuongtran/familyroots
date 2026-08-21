@@ -78,12 +78,27 @@ the ContextVar so post-commit transactions re-apply it).
     **Standing constraint:** any new `persons` write path must insert the membership row
     first or avoid `RETURNING`. Proven by `test_rls_person_create`.
 
+- **Phase 5 (2026-08-22, migration `030_rls_change_requests`, seed S-008)** — RLS extended
+  to `change_requests`. It takes the Phase-2 template unchanged: the column is a NOT-NULL
+  `clan_id` (`app/models/change_request.py:19`), so the policy is
+  `clan_id = <app.clan_id GUC>` on both USING and WITH CHECK. The table is read and written
+  only by the two clan-scoped handlers wired on `get_db` (`get_change_request_command_handler`,
+  `get_change_request_query_handler` in `app/infrastructure/dependencies.py`), so the GUC is
+  always set and no system or unauthenticated path needs the bypass. The ADR-038 `RETURNING`
+  trap does not bite here: one permissive ALL policy means the predicate that accepted the
+  INSERT also admits the row it returns, which is checked rather than assumed. Proven by
+  `test_rls_phase5_change_requests` (two-sided reads including a targeted read by id, INSERT
+  and clan-reassigning UPDATE both rejected by WITH CHECK, a cross-clan review UPDATE
+  touching no row, default-deny, and an ORM insert with RETURNING). Coverage guard now
+  `{documents, events, branches, parent_child, marriages, persons, change_requests}`.
+
 Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
 tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
 by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break
 every request until the GUC is moved earlier), `clan_invitations` is read by the
 unauthenticated accept-by-token path, and `audit_logs` has nullable-clan platform rows +
-a super-admin cross-clan reader. `persons`/`parent_child`/`marriages` need care (the M:N
+a super-admin cross-clan reader. `change_requests` had none of those obstacles, which is
+why it went first among the remainder (S-008). `persons`/`parent_child`/`marriages` need care (the M:N
 `persons` policy is a `clan_memberships` subquery needing a perf check; the tree SQL
 functions run SECURITY INVOKER under the role and would become RLS-filtered — verify they
 still return correctly with the GUC set). A possible final `FORCE ROW LEVEL SECURITY`

@@ -184,6 +184,7 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
             "parent_child",
             "marriages",
             "persons",
+            "change_requests",
         }, f"RLS scope drifted: {rls_tables}"
 
         for table in rls_tables:
