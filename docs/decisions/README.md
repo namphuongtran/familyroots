@@ -43,12 +43,20 @@
 | [039](039-clan-user-list-identity-asymmetry.md) | Clan User Lists — `display_name` on Both, `email` Only on the Admin Pending Queue | Accepted, shipped (2026-08-02) |
 | [040](040-metrics-token-floor-and-throttle.md) | `METRICS_TOKEN` Length Floor at Boot + 404-Preserving Failure Throttle | Accepted, shipped (2026-08-03) |
 | [041](041-primary-green-heritage-family-single-background.md) | Leaf Green Is `primary`, Lacquer Red Becomes the `heritage` Family, One Warm Ground Is `background` | Accepted, shipped (2026-08-14, seed S-005) |
-| [042](042-identity-claims-app-layer-isolation-system-session-lockout.md) | `identity_claims` Keeps Application-Layer Clan Isolation, and Its RLS Policy Denies the Request Role | Accepted (2026-08-22, seed S-011; decision only, built by S-012) |
+| [042](042-identity-claims-app-layer-isolation-system-session-lockout.md) | `identity_claims` Keeps Application-Layer Clan Isolation, and Its RLS Policy Denies the Request Role | Accepted (2026-08-22, seed S-011) — decision only; seed S-012 implements it |
+| [043](043-audit-notification-rls-posture.md) | `audit_logs` Is Inside RLS Layer 2 with Per-Command Policies, `notification_log` Takes the Template Unchanged | Accepted (2026-08-22, seed S-013) — decision only; seed S-014 implements it |
 | [045](045-dark-mode-prefers-color-scheme-only.md) | Dark Mode Switches on `prefers-color-scheme` Alone, and the Dark Palette Is a Token Override | Accepted, shipped (2026-08-21, seed S-006) |
 
-043 and 044 are **allocated and not written**: seeds S-013 and S-016 in
-[`../SEEDS.md`](../SEEDS.md) each carry one of them. The gap is deliberate, so that four agents
-picking work at once cannot pick the same number. The next free number is **046**.
+**044 and 046 are allocated and not written.** Seed S-016 carries 044 and seed S-039 carries 046,
+both in [`../SEEDS.md`](../SEEDS.md). The gap is deliberate, so that four agents picking work at
+once cannot pick the same number. The next free number is **047**.
+
+> **This paragraph is a merge point, so re-read it rather than editing it from memory.** It was
+> resolved by hand on 2026-08-22 after seeds S-011 and S-013 ran in parallel and each narrowed the
+> sentence to exclude only its own number, which conflicted. It also carried a real defect until
+> that day: it said the next free number was 046 while `SEEDS.md` had already allocated 046 to
+> S-039 and said 047. **`SEEDS.md` is the authority on which numbers are taken**, because a seed
+> allocates its number in its own text. When the two disagree, this file is the bug.
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural
