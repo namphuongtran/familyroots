@@ -92,6 +92,34 @@ could not merge them. That conflict was resolved by hand on the integration bran
 sentence now carries a note saying it is a merge point. The fence that failed was mine: both
 agents were told to add their own row to that index, which guarantees both touch it.
 
+**Re-taken again 2026-08-22, after a second parallel batch of four: 47 seeds, 15 done, 19 open, and
+13 blocked.** All four moved:
+
+- **Seeds, 42 to 47.** Five arrived, and none came out of planning. S-009 opened **S-043** by
+  splitting, S-037 opened **S-044**, and S-040 opened **S-045** and **S-046**. **S-047** is
+  different from the other four: it is an `Owed` row whose trigger was met, so it became a seed and
+  the row was deleted in the same change.
+- **Done, 11 to 15.** S-009, S-022, S-037, and S-040, run in parallel in four worktrees.
+- **Open, 17 to 19.** The four left for `done`, minus four. The five new seeds arrived open, plus
+  five. S-023 became open, because S-022 was its only blocker, plus one. Net plus two.
+- **Blocked, 14 to 13.** S-023 left it. Nothing became blocked.
+
+**This batch merged with no conflict, which is the fence working rather than luck.** The four
+branches touched disjoint sets: `backend/**` plus three `docs/architecture` and `docs/ops` files,
+`docs/decisions/**` alone, `mobile/**` alone, and `web/**` plus two more. The previous batch's
+conflict came from telling two agents to add a row to the same index, so this time exactly one
+agent was allowed inside `docs/decisions/`. **The cost of that fence is recorded too**: S-009 found
+a decision it could not write up, because ADRs were fenced away from it, and that is part of why
+S-043 exists rather than being resolved inside S-009.
+
+**Three things this batch found that no seed asked for, and all three were in a document rather
+than in code.** S-040 found that its own seed miscounted a diff and named one GUC writer where
+there are two. S-022 found that its seed's title describes a layout Next.js will not compile. The
+coordinator found that this file's claim "Flutter is not installed on this machine" is false: the
+SDK is present and merely absent from `PATH`, and three rows rested on the wrong conclusion. In
+every case the code was right and the plan was the thing an agent reads first, which is the failure
+this file was opened to stop.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -116,8 +144,9 @@ spec's own ordering at
 § 2.8.1, line 400: tokens first, then fonts, "because a fallback font changes every measurement".
 They sat at the head of M0 and transitively blocked the rest of it. **S-003 is done as of 2026-08-13
 too, and S-004 and S-005 both closed on 2026-08-14**, the first as ADR-041 and the second as the
-rename that carried it into `web/src`. **S-006 is the front of that chain now**, and it is the last
-seed in it.
+rename that carried it into `web/src`. **S-006 closed that chain on 2026-08-21**, and it was the
+last seed in it. What M0 leaves behind is not the chain but the two seeds S-006 opened once the
+palette was real, S-038 and S-039, plus S-035 and S-036.
 
 **S-003 moved three token values and changed no pixel, and both halves of that matter.**
 `muted-foreground`, `destructive`, and `input` now clear WCAG AA, each taking the value design spec
@@ -149,10 +178,17 @@ The consequence lands on **S-007**, whose job is a gate for exactly this and who
 named that probe as the likely mechanism. Its seed body now carries the warning and two mechanisms
 that do work.
 
-**The widest thing open is S-022, and it is one structural edit.** It moves `<html>` and `<body>`
-into the locale-aware layout. **It transitively blocks ten seeds**, every one of PR 1 and PR 2, so
-nothing in M2 starts before it. Counted from the board's own `Blocked by` cells on 2026-08-13, not
-estimated: S-023 through S-027 and S-029 through S-033.
+**S-022 was the widest thing open, and it closed on 2026-08-22.** It transitively blocked ten
+seeds, every one of PR 1 and PR 2. **The front of that chain is now S-023**, the `current_clan_id`
+cookie, which carries nine of those ten behind it: S-024 through S-027 and S-029 through S-033,
+counted from the board's own `Blocked by` cells on 2026-08-22. Nothing in M2 starts before it.
+
+**S-022 did not ship the shape its own title describes, and a reader of the title alone will
+misread the tree.** Next.js forces `app/page.tsx` and `app/api/*`, which sit outside `[locale]`, to
+share one root layout with it, so `<html>` could not move. `app/layout.tsx` stays the single root
+layout and resolves the locale through next-intl's `getLocale()`. The full record, including the
+stale `Sources` line the seed carried, is under
+[S-022](#s-022-move-html-and-body-into-the-locale-aware-layout).
 
 **S-005 is done as of 2026-08-14, and the product is repainted.** It was the most expensive open
 seed and never the widest: it carried ADR-041 into `web/src`, replacing 78 uses of the red ramp
@@ -241,12 +277,13 @@ graph LR
   S004 --> S037[S-037 mobile primary]
   S005 --> S006[S-006 dark block]
   S008[S-008 change_requests]
-  S009[S-009 invitations + memberships]
+  S009[S-009 memberships: done, split] --> S043[S-043 decide invitation-accept session]
   S010[S-010 roles + settings]
   S011[S-011 decide identity_claims shape] --> S012[S-012 identity_claims]
   S013[S-013 decide audit posture] --> S014[S-014 audit + notification_log]
   S008 --> S015[S-015 policy-coverage gate]
   S009 --> S015
+  S043 --> S015
   S010 --> S015
   S012 --> S015
   S014 --> S015
@@ -263,6 +300,10 @@ graph LR
   S026 --> S027
   S003 --> S035[S-035 form boundaries]
   S036[S-036 calendar event marker]
+  S037 --> S044[S-044 mobile off-spec tokens]
+  S040[S-040 decide the seam GUCs] --> S045[S-045 pin the seam's settings]
+  S040 --> S046[S-046 repair ADR-042 citations]
+  S047[S-047 repoint the pending-approval citation]
   S028[S-028 prettier sweep]
   S034[S-034 wordmark at 200% scale]
   S027 --> S029[S-029 persons model + api]
@@ -284,21 +325,21 @@ graph LR
 | S-006 | Add the `.dark` block, and settle which dark mechanism wins | done | S-005, done |
 | S-007 | Gate: fail the build when an `@theme` token cannot resolve | done | S-001, done |
 | S-008 | Enable clan-isolation RLS on `change_requests` | done | none |
-| S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | open | none |
+| S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | done | none |
 | S-010 | Enable clan-isolation RLS on `user_clan_roles` and `clan_settings` | open | none |
 | S-011 | Decide the policy shape for `identity_claims`, which has no `clan_id`, in ADR-042 | done | none |
 | S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | open | S-011, done |
 | S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
 | S-014 | Enable RLS on the two tables S-013 decides for | open | S-013, done |
-| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008, S-009, S-010, S-012, S-014 |
+| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-010, S-012, S-014, S-043 |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
 | S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
 | S-018 | Enforce or hide `privacy_level` | blocked | S-016 |
 | S-019 | Make a clan invitation's reported status agree with its `expires_at` | open | none |
 | S-020 | Re-measure the four dormant database-review items against the code | open | none |
 | S-021 | Run the restore drill against a real dump, and date the result | open | none |
-| S-022 | Move `<html>` and `<body>` into the locale-aware layout | open | none |
-| S-023 | Land the `current_clan_id` cookie and the server request context on it | blocked | S-022 |
+| S-022 | Move `<html>` and `<body>` into the locale-aware layout | done | none |
+| S-023 | Land the `current_clan_id` cookie and the server request context on it | open | S-022, done |
 | S-024 | Derive capabilities per clan role, in `domain/capability` | blocked | S-023 |
 | S-025 | Rewrite the auth store around the clan context | blocked | S-023 |
 | S-026 | Land the three blocked-state screens | blocked | S-024, S-025 |
@@ -312,19 +353,25 @@ graph LR
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
 | S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
 | S-036 | Give the calendar's event marker a channel other than gold | open | none |
-| S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | open | none |
+| S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | done | none |
 | S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | open | S-006, done |
 | S-039 | Decide what the backoffice aside is made of, in ADR-046 | open | S-006, done |
-| S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | open | none |
+| S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | done | none |
 | S-041 | Make the web e2e gate supply its own environment | open | none |
 | S-042 | Make the missing-Supabase banner survive 200% text scale at 320 px | blocked | S-041 |
+| S-043 | Decide which session the invitation-accept path runs on, then cover `clan_invitations`, in ADR-048 | open | none |
+| S-044 | Reconcile mobile's two remaining off-spec token values with spec § 2.1 | open | none |
+| S-045 | Pin the exact set of settings the RLS seam writes | open | none |
+| S-046 | Repair ADR-042's four stale line citations into ADR-008 | open | none |
+| S-047 | Repoint `pending_approval_page.dart`'s citation at the register that replaced it | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
 on 2026-08-13, and for each one no second decision from the maintainer stands between an agent and its
 end state. **S-001 and S-034 are done**, so twelve of the fourteen are open. **S-037 is a fifteenth**,
 added 2026-08-14 by ADR-041 and carrying `none` too, so the count in the heading is the 2026-08-13
-count and not today's. **S-006, S-007, and S-035 are also open** without carrying `none`: each had its
+count and not today's. **Five more carry `none` as of 2026-08-22**: S-043, S-044, S-045, S-046, and
+S-047. Read the board rather than this paragraph for today's set. **S-006, S-007, and S-035 are also open** without carrying `none`: each had its
 only blocker satisfied rather than never having one. That trio said "S-004, S-007, and S-035" until
 2026-08-14, when S-004 and S-005 both went to `done` and S-006 took the place they left. **Four seeds are themselves the
 decision**: S-011, S-013, and S-016 produce an ADR and nothing else, and S-020 produces seeds and
@@ -1363,7 +1410,40 @@ Gold as a text colour, which S-003 already made a lint error. The lunar calendar
 
 ## S-037. Move the mobile `ArborTokens` primary onto ADR-041's leaf green
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**The seed missed the thing that mattered, and it would have shipped a false end state.**
+`ColorScheme.fromSeed` does not return its seed; it derives a tonal palette from it. Measured
+2026-08-22: the bronze seed produced `scheme.primary` `#7E570F`, and the leaf green produces
+`#3E6837`. So changing `tokens.dart` alone would have left the app painting a colour held in no
+token file, on a codebase whose stated rule is that colours live in `tokens.dart` only. Spec § 2.8
+already required the fix and nothing had implemented it. `buildAppTheme` now passes `primary` and
+`onPrimary` to `ColorScheme.fromSeed` explicitly.
+
+**No test asserted the primary colour before this seed**, so the value was unpinned in both
+directions. Three now exist, and a ratchet test fails if any `Color(0x…)` literal appears outside
+`tokens.dart`.
+
+**The two calls this seed was told to make.** `surface` is reconciled to ADR-041's `#FBF8F1`:
+mobile's `#FDFCF7` is sourced by no spec section and no ADR, and ADR-041 decision 3 chose the
+spec's value over both incumbents precisely so no client re-opens it. Contrast on the new ground,
+computed 2026-08-22: `onSurface` 16.22:1, `primary` 7.09:1, `error` 8.59:1. The `heritage` family
+is **not** added, and the reason is in `mobile/CLAUDE.md`: ADR-041 decision 2's argument for
+shipping the container pair early is web-shaped, because web's rename removes red from `primary`
+while mobile's bronze took no red away. The four values are recorded there with the rule that the
+seed building the first thủy tổ marker adds them together with the widget and golden that render
+them.
+
+**Negative controls, three, all watched failing 2026-08-22.** The bronze restored; the `fromSeed`
+pin removed, which produced `#3E6837` against an expected `#3E5C38`; and a planted
+`Color(0xFF123456)` in `app_theme.dart`, which the ratchet caught.
+
+**Gate, on the combined tree, 2026-08-22.** `dart format` 73 files, 0 changed; `build_runner` wrote
+7 outputs; `git diff --exit-code` clean; `flutter analyze` "No issues found!"; `flutter test` 131
+passed. Both goldens were re-baselined and both images viewed, the 2.0-scale one included; neither
+screen renders a filled primary, so the shift in both is the warm ground.
+
+**Two mobile token values are still off-spec and became S-044.**
 
 **Created 2026-08-14 by S-004, and it is not blocked by S-005.** Both seeds read ADR-041 and neither
 reads the other. They are separate seeds rather than one because they land in different languages
@@ -1407,6 +1487,38 @@ design system" for tokens being the only place a colour may live.
 **Out of scope.** The dark palette, spec § 2.2, on either client. Any mobile screen's composition.
 The web rename, which is S-005. Reconciling `onSurface` `#1D1B16` with web's `foreground` `#1a1a1a`,
 which ADR-041 names and deliberately leaves open.
+
+---
+
+## S-044. Reconcile mobile's two remaining off-spec token values with spec § 2.1
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-037**, which fixed `primary`, `onPrimary`, and `surface` and left these
+two alone on scope grounds, the same way S-002 opened S-034 and S-003 opened S-035 and S-036.
+
+**Two values in `mobile/lib/core/theme/tokens.dart` disagree with the spec**, both read
+2026-08-22. `:34` holds `surfaceContainerLow` `#F5F1E6`; spec § 2.1 names `surface-container-low`
+`#F4EFE4`. `:38` holds `error` `#8C1D18`; spec § 2.1's `danger` is `#A32218`, and ADR-041 uses
+`destructive #a32218` on web. A design system that is true on one client is not one, which is the
+argument ADR-041 already made for `primary`.
+
+**End state.** Each of the two values either matches spec § 2.1, or this seed records in its own
+text why mobile keeps its own. `test/core/theme/theme_test.dart` pins whichever is chosen, so the
+value is held by a test rather than by convention. S-037 established that pattern.
+
+**Verification.** The mobile full quality gate, `CLAUDE.md:80`, plus re-baselined goldens. Expect
+both golden images to shift: `surfaceContainerLow` is the card ground in `my_clans`. `error` does
+not appear in either image. Look at the 2.0-scale image before accepting it. **Flutter is installed
+on this machine but is not on `PATH`** — see the `Not verified` register.
+
+**Sources.** `mobile/lib/core/theme/tokens.dart:34` and `:38`, read 2026-08-22;
+`superpowers/specs/2026-08-02-design-system-and-screens.md` § 2.1 for both spec values;
+`docs/decisions/041-primary-green-heritage-family-single-background.md` for `destructive` on web.
+
+**Out of scope.** The dark palette, spec § 2.2. The `heritage` family, which `mobile/CLAUDE.md`
+pairs with its first consumer. Reconciling `onSurface` `#1D1B16` with web's `foreground`, which
+ADR-041 deliberately leaves open.
 
 ---
 
@@ -1535,7 +1647,30 @@ scale — a real open item, and a different one. A theme switch.
 
 ## S-040. Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Closed as ADR-047, `docs/decisions/047-rls-seam-sets-clan-id-only.md`.** The choice was to
+correct ADR-008 rather than add the GUC. `app.user_id` is **not** added. The reasons, in order of
+weight: no policy in the tree reads a second GUC, so it would be a setting nothing reads; the only
+candidate table is `identity_claims`, which ADR-042 had already given a deny-all tripwire the same
+day and which this seed puts out of scope; and both claim handlers run on `get_system_db`
+(`backend/app/infrastructure/dependencies.py:144,149`), which has no RLS seam, so the GUC would be
+unset exactly where it was wanted. The correction to ADR-008 is an **append** at `008:156`, a dated
+amendment, with the original sentence untouched.
+
+**Documentation only, so no gate was run, and that is correct.** No code changed.
+
+**Three points where this seed was the bug, all found 2026-08-22.**
+
+- It says S-008 added "seventeen lines" to ADR-008. `git show --numstat 634a0c5` reports **16 added
+  and 1 removed**, a net shift of 15, which is exactly the `135 → 150` move the seed itself
+  describes.
+- It names one GUC writer. There are **two**: `backend/app/core/rls.py:65` and
+  `backend/app/core/security.py:290`, the second re-applying `app.clan_id` to a transaction that
+  began during auth before the clan was known. Neither writes `app.user_id`, so the conclusion
+  stands, but a later seed adding a GUC has two sites to change.
+- Four of ADR-042's five line citations into ADR-008 went stale when S-008 shifted that file on the
+  same day. That repair is **S-046**.
 
 **A document and the code disagree about the shape of the RLS seam, and the document is the one an
 agent reads first.** Found 2026-08-22 by S-011, re-read at source by the coordinator the same day.
@@ -1576,6 +1711,119 @@ absent GUC mattered to a real decision.
 **Out of scope.** Any new policy. `identity_claims`, which is S-012. The absent
 `SYSTEM_DATABASE_URL` that ADR-008 Decision § 1 also promises and that the shipped design dropped
 on purpose: ADR-043 records that one, and it is a different disagreement.
+
+---
+
+## S-047. Repoint `pending_approval_page.dart`'s citation at the register that replaced it
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**This was an `Owed` row until 2026-08-22, when its trigger was met.** The row read: not changed
+"because `flutter` and `dart` are absent from this machine", so the mobile gate could not be run and
+an unverified edit to a `.dart` file is worse than a stale comment. That reason is now false.
+Flutter 3.44.8 is on this machine, only absent from `PATH`, and S-037 ran the full mobile gate on
+2026-08-22. The row was deleted in the same change that created this seed, as the Maintenance rule
+requires.
+
+**The defect.** `mobile/lib/features/auth/presentation/pending_approval_page.dart:11` ends its
+doc comment with "(work-register §2.2)". `docs/work-register.md` was deleted on 2026-08-13, so the
+pointer resolves to nothing.
+
+**The claim itself is still true, and it has a live home**, which is why this is a repoint and not a
+deletion. The comment says "No copy promises a notification, because no notification exists for any
+queue event". That is now the `Owed` row in this file reading "A notifications API. None exists, and
+the design spec refuses to draw a bell for one." Cite that register rather than the deleted file.
+
+**End state.** The citation resolves. `grep -rn "work-register" mobile/` returns nothing. The
+comment still records why no copy promises a notification, because that reason is the useful half
+and deleting it would lose it.
+
+**Verification.** The mobile full quality gate, `CLAUDE.md:80`, because a `.dart` file changes even
+though only a comment moves. **Prepend the SDK to `PATH` first:**
+`export PATH="$HOME/development/flutter/bin:$PATH"`. No negative control applies: a comment has no
+behaviour to invert, and saying so is better than inventing one.
+
+**Sources.** `mobile/lib/features/auth/presentation/pending_approval_page.dart:5-11`, read
+2026-08-22; the `Owed` row in this file naming the absent notifications API; the corrected Flutter
+row in [Not verified](#not-verified).
+
+**Out of scope.** Building a notifications API. Any other citation into the deleted
+`work-register.md`: nine more pointers in five files are dated historical records and stay, and the
+[Owed](#owed-with-an-owner-and-a-trigger) section says so.
+
+---
+
+## S-045. Pin the exact set of settings the RLS seam writes
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-040.** The disagreement S-040 resolved lived for roughly two months
+because no gate could see it, and the gap is narrow and cheap to close.
+
+**What is pinned today and what is not.**
+`backend/tests/integration/test_rls_activation.py:70-84` asserts the seam sets `current_user` and
+`app.clan_id`. It does **not** assert that the seam sets nothing else, and nothing anywhere compares
+the seam against ADR-008's prose. So the seam could gain or lose a setting and every gate would stay
+green, which is what let ADR-008 promise `app.user_id` while `rls.py` never wrote it.
+
+**The seam has two writers, not one**, and this is the detail S-040's own seed text got wrong:
+`backend/app/core/rls.py:65` and `backend/app/core/security.py:290`. A test that pins only the first
+would miss half the surface.
+
+**End state.** A test asserts the exact set of settings a request transaction carries, so that
+adding one fails the suite until someone updates the assertion deliberately. Both writers are
+covered. ADR-047 and ADR-008 § 2 name the set the test enforces.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+Plus the negative control that defines this seed: add a throwaway `SET LOCAL app.probe` to the seam,
+watch the new test fail, remove it.
+
+**Sources.** `backend/tests/integration/test_rls_activation.py:70-84`; `backend/app/core/rls.py:65`;
+`backend/app/core/security.py:290`; `docs/decisions/047-rls-seam-sets-clan-id-only.md`.
+
+**Out of scope.** Adding or removing any setting. That is ADR-047's decision and it is closed.
+
+---
+
+## S-046. Repair ADR-042's four stale line citations into ADR-008
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-040, which found them and could not repair them**: ADR-042 was outside its
+fence for that batch.
+
+**Four of ADR-042's five citations into ADR-008 no longer resolve to the text they name.** S-008
+shifted that file on 2026-08-22, the same day ADR-042 was written, so all four were correct when
+written. Read 2026-08-22:
+
+| ADR-042 cites | Naming | Now at |
+|---|---|---|
+| `:267` → ADR-008 line 135 | the `app.user_id` clause | 150 |
+| `:42` and `:286` → lines 100-107 | "false security" | 121 |
+| `:272` → lines 89-90 | `FORCE` | 104-105 |
+| `:127` → lines 103-105 | the bypassing role | 119-120 |
+
+`:36` → lines 56-59 still resolves.
+
+**Read this before choosing the shape of the repair.** A line number in a document that another
+seed edits is a citation that goes stale silently, and this is the second time it has happened here.
+Consider whether the repair should cite a heading or a quoted phrase instead of a line, and say what
+you chose. ADR-047's amendment sits at `008:156`, below all five spans, so it moves none of them
+further.
+
+**End state.** Every citation from ADR-042 into ADR-008 resolves to the text it names. Where a
+citation was changed to a non-line form, the ADR says so, because an ADR is a dated record and a
+silent rewrite erases evidence.
+
+**Verification.** Documentation only. No gate. Say so plainly rather than leaving the field empty.
+Check each citation by opening ADR-008 at the cited location and reading it.
+
+**Sources.** `docs/decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md` at
+`:36`, `:42`, `:127`, `:267`, `:272`, `:286`; `docs/decisions/008-rls-defense-in-depth.md`;
+`docs/decisions/047-rls-seam-sets-clan-id-only.md` Measurement 5, which is where the table above was
+first recorded.
+
+**Out of scope.** Anything ADR-042 decided. Any other document's citations into ADR-008.
 
 ---
 
@@ -1769,7 +2017,37 @@ the change-request workflow.
 
 ## S-009. Enable clan-isolation RLS on `clan_invitations` and `clan_memberships`
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-015
+**Status:** done, 2026-08-22, on `clan_memberships` only · **Blocked by:** none · **Unblocks:** S-015
+
+**This seed split, and the split is the outcome its own text predicted.** `clan_memberships` is
+covered by `backend/migrations/versions/031_rls_clan_memberships.py`, reversible, using the
+migration-027 predicate. `clan_invitations` is **not** covered and became **S-043**, which carries
+the decision. S-015 now waits on S-043 rather than on this seed.
+
+**The check this seed named passes, but on a different path than it predicted.** The login path
+reads neither of this seed's tables. It reads `user_clan_roles`
+(`backend/app/infrastructure/persistence/auth_repository.py:118-135`,
+`backend/app/infrastructure/persistence/me_query_port.py:19-42`). So the pre-selection hazard is
+real, and it belongs to **S-010**, which owns that table. The measurement is recorded there.
+
+**What broke `clan_invitations` is a write path, not a read.**
+`POST /api/v1/invitations/{token}/accept` (`backend/app/api/v1/invitations.py:89-102`) declares
+`get_current_user` and no `get_current_clan_id`, and it cannot: the invitee is not a member yet.
+Its handler runs on the RLS request session (`backend/app/infrastructure/dependencies.py:336-340`)
+and `get_by_token` (`backend/app/infrastructure/persistence/invitation_repository.py:53-58`) carries
+no `clan_id` predicate, because the token is the authorization. Measured 2026-08-22: adding
+`clan_invitations` to migration 031 makes every accept raise
+`EntityNotFoundError: invitation.not_found`. Pinned by
+`backend/tests/integration/test_invitation_accept_no_clan_context.py`.
+
+**Negative control, run 2026-08-22.** Replacing migration 031's predicate with `true` failed 8 of
+the 10 tests in `backend/tests/integration/test_rls_phase6_clan_memberships.py`; restoring it
+returned all 10 to green. The two survivors assert no isolation, which is the expected shape.
+
+**Gate, on the combined tree, 2026-08-22.** 1262 passed; `ruff check .` printed `All checks
+passed!`; 452 files already formatted; mypy `Success: no issues found in 418 source files`;
+`Contracts: 6 kept, 0 broken`. `upgrade head` and `downgrade` both run, verified by reading
+`relrowsecurity` and `pg_policies` on each side.
 
 **Both carry a non-optional `clan_id`**, at `backend/app/models/clan_invitation.py:27` and
 `backend/app/models/clan_membership.py:28`, so the template applies to both and they are one seed.
@@ -1802,6 +2080,54 @@ the planted inversion on each table.
 
 ---
 
+## S-043. Decide which session the invitation-accept path runs on, then cover `clan_invitations`, in ADR-048
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-015
+
+**Split out of S-009 on 2026-08-22, because it contains a decision.** S-009 covered
+`clan_memberships` and stopped here. The ADR number is **048**, allocated here.
+
+**The measurement that forces this.** Adding `clan_invitations` to migration 031 makes every
+invitation acceptance raise `EntityNotFoundError: invitation.not_found`. Run 2026-08-22 and pinned
+by `backend/tests/integration/test_invitation_accept_no_clan_context.py`. The cause is that
+`POST /api/v1/invitations/{token}/accept` (`backend/app/api/v1/invitations.py:89-102`) declares
+`get_current_user` and **not** `get_current_clan_id`, and cannot declare it, because the invitee is
+not a member of the clan yet. Its handler runs on the RLS request session
+(`backend/app/infrastructure/dependencies.py:336-340`), `apply_rls_context`
+(`backend/app/core/rls.py:63-65`) drops to `familyroots_app` on every transaction whether or not a
+clan is known, and `get_by_token`
+(`backend/app/infrastructure/persistence/invitation_repository.py:53-58`) carries no `clan_id`
+predicate because the token is the authorization. The write half,
+`transition_status` at `invitation_repository.py:107-127`, fails the same way.
+
+**Why it is a decision and not a fix.** Moving the accept path to the privileged `get_system_db`
+also strips RLS from invitation create, list, and revoke, which share the same handler and **are**
+clan-scoped. So the choice trades one uncovered path for three, or leaves the table uncovered.
+Nobody can make that call inside the seed that found it.
+
+**End state.** `docs/decisions/048-*.md` records whether the accept path moves to `get_system_db`
+or `clan_invitations` stays uncovered, and states what the choice does to invitation create, list,
+and revoke by name. If the decision is to cover the table, a migration enables the migration-027
+predicate on it, isolation is proven in both directions, and
+`backend/tests/integration/test_invitation_accept_no_clan_context.py` is **updated rather than
+deleted**: its accept-under-the-seam case must still pass.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`, plus `uv run alembic upgrade head`
+and the matching `downgrade` if a migration lands. Set your own `TEST_PG_DB_NAME`. Plus the planted
+inversion if a policy lands.
+
+**Sources**, all read 2026-08-22. `backend/app/api/v1/invitations.py:89-102`;
+`backend/app/infrastructure/dependencies.py:336-340`;
+`backend/app/infrastructure/persistence/invitation_repository.py:53-58` and `:107-127`;
+`backend/app/core/rls.py:63-65`;
+`backend/tests/integration/test_invitation_accept_no_clan_context.py`;
+`backend/migrations/versions/027_rls_events_branches.py:26` for the predicate.
+
+**Out of scope.** `user_clan_roles`, which is S-010 and has the same shape on a read path.
+`clan_memberships`, which S-009 closed. The invitation-expiry disagreement, which is S-019.
+
+---
+
 ## S-010. Enable clan-isolation RLS on `user_clan_roles` and `clan_settings`
 
 **Status:** open · **Blocked by:** none · **Unblocks:** S-015
@@ -1814,6 +2140,28 @@ authorization gate reads to decide what a caller may do. A policy that hides a r
 merely hide data: it silently downgrades the caller's permissions. Read
 `docs/architecture/rbac.md` and the gate before writing the policy, and establish whether the role
 read happens with `app.clan_id` already set.
+
+**That check has now been run, and it fails. Measured 2026-08-22 by S-009.** The role read is
+**not** privileged and happens **before** the GUC is set. `get_current_clan_id`
+(`backend/app/core/security.py:246-253`) queries `user_clan_roles` on the request session, and only
+then sets `app.clan_id` at `:290`. The login path reads the same table through
+`backend/app/infrastructure/persistence/auth_repository.py:118-135` and
+`backend/app/infrastructure/persistence/me_query_port.py:19-42`. Adding `user_clan_roles` to
+migration 031 produced this, against an unmodified handler:
+
+```
+FAILED test_rls_login_two_clans.py::test_login_resolves_a_multi_clan_user_under_the_rls_seam
+FAILED test_rls_login_two_clans.py::test_me_clans_lists_both_clans_under_the_rls_seam
+   assert None == 'cf16211b-…'          # login still answers 200, with clan_id None
+   assert set() == {'54f6d0af-…'}       # /me/clans returns []
+```
+
+**Read the failure mode before deciding.** There is no error anywhere. Login still returns `200`
+and simply reports no clans, which is the lock-out S-009's warning describes. **So this seed
+contains a decision and must be split**, exactly as its own warning and `.claude/rules/seeds.md`
+predict: `clan_settings` can probably take the template unchanged, and `user_clan_roles` cannot
+until something decides which session resolves a caller's roles. That decision is the same shape as
+**S-043**, and whoever takes either should read the other first.
 
 **End state.** Both tables have row-level security enabled with one clan-isolation policy each,
 reversible. A test proves a role check still resolves the caller's role for the selected clan, and
@@ -2320,7 +2668,41 @@ against the pre-envelope shapes and `web/CLAUDE.md` calls them frozen.
 
 ## S-022. Move `<html>` and `<body>` into the locale-aware layout
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-023
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-023
+
+**This seed's title describes a shape that does not compile, and the fix took a different one.**
+`web/src/app/page.tsx` and `web/src/app/api/*` sit outside `[locale]` but are still siblings of it
+under `app/`, so Next.js forces them to share one root layout: multiple root layouts require every
+top-level entry to sit in its own route group. A second `<html>` nested inside
+`[locale]/layout.tsx` while `app/layout.tsx` keeps its own is invalid React. What shipped instead:
+`app/layout.tsx` stays the single root layout and resolves the locale with next-intl's
+`getLocale()`, which reads a request header the intl middleware already set from the URL prefix.
+Locale resolution in next-intl is request-scoped, so it resolves correctly one layout above
+`[locale]`. `.claude/rules/tailwind.md` § 7 records both traps.
+
+**One of this seed's `Sources` had already gone stale.** It cites "the `next/font` call at
+`[locale]/layout.tsx:10`". S-002 had already moved the font declarations onto `<html>` in
+`app/layout.tsx`, so that defect no longer existed when this seed was worked.
+
+**Evidence.** `/vi/login` serves `<html lang="vi" …>` and `/en/login` serves `<html lang="en" …>`,
+recorded by request. `web/e2e/smoke.spec.ts` is now two passing plain `test()` cases at `:45` and
+`:52`, converted from the `test.fail()` ratchet as this seed required. Negative control: with
+`lang` hardcoded back to `"en"`, `smoke.spec.ts:45` failed with `Received: "en" Expected: "vi"`;
+restoring the fix returned both cases to green.
+
+**Gate, on the combined tree in the primary checkout, 2026-08-22.** `type-check` clean, `lint`
+clean, `depcruise` 3 pre-existing warnings and 0 errors, `test:unit` 328 passed, `test:component` 3
+passed, **`test:e2e` 38 passed**, `build` exit 0. `/` and `/_not-found` lose static prerendering
+because `getLocale()` calls `headers()`; `/` is intercepted by middleware before that matters.
+
+**The worktree run of `test:e2e` was red, and that is S-041 rather than a defect here.** In the
+`git worktree` this seed was built in, 4 of 38 failed: the horizontal-scroll case of
+`text-scale.spec.ts` on `/vi/login` and `/vi/register`, in both projects. Cause confirmed by the
+coordinator 2026-08-22: `web/.env.local` is untracked (`git ls-files web/.env.local` returns
+nothing), present in the primary checkout and absent in every worktree, so the missing-Supabase
+banner renders and scrolls the page sideways. The same gate on the same tree passed 38 in the
+primary checkout. The defect is **S-042** and the gate's dependence on an untracked file is
+**S-041**.
 
 **Every page in the product tells a screen reader it is English.**
 `web/src/app/layout.tsx:11` hardcodes `<html lang="en">`, and `web/src/app/[locale]/layout.tsx`
@@ -2363,7 +2745,7 @@ requires. Translating anything.
 
 ## S-023. Land the `current_clan_id` cookie and the server request context on it
 
-**Status:** blocked · **Blocked by:** S-022 · **Unblocks:** S-024, S-025
+**Status:** open · **Blocked by:** S-022, done 2026-08-22 · **Unblocks:** S-024, S-025
 
 **The clan context is the thing every later slice trusts, so it is built once here.** The backend
 requires `X-Current-Clan-Id` on every clan-scoped request, alongside `Authorization` and
@@ -2750,13 +3132,9 @@ does not exist. The thirteenth was added the same day by S-002.
 | PDF export. Deferred by ADR-020 and depends on the export worker ADR-005 describes and the Redis events ADR-004 describes, neither of which is built. `scripts/export_tree_pdf.py` is a stub that raises `NotImplementedError` | backend-engineer | The worker exists |
 | **Subset the two typefaces to woff2 and cut the font payload.** The production build emits both `.ttf` files whole, 176 KB plus 165 KB, measured in `.next/static/media/` on 2026-08-13. `next/font/local` neither subsets nor converts. Vietnamese needs a wide Latin range, so this is a subset rather than a Latin-only cut. **It is a register row and not a seed because it contains a decision**: a converted file cannot be hash-compared to `mobile/assets/fonts/`, so `web/src/app/fonts/fonts-in-sync-with-mobile.test.ts` needs a different anti-drift mechanism first, and choosing one is the work. Do not convert the files and delete the test | web-engineer | A Web Vitals or bundle measurement that names the font payload, or the first performance pass before launch. Nothing has measured it on a real connection yet |
 
-**Two citation defects were left alone on purpose, and both are recorded here rather than repaired.**
+**One citation defect is left alone on purpose. The other became S-047 on 2026-08-22, when its
+trigger was met**, and its row was deleted in the same change, as the Maintenance rule requires.
 
-- `mobile/lib/features/auth/presentation/pending_approval_page.dart:11` cites "work-register § 2.2",
-  which no longer exists. It was not changed because `flutter` and `dart` are absent from this
-  machine, measured 2026-08-13, so the mobile gate at `CLAUDE.md:80` cannot be run and an unverified
-  edit to a `.dart` file is worse than a stale comment. **Owner:** flutter-engineer. **Trigger:** the
-  next edit to that file, or any session on a machine with Flutter installed.
 - **Nine more pointers, in five files, are dated historical records and stay.** Two ADRs, two
   finished plans, and one spec. The full list with line numbers is in the table under
   [Where the work stands](#where-the-work-stands), alongside where each part of the deleted file
@@ -2774,10 +3152,17 @@ been read or run, and the row that replaces it says where.
   builds `app-debug.apk`, so it assembles. Whether a user can sign in to real Supabase from a real
   phone is unknown, for the reasons in the Task 20 row above. Everything mobile is verified against
   canned transports.
-- **Flutter is not installed on this machine.** `which flutter` and `which dart` both returned
-  nothing on 2026-08-13. `work-register.md:31` recorded Flutter 3.44.8 with Dart 3.12.2 as installed
-  locally on 2026-08-02. Both may be true of different machines. The consequence is concrete: no
-  mobile claim can be verified from this session, so no mobile seed exists above.
+- **~~Flutter is not installed on this machine.~~ This claim was wrong, and it is corrected here
+  rather than deleted, because it was cited.** Re-measured 2026-08-22: the SDK is at
+  `/Users/southern/development/flutter`, and `flutter --version` reports **Flutter 3.44.8, Dart
+  3.12.2**, which is exactly what `work-register.md:31` recorded on 2026-08-02. That record was
+  right. What is true is narrower: **the SDK is not on `PATH` in any shell.** `which flutter` and
+  `which dart` return nothing in a login shell, and no `.zshrc`, `.zprofile`, or `.zshenv` adds it.
+  The 2026-08-13 measurement ran `which` and drew "not installed" from "not found", which is the
+  same defect class this file exists to catch: a true observation with the wrong conclusion
+  attached. **To run the mobile gate, prepend the SDK to `PATH` first:**
+  `export PATH="$HOME/development/flutter/bin:$PATH"`. S-037 ran the full mobile gate on 2026-08-22
+  this way, and the coordinator re-ran it on the combined tree the same day: 131 tests passed.
 - **The in-process event dispatcher has no durable delivery guarantee.** The root `CLAUDE.md`
   forbids treating an in-process event as a durable integration event without explicit mitigation.
   What happens to an event when the process dies mid-transaction has not been measured.
@@ -2796,13 +3181,31 @@ been read or run, and the row that replaces it says where.
   the range, and S-002 records why. Whether Flutter applies the axis or paints the default instance
   was **not tested**: `flutter` and `dart` are absent from this machine. If it paints the default,
   every body string in the mobile app is ExtraLight. Do not repair `pubspec.yaml` from this row.
-  Read it on a machine with Flutter first.
+  **The stated reason for not testing it is now wrong**: Flutter is on this machine, it is only
+  absent from `PATH`, per the corrected row above. The claim itself is still unverified, because
+  nothing has rendered a weight-400 string and measured it. Whoever tests it should write the
+  result here with the date.
 - **Whether a `paths:` glob in `.claude/rules/` loads the file when a matching file is edited.**
   `nextjs.md` and `tailwind.md` both carry the field and both scope to `web/**`. The whole value of
   the scoping depends on this and it has not been tested here. Treat both files as best-effort.
 - **No dated restore-drill result exists.** Searched 2026-08-13, nothing under `docs/ops/` records a
   run of `scripts/restore_drill.sh` with a date and a `DRILL:` line. So "backups work" is not
   established. S-021 is the seed that settles it.
+- **`ensure_user_profile`'s concurrent first-login upsert is not race-safe.**
+  `backend/app/core/security.py:172-181` guards the insert with
+  `.on_conflict_do_nothing(index_elements=["id"])`, and the comment at `:170-171` claims the PK is
+  the only constraint at risk, "since Supabase sub<->email is 1:1". That reasoning answers a
+  different question: it rules out same-email/**different**-id, while the collision observed is
+  same-email/**same**-id, two concurrent first logins for one user. Postgres can raise the
+  `uq_user_profiles_email` violation before the PK conflict is resolved, and `ON CONFLICT (id)` does
+  not absorb an email-index violation. Found 2026-08-22 by S-009, which was not looking for it:
+  `test_ensure_user_profile_commit::test_concurrent_first_login_is_race_safe` failed once in three
+  full-suite runs with `duplicate key value violates unique constraint "uq_user_profiles_email"`,
+  and a 6-way `asyncio.gather` probe reproduced it **3 times in 400 attempts** against an unmodified
+  tree. Two consequences: that test is flaky while its own docstring asserts it is not, and the
+  production path can answer 500 on a genuine concurrent first login. **This is a register row and
+  not a seed because it contains a decision**: widening the conflict target is an auth change, and
+  what the loser of the race should observe is not established here. **Owner:** backend-engineer.
 - **The three "not verified" boundaries in [`roadmap.md`](roadmap.md).** That file marks which of its
   milestone boundaries rest on no source. Those marks are the claim, and they are not repeated here.
 
@@ -2823,10 +3226,11 @@ been read or run, and the row that replaces it says where.
   same change that creates the seed replacing it.
 - The four counts in the head of this file are a measurement. Re-take them by reading the board's own
   `Status` cell rather than by adding one to the previous figures, and say which of the four moved.
-- Every ADR number a seed allocates is written in that seed. 041 through 047 are taken by S-004,
-  S-011, S-013, S-016, S-006, S-039, and S-040, in that order. **Written so far: 041 on 2026-08-14
-  by S-004, 045 on 2026-08-21 by S-006, and 042 and 043 on 2026-08-22 by S-011 and S-013.** 044,
-  046, and 047 are still allocations rather than files. The next free number is **048**.
+- Every ADR number a seed allocates is written in that seed. 041 through 048 are taken by S-004,
+  S-011, S-013, S-016, S-006, S-039, S-040, and S-043, in that order. **Written so far: 041 on
+  2026-08-14 by S-004, 045 on 2026-08-21 by S-006, and 042, 043, and 047 on 2026-08-22 by S-011,
+  S-013, and S-040.** 044, 046, and 048 are still allocations rather than files. The next free
+  number is **049**.
 - **`docs/decisions/README.md` is not the authority on which numbers are taken.** It said 046 was
   free on 2026-08-21 while this file had already given 046 to S-039. A seed allocates its number in
   its own text, so this file wins and the index is the bug. That index now carries a note saying so.
