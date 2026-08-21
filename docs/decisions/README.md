@@ -43,11 +43,13 @@
 | [039](039-clan-user-list-identity-asymmetry.md) | Clan User Lists — `display_name` on Both, `email` Only on the Admin Pending Queue | Accepted, shipped (2026-08-02) |
 | [040](040-metrics-token-floor-and-throttle.md) | `METRICS_TOKEN` Length Floor at Boot + 404-Preserving Failure Throttle | Accepted, shipped (2026-08-03) |
 | [041](041-primary-green-heritage-family-single-background.md) | Leaf Green Is `primary`, Lacquer Red Becomes the `heritage` Family, One Warm Ground Is `background` | Accepted, shipped (2026-08-14, seed S-005) |
+| [043](043-audit-notification-rls-posture.md) | `audit_logs` Is Inside RLS Layer 2 with Per-Command Policies, `notification_log` Takes the Template Unchanged | Accepted (2026-08-22, seed S-013) — decision only; seed S-014 implements it |
 | [045](045-dark-mode-prefers-color-scheme-only.md) | Dark Mode Switches on `prefers-color-scheme` Alone, and the Dark Palette Is a Token Override | Accepted, shipped (2026-08-21, seed S-006) |
 
-042 to 044 are **allocated and not written**: seeds S-011, S-013, and S-016 in
-[`../SEEDS.md`](../SEEDS.md) each carry one of them. The gap is deliberate, so that four agents
-picking work at once cannot pick the same number. The next free number is **046**.
+042 and 044 are **allocated and not written**: seeds S-011 and S-016 in
+[`../SEEDS.md`](../SEEDS.md) each carry one of them. 043 was written on 2026-08-22 by seed S-013.
+The gap is deliberate, so that four agents picking work at once cannot pick the same number. The
+next free number is **046**.
 
 When adding ADRs, use sequential numbering and keep prior ADRs immutable except for
 Status updates. **Any breaking API contract change or new load-bearing architectural
