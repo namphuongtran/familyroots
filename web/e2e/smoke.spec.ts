@@ -24,24 +24,32 @@ test('the login page renders and carries a sign-in form', async ({ page }) => {
 })
 
 /**
- * A ratchet over a real defect, not a skipped test.
+ * Was a ratchet over a real defect; now a real assertion.
  *
- * `src/app/layout.tsx` hardcodes `<html lang="en">`, so every Vietnamese page
- * currently tells assistive technology it is English — screen readers apply the
- * wrong pronunciation rules to the entire product. The `[locale]` layout renders
- * a `<div>`, not an `<html>`, so the locale never reaches the attribute.
+ * `src/app/layout.tsx` used to hardcode `<html lang="en">`, so every Vietnamese
+ * page told assistive technology it was English — screen readers applied the
+ * wrong pronunciation rules to the entire product. Seed S-022 fixed it:
+ * `RootLayout` now reads the negotiated locale with next-intl's `getLocale()`
+ * (a request-scoped read of the header the intl middleware sets, not tied to
+ * which layout calls it) rather than hardcoding a value, so `<html lang>`
+ * reflects the URL's locale prefix even though `<html>` itself still lives in
+ * the layout above `[locale]` — `src/app/page.tsx` and `src/app/api/*` share
+ * that same root layout and are outside the `[locale]` segment, and React does
+ * not allow a second, nested `<html>` inside it.
  *
- * Fixing it means moving `<html>`/`<body>` into a locale-aware layout while
- * `src/app/page.tsx` and `src/app/api/*` still live outside `[locale]` — real
- * work that belongs to PR 1 (auth), which already rewrites the locale, cookie and
- * middleware machinery. It is not harness work.
- *
- * `test.fail()` means: this is expected to fail today. CI stays green while the
- * bug exists, and turns RED the moment someone fixes it — at which point delete
- * `.fail` and keep the assertion. That is the opposite of `test.skip`, which
- * would let the fix land unnoticed and the coverage never come back.
+ * This was a `test.fail()` before the fix: CI stayed green while the bug
+ * existed, and would have turned RED the moment someone fixed it without
+ * updating this test. That is the opposite of `test.skip`, which would have
+ * let the fix land unnoticed and the coverage never come back.
  */
-test.fail('the page declares Vietnamese to assistive technology', async ({ page }) => {
+test('the page declares Vietnamese to assistive technology', async ({ page }) => {
   await page.goto('/vi/login')
   await expect(page.locator('html')).toHaveAttribute('lang', 'vi', { timeout: 3000 })
+})
+
+// Same fix, a different locale prefix — proves `lang` tracks the route rather
+// than being a second hardcoded value that happens to read `vi`.
+test('the page declares English to assistive technology under /en', async ({ page }) => {
+  await page.goto('/en/login')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en', { timeout: 3000 })
 })
