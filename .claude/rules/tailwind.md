@@ -394,11 +394,27 @@ in that file at all; the backoffice mark is on line 35. Nothing in the fix reste
 which is precisely why nobody would have caught them. Grep for the string before you trust a cited
 line here.
 
-Known defect, so do not be surprised by it: `web/src/app/layout.tsx` hardcodes
-`<html lang="en">`, and `web/src/app/[locale]/layout.tsx` renders a `<div>` instead of the
-document element. That breaks `T-12`. `web/e2e/smoke.spec.ts:44` pins the current broken state
-with `test.fail()`, so fixing `lang` turns that test red on purpose. Update the test in the
-same pull request.
+**Fixed by seed S-022, and the trap for next time it is touched.** `web/src/app/layout.tsx`
+used to hardcode `<html lang="en">`, and `web/src/app/[locale]/layout.tsx` rendered a `<div>`
+instead of the document element — that broke `T-12`. The obvious-looking fix is to move
+`<html>`/`<body>` down into `app/[locale]/layout.tsx` so it can read the route's own locale
+directly. **That fix does not compile.** `web/src/app/page.tsx` (the bare `/` route) and
+`web/src/app/api/*` sit outside the `[locale]` segment but are still siblings of it under
+`app/`, so they share the same, single, required root layout — Next.js only allows more than
+one root layout when every top-level entry sits inside its own route group, and turning
+`page.tsx` into one is a bigger restructure than this fix needs. Nesting a second `<html>`
+inside `app/[locale]/layout.tsx` while `app/layout.tsx` still renders one is also just invalid:
+React does not allow `<html>` inside `<body>`.
+
+The fix that shipped: `app/layout.tsx` stays the one root layout and calls next-intl's
+`getLocale()` (from `next-intl/server`) instead of hardcoding `"en"`. `getLocale()` reads a
+request header the intl middleware already set from the URL prefix, so it resolves correctly
+for `/vi/login` and `/en/login` even though it is called one layout above `[locale]` — locale
+resolution in next-intl is scoped to the request, not to which component in the tree asks for
+it. `app/[locale]/layout.tsx` dropped its `<div className="antialiased">` wrapper entirely
+(`globals.css`'s `body { @apply ... antialiased }` already carries that class on the real
+document element, so the div was a second, dead copy) and returns a `<>` fragment instead.
+`web/e2e/smoke.spec.ts:44` is a plain `test()` now, covering both `/vi/login` and `/en/login`.
 
 ## 8. Images and fonts
 

@@ -188,9 +188,9 @@ Four harnesses, one gate each:
 - `pnpm test:e2e` — Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots `next dev` on
   `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. Four specs, and
   `pnpm test:e2e --list` counted 36 tests on 2026-08-21 (18 cases across the two projects):
-  - `smoke.spec.ts` — locale redirect, the login form renders, and a `test.fail()` ratchet on
-    `R-lang` (see `docs/sad/11-risks-and-technical-debt.md`) that turns red the day
-    `<html lang>` is fixed.
+  - `smoke.spec.ts` — locale redirect, the login form renders, and (since seed S-022 fixed
+    `R-lang`, see `docs/sad/11-risks-and-technical-debt.md`) `<html lang>` tracking the route
+    locale on both `/vi/login` and `/en/login`.
   - `fonts.spec.ts` — the two mandated typefaces reach the screen (seed S-002). A computed
     style in a real browser is the only thing that can see a dead `font-family`.
   - `text-scale.spec.ts` — `T-04`: no horizontal page scroll at 320 px width and 200% root

@@ -23,7 +23,6 @@ graph TB
     l2[R10 Lunar range guard masks over-2199 as a 29-day month]:::comp
     l3[R11 Web test harness now spine-only · no feature slice coverage yet]:::comp
     l4[R12 Prompt-2 TODO scaffolds in scripts and infra]:::comp
-    l5[R-lang Every page declares English to assistive technology]:::comp
   end
 
   classDef comp fill:#85bbf0,stroke:#5d82a8,color:#000000
@@ -47,7 +46,7 @@ graph TB
 | R10 | **Lunar range masking** — `_days_in_lunar_month` catches `ValueError` broadly | Year > 2199 silently becomes a 29-day month | Engine range 1910–2199 is fail-loud elsewhere | Narrow the except clause |
 | R11 | **Thin web tests** — was Node runner, behavior + contract suites only | Regressions land in the browser layer | Four harnesses now exist and are CI-gated: Vitest unit (55 tests), Vitest/RTL/MSW component (3 tests), Playwright e2e (real `next dev`, desktop + mobile viewport), `dependency-cruiser` layer rules. Coverage is the spine only — no feature slice has tests yet | Each feature slice PR adds unit/component/e2e coverage for its own screens |
 | R12 | **`services/` legacy fence** | Cross-cutting code outside the hexagon | import-linter fences it; new aggregates go through `application/` | Keep the ratchet shrinking |
-| R-lang | **Every page declares the wrong language to assistive technology.** `src/app/layout.tsx` hardcodes `<html lang="en">`, and `src/app/[locale]/layout.tsx` renders a `<div>`, so the selected locale never reaches the `lang` attribute. Screen readers apply English pronunciation rules to Vietnamese content across the whole product. Confirmed by request: `/vi/login` serves `<html lang="en">` | Every non-English page tells assistive technology it is English | Not fixed here — the fix is structural: `<html>`/`<body>` must move into a locale-aware layout while `src/app/page.tsx` and `src/app/api/*` still sit outside the `[locale]` segment. Tracked by a `test.fail()` in `web/e2e/smoke.spec.ts`: CI stays green while the bug exists and turns red the moment it is fixed, forcing the assertion to be promoted to a normal test rather than quietly lost | **Owner: PR 1 (auth slice)**, which already rewrites the locale, cookie and middleware machinery |
+| ~~R-lang~~ | **Fixed by seed S-022, 2026-08-22.** Was: every page declared the wrong language to assistive technology — `src/app/layout.tsx` hardcoded `<html lang="en">`, and `src/app/[locale]/layout.tsx` rendered a `<div>`, so the selected locale never reached the `lang` attribute. Confirmed by request before the fix: `/vi/login` served `<html lang="en">` | — | `app/layout.tsx` (the one root layout `app/page.tsx` and `app/api/*` also share) now reads the locale with next-intl's `getLocale()` instead of hardcoding it, rather than moving `<html>` into `app/[locale]/layout.tsx` — that would have needed `page.tsx` split into its own route group to keep its own root layout, a larger change than this risk needed. `web/e2e/smoke.spec.ts:45` (formerly a `test.fail()`) is now a plain, passing `test()` covering `/vi/login` and `/en/login` | Closed |
 
 ## 11.3 Debt principles in force
 
