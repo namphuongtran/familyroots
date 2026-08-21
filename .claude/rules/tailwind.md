@@ -72,8 +72,31 @@ Two rules follow, and the second one is the one that costs time:
   2026-08-13: with a throwaway file carrying `text-muted-foreground bg-destructive border-input`,
   the production build emitted `--color-muted-foreground:#6e6653`, `--color-destructive:#a32218`,
   and `--color-input:#8a8072`, each with the matching `.class{…var(--color-x)}` rule. So the values
-  are correct and on demand, not dead. **S-007 is the seed for gating this**, and it must not be
-  built on a runtime probe for the reason above.
+  are correct and on demand, not dead. **Seed S-007 gated this on 2026-08-22**, and the next
+  paragraph is what it built.
+
+**The gate is `web/src/app/theme-tokens.test.ts`, and it compiles rather than reads.** It is in the
+unit gate, so `pnpm test:unit` fails when a token cannot resolve, and the failing case is named for
+the token. Three things about it are worth knowing before you touch it:
+
+- **It generates the class set instead of relying on `web/src`.** One `bg-*`, `font-*`, `rounded-*`,
+  or `animate-*` candidate per declared token, handed to Tailwind through `@source inline(...)` with
+  `source(none)`. That is what removes the ambiguity in the paragraph above: once every token is
+  referenced, absence from the built CSS means the build dropped it and nothing else. Verified
+  2026-08-22 by dropping one candidate from the list, at which point `--color-input` vanished from
+  the build, exactly as the fifteen dead-looking tokens did in a browser.
+- **It judges the value, not the shape of the text.** Every `var()` is substituted against the scope
+  and the result must parse as a colour, so both halves of the S-001 defect fail: `hsl(var(--input))`
+  with `--input` gone fails on the missing variable, and `hsl(#8a8072)` with `--input` restored fails
+  on `hsl()` not taking a hex. A literal that is not a colour, `#ff` or `bananas`, fails too.
+- **A new `@theme` namespace stops it rather than slipping past it.** `UTILITY_PREFIX` knows four
+  namespaces. Add `--spacing-*` or `--text-*` to `@theme` and the file throws, naming the namespace,
+  because a namespace it skips is a namespace nothing gates. Extend the map, do not delete the throw.
+
+Two things it deliberately does not do. It does not judge whether a value is the *right* colour;
+`contrast.test.ts` measures the pairs and ADR-041 decides the values. It does not check the two font
+tokens' families, which read variables `next/font` creates at runtime: those are allow-listed, and
+`e2e/fonts.spec.ts` is what proves they reach a screen.
 
 **These classes work now:** `bg-background`, `text-foreground`, `border-border`, `bg-card`,
 `bg-muted`, `text-muted-foreground`, `bg-popover`, `bg-accent`, `bg-secondary`,
@@ -177,7 +200,8 @@ focus ring and needs no offset.
 Rules that follow from this:
 
 - **Do not add a new token in the `hsl(var(--x))` form. Put the value straight in `@theme`.**
-  This is the defect that cost seventeen tokens, and nothing in the build catches it yet.
+  This is the defect that cost seventeen tokens. Since 2026-08-22 the unit gate catches it, in
+  `theme-tokens.test.ts`, so you will find out in `pnpm test:unit` rather than on a screen.
 - **Use the semantic token, not Tailwind's own palette**, for example `text-muted-foreground`
   rather than `text-gray-500`. Since 2026-08-21 this has a second and harder reason than contrast:
   a palette colour has no dark value, so `text-gray-500` is a screen that does not follow the

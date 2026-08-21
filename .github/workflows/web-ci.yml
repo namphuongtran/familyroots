@@ -48,6 +48,14 @@ jobs:
       - name: Dependency boundaries
         run: pnpm depcruise
 
+      # This step is also where the stylesheet gates live, and none of them is
+      # reachable from any other job. `src/app/theme-tokens.test.ts` compiles
+      # `globals.css` through the real Tailwind pipeline and fails when an
+      # `@theme` token cannot resolve (seed S-007); `contrast.test.ts` measures
+      # the token pairs against WCAG AA (S-003, S-006); `focus-ring.test.ts`
+      # scans for a focus ring shipped without its offset (S-005). CSS the
+      # browser drops is not a build error, so `pnpm build` passing says nothing
+      # about any of the three.
       - name: Unit tests
         run: pnpm test:unit
 
