@@ -25,11 +25,15 @@ class ArborTokens extends ThemeExtension<ArborTokens> {
   });
 
   /// Primary text is `on_surface` #1d1b16 — never #000000.
+  ///
+  /// `primary`, `onPrimary` and `surface` are ADR-041's values, taken exactly.
+  /// See `docs/decisions/041-primary-green-heritage-family-single-background.md`
+  /// decision 1 for the leaf green and decision 3 for the one warm ground.
   factory ArborTokens.light() => const ArborTokens(
-    surface: Color(0xFFFDFCF7),
+    surface: Color(0xFFFBF8F1),
     surfaceContainerLow: Color(0xFFF5F1E6),
     onSurface: Color(0xFF1D1B16),
-    primary: Color(0xFF7A5C2E),
+    primary: Color(0xFF3E5C38),
     onPrimary: Color(0xFFFFFFFF),
     error: Color(0xFF8C1D18),
     outlineVariant: Color(0xFFCFC7B4),
