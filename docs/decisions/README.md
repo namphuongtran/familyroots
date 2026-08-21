@@ -43,9 +43,10 @@
 | [039](039-clan-user-list-identity-asymmetry.md) | Clan User Lists — `display_name` on Both, `email` Only on the Admin Pending Queue | Accepted, shipped (2026-08-02) |
 | [040](040-metrics-token-floor-and-throttle.md) | `METRICS_TOKEN` Length Floor at Boot + 404-Preserving Failure Throttle | Accepted, shipped (2026-08-03) |
 | [041](041-primary-green-heritage-family-single-background.md) | Leaf Green Is `primary`, Lacquer Red Becomes the `heritage` Family, One Warm Ground Is `background` | Accepted, shipped (2026-08-14, seed S-005) |
+| [042](042-identity-claims-app-layer-isolation-system-session-lockout.md) | `identity_claims` Keeps Application-Layer Clan Isolation, and Its RLS Policy Denies the Request Role | Accepted (2026-08-22, seed S-011; decision only, built by S-012) |
 | [045](045-dark-mode-prefers-color-scheme-only.md) | Dark Mode Switches on `prefers-color-scheme` Alone, and the Dark Palette Is a Token Override | Accepted, shipped (2026-08-21, seed S-006) |
 
-042 to 044 are **allocated and not written**: seeds S-011, S-013, and S-016 in
+043 and 044 are **allocated and not written**: seeds S-013 and S-016 in
 [`../SEEDS.md`](../SEEDS.md) each carry one of them. The gap is deliberate, so that four agents
 picking work at once cannot pick the same number. The next free number is **046**.
 
