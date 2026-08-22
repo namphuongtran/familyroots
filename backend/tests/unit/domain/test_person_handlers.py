@@ -82,7 +82,12 @@ class TestPersonCommandHandlerUpdate:
 
     @pytest.mark.asyncio
     async def test_update_response_redacts_pii_for_editor_editing_stranger(self) -> None:
-        """L11: the PATCH response must not leak a stranger's phone/email to an editor."""
+        """The PATCH response must not leak a stranger's phone/email to an editor.
+
+        docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md § 2 gives an
+        `editor` the phone/email of "their own linked person only", and its Measurement 3
+        names PATCH /persons/{id} as one of the four routes that redact.
+        """
         person = _make_person("Before")
         person.phone = "0900000000"
         person.email = "a@example.com"

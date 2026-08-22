@@ -83,23 +83,29 @@ class _FakePersonQueryHandler:
         return out
 
     async def redact_pii(self, persons: Any, *, viewer_role: str, viewer_user_id: Any) -> None:
-        # PII redaction (L11) is covered in test_person_pii_visibility; not exercised
-        # here — this batch test targets profile/fields/stats behavior.
+        # A no-op on purpose, and it proves nothing about redaction — this module's
+        # fixtures carry no phone or email, so redacting here would assert nothing. This
+        # batch test targets profile/fields/stats behavior.
         #
-        # AMENDED 2026-08-22 by seed S-058, which the two lines above are the reason for.
-        # They cite a suite that does not hold the claim: test_person_pii_visibility
-        # calls redact_pii itself and issues no HTTP request, so it proves the function
-        # and never proves that this route calls it. ADR-049 § "Measurement 5" deleted
-        # a redaction call site and watched the whole suite stay at 1351 passed. The
-        # call site this module's route reaches, app/api/v1/persons.py:267, is now
-        # covered by tests/integration/test_person_pii_over_http.py, which sends the
-        # request and reads phone/email out of the response body.
+        # The rule itself is
+        # docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md.
         #
-        # The stub stays a no-op deliberately: this module's fixtures carry no phone or
-        # email, so redacting here would assert nothing, and the wiring is proved in the
-        # file named above. A test author citing another suite is making a claim about
-        # that suite, and it has to be read at source like any other citation
-        # (.claude/rules/seeds.md, "A test pins an outcome, not a setting").
+        # Be careful what the PII suites prove. test_person_pii_visibility, unit and
+        # integration alike, calls redact_pii itself and issues no HTTP request, so it
+        # proves the function and never proves that any route calls it. ADR-049
+        # § "Measurement 5" deleted a redaction call site and watched the whole suite stay
+        # at "1351 passed". The call site this module's route reaches,
+        # app/api/v1/persons.py:267, is covered by
+        # tests/integration/test_person_pii_over_http.py, which sends the request and reads
+        # phone/email out of the response body.
+        #
+        # A test author citing another suite is making a claim about that suite, and it has
+        # to be read at source like any other citation (.claude/rules/seeds.md, "A test pins
+        # an outcome, not a setting"). Corrected 2026-08-22 by seed S-058; folded into one
+        # comment by seed S-059, which also repointed this comment's citation at the ADR
+        # above. It used to cite a review-finding label whose defining document was
+        # deleted on 2026-07-12, so nothing in this repository defines it — see ADR-049
+        # § "Measurement 8b" and the dated amendment in ADR-037 § 7.
         return None
 
     async def get_persons_stats(

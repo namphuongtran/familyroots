@@ -1,7 +1,18 @@
-"""L11: contact PII (phone/email) is redacted on read unless viewer is admin or self.
+"""Contact PII (phone/email) is redacted on read unless the viewer is admin or self.
+
+The rule is docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md. Its § 1
+fixes the set at exactly ``phone`` and ``email``; its § 2 gives an ``editor`` or ``viewer``
+the contact details of "their own linked person only", and an ``admin`` those of every
+person in the clan.
 
 Genealogy content stays visible to every clan member; only phone/email are gated.
 redact_pii mutates the PersonResponse list in place before it is serialized to the wire.
+
+**This file proves the function, not the wiring.** Every case below calls ``redact_pii``
+itself and none issues an HTTP request. ADR-049 § "Measurement 5" deleted a route's
+redaction call and watched the whole suite stay at ``1351 passed``. The four routes that
+redact are proved by request and response body in
+``tests/integration/test_person_pii_over_http.py`` (seed S-058).
 """
 
 import uuid

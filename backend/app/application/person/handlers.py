@@ -26,8 +26,14 @@ from app.domain.shared.exceptions import EntityNotFoundError, ForbiddenError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.schemas.person import PersonResponse
 
-# Contact PII hidden from ordinary clan members (L11). Genealogy content (names, dates,
+# Contact PII hidden from ordinary clan members. Genealogy content (names, dates,
 # places, lineage, bio, …) stays visible to every member.
+#
+# The rule and the set are fixed by
+# docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md. Its § 1 keeps the
+# set at exactly these two fields, and its § 3 requires that adding a third field here also
+# adds it to EXCLUDED_PERSON_FIELDS (app/domain/change_request/person_changes.py), or the
+# change-request queue republishes what this read path just hid.
 _PII_FIELDS = ("phone", "email")
 _ADMIN_ROLE = "admin"
 
@@ -144,7 +150,10 @@ class PersonCommandHandler:
         await self._uow.commit()
         response = PersonResponse.model_validate(person)
         # The PATCH response echoes the person's stored fields — redact contact PII so
-        # an editor editing a stranger's record can't read phone/email through it (L11).
+        # an editor editing a stranger's record can't read phone/email through it.
+        # docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md § 2 gives an
+        # `editor` the phone/email of "their own linked person only", and its Measurement 3
+        # names PATCH /persons/{id} as one of the four routes that redact.
         await _redact_person_pii(
             self._repo, [response], viewer_role=cmd.actor.role, viewer_user_id=cmd.actor.user_id
         )
