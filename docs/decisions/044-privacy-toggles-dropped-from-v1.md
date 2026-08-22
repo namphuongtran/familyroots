@@ -42,6 +42,21 @@ backend/app/models/clan_settings.py:30:    privacy_level: Mapped[str] = mapped_c
 Two hits, both declarations, in one file. No reader in the backend, the web client, or the mobile
 client.
 
+> **Amended 2026-08-22 by seed S-017, which dropped `allow_public_tree` and checked first.** The
+> command above searches `backend/app web/src mobile/lib`. **`backend/tests` is not in it**, and the
+> sentence "no reader in the backend" reads wider than the command supports. One hit lies outside
+> that root: `backend/tests/integration/test_rls_phase10_clan_settings.py:270` wrote
+> `allow_public_tree = true` and `:284` read it back, as the payload of
+> `test_update_of_the_other_clans_settings_touches_no_row`.
+>
+> **It was never a reader of the column's meaning** — the RLS policy under test does not refer to the
+> column, which was only an arbitrary value to update. S-017 repointed it at `default_language`,
+> which `_seed_two` writes explicitly, so the closing assertion can no longer pass on a server
+> default the way `assert allow_public is False` could. The decision in § 1 is unchanged.
+>
+> **The scope of a search is part of the claim it supports.** Measurement 2 below already says this
+> about names; it applies to roots as well, and this table is the instance.
+
 ### Measurement 2 — the same question asked about the **concept**, because a name search is a claim about names
 
 Seed **S-020** established on 2026-08-22 that its own absence claim was false: it had searched for

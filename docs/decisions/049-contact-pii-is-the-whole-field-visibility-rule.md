@@ -294,7 +294,25 @@ docs/decisions/037-change-requests-workflow.md
 
 **Nothing in the repository defines `L11`.** All six are citing sites. `git log -S"L11"` shows it
 entered with commit `8dbf159` on 2026-07-05, where it is a label from a review list that was never
-committed. ADR-037 § 7 (`037-change-requests-workflow.md:191`) cites it too, so an ADR rests on it.
+committed.
+
+> **Amended 2026-08-22 by seed S-059. The sentence above is wrong on one point, and the way it went
+> wrong is the same defect this ADR was written to correct.** `L11` **was** committed. Re-running
+> `git log -S"L11"` over the **whole tree** rather than over `backend/` returns `bae1ee4`
+> (2026-07-04), one commit earlier, which added `docs/architecture/backend-review-2026-07-04.md`.
+> That file defined the label at its line 133: "L11 within-clan PII by default
+> (`GET /persons profile=full`)". Commit `733decc` deleted that document whole on 2026-07-12, which
+> is when the citations became dangling.
+>
+> **So `L11` named a finding, never the rule.** The code committed the day after `bae1ee4` cited it
+> as though it were the rule, which made those citations thin on the day they were written rather
+> than only later. The conclusion this ADR drew — that the citations point at nothing today, and that
+> ADR-049 is the definition they were reaching for — is unchanged.
+>
+> Verified by the coordinator on 2026-08-22: `git log -S"L11" -- backend/` returns `8dbf159` as its
+> earliest commit, while `git log -S"L11" -- docs/` returns `bae1ee4`. **A `-S` search scoped to a
+> subtree is a claim about that subtree, not about the repository** — which is Measurement 1's own
+> lesson, that a name search is a claim about names, arriving one level up. ADR-037 § 7 (`037-change-requests-workflow.md:191`) cites it too, so an ADR rests on it.
 This is the citation defect that passes every mechanical check: the pointer resolves, because the
 files exist, and it fails, because none of them holds the claim.
 

@@ -463,6 +463,49 @@ and the index are two places and only the index is read when someone asks which 
 Three rows were added this batch — 046, 052, and 053 — and the index now carries a two-directional
 check to run whenever an ADR lands.
 
+**Re-taken again 2026-08-22, after a twelfth parallel batch of four: 63 seeds, 55 done, 8 open, and
+none blocked.** All four figures moved:
+
+- **Done, 51 to 55.** S-017, S-033, S-059, and S-061.
+- **Open, 9 to 8.** The four left for `done`, minus four; S-038 became open as S-061 closed, and
+  S-062 and S-063 arrived open, plus three.
+- **Blocked, 1 to 0.** S-038 left it and nothing entered. **The board carries no blocked seed for the
+  first time since it was written.**
+- **Seeds, 61 to 63.** The coordinator opened S-062 and S-063 from what this batch measured.
+
+**Two agents each found that a document they were told to trust had scoped its own search too
+narrowly, and the two findings are the same shape.** S-059 found that ADR-049 says `L11` was "never
+committed"; re-run over the whole tree rather than over `backend/`, `git log -S"L11"` returns
+`bae1ee4` (2026-07-04), which added a review document defining the label, deleted by `733decc` eight
+days later. S-017 found that ADR-044's Measurement 3 searched `backend/app web/src mobile/lib` while
+its prose reads "no reader in the backend", and one reader sat in `backend/tests`. Both were verified
+by the coordinator and both ADRs now carry a dated amendment. **The scope of a search is part of the
+claim it supports** — the general form of "a name search is a claim about names", which ADR-044's own
+Measurement 2 already states one paragraph below the table that got it wrong.
+
+**S-033 could not do what its own seed said, and said so instead of forcing it.** The two paths the
+seed names do not exist, and two live files outside its slice consume the chain it was told to
+delete. It followed S-027's precedent — trim to what the out-of-scope files need, delete the rest —
+and it refused to reconcile the seed's nine-day-old "102 files" figure with today's 51 rather than
+adopting either. **The measurement that seed existed to take is therefore not usable**, and the
+closing note says so rather than letting a ratio be quoted forward.
+
+**One honest hedge produced a seed.** S-033 was fenced out of `web/messages/*.json` and reported the
+orphaned-key question as "unconfirmed, not observed" rather than "none". The coordinator ran the
+check: **44 keys are orphaned, and `relationship_form` is a dead namespace** with 16 keys and zero
+surviving callers. A confident "none" would have closed the question wrongly. That is **S-062**.
+
+**A document had drifted one batch earlier and the coordinator had merged it.**
+`docs/ops/migrations.md` said `Head = 035_rls_clan_settings` while `036` was already in the tree.
+S-017 repaired it while doing something else. Nothing enforces the two staying equal, which is
+**S-063**.
+
+**S-061 corrected itself before committing, and reported the deviation.** Its first pass invented a
+sizing and ordering for the brand row that ADR-046's per-line table does not specify, and it had
+already written that invention into `.claude/rules/tailwind.md`. It caught this on re-reading the
+table literally, reverted the code, and fixed both doc passages. **The value is in reporting it**:
+an agent that quietly fixes its own deviation teaches the next one nothing.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -654,6 +697,8 @@ graph LR
   S053 --> S060[S-060 restore advertises its envelope]
   S006 --> S039[S-039 decide the backoffice aside] --> S061[S-061 convert the aside]
   S061 --> S038[S-038 the 393 palette utilities]
+  S032 --> S033[S-033 delete legacy persons] --> S062[S-062 orphaned message keys]
+  S063[S-063 migrations-doc drift gate]
   S055 --> S056[S-056 by-id edge visibility]
   S028[S-028 prettier sweep]
   S034[S-034 wordmark at 200% scale]
@@ -661,7 +706,6 @@ graph LR
   S029 --> S030[S-030 persons repository + hooks]
   S030 --> S031[S-031 persons list + detail]
   S031 --> S032[S-032 persons create + edit]
-  S032 --> S033[S-033 delete legacy persons]
 ```
 
 ## Status board
@@ -684,7 +728,7 @@ graph LR
 | S-014 | Enable RLS on the two tables S-013 decides for | done | S-013, done |
 | S-015 | Gate: fail when a clan-owned table carries no policy | done | S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | done | none |
-| S-017 | Drop `allow_public_tree` by reversible migration, per ADR-044 § 1 | open | S-016, done |
+| S-017 | Drop `allow_public_tree` by reversible migration, per ADR-044 § 1 | done | S-016, done |
 | S-018 | Drop `privacy_level` by reversible migration, per ADR-044 § 2 | open | S-016, done |
 | S-019 | Make a clan invitation's reported status agree with its `expires_at` | done | none |
 | S-020 | Re-measure the four dormant database-review items against the code | done | none |
@@ -700,12 +744,12 @@ graph LR
 | S-030 | Land the persons repository, query keys, and hooks | done | S-029, done |
 | S-031 | Land the persons list and detail screens | done | S-030, done |
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | done | S-031, done |
-| S-033 | Delete the legacy persons code | open | S-032, done |
+| S-033 | Delete the legacy persons code | done | S-032, done |
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
 | S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
 | S-036 | Give the calendar's event marker a channel other than gold | open | none |
 | S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | done | none |
-| S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | blocked | S-061 |
+| S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | open | S-061, done |
 | S-039 | Decide what the backoffice aside is made of, in ADR-046 | done | S-006, done |
 | S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | done | none |
 | S-041 | Make the web e2e gate supply its own environment | done | none |
@@ -726,9 +770,11 @@ graph LR
 | S-056 | Give the two by-id relationship reads the same soft-delete predicate the batch reads carry | done | S-055, done |
 | S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | done | none |
 | S-058 | Make a person read prove, through the API, that a stranger's `phone` comes back `null` | done | none |
-| S-059 | Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for | open | none |
+| S-059 | Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for | done | none |
 | S-060 | Make `POST /persons/{id}/restore` advertise the envelope it actually returns | open | none |
-| S-061 | Convert the backoffice aside off `bg-gray-950` in one edit, per ADR-046 | open | S-039, done |
+| S-061 | Convert the backoffice aside off `bg-gray-950` in one edit, per ADR-046 | done | S-039, done |
+| S-062 | Remove the 44 message keys S-033's deletion orphaned, and the dead `relationship_form` namespace | open | S-033, done |
+| S-063 | Gate: fail when `docs/ops/migrations.md` and the Alembic chain disagree | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -2736,7 +2782,7 @@ admin-only and unredacted by decision. Repointing the six `L11` citations.
 
 ## S-059. Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by S-053, found while measuring something else.** Six files cite `L11` as the
 authority for the contact-PII redaction rule. **Nothing in this repository defines `L11`.** Counted
@@ -2813,7 +2859,7 @@ returns a message envelope.
 
 ## S-061. Convert the backoffice aside off `bg-gray-950` in one edit, per ADR-046
 
-**Status:** open · **Blocked by:** S-039, done 2026-08-22 · **Unblocks:** S-038
+**Status:** done, 2026-08-22 · **Blocked by:** S-039, done 2026-08-22 · **Unblocks:** S-038
 
 **ADR-046 already decided this. Read it and do not re-open the choice**:
 `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`, whose "What has to
@@ -2868,9 +2914,89 @@ partial conversion this seed forbids, and seeing it fail is what proves the whol
 
 ---
 
+## S-062. Remove the 44 message keys S-033's deletion orphaned, and the dead `relationship_form` namespace
+
+**Status:** open · **Blocked by:** S-033, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by the coordinator, after S-033 said honestly that it had not confirmed this.**
+S-033's fence gave `web/messages/*.json` to S-061 for that batch, so it reported "unconfirmed, not
+observed" rather than "none". **That hedge is why the finding exists**: a confident "none" would have
+closed the question wrongly.
+
+**Measured 2026-08-22 by the coordinator**, by extracting every `useTranslations('<ns>')` namespace
+and every `t('<key>')` leaf from the six components S-033 deleted, then checking each leaf against
+the surviving `web/src`:
+
+- **44 keys are now referenced nowhere**, across four namespaces: `member` (12), `member_form` (17),
+  `members` (3), and `relationship_form` (12).
+- **`relationship_form` is a dead namespace, not a set of dead keys.** It holds 16 keys in
+  `web/messages/vi.json` and **zero** surviving files call `useTranslations('relationship_form')`.
+  The other three namespaces keep live callers — 5, 4, and 2 files — so only individual keys are
+  orphaned there.
+
+**End state.** The 44 keys are gone from all four locale files, and `relationship_form` is gone as a
+namespace. All four files stay valid JSON with the same key set as each other, which is the property
+that actually matters and which nothing currently checks.
+
+**Verification.** The **full** web gate in `web/CLAUDE.md`. **A green gate is not evidence here**, and
+say so: nothing loads an unused key, so deleting one cannot fail a test. **The control has to be
+built rather than planted.** Assert that the four locale files carry identical key sets, and watch
+that assertion fail by deleting one key from `vi.json` alone. Without it, this seed can silently
+delete a key from three files and leave it in the fourth.
+
+**Read this before deleting.** A key that no `t()` call names may still be reached by a computed
+name. Search for template-built keys before trusting the list, and say what you searched. The list
+above was built from literal `t('...')` calls only.
+
+**Sources.** The six files S-033 deleted, read at `main` before deletion:
+`web/src/components/members/{MemberDetailClient,MemberForm,MemberCard,MemberSearch,MemberList,RelationshipForm}.tsx`;
+`web/messages/{vi,en,zh,fr}.json`.
+
+**Out of scope.** Any key not in the measured list. Adding a locale. The `Backoffice.rail_label` key
+S-061 added.
+
+---
+
+## S-063. Gate: fail when `docs/ops/migrations.md` and the Alembic chain disagree
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by the coordinator, after S-017 found the drift and the coordinator confirmed it
+had shipped.** `docs/ops/migrations.md:119` on `main` at `62a863d` read
+"Head = `035_rls_clan_settings`", while `backend/migrations/versions/036_rls_user_clan_roles.py` had
+already landed in the previous batch. S-052 shipped the migration and did not update the file, and
+**nothing caught it, including the coordinator, who merged it.**
+
+**The shape of the defect is the one this repository keeps meeting.** Two places record the same
+fact, only one of them is executable, and the other is what an agent reads first. That is the same
+failure `.claude/rules/seeds.md` was adopted for on 2026-08-13.
+
+**End state.** A check fails when the migration chain on disk and the chain listed in
+`docs/ops/migrations.md` disagree, on either the head or the set of revisions. It runs in the backend
+gate, so an agent meets it before opening a pull request rather than in CI.
+
+**Decide and say which**: derive the doc's list from Alembic and fail on difference, or assert the
+head only. The first is stronger and the second is cheaper. **Do not make the check pass by
+loosening what it compares.**
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**Negative control, and it is the point of the seed:** revert `docs/ops/migrations.md` to its
+`62a863d` state, which is missing `036`, and watch the new check fail naming that revision. Then
+restore. A check that has never been seen to catch the exact drift that motivated it pins nothing.
+
+**Sources.** `docs/ops/migrations.md` at `62a863d`, line 119;
+`backend/migrations/versions/036_rls_user_clan_roles.py`, landed in the batch before it;
+`backend/migrations/versions/037_drop_allow_public_tree.py`, which S-017 added along with the repair.
+
+**Out of scope.** `infra/supabase/migrations/`, the hand-written parallel set that
+`docs/ops/migrations.md` already records as drifted with Alembic as the source of truth. Any
+migration's content.
+
+---
+
 ## S-038. Move the 393 hardcoded palette utilities onto the semantic tokens
 
-**Status:** blocked · **Blocked by:** S-061 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-061, done 2026-08-22 · **Unblocks:** nothing yet
 
 **This seed became blocked on 2026-08-22, by a measurement S-039 took.** One of the 393 utilities is
 `bg-gray-50` at `web/src/app/[locale]/backoffice/layout.tsx:32`, and it is the surface the backoffice
@@ -4455,7 +4581,7 @@ S-018. Any screen.
 
 ## S-017. Drop `allow_public_tree` by reversible migration, per ADR-044 § 1
 
-**Status:** open · **Blocked by:** S-016, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-016, done 2026-08-22 · **Unblocks:** nothing yet
 
 **ADR-044 § 1 decided this column drops and does not come back**, because it is a projection of
 `privacy_level` and two authorities on one question is ADR-027's defect. **Read the ADR and do not
@@ -5419,7 +5545,33 @@ Deleting a person. Bulk edit.
 
 ## S-033. Delete the legacy persons code
 
-**Status:** open · **Blocked by:** S-032, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-032, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Closed 2026-08-22. Three of this seed's own statements were wrong, and the agent found each at
+source rather than working around it.**
+
+- **The paths this seed names do not exist.** There is no `web/src/lib/api/persons*` and no
+  `web/src/lib/hooks/use*Person*`. The legacy transport is `web/src/lib/api/members.ts`, which
+  exports `personsApi`, and the legacy hooks are `web/src/lib/hooks/useMembers.ts`, which export
+  `usePerson`, `usePersons`, and `personKeys`. Confirmed by the coordinator: both globs match
+  nothing on `main` at `62a863d`.
+- **The chain could not be deleted whole, because two live out-of-scope files consume it.**
+  `web/src/components/family-tree/MemberSidebar.tsx:9` imports `usePerson`, and
+  `web/src/lib/hooks/useRelationships.ts:17` imports `personKeys`. Both belong to slices that have
+  not been built. Rewiring them was not possible without building parts of those slices, so the
+  agent followed S-027's `axios.ts` precedent exactly: **trim the shared chain to what the
+  out-of-scope files still need, delete the rest.** Ten files deleted outright, ten trimmed.
+- **The "102 files on 2026-08-13" figure could not be reconciled and was not accepted.** Today's
+  count of the four legacy trees is **51** files, not the ~99 the seed implies. The agent flagged the
+  gap rather than adopting either number. **The measurement this seed exists to take is therefore
+  unreliable as a basis for estimating PR 3 through PR 7**, and whoever needs that estimate should
+  re-derive it rather than quoting the ratio forward.
+
+The delta actually measured, 2026-08-22: **20 files changed, 111 insertions, 1386 deletions**, zero
+added. `no-orphans` warnings 3 before and 3 after, unchanged, because
+`web/.dependency-cruiser.cjs` excludes the legacy trees from the graph. Three tests removed, each
+named with the deleted path it covered. The orphaned message keys the seed did not ask about became
+**S-062**.
 
 **PR 2 closes here, on the same rule S-027 closed PR 1 with.** No pull request only adds.
 
