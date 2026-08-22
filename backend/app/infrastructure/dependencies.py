@@ -342,3 +342,21 @@ def get_invitation_command_handler(
 
 def get_invitation_query_handler(db: AsyncSession = Depends(get_db)) -> InvitationQueryHandler:
     return InvitationQueryHandler(SqlAlchemyInvitationRepository(db))
+
+
+# Accepting an invitation is a CROSS-CLAN flow, exactly like an identity claim: the invitee
+# is not a member of the clan yet, so ``POST /invitations/{token}/accept``
+# (``app/api/v1/invitations.py:95-108``) cannot declare ``get_current_clan_id`` and the RLS
+# GUC is therefore unset for the whole request. The token IS the authorization
+# (``invitation_repository.get_by_token`` has no ``clan_id`` predicate on purpose), so this
+# ONE route runs on the privileged system session while create/list/revoke stay on ``get_db``
+# and keep the seam. ADR-048 is the decision and the reason; migration 032 relies on it.
+#
+# Do NOT re-point this at ``get_db``: under the ``clan_invitations`` policy every accept would
+# answer ``invitation.not_found``. ``tests/integration/test_invitation_accept_no_clan_context.py``
+# pins both halves of that.
+def get_invitation_accept_handler(
+    db: AsyncSession = Depends(get_system_db),
+) -> InvitationCommandHandler:
+    uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+    return InvitationCommandHandler(SqlAlchemyInvitationRepository(db), uow)
