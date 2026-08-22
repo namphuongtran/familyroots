@@ -11,6 +11,25 @@ Accepted.
 > `Event` and `Branch` remain hard-deleted as described here; only `Document`
 > moved.
 
+> **Amendment (2026-08-22, ADR-051, seed S-055):** the 2026-07-02 update below is
+> **amended, not withdrawn as a whole, and its text is left exactly as written.** Its
+> first clause — "soft-deleting a person will also soft-delete its edges" — is
+> **superseded**: no cascade is built and none will be.
+> [ADR-051](051-edge-visibility-derived-not-cascaded.md) decided that an edge's
+> visibility is **derived on read**, not stored on the edge row. An edge is visible when
+> its own `is_deleted` is `false` **and** neither endpoint person's `is_deleted` is
+> `true`. Its second clause — "`restore` re-activates only the edges hidden by that same
+> delete" — **stands and is satisfied exactly**, because the person's flag is one of the
+> three inputs to the predicate: restoring a person un-hides the edges its delete hid, and
+> an edge an admin deleted separately keeps its own flag and stays hidden. Nothing is
+> stored to tell the two apart, so nothing can be lost.
+> The read filter shipped on 2026-08-22 as seed S-054
+> (`backend/app/infrastructure/persistence/person_query_port.py:84`,
+> `person_repository.py:274,281`). The five reasons the cascade lost — chiefly that a
+> cascading **restore** can be refused by migration 022's `parent_child` guard and left
+> half-applied — are in ADR-051 § 4. Two by-id reads still carry half the predicate; that
+> is ADR-051 § 8 and seed S-056, and it is not a cascade.
+
 > **Update (2026-07-02):** Person/Marriage/ParentChild FKs use `ON DELETE RESTRICT`
 > (persons are never hard-deleted). Soft-deleting a person currently leaves its edges
 > live (they are hidden from the clan-scoped tree, which filters `is_deleted=false`,
