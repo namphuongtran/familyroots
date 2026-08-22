@@ -25,7 +25,7 @@ from jose import jwk, jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.core.security as security_module
-from app.core.database import get_db
+from app.core.database import get_db, get_system_db
 from app.main import create_app
 
 pytestmark = pytest.mark.integration
@@ -92,6 +92,9 @@ def client(migrated_db_url: str, jwks_cache: None) -> Iterator[TestClient]:
             yield session
 
     app.dependency_overrides[get_db] = _override_db
+    # ADR-048: POST /invitations/{token}/accept runs on the privileged system session
+    # (it has no clan context), so the test session must be injected there too.
+    app.dependency_overrides[get_system_db] = _override_db
     yield TestClient(app)
     engine.sync_engine.dispose()
 

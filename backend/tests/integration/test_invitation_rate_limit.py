@@ -25,7 +25,7 @@ from fastapi import Header
 from httpx2 import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.database import get_db
+from app.core.database import get_db, get_system_db
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.security import get_current_user
 from app.main import create_app
@@ -51,6 +51,9 @@ async def client_with_rate_limit(migrated_db_url: str) -> AsyncGenerator[AsyncCl
 
     app = create_app()
     app.dependency_overrides[get_db] = _override_db
+    # ADR-048: POST /invitations/{token}/accept runs on the privileged system session
+    # (it has no clan context), so the test session must be injected there too.
+    app.dependency_overrides[get_system_db] = _override_db
     app.dependency_overrides[get_current_user] = _override_current_user
 
     for mw in app.user_middleware:

@@ -9,8 +9,9 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > **defense-in-depth layer-2** (ADR-008) and is **ACTIVE**: request traffic runs under
 > the non-bypass `familyroots_app` role with a per-request `app.clan_id` GUC, so
 > `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
-> `change_requests`, and `clan_memberships` are RLS-enforced at the DB layer (other
-> clan-scoped tables are added table-by-table, and two of them cannot be — see point 7).
+> `change_requests`, `clan_memberships`, and `clan_invitations` are RLS-enforced at the DB
+> layer (other clan-scoped tables are added table-by-table, and one of them cannot be — see
+> point 7).
 > `persons` carries two extra rules — see point 6 below and
 > [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
 > describe the application-layer mechanism that remains the primary guarantee.
@@ -68,7 +69,7 @@ PostgreSQL instance
    `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
 6. **RLS layer-2 (ACTIVE for `documents`, `events`, `branches`, `parent_child`,
-   `marriages`, `persons`, `change_requests`, `clan_memberships`).** The request path drops to the non-bypass `familyroots_app`
+   `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`).** The request path drops to the non-bypass `familyroots_app`
    role and sets the transaction-local `app.clan_id` GUC (an `after_begin` seam on the
    request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
    RLS-enforced at the DB layer behind the primary application filters. System paths
@@ -94,12 +95,13 @@ PostgreSQL instance
      must insert the membership first or avoid `RETURNING`. See
      [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md).
 
-7. **Two clan-scoped tables cannot take a clan policy as they stand**, because they are
-   read on paths that run *before* any clan is chosen. The request session drops to
-   `familyroots_app` on every transaction, including those, so `app.clan_id` is empty,
-   the predicate is NULL, and the table reads as empty. Nothing raises. The failure looks
-   like a successful request with missing data — which is why this is written down rather
-   than left to be rediscovered. Both were measured on 2026-08-22 while closing S-009.
+7. **A clan-scoped table cannot take a clan policy while any path reads it before a clan is
+   chosen.** The request session drops to `familyroots_app` on every transaction, including
+   such a path, so `app.clan_id` is empty, the predicate is NULL, and the table reads as
+   empty. Nothing raises. The failure looks like a successful request with missing data —
+   which is why this is written down rather than left to be rediscovered. Two tables were
+   measured in that state on 2026-08-22 while closing S-009. **One is still open and one is
+   now resolved**, and the resolved one shows the shape of the fix.
 
    - **`user_clan_roles`** is what `get_current_clan_id` reads to decide which clan is
      active (`backend/app/core/security.py:246-253`; the GUC is set only at `:290`), and
@@ -108,17 +110,26 @@ PostgreSQL instance
      answers `200` but with `clan_id: null`, and `/me/clans` returns `[]` — the user is
      told they belong to no clan. Pinned by
      `backend/tests/integration/test_rls_login_two_clans.py`.
-   - **`clan_invitations`** is read by `POST /invitations/{token}/accept`
-     (`backend/app/api/v1/invitations.py:89`), which deliberately has no
-     `get_current_clan_id` — the invitee is not a member yet — while its handler runs on
-     `get_db` (`dependencies.py:336`) and `get_by_token`
-     (`invitation_repository.py:53`) has no `clan_id` predicate. With a policy applied,
-     every accept raises `invitation.not_found`. Pinned by
-     `backend/tests/integration/test_invitation_accept_no_clan_context.py`.
+   - **`clan_invitations` had the same shape and is now RESOLVED**, by
+     [ADR-048](../decisions/048-invitation-accept-runs-on-the-system-session.md) and
+     migration `032`. `POST /invitations/{token}/accept`
+     (`backend/app/api/v1/invitations.py:95`) deliberately has no `get_current_clan_id` —
+     the invitee is not a member yet — and `get_by_token`
+     (`invitation_repository.py:53`) has no `clan_id` predicate, because the token is the
+     authorization. So that ONE route moved to its own provider on the privileged system
+     session (`get_invitation_accept_handler`, `dependencies.py:358-362`), while create,
+     list and revoke stayed on `get_db` and are what the policy protects. The accept path
+     therefore keeps one layer of clan isolation where the other three have two, which
+     ADR-048 records rather than hides. Pinned by
+     `backend/tests/unit/api/test_invitation_accept_session_wiring.py` (the route resolves
+     the right session) and
+     `backend/tests/integration/test_invitation_accept_no_clan_context.py` (the session
+     choice still produces the right behaviour against the real policy).
 
-   Covering either one means first deciding which session that path runs on, and that
-   decision needs its own ADR. Seed S-009 enabled RLS on `clan_memberships` only for
-   this reason.
+   Covering a table in this shape means first deciding which session its clan-less path runs
+   on, and that decision needs its own ADR. Seed S-009 enabled RLS on `clan_memberships` only
+   for this reason; seed S-043 then made the decision for `clan_invitations`, and S-010 still
+   owns `user_clan_roles`.
 
 ## Multi-clan membership (clan switcher)
 

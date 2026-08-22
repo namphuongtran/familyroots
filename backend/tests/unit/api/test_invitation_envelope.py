@@ -17,7 +17,10 @@ from fastapi.testclient import TestClient
 from app.api.v1.invitations import admin_invitations_router, user_invitations_router
 from app.core.database import get_db
 from app.core.security import ensure_user_profile, get_current_clan_id, get_current_user
-from app.infrastructure.dependencies import get_invitation_command_handler
+from app.infrastructure.dependencies import (
+    get_invitation_accept_handler,
+    get_invitation_command_handler,
+)
 from app.schemas.auth import UserProfile
 
 
@@ -80,7 +83,9 @@ def _user_client(handler: _FakeAcceptHandler) -> TestClient:
         "email": "invitee@x.com",
         "user_metadata": {"full_name": "Invitee"},
     }
-    app.dependency_overrides[get_invitation_command_handler] = lambda: handler
+    # ADR-048: accept has its OWN provider (the privileged system session), separate from
+    # the create/revoke command handler that stays on the RLS request session.
+    app.dependency_overrides[get_invitation_accept_handler] = lambda: handler
     return TestClient(app)
 
 

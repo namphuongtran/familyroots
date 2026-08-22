@@ -16,6 +16,7 @@ from app.core.permissions import RequireClanRole
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import (
+    get_invitation_accept_handler,
     get_invitation_command_handler,
     get_invitation_query_handler,
 )
@@ -86,11 +87,16 @@ async def revoke_invitation(
     )
 
 
+# The one route in this module with no clan context: the invitee is not a member yet, so
+# there is no clan to select and ``get_current_clan_id`` cannot be declared here. It therefore
+# runs on ``get_invitation_accept_handler`` (the privileged system session) rather than on the
+# RLS request session the other three use — see ADR-048. The token is the authorization, and
+# ADR-021's rate limit on ``/api/v1/invitations`` is what guards it against guessing.
 @user_invitations_router.post("/{token}/accept", responses=ok(InvitationAcceptedResponse))
 async def accept_invitation(
     token: str,
     current_user: dict[str, Any] = Depends(get_current_user),
-    handler: InvitationCommandHandler = Depends(get_invitation_command_handler),
+    handler: InvitationCommandHandler = Depends(get_invitation_accept_handler),
 ) -> dict[str, Any]:
     out = await handler.accept(
         AcceptInvitation(

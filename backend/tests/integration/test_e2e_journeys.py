@@ -50,7 +50,7 @@ from jose import jwk, jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.core.security as security_module
-from app.core.database import get_db
+from app.core.database import get_db, get_system_db
 from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
     AuthTokens,
@@ -186,6 +186,9 @@ def client(
             yield session
 
     app.dependency_overrides[get_db] = _override_db
+    # ADR-048: POST /invitations/{token}/accept runs on the privileged system session
+    # (it has no clan context), so the test session must be injected there too.
+    app.dependency_overrides[get_system_db] = _override_db
     app.dependency_overrides[get_identity_provider] = lambda: stub_identity
     yield TestClient(app)
     engine.sync_engine.dispose()
