@@ -22,8 +22,7 @@ infra/
 ├── render/
 │   └── render.yaml      # Render.com config-as-code
 ├── supabase/
-│   ├── seed.sql            # empty scaffold
-│   └── rls_policies.sql    # NOT the deployed policies — see below
+│   └── seed.sql            # empty scaffold — no schema, no policies. See below
 ├── firebase/
 │   └── google-services-template.json
 └── sentry/
@@ -86,12 +85,47 @@ Postgres 18 server and diffing `information_schema`:
 - It could not be applied to a plain Postgres at all: `004_fcm_tokens.sql` calls `auth.uid()`,
   and psql stopped with `ERROR: schema "auth" does not exist`.
 
-`rls_policies.sql` is a file of the same kind and has not been reviewed against the deployed
-policy set. The policies the deployed database runs come from Alembic migrations `002` and
-`027`-`036` (ADR-008, ADR-043), which leave 21 policies across 14 RLS-enabled tables at head.
-`rls_policies.sql` cannot be applied to that database: run against a fresh `alembic upgrade
-head` on 2026-08-22 it stopped at its first statement with `ERROR: schema "auth" does not
-exist`, and the 21 policies were unchanged. Do not apply it to anything.
+**The RLS policy set is not managed here either.** `rls_policies.sql` was a hand-written set of
+20 policies of the same kind, and seed **S-067 deleted it on 2026-08-22** after reviewing it.
+The policies the deployed database runs come from Alembic migrations `002` and `027`-`036`
+(ADR-008, ADR-043): 20 policies over 13 RLS-enabled tables at head, counted on 2026-08-22
+against a fresh `alembic upgrade head`. (`infra/README.md` previously said 21 over 14. That was
+correct when S-064 measured it and stopped being correct the same day: migration
+`039_drop_clan_settings` dropped the `clan_settings` table and its one policy with it.)
+
+S-064 recorded `rls_policies.sql` as an unreviewed liability. The review found three things, all
+measured on 2026-08-22 against a fresh `alembic upgrade head` on Postgres 18.
+
+- **It contradicted ADR-008 § 2 at its root.** Every policy in it keyed on `auth.uid()`.
+  ADR-008 § 2 (`docs/decisions/008-rls-defense-in-depth.md:304-308`) chose app-specific GUCs
+  "not `request.jwt.claims`/`auth.uid()` which require Supabase's `auth` schema", and
+  [ADR-047](../docs/decisions/047-rls-seam-sets-clan-id-only.md) re-affirms that half of § 2 as
+  shipped and unchanged.
+- **"It cannot be applied" was true only of plain Postgres, and that was the trap.** On plain
+  Postgres it stopped at statement 1 with `ERROR: schema "auth" does not exist`, which is what
+  made it look inert. Given nothing more than a stub `auth.uid()` — which a real Supabase
+  project supplies for free — **31 of its 32 statements applied cleanly on top of the shipped
+  set**, taking `public` from 20 policies to 39. It stopped only at the last statement, on
+  `storage`, which Supabase also supplies.
+- **Applying it would have widened clan isolation, not replaced it.** Every policy it declared
+  was PERMISSIVE, and Postgres OR's permissive policies for the same command and role. Its
+  `persons_insert_editor_above` carried `WITH CHECK (auth.user_clan_role() IN
+  ('admin','editor'))` and **no clan predicate at all**, beside the shipped `persons_ins` and
+  its `WITH CHECK (created_by_clan_id = current_setting('app.clan_id'))`. Demonstrated at the
+  database layer: a user approved `editor` in clan A **only**, on a session whose `app.clan_id`
+  was clan A, inserted a row owned by clan B and it was accepted. Dropping that single policy
+  and repeating the identical insert produced `ERROR: new row violates row-level security
+  policy for table "persons"`.
+
+Its `auth.user_clan_id()` helper is worth naming as the reason not to revive any of it. It
+returned the **first** approved clan by `LIMIT 1` with no `ORDER BY`. This product has no "the
+user's clan": a user may belong to several, and the active one arrives per request as
+`X-Current-Clan-Id` and is injected as `app.clan_id` (ADR-008, ADR-047). Its sibling
+`auth.user_clan_role()` had the same `LIMIT 1` shape and **was** used, by 10 of its 20 policies.
+
+`backend/tests/unit/test_no_parallel_table_ddl_under_infra.py` now fails on any `.sql` file
+under `infra/` that declares `CREATE TABLE` **or** any RLS or policy DDL. Both assert the
+statement, not the path, so a differently named file in a different directory is caught too.
 
 `seed.sql` is an unimplemented scaffold: six lines, all comments.
 
