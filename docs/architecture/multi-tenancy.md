@@ -10,8 +10,11 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > the non-bypass `familyroots_app` role with a per-request `app.clan_id` GUC, so
 > `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
 > `change_requests`, `clan_memberships`, `clan_invitations`, `notification_log`, and
-> `clan_settings` are RLS-enforced at the DB layer (other clan-scoped tables are added
-> table-by-table). Fourteen tables have RLS enabled and **the number of fully covered tables
+> `clan_settings` are RLS-enforced at the DB layer. **The table-by-table rollout is
+> finished.** Measured 2026-08-22 while closing seed S-015: all **14** clan-owned tables now
+> have row-level security enabled and a policy, and no clan-owned table is left outside
+> layer 2. See the schema table above for the classification and point 10 for the gate that
+> keeps it true. Fourteen tables have RLS enabled and **the number of fully covered tables
 > is eleven**, because three of them carry policies that are not clan isolation, in three
 > different ways: `identity_claims` is a deny-all tripwire (point 8), `audit_logs` is
 > clan-keyed on reads only (point 9), and `user_clan_roles` is clan-keyed on `UPDATE` and
@@ -31,22 +34,38 @@ Separate-schema multi-tenancy was considered and rejected:
 
 ## Schema layout
 
-```
-PostgreSQL instance
-└── public schema (all tables, data separated by clan_id / created_by_clan_id)
-    ├── clans              (one row per clan)
-    ├── persons            (global — created_by_clan_id is provenance only; visibility is
-    │                       clan_memberships, in the app layer AND in RLS)
-    ├── clan_memberships   (M:N link between persons and clans, filtered by clan_id;
-    │                       RLS-enforced)
-    ├── marriages          (global edges, write-gated by created_by_clan_id)
-    ├── parent_child       (global edges, write-gated by created_by_clan_id)
-    ├── documents          (filtered by clan_id in the app layer; RLS-enforced)
-    ├── events             (filtered by clan_id in the app layer; RLS-enforced)
-    ├── user_clan_roles    (which user belongs to which clan, with what role)
-    ├── change_requests    (approval workflow queue, filtered by clan_id; RLS-enforced)
-    └── audit_log          (cross-clan audit trail)
-```
+One `public` schema holds every table. Data is separated by `clan_id` or
+`created_by_clan_id` in the application layer, and by an RLS policy at the database for
+every clan-owned table.
+
+**This block used to be an eight-line sketch and it had gone stale in three ways**: it
+named `audit_log` for a table called `audit_logs`, it omitted seven tables that exist, and
+it gave no way to tell a clan-owned table from a platform-global one. Seed S-015 replaced
+it with the full list, because the coverage gate in
+`backend/tests/integration/test_rls_activation.py` now rests on exactly that distinction.
+Measured 2026-08-22 against migration `036_rls_user_clan_roles`: `public` holds **18**
+ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
+
+| Table | Clan-owned? | How the clan is reached | RLS posture |
+|---|---|---|---|
+| `persons` | yes | `created_by_clan_id` (provenance); visibility is `clan_memberships` | clan-isolated, per command |
+| `clan_memberships` | yes | `clan_id` | clan-isolated |
+| `branches` | yes | `clan_id` | clan-isolated |
+| `documents` | yes | `clan_id` | clan-isolated |
+| `events` | yes | `clan_id` | clan-isolated |
+| `marriages` | yes | `created_by_clan_id` (global edge, write-gated) | clan-isolated |
+| `parent_child` | yes | `created_by_clan_id` (global edge, write-gated) | clan-isolated |
+| `change_requests` | yes | `clan_id` | clan-isolated |
+| `clan_invitations` | yes | `clan_id` | clan-isolated (accept moved to the system session, ADR-048) |
+| `clan_settings` | yes | `clan_id`, NOT NULL and UNIQUE | clan-isolated, inert today |
+| `notification_log` | yes | `clan_id`, NOT NULL | clan-isolated, inert today |
+| `identity_claims` | yes | no clan column at all; reaches one through `person_id` | deny-all tripwire (point 8, ADR-042) |
+| `audit_logs` | yes | `clan_id`, nullable by decision | clan-keyed reads only (point 9, ADR-043) |
+| `user_clan_roles` | yes | `clan_id` | clan-keyed `UPDATE`/`DELETE` only (point 7, ADR-050) |
+| `clans` | **no** | it IS the tenant | outside layer 2 (ADR-008) |
+| `user_profiles` | **no** | per-user identity; no owning clan | none |
+| `user_fcm_tokens` | **no** | per-device push token, owned by a user | none |
+| `alembic_version` | **no** | Alembic's own bookkeeping | none |
 
 ## How isolation works (application layer — the active mechanism)
 
@@ -79,9 +98,11 @@ PostgreSQL instance
    request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
    RLS-enforced at the DB layer behind the primary application filters. System paths
    (scheduler/purge/migrations, plus the two cross-clan readers — identity claims and
-   platform-admin metrics) use the privileged session and bypass. Remaining clan-scoped
-   tables are added table-by-table. Gated by `RLS_ENABLED` (code-free rollback). See
-   ADR-008.
+   platform-admin metrics) use the privileged session and bypass. **No clan-owned table is
+   left to add**: Phase 11 (migration `036`) covered the last one, measured 2026-08-22 by
+   seed S-015. Gated by `RLS_ENABLED` (code-free rollback). See ADR-008, whose own "Not yet"
+   paragraph still reads as though tables remain — that paragraph is a dated record and this
+   file is the current count.
 
    `persons` is the M:N exception: its policies are per-command and keyed on a
    `clan_memberships` membership subquery for SELECT/UPDATE/DELETE, with
@@ -264,6 +285,50 @@ PostgreSQL instance
    in a row have now found a guard passing over the wrong thing; the rule is
    `.claude/rules/seeds.md` § "A test pins an outcome, not a setting", and its last line — a set
    is a setting too — is why a fourth set exists instead of a fourth name in an old one.
+
+10. **The four sets say what each listed table's policies do. Nothing said which tables they
+    are obliged to cover, and that silence is what seed S-015 closed (2026-08-22).** Each of
+    the four assertions iterates its own members, so a clan-owned table in **none** of them
+    was a table no question was ever asked about. A new table could ship with no policy at
+    all and the whole suite stayed green. This is not a hypothetical: eight tables went
+    uncovered across migrations `027`, `028` and `029`, found on 2026-08-13 by listing
+    `__tablename__` and grepping the migrations by hand.
+
+    **The rule: every ordinary table in `public` is clan-owned unless it is named in
+    `_NOT_CLAN_OWNED_TABLES`, with its reason, in
+    `backend/tests/integration/test_rls_activation.py`.** The universe comes from `pg_class`
+    rather than from a written list, so a table added by a migration is inside the gate the
+    moment the migration runs. The default is deliberately the strict one: the failure this
+    repository has actually suffered is a table shipping **unclassified**, so defaulting to
+    "global" would reproduce exactly that silence, while defaulting to "clan-owned" turns an
+    omission into a named failure on the day it lands.
+
+    **"It has a `clan_id` column" is not the membership rule, and this file holds one
+    counter-example in each direction.** `identity_claims` has no clan column at all and is
+    in scope (point 8). `audit_logs.clan_id` is nullable on purpose, so the column's presence
+    says nothing about whether every row has an owning clan (point 9). The column signal is
+    used for the one job it is sufficient for instead: a **veto**. A table with a foreign key
+    to `clans`, or a column whose name ends in `clan_id`, may never be named as not
+    clan-owned. That is what stops an exemption being added quietly to make a red gate go
+    green — the one edit that would otherwise defeat the whole check.
+
+    **Four tables are named as not clan-owned, and two of them rest on no ADR.** `clans` is
+    the tenant registry itself, kept outside layer 2 by ADR-008. `alembic_version` belongs to
+    Alembic. `user_profiles` and `user_fcm_tokens` are per-user identity: a profile exists
+    before any clan and may belong to several, so no single clan owns the row.
+    **No ADR decides that last pair.** ADR-048 and ADR-050 each state as a fact that
+    `user_profiles` carries no policy; neither decides that it should not. S-015 recorded
+    that as owed rather than citing an ADR that does not say it.
+
+    The gate is `test_every_clan_owned_table_is_covered_by_exactly_one_of_the_four_postures`,
+    and it fails on four shapes: a clan-owned table in no set, a set naming a table that is
+    not clan-owned, a table in two sets, and a clan-owned table with RLS disabled or enabled
+    with no policy. **RLS-disabled is the shape the older guard could not see at all** — it
+    enumerated `relrowsecurity` tables, so a table that never had row-level security switched
+    on was invisible to it, which is why a drop-the-policy control never reached it. The
+    exemption list has its own guard,
+    `test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_global`. Every one
+    of those shapes was planted and watched failing on 2026-08-22.
 
 ## Multi-clan membership (clan switcher)
 
