@@ -19,6 +19,7 @@ import type {
   PersonActionResult,
   PersonBatchResult,
   PersonSearchHit,
+  PersonWriteResult,
 } from '@/domain/person/person'
 import { ApiError, INVALID_CURSOR_CODE, MalformedResponseError } from '@/shared/http/errors'
 import { unwrapData, unwrapPage, type Page } from '@/shared/http/envelope'
@@ -138,6 +139,23 @@ export async function batchGetPersons(
 }
 
 /**
+ * Reads `meta.warning` off a write response's envelope (spec §7.7a: "a
+ * successful write ... the save succeeds, and a `warning` toast appears
+ * afterwards"). Deliberately not `unwrapPage` or a new case inside
+ * `unwrapData` — `unwrapData`'s whole contract is "hand back `data`, see
+ * nothing else," the same reason `batchGetPersons` above reads its own
+ * `meta` rather than forcing itself through a shared reader. A raw body with
+ * no `meta`, a non-string `warning`, or `meta` shaped some other way all map
+ * to `null` rather than throwing — an absent or malformed warning is not a
+ * contract violation the way a missing `data` key is.
+ */
+function readWriteWarning(raw: unknown): string | null {
+  if (!isRecord(raw) || !isRecord(raw.meta)) return null
+  const { warning } = raw.meta
+  return typeof warning === 'string' ? warning : null
+}
+
+/**
  * `POST /persons`. `body` is typed straight from the generated
  * `PersonCreateRequest`, not validated with zod — see this feature's own
  * `../api/persons-api.ts` doc comment and `web/CLAUDE.md`'s "Write DTOs skip
@@ -148,19 +166,23 @@ export async function batchGetPersons(
 export async function createPerson(
   body: PersonCreateRequest,
   options: PersonsApiCallOptions,
-): Promise<Person> {
+): Promise<PersonWriteResult> {
   const raw = await api.createPerson(body, options)
-  return unwrapData(raw, parsePerson)
+  return { person: unwrapData(raw, parsePerson), warning: readWriteWarning(raw) }
 }
 
-/** `PATCH /persons/{id}`. `body.expected_version` is the caller's job (ADR-017). */
+/**
+ * `PATCH /persons/{id}`. `body.expected_version` is the caller's job
+ * (ADR-017) — a mismatch surfaces as the `stale_write` `ApiError` this
+ * function throws unchanged, for `ui/PersonForm.tsx` to catch.
+ */
 export async function updatePerson(
   id: string,
   body: PersonUpdateRequest,
   options: PersonsApiCallOptions,
-): Promise<Person> {
+): Promise<PersonWriteResult> {
   const raw = await api.updatePerson(id, body, options)
-  return unwrapData(raw, parsePerson)
+  return { person: unwrapData(raw, parsePerson), warning: readWriteWarning(raw) }
 }
 
 /** `DELETE /persons/{id}` — soft delete; returns a `MessageData` envelope. */

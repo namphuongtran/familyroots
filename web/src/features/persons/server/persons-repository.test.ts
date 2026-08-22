@@ -233,13 +233,38 @@ describe('createPerson / updatePerson — write bodies carry no zod validation',
     const fetchImpl = vi.fn<FetchLike>(async () =>
       jsonResponse({ data: personFixture({ full_name: 'Lê Văn Cường' }) }, { status: 201 }),
     )
-    const person = await createPerson(
+    const result = await createPerson(
       { full_name: 'Lê Văn Cường', gender: 'male', nationality: 'VN' } as Parameters<
         typeof createPerson
       >[0],
       { context, fetchImpl },
     )
-    expect(person.fullName).toBe('Lê Văn Cường')
+    expect(result.person.fullName).toBe('Lê Văn Cường')
+    expect(result.warning).toBeNull()
+  })
+
+  /**
+   * Spec §7.7a: "`meta.warning` on a successful write ... the save
+   * succeeds, and a `warning` toast appears afterwards." Proven with a
+   * negative control: reverting `readWriteWarning`'s call in `createPerson`
+   * back to a bare `unwrapData(raw, parsePerson)` (S-032's own diff) makes
+   * this assertion fail with `undefined` where `'...'` was expected, because
+   * nothing else in the repository ever reads past `data`.
+   */
+  it('createPerson surfaces meta.warning', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () =>
+      jsonResponse(
+        { data: personFixture(), meta: { warning: 'chênh lệch tuổi bất thường' } },
+        { status: 201 },
+      ),
+    )
+    const result = await createPerson(
+      { full_name: 'Lê Văn Cường', gender: 'male', nationality: 'VN' } as Parameters<
+        typeof createPerson
+      >[0],
+      { context, fetchImpl },
+    )
+    expect(result.warning).toBe('chênh lệch tuổi bất thường')
   })
 
   /**
@@ -278,8 +303,9 @@ describe('createPerson / updatePerson — write bodies carry no zod validation',
     )
     // `expected_version` (ADR-017) is the only required field — every content
     // field on PersonUpdateRequest is optional, so this literal needs nothing else.
-    const person = await updatePerson('id-1', { expected_version: 1 }, { context, fetchImpl })
-    expect(person.version).toBe(2)
+    const result = await updatePerson('id-1', { expected_version: 1 }, { context, fetchImpl })
+    expect(result.person.version).toBe(2)
+    expect(result.warning).toBeNull()
   })
 })
 
