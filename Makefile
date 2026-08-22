@@ -1,4 +1,5 @@
 .PHONY: help docker-up docker-down backend-dev backend-test backend-lint \
+       supabase-up supabase-down supabase-env \
        mobile-run mobile-test web-dev web-build web-lint web-type-check \
        infra-preview infra-up migrate seed
 
@@ -15,6 +16,18 @@ docker-down: ## Stop all containers
 
 docker-all: ## Start all services including backend
 	docker compose up -d
+
+# ─── Supabase (auth + Storage), a SEPARATE stack from docker-compose ──
+# Two databases on purpose: pgdb is the application database Alembic migrates, the
+# Supabase stack owns auth.* and Storage. See docs/ops/local-supabase.md.
+supabase-up: ## Start the local Supabase stack (auth + Storage) and wait for health
+	scripts/supabase_local.sh up
+
+supabase-down: ## Stop the local Supabase stack, keeping its database
+	scripts/supabase_local.sh down
+
+supabase-env: ## Print SUPABASE_URL / ANON / SERVICE_ROLE for the local stack
+	scripts/supabase_local.sh env
 
 # ─── Backend ───────────────────────────────────────────────────────────
 backend-dev: ## Run backend with hot reload
