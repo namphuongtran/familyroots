@@ -35,7 +35,9 @@
     "**/*.mts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next-banner-e2e/types/**/*.ts",
+    ".next-banner-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
