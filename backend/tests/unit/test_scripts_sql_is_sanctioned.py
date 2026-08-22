@@ -62,6 +62,11 @@ list.
   `CREATE DATABASE` at `:122` through `psql -c`, and this guard sees neither. That is the
   largest hole. Closing it means deciding how to scan shell heredocs and `-c` arguments
   without drowning in false positives, which is a second decision and therefore a second seed.
+  **That seed is S-077 and it landed on 2026-08-22**: `test_inline_sql_in_scripts_is_sanctioned
+  .py` extracts what a `psql` invocation executes and reuses `_classify`, `_strip_comments`
+  and `_ESCALATIONS` from this module, so a statement gets the same verdict inline as it does
+  in a `.sql` file. This paragraph still describes **this** guard correctly: it reads `.sql`
+  files, and it is still blind to inline SQL on its own.
 - **It classifies by verb, not by meaning.** Widening `GRANT SELECT` to `GRANT ALL` stays
   class `grant` and passes. What catches that is the drill's own check 4, which drops to the
   request role and counts rows two-sided (ADR-052 § 3), plus the instruction at

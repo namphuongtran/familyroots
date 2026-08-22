@@ -7,7 +7,8 @@ on:
       - "backend/**"
       # The backend unit suite guards three things that live outside backend/:
       # docs/ops/migrations.md (S-063), infra/ table and policy DDL (S-064, S-067),
-      # and scripts/ SQL that a shell script actually feeds to psql (S-069). Without
+      # and scripts/ SQL, both the .sql files a shell script feeds to psql (S-069) and
+      # the statements a shell script runs inline through psql -c (S-077). Without
       # these filters a pull request that only touches those paths runs no gate at all.
       - "docs/ops/migrations.md"
       - "infra/**"
