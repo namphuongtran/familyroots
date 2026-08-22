@@ -1,18 +1,24 @@
-"""``user_clan_roles`` cannot take a clan policy, and this file is the standing proof.
+"""``user_clan_roles`` is half covered, and this file is the standing proof of which half.
 
 The name says "login two clans" because S-009 opened it on the read half. It now covers
-both halves of the table's hazard, read and write, because keeping one table's evidence in
-one file is worth more than a tidy file name.
+both halves of the table's hazard, read and write, plus the role check S-010 named and
+could not run, because keeping one table's evidence in one file is worth more than a tidy
+file name.
 
-Seed S-009 named this check because getting the read half wrong locks users out silently
-rather than loudly. The login path runs on ``get_db`` — the RLS request session — and it
-runs BEFORE any clan is chosen, so ``app.clan_id`` is empty and the migration-027 predicate
+**Migration 036 gave this table policies on 2026-08-22 (S-052, ADR-050), and the four cases
+below are the reason two of those four policies are permissive.** ``user_clan_roles_sel`` is
+``USING (true)`` and ``user_clan_roles_ins`` is ``WITH CHECK (true)``. Only ``UPDATE`` and
+``DELETE`` are clan-keyed. Everything in this file would fail under the migration-027
+template, and the failures look nothing alike.
+
+The login path runs on ``get_db`` — the RLS request session — and it runs BEFORE any clan is
+chosen, so ``app.clan_id`` is empty and the migration-027 predicate
 (``clan_id = nullif(current_setting('app.clan_id', true), '')::uuid``) evaluates to NULL.
 Any clan-isolation policy placed on a table that the pre-selection read touches turns
 "this user belongs to two clans" into "this user belongs to none", and the user is told
 they have no approved membership. No error is logged. Nothing fails closed loudly.
 
-The pre-selection READS are, re-measured 2026-08-22 by S-010:
+The pre-selection READS are, re-measured 2026-08-22 by S-052:
 
 * ``SqlAlchemyAuthQueryPort.get_login_profile`` — ``user_clan_roles`` joined to ``clans``
   (``app/infrastructure/persistence/auth_repository.py:120-137``);
@@ -30,24 +36,26 @@ The pre-selection WRITE, which S-009 and S-010 both missed and S-010 measured:
   same clan-less request session — ``get_auth_command_handler`` is wired to ``get_db``
   (``app/infrastructure/dependencies.py:192-202``).
 
-All four touch ``user_clan_roles``, which migrations 031 and 035 both deliberately leave
-alone, and none of them reads ``clan_memberships``, ``clan_invitations`` or
-``clan_settings``. These tests drive the real routes over the real ``RlsSession`` seam, so
-the day a migration puts a clan policy on a pre-selection table, they fail.
+These tests drive the real routes over the real ``RlsSession`` seam, so the day a migration
+puts a **clan-keyed SELECT or INSERT** on this table, they fail.
 
-Negative control, re-run 2026-08-22 by S-010 by putting ``user_clan_roles`` in migration
-035's table list. It breaks in both directions, and the two failures look nothing alike:
+Negative control, re-run 2026-08-22 by S-052 by applying the migration-027 template to
+``user_clan_roles`` in a throwaway migration. It breaks in both directions, and the two
+failures look nothing alike:
 
 * **silently** — ``test_login_resolves_a_multi_clan_user_under_the_rls_seam`` fails with
-  ``assert None == '<clan uuid>'``: login still answers ``200``, reporting that the user
-  belongs to nowhere. ``test_me_clans_lists_both_clans_under_the_rls_seam`` fails with
-  ``assert set() == {...}``. Neither logs an error;
+  ``AssertionError: {... 'clan_id': None ...}``: login still answers ``200``, reporting
+  that the user belongs to nowhere. ``test_me_clans_lists_both_clans_under_the_rls_seam``
+  fails with ``AssertionError: set()``. Neither logs an error;
 * **loudly** — the two onboard tests below fail with
   ``psycopg.errors.InsufficientPrivilege: new row violates row-level security policy for
   table "user_clan_roles"``, surfacing as a 500.
 
 That the same policy produces a silent lockout on one route and a 500 on another is the
-reason the decision needs an ADR rather than a patch.
+reason the decision needed an ADR rather than a patch.
+
+The clan-keyed half that DID ship is proved in
+``test_rls_phase11_user_clan_roles.py``, at the database layer and in both directions.
 """
 
 from __future__ import annotations
@@ -347,3 +355,153 @@ async def test_the_seam_really_was_active_during_those_requests(
     async with rls_session_factory() as s:
         assert await s.scalar(sa.text("SELECT current_user")) == "familyroots_app"
         assert await s.scalar(sa.text("SELECT current_setting('app.clan_id', true)")) == ""
+
+
+# ── The role check S-010 named and could not run ────────────────────────────────
+
+
+@pytest.fixture()
+async def admin_here_viewer_there(
+    privileged_session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """One user, approved in TWO clans with DIFFERENT roles: admin in one, viewer in the
+    other. The whole point of ``user_clan_roles`` having both a ``user_id`` and a
+    ``clan_id`` is that this state is legal, and the gate must resolve it per clan."""
+    user_id = uuid.uuid4()
+    email = f"{user_id.hex[:12]}@example.com"
+    admin_clan, viewer_clan = uuid.uuid4(), uuid.uuid4()
+    async with privileged_session_factory() as s:
+        for cid, name in ((admin_clan, "Họ Quản"), (viewer_clan, "Họ Xem")):
+            await s.execute(
+                sa.text("INSERT INTO clans (id, name, slug, is_active) VALUES (:id, :n, :s, true)"),
+                {"id": cid, "n": name, "s": f"r-{cid.hex[:8]}"},
+            )
+        await s.execute(
+            sa.text("INSERT INTO user_profiles (id, email, display_name) VALUES (:id, :e, 'u')"),
+            {"id": user_id, "e": email},
+        )
+        for cid, role in ((admin_clan, "admin"), (viewer_clan, "viewer")):
+            await s.execute(
+                sa.text(
+                    "INSERT INTO user_clan_roles "
+                    "(user_id, clan_id, role, is_approved, approved_by, approved_at) "
+                    "VALUES (:uid, :cid, :role, true, :uid, now())"
+                ),
+                {"uid": user_id, "cid": cid, "role": role},
+            )
+        await s.commit()
+    return {
+        "user_id": user_id,
+        "email": email,
+        "admin_clan": admin_clan,
+        "viewer_clan": viewer_clan,
+    }
+
+
+async def test_the_role_that_resolves_is_the_one_for_the_selected_clan(
+    rls_session_factory: async_sessionmaker[AsyncSession],
+    admin_here_viewer_there: dict[str, Any],
+) -> None:
+    """The assertion S-010 named. Same user, same token, same admin-only route, two values
+    of ``X-Current-Clan-Id`` — and the answers must differ.
+
+    This asserts the OUTCOME (what the caller is allowed to do) rather than the setting
+    (what ``require_role`` returned), per ``.claude/rules/seeds.md``, "A test pins an
+    outcome, not a setting". ``GET /clans/me/users/pending`` is ``RequireAdmin``
+    (``app/api/v1/clans.py:123-128``), so a 200 in one clan and a 403 in the other is the
+    role resolving per clan context, read through the response body.
+
+    It runs on the ``RlsSession`` seam with migration 036 live, so it is also the proof
+    that the clan-keyed UPDATE and DELETE policies did not break the gate: ``require_role``
+    reads ``user_clan_roles`` AFTER ``get_current_clan_id`` has set the GUC
+    (``app/core/security.py:290``), and its own read is a SELECT, which ADR-050 leaves
+    permissive.
+    """
+    app = _app(
+        rls_session_factory,
+        current_user={
+            "sub": str(admin_here_viewer_there["user_id"]),
+            "email": admin_here_viewer_there["email"],
+            "user_metadata": {"full_name": "Hai Vai"},
+        },
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        allowed = await ac.get(
+            "/api/v1/clans/me/users/pending",
+            headers={
+                "Authorization": "Bearer x",
+                "X-Current-Clan-Id": str(admin_here_viewer_there["admin_clan"]),
+            },
+        )
+        denied = await ac.get(
+            "/api/v1/clans/me/users/pending",
+            headers={
+                "Authorization": "Bearer x",
+                "X-Current-Clan-Id": str(admin_here_viewer_there["viewer_clan"]),
+            },
+        )
+
+    assert allowed.status_code == 200, allowed.text
+    assert denied.status_code == 403, denied.text
+    assert denied.json()["error"]["code"] == "insufficient_permissions", denied.text
+
+
+async def test_the_viewer_clan_is_a_real_membership_and_not_simply_invisible(
+    rls_session_factory: async_sessionmaker[AsyncSession],
+    admin_here_viewer_there: dict[str, Any],
+) -> None:
+    """The other half of the test above, and the reason it is two tests.
+
+    A 403 on the admin route proves nothing on its own: a policy that hid the viewer
+    membership entirely would produce the same 403 (``no_approved_clan_membership``
+    reaches the client as 403 too). So this asserts the caller really IS a member of the
+    viewer clan by driving a ``RequireViewer`` route (``GET /clans/me``,
+    ``app/api/v1/clans.py:46-51``) in that same clan and getting its clan back.
+
+    The error CODE in the test above carries the other half: ``insufficient_permissions``,
+    not ``no_approved_clan_membership``. A denial and a lockout are different failures and
+    this file has been wrong about that distinction before.
+    """
+    app = _app(
+        rls_session_factory,
+        current_user={
+            "sub": str(admin_here_viewer_there["user_id"]),
+            "email": admin_here_viewer_there["email"],
+            "user_metadata": {"full_name": "Hai Vai"},
+        },
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        resp = await ac.get(
+            "/api/v1/clans/me",
+            headers={
+                "Authorization": "Bearer x",
+                "X-Current-Clan-Id": str(admin_here_viewer_there["viewer_clan"]),
+            },
+        )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["id"] == str(admin_here_viewer_there["viewer_clan"])
+
+
+async def test_me_clans_reports_both_roles_and_not_one_of_them_twice(
+    rls_session_factory: async_sessionmaker[AsyncSession],
+    admin_here_viewer_there: dict[str, Any],
+) -> None:
+    """The switcher must show the right role beside each clan, not the role of whichever
+    membership sorted first. ``GET /me/clans`` carries no ``X-Current-Clan-Id``, so it runs
+    with an empty GUC — the case the permissive SELECT policy exists for."""
+    app = _app(
+        rls_session_factory,
+        current_user={
+            "sub": str(admin_here_viewer_there["user_id"]),
+            "email": admin_here_viewer_there["email"],
+            "user_metadata": {"full_name": "Hai Vai"},
+        },
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        resp = await ac.get("/api/v1/me/clans", headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 200, resp.text
+    by_clan = {row["clan_id"]: row["role"] for row in resp.json()["data"]}
+    assert by_clan == {
+        str(admin_here_viewer_there["admin_clan"]): "admin",
+        str(admin_here_viewer_there["viewer_clan"]): "viewer",
+    }, by_clan

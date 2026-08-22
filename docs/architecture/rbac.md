@@ -40,6 +40,23 @@ Stored in `public.user_clan_roles` table. A user may belong to **multiple clans*
 
 The **active clan** is selected at runtime via the `X-Current-Clan-Id` request header (Slack-style workspace switcher). If a user belongs to exactly one clan and omits the header, that clan is auto-selected for zero-friction UX.
 
+> **What the database enforces on this table, added 2026-08-22 by
+> [ADR-050](../decisions/050-user-clan-roles-clan-keyed-mutations.md), migration `036`.**
+> `user_clan_roles` is inside RLS layer 2 for **`UPDATE` and `DELETE` only**. Those two
+> commands are keyed on the `app.clan_id` GUC, so the request role cannot approve, reject,
+> re-role or remove a membership in a clan other than its active one, and cannot rewrite a
+> row's `clan_id`. **`SELECT` and `INSERT` are permissive by decision**, because
+> `get_current_clan_id` reads this table to decide which clan is active — before any clan is
+> known — and `POST /auth/onboard` inserts the caller's own membership with no clan selected.
+> So reads of this table have one layer of isolation (the application filters below) and the
+> authority-changing writes have two. Two consequences for anyone changing roles code. **A
+> mutating statement that reaches the table with no clan GUC set now matches zero rows rather
+> than mutating**, which is fail-closed and silent, so check that your route carries
+> `Depends(get_current_clan_id)`. And **a role check reads this table AFTER the GUC is set**
+> (`backend/app/core/security.py:290`), which is why `require_role` still resolves correctly
+> for a user holding different roles in two clans — pinned by
+> `backend/tests/integration/test_rls_login_two_clans.py`.
+
 ## Full Permission Matrix
 
 | Action                         | super_admin | admin | editor | viewer |

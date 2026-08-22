@@ -9,7 +9,7 @@
 | [005](005-dedicated-export-worker.md) | Dedicated Worker Service for Heavy Exports | **Deferred — not built** |
 | [006](006-soft-vs-hard-delete.md) | Selective Soft-Delete by Aggregate | Accepted, shipped (edge-cascade on roadmap) |
 | [007](007-identity-claims-workflow.md) | Identity Claims Workflow | Accepted, shipped |
-| [008](008-rls-defense-in-depth.md) | Row-Level Security as Defense-in-Depth Layer-2 | Accepted, shipped. Phases 1-10, migrations 002 and 026-035. Clan-isolated: `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`, `notification_log`, `clan_settings`. Not clan isolation: `identity_claims` (deny-all tripwire, ADR-042) and `audit_logs` (clan-keyed reads only, ADR-043). Amended by ADR-038 (Phase 4), ADR-047 (§ 2), and the dated Phase-10 amendment to its "Not yet" paragraph. `user_clan_roles` stays outside layer 2 pending ADR-050 |
+| [008](008-rls-defense-in-depth.md) | Row-Level Security as Defense-in-Depth Layer-2 | Accepted, shipped. Phases 1-11, migrations 002 and 026-036. Clan-isolated: `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`, `notification_log`, `clan_settings`. Not clan isolation: `identity_claims` (deny-all tripwire, ADR-042), `audit_logs` (clan-keyed reads only, ADR-043) and `user_clan_roles` (clan-keyed UPDATE and DELETE only, ADR-050). Amended by ADR-038 (Phase 4), ADR-047 (§ 2), and the dated Phase-10 amendment to its "Not yet" paragraph |
 | [009](009-clan-deletion-restrict.md) | Clan Deletion Is RESTRICT-Guarded | Accepted, shipped |
 | [010](010-response-envelope-cursor-pagination.md) | Canonical Success Envelope + Cursor-Only Pagination | Accepted, shipped |
 | [011](011-historical-date-precision.md) | HistoricalDate — Precision Model Replaces `*_approx` | Accepted, shipped |
@@ -48,14 +48,17 @@
 | [045](045-dark-mode-prefers-color-scheme-only.md) | Dark Mode Switches on `prefers-color-scheme` Alone, and the Dark Palette Is a Token Override | Accepted, shipped (2026-08-21, seed S-006) |
 | [047](047-rls-seam-sets-clan-id-only.md) | The RLS Seam Sets `app.clan_id` Only, and ADR-008's `app.user_id` Clause Is Corrected by Dated Amendment | Accepted (2026-08-22, seed S-040) — decision only; amends ADR-008 § 2, no code change |
 | [048](048-invitation-accept-runs-on-the-system-session.md) | Only `POST /invitations/{token}/accept` Moves to the System Session, and `clan_invitations` Takes the Clan-Isolation Policy | Accepted, shipped (2026-08-22, seed S-043) |
+| [050](050-user-clan-roles-clan-keyed-mutations.md) | `user_clan_roles` Takes Clan-Keyed UPDATE and DELETE Only, and Every Reader Stays on the Session It Is On | Accepted, shipped (2026-08-22, seed S-052) — migration `036_rls_user_clan_roles`. Half covered on purpose: `SELECT` and `INSERT` are permissive (the authorization gate and `POST /auth/onboard` both run with no clan selected), `UPDATE` and `DELETE` are clan-keyed. The mirror of ADR-043. No handler changed session |
 
-**044, 046, 049 and 050 are allocated and not written.** Seed S-016 carries 044, seed S-039
-carries 046, and seed S-051 carries 049, all in [`../SEEDS.md`](../SEEDS.md). **050 was allocated
-on 2026-08-22 by seed S-010**, for the `user_clan_roles` decision it split out; that seed's text
-is in [`../SEEDS.md`](../SEEDS.md). The gap is deliberate, so that four agents picking work at
-once cannot pick the same number. **048 was taken by seed S-043 on 2026-08-22**, the same day 047
-went to seed S-040. The next free number is **051** unless [`../SEEDS.md`](../SEEDS.md) has
-allocated it.
+**044, 046 and 049 are allocated and not written.** Seed S-016 carries 044 and seed S-039
+carries 046, both in [`../SEEDS.md`](../SEEDS.md). **049 stays free by decision**: seed S-051
+pre-allocated it and then wrote no ADR, because what it had to say is about how this repository
+verifies rather than about the system it builds, and that belongs in `.claude/rules/seeds.md`
+(see its § "Why this is a rule here and not ADR-049"). **050 was written on 2026-08-22 by seed
+S-052**, which S-010 split out for the `user_clan_roles` decision. The gap is deliberate, so that
+four agents picking work at once cannot pick the same number. **048 was taken by seed S-043 on
+2026-08-22**, the same day 047 went to seed S-040. The next free number is **051** unless
+[`../SEEDS.md`](../SEEDS.md) has allocated it.
 
 > **This paragraph is a merge point, so re-read it rather than editing it from memory.** It was
 > resolved by hand on 2026-08-22 after seeds S-011 and S-013 ran in parallel and each narrowed the
