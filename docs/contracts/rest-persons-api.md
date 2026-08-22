@@ -71,6 +71,36 @@ array under `data` (no `meta` — these are not cursor-paginated).
 - NOTE: `created_by_clan_id` is **not** accepted on create/update — it is provenance,
   always stamped from the active clan (see the 2026-06-28 design review, C5).
 
+### An edge is returned only when both of its persons are live (2026-08-22)
+
+A relationship edge is hidden when the person on its other end is soft-deleted,
+even though the edge row itself is not deleted. This applies to:
+
+| Read | What it omits now |
+|---|---|
+| `GET /persons/{id}/marriages` | a marriage whose spouse is soft-deleted |
+| `GET /persons/{id}/parent-child` | a link whose parent or child is soft-deleted |
+| `POST /persons/batch`, `include=marriages` / `include=parent_child` | the same edges |
+| `POST /persons/batch`, `include=stats` | those edges are not counted in `spouse_count` or `child_count` |
+
+`GET /persons/{id}/timeline` and every tree endpoint already behaved this way.
+Before this change the four reads above did not, so a client could be handed an
+edge pointing at a person the same API answered `404` for, and a person card
+could render `spouse_count: 2` for someone with one live spouse.
+
+**What a client can rely on.** No list under `/persons` contains a person id
+that `GET /persons/{that_id}` answers `404` for, and `stats` agrees with the
+list it summarises. **Deleting a person is still soft and still reversible**:
+`POST /persons/{id}/restore` brings the person back, and the edges reappear with
+them, because the edge rows were never changed.
+
+**What is not part of this.** Deleting the edge itself
+(`DELETE /relationships/marriages/{marriage_id}`,
+`DELETE /relationships/parent-child/{link_id}` — see
+[rest-relationships-api.md](rest-relationships-api.md)) is a separate operation
+and hides that one edge on its own. Nothing about the response schema changed:
+`MarriageResponse` and `ParentChildResponse` carry the same fields as before.
+
 ### `avatar_url` is read-only (ADR-036) — **breaking for writers**
 
 `avatar_url` is returned on every person projection (`PersonResponse`, `PersonSummary`,
@@ -127,6 +157,14 @@ Example error shape:
 }
 
 ## Versioning & Compatibility Rules
+- **2026-08-22 (seed S-054), behaviour change, no schema change**: the four edge
+  reads listed above stopped returning edges whose counterpart person is
+  soft-deleted, and `spouse_count`/`child_count` stopped counting them. No field
+  was added, removed, or renamed, so this is not breaking under the rules below.
+  A client will notice one thing: a count can go **down** without any edge being
+  deleted, and a list can lose a row it held before. That old row was a defect —
+  it pointed at a person the same API answered `404` for — so there is no
+  behaviour worth preserving and no compatibility period.
 - **2026-08-02 (ADR-036), breaking for writers**: `avatar_url` moved from
   client-writable to server-managed; sending it on create/update is now a 422. It
   remains present and unchanged on every read. Shipped without a version bump because

@@ -118,8 +118,13 @@ resolve to their spouse term — bereavement does not end the kinship, only divo
 - **Soft delete.** `soft_delete()` sets `is_deleted`, `deleted_at`, `deleted_by` and
   emits `PersonDeleted`; `restore()` clears them and emits `PersonRestored`.
   Records are never physically removed. See [ADR-006](../decisions/006-soft-vs-hard-delete.md).
-- **A soft-deleted person is invisible everywhere, including every write guard
-  (M3, review 2026-07-18).** It's not just reads: marriage, parent-child, event,
+- **A soft-deleted person is invisible to every write guard (M3, review
+  2026-07-18).** This bullet used to open "invisible everywhere" and continue
+  "It's not just reads", and **that told a reader the read side was closed
+  first, which was false for three reads until 2026-08-22**. What the write
+  guards do is unchanged and is stated below; what was wrong is the claim about
+  reads, corrected in the paragraph that follows this list of guards. Marriage,
+  parent-child, event,
   and document creation all treat a soft-deleted `person_id` reference as
   `404 person_not_found`, the same as a nonexistent one (these fields are
   create-only — immutable on `PATCH` — so the guard only needs to run there);
@@ -143,6 +148,32 @@ resolve to their spouse term — bereavement does not end the kinship, only divo
   matches guards literally named `person(s)_in_clan`, so the differently-named
   `get_live_person` is pinned separately by
   `test_claim_live_person_resolver_filters_soft_deleted` in the same file.
+- **The read side was closed on 2026-08-22, seven weeks later, by seed S-054.**
+  Three reads filtered only the **edge's own** `is_deleted` and never looked at
+  the person the edge pointed at: `GET /persons/{id}/marriages`,
+  `GET /persons/{id}/parent-child`, and `POST /persons/batch` with
+  `include=stats`. Measured 2026-08-22 over HTTP: the survivor's marriages read
+  returned the edge to a soft-deleted spouse, the parent-child read returned the
+  edge to a soft-deleted child, and `spouse_count`/`child_count` both answered 2
+  for a survivor with one live spouse and one live child — while `GET
+  /persons/{deleted}` answered `404` in the same run. **What leaked is the edge
+  and the uuid, not the name**: `MarriageResponse` and `ParentChildResponse`
+  carry ids and no name field. `GET /persons/{id}/timeline` and the tree
+  functions always joined the counterpart person and filtered it, so two reads
+  over one marriage row gave a client two different answers. All three now
+  give the same answer: an edge with a soft-deleted person on either end is
+  dropped (`app/infrastructure/persistence/person_query_port.py` and
+  `person_repository.py::get_stats_for_persons`). They reach it with a
+  `NOT EXISTS` anti-join rather than the timeline's join, because these are batch
+  reads and the join made the planner scan the whole `persons` table — the
+  measurement is in the query port's module docstring, and it is the reason not to
+  "simplify" the predicate into a join later.
+  Proven by `backend/tests/integration/test_edge_cascade_on_person_soft_delete.py`.
+  **This is a read filter and not a cascade.** The edge rows still carry
+  `is_deleted = false`, nothing consumes `PersonDeleted`, and the cascade
+  ADR-006's update of 2026-07-02 promised is still unbuilt — whether to build it
+  is seed S-055's decision. When adding any new read over `marriages` or
+  `parent_child`, filtering the edge's own flag is **half** the predicate.
 - **Audited updates.** `update()` records old/new values into the `PersonUpdated`
   event for the audit trail.
 

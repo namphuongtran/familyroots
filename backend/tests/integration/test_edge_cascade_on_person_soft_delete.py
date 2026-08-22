@@ -1,69 +1,55 @@
-"""What a client sees when a person is soft-deleted but their edges are not.
+"""An edge pointing at a soft-deleted person does not surface, on any read.
 
-**This file establishes a consequence. It fixes nothing.** Seed S-020 asked one
-question that needed a test rather than an opinion: with a person soft-deleted,
-what does a relationship read and an edge count return? ADR-006's update of
-2026-07-02 already decided the answer the product wants ("soft-deleting a person
-will also soft-delete its edges"), and that decision has never been implemented:
-``Person.soft_delete`` (``app/domain/person/entity.py:267-280``) sets the
-person's own three flags and emits ``PersonDeleted``, and measured 2026-08-22
-nothing outside ``app/domain/person`` consumes that event.
+**This file replaces the characterization tests seed S-020 wrote here on
+2026-08-22.** Those asserted the opposite, because that was what the code did:
+``GET /persons/{survivor}/marriages`` returned the edge to a soft-deleted
+spouse, ``GET /persons/{survivor}/parent-child`` returned the edge to a
+soft-deleted child, and ``POST /persons/batch`` with ``include=stats`` answered
+``spouse_count: 2, child_count: 2`` for a survivor with one live spouse and one
+live child. The same API answered ``404`` for the deleted person in the same
+run. Seed S-054 closed that, and the old assertions are its negative control —
+all four flipped, each on a different value (recorded in the S-054 commit
+message). The file was **replaced**, not repaired assertion by assertion.
 
-**These tests assert today's behaviour, not the wanted behaviour.** Each one is
-named for the reading it takes. When the cascade is implemented, every test here
-that says ``surfaces`` or ``counts`` must fail, and that failure is the signal to
-delete this file and replace it with the wanted-behaviour tests. Do not "repair"
-an assertion here to make a cascade land green.
+**What changed, and what deliberately did not.** S-054 is a read filter only.
+``get_marriages_batch`` and ``get_parent_child_links_batch``
+(``app/infrastructure/persistence/person_query_port.py``) now drop an edge with a
+soft-deleted person on either end, reaching the same answer
+``get_timelines_batch`` and the tree builder already reached;
+``get_stats_for_persons`` (``app/infrastructure/persistence/person_repository.py``)
+does the same in its two counting sub-queries. Both use ``NOT EXISTS`` rather
+than the timeline's join, for a measured reason recorded in the query port's
+module docstring — these are batch reads, and the join made the planner scan the
+whole ``persons`` table. **No cascade was added.** ``Person.soft_delete``
+(``app/domain/person/entity.py:267-280``) still sets only the person's own
+flags, ``PersonDeleted`` still has no consumer outside ``app/domain/person``,
+and the edge rows still read ``is_deleted = false`` — which
+``test_the_edge_rows_are_untouched...`` below proves with raw SQL, so this
+file's claim rests on the read and not on a data change. Whether the cascade
+should exist at all is seed S-055's decision and seed S-056's build. **This
+filter stays correct either way**, because rows written before any cascade
+ships would not carry its flag.
 
-**What was measured on 2026-08-22, and it is not one answer but two.** The reads
-disagree with each other over the same edge row:
+**What was leaking is the edge and the uuid, not the name.**
+``MarriageResponse`` (``app/schemas/marriage.py:61-85``) and
+``ParentChildResponse`` (``app/schemas/parent_child.py:40-59``) carry
+``person1_id``/``person2_id`` and ``parent_id``/``child_id`` and no name field.
+A client learned that a person existed and was related, plus their uuid, and
+nothing else. Say that much and no more.
 
-* ``GET /persons/{id}/marriages`` and ``GET /persons/{id}/parent-child`` filter
-  the **edge**'s ``is_deleted`` and never look at the counterpart person
-  (``app/infrastructure/persistence/person_query_port.py:56,81``), so the
-  survivor's read hands a client an edge pointing at a person the same API
-  answers ``404`` for.
-* ``POST /persons/batch`` with ``include=stats`` counts the same edges
-  (``app/infrastructure/persistence/person_repository.py:260-270``), so
-  ``spouse_count`` and ``child_count`` include the soft-deleted counterpart.
-* ``GET /persons/{id}/timeline`` **does** filter the counterpart
-  (``person_query_port.py:207-216``, and the tree builder likewise, pinned by
-  ``test_soft_deleted_spouse_filtering.py``).
-
-So this is a client-visible defect, not a dormant one, and the two consumers of
-"who is this person married to" give different answers on the same data.
-
-**What leaks is the edge and the id, not the name.** ``MarriageResponse``
-(``app/schemas/marriage.py:61-85``) and ``ParentChildResponse``
-(``app/schemas/parent_child.py:40-59``) carry ``person1_id``/``person2_id`` and
-``parent_id``/``child_id`` and no name field, so a client learns that a person
-exists and is related, plus their uuid, and nothing else about them. Say that
-much and no more.
-
-**One document is wrong about this, and it is not fixed here.**
-``docs/architecture/domain-rules.md:122`` reads "A soft-deleted person is
-invisible everywhere, including every write guard", and its next clause is "It's
-not just reads", which tells a reader the read side was already closed. The four
-readings below say it was not. That file was fenced to another agent on
-2026-08-22, so S-020 recorded the correction rather than making it.
-
-**The negative control, run 2026-08-22.** The three ``surfaces``/``counts``
-tests plus ``test_timeline_disagrees...`` were re-run against a fixture that
-seeds both edges already soft-deleted, which is the state ADR-006's cascade
-would produce. Five of the seven tests failed, each on the assertion naming the
-edge: ``assert '2976...' in {'f199...'}`` for the marriages read, the same shape
-for parent-child, and ``{'spouse_count': 1, 'child_count': 1} != {'spouse_count':
-2, 'child_count': 2}`` for the counts. The fixture was then restored and all
-seven passed. That is question 2 of ".claude/rules/seeds.md", "A test pins an
-outcome, not a setting": the failing reading and the passing reading are
-different values, so these assertions are about the edge and not about whether
-the endpoint answers at all.
+**The two-sided shape is the point and it is inherited from S-020.** Every
+fixture carries a live spouse and a live child beside the deleted ones. Without
+them, a read that returned nothing at all would pass every "the deleted one is
+absent" assertion. And ``test_the_same_readings_flip_back_when_the_person_is
+_restored`` clears the person's ``is_deleted`` flag and takes the same four
+readings again, so the failing reading and the passing reading are different
+values rather than one reading either way — question 2 of
+``.claude/rules/seeds.md``, "A test pins an outcome, not a setting".
 
 Real Postgres (``migrated_db_url``), JWT verification stubbed the same way as
 ``tests/integration/test_person_documents_soft_delete.py``. Every read is taken
 over HTTP so the answer is about a response body rather than about a repository
-call, and one test reads the rows back with raw SQL so the database-layer claim
-does not rest on an application-layer join.
+call.
 """
 
 from __future__ import annotations
@@ -107,8 +93,8 @@ async def seeded(session_factory: async_sessionmaker[AsyncSession]) -> dict[str,
     child, and a soft-deleted child.
 
     The live pair is the control on every assertion below. Without it a read that
-    returned nothing at all would pass the "the deleted one is present" test by
-    accident in reverse, and a count of zero would look like a working cascade.
+    returned nothing at all would pass "the deleted one is absent" by accident,
+    and a count of zero would look like a working filter.
     """
     clan_id = uuid.uuid4()
     viewer_id = uuid.uuid4()
@@ -233,12 +219,41 @@ def viewer_headers(seeded: dict[str, Any]) -> dict[str, str]:
     }
 
 
+async def _marriage_edge_ids(
+    client: AsyncClient, seeded: dict[str, Any], headers: dict[str, str]
+) -> set[str]:
+    resp = await client.get(f"/api/v1/persons/{seeded['survivor']}/marriages", headers=headers)
+    assert resp.status_code == 200, resp.text
+    return {m["id"] for m in resp.json()["data"]}
+
+
+async def _parent_child_edge_ids(
+    client: AsyncClient, seeded: dict[str, Any], headers: dict[str, str]
+) -> set[str]:
+    resp = await client.get(f"/api/v1/persons/{seeded['survivor']}/parent-child", headers=headers)
+    assert resp.status_code == 200, resp.text
+    return {link["id"] for link in resp.json()["data"]}
+
+
+async def _survivor_stats(
+    client: AsyncClient, seeded: dict[str, Any], headers: dict[str, str]
+) -> dict[str, int]:
+    resp = await client.post(
+        "/api/v1/persons/batch",
+        headers=headers,
+        json={"ids": [str(seeded["survivor"])], "include": "stats"},
+    )
+    assert resp.status_code == 200, resp.text
+    stats: dict[str, int] = resp.json()["data"][0]["stats"]
+    return stats
+
+
 async def test_the_deleted_person_is_gone_from_their_own_reads(
     client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
 ) -> None:
     """The premise the rest of the file rests on: the person really is deleted.
 
-    Without this, "the survivor still sees the edge" would be unremarkable.
+    Without this, "the survivor's edge list omits them" would be unremarkable.
     """
     gone = await client.get(f"/api/v1/persons/{seeded['deleted_spouse']}", headers=viewer_headers)
     assert gone.status_code == 404, gone.text
@@ -247,13 +262,16 @@ async def test_the_deleted_person_is_gone_from_their_own_reads(
     assert alive.status_code == 200, alive.text
 
 
-async def test_both_edges_to_a_soft_deleted_person_stay_live_in_the_database(
+async def test_the_edge_rows_are_untouched_so_the_read_filter_is_what_hides_them(
     session_factory: async_sessionmaker[AsyncSession], seeded: dict[str, Any]
 ) -> None:
     """Read the rows back with raw SQL, so this claim does not rest on a join.
 
-    Nothing consumes ``PersonDeleted``, so no cascade runs and both edge rows
-    keep ``is_deleted = false`` while the person they point at does not.
+    S-054 added no cascade: nothing consumes ``PersonDeleted``, so both edge rows
+    keep ``is_deleted = false`` while the person they point at does not. This is
+    the fact that makes the rest of the file about the **read**. It is also the
+    boundary S-055 and S-056 own — when a cascade ships, this test is the one
+    that changes, and the reads below must keep passing unchanged.
     """
     async with session_factory() as s:
         marriage = await s.execute(
@@ -273,126 +291,90 @@ async def test_both_edges_to_a_soft_deleted_person_stay_live_in_the_database(
     assert link.scalar_one() is False
 
 
-async def test_person_marriages_surfaces_the_edge_to_a_soft_deleted_spouse(
+async def test_person_marriages_omits_the_edge_to_a_soft_deleted_spouse(
     client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
 ) -> None:
-    """A client asking who the survivor is married to is told about a 404 person."""
+    """A client asking who the survivor is married to is told about live spouses only."""
     resp = await client.get(
         f"/api/v1/persons/{seeded['survivor']}/marriages", headers=viewer_headers
     )
     assert resp.status_code == 200, resp.text
     edge_ids = {m["id"] for m in resp.json()["data"]}
     assert str(seeded["live_marriage_id"]) in edge_ids  # control: the read works at all
-    assert str(seeded["deleted_spouse_marriage_id"]) in edge_ids
+    assert str(seeded["deleted_spouse_marriage_id"]) not in edge_ids
 
     partner_ids = {m["person1_id"] for m in resp.json()["data"]} | {
         m["person2_id"] for m in resp.json()["data"]
     }
-    assert str(seeded["deleted_spouse"]) in partner_ids
+    assert str(seeded["live_spouse"]) in partner_ids
+    assert str(seeded["deleted_spouse"]) not in partner_ids
 
 
-async def test_person_parent_child_surfaces_the_edge_to_a_soft_deleted_child(
+async def test_person_parent_child_omits_the_edge_to_a_soft_deleted_child(
     client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
 ) -> None:
-    """The same hole on the lineage edge, which is the one ADR-006 calls irreplaceable."""
+    """The same rule on the lineage edge, which is the one ADR-006 calls irreplaceable."""
     resp = await client.get(
         f"/api/v1/persons/{seeded['survivor']}/parent-child", headers=viewer_headers
     )
     assert resp.status_code == 200, resp.text
     edge_ids = {link["id"] for link in resp.json()["data"]}
     assert str(seeded["live_link_id"]) in edge_ids  # control: the read works at all
-    assert str(seeded["deleted_child_link_id"]) in edge_ids
+    assert str(seeded["deleted_child_link_id"]) not in edge_ids
 
     child_ids = {link["child_id"] for link in resp.json()["data"]}
-    assert str(seeded["deleted_child"]) in child_ids
+    assert str(seeded["live_child"]) in child_ids
+    assert str(seeded["deleted_child"]) not in child_ids
 
 
-async def test_batch_stats_counts_edges_that_point_at_soft_deleted_persons(
+async def test_batch_stats_counts_only_edges_whose_other_end_is_live(
     client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
 ) -> None:
-    """The edge count answers two, not one, for a survivor with one live spouse.
+    """The edge count answers one, matching the one live spouse and one live child.
 
     ``spouse_count`` and ``child_count`` are what a card in the UI renders, so
-    this is the number a reader sees before any list is opened.
+    this is the number a reader sees before any list is opened. It counted two.
+    """
+    assert await _survivor_stats(client, seeded, viewer_headers) == {
+        "spouse_count": 1,
+        "child_count": 1,
+    }
+
+
+async def test_the_batch_include_fan_out_omits_the_same_two_edges(
+    client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
+) -> None:
+    """``POST /persons/batch`` reaches the edge reads through a different path.
+
+    The two sub-resource routes call the single-person delegates; the batch route
+    calls ``get_included_data_batch``, one query per include token for the whole
+    batch. Same SQL underneath, but the fan-out is what a list screen uses, so it
+    is read here rather than inferred.
     """
     resp = await client.post(
         "/api/v1/persons/batch",
         headers=viewer_headers,
-        json={"ids": [str(seeded["survivor"])], "include": "stats"},
+        json={"ids": [str(seeded["survivor"])], "include": "marriages,parent_child"},
     )
     assert resp.status_code == 200, resp.text
-    stats = resp.json()["data"][0]["stats"]
-    assert stats == {"spouse_count": 2, "child_count": 2}
+    person = resp.json()["data"][0]
 
-
-async def test_the_same_readings_flip_once_the_edges_are_soft_deleted(
-    client: AsyncClient,
-    session_factory: async_sessionmaker[AsyncSession],
-    seeded: dict[str, Any],
-    viewer_headers: dict[str, str],
-) -> None:
-    """The negative control for the three tests above, and it needs explaining.
-
-    Those three are characterization tests: they assert what the code does today,
-    so "delete the fix and watch them fail" has nothing to delete. What must be
-    shown instead is that each assertion reads the **edge** and not something
-    that is true either way. So this test applies by hand exactly what ADR-006's
-    2026-07-02 update decided the cascade would do -- soft-delete the edges that
-    the person's own delete should have taken with it -- and takes the same three
-    readings again. All three flip.
-
-    Nothing in ``app/`` is modified. The wanted behaviour is reached through the
-    data, which is why this control can live entirely in the test tree.
-    """
-    async with session_factory() as s:
-        await s.execute(
-            sa.text(
-                "UPDATE marriages SET is_deleted = true, deleted_at = now(), deleted_by = :uid "
-                "WHERE id = :id"
-            ),
-            {"id": seeded["deleted_spouse_marriage_id"], "uid": seeded["viewer_id"]},
-        )
-        await s.execute(
-            sa.text(
-                "UPDATE parent_child SET is_deleted = true, deleted_at = now(), deleted_by = :uid "
-                "WHERE id = :id"
-            ),
-            {"id": seeded["deleted_child_link_id"], "uid": seeded["viewer_id"]},
-        )
-        await s.commit()
-
-    marriages = await client.get(
-        f"/api/v1/persons/{seeded['survivor']}/marriages", headers=viewer_headers
-    )
-    assert marriages.status_code == 200, marriages.text
-    marriage_ids = {m["id"] for m in marriages.json()["data"]}
+    marriage_ids = {m["id"] for m in person["marriages"]}
     assert str(seeded["live_marriage_id"]) in marriage_ids
     assert str(seeded["deleted_spouse_marriage_id"]) not in marriage_ids
 
-    links = await client.get(
-        f"/api/v1/persons/{seeded['survivor']}/parent-child", headers=viewer_headers
-    )
-    assert links.status_code == 200, links.text
-    link_ids = {link["id"] for link in links.json()["data"]}
+    link_ids = {link["id"] for link in person["parent_child"]}
     assert str(seeded["live_link_id"]) in link_ids
     assert str(seeded["deleted_child_link_id"]) not in link_ids
 
-    stats = await client.post(
-        "/api/v1/persons/batch",
-        headers=viewer_headers,
-        json={"ids": [str(seeded["survivor"])], "include": "stats"},
-    )
-    assert stats.status_code == 200, stats.text
-    assert stats.json()["data"][0]["stats"] == {"spouse_count": 1, "child_count": 1}
 
-
-async def test_timeline_disagrees_with_the_marriages_read_on_the_same_edge(
+async def test_the_marriages_read_and_the_timeline_agree_on_the_same_edge(
     client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
 ) -> None:
-    """Two reads over one marriage row give a client two different answers.
+    """Two reads over one marriage row now give a client the same answer.
 
-    The timeline join filters the counterpart person; the marriages read does
-    not. This test exists so the disagreement is one reading rather than an
+    The timeline join always filtered the counterpart person; the marriages read
+    did not. This test exists so the agreement is one reading rather than an
     inference across two files.
     """
     timeline = await client.get(
@@ -412,4 +394,78 @@ async def test_timeline_disagrees_with_the_marriages_read_on_the_same_edge(
     partner_ids = {m["person1_id"] for m in marriages.json()["data"]} | {
         m["person2_id"] for m in marriages.json()["data"]
     }
-    assert str(seeded["deleted_spouse"]) in partner_ids
+    assert str(seeded["live_spouse"]) in partner_ids
+    assert str(seeded["deleted_spouse"]) not in partner_ids
+
+
+async def test_the_subtree_read_agrees_with_the_edge_reads_about_the_same_child(
+    client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
+) -> None:
+    """The tree was already right; check S-054 did not push the reads past it.
+
+    The tree functions filter soft-deleted persons
+    (``infra/supabase/migrations/002_tree_functions.sql``), so the survivor's
+    subtree already showed one child and one spouse. The edge reads now say the
+    same. A filter that hid the live pair as well would agree with nothing.
+    """
+    resp = await client.get(f"/api/v1/tree/subtree/{seeded['survivor']}", headers=viewer_headers)
+    assert resp.status_code == 200, resp.text
+    root = resp.json()["data"]["tree"]
+
+    child_ids = {child["id"] for child in root["children"]}
+    assert child_ids == {str(seeded["live_child"])}
+
+    spouse_ids = {spouse["id"] for spouse in root["spouses"]}
+    assert spouse_ids == {str(seeded["live_spouse"])}
+
+    assert child_ids == {
+        link["child_id"]
+        for link in (
+            await client.get(
+                f"/api/v1/persons/{seeded['survivor']}/parent-child", headers=viewer_headers
+            )
+        ).json()["data"]
+    }
+
+
+async def test_the_same_readings_flip_back_when_the_person_is_restored(
+    client: AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    seeded: dict[str, Any],
+    viewer_headers: dict[str, str],
+) -> None:
+    """The control: the four readings above are about the counterpart person.
+
+    Clearing ``persons.is_deleted`` on the spouse and the child — and nothing
+    else, the edge rows are never touched — makes every reading take its other
+    value: both edges come back and both counts go to two. So the failing
+    reading and the passing reading are different values, not one reading either
+    way (question 2 of ``.claude/rules/seeds.md``, "A test pins an outcome, not
+    a setting"). It also pins the behaviour S-055 has to preserve: a restored
+    person's edges must reappear.
+    """
+    before_marriages = await _marriage_edge_ids(client, seeded, viewer_headers)
+    before_links = await _parent_child_edge_ids(client, seeded, viewer_headers)
+    before_stats = await _survivor_stats(client, seeded, viewer_headers)
+    assert str(seeded["deleted_spouse_marriage_id"]) not in before_marriages
+    assert str(seeded["deleted_child_link_id"]) not in before_links
+    assert before_stats == {"spouse_count": 1, "child_count": 1}
+
+    async with session_factory() as s:
+        await s.execute(
+            sa.text(
+                "UPDATE persons SET is_deleted = false, deleted_at = NULL, deleted_by = NULL "
+                "WHERE id = ANY(:ids)"
+            ),
+            {"ids": [seeded["deleted_spouse"], seeded["deleted_child"]]},
+        )
+        await s.commit()
+
+    after_marriages = await _marriage_edge_ids(client, seeded, viewer_headers)
+    after_links = await _parent_child_edge_ids(client, seeded, viewer_headers)
+    after_stats = await _survivor_stats(client, seeded, viewer_headers)
+    assert str(seeded["deleted_spouse_marriage_id"]) in after_marriages
+    assert str(seeded["live_marriage_id"]) in after_marriages
+    assert str(seeded["deleted_child_link_id"]) in after_links
+    assert str(seeded["live_link_id"]) in after_links
+    assert after_stats == {"spouse_count": 2, "child_count": 2}

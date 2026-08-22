@@ -256,16 +256,31 @@ class SqlAlchemyPersonRepository:
             return {}
         # Counts are scoped to edges owned by the caller's clan (created_by_clan_id);
         # otherwise spouse/child counts would leak the existence of cross-clan edges.
+        #
+        # An edge counts only when neither of its endpoint persons is soft-deleted,
+        # not merely when the edge row is live (seed S-054, 2026-08-22). Nothing
+        # cascades a person's soft delete onto its edges, so `m.is_deleted=false`
+        # alone counted a spouse the same API answers 404 for — the card rendered
+        # "2 spouses" for a person with one. Same rule as the edge reads in
+        # `person_query_port.py`, and the `NOT EXISTS` shape is chosen there for a
+        # measured reason: read that module's docstring before rewriting this as a
+        # join.
         stmt = text("""
             SELECT p.id,
                 (SELECT COUNT(*) FROM public.marriages m
                  WHERE (m.person1_id=p.id OR m.person2_id=p.id)
                  AND m.is_deleted=false
-                 AND m.created_by_clan_id=:clan_id) as spouse_count,
+                 AND m.created_by_clan_id=:clan_id
+                 AND NOT EXISTS (SELECT 1 FROM public.persons px
+                                 WHERE px.id IN (m.person1_id, m.person2_id)
+                                 AND px.is_deleted)) as spouse_count,
                 (SELECT COUNT(*) FROM public.parent_child pc
                  WHERE pc.parent_id=p.id
                  AND pc.is_deleted=false
-                 AND pc.created_by_clan_id=:clan_id) as child_count
+                 AND pc.created_by_clan_id=:clan_id
+                 AND NOT EXISTS (SELECT 1 FROM public.persons px
+                                 WHERE px.id IN (pc.parent_id, pc.child_id)
+                                 AND px.is_deleted)) as child_count
             FROM public.persons p
             WHERE p.id = ANY(:pids)
         """).bindparams(pids=person_ids, clan_id=clan_id)
