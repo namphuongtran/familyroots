@@ -187,8 +187,22 @@ starting uvicorn.
   `backend/tests/unit/test_no_parallel_table_ddl_under_infra.py` fails if any `.sql` file under
   `infra/` declares `CREATE TABLE` again; it asserts the property, not the path, so a differently
   named file is caught too.
-- `infra/supabase/rls_policies.sql` survives and is **not** covered by that guard, because it
-  creates no table. It is unreviewed and is **not** what the database runs: the deployed policies
-  come from migrations `002` and `027`-`036`. Applied to a fresh `alembic upgrade head` on
-  2026-08-22 it stopped at its first statement with `ERROR: schema "auth" does not exist`. It is
-  seed **S-067**.
+- `infra/supabase/rls_policies.sql` held a hand-written set of **20** RLS policies of the same kind.
+  Seed **S-067 deleted it on 2026-08-22** after review. The deployed policies come from migrations
+  `002` and `027`-`036` (ADR-008, ADR-043): 20 policies over 13 RLS-enabled tables at head, counted
+  2026-08-22. The file keyed every policy on `auth.uid()`, which **ADR-008 § 2 rejects by name** in
+  favour of `current_setting('app.clan_id')`.
+
+  **"It cannot be applied" was true only of plain Postgres, and that was the trap.** Given a stub
+  `auth.uid()` — which a real Supabase project supplies for free — **31 of its 32 statements applied
+  cleanly *on top of* the shipped set**, taking `public` from 20 policies to 39. **Policies
+  compose**: every one it declared was PERMISSIVE, and Postgres OR's permissive policies for the
+  same command and role, so applying it would have **widened** clan isolation rather than replacing
+  it. Proven at the database layer: its `persons_insert_editor_above` carried **no clan predicate at
+  all**, and a user approved `editor` in clan A only, with `app.clan_id` set to clan A, inserted a
+  row owned by clan B. Dropping that one policy made the identical insert fail.
+
+  `backend/tests/unit/test_no_parallel_table_ddl_under_infra.py` now fails on any `.sql` under
+  `infra/` declaring `CREATE TABLE` **or** any RLS or policy DDL, including `DROP POLICY` and
+  `DISABLE ROW LEVEL SECURITY` — a file that *removes* a shipped policy is at least as dangerous as
+  one that adds a wide one. Both guards assert the statement, not the path.

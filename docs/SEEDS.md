@@ -624,6 +624,63 @@ named every one with its file and line. It also found that `globals.css`'s own c
 giỗ as `heritage`'s intended use, and made `EventCard` the first surface to paint it. **A token may
 already exist for a use you think is uncovered.** The 41 became **S-068**, which carries ADR 055.
 
+**Re-taken again 2026-08-22, after a fifteenth parallel batch of four: 70 seeds, 68 done, 2 open, and
+none blocked. Every seed that existed when the batch began is now closed** — the first time the board
+has had nothing open in it. The two that remain were opened by what the batch measured.
+
+- **Done, 64 to 68.** S-036, S-066, S-067, and S-068.
+- **Open, 4 to 2.** All four left for `done`, minus four; the coordinator opened S-069 and S-070.
+- **Blocked** stayed 0. **Seeds, 68 to 70.**
+
+**The batch's finding is a latent cross-clan write, and it was one `supabase db push` away.**
+S-067's seed said `infra/supabase/rls_policies.sql` "is not what the database runs, **and cannot
+be**". That is true only of plain Postgres, **and that was the trap.** Given a stub `auth.uid()` —
+which a real Supabase project supplies for free — 31 of its 32 statements applied cleanly **on top of**
+the shipped set, taking `public` from 20 policies to 39. **Policies compose**: all 20 it declared
+were PERMISSIVE, zero RESTRICTIVE, and Postgres OR's permissive policies for the same command and
+role, so applying it would have **widened** clan isolation rather than replacing it. Its
+`persons_insert_editor_above` carried **no clan predicate at all**, and the agent proved the
+consequence at the database layer — an editor approved in clan A only, with `app.clan_id` set to
+clan A, inserted a row owned by clan B; dropping that one policy made the identical insert fail.
+
+**And the seed named the wrong function, in the direction that matters.** The coordinator's text
+built its whole argument on `auth.user_clan_id()` and its `LIMIT 1`. Read at source, that function
+**was never called** — one line in the file, its own definition. The defect sat in
+`auth.user_clan_role()`, identical `LIMIT 1`, called by **10 of the 20 policies**. **Had that reading
+been "repaired" to say the `LIMIT 1` one is unused and therefore harmless, the file would have looked
+safer than it was.** A correction can move a claim the wrong way.
+
+**A seed established a user-facing fact by reading library source rather than guessing.** S-066 was
+told to find out what next-intl does with a missing key before deciding what "done" meant. It read
+`request.ts` — which loads one locale's JSON with no fallback, no `getMessageFallback`, no `onError`
+— and then the library itself. The answer is neither of the two obvious ones: a Chinese or French
+user hitting one of the 61 missing keys saw **the literal string `document.upload` rendered as UI
+text**, with a console error. Not English, not a crash.
+
+**Two agents edited `web/messages/*.json` at the same time and the result was consistent.** The
+coordinator declared the overlap rather than pretending a fence solved it, told each to name what it
+touched, and prepared to resolve by hand. Git merged cleanly, and the gate proved the outcome: all
+four locales at **381 keys with identical sets**, with S-036's new key present in all four and
+S-066's widened parity test — now covering the whole file — passing on the combined tree.
+
+**Four seeds have now independently invented the same workaround, which means a tool is missing.**
+S-031, S-032, S-036, and S-039 each built a throwaway route, read it, and deleted it before
+committing, because the e2e harness can reach only `/vi/login` and `/vi/register`. S-068 made the cost
+explicit: **none of the ten files it converted sits on a reachable route**, so its own seed's
+verification instruction was impossible as written, and it said so. That is **S-070**.
+
+**A guard was found to be watching the wrong directory.** Both `infra/` guards watch files that never
+execute. `scripts/restore_drill.sh:149` feeds `scripts/restore_bootstrap_role.sql` to `psql -f`, and
+**no guard watches `scripts/` at all.** Nothing is wrong there today, which is the point: nothing
+would notice if it changed. S-067 wrote it down rather than widening its own guard, because that
+would have closed two seeds in one change. That is **S-069**.
+
+**Three counting errors were caught this batch, all of them the coordinator's, and all the same
+shape.** S-066's seed carried locale totals measured before S-062 merged. S-062's own "34 keys"
+counted top-level entries where the flattened total was 40, because `relationship_form` held two
+nested objects. And S-067's seed named the unused function. **None changed a decision. All three
+would have reached a later reader as fact.**
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -822,7 +879,8 @@ graph LR
   S064 --> S067[S-067 rls_policies.sql]
   S061 --> S038
   S038 --> S068[S-068 decide the tokenless families, ADR-055]
-  S003 --> S035
+  S067 --> S069[S-069 guard scripts/ SQL]
+  S070[S-070 an authenticated route in e2e]
   S017 --> S064[S-064 retire infra/supabase/migrations]
   S018 --> S064
   S018 --> S065[S-065 decide what clan_settings is for]
@@ -875,7 +933,7 @@ graph LR
 | S-033 | Delete the legacy persons code | done | S-032, done |
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
 | S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | done | S-003, done |
-| S-036 | Give the calendar's event marker a channel other than gold | open | none |
+| S-036 | Give the calendar's event marker a channel other than gold | done | none |
 | S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | done | none |
 | S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | done | S-061, done |
 | S-039 | Decide what the backoffice aside is made of, in ADR-046 | done | S-006, done |
@@ -905,9 +963,11 @@ graph LR
 | S-063 | Gate: fail when `docs/ops/migrations.md` and the Alembic chain disagree | done | none |
 | S-064 | Retire or regenerate `infra/supabase/migrations/`, which is now two columns out of date | done | none |
 | S-065 | Decide what `clan_settings` is for, now that it is an empty table with five unread columns | done | none |
-| S-066 | Bring `zh.json` and `fr.json` up to the 61 keys `vi` and `en` already carry | open | S-062, done |
-| S-067 | Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model | open | S-064, done |
-| S-068 | Decide what the eight tokenless colour families mean, in ADR-055 | open | S-038, done |
+| S-066 | Bring `zh.json` and `fr.json` up to the 61 keys `vi` and `en` already carry | done | S-062, done |
+| S-067 | Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model | done | S-064, done |
+| S-068 | Decide what the eight tokenless colour families mean, in ADR-055 | done | S-038, done |
+| S-069 | Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/` | open | S-067, done |
+| S-070 | Make an authenticated route reachable in the e2e harness | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -1921,7 +1981,7 @@ records as open.
 
 ## S-036. Give the calendar's event marker a channel other than gold
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **A 4 px gold dot is the only thing that says a day has an event.** `bg-gold-500` `#d4af37` on the
 `cream` `#fdfbf7` ground measures **2.03:1**, recomputed 2026-08-13. It carries information, so WCAG
@@ -3240,7 +3300,7 @@ feature, which ADR-044 § 2 fixes the terms for if it ever returns.
 
 ## S-066. Bring `zh.json` and `fr.json` up to the 61 keys `vi` and `en` already carry
 
-**Status:** open · **Blocked by:** S-062, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-062, done 2026-08-22 · **Unblocks:** nothing yet
 
 **Found 2026-08-22 by S-062 while building a control it needed for something else, and confirmed by
 the coordinator the same day.** Counted from the four files directly:
@@ -3251,6 +3311,15 @@ the coordinator the same day.** Counted from the four files directly:
 | `en` | 420 |
 | `zh` | **359** |
 | `fr` | **359** |
+
+> **These four figures were stale before the seed was worked, and the correction is instructive.**
+> Re-counted 2026-08-22 by the agent that closed it: **380 / 380 / 319 / 319**. Seed S-062 merged
+> after this text was written and removed 40 leaf keys from every locale, a uniform shift that left
+> **the 61-key gap itself unchanged**. The coordinator then found the arithmetic did not close —
+> S-062 reported deleting 34 and 40 disappeared — and resolved it: `relationship_form` had **16
+> top-level entries**, two of which (`status`, `type`) were nested objects, giving **22 leaf keys**.
+> Both counts are true measurements of different things, the namespace went whole either way, and no
+> key was wrongly deleted. **Say which unit you counted in.**
 
 `zh` and `fr` are each missing **the same 61 keys**, across five namespaces: `auth`, `common`,
 `document`, `event`, and `relationship`.
@@ -3283,7 +3352,7 @@ not something this repository can check.
 
 ## S-067. Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model
 
-**Status:** open · **Blocked by:** S-064, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-064, done 2026-08-22 · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by the coordinator, from a finding S-064 reported and was fenced out of acting
 on** — it names a file outside the directory S-064 owned.
@@ -3298,6 +3367,17 @@ boundary this product cannot get wrong.
 does not have "the user's clan": a user may belong to several, and the active one arrives per request
 as `X-Current-Clan-Id` and is injected as `app.clan_id` by the RLS seam (ADR-008, ADR-047). **A
 policy keyed on `LIMIT 1` would silently pick the wrong clan for any multi-clan user.**
+
+> **This paragraph names the wrong function, and the direction of the error is the point.** Read at
+> source 2026-08-22 by the agent that closed the seed, and re-checked by the coordinator:
+> **`auth.user_clan_id()` was never called.** The string appears exactly once in the file — its own
+> definition at `:11`. The defect sat in its sibling `auth.user_clan_role()` at `:20-26`, which has
+> the identical `LIMIT 1` with no `ORDER BY` and **was called by 10 of the 20 policies** (`:58`,
+> `:63`, `:68`, `:80`, `:92`, `:104`, `:116`, `:128`, `:140`, `:162`).
+>
+> **Had this reading been "repaired" to say the `LIMIT 1` function is unused and therefore harmless,
+> the file would have looked safer than it was.** A correction can move a claim in the wrong
+> direction, and this is what that looks like.
 
 **It is also not what the database runs**, and cannot be: applied to a fresh `alembic upgrade head`
 on 2026-08-22 it stopped at its first statement with `ERROR: schema "auth" does not exist`. The
@@ -3329,7 +3409,7 @@ a policy, not only a table. If you widen it, plant a policy file and watch it fa
 
 ## S-068. Decide what the eight tokenless colour families mean, in ADR-055
 
-**Status:** open · **Blocked by:** S-038, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-038, done 2026-08-22 · **Unblocks:** nothing yet
 
 **S-038 swept 289 palette utilities onto semantic tokens and stopped at 41 it could not move,
 because no token exists for them.** It did not invent values, which its own out-of-scope line
@@ -3384,6 +3464,105 @@ the token set and its comments; spec § 2.1, § 2.2, and § 5 `T-06`;
 
 **Out of scope.** The 289 uses S-038 already moved. Renaming `accent`, which ADR-045 leaves open.
 Any screen's layout.
+
+---
+
+## S-069. Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/`
+
+**Status:** open · **Blocked by:** S-067, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by the coordinator, from a finding S-067 made about its own guard.** Both guards
+in `backend/tests/unit/test_no_parallel_table_ddl_under_infra.py` are scoped to `infra/`. **`infra/`
+is a directory where SQL never ran.** The one place SQL genuinely executes is `scripts/`:
+`scripts/restore_drill.sh:149` runs `psql "$SCRATCH_DSN" … -f "$BOOTSTRAP_SQL"` on
+`scripts/restore_bootstrap_role.sql`.
+
+**Nothing is wrong today**, and that is worth stating first. That file declares neither a table nor a
+policy — it creates the `familyroots_app` role and its grants, which is exactly what ADR-052 decided
+it should do. **The gap is that nothing would notice if it changed.**
+
+**The asymmetry is the finding.** Two guards now watch a directory whose files are inert, and no
+guard watches the file a shell script feeds to `psql`. S-067 wrote this down rather than widening its
+own guard, because widening it would have closed two seeds in one change.
+
+**This seed contains a decision and it is a real one.** A guard over `scripts/` cannot simply forbid
+DDL, because `restore_bootstrap_role.sql` **is** DDL and must stay. So decide what the rule is:
+perhaps an allow-list of files under `scripts/` that may contain DDL, each with the ADR that
+sanctions it, failing on any other. **Say what you chose and why, and do not choose the rule that
+makes today's tree pass with the least thought.**
+
+**End state.** A check fails when a `.sql` file under `scripts/` declares DDL that no decision
+sanctions. It runs in the backend gate. Whatever shape it takes, `restore_bootstrap_role.sql` passes
+**by being named**, not by the rule being loose enough to admit it.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**Two planted controls, following S-064 and S-067**: a new file under a name nobody would guess, to
+prove the check is about the property and not the path; and a change **inside**
+`restore_bootstrap_role.sql` that the rule should reject, to prove being on the allow-list is not a
+blank cheque. Quote both.
+
+**Sources.** `scripts/restore_drill.sh:149`; `scripts/restore_bootstrap_role.sql`;
+`backend/tests/unit/test_no_parallel_table_ddl_under_infra.py`;
+`docs/decisions/052-restore-bootstraps-the-request-role.md`.
+
+**Out of scope.** `infra/`, which the two existing guards cover. Renaming the guard module, which
+S-067 left alone because three prose citations point at its filename.
+
+---
+
+## S-070. Make an authenticated route reachable in the e2e harness
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by the coordinator. Three seeds have now hit this wall independently**, and the
+third confirmed it for a set of ten files rather than one.
+
+**The e2e suite can reach exactly two routes: `/vi/login` and `/vi/register`.** Everything else is
+behind `requireServerRole` / `requireRole` and a real Supabase session. This is **not** the
+missing-`.env.local` problem that S-041 fixed — the placeholder Supabase env is present and the
+banner spec works. It is that no test can hold a session.
+
+The cost is now measured rather than suspected:
+
+- **S-039 / ADR-046** could not read the backoffice rail in a browser, and said so.
+- **S-031** could not exercise `/vi/members`, and used a throwaway route instead.
+- **S-032** could not reach the conflict dialog, and used a throwaway preview route.
+- **S-036** could not render the calendar with data, and used a throwaway preview route.
+- **S-068** found that **none of the ten files it converted sits on a reachable route**, and its
+  seed's own verification instruction — "an `e2e/dark-theme.spec.ts` case per converted surface" —
+  was therefore impossible as written.
+
+**Four seeds have now independently invented the same workaround**: build a throwaway route, screenshot
+it, delete it before committing. **That is a pattern, and a pattern repeated four times is a missing
+tool.** Every one of those readings is honest and every one is weaker than reading the real screen,
+because a throwaway route reproduces the classes rather than exercising the component in place.
+
+**This seed contains a decision.** The options are not equal and none is obviously right: seed a test
+user and log in through the real flow against a local Supabase; stub the session at the middleware or
+`requireServerRole` boundary for a test-only build; or accept the limit and make the throwaway-route
+pattern a documented, reusable helper rather than something four agents each rebuilt. **The third is
+the honest fallback and should be chosen deliberately, not by default.**
+
+**Read the failure direction before choosing.** A session stub that can be reached in production is
+worse than no e2e coverage at all. Whatever is built must be impossible to enable outside the test
+harness, and the seed must say how that is enforced rather than asserting it.
+
+**End state.** At least one authenticated route is exercised by `e2e/` with the real component tree,
+under both colour schemes and at 200% text scale, and `web/CLAUDE.md` records how to add the next
+one. If the decision is the third option, the helper exists and the four prior workarounds are
+pointed at it.
+
+**Verification.** The **full** web gate in `web/CLAUDE.md`. **The control is the point**: plant a
+regression on the newly reachable route — a dead Tailwind class, or a removed `aria-label` — and
+watch the new e2e case fail naming it. A harness that has never been seen to catch anything on a real
+authenticated screen has not been shown to work.
+
+**Sources.** `web/e2e/` and `web/playwright.config.ts`; `web/src/lib/auth/` for
+`requireServerRole`; the five seeds named above, each in this file with its own account of the
+workaround it used; `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`
+for the first recorded instance.
+
+**Out of scope.** Mobile. Any new screen. Changing what any route requires.
 
 ---
 
