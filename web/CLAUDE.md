@@ -97,9 +97,9 @@ Two trees coexist during the migration described in
   ```
 
   `src/features/persons/{model,api}` landed 2026-08-22 by seed S-029, the first feature
-  slice — `server/`, `hooks/`, and `ui/` are still to come (S-030 onward). New code that
-  isn't a feature slice belongs in `src/domain/` or `src/shared/http/`, never in the
-  legacy trees above.
+  slice; `server/` and `hooks/` landed the same day by S-030 — see "The `persons` slice"
+  below for both. `ui/` is still to come. New code that isn't a feature slice belongs in
+  `src/domain/` or `src/shared/http/`, never in the legacy trees above.
 
 Path alias `@/*` → `./src/*` (tsconfig).
 
@@ -190,9 +190,9 @@ shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
   should only ever think about one absent value.
 - **`api/` returns `Promise<unknown>` from every function — the raw enveloped body,
   unparsed.** `unwrapData`/`unwrapPage` plus the model schema and mapper are composed by
-  the caller (today, the test; from S-030 on, the repository in `server/`). This is
+  the caller — `server/persons-repository.ts`, landed by S-030 below. This is
   deliberate, not a placeholder: it is what lets `api-layer-has-no-react` mean something,
-  and it is what `server/` in S-030 is *for* — "fetch → parse → map to domain" in
+  and it is what `server/` is *for* — "fetch → parse → map to domain" in
   `web/CLAUDE.md`'s own Architecture section names three separate steps, and this slice
   is proof they run in three separate places.
 - **`domain/person/person.ts` is plain TypeScript with no functions, only types** —
@@ -227,6 +227,120 @@ shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
   negative control: breaking the mapper's `fullName` field, dropping the list query
   params, and swallowing the transport error each failed the named test for that reason,
   then were reverted.
+
+### The `persons` repository, query keys, and hooks (S-030, `server/`, `hooks/`)
+
+**`server/persons-repository.ts` is the fetch → parse → map step S-029 left open.** Every
+function takes the `PersonsApiCallOptions` S-029's `api/` layer already defined
+(`context`, `signal`, `refreshAuth`, `fetchImpl`, `timeoutMs`) and returns a domain type —
+`Person`, `Page<Person>`, `PersonSearchHit[]`, `PersonBatchResult`, or `PersonActionResult`
+— never a DTO and never the raw `Promise<unknown>` `api/` hands back.
+
+- **The cursor rule lives here, not in a hook.** `listPersons` catches a `400
+  invalid_cursor` `ApiError` and retries once with `cursor: null` before it ever reaches a
+  caller. Doing it in `server/` rather than `hooks/` means the retry is testable without
+  React (`persons-repository.test.ts`, no MSW, no `renderHook`) and means a screen cannot
+  forget to handle it — there is nothing left for a screen to handle. It only retries when
+  the failed request actually carried a cursor, so a genuinely malformed request (a 422,
+  say) still surfaces as itself rather than looping.
+- **The 401/403 split is proven through the repository, not reimplemented in it.**
+  `apiFetch` already refreshes once on 401 and never on 403; what was still unproven is
+  that two *concurrent* repository calls sharing one `refreshAuth` (built with
+  `createSingleFlight`, `shared/http/refresh.ts`) collapse onto one refresh rather than
+  each calling it independently. `persons-repository.test.ts` proves it by calling
+  `getPerson` twice concurrently with a shared, deliberately slow-to-resolve
+  `refreshAuth`, and asserting the underlying refresh operation ran once. **Building an
+  actual browser `refreshAuth` — wiring `createSingleFlight` to a real Supabase
+  `refreshSession()` call — is explicitly not done here.** No screen exists yet to need
+  one (S-031/S-032), and no auth slice exists yet to own where a browser-wide singleton
+  like that should live; inventing one now, untested against a real caller, would be the
+  kind of decision a seed is supposed to isolate rather than smuggle into an unrelated one.
+  A hook here only ever forwards whatever `refreshAuth` its caller passes in.
+- **`batchGetPersons` gets its own small envelope reader rather than reusing
+  `unwrapPage`.** `POST /persons/batch`'s `meta` is `{errors: BatchError[]}`, not the
+  cursor triplet `unwrapPage` requires, so forcing it through `unwrapPage` would mean
+  faking a `has_more`/`limit` that do not exist on the wire. `items` and `errors` are
+  read and mapped separately and never merged — `docs/contracts/rest-persons-api.md` is
+  explicit that an unresolved id is never mixed into `data`, and `PersonBatchResult`
+  (`domain/person/person.ts`) keeps that shape in the return type too.
+- **The `HistoricalDate` DTO stays duplicated — S-030 is not the second slice that needs
+  it.** S-029 named `historical-date-dto.ts` as `persons`-local on purpose until a second
+  *feature* (marriages, events, tree nodes) needs the same wire shape. S-030 adds no new
+  feature and no new wire shape; it is the same slice consuming what S-029 already parses.
+  Nothing here changed about that file.
+- **Write bodies still carry no zod validation, and this seed agrees with that call.**
+  `createPerson`/`updatePerson` take `PersonCreateRequest`/`PersonUpdateRequest` typed
+  straight from `components['schemas'][...]`, the same as `api/persons-api.ts` already
+  did. The reasoning holds up under one direct test:
+  `persons-repository.test.ts`'s "forwards a body with an unrecognised key untouched"
+  sends a body carrying a key no generated type declares and asserts it reaches
+  `JSON.stringify` unchanged — proof nothing runs a schema over it, not just an assertion
+  that the decision is fine in prose. (Verified as a negative control too: inserting a
+  real zod `.parse()` ahead of the transport call, the same key gets silently stripped
+  and this test is what catches it — see the commit message.)
+
+**Query keys live in one place, `server/query-keys.ts`'s `personsKeys`, so a read and its
+invalidation cannot drift apart.** Every key is `[..., clanId, ...]`-scoped first, matching
+the shape `shared/http/clan-switch.test.tsx` already proved for a plain `useQuery`: a key
+built from the active clan refetches the moment `writeClanCookie` changes it, with no
+manual invalidation step for a clan switch. `list`/`search`/`detail` all drop the cursor
+from the key on purpose — the cursor is `useInfiniteQuery`'s own `pageParam`, identifying
+*which page*, not *which list*; keying on it would turn every page into its own cache
+entry that never invalidates together.
+
+**Hooks (`hooks/use-persons-queries.ts`, `hooks/use-person-mutations.ts`) take a
+`RequestContext` the caller passes in — they do not call `getClientRequestContext()`
+themselves.** No screen exists yet (S-031/S-032) to decide how a context gets built and
+kept reactive (almost certainly `useCurrentClanId()` plus the rest of the session), and
+deciding that inside a hook nobody calls yet would be exactly the kind of premature
+decision `.claude/rules/seeds.md` warns a seed against making for a later one. This keeps
+every hook testable with a plain `RequestContext` object and MSW, which is what
+`hooks/*.test.tsx` do.
+
+- **Mutation invalidation is same-feature only, per this seed's own "Out of scope."**
+  `useCreatePerson` invalidates `personsKeys.lists(clanId)`; `useUpdatePerson`,
+  `useDeletePerson`, and `useRestorePerson` invalidate the one `personsKeys.detail(...)`
+  plus every list. None of them touch `['tree']` the way the legacy
+  `src/lib/hooks/query-invalidation.ts` does for the same mutations — cross-feature
+  invalidation arrives with the second feature slice that needs to invalidate `persons`
+  from outside it, per this seed's text.
+- **The public surface changed shape.** Through S-029, `index.ts` re-exported the raw
+  `api/persons-api.ts` functions (`Promise<unknown>`) because nothing else existed to be
+  the entry point. Now that `server/` parses, those raw functions are **no longer
+  re-exported** — `index.ts` hands out the parsed repository functions and the hooks
+  under the same names (`getPerson`, `listPersons`, …) instead, so a caller outside this
+  feature can no longer reach the unparsed transport at all. `api/persons-api.ts` itself
+  is unchanged; it is just no longer part of what `cross-feature-only-via-index` lets
+  another feature see.
+- **Tests:** `server/persons-repository.test.ts` (unit, `fetchImpl`-mocked, no MSW) covers
+  every mapped value for every operation, the cursor-drop retry and its passthrough
+  counterpart, and the 401/403 split, each with a run-and-reverted negative control (see
+  the commit message for every one, with its failing output).
+  `server/persons-repository.two-runtimes.test.tsx` is the real version of the stand-in
+  `shared/http/context.test.tsx` already flagged as temporary: it calls `getPerson` once
+  through `getServerRequestContext()` and once through `getClientRequestContext()` against
+  the same MSW-mocked backend and asserts the two resulting `Person` values are equal —
+  `.tsx`, not `.ts`, because `getClientRequestContext` needs `document.cookie`, which only
+  exists under the `component` project's jsdom environment; a node-environment version
+  would make "both runtimes agree" true for the wrong reason (every browser-side read
+  would resolve to null). `hooks/*.test.tsx` cover the query/mutation wiring itself:
+  loading → success → error for `usePerson`, cursor pagination for `usePersonsList`
+  without ever parsing the cursor, disabled-when-blank for `usePersonSearch`, and — with
+  its own negative control — that a successful `useCreatePerson` mutation makes an
+  already-mounted `usePersonsList` refetch with no re-render or manual `refetch()` call.
+
+**`pnpm depcruise` coverage was checked, not assumed.** No rule in `.dependency-cruiser.cjs`
+names `server/` or `hooks/` specifically — only `api/` (`api-layer-has-no-react`) and `ui/`
+(`ui-does-not-call-transport`) get a directory-specific rule. `cross-feature-only-via-index`
+is written path-agnostically (`^src/features/([^/]+)/` with no subdirectory name), so it
+already covers every subdirectory including these two. Proved by planting
+`src/features/relationships/probe.ts` importing `../persons/server/query-keys` directly,
+then `../persons/hooks/use-persons-queries` directly: both produced
+`error cross-feature-only-via-index: src/features/relationships/probe.ts → ...` by name,
+`pnpm depcruise` went from 0 errors to 1, and both throwaway files were removed afterward,
+neither reaching a commit. `depcruise` stayed at **0 errors, 3 warnings** before and after
+this seed's real changes — the same three orphans S-029 already recorded, unaffected,
+since `refresh.ts` is still imported only from `.test.ts` files, which the graph excludes.
 
 ### The spine (`src/shared/http/`, `src/shared/telemetry/`, `src/domain/date/`)
 

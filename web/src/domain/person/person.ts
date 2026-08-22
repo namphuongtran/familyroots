@@ -88,3 +88,23 @@ export interface PersonActionResult {
   readonly message: string
   readonly id: string | null
 }
+
+/**
+ * One row of `POST /persons/batch`'s `meta.errors` — a requested id that did
+ * not resolve. Mirrors `components.schemas.BatchError`.
+ */
+export interface PersonBatchError {
+  readonly id: string
+  readonly code: string
+}
+
+/**
+ * The outcome of `POST /persons/batch` (`components.schemas.PersonBatchEnvelope`):
+ * the persons that resolved and the ids that did not, kept apart rather than
+ * merged — `docs/contracts/rest-persons-api.md` is explicit that an
+ * unresolved id is "never mixed into `data`".
+ */
+export interface PersonBatchResult {
+  readonly items: readonly Person[]
+  readonly errors: readonly PersonBatchError[]
+}

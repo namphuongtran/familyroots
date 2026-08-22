@@ -17,7 +17,12 @@
 
 import { z } from 'zod'
 import type { components } from '@/generated/api-types'
-import type { Person, PersonActionResult, PersonSearchHit } from '@/domain/person/person'
+import type {
+  Person,
+  PersonActionResult,
+  PersonBatchError,
+  PersonSearchHit,
+} from '@/domain/person/person'
 import {
   historicalDateDtoSchema,
   toHistoricalDate,
@@ -177,4 +182,8 @@ export function assertBatchErrorDtoMatchesGenerated(
   dto: BatchErrorDto,
 ): components['schemas']['BatchError'] {
   return dto
+}
+
+export function toPersonBatchError(dto: BatchErrorDto): PersonBatchError {
+  return { id: dto.id, code: dto.code }
 }
