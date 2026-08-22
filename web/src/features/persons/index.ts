@@ -27,6 +27,7 @@ export type {
   PersonActionResult,
   PersonBatchResult,
   PersonSearchHit,
+  PersonWriteResult,
 } from '@/domain/person/person'
 
 export type {
@@ -90,3 +91,12 @@ export { PersonProfile } from './ui/PersonProfile'
 export { formatHistoricalDate, isKnownDate } from './ui/format-person-date'
 export { usePersonsRequestContext } from './ui/use-persons-request-context'
 export type { PersonsRequestContext } from './ui/use-persons-request-context'
+
+// Landed by S-032 — the create/edit form and its §7.7c conflict dialog.
+// `HistoricalDateField`, `StaleWriteDialog`, `ForbiddenWriteDialog`, and the
+// pure helpers in `person-form-schema.ts`/`stale-write-diff.ts` are
+// deliberately not exported here: nothing outside this feature composes a
+// form from smaller pieces today, and `PersonForm` is the one thing
+// `app/[locale]/(dashboard)/members/{new,[id]/edit}/page.tsx` need.
+export { PersonForm } from './ui/PersonForm'
+export type { PersonFormProps } from './ui/PersonForm'

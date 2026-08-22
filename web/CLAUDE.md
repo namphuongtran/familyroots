@@ -97,9 +97,10 @@ Two trees coexist during the migration described in
   ```
 
   `src/features/persons/{model,api}` landed 2026-08-22 by seed S-029, the first feature
-  slice; `server/` and `hooks/` landed the same day by S-030 — see "The `persons` slice"
-  below for both. `ui/` is still to come. New code that isn't a feature slice belongs in
-  `src/domain/` or `src/shared/http/`, never in the legacy trees above.
+  slice; `server/` and `hooks/` landed the same day by S-030; `ui/` landed the same day too,
+  in two seeds — the list/detail screens (S-031) and the create/edit form (S-032) — see "The
+  `persons` slice" and the two sections below it. New code that isn't a feature slice belongs
+  in `src/domain/` or `src/shared/http/`, never in the legacy trees above.
 
 Path alias `@/*` → `./src/*` (tsconfig).
 
@@ -341,6 +342,92 @@ then `../persons/hooks/use-persons-queries` directly: both produced
 neither reaching a commit. `depcruise` stayed at **0 errors, 3 warnings** before and after
 this seed's real changes — the same three orphans S-029 already recorded, unaffected,
 since `refresh.ts` is still imported only from `.test.ts` files, which the graph excludes.
+
+### The persons create/edit form and its `409 stale_write` dialog (S-032, `ui/PersonForm.tsx`)
+
+**The repository's return shape changed.** `createPerson`/`updatePerson` (`server/persons-repository.ts`)
+now resolve `PersonWriteResult` (`{ person, warning }`, `@/domain/person/person`), not a bare
+`Person` — spec §7.7a's "`meta.warning` on a successful write ... the save succeeds, and a
+`warning` toast appears afterwards" needs the envelope's `meta.warning`, which `unwrapData`
+never returns (it hands back `data` only). A new `readWriteWarning` reads `raw.meta.warning`
+straight off the same raw body `unwrapData` already parses, the same shape `batchGetPersons`
+uses for its own `meta.errors`. `hooks/use-person-mutations.ts` needed no logic change —
+`mutate`/`mutateAsync` just resolve to the wider type now — but its own doc comments say so,
+and `server/persons-repository.test.ts` gained a case with a run negative control: reverting
+`readWriteWarning`'s call site back to a bare `unwrapData(raw, parsePerson)` makes the new
+`createPerson surfaces meta.warning` test fail with `undefined` where a string was expected.
+
+**The `409 stale_write` path is the reason this seed exists, and it is not a generic error
+banner.** `PersonForm.tsx`'s `onSubmit` catches an `ApiError` with `code === 'stale_write'`,
+refetches the record (`getPerson`, this feature's own `server/`, not a hook — `ui/` may reach
+its own `server/`; only `ui-does-not-call-transport` restricts `api/`), diffs it against the
+form's current values (`stale-write-diff.ts`'s `diffPersonFormValues`), and opens
+`StaleWriteDialog` with one row per field that actually differs, spec §7.7c. A row's default
+choice is "keep mine" when the user actually edited that field since the form loaded, "use
+latest" otherwise — a real three-way comparison (loaded / typed / latest), not a two-way one,
+and `stale-write-diff.test.ts` has a negative control proving the naive two-way reading (which
+would default every row to "mine", since every row's `mine` differs from `latest` by
+construction of the filter) fails the case where the user never touched the field.
+
+**`PersonForm.test.tsx`'s own conflict test carries the negative control this seed's
+instructions asked for, run by hand and reverted.** With the `onSubmit` branch's
+`error.code === STALE_WRITE_CODE` check changed to `false`, "opens the field-level conflict
+dialog instead of a generic error banner" fails: the `waitFor` on "Người khác vừa sửa hồ sơ
+này" times out because the 409 falls through to the generic `setSubmitError` branch instead —
+the exact silent-loss shape this seed exists to prevent. Reverted, and the suite is green
+again. See the commit message for the actual failing output.
+
+**First use of `@radix-ui/react-dialog` in `web/src`** (`.claude/rules/tailwind.md` §4: the
+package was installed and imported by no file before this). `StaleWriteDialog` and
+`ForbiddenWriteDialog` (the 403-mid-edit case, same spec paragraph) both control `Dialog.Root`
+from the caller's own `open` state and call `event.preventDefault()` in `onEscapeKeyDown` and
+`onInteractOutside`, matching spec §7.7c's "not dismissible by scrim tap" literally rather than
+by convention.
+
+**A real browser measurement found and fixed a genuine `T-04` defect before this seed closed,
+not after.** `StaleWriteDialog`'s field-comparison rows originally laid "Bản của bạn" / value
+side by side in a `flex items-baseline justify-between` row. Measured 2026-08-22 at 320px width
+with `:root { font-size: 32px }` (200%) against a throwaway preview route (`StaleWriteDialog`
+rendered directly with fixture rows, no backend, deleted before this commit): the dialog's own
+`clientWidth` was 250px against a `scrollWidth` of 288px — a real 38px overflow invisible at
+the *document* level (`documentElement.scrollWidth === clientWidth === 320` the whole time)
+because Radix's `overflow-y-auto` on `Dialog.Content` computes `overflow-x` to `auto` too, per
+the CSS spec's rule for a box with one axis scrolling and the other `visible` — so the overflow
+became an invisible *internal* horizontal scroll rather than a page-level one. The cause was the
+classic flexbox `min-width: auto` trap: a flex item's implicit minimum width is its own longest
+unbroken content run, so the value span refused to wrap. Fixed by stacking label above value
+(a block layout has no such minimum) instead of the spec diagram's side-by-side line, and by
+adding `flex-wrap` to the segmented mine/latest button row, which had the identical defect at
+106px available width against two buttons wanting ~215px combined. Re-measured after the fix:
+`dialog.clientWidth === dialog.scrollWidth` (250 === 250) at 320px/200%, and again with no
+overflow at 1280px/200%. Screenshots were taken and reviewed, then discarded — see this seed's
+closing note in `docs/SEEDS.md` for what was and was not verified this way.
+
+**Scope this seed deliberately did not cover, named rather than left silent:**
+
+- Fields shown are exactly spec §7.7's own list. `religion`, `nationality`, `occupation`,
+  `educationLevel`, `titleRank`, `phone`, and `email` exist on `Person` but are not in that
+  list; `nationality` is sent as the backend's own default `'VN'` on create since the field
+  is required there regardless. `phone`/`email` additionally carry ADR-049's role-narrower
+  write rule (a `viewer` may write them only on their own linked person), which this form does
+  not attempt to gate — a reason beyond the spec's own silence to leave both out for now.
+- "Chi/nhánh" (spec §7.7's field list) has no home: `Person` carries no branch field at all,
+  the same finding `ui/PersonRow.tsx`'s own comment already recorded for the list row.
+- The success/warning "toast" is an inline confirmation panel inside `PersonForm.tsx` that
+  replaces the form until the user continues, not a cross-navigation global toast — no toast
+  primitive exists anywhere in this codebase (`app/[locale]/(dashboard)/members/page.tsx`'s own
+  comment calls inventing one "exactly the kind of write-UX decision" a seed should not make as
+  a side effect of something else). This seed is the one that had to decide, and decided
+  narrowly, confined to this one component.
+- The unsaved-changes guard covers the in-form Cancel button (a `window.confirm`) and a real
+  tab close/reload (`beforeunload`), not in-app navigation through the page shell's own back
+  link — the App Router has no `routeChangeStart`-equivalent to intercept that without a custom
+  `Link` wrapper.
+- A second `409` on the resolved resubmit reopens the dialog with fresh data and a
+  `repeatedConflict` note (spec §7.7c's own text), proven in `person-form-schema.ts`'s design
+  and wired in `PersonForm.tsx`, but has no dedicated component test — `PersonForm.test.tsx`
+  covers the first conflict, the resolve-and-save path, and the discard-and-reload path, not
+  the repeat.
 
 ### The spine (`src/shared/http/`, `src/shared/telemetry/`, `src/domain/date/`)
 

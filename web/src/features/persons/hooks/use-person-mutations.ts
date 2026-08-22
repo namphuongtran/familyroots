@@ -29,7 +29,11 @@ export interface PersonMutationOptions {
   refreshAuth?: () => Promise<RequestContext | null>
 }
 
-/** `POST /persons`. A new person can only ever affect a list, never a detail that pre-exists it. */
+/**
+ * `POST /persons`. A new person can only ever affect a list, never a detail that pre-exists it.
+ * `mutate`/`mutateAsync` resolve to `PersonWriteResult` (S-032) — `.person` plus a `.warning`
+ * string when the write carried `meta.warning` (spec §7.7a) — not a bare `Person`.
+ */
 export function useCreatePerson(options: PersonMutationOptions) {
   const { context, refreshAuth } = options
   const queryClient = useQueryClient()
@@ -50,7 +54,7 @@ export function useUpdatePerson(options: PersonMutationOptions) {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: PersonUpdateRequest }) =>
       updatePerson(id, body, { context, refreshAuth }),
-    onSuccess: (_person, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: personsKeys.detail(context.clanId, variables.id) })
       queryClient.invalidateQueries({ queryKey: personsKeys.lists(context.clanId) })
     },

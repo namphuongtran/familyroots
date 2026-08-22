@@ -90,6 +90,20 @@ export interface PersonActionResult {
 }
 
 /**
+ * The result of `POST /persons` or `PATCH /persons/{id}` (S-032). Spec
+ * §7.7a: "`meta.warning` on a successful write ... the save succeeds, and a
+ * `warning` toast appears afterwards." The envelope's `meta` is discarded by
+ * `unwrapData` on every other read (nothing else has ever needed it), so the
+ * write path is the one place a repository function reads past `data` on a
+ * 2xx — `warning` is `null` on every response that carried no `meta.warning`
+ * string, which is the common case.
+ */
+export interface PersonWriteResult {
+  readonly person: Person
+  readonly warning: string | null
+}
+
+/**
  * One row of `POST /persons/batch`'s `meta.errors` — a requested id that did
  * not resolve. Mirrors `components.schemas.BatchError`.
  */
