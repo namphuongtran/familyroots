@@ -77,3 +77,16 @@ export {
 
 export type { PersonsQueryOptions } from './hooks/use-persons-queries'
 export { usePerson, usePersonSearch, usePersonsList } from './hooks/use-persons-queries'
+
+// `ui/` lands with S-031 — the persons list and detail screens. Exported
+// here per this file's own header comment ("should be added here as it
+// lands, not reached around").
+export { PersonAvatar } from './ui/PersonAvatar'
+export { PersonRow } from './ui/PersonRow'
+export { PersonsErrorState } from './ui/PersonsErrorState'
+export { PersonsList } from './ui/PersonsList'
+export { PersonsListSkeleton } from './ui/PersonsListSkeleton'
+export { PersonProfile } from './ui/PersonProfile'
+export { formatHistoricalDate, isKnownDate } from './ui/format-person-date'
+export { usePersonsRequestContext } from './ui/use-persons-request-context'
+export type { PersonsRequestContext } from './ui/use-persons-request-context'
