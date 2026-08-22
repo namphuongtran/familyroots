@@ -329,6 +329,41 @@ bootstraps the role and its grants, and the drill proves it with a real two-side
 grant count. In the negative control, checks 1, 2, and 3 all still read `OK` — which is exactly what
 reported `DRILL: PASS` on the same broken database before.
 
+**Re-taken again 2026-08-22, after a ninth parallel batch of four: 57 seeds, 43 done, 12 open, and
+2 blocked.** Three of the four moved:
+
+- **Done, 39 to 43.** S-016, S-030, S-042, and S-055.
+- **Open** stayed 12. The four left for `done`, minus four; S-017, S-018, S-031, and S-056 became
+  open as their blockers closed, plus four.
+- **Blocked, 6 to 2.** Only S-032 and S-033 remain blocked, both behind the persons screen chain.
+- **Seeds** stayed 57, the second batch running to open nothing new.
+
+**Two ADR seeds ran in one batch for the first time, and the fence that made it safe was narrow.**
+Each owned only its own ADR file, **neither touched `docs/decisions/README.md`**, and both returned
+their index row to the coordinator, who applied both. No conflict.
+
+**Three seeds were rewritten by the decisions this batch produced**, which is the chain working
+rather than churn. S-017 and S-018 stopped being "enforce or hide" and became one reversible
+migration each. **S-056 stopped being a cascade build entirely** and became a two-read predicate fix,
+because ADR-051 decided against the cascade S-056 existed to build.
+
+**ADR-051 found a fourth shape and settled it on a measurement.** Migration 022's guard is cheap on a
+soft-delete and **full on a restore**, and every invariant counts live rows only — so a cascade takes
+the hidden person's edges out of every invariant while the person is hidden, and **the gap is
+writable**. Deriving visibility on read keeps ADR-006's restore clause exactly, because there is no
+cascade state to lose. The export argument for cascading was checked at source and did not survive:
+flagging the edge would make the lossless archive **lossy**.
+
+**ADR-044 found that its own seed had the cost backwards.** All three options read "delete" as the
+expensive one; with no rows in the table, delete is the **exactly reversible** one. Two of S-016's own
+claims were false, and the useful one is that the value domain **is** documented — and unenforced,
+with one value duplicating another column and `private` having no defined meaning at all.
+
+**Two seeds proved a gate rather than trusting it, one day after S-029 found a rule that could never
+fire.** S-030 planted cross-feature imports at `server/` and `hooks/` to prove `depcruise` sees them.
+S-042 could not measure its defect at all until it stood up a second dev server, and said plainly
+which three files outside its fence that cost.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -541,9 +576,9 @@ graph LR
 | S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
 | S-014 | Enable RLS on the two tables S-013 decides for | done | S-013, done |
 | S-015 | Gate: fail when a clan-owned table carries no policy | done | S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done |
-| S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
-| S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
-| S-018 | Enforce or hide `privacy_level` | blocked | S-016 |
+| S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | done | none |
+| S-017 | Drop `allow_public_tree` by reversible migration, per ADR-044 § 1 | open | S-016, done |
+| S-018 | Drop `privacy_level` by reversible migration, per ADR-044 § 2 | open | S-016, done |
 | S-019 | Make a clan invitation's reported status agree with its `expires_at` | open | none |
 | S-020 | Re-measure the four dormant database-review items against the code | done | none |
 | S-021 | Run the restore drill against a real dump, and date the result | done | none |
@@ -555,8 +590,8 @@ graph LR
 | S-027 | Delete the legacy auth transport and the `axios` dependency | done | S-025 done, S-026 done |
 | S-028 | Clear the 112-file prettier drift in one sweep | open | none |
 | S-029 | Land `features/persons` model and api against the frozen contract | done | S-027, done in part |
-| S-030 | Land the persons repository, query keys, and hooks | open | S-029, done |
-| S-031 | Land the persons list and detail screens | blocked | S-030 |
+| S-030 | Land the persons repository, query keys, and hooks | done | S-029, done |
+| S-031 | Land the persons list and detail screens | open | S-030, done |
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | blocked | S-031 |
 | S-033 | Delete the legacy persons code | blocked | S-032 |
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
@@ -567,7 +602,7 @@ graph LR
 | S-039 | Decide what the backoffice aside is made of, in ADR-046 | open | S-006, done |
 | S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | done | none |
 | S-041 | Make the web e2e gate supply its own environment | done | none |
-| S-042 | Make the missing-Supabase banner survive 200% text scale at 320 px | open | S-041, done |
+| S-042 | Make the missing-Supabase banner survive 200% text scale at 320 px | done | S-041, done |
 | S-043 | Decide which session the invitation-accept path runs on, then cover `clan_invitations`, in ADR-048 | done | none |
 | S-044 | Reconcile mobile's two remaining off-spec token values with spec § 2.1 | done | none |
 | S-045 | Pin the exact set of settings the RLS seam writes | done | none |
@@ -580,8 +615,8 @@ graph LR
 | S-052 | Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050 | done | none |
 | S-053 | Decide what field-level visibility means in v1, in ADR-049 | open | none |
 | S-054 | Make the three edge reads agree with the tree and the timeline about a soft-deleted person | done | none |
-| S-055 | Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051 | open | none |
-| S-056 | Build whatever ADR-051 chose for the edge cascade | blocked | S-055 |
+| S-055 | Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051 | done | none |
+| S-056 | Give the two by-id relationship reads the same soft-delete predicate the batch reads carry | open | S-055, done |
 | S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | done | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
@@ -2295,7 +2330,57 @@ semantics. Any write guard.
 
 ## S-055. Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-056
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-056
+
+**ADR-051 chose a fourth shape this seed did not name: do not cascade, and make the derived rule the
+decision rather than the absence of one.** An edge is visible when its own `is_deleted` is false
+**and** neither endpoint person's is true.
+
+**The distinction from this seed's third option is load-bearing.** "Let S-054's read filter be the
+whole answer" reads as an omission. Deriving is a positive rule with a name and an obligation, and it
+is **the only shape that keeps ADR-006's second clause exactly** — the person's flag is one of the
+three inputs, so restoring a person un-hides the edges its delete hid, while an edge an admin deleted
+separately keeps its own flag and stays hidden. **Nothing is stored to tell the two apart, so nothing
+can be lost.**
+
+**What settled it was measured, and the coordinator reproduced it.** Migration 022's guard
+early-returns on a soft-delete (`IF NEW.is_deleted THEN RETURN NULL`) and skips the advisory lock
+(`IF NOT NEW.is_deleted THEN PERFORM pg_advisory_xact_lock`), so cascading a **delete** is cheap. But
+re-activating an edge is an `is_deleted → false` UPDATE, which runs the **full** biological-parent cap
+and the recursive ancestry walk — and both count live rows only, as do all three unique backstops.
+
+**So a cascade takes the hidden person's edges out of every database invariant while the person is
+hidden, and the gap is writable.** Delete father `P`; add a second biological parent `Q` to child `C`
+while `P` is hidden; restore `P` — the trigger raises, the person is restored, some edges are back,
+one failed. **Under the derived rule `P→C` never leaves the count**, so `Q→C` is refused at creation
+time, when a human is present to be told.
+
+**The failure direction is closed by the shape of the predicate rather than by care.** There is no
+cascade state to determine. Visibility is a total function of three booleans that always exist, and
+the predicate is a disjunction of hiding conditions, so **missing information can only hide an edge,
+never make one appear**. A stored cascade runs the wrong way: a lost cascade leaves the row
+`is_deleted = false`, visible to any reader that trusts the row, with no record that it was owed.
+
+**The strongest argument for cascading was checked and did not survive.** The export **does** read
+both edge tables directly with no `is_deleted` filter, confirmed by the coordinator at
+`export_query_port.py:55-66`. But GEDCOM already applies this exact rule in memory, and the JSON
+archive is **lossless by contract** — flagging the edge would make it **lossy**, because an importer
+could no longer tell an admin-deleted marriage from a spouse-deleted one, which is the distinction
+ADR-006's second clause exists to preserve.
+
+**No column the schema already carries works as a marker.** `deleted_at` against the person's fails
+the two-endpoint case: delete `A` at T1, delete `B` at T2 with the stamp still T1, restore `A`, and
+the edge re-appears while `B` is still deleted.
+
+**A trap it hit and recorded.** `trg_parent_child_clan_lock` is declared on `UPDATE OF is_deleted`,
+so it looks like it fires on a soft-delete — but the function body wraps the lock in
+`IF NOT NEW.is_deleted`. **Reading the trigger declaration alone gives the wrong answer**, and the
+agent says it read it wrong first.
+
+**It found a fourth leaking read this seed did not name**, which became S-056's whole job.
+
+**No gate was run, and that is correct.** One ADR, one dated amendment above the untouched 2026-07-02
+text, one index row.
 
 **An ADR already decided this once, and it was never built.**
 `docs/decisions/006-soft-vs-hard-delete.md`, in its update dated 2026-07-02: "soft-deleting a person
@@ -2341,36 +2426,47 @@ this. Hard delete, which ADR-006 settles.
 
 ---
 
-## S-056. Build whatever ADR-051 chose for the edge cascade
+## S-056. Give the two by-id relationship reads the same soft-delete predicate the batch reads carry
 
-**Status:** blocked · **Blocked by:** S-055 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-055, done 2026-08-22 · **Unblocks:** nothing yet
 
-**Read ADR-051 and implement what it chose. Do not re-open the choice.**
+**This seed was rewritten on 2026-08-22, because ADR-051 decided against the cascade it was written
+to build.** It adds **no column, no `PersonDeleted` consumer, and no trigger**. Read ADR-051 § 8 and
+do not re-open the choice.
 
-**End state**, one of three, and the seed states which once ADR-051 lands. The cascade runs where the
-ADR names, with the marker it defines, and a test proves that soft-deleting a person hides its edges
-**and** that restoring re-activates exactly the edges the cascade hid, not one deleted separately
-beforehand. Or the cascade runs with no restore symmetry and the test proves restore leaves them
-hidden. Or ADR-051 chose not to cascade, this seed closes with no code and a note saying so, and
-S-054 is the whole answer.
+**S-055 found a fourth leaking read that S-054 did not fix.**
+`GET /relationships/marriages/{id}` and `GET /relationships/parent-child/{id}` still return an edge
+whose endpoint person is soft-deleted, while the same API answers `404` for that person. Same class
+of defect as the three S-054 closed, reached by edge id rather than by person.
 
-**The failure direction is closed in every branch:** an edge whose cascade state cannot be determined
+**Do not fix it with a one-line predicate, and this is the whole reason the seed is worth writing
+down.** The same repository method loads the row for **update and delete** as well as for the read
+(`backend/app/application/relationship/handlers.py:69,114,158,184`). Hiding the row there would
+silently take away an admin's ability to repair or remove an edge that touches a soft-deleted
+person, **and that row then becomes unreachable through the API entirely.** So the read gets its own
+accessor and the command handlers keep the unfiltered one.
+
+**End state.** Both by-id reads hide an edge whose endpoint person is soft-deleted, matching the
+three batch reads. The predicate **reuses `_no_deleted_endpoint`**
+(`backend/app/infrastructure/persistence/person_query_port.py:84`) rather than becoming a third copy.
+The write path is untouched.
+
+**The failure direction is unchanged and stays closed:** an edge whose state cannot be determined
 stays hidden.
 
-**Verification.** The backend full quality gate, plus `upgrade` and `downgrade` if a migration lands.
-**The negative control is the point**: delete the cascade and watch the named test fail. **A test that
-has only ever seen the delete case proves nothing about restore**, so write one that soft-deletes an
-edge directly, then soft-deletes and restores the person, and asserts that edge is still hidden.
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. No migration, so no `upgrade` or
+`downgrade`. **The test must pin the outcome, not the setting**: with a spouse soft-deleted, the `GET`
+answers `404` **and** the `DELETE` for the same id still succeeds **in the same run**. A test that
+only checks the `404` would pass over a change that broke the admin's repair path. **Negative
+control**: delete the predicate and watch the `404` assertion fail, while the `DELETE` assertion keeps
+passing both ways — which is what proves the two halves are separate.
 
-**Sources.** `docs/decisions/051-*.md`, which does not exist yet;
-`backend/app/domain/person/entity.py:267-296`; `backend/app/infrastructure/event_dispatcher.py`;
-`docs/decisions/025-per-clan-edge-write-serialization.md`, because a cascade is an edge write and the
-integrity guard takes a per-clan advisory lock;
-`backend/tests/integration/test_edge_write_serialization.py`.
+**Sources.** `docs/decisions/051-edge-visibility-derived-not-cascaded.md` § 8;
+`backend/app/infrastructure/persistence/relationship_repository.py:151-160` and `:191-200`;
+`backend/app/application/relationship/handlers.py:69,114,158,184,197-198,205-206`;
+`backend/app/infrastructure/persistence/person_query_port.py:84`.
 
-**Out of scope.** The read filter, S-054. Re-litigating ADR-051.
-
----
+**Out of scope.** Any cascade. The batch reads, which S-054 closed. The export, which already agrees.
 
 ## S-057. Make a restore into a new cluster produce a database the application can use, in ADR-052
 
@@ -2916,7 +3012,39 @@ a live backend.
 
 ## S-042. Make the missing-Supabase banner survive 200% text scale at 320 px
 
-**Status:** open · **Blocked by:** S-041, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-041, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Re-measured before the fix and the seed's numbers reproduced exactly**: page `scrollWidth` 569
+against `clientWidth` 320, hint paragraph 504 against 190.
+
+**The hard part was not the fix, it was making the defect measurable at all.** A `next dev` process
+inlines its `NEXT_PUBLIC_*` values once, at start, so one server cannot answer two ways.
+`playwright.config.ts`'s `webServer` is now an **array**: the original entry keeps S-041's
+placeholders for every existing spec, and a second entry boots a dedicated server with both variables
+forced **explicitly empty** — not merely omitted, because an unset shell variable would leak the real
+placeholders through. **No existing spec file was touched and S-041 is undisturbed.**
+
+**Two Next.js traps came out of running two dev servers**, and both are now in
+`.claude/rules/tailwind.md` § 7. They collide over Next's dev lockfile, so the second server needs its
+own `distDir` — gated behind `PLAYWRIGHT_SECOND_DIST_DIR`, which the coordinator verified defaults to
+`.next`, so every other invocation is unaffected. And **Next itself patches `tsconfig.json`** when a
+new `distDir` first runs; the agent committed that patch deliberately rather than letting it reappear
+as uncommitted drift after every gate run.
+
+**The fix does not make the banner say less**, which was the one way to close this defect by deleting
+the feature. `withBreakOpportunities()` splits the **whole translated string** on `_` and re-joins
+with `<wbr />`, so **no locale file changed** and no variable name is hardcoded anywhere — verified,
+`vi.json` still carries both names in full. A dedicated case asserts `textContent` contains both.
+
+**It went outside its fenced files and said so plainly rather than silently.** `web/next.config.ts`,
+`web/.gitignore`, and `web/tsconfig.json` were the minimum needed to run two dev servers for one
+test. The coordinator confirmed no overlap with the concurrent web agent.
+
+**Negative control.** Reverting the fix failed 4 cases with `Expected: 320, Received: 569`; restoring
+it returned 12 passed.
+
+**Gate, on the combined tree, 2026-08-22.** e2e went **38 to 50** — 12 new cases across two pages and
+two projects. Everything else clean; `build` exit 0.
 
 **S-041 landed on 2026-08-22, so the baseline this seed waited for now exists**, and the direction
 this seed calls "backwards" is now the situation: `pnpm test:e2e` supplies placeholder Supabase
@@ -3882,7 +4010,55 @@ through S-014 do. Global tables. Grants.
 
 ## S-016. Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-017, S-018
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-017, S-018
+
+**Closed by ADR-044. Both columns drop, for different reasons and on different terms of return.**
+`allow_public_tree` drops and **may not come back**, because it is a projection of `privacy_level`
+and two authorities on one question is ADR-027's defect. `privacy_level` drops and **may return** on
+four named terms: a domain closed at the database, a named enforcement point, a failure direction
+resolving to the most restrictive value, and a row creator built first.
+
+**The precondition decided it in the opposite direction to the one this seed expected.** All three
+options here read "delete" as the expensive, irreversible one. With **no rows in the table**, delete
+is the option that is **exactly reversible and loses nothing** — so the question was never "keep or
+delete" but "delete, on what terms of return", and that is where the two columns genuinely differ.
+
+**Two of this seed's own claims were false, and correcting the first was the most useful thing the
+ADR did.** The value domain **is** stated, verified by the coordinator at
+`docs/architecture/data-model.md:836`: `private`, `clan_members`, or `public`. It is **unenforced** —
+no `CHECK`, no enum, no validator — one value duplicates the other column, and `private` has **no
+defined meaning**: nobody has written down private *from whom*, in a product whose `viewer` role is
+"read-only access to all clan data". And the table is not a live table with two dormant columns:
+**all seven data columns are unread**, measured one name at a time.
+
+**Nothing creates the row and nothing should, measured rather than predicted.** On a throwaway
+database carrying migration `035`'s policy verbatim: an insert with **no** `app.clan_id` set — the
+register and onboard path — is rejected with `new row violates row-level security policy`. **That is
+the same failure S-010 measured on `user_clan_roles`.** A future creator runs on the system session
+(the ADR-048 precedent) or lazily on a clan-scoped write, never in `POST /auth/register`.
+
+**RLS is not the enforcement point for privacy**, and the ADR says why: the policy answers "which
+settings row may this session see", while a privacy rule answers "may this caller see this clan at
+all" — which is decided **before** a clan is selected, and on a public route the GUC would be
+caller-supplied.
+
+**It looked for the concept and not only the identifier**, which is what S-020 established the day
+before. Four graded-visibility mechanisms exist — PII redaction, change-request queue scoping, the
+viewer self-edit whitelist, and the clan user-list `email` asymmetry — and **not one is about who may
+read the clan**. Ten locale files searched in English and Vietnamese name it nowhere.
+
+**A promise with nothing behind it, found on the way and confirmed by the coordinator.**
+`docs/architecture/rbac.md:113-115` carries "View clan settings" and "Edit clan settings" rows in the
+permission matrix. **No endpoint reads or writes the table** — `grep` over `backend/app/api/` and
+`backend/app/application/` returns nothing. That is the design spec's own J22 defect verbatim: **a
+permission matrix is not evidence that an endpoint exists.**
+
+**It also checked a discrepancy that turned out not to be one**, and said so: `001_initial.py`
+declares the `clan_settings` foreign key `ON DELETE CASCADE` while the ORM says `RESTRICT`, and
+migration `010` converts it. It nearly reported a defect that does not exist.
+
+**No gate, and that is what this seed's `Verification` field says.** One Markdown file and an index
+row.
 
 **A precondition S-016, S-017, and S-018 did not name, added 2026-08-22 by S-020 and S-010.** The
 table is not merely unread — **it is empty, and nothing can put a row in it.** Measured 2026-08-22 and
@@ -3934,62 +4110,64 @@ S-018. Any screen.
 
 ---
 
-## S-017. Enforce or hide `allow_public_tree`
+## S-017. Drop `allow_public_tree` by reversible migration, per ADR-044 § 1
 
-**Status:** blocked · **Blocked by:** S-016 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-016, done 2026-08-22 · **Unblocks:** nothing yet
 
-**Read ADR-044 and implement what it chose for this column only.**
+**ADR-044 § 1 decided this column drops and does not come back**, because it is a projection of
+`privacy_level` and two authorities on one question is ADR-027's defect. **Read the ADR and do not
+re-open the choice.**
 
-**End state.** One of three, and the seed states which: the flag is enforced at the point ADR-044
-names, with a test proving an anonymous or non-member read is refused when the flag is false **and**
-allowed when it is true; or the column is dropped by a reversible migration and the concept is gone
-from the contracts; or the column stays, nothing reads it, and
-`docs/contracts/rest-clans-api.md` says plainly that it is inert so no client renders a control for
-it. The failure direction is closed: an unreadable or absent setting refuses rather than allows.
+**This loses nothing, which is why it is a migration and not a deprecation.** The table is empty:
+nothing constructs a `ClanSettings`, no trigger creates a row, and no code reads the column. Measured
+2026-08-22 and confirmed twice, by S-010 and by S-016.
 
-**Verification.** The backend full quality gate, plus `upgrade` and `downgrade` if a migration
-lands. If enforcement lands, the negative control is the whole point: delete the check, watch the
-named test fail. A test that has only ever seen the allow case proves nothing about a privacy
-control.
+**End state.** One reversible migration drops `allow_public_tree`, and the ORM line at
+`backend/app/models/clan_settings.py:28` goes with it. **No contract change**, because no contract
+documents the column — S-016 checked and `docs/contracts/rest-clans-api.md` has no clan-settings
+shape at all.
 
-**Sources.** `docs/decisions/044-*.md`, which does not exist yet;
-`backend/app/models/clan_settings.py:28`; `docs/contracts/rest-clans-api.md` for the surface;
-`docs/architecture/multi-tenancy.md` for the isolation model.
+**Verification.** The backend full quality gate, `CLAUDE.md:76`, plus `uv run alembic upgrade head`
+**and** the matching `downgrade`. Set your own `TEST_PG_DB_NAME`. **The negative control is the
+`downgrade`, not a deleted check** — there is no check to delete, because nothing read the column.
+Run `downgrade` then `upgrade` again and confirm the column comes back and goes away.
 
-**Out of scope.** `privacy_level`, which is S-018. Any screen.
+**Sources.** `docs/decisions/044-privacy-toggles-dropped-from-v1.md` § 1;
+`backend/app/models/clan_settings.py:28`; `backend/migrations/versions/001_initial.py:594-607` for
+the `NOT NULL` plus `server_default` this drops.
 
----
+**Out of scope.** `privacy_level`, which is S-018. The rest of the table, which is a `Not verified`
+row below. Building any privacy feature.
 
-## S-018. Enforce or hide `privacy_level`
+## S-018. Drop `privacy_level` by reversible migration, per ADR-044 § 2
 
-**Status:** blocked · **Blocked by:** S-016 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-016, done 2026-08-22 · **Unblocks:** nothing yet
 
-**Read ADR-044 and implement what it chose for this column only.** It is separate from S-017 because
-the shapes differ: `backend/app/models/clan_settings.py:30` is a `String(20)` defaulting to
-`"clan_members"`, and no source the seed found states the full value domain.
+**ADR-044 § 2 decided this column drops from v1 and may return on four named terms.** Read the ADR.
+**Dropping it is not deciding against the concept** — it is refusing to ship a control that restricts
+nothing, which is the most dangerous control in the product because the operator believes the tree is
+private and it is not.
 
-**The value domain is the first thing to establish, and it may be a finding rather than a fact.** An
-unrecognized value in an unvalidated string column most plausibly reads as the most permissive
-branch, which is the failure direction that must be closed. If the domain is genuinely undecided,
-that is a decision and it belongs in ADR-044 rather than in this seed.
+**This seed owns a documentation correction the other one does not.**
+`docs/architecture/data-model.md:836` is the **only** place the value domain is written down —
+`private`, `clan_members`, or `public` — and it is unenforced. When the column goes, that row must go
+with it, or the domain outlives the column that carried it.
 
-**End state.** One of three, as in S-017. If it is enforced, the value domain is closed, an
-unrecognized value fails closed, and a test proves each value in the domain restricts what it claims
-to. If the column is dropped, the migration is reversible. If it stays inert,
-`docs/contracts/rest-clans-api.md` says so.
+**End state.** One reversible migration drops `privacy_level`, the ORM line at
+`backend/app/models/clan_settings.py:30` goes with it, and `docs/architecture/data-model.md`'s column
+table is corrected in the same change. **If the concept returns**, ADR-044 § 2 already fixes the
+terms: a domain closed at the database, `get_current_clan_id` plus `RequireViewer` as the enforcement
+point, a failure direction resolving to the most restrictive value, and a row creator built first.
 
-**Verification.** The backend full quality gate, plus `upgrade` and `downgrade` if a migration
-lands. Plus a test per value in the domain, and one for an unrecognized value, each watched failing
-against a deleted check.
+**Verification.** The backend full quality gate, plus `upgrade` **and** `downgrade`. Set your own
+`TEST_PG_DB_NAME`. **The negative control is the `downgrade`**, for the same reason as S-017.
 
-**Sources.** `docs/decisions/044-*.md`, which does not exist yet;
-`backend/app/models/clan_settings.py:30` for the column and its default;
-`docs/architecture/rbac.md` for the roles a level would interact with.
+**Sources.** `docs/decisions/044-privacy-toggles-dropped-from-v1.md` § 2;
+`backend/app/models/clan_settings.py:30`; `docs/architecture/data-model.md:836` for the domain this
+seed removes with the column.
 
-**Out of scope.** `allow_public_tree`, which is S-017. Field-level visibility, which is a separate
-dormant item and is measured by S-020.
-
----
+**Out of scope.** `allow_public_tree`, which is S-017. Building a privacy level. Deciding what
+`private` means — ADR-044 records that nobody has, and that is why the column is going.
 
 ## S-019. Make a clan invitation's reported status agree with its `expires_at`
 
@@ -4768,7 +4946,32 @@ above.
 
 ## S-030. Land the persons repository, query keys, and hooks
 
-**Status:** open · **Blocked by:** S-029, done 2026-08-22 · **Unblocks:** S-031
+**Status:** done, 2026-08-22 · **Blocked by:** S-029, done 2026-08-22 · **Unblocks:** S-031
+
+**`server/` and `hooks/` land, and `index.ts` no longer re-exports the raw `api/` transport** — the
+repository supersedes it, which is the layering S-029 set up deliberately.
+
+**Query keys are clan-scoped first**, matching the pattern `clan-switch.test.tsx` already proved, and
+`list`/`search`/`detail` **drop the cursor from the key**, because a cursor is `useInfiniteQuery`'s
+own `pageParam` and not part of "which list". Mutations invalidate same-feature keys only.
+
+**It checked whether its gate could see the new directories rather than assuming.** No rule names
+`server/` or `hooks/`. It proved `cross-feature-only-via-index` covers them anyway by planting a
+cross-feature import at each path and watching `depcruise` go 0 errors to 1, twice, removing both
+probes. **That is the lesson from S-029's vacuous rule applied one day later.**
+
+**It proved the two decisions S-029 handed over rather than restating them.** Write bodies still
+carry no zod validation, and a test now sends a body with an unrecognized key and asserts it reaches
+the wire unchanged — with a negative control that inserting a real `.parse()` **silently strips** it.
+The `HistoricalDate` DTO stays duplicated, because this seed adds no new wire shape and so is not the
+slice that should factor it out.
+
+**Six negative controls, each failing for its named reason and restored**: the cursor-drop retry, the
+single-flight refresh (two calls instead of one), the 403-never-refreshes rule, the envelope unwrap,
+the write-body pass-through, and cache invalidation (the mounted list never refetching).
+
+**Gate, on the combined tree, 2026-08-22.** type-check and lint clean; `depcruise` 0 errors and 3
+warnings; `test:unit` **380**; `test:component` **38**; `test:e2e` 50; `build` exit 0.
 
 **S-029 left you the parsing.** Its api layer is transport only and returns `Promise<unknown>` on
 purpose: unwrapping the envelope, validating with the zod DTOs, and mapping into domain types is
@@ -4806,7 +5009,13 @@ the second slice that needs it.
 
 ## S-031. Land the persons list and detail screens
 
-**Status:** blocked · **Blocked by:** S-030 · **Unblocks:** S-032
+**Status:** open · **Blocked by:** S-030, done 2026-08-22 · **Unblocks:** S-032
+
+**S-030 left you a complete data layer and one thing it deliberately did not do.** The repository,
+query keys, and hooks exist in `web/src/features/persons/{server,hooks}`, and `index.ts` is the only
+import path you may use. **Cross-feature invalidation was left out of scope** — S-030's mutations
+invalidate persons keys only, so if a screen you build needs the tree to refetch after a person
+changes, that wiring is yours and you should say so rather than assuming it happens.
 
 **Build on the repaired tokens from M0, and do not reach for a dead class.**
 `.claude/rules/tailwind.md` § 2 lists which classes work. If a screen looks right while using a dead
@@ -5035,6 +5244,17 @@ been read or run, and the row that replaces it says where.
   is on record**. The screens are covered by component tests and the e2e text-scale suite covers only
   `/vi/login` and `/vi/register`, so `T-04` is unestablished for these three. Recorded 2026-08-22 by
   the coordinator rather than assumed from a green gate. **Owner:** web-engineer.
+- **`clan_settings` is a dead table, not a table with two dormant columns.** Measured 2026-08-22 by
+  S-016: **all seven data columns have zero readers**, nothing constructs a `ClanSettings`, and the
+  only reference is `Clan.settings` (`backend/app/models/clan.py:35`), which no caller consumes.
+  After S-017 and S-018 it has zero rows, five unread columns, and an RLS policy guarding a reader
+  that does not exist. **Owner:** backend-engineer.
+- **`docs/architecture/rbac.md:113-115` promises a screen that cannot exist.** The permission matrix
+  carries "View clan settings" and "Edit clan settings" rows, and **no endpoint reads or writes the
+  table** — confirmed 2026-08-22 over `backend/app/api/` and `backend/app/application/`. This is the
+  design spec's own J22 defect verbatim: **a permission matrix is not evidence that an endpoint
+  exists.** Recorded by S-016, which was fenced out of `docs/architecture/`. **Owner:**
+  backend-engineer.
 - **The three "not verified" boundaries in [`roadmap.md`](roadmap.md).** That file marks which of its
   milestone boundaries rest on no source. Those marks are the claim, and they are not repeated here.
 
