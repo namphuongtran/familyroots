@@ -200,3 +200,9 @@ app.*.symbols
 
 # Git worktrees created by the harness / using-git-worktrees skill — local only.
 .claude/worktrees/
+
+# Playwright MCP scratch output. The MCP browser tool writes page snapshots into the
+# directory it is invoked from, which is the repository root. Four of these were
+# committed by accident in 3db8f96 on 2026-08-22 (a `git add -A` in the batch commit)
+# and removed in the next batch. They are session debris, never an artefact.
+.playwright-mcp/
