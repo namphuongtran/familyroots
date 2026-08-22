@@ -39,6 +39,23 @@ Headers:
   Expiry is realized lazily on re-invite (no background sweep) and emits no event; the
   timed-out row remains as `expired` history. Only a *still-valid* pending invite blocks.
 - The invitation `token` is a ~256-bit `secrets.token_urlsafe(32)` value.
+- **`status` on a list row is DERIVED at read time, not the stored column** (S-019).
+  Because expiry is realized lazily (previous bullet), a timed-out invitation keeps
+  `status = 'pending'` in storage until somebody re-invites that email — possibly
+  forever. Reporting the stored value made the list say `pending` for a link `accept`
+  already refuses, so the read computes the field instead:
+  - a stored `pending` whose `expires_at` has passed is reported as **`expired`**;
+  - `accepted`, `revoked`, and an already-stored `expired` are reported **verbatim**,
+    however long ago `expires_at` passed. They record an act, not a deadline.
+  The comparison is strict (`expires_at < now`, UTC) and is **the same predicate
+  `accept` refuses on**, so a row this endpoint calls `pending` is a row `accept` will
+  still take. Nothing else in the row is derived. The stored column is unchanged by a
+  read; a client that wants the raw lifecycle value cannot get it from this API.
+- **`status` appears in exactly one response: the list row.** There is no
+  per-invitation detail route, and the 201 create body carries no `status` — a freshly
+  created invitation is always pending.
+- Clients may keep deriving the row state from `expires_at` themselves; the server now
+  reaches the same answer, so the two agree rather than compete.
 
 ### Invitee surface — base route: /api/v1/invitations
 
@@ -68,9 +85,11 @@ Response shapes (see [Response envelope](README.md#response-envelope)):
 ```
 
 `GET /clans/{clan_id}/invitations` — plain array under `data` (no `meta` — not
-cursor-paginated):
+cursor-paginated). Fields: `id`, `clan_id`, `email`, `role`, `status`, `expires_at`,
+`accepted_at`, `created_at`. `status` is one of `pending` | `accepted` | `revoked` |
+`expired` and is **derived** — see the admin-surface bullets above:
 ```json
-{ "data": [ { "id": "...", "email": "...", "role": "...", "status": "...", "...": "..." } ] }
+{ "data": [ { "id": "...", "clan_id": "...", "email": "...", "role": "...", "status": "expired", "expires_at": "...", "accepted_at": null, "created_at": "..." } ] }
 ```
 
 `POST /invitations/{token}/accept`:
@@ -86,3 +105,7 @@ Error envelope: standard `{ "error": { "code", "message", "detail" } }`.
 - Non-breaking: add optional invitation metadata, add optional query params.
 - Breaking: change the token scheme, the email-match rule, the role-grant semantics,
   or the error envelope.
+- Deriving `status` (S-019) changed no field name and no type. It changed the **value**
+  a timed-out row reports, from `pending` to `expired` — which is the defect it fixed,
+  and matches what a client was already told to compute for itself. A client that
+  counted `status == "pending"` rows now gets a smaller, truthful count.

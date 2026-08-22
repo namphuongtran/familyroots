@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from app.domain.invitation.entity import Invitation
+from app.domain.invitation.entity import Invitation, effective_status, is_expired
 from app.domain.invitation.events import (
     InvitationAccepted,
     InvitationCreated,
@@ -114,3 +114,59 @@ def test_revoke_rejects_non_pending() -> None:
     with pytest.raises(ConflictError, match="not_pending"):
         inv.revoke(_actor())
     assert inv.collect_events() == []
+
+
+# ── S-019: the status a reader is told ──────────────────────────────────────────
+
+
+def test_effective_status_reports_a_timed_out_pending_as_expired() -> None:
+    """The defect, at its smallest. Nothing sweeps the row, so the stored value is
+    ``pending``; what a reader must be told is ``expired``."""
+    now = datetime.now(UTC)
+    assert effective_status("pending", now - timedelta(seconds=1), now=now) == "expired"
+
+
+def test_effective_status_leaves_a_live_pending_alone() -> None:
+    """The control: the failing reading and the passing reading are different words."""
+    now = datetime.now(UTC)
+    assert effective_status("pending", now + timedelta(days=1), now=now) == "pending"
+
+
+def test_effective_status_reports_terminal_statuses_verbatim() -> None:
+    """``accepted`` and ``revoked`` record an act, not a deadline, so the clock passing
+    afterwards must not relabel them."""
+    now = datetime.now(UTC)
+    long_gone = now - timedelta(days=365)
+    assert effective_status("accepted", long_gone, now=now) == "accepted"
+    assert effective_status("revoked", long_gone, now=now) == "revoked"
+    assert effective_status("expired", long_gone, now=now) == "expired"
+
+
+def test_effective_status_treats_a_missing_deadline_as_never_expiring() -> None:
+    """``expires_at`` is nullable on the entity. No deadline is not a passed deadline —
+    and ``accept`` reads it the same way, which is the point of the shared predicate."""
+    now = datetime.now(UTC)
+    assert effective_status("pending", None, now=now) == "pending"
+    assert is_expired(None, now=now) is False
+
+
+def test_the_read_and_accept_agree_at_the_exact_boundary() -> None:
+    """One predicate, so the two halves cannot disagree — asserted rather than assumed.
+
+    At ``expires_at == now`` the invitation is NOT yet expired: ``accept`` succeeds and
+    the read still says ``pending``. One second later both flip. The instant either half
+    is given its own comparison, this is the test that catches it.
+    """
+    now = datetime.now(UTC)
+
+    # Exactly at the deadline: accept succeeds, so the read must not say "expired".
+    at_deadline = _pending(expires_at=now)
+    at_deadline.accept(user_id=uuid.uuid4(), user_email="invited@x.com", now=now)
+    assert at_deadline.status == "accepted"
+    assert effective_status("pending", now, now=now) == "pending"
+
+    # One second past it: accept refuses, and the read says "expired".
+    past = _pending(expires_at=now - timedelta(seconds=1))
+    with pytest.raises(ConflictError, match="expired"):
+        past.accept(user_id=uuid.uuid4(), user_email="invited@x.com", now=now)
+    assert effective_status("pending", now - timedelta(seconds=1), now=now) == "expired"

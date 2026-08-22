@@ -12,8 +12,9 @@ from app.application.invitation.commands import (
     CreateInvitation,
     RevokeInvitation,
 )
+from app.application.invitation.views import InvitationListItem
 from app.core.config import settings
-from app.domain.invitation.entity import Invitation
+from app.domain.invitation.entity import Invitation, effective_status
 from app.domain.invitation.repository import InvitationRepository
 from app.domain.shared.exceptions import ConflictError, EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
@@ -154,5 +155,33 @@ class InvitationQueryHandler:
     def __init__(self, repo: InvitationRepository) -> None:
         self._repo = repo
 
-    async def list_for_clan(self, clan_id: uuid.UUID) -> list[Any]:
-        return await self._repo.list_by_clan(clan_id)
+    async def list_for_clan(self, clan_id: uuid.UUID) -> list[InvitationListItem]:
+        """A clan's invitations, newest first, with a status that agrees with ``expires_at``.
+
+        The stored ``status`` is not reported as-is. Nothing sweeps the table, so a
+        timed-out row stays ``pending`` in storage until the next create for that
+        (clan, email) retires it — and a list that repeated that would show an admin
+        ``Đang chờ`` for a link ``accept`` already refuses (S-019).
+
+        ``datetime.now(UTC)`` is deliberately the SAME clock ``accept`` reads
+        (``InvitationCommandHandler.accept`` above), not the DB-side ``now()`` that
+        ``expire_stale_pending`` uses. What this read has to agree with is the accept
+        decision, so it must be compared against the accept decision's clock.
+
+        Read once, outside the loop, so every row in one response is judged against one
+        instant rather than against the clock as it moves down the list.
+        """
+        now = datetime.now(UTC)
+        return [
+            InvitationListItem(
+                id=row.id,
+                clan_id=row.clan_id,
+                email=row.email,
+                role=row.role,
+                status=effective_status(row.status, row.expires_at, now=now),
+                expires_at=row.expires_at,
+                accepted_at=row.accepted_at,
+                created_at=row.created_at,
+            )
+            for row in await self._repo.list_by_clan(clan_id)
+        ]

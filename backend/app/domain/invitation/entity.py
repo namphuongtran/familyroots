@@ -27,6 +27,35 @@ from app.domain.shared.exceptions import ConflictError, ForbiddenError
 from app.domain.shared.value_objects import ActorInfo
 
 
+def is_expired(expires_at: datetime | None, *, now: datetime) -> bool:
+    """Whether an invitation whose deadline is ``expires_at`` has timed out at ``now``.
+
+    ONE predicate, two callers, on purpose (S-019). ``accept`` below refuses on it, and
+    the read side derives the reported status from it. If the two ever disagree, a list
+    reports ``pending`` for an invitation that ``accept`` refuses — which is the exact
+    defect S-019 closed. Keeping the comparison in one function is what stops them
+    drifting apart again.
+    """
+    return expires_at is not None and expires_at < now
+
+
+def effective_status(status: str, expires_at: datetime | None, *, now: datetime) -> str:
+    """The status a reader is told, which is not always the stored one.
+
+    Nothing sweeps ``clan_invitations``: a timed-out row keeps ``status = 'pending'``
+    until the next create for that (clan, email) lazily retires it (see
+    ``InvitationRepository.expire_stale_pending``). So the read derives instead — a
+    stored ``pending`` past its ``expires_at`` reads as ``expired``.
+
+    Only ``pending`` derives. ``accepted``, ``revoked``, and an already-stored
+    ``expired`` are terminal facts about what somebody did, not about the clock, so
+    they are reported verbatim however long ago ``expires_at`` passed.
+    """
+    if status == "pending" and is_expired(expires_at, now=now):
+        return "expired"
+    return status
+
+
 @dataclass
 class Invitation(AggregateRoot):
     """Clan invitation aggregate root."""
@@ -87,7 +116,7 @@ class Invitation(AggregateRoot):
         """
         if self.status != "pending":
             raise ConflictError("invitation.not_pending")
-        if self.expires_at is not None and self.expires_at < now:
+        if is_expired(self.expires_at, now=now):
             raise ConflictError("invitation.expired")
         if self.email.strip().lower() != user_email.strip().lower():
             raise ForbiddenError("invitation.email_mismatch")
