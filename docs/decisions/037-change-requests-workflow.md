@@ -191,6 +191,43 @@ the queue for any editor, bypassing the redaction the person read path applies
 (L11). Contact details are not gia phả content and are not what relatives correct.
 `avatar_url` is excluded because it is set by the document/avatar flow, not typed.
 
+> **Amended 2026-08-22 by [ADR-049](049-contact-pii-is-the-whole-field-visibility-rule.md),
+> seed S-059 — read `(L11)` above as
+> [ADR-049](049-contact-pii-is-the-whole-field-visibility-rule.md).** `L11` names nothing in
+> the tree today. ADR-049 § "Measurement 8b" counted six files citing it and none defining
+> it, and this ADR was one of the six.
+>
+> **The history is one step longer than ADR-049 recorded, re-measured 2026-08-22 by seed
+> S-059.** ADR-049 says the label "entered with commit `8dbf159` on 2026-07-05, where it is
+> a label from a review list that was never committed". It *was* committed. `git log -S"L11"`
+> run over the whole tree, rather than over `backend/`, returns `bae1ee4` (2026-07-04) one
+> commit earlier, which added `docs/architecture/backend-review-2026-07-04.md`. That file
+> defined `L11` in a single sentence, quoted here because the file no longer exists:
+>
+> > L11 within-clan PII by default (`GET /persons profile=full`).
+>
+> So the label was a **finding**, not a rule: it named the defect, never the redaction that
+> answers it. The citations were therefore thin on the day they were written, 2026-07-05.
+> They became dangling on 2026-07-12, when `733decc` deleted that review document whole
+> (`git diff-tree -r --name-status 733decc` reports `D`, 151 lines). ADR-049 is not amended
+> here, because this ADR may not edit another; the correction is handed to the coordinator.
+>
+> **The rest of § 7 stands unchanged**, and the
+> sentence above is left exactly as written, including the dangling label, because this file
+> is a dated record of what was believed on 2026-08-02 and erasing the citation would erase
+> the evidence that an ADR rested on one. The five citing sites under `backend/` were
+> repointed by seed S-059 on 2026-08-22; this one is corrected by this note instead, because
+> `docs/decisions/README.md` asks that prior ADRs stay immutable except for Status updates,
+> and ADR-047 § 3 draws the line at an **append** rather than a rewrite.
+>
+> What the redaction rule actually is, now that it has a definition: ADR-049 § 1 fixes the
+> set at exactly `phone` and `email` and makes it non-configurable, and § 2 gives an
+> `editor` or `viewer` those fields for "their own linked person only". § 7's own reasoning
+> is unaffected and ADR-049 § 3 restates its point from the other side: `_PII_FIELDS` and
+> `EXCLUDED_PERSON_FIELDS` are separate constants that happen to agree, so "if a future
+> change adds a third field to the read redaction and not to the change-request exclusion,
+> the review queue republishes what the read path just hid."
+
 Unknown field names are **rejected** (`422 change_request.field_not_submittable`),
 never silently dropped — Pydantic ignores extras by default, so the whitelist check
 runs *before* validation, otherwise a misspelled field would be quietly discarded and
