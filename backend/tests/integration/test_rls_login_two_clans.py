@@ -1,32 +1,53 @@
-"""A multi-clan user can still log in and see BOTH clans once RLS reaches more tables.
+"""``user_clan_roles`` cannot take a clan policy, and this file is the standing proof.
 
-Seed S-009 names this check because getting it wrong locks users out silently rather than
-loudly. The login path runs on ``get_db`` — the RLS request session — and it runs BEFORE
-any clan is chosen, so ``app.clan_id`` is empty and the migration-027 predicate
+The name says "login two clans" because S-009 opened it on the read half. It now covers
+both halves of the table's hazard, read and write, because keeping one table's evidence in
+one file is worth more than a tidy file name.
+
+Seed S-009 named this check because getting the read half wrong locks users out silently
+rather than loudly. The login path runs on ``get_db`` — the RLS request session — and it
+runs BEFORE any clan is chosen, so ``app.clan_id`` is empty and the migration-027 predicate
 (``clan_id = nullif(current_setting('app.clan_id', true), '')::uuid``) evaluates to NULL.
 Any clan-isolation policy placed on a table that the pre-selection read touches turns
 "this user belongs to two clans" into "this user belongs to none", and the user is told
 they have no approved membership. No error is logged. Nothing fails closed loudly.
 
-The pre-selection reads are, at 2026-08-22:
+The pre-selection READS are, re-measured 2026-08-22 by S-010:
 
 * ``SqlAlchemyAuthQueryPort.get_login_profile`` — ``user_clan_roles`` joined to ``clans``
-  (``app/infrastructure/persistence/auth_repository.py:118-135``);
+  (``app/infrastructure/persistence/auth_repository.py:120-137``);
 * ``SqlAlchemyMeQueryPort.list_clans`` — ``user_clan_roles`` joined to ``clans``
   (``app/infrastructure/persistence/me_query_port.py:19-42``);
 * ``get_current_clan_id`` itself — ``user_clan_roles``
-  (``app/core/security.py:246-253``), which runs before it sets the GUC at
+  (``app/core/security.py:249-254``), which runs before it sets the GUC at
   ``app/core/security.py:290``.
 
-All three read ``user_clan_roles``, which migration 031 deliberately does not touch, and
-none of them reads ``clan_memberships`` or ``clan_invitations``. This test is the standing
-proof of that: it drives the real routes over the real ``RlsSession`` seam, so the day a
-migration puts a clan policy on a pre-selection table, this fails.
+The pre-selection WRITE, which S-009 and S-010 both missed and S-010 measured:
 
-Negative control (run 2026-08-22): adding ``user_clan_roles`` to migration 031's table
-list makes both tests below fail. Login still answers ``200``, but with
-``clan_id: None`` — the user is told they belong to nowhere — and ``GET /me/clans``
-returns ``[]``. Neither logs an error. That silence is the whole reason this file exists.
+* ``SqlAlchemyAuthRepository.add_membership``
+  (``app/infrastructure/persistence/auth_repository.py:69-88``) INSERTs the
+  ``user_clan_roles`` row for ``POST /auth/register`` and ``POST /auth/onboard`` on that
+  same clan-less request session — ``get_auth_command_handler`` is wired to ``get_db``
+  (``app/infrastructure/dependencies.py:192-202``).
+
+All four touch ``user_clan_roles``, which migrations 031 and 035 both deliberately leave
+alone, and none of them reads ``clan_memberships``, ``clan_invitations`` or
+``clan_settings``. These tests drive the real routes over the real ``RlsSession`` seam, so
+the day a migration puts a clan policy on a pre-selection table, they fail.
+
+Negative control, re-run 2026-08-22 by S-010 by putting ``user_clan_roles`` in migration
+035's table list. It breaks in both directions, and the two failures look nothing alike:
+
+* **silently** — ``test_login_resolves_a_multi_clan_user_under_the_rls_seam`` fails with
+  ``assert None == '<clan uuid>'``: login still answers ``200``, reporting that the user
+  belongs to nowhere. ``test_me_clans_lists_both_clans_under_the_rls_seam`` fails with
+  ``assert set() == {...}``. Neither logs an error;
+* **loudly** — the two onboard tests below fail with
+  ``psycopg.errors.InsufficientPrivilege: new row violates row-level security policy for
+  table "user_clan_roles"``, surfacing as a 500.
+
+That the same policy produces a silent lockout on one route and a 500 on another is the
+reason the decision needs an ADR rather than a patch.
 """
 
 from __future__ import annotations
@@ -216,6 +237,105 @@ async def test_me_clans_lists_both_clans_under_the_rls_seam(
         str(two_clan_user["clan_one"]),
         str(two_clan_user["clan_two"]),
     }, returned
+
+
+async def _lone_user_profile(
+    privileged_session_factory: async_sessionmaker[AsyncSession],
+) -> tuple[uuid.UUID, str]:
+    """A user with a profile and NO membership anywhere — the state onboarding starts from."""
+    uid = uuid.uuid4()
+    email = f"{uid.hex[:12]}@example.com"
+    async with privileged_session_factory() as s:
+        await s.execute(
+            sa.text("INSERT INTO user_profiles (id, email, display_name) VALUES (:i, :e, 'u')"),
+            {"i": uid, "e": email},
+        )
+        await s.commit()
+    return uid, email
+
+
+async def test_onboard_create_writes_a_user_clan_roles_row_with_no_clan_selected(
+    rls_session_factory: async_sessionmaker[AsyncSession],
+    privileged_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The WRITE half of the hazard, and it fails loudly rather than silently.
+
+    ``POST /auth/onboard`` with ``clan_action=create`` makes the clan and then INSERTs the
+    caller's admin membership through ``add_membership``
+    (``auth_repository.py:69-88``) on the RLS request session. No clan GUC exists yet — the
+    route takes ``get_current_user`` and not ``get_current_clan_id``, and it could not take
+    the latter, because the clan does not exist until this request creates it.
+
+    Under a clan-keyed ``WITH CHECK`` that INSERT compares ``<the new clan> = NULL`` and
+    Postgres raises ``InsufficientPrivilege``, which reaches the client as a 500.
+    """
+    uid, email = await _lone_user_profile(privileged_session_factory)
+    app = _app(
+        rls_session_factory,
+        current_user={"sub": str(uid), "email": email, "user_metadata": {"full_name": "Tân"}},
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        resp = await ac.post(
+            "/api/v1/auth/onboard",
+            headers={"Authorization": "Bearer x"},
+            json={
+                "clan_action": "create",
+                "clan_name": "Họ Nguyễn",
+                "clan_slug": f"s{uid.hex[:8]}",
+            },
+        )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()["data"]
+    assert body["clan_id"], body
+    assert body["is_approved"] is True, body
+
+    async with privileged_session_factory() as s:  # privileged: the row is really there
+        n = await s.scalar(
+            sa.text("SELECT count(*) FROM user_clan_roles WHERE user_id = :u"), {"u": uid}
+        )
+    assert n == 1
+
+
+async def test_onboard_join_writes_a_pending_user_clan_roles_row_with_no_clan_selected(
+    rls_session_factory: async_sessionmaker[AsyncSession],
+    privileged_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The same write on the join branch, which reaches an EXISTING clan.
+
+    ``clan_action=join`` resolves the clan through ``get_clan_by_id``
+    (``auth_repository.py:51-52``) and then stages a pending viewer membership. A reader
+    might expect the join branch to be safe because a real clan id is in hand; it is not.
+    The id is in the request body, never in ``app.clan_id``, so the predicate is still NULL.
+    """
+    clan_id = uuid.uuid4()
+    async with privileged_session_factory() as s:
+        await s.execute(
+            sa.text("INSERT INTO clans (id, name, slug) VALUES (:i, 'Họ Trần', :s)"),
+            {"i": clan_id, "s": f"j{clan_id.hex[:10]}"},
+        )
+        await s.commit()
+    uid, email = await _lone_user_profile(privileged_session_factory)
+
+    app = _app(
+        rls_session_factory,
+        current_user={"sub": str(uid), "email": email, "user_metadata": {"full_name": "Tân"}},
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        resp = await ac.post(
+            "/api/v1/auth/onboard",
+            headers={"Authorization": "Bearer x"},
+            json={"clan_action": "join", "clan_id": str(clan_id)},
+        )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()["data"]
+    assert body["clan_id"] == str(clan_id), body
+    assert body["is_approved"] is False, body
+
+    async with privileged_session_factory() as s:
+        approved = await s.scalar(
+            sa.text("SELECT is_approved FROM user_clan_roles WHERE user_id = :u"), {"u": uid}
+        )
+    assert approved is False
 
 
 async def test_the_seam_really_was_active_during_those_requests(

@@ -164,6 +164,55 @@ the ContextVar so post-commit transactions re-apply it).
     reason for a `SELECT`-only clan predicate, and the super-admin reader bypasses RLS
     entirely. The paragraph is left as the dated record of what was believed in 2026-06.
 
+- **Phase 10 (2026-08-22, migration `035_rls_clan_settings`, seed S-010)** — `clan_settings`
+  takes the Phase-2 template unchanged on a `clan_id` that is both NOT NULL and UNIQUE, one
+  row per clan. It joins `_CLAN_ISOLATED_TABLES` because both halves of its single policy are
+  clan-keyed. **S-010's other table, `user_clan_roles`, did not ship and could not**; see the
+  amendment to the "Not yet" paragraph below.
+  - Like `notification_log` in Phase 9, this policy is **inert on the day it ships**, and more
+    completely so. Measured 2026-08-22 by `grep -rn 'clan_settings\|ClanSettings' backend/app`:
+    the only application reference outside the ORM model is the `Clan.settings` relationship
+    (`backend/app/models/clan.py:35`); nothing reads `clan.settings`, nothing constructs a
+    `ClanSettings`, no route, repository or query port touches the table, and `001_initial.py`
+    installs no trigger that would populate it. The table is empty and unread. ADR-043 § 2's
+    reasoning applies unchanged: a cheap correct policy beats a permanent exemption row in
+    S-015's list, because a second place to record a fact is a second place to be wrong.
+  - **One live read path did have to be checked, and it is a trap worth naming.**
+    `Clan.settings` is `lazy="selectin"`, so every load of a `Clan` ORM entity emits a second
+    SELECT against `clan_settings`. Two such loads run on the RLS request session with **no
+    clan GUC**: `get_clan_by_slug` and `get_clan_by_id`
+    (`backend/app/infrastructure/persistence/auth_repository.py:47-49`, `:51-52`), both reached
+    from `POST /auth/register` and `POST /auth/onboard`. Under the policy that selectin returns
+    zero rows and `clan.settings` is `None`. Measured 2026-08-22: both onboard flows still
+    answer `201`, because no caller consumes `clan.settings`. `Clan` declares five
+    `lazy="selectin"` relationships (`clan.py:32-36`) and three of those targets — `persons`,
+    `clan_memberships`, `branches` — have carried policies since Phases 4, 6 and 2, so the
+    clan-less auth path has been loading a `Clan` with empty eager collections all along.
+  - Because this table is empty in the running application, **"zero rows returned" is also its
+    honest answer with no policy at all**. Every denial assertion in
+    `backend/tests/integration/test_rls_phase10_clan_settings.py` therefore ends with a
+    privileged read proving the rows were there — S-012's rule, at its sharpest here.
+
+> **Amendment (2026-08-22, Phase 10, seed S-010) — the `user_clan_roles` clause below is
+> right, and it is now measured rather than predicted, in both directions.** It says RLS
+> there "would default-deny and break every request". Re-measured on 2026-08-22 by adding
+> `user_clan_roles` to migration 035's table list: it breaks two ways that look nothing
+> alike, and the difference is the whole reason this is a decision rather than a patch.
+> **The reads fail silently** — `get_current_clan_id` queries the table on the request
+> session at `backend/app/core/security.py:249-254` and sets `app.clan_id` only afterwards
+> at `:290`, and `get_login_profile` (`auth_repository.py:120-137`) and `list_clans`
+> (`me_query_port.py:19-42`) read it before any clan exists to select, so `POST /auth/login`
+> answers `200` with `clan_id: null` and `GET /me/clans` returns `[]`, with nothing raised
+> and nothing logged. **The writes fail loudly** — `add_membership`
+> (`auth_repository.py:69-88`) INSERTs the row on that same clan-less session, so both
+> `POST /auth/onboard` flows raise `psycopg.errors.InsufficientPrivilege: new row violates
+> row-level security policy for table "user_clan_roles"`, a 500. A policy that hides a role
+> row does not merely hide data: it silently downgrades what the caller is allowed to do,
+> because this is the table the authorization gate reads. The decision — move those reads to
+> the privileged session, set the GUC earlier, or leave the table outside layer 2 — is owed
+> its own ADR, pre-allocated as **ADR-050**. Pinned by
+> `backend/tests/integration/test_rls_login_two_clans.py`, which covers both halves.
+
 Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
 tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
 by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break
