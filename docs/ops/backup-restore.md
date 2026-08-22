@@ -3,10 +3,11 @@
 > **ACTIVE since 2026-07-12.** Nightly off-provider database backups run from
 > GitHub Actions (`.github/workflows/db-backup.yml`) into a Supabase Storage
 > bucket, separate from the Render database itself. A restore has been drilled
-> for real against a local dev dump (see the drill log below) — this is no
-> longer a "target" runbook, it documents what actually ships. Document blobs
-> live in Supabase Storage already; the still-deferred items are called out
-> honestly at the bottom.
+> for real against a local dev dump (see the drill log below, most recently
+> 2026-08-22) — this is no longer a "target" runbook, it documents what
+> actually ships. No production dump has been drilled, and no dump carrying the
+> RLS migrations has been drilled. Document blobs live in Supabase Storage
+> already; the still-deferred items are called out honestly at the bottom.
 
 ## What runs
 
@@ -63,6 +64,14 @@ failed backup and the job errors out.
 
 ## Restore procedure — `scripts/restore_drill.sh`
 
+**Prerequisite: `psql`, `pg_dump`, and `pg_restore` must be on `PATH`.** On the maintainer's
+machine, checked 2026-08-22, Homebrew's `libpq` 18.4 is keg-only, so all three report "command not
+found" until you run `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. Without it the drill's
+first `psql` call fails and the script blames the wrong thing. Reproduced 2026-08-22 with the same
+`if ! psql …` construct the script uses at `scripts/restore_drill.sh:102-106`: bash prints
+`bash: psql: command not found`, then the script's own branch prints `::error::cannot reach
+Postgres at … — is pgdb up?` and `DRILL: FAIL`. Postgres was up the whole time.
+
 Never restores over production — it always targets a scratch database
 (`familyroots_restore_drill`) on `PGHOST:PGPORT` (default
 `localhost:5432`, `postgres`/`postgres`), dropping and recreating it first, so
@@ -95,8 +104,9 @@ immediately after the go-live checklist's first real prod dump.
 | Date | Dump | Result | Notes |
 |------|------|--------|-------|
 | 2026-07-14 | `familyroots-manual-seeded.dump.gz` (local dev, migrated to head + seeded with a 3-person/2-generation tree) | **DRILL: PASS** | All 3 checks OK on their success path: alembic head matched (`016_document_soft_delete`), non-zero row counts for the seeded tables, tree query returned 3 rows. An earlier run against the same dev DB pre-migration/pre-seed exercised the WARN branches (behind-head, no-persons-skip) — both PASS. Failure paths (corrupt dump, unreachable Postgres, missing table, missing function, missing `uv`) were exercised in review, not on this dump — the review fix guarded all capture sites, and a rider repro confirmed a dump missing `persons` yields `DRILL: FAIL` with a full report and no crash. |
+| 2026-08-22 | `familyroots-2026-08-22.dump.gz` (14,669 bytes), produced the same day by `scripts/db_backup.sh --dry-run` against the local docker database `family_roots`. **Local dev data, not a production dump.** | **DRILL: PASS** (exit 0) | The alembic check returned a **WARN**, not an OK: `WARN — dump at 016_document_soft_delete, repo head is 033_rls_identity_claims (dump predates head; not a failure)`. The local dev database has not been migrated since the 2026-07-14 drill, so the dump sits 17 revisions behind the chain (`017_notification_sent_on` through `033_rls_identity_claims`). Row counts non-zero for `clans` 1, `persons` 3, `clan_memberships` 3, `parent_child` 2; zero for `marriages`, `events`, `documents`. Tree query OK, 3 rows. Restored into the scratch database `familyroots_restore_drill`; `family_roots` was never touched, and its seven row counts were identical before and after the run. |
 
-Verbatim run-2 output (the success-path run referenced above):
+Verbatim output of the 2026-07-14 run ("run 2", the success-path run its row refers to):
 
 <details>
 <summary>Drill run 2 — migrated + seeded (click to expand)</summary>
@@ -141,6 +151,104 @@ DRILL: PASS
 Exit code: `0`.
 
 </details>
+
+Verbatim output of the 2026-08-22 run:
+
+<details>
+<summary>Drill run, 2026-08-22 — local dev dump taken the same day (click to expand)</summary>
+
+Exact command, run from the repository root with the keg-only libpq client on `PATH`:
+
+```
+export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+bash scripts/restore_drill.sh /private/tmp/claude-501/-Volumes-Macext01-HD-playground-familyroots/80bc46c2-0552-41bf-a551-adbbc0c39289/scratchpad/fr-drill/familyroots-2026-08-22.dump.gz
+```
+
+```
+==> dropping scratch DB if it exists: familyroots_restore_drill
+DROP DATABASE
+==> creating scratch DB: familyroots_restore_drill
+CREATE DATABASE
+==> restoring /private/tmp/claude-501/-Volumes-Macext01-HD-playground-familyroots/80bc46c2-0552-41bf-a551-adbbc0c39289/scratchpad/fr-drill/familyroots-2026-08-22.dump.gz -> familyroots_restore_drill
+==> pg_restore completed
+==> checking alembic head
+  WARN — dump at 016_document_soft_delete, repo head is 033_rls_identity_claims (dump predates head; not a failure)
+==> row-count smoke report
+  clans                1
+  persons              3
+  clan_memberships     3
+  marriages            0
+  parent_child         2
+  events               0
+  documents            0
+==> tree query check (get_family_tree_flat)
+  OK   — get_family_tree_flat returned 3 row(s) for person 22222222-2222-2222-2222-222222222221
+
+===== Restore Drill Report =====
+dump:        /private/tmp/claude-501/-Volumes-Macext01-HD-playground-familyroots/80bc46c2-0552-41bf-a551-adbbc0c39289/scratchpad/fr-drill/familyroots-2026-08-22.dump.gz
+scratch db:  familyroots_restore_drill @ localhost:5432
+alembic:     WARN — dump at 016_document_soft_delete, repo head is 033_rls_identity_claims (dump predates head; not a failure)
+row counts:
+  clans                1
+  persons              3
+  clan_memberships     3
+  marriages            0
+  parent_child         2
+  events               0
+  documents            0
+tree query:  OK   — get_family_tree_flat returned 3 row(s) for person 22222222-2222-2222-2222-222222222221
+=================================
+DRILL: PASS
+```
+Exit code: `0`. The drill was run **once**. The dump it read was produced the same day by
+`BACKUP_TMPDIR=… DATABASE_URL=postgresql://postgres:postgres@localhost:5432/family_roots bash scripts/db_backup.sh --dry-run`,
+which runs the real `pg_dump | gzip` path and stops before the Supabase upload, so no Supabase
+credential was needed and nothing was uploaded.
+
+</details>
+
+### What the 2026-08-22 run proves, and what it does not
+
+- **It proves the restore path works end to end today**: a dump written by `scripts/db_backup.sh`
+  restores into a fresh database with `pg_restore --exit-on-error`, and the restored database
+  answers both the row-count queries and `get_family_tree_flat()`.
+- **It does not prove anything about production.** The dump holds local dev data. No production
+  dump has ever been drilled here. That item is still open in the go-live checklist above.
+- **It does not prove the current schema restores.** The dump reports
+  `016_document_soft_delete`, and the repo chain head is `033_rls_identity_claims`. Both recorded
+  drills, 2026-07-14 and 2026-08-22, ran against a dump at `016`. **Nothing in this repository has
+  restored a dump carrying the RLS migrations `026` to `033`,** and the drill would not report the
+  gap this opens. The reasoning below is read from the scripts and the migrations. It was **not**
+  tested on 2026-08-22, because the dev database is at `016` and has no RLS to carry:
+  - `scripts/db_backup.sh` runs `pg_dump --format=custom --no-owner --no-privileges`, and
+    `scripts/restore_drill.sh` runs `pg_restore --no-owner --no-privileges`. Neither dumps cluster
+    roles, and `--no-privileges` drops the `GRANT` statements.
+  - Migration `002` creates the non-bypass role `familyroots_app`
+    (`CREATE ROLE familyroots_app NOLOGIN` at
+    `backend/migrations/versions/002_rls_documents_pilot.py:38`) and migration `026` extends its
+    grants (`026_rls_activation_grants.py:30-36`). A role is cluster-wide, not database-wide,
+    so a drill restoring into the **same** cluster finds the role already there and sees nothing
+    wrong. A real recovery restores into a **new** cluster, where the role and its grants are
+    absent, and `SET LOCAL ROLE familyroots_app` (`backend/app/core/rls.py:63`) would then fail.
+    That is the case the drill does not cover.
+  - The drill's three checks would still pass, because they connect as the superuser that created
+    the scratch database, and that role bypasses RLS. See "Still deferred" below.
+
+### Two corrections to earlier records
+
+- **The claim that no dated drill result existed was wrong when it was written.** `docs/SEEDS.md`
+  carries a `Not verified` row reading "No dated restore-drill result exists. Searched 2026-08-13,
+  nothing under `docs/ops/` records a run of `scripts/restore_drill.sh` with a date and a `DRILL:`
+  line." The drill-log table above, with a `DRILL: PASS` row and its verbatim output, was added by
+  commit `a533d75`, committed 2026-07-14, and `git merge-base --is-ancestor a533d75 HEAD` confirms
+  it has been an ancestor ever since. (Its row read `2026-07-12` at that commit and reads
+  `2026-07-14` today.) What was actually missing on 2026-08-13 was not a dated result. It was a
+  **current** one: the newest result was five weeks old and 17 revisions behind the chain.
+- **The Postgres client tools are installed on this machine but are not on `PATH`.** Homebrew's
+  `libpq` 18.4 is keg-only at `/opt/homebrew/opt/libpq/bin`, so `psql`, `pg_dump`, and `pg_restore`
+  all report "command not found" until that directory is prepended. The drill's own error branch
+  reads `cannot reach Postgres … — is pgdb up?`, which points at the wrong cause for this failure.
+  Prepend the path before running either script.
 
 ## Local dev backup/restore (docker `pgdb`)
 
@@ -206,6 +314,12 @@ docker compose down -v && docker compose up -d pgdb && \
 - **Admin-succession runbook**: no runbook exists for a clan whose only admin
   dies or leaves — unrelated to backups mechanically, but the same "family
   data must outlive individuals" principle; still TBD.
+- **No drill against a dump at the chain head, and none against an RLS-carrying dump**: both
+  recorded results, 2026-07-14 and 2026-08-22, restored a dump reporting
+  `016_document_soft_delete`, while the chain head on 2026-08-22 is `033_rls_identity_claims`. So
+  the restore path is proven for the pre-RLS schema only. Restoring a post-`026` dump also needs
+  the `familyroots_app` role and its grants in the target cluster, which the dump does not carry;
+  see the 2026-08-22 note above.
 - **Backup-freshness monitoring**: GitHub silently drops/auto-disables
   scheduled workflows after 60 days of repository inactivity, with no alert
   when this happens. A dead-man's-switch alert ("no `db/daily` object newer
