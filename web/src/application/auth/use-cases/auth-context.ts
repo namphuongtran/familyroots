@@ -3,10 +3,7 @@ import type {
   AuthSessionPort,
   SessionUser,
 } from '@/application/auth/ports/auth-repository'
-import type {
-  UserClanMembership,
-  UserProfile,
-} from '@/lib/types'
+import type { UserClanMembership, UserProfile } from '@/lib/types'
 
 export interface HydratedAuthContext {
   user: UserProfile | null
@@ -39,8 +36,7 @@ export function mapSessionUserToProfile(user: SessionUser): UserProfile {
     is_approved: false,
     has_pending_membership: false,
     person_id: undefined,
-    preferred_locale:
-      (asString(meta.preferred_locale) as UserProfile['preferred_locale']) ?? 'vi',
+    preferred_locale: (asString(meta.preferred_locale) as UserProfile['preferred_locale']) ?? 'vi',
     platform_role: undefined,
   }
 }
@@ -72,7 +68,9 @@ export async function hydrateAuthContext(
     ])
 
     const currentClanId = resolveCurrentClanId(memberships.clans, preferredClanId, profile.clan_id)
-    const activeMembership = memberships.clans.find((membership) => membership.clan_id === currentClanId)
+    const activeMembership = memberships.clans.find(
+      (membership) => membership.clan_id === currentClanId,
+    )
     const mergedProfile = {
       ...fallbackProfile,
       ...profile,
@@ -93,10 +91,8 @@ export async function hydrateAuthContext(
       clanMemberships: memberships.clans,
       currentClanId,
       activeMembership,
-      isPendingApproval:
-        !isPlatformOnlyUser && !hasApprovedClanMembership && hasPendingMembership,
-      needsOnboarding:
-        !isPlatformOnlyUser && !hasApprovedClanMembership && !hasPendingMembership,
+      isPendingApproval: !isPlatformOnlyUser && !hasApprovedClanMembership && hasPendingMembership,
+      needsOnboarding: !isPlatformOnlyUser && !hasApprovedClanMembership && !hasPendingMembership,
       needsClanSelection: memberships.clans.length > 1 && !currentClanId,
     }
   } catch {

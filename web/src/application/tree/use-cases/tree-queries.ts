@@ -10,11 +10,7 @@ export function getFullTree(
   return repository.getFullTree(params)
 }
 
-export function getSubtree(
-  repository: TreeQueryRepository,
-  rootId: string,
-  maxGenerations = 5,
-) {
+export function getSubtree(repository: TreeQueryRepository, rootId: string, maxGenerations = 5) {
   return repository.getSubtree(rootId, maxGenerations)
 }
 
@@ -26,10 +22,6 @@ export function getAncestors(
   return repository.getAncestors(personId, maxGenerations)
 }
 
-export function getRelationshipPath(
-  repository: TreeQueryRepository,
-  fromId: string,
-  toId: string,
-) {
+export function getRelationshipPath(repository: TreeQueryRepository, fromId: string, toId: string) {
   return repository.getRelationshipPath(fromId, toId)
 }

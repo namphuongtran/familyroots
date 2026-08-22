@@ -13,7 +13,12 @@ import {
   marriageCommandRepository,
   parentChildCommandRepository,
 } from '@/infrastructure/relationships/relationship-command-repository'
-import type { MarriageCreateInput, MarriageUpdateInput, ParentChildCreateInput, ParentChildUpdateInput } from '@/lib/types'
+import type {
+  MarriageCreateInput,
+  MarriageUpdateInput,
+  ParentChildCreateInput,
+  ParentChildUpdateInput,
+} from '@/lib/types'
 import { personKeys } from './useMembers'
 
 export function useMarriageMutations(personId?: string) {
@@ -27,8 +32,7 @@ export function useMarriageMutations(personId?: string) {
   }
 
   const create = useMutation({
-    mutationFn: (input: MarriageCreateInput) =>
-      createMarriage(marriageCommandRepository, input),
+    mutationFn: (input: MarriageCreateInput) => createMarriage(marriageCommandRepository, input),
     onSuccess: invalidatePerson,
   })
 

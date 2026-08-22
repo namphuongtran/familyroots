@@ -38,8 +38,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="border-primary h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" />
       </div>
     )
   }
@@ -47,11 +47,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!user || isPendingApproval || needsOnboarding) return null
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="bg-background flex h-screen overflow-hidden">
       <Sidebar />
       <div
         className={cn(
-          'flex flex-col flex-1 min-w-0 transition-all duration-200',
+          'flex min-w-0 flex-1 flex-col transition-all duration-200',
           sidebarOpen ? 'ml-56' : 'ml-14',
         )}
       >

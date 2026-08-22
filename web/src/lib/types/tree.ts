@@ -41,7 +41,7 @@ export interface TreeNode {
   // for this (see tree-transform.ts's visited-set handling).
   pedigree_collapse_ref?: boolean
   spouses: SpouseNode[]
-  children: TreeNode[]    // recursive
+  children: TreeNode[] // recursive
 }
 
 export interface PathStep {
@@ -56,6 +56,6 @@ export interface RelationshipPath {
   from_person: PersonSummary
   to_person: PersonSummary
   path: PathStep[]
-  relationship_description: string  // e.g. "Cháu gọi bằng ông nội"
+  relationship_description: string // e.g. "Cháu gọi bằng ông nội"
   degree: number
 }

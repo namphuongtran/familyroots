@@ -1,7 +1,11 @@
 import api from './axios'
 import type {
-  Marriage, MarriageCreateInput, MarriageUpdateInput,
-  ParentChild, ParentChildCreateInput, ParentChildUpdateInput,
+  Marriage,
+  MarriageCreateInput,
+  MarriageUpdateInput,
+  ParentChild,
+  ParentChildCreateInput,
+  ParentChildUpdateInput,
   ApiResponse,
 } from '@/lib/types'
 
@@ -36,7 +40,10 @@ export const parentChildApi = {
   },
 
   update: async (id: string, input: ParentChildUpdateInput): Promise<ParentChild> => {
-    const { data } = await api.patch<ApiResponse<ParentChild>>(`/relationships/parent-child/${id}`, input)
+    const { data } = await api.patch<ApiResponse<ParentChild>>(
+      `/relationships/parent-child/${id}`,
+      input,
+    )
     return data.data
   },
 

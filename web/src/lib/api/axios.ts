@@ -12,9 +12,7 @@ const api = axios.create({
 api.interceptors.request.use(async (config) => {
   try {
     const supabase = createClientOrNull()
-    const session = supabase
-      ? (await supabase.auth.getSession()).data.session
-      : null
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null
 
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`

@@ -15,11 +15,13 @@ This document defines the target architecture for the FamilyRoots web applicatio
 Location: `src/domain`
 
 Responsibilities:
+
 - Domain types and value objects
 - Business invariants and pure rules
 - No framework imports
 
 Rules:
+
 - Must not import from React, Next.js, Axios, Supabase, Zustand, or TanStack Query.
 
 ## Application
@@ -27,11 +29,13 @@ Rules:
 Location: `src/application`
 
 Responsibilities:
+
 - Use-cases and orchestration
 - Repository/service ports
 - Input/output contracts for UI-facing workflows
 
 Rules:
+
 - May import domain
 - Must not import infrastructure implementations directly
 
@@ -40,12 +44,14 @@ Rules:
 Location: `src/infrastructure`
 
 Responsibilities:
+
 - HTTP adapters
 - Supabase adapters
 - DTO mappers
 - Request context and transport policies
 
 Rules:
+
 - Implements application ports
 - Can import application/domain/lib types
 
@@ -54,11 +60,13 @@ Rules:
 Location: `src/app`, `src/components`, `src/lib/hooks`, `src/store`
 
 Responsibilities:
+
 - Routes, components, and interaction state
 - Calls application use-cases
 - Keeps business logic thin
 
 Rules:
+
 - Can depend on application
 - Should not include transport-specific parsing rules
 
@@ -110,11 +118,13 @@ Rules:
 ## API Contract Invariants
 
 1. Headers
+
 - Always send Authorization bearer token if present.
 - Always send `Accept-Language`.
 - Always send `X-Current-Clan-Id` when available.
 
 2. Query semantics
+
 - Cursor pagination must use opaque `next_cursor`.
 - `profile` accepted values: `summary`, `detail`, `full`.
 - When both `include` and `fields` are present, include keys must be added to sparse fields.

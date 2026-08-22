@@ -18,20 +18,20 @@ export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
   const { data: member, isLoading } = usePerson(personId)
 
   return (
-    <div className="absolute top-4 left-4 z-20 bg-white rounded-xl shadow-lg border border-gray-200 w-64 overflow-hidden">
+    <div className="absolute top-4 left-4 z-20 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
         <span className="text-sm font-semibold text-gray-700">{t('details')}</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+        <button onClick={onClose} className="text-gray-400 transition-colors hover:text-gray-600">
           <X className="h-4 w-4" />
         </button>
       </div>
 
       {isLoading ? (
-        <div className="p-4 space-y-3">
+        <div className="space-y-3 p-4">
           <div className="flex items-center gap-3">
-            <Skeleton className="h-12 w-12 rounded-full shrink-0" />
-            <div className="space-y-1 flex-1">
+            <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-1">
               <Skeleton className="h-4 w-28" />
               <Skeleton className="h-3 w-20" />
             </div>
@@ -40,7 +40,7 @@ export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
           <Skeleton className="h-3 w-3/4" />
         </div>
       ) : member ? (
-        <div className="p-4 space-y-3">
+        <div className="space-y-3 p-4">
           <div className="flex items-center gap-3">
             <MemberAvatar
               avatarUrl={member.avatar_url}
@@ -72,20 +72,20 @@ export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
           )}
 
           {member.notes && (
-            <p className="text-xs text-gray-500 italic line-clamp-3">{member.notes}</p>
+            <p className="line-clamp-3 text-xs text-gray-500 italic">{member.notes}</p>
           )}
 
           <div className="flex gap-2 pt-1">
             <Link
               href={`/persons/${member.id}`}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-md bg-primary-container text-primary-container-foreground hover:bg-primary-container-hover transition-colors"
+              className="bg-primary-container text-primary-container-foreground hover:bg-primary-container-hover flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors"
             >
               <Users className="h-3 w-3" />
               {t('view_profile')}
             </Link>
             <Link
               href={`/persons/${member.id}/edit`}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              className="flex flex-1 items-center justify-center gap-1 rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-50"
             >
               <Edit className="h-3 w-3" />
               {t('edit')}

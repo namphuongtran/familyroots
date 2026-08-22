@@ -1,10 +1,10 @@
 // Event types — aligned with backend EventResponse / UpcomingEvent
 
 export type EventType =
-  | 'death_anniversary'     // ngày giỗ
-  | 'birthday'              // sinh nhật
-  | 'wedding_anniversary'   // kỷ niệm ngày cưới
-  | 'clan_ceremony'         // lễ kỵ / giỗ tổ
+  | 'death_anniversary' // ngày giỗ
+  | 'birthday' // sinh nhật
+  | 'wedding_anniversary' // kỷ niệm ngày cưới
+  | 'clan_ceremony' // lễ kỵ / giỗ tổ
   | 'custom'
 
 export interface ClanEvent {
@@ -14,10 +14,10 @@ export interface ClanEvent {
   event_type: EventType
   title: string
   description?: string
-  event_date: string          // ISO date YYYY-MM-DD
-  is_lunar_calendar: boolean  // âm lịch
+  event_date: string // ISO date YYYY-MM-DD
+  is_lunar_calendar: boolean // âm lịch
   is_recurring: boolean
-  notify_days_before: number  // 0–30
+  notify_days_before: number // 0–30
   created_by: string
   created_at: string
   updated_at: string
@@ -27,8 +27,8 @@ export interface ClanEvent {
 export interface UpcomingEvent extends ClanEvent {
   person_name?: string
   person_avatar_url?: string
-  next_occurrence: string     // ISO date of next occurrence
-  days_until: number          // how many days until next occurrence
+  next_occurrence: string // ISO date of next occurrence
+  days_until: number // how many days until next occurrence
 }
 
 export interface EventCreateInput {

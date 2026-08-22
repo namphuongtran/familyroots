@@ -32,7 +32,12 @@ const mockUseAuth = vi.mocked(useAuth)
 function authWith(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
   return {
     clanMemberships: [
-      { clan_id: 'clan-a', clan_name: 'Dòng họ Nguyễn', clan_slug: 'nguyen', role: 'viewer' as const },
+      {
+        clan_id: 'clan-a',
+        clan_name: 'Dòng họ Nguyễn',
+        clan_slug: 'nguyen',
+        role: 'viewer' as const,
+      },
     ],
     currentClanId: undefined,
     isLoading: false,
@@ -52,13 +57,20 @@ describe('select-clan page routes a real clan_suspended rejection to the blocked
 
     renderWithProviders(<SelectClanPage />, { messages })
 
-    fireEvent.click(screen.getByLabelText('Dòng họ Nguyễn', { exact: false }).closest('label')!.querySelector('input')!)
+    fireEvent.click(
+      screen
+        .getByLabelText('Dòng họ Nguyễn', { exact: false })
+        .closest('label')!
+        .querySelector('input')!,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     await waitFor(() => expect(selectClan).toHaveBeenCalledWith('clan-a'))
     await waitFor(() =>
       expect(pushMock).toHaveBeenCalledWith(
-        expect.stringContaining('/clan-suspended?clanId=clan-a&clanName=D%C3%B2ng+h%E1%BB%8D+Nguy%E1%BB%85n'),
+        expect.stringContaining(
+          '/clan-suspended?clanId=clan-a&clanName=D%C3%B2ng+h%E1%BB%8D+Nguy%E1%BB%85n',
+        ),
       ),
     )
   })
@@ -72,7 +84,9 @@ describe('select-clan page routes a real clan_suspended rejection to the blocked
 
     await waitFor(() => expect(selectClan).toHaveBeenCalledWith('clan-a'))
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('/clan-suspended?clanId=clan-a')),
+      expect(pushMock).toHaveBeenCalledWith(
+        expect.stringContaining('/clan-suspended?clanId=clan-a'),
+      ),
     )
   })
 

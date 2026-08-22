@@ -1,8 +1,4 @@
-import type {
-  CursorPage,
-  DocumentResponse,
-  DocumentSummary,
-} from '@/lib/types'
+import type { CursorPage, DocumentResponse, DocumentSummary } from '@/lib/types'
 
 export interface DocumentQueryRepository {
   list(params?: {

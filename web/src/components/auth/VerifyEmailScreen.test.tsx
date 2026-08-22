@@ -78,7 +78,11 @@ describe('VerifyEmailScreen (S-026, spec §7.1c surface 1)', () => {
 
     renderWithProviders(<VerifyEmailScreen />, { messages })
 
-    expect(screen.getByText('Email của bạn chưa được xác thực. Xin mở hộp thư và bấm vào liên kết xác thực để tiếp tục đăng nhập.')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Email của bạn chưa được xác thực. Xin mở hộp thư và bấm vào liên kết xác thực để tiếp tục đăng nhập.',
+      ),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Gửi lại thư xác thực' })).toBeDisabled()
     // T-17: still a way forward with no email known.
     expect(screen.getByRole('link', { name: 'Về trang đăng nhập' })).toBeInTheDocument()

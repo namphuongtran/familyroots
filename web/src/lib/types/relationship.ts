@@ -54,6 +54,15 @@ export interface ParentChildCreateInput {
 
 export type ParentChildUpdateInput = Partial<Omit<ParentChildCreateInput, 'parent_id' | 'child_id'>>
 
-export const PARENT_CHILD_TYPE_OPTIONS: ParentChildType[] = ['biological', 'adopted', 'step', 'foster']
-export const MARRIAGE_STATUS_OPTIONS: MarriageStatus[] = ['married', 'divorced', 'widowed', 'separated']
-
+export const PARENT_CHILD_TYPE_OPTIONS: ParentChildType[] = [
+  'biological',
+  'adopted',
+  'step',
+  'foster',
+]
+export const MARRIAGE_STATUS_OPTIONS: MarriageStatus[] = [
+  'married',
+  'divorced',
+  'widowed',
+  'separated',
+]

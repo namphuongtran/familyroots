@@ -1,9 +1,5 @@
 import type { EventQueryRepository } from '@/application/events/ports/event-query-repository'
-import type {
-  ClanEvent,
-  CursorPage,
-  UpcomingEvent,
-} from '@/lib/types'
+import type { ClanEvent, CursorPage, UpcomingEvent } from '@/lib/types'
 import { eventsApi } from '@/lib/api/events'
 
 export class HttpEventQueryRepository implements EventQueryRepository {

@@ -111,8 +111,8 @@ export function PendingApprovalScreen() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <p className="text-sm text-muted-foreground">{t('loading')}</p>
+      <div className="bg-background flex min-h-screen items-center justify-center px-4">
+        <p className="text-muted-foreground text-sm">{t('loading')}</p>
       </div>
     )
   }
@@ -126,22 +126,25 @@ export function PendingApprovalScreen() {
   const clanName = user?.clan_name
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-heritage-container px-4 py-12">
+    <div className="bg-heritage-container flex min-h-screen items-center justify-center px-4 py-12">
       <div className="w-full max-w-md space-y-6 text-center">
-        <Clock className="mx-auto h-12 w-12 text-heritage-container-foreground" aria-hidden="true" />
+        <Clock
+          className="text-heritage-container-foreground mx-auto h-12 w-12"
+          aria-hidden="true"
+        />
 
         <div className="space-y-2">
-          <h1 className="font-serif text-2xl text-heritage-container-foreground">
+          <h1 className="text-heritage-container-foreground font-serif text-2xl">
             {t('pending_screen_heading')}
           </h1>
-          <p className="text-sm text-heritage-container-foreground">
+          <p className="text-heritage-container-foreground text-sm">
             {clanName
               ? t('pending_screen_body_with_clan', { clanName })
               : t('pending_screen_body_no_clan')}
           </p>
         </div>
 
-        <ol className="space-y-2 text-left text-sm text-heritage-container-foreground">
+        <ol className="text-heritage-container-foreground space-y-2 text-left text-sm">
           <li className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             {t('pending_screen_step_account')}
@@ -172,7 +175,7 @@ export function PendingApprovalScreen() {
             type="button"
             onClick={() => void handleRecheck()}
             disabled={recheckStatus === 'checking'}
-            className="w-full max-w-xs rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring w-full max-w-xs rounded-full px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
           >
             {recheckStatus === 'checking'
               ? t('pending_screen_recheck_checking')
@@ -181,7 +184,7 @@ export function PendingApprovalScreen() {
 
           <Link
             href={`/${locale}/register?mode=oauth`}
-            className="text-sm text-heritage-container-foreground underline-offset-2 hover:underline"
+            className="text-heritage-container-foreground text-sm underline-offset-2 hover:underline"
           >
             {t('pending_screen_join_another')}
           </Link>
@@ -189,7 +192,7 @@ export function PendingApprovalScreen() {
           <button
             type="button"
             onClick={() => void signOut()}
-            className="text-sm text-heritage-container-foreground/80 hover:text-heritage-container-foreground"
+            className="text-heritage-container-foreground/80 hover:text-heritage-container-foreground text-sm"
           >
             {t('logout')}
           </button>

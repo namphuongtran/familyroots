@@ -5,12 +5,7 @@ import type {
   RegisterResult,
 } from '@/application/auth/ports/auth-repository'
 import api from '@/lib/api/axios'
-import type {
-  ApiResponse,
-  ClanSwitchResponse,
-  UserClansResponse,
-  UserProfile,
-} from '@/lib/types'
+import type { ApiResponse, ClanSwitchResponse, UserClansResponse, UserProfile } from '@/lib/types'
 
 type UpdateMeInput = {
   full_name?: string

@@ -1,7 +1,4 @@
-import type {
-  AuthSessionPort,
-  SessionUser,
-} from '@/application/auth/ports/auth-repository'
+import type { AuthSessionPort, SessionUser } from '@/application/auth/ports/auth-repository'
 import { createClientOrNull } from '@/lib/supabase/client'
 import { createMissingSupabaseEnvError } from '@/lib/supabase/config'
 

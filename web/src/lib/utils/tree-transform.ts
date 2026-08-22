@@ -9,16 +9,13 @@ export interface PersonNodeData {
   [key: string]: unknown
 }
 
-const NODE_WIDTH = 144   // px (w-36)
-const NODE_HEIGHT = 120  // px
-const H_GAP = 60         // horizontal gap between siblings
-const SPOUSE_GAP = 40    // horizontal gap between member and spouse
-const V_GAP = 80         // vertical gap between generations
+const NODE_WIDTH = 144 // px (w-36)
+const NODE_HEIGHT = 120 // px
+const H_GAP = 60 // horizontal gap between siblings
+const SPOUSE_GAP = 40 // horizontal gap between member and spouse
+const V_GAP = 80 // vertical gap between generations
 
-function spouseNodeData(
-  spouse: SpouseNode,
-  depth: number,
-): PersonNodeData {
+function spouseNodeData(spouse: SpouseNode, depth: number): PersonNodeData {
   return {
     member: {
       ...spouse,
@@ -44,14 +41,12 @@ function spouseNodeData(
  * Width = max(node + spouses width, children-row width)
  */
 function subtreeWidth(node: TreeNode): number {
-  const coupleWidth =
-    (NODE_WIDTH + SPOUSE_GAP) * (1 + node.spouses.length) - SPOUSE_GAP
+  const coupleWidth = (NODE_WIDTH + SPOUSE_GAP) * (1 + node.spouses.length) - SPOUSE_GAP
 
   if (node.children.length === 0) return coupleWidth
 
   const childrenTotalWidth =
-    node.children.reduce((sum, c) => sum + subtreeWidth(c), 0) +
-    H_GAP * (node.children.length - 1)
+    node.children.reduce((sum, c) => sum + subtreeWidth(c), 0) + H_GAP * (node.children.length - 1)
 
   return Math.max(coupleWidth, childrenTotalWidth)
 }
@@ -69,12 +64,7 @@ export function treeToReactFlow(root: TreeNode): { nodes: Node[]; edges: Edge[] 
   const edges: Edge[] = []
   const visited = new Set<string>()
 
-  function processNode(
-    node: TreeNode,
-    centreX: number,
-    y: number,
-    parentId?: string,
-  ) {
+  function processNode(node: TreeNode, centreX: number, y: number, parentId?: string) {
     // A pedigree-collapse stub (H4) mirrors a person who also appears as a FULL
     // node elsewhere in this same payload — the same person id, twice. Stubs
     // must never gate `visited`: if a stub is reached before its canonical full

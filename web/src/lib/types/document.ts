@@ -1,12 +1,6 @@
 // Document types — aligned with backend DocumentResponse / DocumentSummary
 
-export type DocumentType =
-  | 'photo'
-  | 'id_document'
-  | 'certificate'
-  | 'audio'
-  | 'video'
-  | 'other'
+export type DocumentType = 'photo' | 'id_document' | 'certificate' | 'audio' | 'video' | 'other'
 
 export interface DocumentResponse {
   id: string

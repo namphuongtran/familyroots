@@ -8,10 +8,7 @@ function getDateFnsLocale(locale = 'vi') {
 }
 
 /** Format ISO date to a human-readable date string */
-export function formatDate(
-  isoDate: string | undefined | null,
-  locale = 'vi',
-): string {
+export function formatDate(isoDate: string | undefined | null, locale = 'vi'): string {
   if (!isoDate) return ''
   try {
     return format(new Date(isoDate), 'dd/MM/yyyy', {
@@ -43,12 +40,8 @@ export function formatLifespan(
   birthApprox = false,
   deathApprox = false,
 ): string {
-  const birth = birthDate
-    ? `${birthApprox ? '~' : ''}${formatYear(birthDate)}`
-    : '?'
-  const death = deathDate
-    ? `${deathApprox ? '~' : ''}${formatYear(deathDate)}`
-    : ''
+  const birth = birthDate ? `${birthApprox ? '~' : ''}${formatYear(birthDate)}` : '?'
+  const death = deathDate ? `${deathApprox ? '~' : ''}${formatYear(deathDate)}` : ''
 
   if (!birthDate && !deathDate) return ''
   if (deathDate) return `${birth} – ${death}`
@@ -58,10 +51,7 @@ export function formatLifespan(
 /**
  * Returns a relative time string, e.g. "7 ngày nữa"
  */
-export function formatRelativeTime(
-  isoDate: string,
-  locale = 'vi',
-): string {
+export function formatRelativeTime(isoDate: string, locale = 'vi'): string {
   try {
     return formatDistance(new Date(isoDate), new Date(), {
       addSuffix: true,
@@ -73,11 +63,7 @@ export function formatRelativeTime(
 }
 
 /** Format event date, showing lunar indicator if needed */
-export function formatEventDate(
-  isoDate: string,
-  isLunar: boolean,
-  locale = 'vi',
-): string {
+export function formatEventDate(isoDate: string, isLunar: boolean, locale = 'vi'): string {
   const formatted = formatDate(isoDate, locale)
   return isLunar ? `${formatted} (ÂL)` : formatted
 }

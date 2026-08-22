@@ -44,17 +44,17 @@ export function ClanSuspendedScreen() {
   const hasOtherClans = clanMemberships.some((membership) => membership.clan_id !== clanId)
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-accent px-4 py-12">
+    <div className="bg-accent flex min-h-screen items-center justify-center px-4 py-12">
       <div className="w-full max-w-md space-y-6 text-center">
-        <ShieldAlert className="mx-auto h-12 w-12 text-accent-foreground" aria-hidden="true" />
+        <ShieldAlert className="text-accent-foreground mx-auto h-12 w-12" aria-hidden="true" />
 
         <div className="space-y-2">
-          <h1 className="font-serif text-2xl text-accent-foreground">
+          <h1 className="text-accent-foreground font-serif text-2xl">
             {clanName
               ? t('clan_suspended_heading_with_name', { clanName })
               : t('clan_suspended_heading_no_name')}
           </h1>
-          <p className="text-sm text-accent-foreground">{t('clan_suspended_body')}</p>
+          <p className="text-accent-foreground text-sm">{t('clan_suspended_body')}</p>
         </div>
 
         {/* T-17: never a dead end. The contextual action is "switch clan" when another
@@ -65,7 +65,7 @@ export function ClanSuspendedScreen() {
           {hasOtherClans && (
             <Link
               href={`/${locale}/select-clan`}
-              className="w-full max-w-xs rounded-full bg-primary px-4 py-2.5 text-center text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring w-full max-w-xs rounded-full px-4 py-2.5 text-center text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             >
               {t('clan_suspended_switch_button')}
             </Link>
@@ -76,8 +76,8 @@ export function ClanSuspendedScreen() {
             onClick={() => void signOut()}
             className={
               hasOtherClans
-                ? 'text-sm text-accent-foreground/80 hover:text-accent-foreground'
-                : 'w-full max-w-xs rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2'
+                ? 'text-accent-foreground/80 hover:text-accent-foreground text-sm'
+                : 'bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring w-full max-w-xs rounded-full px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden'
             }
           >
             {t('logout')}

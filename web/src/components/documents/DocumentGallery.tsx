@@ -24,7 +24,7 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
 
-  const documents = data?.pages.flatMap(p => p.data) ?? []
+  const documents = data?.pages.flatMap((p) => p.data) ?? []
 
   if (isLoading) {
     return (
@@ -38,8 +38,8 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
 
   if (documents.length === 0) {
     return (
-      <div className="text-center py-10 text-gray-400">
-        <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
+      <div className="py-10 text-center text-gray-400">
+        <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
         <p className="text-sm">{t('no_documents')}</p>
       </div>
     )
@@ -64,15 +64,15 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
 
   return (
     <div className="grid grid-cols-2 gap-2">
-      {documents.map(doc => (
+      {documents.map((doc) => (
         <div
           key={doc.id}
-          className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square flex items-center justify-center"
+          className="group relative flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
         >
           <div className="flex flex-col items-center gap-1 p-3">
             <FileText className="h-8 w-8 text-gray-400" />
-            <p className="text-[10px] text-center text-gray-500 line-clamp-2">{doc.title}</p>
-            <p className="text-[9px] uppercase text-gray-400">{doc.document_type}</p>
+            <p className="line-clamp-2 text-center text-[10px] text-gray-500">{doc.title}</p>
+            <p className="text-[9px] text-gray-400 uppercase">{doc.document_type}</p>
             <p className="text-[9px] text-gray-400">{formatDate(doc.created_at)}</p>
             <button
               type="button"
@@ -89,15 +89,18 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
             <div className="absolute inset-x-0 bottom-0 flex justify-end bg-linear-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
               {confirmDeleteId === doc.id ? (
                 <button
-                  onClick={() => { deleteDocument.mutate(doc.id); setConfirmDeleteId(null) }}
-                  className="p-1.5 rounded-full bg-red-500 text-white hover:bg-red-600"
+                  onClick={() => {
+                    deleteDocument.mutate(doc.id)
+                    setConfirmDeleteId(null)
+                  }}
+                  className="rounded-full bg-red-500 p-1.5 text-white hover:bg-red-600"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               ) : (
                 <button
                   onClick={() => setConfirmDeleteId(doc.id)}
-                  className="p-1.5 rounded-full bg-white/80 hover:bg-white text-red-500"
+                  className="rounded-full bg-white/80 p-1.5 text-red-500 hover:bg-white"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

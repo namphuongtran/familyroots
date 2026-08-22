@@ -1,5 +1,12 @@
 import api from './axios'
-import type { ClanEvent, UpcomingEvent, EventCreateInput, EventUpdateInput, ApiResponse, CursorPage } from '@/lib/types'
+import type {
+  ClanEvent,
+  UpcomingEvent,
+  EventCreateInput,
+  EventUpdateInput,
+  ApiResponse,
+  CursorPage,
+} from '@/lib/types'
 
 export const eventsApi = {
   list: async (params?: { cursor?: string; limit?: number }): Promise<CursorPage<ClanEvent>> => {

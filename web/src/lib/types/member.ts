@@ -20,13 +20,13 @@ export interface Person {
   id: string
   full_name: string
   birth_name?: string
-  courtesy_name?: string       // tên tự / tên hiệu
-  posthumous_name?: string     // tên thụy
+  courtesy_name?: string // tên tự / tên hiệu
+  posthumous_name?: string // tên thụy
   alias_name?: string
   gender: 'male' | 'female' | 'unknown'
-  birth_date?: string          // ISO date string YYYY-MM-DD
-  birth_date_lunar?: string    // lunar date string
-  birth_date_approx: boolean   // true = estimated year only
+  birth_date?: string // ISO date string YYYY-MM-DD
+  birth_date_lunar?: string // lunar date string
+  birth_date_approx: boolean // true = estimated year only
   death_date?: string
   death_date_lunar?: string
   death_date_approx: boolean
@@ -53,7 +53,7 @@ export interface Person {
   updated_at: string
   // Clan-context fields (from ClanMembership join)
   membership_role?: 'blood' | 'spouse' | 'adopted'
-  generation?: number          // đời thứ (relative to clan)
+  generation?: number // đời thứ (relative to clan)
   is_founder?: boolean
 }
 

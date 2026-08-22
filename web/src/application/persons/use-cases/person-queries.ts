@@ -8,9 +8,6 @@ import type { PersonQueryRepository } from '@/application/persons/ports/person-q
 // `useMembers.ts`'s `usePerson` still calls it — see that file's header
 // comment for who still needs `usePerson` and why.
 
-export async function getPerson(
-  repository: PersonQueryRepository,
-  id: string,
-): Promise<Person> {
+export async function getPerson(repository: PersonQueryRepository, id: string): Promise<Person> {
   return repository.get(id)
 }

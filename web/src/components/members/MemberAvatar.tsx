@@ -44,7 +44,7 @@ export function MemberAvatar({
   return (
     <span
       className={cn(
-        'relative inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 font-semibold',
+        'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold',
         SIZE_CLASSES[size],
         !avatarUrl && GENDER_BG[gender],
         isDeceased && 'opacity-60 grayscale',
@@ -53,17 +53,11 @@ export function MemberAvatar({
     >
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={avatarUrl}
-          alt={fullName}
-          className="h-full w-full object-cover"
-        />
+        <img src={avatarUrl} alt={fullName} className="h-full w-full object-cover" />
       ) : (
         <span>{getInitials(fullName)}</span>
       )}
-      {isDeceased && (
-        <span className="absolute inset-0 bg-white/20 rounded-full" />
-      )}
+      {isDeceased && <span className="absolute inset-0 rounded-full bg-white/20" />}
     </span>
   )
 }

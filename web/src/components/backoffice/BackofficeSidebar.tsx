@@ -27,9 +27,9 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
   const pathname = usePathname()
 
   return (
-    <aside className="w-60 h-screen flex flex-col bg-muted text-foreground shrink-0 fixed left-0 top-0">
+    <aside className="bg-muted text-foreground fixed top-0 left-0 flex h-screen w-60 shrink-0 flex-col">
       {/* Brand */}
-      <div className="h-16 flex items-center gap-2.5 px-5 mb-2">
+      <div className="mb-2 flex h-16 items-center gap-2.5 px-5">
         {/*
           ADR-046 ("The backoffice aside stops being inverted and becomes a
           surface step") converted this aside from a hand-built bg-gray-950
@@ -43,15 +43,15 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
           placed on a ground outside the token system fails in one theme or
           the other, because the ink moves and the ground cannot).
         */}
-        <span className="text-primary font-bold text-lg font-serif">FR</span>
+        <span className="text-primary font-serif text-lg font-bold">FR</span>
         <div className="leading-tight">
-          <p className="text-xs text-foreground">{t('rail_label')}</p>
+          <p className="text-foreground text-xs">{t('rail_label')}</p>
           <p className="text-xs font-semibold">FamilyRoots</p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const fullHref = `/${locale}/backoffice/${href}`
           const active = pathname.startsWith(fullHref)
@@ -60,7 +60,7 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
               key={href}
               href={fullHref}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                 active
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-card hover:text-foreground',
@@ -75,10 +75,10 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-4 mt-2">
+      <div className="mt-2 px-3 py-4">
         <button
           onClick={() => signOut()}
-          className="flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-card hover:text-foreground transition-colors"
+          className="text-muted-foreground hover:bg-card hover:text-foreground flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors"
         >
           <LogOut className="h-4 w-4" />
           Sign out

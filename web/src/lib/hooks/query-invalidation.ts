@@ -32,7 +32,9 @@ export function eventMutationInvalidationKeys(options?: {
   personId?: string
   upcomingDays?: number
 }) {
-  const keys: Array<readonly unknown[]> = [...eventBaseInvalidationKeys(options?.upcomingDays ?? 30)]
+  const keys: Array<readonly unknown[]> = [
+    ...eventBaseInvalidationKeys(options?.upcomingDays ?? 30),
+  ]
 
   if (options?.detailId) {
     keys.push(['events', 'detail', options.detailId])

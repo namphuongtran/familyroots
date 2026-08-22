@@ -6,10 +6,7 @@ import type {
   AuthenticatedOnboardingInput,
   RegisterResult,
 } from '@/application/auth/ports/auth-repository'
-import {
-  hydrateAuthContext,
-  selectActiveClan,
-} from '@/application/auth/use-cases/auth-context'
+import { hydrateAuthContext, selectActiveClan } from '@/application/auth/use-cases/auth-context'
 import { authProfileRepository } from '@/infrastructure/auth/http-auth-profile-repository'
 import { authSessionPort } from '@/infrastructure/auth/supabase-auth-session-port'
 import {
@@ -42,7 +39,11 @@ export function useAuth() {
 
   const syncAuthContext = useCallback(async () => {
     const preferredClanId = readCurrentClanId() ?? undefined
-    const context = await hydrateAuthContext(authSessionPort, authProfileRepository, preferredClanId)
+    const context = await hydrateAuthContext(
+      authSessionPort,
+      authProfileRepository,
+      preferredClanId,
+    )
     if (!context.user) {
       clear()
       return

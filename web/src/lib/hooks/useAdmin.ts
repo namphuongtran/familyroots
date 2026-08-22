@@ -15,10 +15,7 @@ import {
   clanAdminRepository,
   platformAdminRepository,
 } from '@/infrastructure/admin/http-admin-repositories'
-import type {
-  ClanRole,
-  ClanSettings,
-} from '@/lib/types'
+import type { ClanRole, ClanSettings } from '@/lib/types'
 
 export const adminKeys = {
   all: ['admin'] as const,
@@ -66,8 +63,7 @@ export function useClanSettings() {
 export function useClanSettingsMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Partial<ClanSettings>) =>
-      updateClanSettings(clanAdminRepository, input),
+    mutationFn: (input: Partial<ClanSettings>) => updateClanSettings(clanAdminRepository, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.clanSettings() }),
   })
 }

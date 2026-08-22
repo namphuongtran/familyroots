@@ -6,12 +6,14 @@ import { useEvents } from '@/lib/hooks/useEvents'
 
 export function EventListClient() {
   const { data, isLoading } = useEvents()
-  const events = data?.pages.flatMap(p => p.data) ?? []
+  const events = data?.pages.flatMap((p) => p.data) ?? []
 
   if (isLoading) {
     return (
       <div className="space-y-2">
-        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 rounded-xl" />
+        ))}
       </div>
     )
   }
@@ -22,7 +24,9 @@ export function EventListClient() {
 
   return (
     <div className="space-y-2">
-      {events.map(e => <EventCard key={e.id} event={e} />)}
+      {events.map((e) => (
+        <EventCard key={e.id} event={e} />
+      ))}
     </div>
   )
 }
