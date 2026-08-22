@@ -1,72 +1,16 @@
-import type {
-  CursorPage,
-  DocumentSummary,
-  Marriage,
-  ParentChild,
-  Person,
-  PersonBatchGetInput,
-  PersonBatchGetResponse,
-  PersonSummary,
-  TimelineEvent,
-} from '@/lib/types'
-import type {
-  PersonQueryRepository,
-  PersonsListQuery,
-} from '@/application/persons/ports/person-query-repository'
+import type { Person } from '@/lib/types'
+import type { PersonQueryRepository } from '@/application/persons/ports/person-query-repository'
 
-export async function listPersons(
-  repository: PersonQueryRepository,
-  params: PersonsListQuery,
-): Promise<CursorPage<PersonSummary>> {
-  return repository.list(params)
-}
-
-export async function searchPersons(
-  repository: PersonQueryRepository,
-  query: string,
-  limit = 20,
-): Promise<PersonSummary[]> {
-  return repository.search(query, limit)
-}
+// S-033 deleted `listPersons`, `searchPersons`, `getPersonMarriages`,
+// `getPersonParentChild`, `getPersonTimeline`, `getPersonDocuments`, and
+// `batchGetPersons` here: their sole caller, `src/lib/hooks/useMembers.ts`'s
+// legacy hooks, was deleted with them. `getPerson` stays because
+// `useMembers.ts`'s `usePerson` still calls it — see that file's header
+// comment for who still needs `usePerson` and why.
 
 export async function getPerson(
   repository: PersonQueryRepository,
   id: string,
 ): Promise<Person> {
   return repository.get(id)
-}
-
-export async function getPersonMarriages(
-  repository: PersonQueryRepository,
-  id: string,
-): Promise<Marriage[]> {
-  return repository.getMarriages(id)
-}
-
-export async function getPersonParentChild(
-  repository: PersonQueryRepository,
-  id: string,
-): Promise<ParentChild[]> {
-  return repository.getParentChild(id)
-}
-
-export async function getPersonTimeline(
-  repository: PersonQueryRepository,
-  id: string,
-): Promise<TimelineEvent[]> {
-  return repository.getTimeline(id)
-}
-
-export async function getPersonDocuments(
-  repository: PersonQueryRepository,
-  id: string,
-): Promise<DocumentSummary[]> {
-  return repository.getDocuments(id)
-}
-
-export async function batchGetPersons(
-  repository: PersonQueryRepository,
-  input: PersonBatchGetInput,
-): Promise<PersonBatchGetResponse> {
-  return repository.batchGet(input)
 }

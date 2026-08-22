@@ -10,17 +10,10 @@ export type {
   UserClanMembership,
   UserClansResponse,
 } from './api'
-export type {
-  Person,
-  PersonSummary,
-  PersonCreateInput,
-  PersonUpdateInput,
-  TimelineEvent,
-  PersonProfile,
-  PersonBatchGetInput,
-  PersonBatchGetError,
-  PersonBatchGetResponse,
-} from './member'
+// S-033 trimmed this re-export to `Person` and `PersonSummary`, the two
+// types `./member` still declares. See that file's own header comment for
+// why each removed type's last reader went with it.
+export type { Person, PersonSummary } from './member'
 export type {
   Marriage,
   MarriageStatus,

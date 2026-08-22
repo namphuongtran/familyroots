@@ -14,13 +14,18 @@ import {
   mapSessionUserToProfile,
   selectActiveClan,
 } from '../../src/application/auth/use-cases/auth-context.ts'
+// S-033 deleted `personCreateInvalidationKeys`, `personUpdateInvalidationKeys`, and
+// `personDeleteInvalidationKeys` from `query-invalidation.ts`, along with the
+// `'person invalidation helpers cover list, detail, and tree refreshes'` test below that
+// covered only them — their sole caller was `useMembers.ts`'s `usePersonMutations`, deleted
+// the same seed because its own sole caller, `src/components/members/MemberForm.tsx`, was
+// dead (S-032 had already found it unreachable; S-033 confirmed zero importers and deleted
+// it). `documentUploadInvalidationKeys` and `eventMutationInvalidationKeys` still back the
+// live `src/lib/hooks/{useDocuments,useEvents}.ts`, so they and their own tests stay.
 import {
   documentDeleteInvalidationKeys,
   documentUploadInvalidationKeys,
   eventMutationInvalidationKeys,
-  personCreateInvalidationKeys,
-  personDeleteInvalidationKeys,
-  personUpdateInvalidationKeys,
 } from '../../src/lib/hooks/query-invalidation.ts'
 
 test('mapSessionUserToProfile keeps session fallback identity-only', () => {
@@ -217,20 +222,6 @@ test('selectActiveClan delegates to repository and returns backend clan id', asy
 
   assert.equal(result, 'clan-9')
   assert.deepEqual(calls, ['clan-9'])
-})
-
-test('person invalidation helpers cover list, detail, and tree refreshes', () => {
-  assert.deepEqual(personCreateInvalidationKeys(), [['persons', 'list'], ['tree']])
-  assert.deepEqual(personUpdateInvalidationKeys('p-1'), [
-    ['persons', 'detail', 'p-1'],
-    ['persons', 'list'],
-    ['tree'],
-  ])
-  assert.deepEqual(personDeleteInvalidationKeys('p-2'), [
-    ['persons', 'detail', 'p-2'],
-    ['persons', 'list'],
-    ['tree'],
-  ])
 })
 
 test('document invalidation helpers cover person document/detail refreshes when linked', () => {

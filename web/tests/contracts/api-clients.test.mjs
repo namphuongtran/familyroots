@@ -94,29 +94,22 @@ test('auth context session fallback remains identity-only', async () => {
   )
 })
 
-test('person API uses backend person routes and preserves normalization hooks', async () => {
-  const source = await read('src/lib/api/members.ts')
-
-  assert.match(source, /normalizeIncludeAndFields/)
-  assert.match(source, /normalizePersonsBatchInput/)
-  assert.match(source, /normalizePersonsProfile/)
-  assert.match(source, /['"`]\/persons['"`]/)
-  assert.match(source, /['"`]\/persons\/search['"`]/)
-  assert.match(source, /['"`]\/persons\/batch['"`]/)
-  assert.match(source, /\/persons\/\$\{id\}\/marriages/)
-  assert.match(source, /\/persons\/\$\{id\}\/parent-child/)
-  assert.match(source, /\/persons\/\$\{id\}\/timeline/)
-  assert.match(source, /\/persons\/\$\{id\}\/documents/)
-})
-
-test('person batch query contract supports include_by_id and backend profiles', async () => {
-  const queryPolicy = await read('src/infrastructure/http/query-policy.ts')
-  const memberTypes = await read('src/lib/types/member.ts')
-
-  assert.match(queryPolicy, /normalizePersonsBatchInput/)
-  assert.match(queryPolicy, /input\.include_by_id/)
-  assert.match(queryPolicy, /profile: normalizePersonsProfile\(input\.profile\)/)
-  assert.match(queryPolicy, /fieldSet\.add\(includeKey\)/)
-  assert.match(memberTypes, /include_by_id\?: Record<string, string>/)
-  assert.match(memberTypes, /export type PersonProfile = 'summary' \| 'detail' \| 'full'/)
-})
+// S-033 deleted both person contract tests that used to sit here.
+//
+// 'person API uses backend person routes and preserves normalization hooks' asserted on
+// `src/lib/api/members.ts`'s `list`/`search`/`batch`/`getMarriages`/`getParentChild`/
+// `getTimeline`/`getDocuments` methods and the `query-policy.ts` normalizers they called.
+// S-033 deleted all seven methods — each one's only caller was a
+// `src/components/members/*.tsx` component this same seed deleted — leaving `members.ts`
+// with just `personsApi.get`, which this test never asserted on.
+//
+// 'person batch query contract supports include_by_id and backend profiles' asserted on
+// `src/infrastructure/http/query-policy.ts` (deleted outright — its only importer was the
+// batch method above) and on `src/lib/types/member.ts`'s `PersonProfile`/`include_by_id`
+// (deleted from that file for the same reason: their last reader went with `query-policy.ts`
+// and `members.ts`'s batch method).
+//
+// `src/lib/hooks/useMembers.ts`'s own header comment names who still needs the persons chain
+// that stayed (`MemberSidebar.tsx`, `useRelationships.ts`) and why; neither exercises a route
+// this file's harness (which reads source text, not requests) can usefully assert on beyond
+// what `members.ts`'s own remaining `get` method already is.
