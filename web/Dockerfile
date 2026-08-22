@@ -23,9 +23,19 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # `SupabaseSetupNotice.tsx` — a Client Component that reads both — renders the
 # "Supabase is not configured" banner regardless of what the container is later given.
 # So they must arrive here, as build arguments, promoted to env vars for `pnpm build`
-# to inline. Do NOT add `NEXT_PUBLIC_API_URL` or any other NEXT_PUBLIC_* here unless a
-# client component actually reads it — check before adding one (see the seed's own
-# "Out of scope").
+# to inline. Do NOT add another NEXT_PUBLIC_* here unless a client component actually
+# reads it — check before adding one (see the seed's own "Out of scope").
+#
+# `NEXT_PUBLIC_API_URL` joined the two above by seed S-076 / ADR-056: `src/lib/api/axios.ts`
+# (the legacy transport, still imported by every remaining legacy slice per web/CLAUDE.md)
+# reads it too, so it has the identical build-time exposure. ADR-056 decided this is the
+# *browser-facing* origin only — a host-reachable URL, never a compose-network hostname
+# like `http://api:8000/api/v1`, because a browser cannot resolve that name. The
+# server-to-server value (`src/lib/server/auth-context.ts`) is a *separate*, non-public
+# `API_URL` env var, read live at request time in the runner stage below — it takes no
+# ARG and is not baked, on purpose, because Next.js only inlines a `NEXT_PUBLIC_`-prefixed
+# name. See ADR-056 for the value each deployment shape needs and what a plain baked value
+# would have gotten wrong.
 #
 # THIS MAKES THE IMAGE ENVIRONMENT-SPECIFIC. An image built with staging's Supabase
 # project has staging's URL and anon key permanently baked into its JS bundle — it
@@ -56,8 +66,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # that name has no `NEXT_PUBLIC_` prefix, is never read by web/, and stays backend-only.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 RUN pnpm build
 
@@ -78,5 +90,11 @@ USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+# ADR-056 / S-076: `API_URL` (no `NEXT_PUBLIC_` prefix) is the server-to-server backend
+# origin — read live by `src/lib/server/auth-context.ts` via `process.env.API_URL`, never
+# baked into this image. Set it per environment through `docker run -e` or compose's
+# `environment:`; unset, the server falls back to whatever `NEXT_PUBLIC_API_URL` got
+# baked with, which is also correct on a deployment shape with one shared public origin.
 
 CMD ["node", "server.js"]
