@@ -477,8 +477,11 @@ none blocked.** All four figures moved:
 narrowly, and the two findings are the same shape.** S-059 found that ADR-049 says `L11` was "never
 committed"; re-run over the whole tree rather than over `backend/`, `git log -S"L11"` returns
 `bae1ee4` (2026-07-04), which added a review document defining the label, deleted by `733decc` eight
-days later. S-017 found that ADR-044's Measurement 3 searched `backend/app web/src mobile/lib` while
-its prose reads "no reader in the backend", and one reader sat in `backend/tests`. Both were verified
+days later. S-017 found that ADR-044's **Measurement 1** searched `backend/app web/src mobile/lib` while
+its prose reads "no reader in the backend", and one reader sat in `backend/tests`. **This sentence
+said "Measurement 3" until 2026-08-22**, when S-018's agent read the ADR and found the amendment
+under Measurement 1; the amendment itself was correctly placed and only this description of it was
+wrong. Both were verified
 by the coordinator and both ADRs now carry a dated amendment. **The scope of a search is part of the
 claim it supports** — the general form of "a name search is a claim about names", which ADR-044's own
 Measurement 2 already states one paragraph below the table that got it wrong.
@@ -505,6 +508,61 @@ sizing and ordering for the brand row that ADR-046's per-line table does not spe
 already written that invention into `.claude/rules/tailwind.md`. It caught this on re-reading the
 table literally, reverted the code, and fixed both doc passages. **The value is in reporting it**:
 an agent that quietly fixes its own deviation teaches the next one nothing.
+
+**Re-taken again 2026-08-22, after a thirteenth parallel batch of four: 65 seeds, 59 done, 6 open,
+and none blocked.** Three of the four moved:
+
+- **Done, 55 to 59.** S-018, S-028, S-060, and S-063.
+- **Open, 8 to 6.** The four left for `done`, minus four; the coordinator opened S-064 and S-065,
+  plus two.
+- **Blocked** stayed 0.
+- **Seeds, 63 to 65.**
+
+**Two seeds were dispatched to depend on each other on purpose, and the composition was the test.**
+S-018 added migration `038` and owned `docs/ops/migrations.md`; S-063 built a gate over that file and
+was fenced out of editing it. S-063 was told to derive the chain from Alembic at run time and never
+to hardcode a head, because a revision it had never seen would land in the same tree. **On the
+combined tree the gate passed** — and the coordinator then removed `038` from the document and
+watched it fail naming `038_drop_privacy_level`. That is the drift that shipped unnoticed in batch 9,
+now caught by a check that knew nothing about the migration.
+
+**Three agents each found that a document they were told to trust was wrong, and each found it by
+reading rather than by being asked.**
+
+- **S-060 corrected this file.** S-060's own text said "nothing asserts the generated schema". False:
+  `test_openapi_typed_responses.py` asserts it for 29 routes. The true statement is narrower and
+  better — its docstring says it pins "representative routes", it **samples**, and neither `restore`
+  nor its `DELETE` sibling was in the sample. **A sampling guard cannot see drift on a route it does
+  not name.** It also recommended **against** building the obvious general guard, because the naive
+  rule flags 6 of 20 routes and all 6 are correct: "a guard with a 30 percent false-positive rate
+  gets suppressed, and a suppressed guard is worse than none."
+- **S-018 found the seed's "only place" claim false.** The value domain was in `data-model.md`
+  twice, the column table **and** the ER diagram at `:212`. Trusting "only" would have left the
+  domain alive in the diagram after the column died. ADR-044's Measurement 4 now carries a dated
+  amendment, and `docs/decisions/README.md`'s ADR-044 row no longer points at a line that holds
+  nothing.
+- **S-028 found the count in its own title stale**: 99 files, not 112.
+
+**S-018 caught a worthless measurement of its own, mid-measurement.** Its first catalogue comparison
+piped through `cat -A`, which BSD `cat` rejects; both files came out empty and `diff` called them
+identical. **Two empty files matching.** It threw the reading away and redid it with `od -c` and
+`cmp`. That is the rule catching its own author.
+
+**A CI gate landed with a trap inside it, and the coordinator closed it in the same batch.** S-028
+added `pnpm format:check` to CI. There was **no `web/.prettierignore` at all**, so the sweep also
+reformatted `pnpm-lock.yaml`. Measured on the integration tree: `pnpm install --lockfile-only`
+rewrites that file back to pnpm's style, reversing the prettier diff exactly, after which
+`format:check` exits 1. **The next `pnpm add` on any branch would have failed CI.** S-028 flagged
+the reformat and confirmed `--frozen-lockfile` still read it — true, and not the whole risk. Fixed at
+`38f0b25` with two controls: prettier still fails on planted drift in `web/src`, and after pnpm
+regenerates the lockfile `format:check` is clean.
+
+**Two documents finished emptying and became seeds.** `infra/supabase/migrations/001_initial_schema.sql`
+still declares both dropped columns and **no check reads that directory at all** — S-063's new gate
+compares the doc to Alembic, and `test_schema_baseline.py` compares the ORM to Alembic. That is
+**S-064**. And ADR-044 § 5's hand-off is now fully due: `clan_settings` is an empty table with five
+unread columns and an RLS policy guarding a reader that does not exist, while `rbac.md:113-115`
+still promises a screen no endpoint backs. That is **S-065**, which carries ADR number 054.
 
 The figures were taken by reading the board's own `Status` cell, with:
 
@@ -699,6 +757,10 @@ graph LR
   S061 --> S038[S-038 the 393 palette utilities]
   S032 --> S033[S-033 delete legacy persons] --> S062[S-062 orphaned message keys]
   S063[S-063 migrations-doc drift gate]
+  S017 --> S064[S-064 retire infra/supabase/migrations]
+  S018 --> S064
+  S018 --> S065[S-065 decide what clan_settings is for]
+  S017 --> S065
   S055 --> S056[S-056 by-id edge visibility]
   S028[S-028 prettier sweep]
   S034[S-034 wordmark at 200% scale]
@@ -729,7 +791,7 @@ graph LR
 | S-015 | Gate: fail when a clan-owned table carries no policy | done | S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | done | none |
 | S-017 | Drop `allow_public_tree` by reversible migration, per ADR-044 § 1 | done | S-016, done |
-| S-018 | Drop `privacy_level` by reversible migration, per ADR-044 § 2 | open | S-016, done |
+| S-018 | Drop `privacy_level` by reversible migration, per ADR-044 § 2 | done | S-016, done |
 | S-019 | Make a clan invitation's reported status agree with its `expires_at` | done | none |
 | S-020 | Re-measure the four dormant database-review items against the code | done | none |
 | S-021 | Run the restore drill against a real dump, and date the result | done | none |
@@ -739,7 +801,7 @@ graph LR
 | S-025 | Rewrite the auth store around the clan context | done | S-023, done |
 | S-026 | Land the three blocked-state screens | done | S-024, done; S-025, done |
 | S-027 | Delete the legacy auth transport and the `axios` dependency | done | S-025 done, S-026 done |
-| S-028 | Clear the 112-file prettier drift in one sweep | open | none |
+| S-028 | Clear the 112-file prettier drift in one sweep | done | none |
 | S-029 | Land `features/persons` model and api against the frozen contract | done | S-027, done in part |
 | S-030 | Land the persons repository, query keys, and hooks | done | S-029, done |
 | S-031 | Land the persons list and detail screens | done | S-030, done |
@@ -771,10 +833,12 @@ graph LR
 | S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | done | none |
 | S-058 | Make a person read prove, through the API, that a stranger's `phone` comes back `null` | done | none |
 | S-059 | Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for | done | none |
-| S-060 | Make `POST /persons/{id}/restore` advertise the envelope it actually returns | open | none |
+| S-060 | Make `POST /persons/{id}/restore` advertise the envelope it actually returns | done | none |
 | S-061 | Convert the backoffice aside off `bg-gray-950` in one edit, per ADR-046 | done | S-039, done |
 | S-062 | Remove the 44 message keys S-033's deletion orphaned, and the dead `relationship_form` namespace | open | S-033, done |
-| S-063 | Gate: fail when `docs/ops/migrations.md` and the Alembic chain disagree | open | none |
+| S-063 | Gate: fail when `docs/ops/migrations.md` and the Alembic chain disagree | done | none |
+| S-064 | Retire or regenerate `infra/supabase/migrations/`, which is now two columns out of date | open | none |
+| S-065 | Decide what `clan_settings` is for, now that it is an empty table with five unread columns | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -2824,7 +2888,7 @@ S-058.
 
 ## S-060. Make `POST /persons/{id}/restore` advertise the envelope it actually returns
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by S-053, found while reading the persons routes. Verified by the coordinator
 the same day, and it is narrower than first reported.**
@@ -2845,7 +2909,13 @@ sibling and matching what it returns. `docs/contracts/rest-persons-api.md` needs
 seed should confirm that by reading it rather than assuming it.
 
 **Verification.** The backend full quality gate, `CLAUDE.md:76`. **A green gate is not evidence
-here**, because nothing asserts the generated schema. Read the generated OpenAPI document for this
+here**, and the reason is narrower than this seed first said. **Corrected 2026-08-22 by the agent
+that closed it:** `backend/tests/unit/api/test_openapi_typed_responses.py` **does** assert the
+generated schema, for 29 routes, and one of them pins this very `MessageData` ref on a different
+path. It **samples** — its own docstring at `:11-12` says it pins "representative routes across
+every v1 router" — and neither `restore` nor its `DELETE` sibling was in the sample. **A sampling
+guard cannot see drift on a route it does not name**, which is "a set is a setting too" one level
+up. Read the generated OpenAPI document for this
 path and quote the response schema before and after. If nothing in the suite would have caught the
 drift, say so — that absence is the finding, and it may be worth its own guard over every route that
 returns a message envelope.
@@ -2959,7 +3029,7 @@ S-061 added.
 
 ## S-063. Gate: fail when `docs/ops/migrations.md` and the Alembic chain disagree
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by the coordinator, after S-017 found the drift and the coordinator confirmed it
 had shipped.** `docs/ops/migrations.md:119` on `main` at `62a863d` read
@@ -2991,6 +3061,99 @@ restore. A check that has never been seen to catch the exact drift that motivate
 **Out of scope.** `infra/supabase/migrations/`, the hand-written parallel set that
 `docs/ops/migrations.md` already records as drifted with Alembic as the source of truth. Any
 migration's content.
+
+---
+
+## S-064. Retire or regenerate `infra/supabase/migrations/`, which is now two columns out of date
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by the coordinator, from findings S-017 and S-018 each reported and neither
+acted on**, both being outside their seeds.
+
+`infra/supabase/migrations/001_initial_schema.sql` is a hand-maintained mirror of the baseline DDL.
+It still declares **both** columns dropped on 2026-08-22: `allow_public_tree` at `:427` and
+`privacy_level` at `:429`. `docs/ops/migrations.md` already records the set as drifted, with Alembic
+as the source of truth.
+
+**Nothing catches this, and S-063's new gate does not either.** That gate compares
+`docs/ops/migrations.md` to the Alembic chain. `backend/tests/integration/test_schema_baseline.py`
+compares the **ORM** to **Alembic**. No check reads `infra/supabase/migrations/` at all. **If anyone
+bootstraps a database from that file they get a schema Alembic will not recognise**, which is worse
+than having no file.
+
+**This seed contains a decision, and it is a small one, which is why it is a seed rather than an
+`Owed` row.** Either the directory is deleted, or it is regenerated from Alembic and a check keeps
+it honest. **Deleting is the smaller claim** — a parallel set that nothing reads and nothing checks
+is a liability, and Alembic is already the source of truth by written decision. Take that unless
+reading shows a deployment path that consumes the file. **Read `infra/` and the Render and Vercel
+configuration before choosing**, and say what you found either way.
+
+**End state.** Either the directory is gone and every pointer to it is repaired, or it is
+regenerated and a check fails when it and Alembic disagree. `docs/ops/migrations.md` "Known risks"
+is updated to say which, because that is where the drift is currently recorded as accepted.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**If you delete: a green gate proves nothing**, because nothing referenced the file. Say so, and
+instead grep the whole tree plus the CI workflows for the path and quote the result. **If you
+regenerate: plant the drift** — remove a column from the generated file and watch the new check name
+it.
+
+**Sources.** `infra/supabase/migrations/001_initial_schema.sql:427,429`;
+`docs/ops/migrations.md` "Known risks"; `backend/tests/integration/test_schema_baseline.py`;
+`backend/migrations/versions/037_drop_allow_public_tree.py` and `038_drop_privacy_level.py`.
+
+**Out of scope.** The Alembic chain. Any migration's content. Pulumi, which is its own `Owed` row.
+
+---
+
+## S-065. Decide what `clan_settings` is for, now that it is an empty table with five unread columns
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**ADR-044 § 5 hands this to the coordinator by name, and both its preconditions are now met.**
+S-017 and S-018 landed on 2026-08-22, so `clan_settings` today is: **zero rows**, **five unread
+columns**, and an **RLS policy guarding a reader that does not exist**.
+
+Measured 2026-08-22 by S-016 and unchanged since: nothing constructs a `ClanSettings`, no trigger
+creates a row, and the only reference is `Clan.settings` (`backend/app/models/clan.py:35`), which no
+caller consumes.
+
+**Two documents still promise the feature, and that is the sharper half.**
+`docs/architecture/rbac.md:113-115` carries `View clan settings` and `Edit clan settings` rows in the
+permission matrix, and **no endpoint reads or writes the table** — confirmed 2026-08-22 over
+`backend/app/api/` and `backend/app/application/`. That is the design spec's own J22 defect
+verbatim: **a permission matrix is not evidence that an endpoint exists.**
+`docs/contracts/rest-clans-api.md:168` uses the phrase "clan settings" for the `PATCH /clans/me`
+body, which is clan **info** and a different thing, in a way that reads as covering this table.
+
+**This is a decision seed. Choose one and record why the others lost.** Drop the table entirely, and
+say what a future settings feature would build instead. Keep it and build the row creator, which
+ADR-044 § 5 costs out. Or keep it dormant and **write down that it is dormant** where a reader meets
+it, which is the option that costs least and buys least.
+
+**Pre-allocated ADR number: 054.** Confirm it is free in `docs/decisions/README.md` before writing,
+and remember that this tracker wins over that index when they disagree.
+
+**End state.** `docs/decisions/054-*.md` chooses one option. Whichever it is,
+`docs/architecture/rbac.md:113-115` stops promising a screen no endpoint backs, and
+`docs/contracts/rest-clans-api.md:168` stops being ambiguous about which "settings" it means. **Both
+corrections land in the same change as the decision**, because a decision that leaves the misleading
+documents standing has not been made.
+
+**Verification.** If the decision is drop, the backend full quality gate plus `upgrade` and
+`downgrade`, with the downgrade proved against a database that never carried the revision — the
+pattern S-018 established. If the decision is documentation only, say **"no gate"** plainly.
+**Delete the two `Not verified` rows about `clan_settings` in the same change**, because a register
+row never lives in two places.
+
+**Sources.** `docs/decisions/044-privacy-toggles-dropped-from-v1.md` § 5;
+`backend/app/models/clan_settings.py`; `backend/app/models/clan.py:35`;
+`backend/migrations/versions/035_rls_clan_settings.py` for the policy;
+`docs/architecture/rbac.md:113-115`; `docs/contracts/rest-clans-api.md:168`.
+
+**Out of scope.** `allow_public_tree` and `privacy_level`, both already dropped. Building a privacy
+feature, which ADR-044 § 2 fixes the terms for if it ever returns.
 
 ---
 
@@ -4610,7 +4773,30 @@ row below. Building any privacy feature.
 
 ## S-018. Drop `privacy_level` by reversible migration, per ADR-044 § 2
 
-**Status:** open · **Blocked by:** S-016, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-016, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Closed 2026-08-22 by migration `038_drop_privacy_level`. This seed's own central claim was
+false.** It says `data-model.md:836` is the **only** place the value domain is written down. It was
+not: the ER diagram at `data-model.md:212` carried
+`varchar privacy_level "private | clan_members | public"` as well, and the table row had already
+moved to `:842` after S-017's note. Both are removed. **Had "only" been trusted, the domain would
+have survived in the diagram** — the exact failure this seed exists to prevent. ADR-044's
+Measurement 4 carries the same defect and now carries a dated amendment.
+
+**No reader exists anywhere**, checked with `git grep` over the whole tracked tree rather than the
+three roots ADR-044 used: **zero hits under `backend/tests`**, so unlike `allow_public_tree` this
+column was never even an arbitrary test payload.
+
+**The downgrade was proved against a database that never carried `038`**, `cmp` exit 0 on all nine
+catalogue fields, and then exercised rather than assumed: an insert omitting the column takes
+`clan_members`, an explicit NULL is rejected, and `'wide-open'` is **accepted** — which confirms at
+source that the documented domain was never defended. **One thing `ADD COLUMN` cannot restore is
+ordinal position**, `attnum` 8 becoming 12; S-017 has the same property and did not record it.
+
+**The agent caught a worthless reading of its own and threw it away.** Its first comparison piped
+through `cat -A`, which BSD `cat` rejects, so both files came out empty and `diff` reported them
+identical. Two empty files matching. It redid the comparison with `od -c` and `cmp`. That is § "A
+test pins an outcome, not a setting" catching itself mid-measurement.
 
 **ADR-044 § 2 decided this column drops from v1 and may return on four named terms.** Read the ADR.
 **Dropping it is not deciding against the concept** — it is refusing to ship a control that restricts
@@ -5299,7 +5485,27 @@ leaves with its own slice.
 
 ## S-028. Clear the 112-file prettier drift in one sweep
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Closed 2026-08-22. The count in this seed's title is wrong and is kept, because a seed title is
+the record of what was believed.** `pnpm format:check` named **99** files, not 112. Three batches
+had added and deleted `web/` files since 112 was measured, and nobody re-ran the count.
+
+**It landed as two commits on purpose.** `web/CLAUDE.md` was itself one of the 99 drifted files, so
+its mechanical reflow and its prose edit had to be separated: commit one is what `pnpm format`
+produced and nothing else, commit two is the prose. Composed the other way, no reviewer could tell
+the tool's work from the author's. Idempotency was proved by re-running `pnpm format` after
+committing and getting `git diff --exit-code` clean.
+
+**The sweep exposed a trap the seed did not anticipate, and the coordinator closed it in the same
+batch.** There was **no `web/.prettierignore` at all**, so the sweep also reformatted
+`pnpm-lock.yaml`: 4244 insertions, 1493 deletions. `pnpm format:check` is now a CI gate, and
+measured on the integration tree 2026-08-22, `pnpm install --lockfile-only` rewrites that file back
+to pnpm's own style — reversing the prettier diff exactly — after which `format:check` exits 1.
+**So the next `pnpm add` on any branch would have failed CI.** The lockfile is reverted and a
+`.prettierignore` now covers it, build output, and generated code. Two controls: a planted
+`const   PLANTED="drift"` in `web/src/lib/utils/cn.ts` still fails `format:check` by name, and after
+pnpm regenerates the lockfile `format:check` is clean.
 
 **112 files carry pre-existing prettier drift, and the cost is that nobody may run the formatter.**
 `web/CLAUDE.md` says do not run `pnpm format`, and `.claude/rules/tailwind.md` § 9 repeats it,

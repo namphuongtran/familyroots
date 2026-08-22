@@ -165,6 +165,24 @@ The domain is decided. What is missing is every mechanism that would make it mea
 
 So the domain is not undecided. It is **documented, unenforced, and one third meaningless.**
 
+> **Amended 2026-08-22 by seed S-018, which dropped `privacy_level` and had to find every copy of
+> the domain before it could.** This measurement points at
+> `docs/architecture/data-model.md:836` as the home of the domain. **Two things were wrong with
+> that pointer, and the second is the one that mattered.**
+>
+> The line number had already moved to `:842`, because S-017 inserted a note above it earlier the
+> same day. **And the domain was written in two places in that file, not one**: the column table,
+> and the ER diagram at `:212`, which read
+> `varchar privacy_level "private | clan_members | public"`. Both are now removed with the column.
+> **Had the single-source claim been trusted, the domain would have outlived the column in the
+> diagram** — which is exactly the failure S-018 was written to prevent.
+>
+> The finding in § 2 is unchanged. S-018 confirmed the "unenforced" half by writing `'wide-open'`
+> into the restored column, which Postgres accepted without complaint.
+>
+> **A single-source claim is a claim about where you looked** — the same shape as this ADR's own
+> amendment under Measurement 1 about search roots.
+
 ### Measurement 5 — what "create the row" costs, measured rather than predicted
 
 Migration `035_rls_clan_settings` gave the table the migration-027 predicate on both halves. The
