@@ -178,6 +178,17 @@ docker-compose `api` service runs `python -m alembic upgrade head` before
 starting uvicorn.
 
 ## Known risks
-- A parallel hand-written SQL set exists under `infra/supabase/migrations/`; the
-  Alembic chain is the source of truth for the deployed schema — keep new DB objects
-  in Alembic, not only in the Supabase SQL files (historically they drifted).
+- The Alembic chain is the **only** source of truth for the deployed schema. There is no second
+  copy. `infra/supabase/migrations/`, a hand-written mirror that nothing executed and no check
+  read, was **deleted by seed S-064 on 2026-08-22** after measurement showed it 27 columns short of
+  head, 8 columns ahead of it, one table over, and carrying tree functions with **no clan predicate
+  at all** — a database bootstrapped from it walked the tree across clans. It also would not apply
+  to a plain Postgres (`auth.uid()`). `infra/README.md` records the measurement.
+  `backend/tests/unit/test_no_parallel_table_ddl_under_infra.py` fails if any `.sql` file under
+  `infra/` declares `CREATE TABLE` again; it asserts the property, not the path, so a differently
+  named file is caught too.
+- `infra/supabase/rls_policies.sql` survives and is **not** covered by that guard, because it
+  creates no table. It is unreviewed and is **not** what the database runs: the deployed policies
+  come from migrations `002` and `027`-`036`. Applied to a fresh `alembic upgrade head` on
+  2026-08-22 it stopped at its first statement with `ERROR: schema "auth" does not exist`. It is
+  seed **S-067**.

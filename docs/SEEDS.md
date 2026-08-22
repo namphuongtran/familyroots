@@ -564,6 +564,66 @@ compares the doc to Alembic, and `test_schema_baseline.py` compares the ORM to A
 unread columns and an RLS policy guarding a reader that does not exist, while `rbac.md:113-115`
 still promises a screen no endpoint backs. That is **S-065**, which carries ADR number 054.
 
+**Re-taken again 2026-08-22, after a fourteenth parallel batch of four: 68 seeds, 64 done, 4 open,
+and none blocked.** All four figures moved:
+
+- **Done, 59 to 64.** S-035, S-038, S-062, S-064, and S-065. **Five, because S-038 closed S-035 too**
+  — S-038's own text authorises that, calling S-035 "a subset of this seed", and it is the one
+  sanctioned exception to one-pull-request-per-seed here.
+- **Open, 6 to 4.** Five left for `done`, minus five; the coordinator opened S-066, S-067, and S-068,
+  plus three.
+- **Blocked** stayed 0.
+- **Seeds, 65 to 68.**
+
+**The coordinator's own measurement was wrong, and the agent that inherited it caught it.** S-062's
+seed said 44 message keys were orphaned. **The true count is 34.** The coordinator's scan checked
+literal `t('...')` calls against surviving `useTranslations` callers and missed two reach paths that
+both exist here: `getTranslations`, next-intl's **server-component** form, which made
+`PersonProfile.tsx:60` invisible while it read four of those keys literally; and a computed
+`t(labelKey)` over a tuple in `PersonForm.tsx`. **Ten of the forty-four were live.** The seed's own
+"Read this before deleting" paragraph warns about exactly this, and the person who wrote the warning
+committed the error. **An absence claim built on one call form is a claim about that call form.**
+
+**The S-063 gate fired on a real migration, unplanted.** The batch before, the coordinator had to
+plant the drift to prove the gate worked. This time S-065 added migration `039` and the gate stopped
+it, naming `039_drop_clan_settings` on both the chain and the head. A check written a day earlier, by
+an agent fenced out of the document, caught a different agent forgetting.
+
+**S-064's seed understated its subject by an order of magnitude, and the agent measured rather than
+trusting.** The coordinator wrote that seed from two other agents' side findings, and **nobody had
+read the directory**. Applied to a real Postgres, the hand-written set was **27 columns short of
+head** (no `HistoricalDate`, no optimistic-lock `version`), **8 columns ahead**, one table over, and
+would not apply at all (`auth.uid()`). Two of its extra columns are the pre-rename names
+`test_schema_baseline.py:51-60` asserts must **not** exist. **And its tree functions carried no clan
+predicate**: `002_tree_functions.sql` has zero `created_by_clan_id`, `003_path_finder.sql` names
+`p_clan_id` once as a parameter and never uses it. A database bootstrapped from it walked the tree
+across clans. Verified independently by the coordinator.
+
+**A checker that could never run was found and fixed.** `infra-ci.yml` filters on `infra/pulumi/**`
+and `backend-ci.yml` on `backend/**`, so **a pull request touching only `infra/supabase/` ran no gate
+at all** — including S-064's new guard and S-063's. S-064 widened the backend job to `infra/**` and
+`docs/ops/migrations.md`. That guard also asserts the **property, not the path**: no `.sql` under
+`infra/` may declare `CREATE TABLE`, proved by a second control that plants a **differently named**
+file.
+
+**S-065 caught a backwards claim of its own before shipping it.** Its first draft said a downgrade
+that forgot the RLS policy would leave `test_rls_activation.py` red. Reading the guard at source
+showed the opposite: it asserts the catalogue's RLS set **equals** the union of the posture sets, so
+a **correct** downgrade makes it red and a policy-less one passes. Corrected in the ADR and the
+migration docstring.
+
+**One measurement error travelled through three documents before anyone read it at source.** ADR-044
+said all seven `clan_settings` columns were unread; the coordinator repeated it in S-065's text; both
+were true of `backend/app` and false of the tree, because `default_language` is read by
+`test_rls_phase10_clan_settings.py:198,205` — put there by S-017 the day before. **The coordinator
+wrote the "scope of a search is part of the claim" amendment into ADR-044 one day earlier and then
+made the same error in the next seed.**
+
+**S-038 stopped at 41 uses rather than inventing values**, which its out-of-scope line requires, and
+named every one with its file and line. It also found that `globals.css`'s own comment already names
+giỗ as `heritage`'s intended use, and made `EventCard` the first surface to paint it. **A token may
+already exist for a use you think is uncovered.** The 41 became **S-068**, which carries ADR 055.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -757,6 +817,12 @@ graph LR
   S061 --> S038[S-038 the 393 palette utilities]
   S032 --> S033[S-033 delete legacy persons] --> S062[S-062 orphaned message keys]
   S063[S-063 migrations-doc drift gate]
+  S033 --> S062
+  S062 --> S066[S-066 zh/fr locale parity]
+  S064 --> S067[S-067 rls_policies.sql]
+  S061 --> S038
+  S038 --> S068[S-068 decide the tokenless families, ADR-055]
+  S003 --> S035
   S017 --> S064[S-064 retire infra/supabase/migrations]
   S018 --> S064
   S018 --> S065[S-065 decide what clan_settings is for]
@@ -808,10 +874,10 @@ graph LR
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | done | S-031, done |
 | S-033 | Delete the legacy persons code | done | S-032, done |
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
-| S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
+| S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | done | S-003, done |
 | S-036 | Give the calendar's event marker a channel other than gold | open | none |
 | S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | done | none |
-| S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | open | S-061, done |
+| S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | done | S-061, done |
 | S-039 | Decide what the backoffice aside is made of, in ADR-046 | done | S-006, done |
 | S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | done | none |
 | S-041 | Make the web e2e gate supply its own environment | done | none |
@@ -835,10 +901,13 @@ graph LR
 | S-059 | Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for | done | none |
 | S-060 | Make `POST /persons/{id}/restore` advertise the envelope it actually returns | done | none |
 | S-061 | Convert the backoffice aside off `bg-gray-950` in one edit, per ADR-046 | done | S-039, done |
-| S-062 | Remove the 44 message keys S-033's deletion orphaned, and the dead `relationship_form` namespace | open | S-033, done |
+| S-062 | Remove the 44 message keys S-033's deletion orphaned, and the dead `relationship_form` namespace | done | S-033, done |
 | S-063 | Gate: fail when `docs/ops/migrations.md` and the Alembic chain disagree | done | none |
-| S-064 | Retire or regenerate `infra/supabase/migrations/`, which is now two columns out of date | open | none |
-| S-065 | Decide what `clan_settings` is for, now that it is an empty table with five unread columns | open | none |
+| S-064 | Retire or regenerate `infra/supabase/migrations/`, which is now two columns out of date | done | none |
+| S-065 | Decide what `clan_settings` is for, now that it is an empty table with five unread columns | done | none |
+| S-066 | Bring `zh.json` and `fr.json` up to the 61 keys `vi` and `en` already carry | open | S-062, done |
+| S-067 | Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model | open | S-064, done |
+| S-068 | Decide what the eight tokenless colour families mean, in ADR-055 | open | S-038, done |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -1800,7 +1869,7 @@ looks.
 
 ## S-035. Draw form boundaries with `border-input` rather than `border-gray-300`
 
-**Status:** open · **Blocked by:** S-003, done 2026-08-13 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-003, done 2026-08-13 · **Unblocks:** nothing yet
 
 **S-003 gave `input` a value that clears 3:1 and no control asks for it.** Counted 2026-08-13 across
 `web/src`, excluding `globals.css`: `border-input` appears in zero files. Every form draws its own
@@ -2986,7 +3055,7 @@ partial conversion this seed forbids, and seeing it fail is what proves the whol
 
 ## S-062. Remove the 44 message keys S-033's deletion orphaned, and the dead `relationship_form` namespace
 
-**Status:** open · **Blocked by:** S-033, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-033, done 2026-08-22 · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by the coordinator, after S-033 said honestly that it had not confirmed this.**
 S-033's fence gave `web/messages/*.json` to S-061 for that batch, so it reported "unconfirmed, not
@@ -2999,6 +3068,18 @@ the surviving `web/src`:
 
 - **44 keys are now referenced nowhere**, across four namespaces: `member` (12), `member_form` (17),
   `members` (3), and `relationship_form` (12).
+
+  > **This count is wrong by ten, and the correction is this seed's most useful output.** Measured
+  > 2026-08-22 by the agent that closed it: **the true orphan count is 34.** The coordinator's scan
+  > checked literal `t('...')` calls against surviving `useTranslations('<ns>')` callers, and missed
+  > two other reach paths that both exist in this tree. `getTranslations` is next-intl's
+  > **server-component** form, so `web/src/features/persons/ui/PersonProfile.tsx:60` was invisible to
+  > the scan while reading `deceased`, `birth_place`, `death_place`, and `notes` literally. And
+  > `PersonForm.tsx` builds `t(labelKey)` over a tuple, reaching `birth_place` and `death_place`
+  > under `member_form`. **Ten of the forty-four were live**, and deleting them would have broken the
+  > UI with no test able to notice. This is the same defect the paragraph directly below warns
+  > about, committed by the person who wrote the warning: **an absence claim built on one call form
+  > is a claim about that call form.**
 - **`relationship_form` is a dead namespace, not a set of dead keys.** It holds 16 keys in
   `web/messages/vi.json` and **zero** surviving files call `useTranslations('relationship_form')`.
   The other three namespaces keep live callers — 5, 4, and 2 files — so only individual keys are
@@ -3066,7 +3147,7 @@ migration's content.
 
 ## S-064. Retire or regenerate `infra/supabase/migrations/`, which is now two columns out of date
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by the coordinator, from findings S-017 and S-018 each reported and neither
 acted on**, both being outside their seeds.
@@ -3109,7 +3190,7 @@ it.
 
 ## S-065. Decide what `clan_settings` is for, now that it is an empty table with five unread columns
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **ADR-044 § 5 hands this to the coordinator by name, and both its preconditions are now met.**
 S-017 and S-018 landed on 2026-08-22, so `clan_settings` today is: **zero rows**, **five unread
@@ -3157,9 +3238,158 @@ feature, which ADR-044 § 2 fixes the terms for if it ever returns.
 
 ---
 
+## S-066. Bring `zh.json` and `fr.json` up to the 61 keys `vi` and `en` already carry
+
+**Status:** open · **Blocked by:** S-062, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Found 2026-08-22 by S-062 while building a control it needed for something else, and confirmed by
+the coordinator the same day.** Counted from the four files directly:
+
+| Locale | Keys |
+|---|---|
+| `vi` | 420 |
+| `en` | 420 |
+| `zh` | **359** |
+| `fr` | **359** |
+
+`zh` and `fr` are each missing **the same 61 keys**, across five namespaces: `auth`, `common`,
+`document`, `event`, and `relationship`.
+
+**This is why S-062's parity test is scoped to three namespaces rather than the whole file**, and
+that scoping is recorded in the test's own comment. A whole-file assertion fails immediately on this
+drift. **Do not widen that test until this seed lands, and do not narrow it further to make anything
+pass** — S-062 chose the honest scope and said so.
+
+**What next-intl does with a missing key is the thing to establish first**, because it decides
+whether this is a defect or an untranslated string. Find out and write it down: does it fall back to
+the default locale, render the key, or throw? The answer changes what "done" means here.
+
+**End state.** All four locale files carry the same key set, and S-062's parity test is widened from
+three namespaces to the whole file **in the same change**, so the drift cannot return. The Vietnamese
+and English values are the source; `zh` and `fr` receive translations, not copies of the English.
+
+**Verification.** The **full** web gate in `web/CLAUDE.md`. **The control already exists** — widen
+`web/messages/message-key-parity.test.ts` to the whole file and watch it fail before you add the
+keys, then pass after. Quote both readings. That is stronger than a planted control, because the
+failure is real.
+
+**Sources.** `web/messages/{vi,en,zh,fr}.json`; `web/messages/message-key-parity.test.ts` and its
+scoping comment, added by S-062 on 2026-08-22.
+
+**Out of scope.** Adding a locale. The 34 keys S-062 removed. Translation quality review, which is
+not something this repository can check.
+
+---
+
+## S-067. Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model
+
+**Status:** open · **Blocked by:** S-064, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by the coordinator, from a finding S-064 reported and was fenced out of acting
+on** — it names a file outside the directory S-064 owned.
+
+**S-064 deleted `infra/supabase/migrations/` and this file survived, because S-064's new guard
+asserts that no `.sql` under `infra/` declares `CREATE TABLE`, and this one declares none.** It is a
+hand-written RLS policy set. **Nothing executes it and no check reads it**, and it sits on the one
+boundary this product cannot get wrong.
+
+**It contradicts the clan model at its root.** Read 2026-08-22: it defines its own
+`auth.user_clan_id()` at `:11-16`, returning **the first approved clan** via `LIMIT 1`. This product
+does not have "the user's clan": a user may belong to several, and the active one arrives per request
+as `X-Current-Clan-Id` and is injected as `app.clan_id` by the RLS seam (ADR-008, ADR-047). **A
+policy keyed on `LIMIT 1` would silently pick the wrong clan for any multi-clan user.**
+
+**It is also not what the database runs**, and cannot be: applied to a fresh `alembic upgrade head`
+on 2026-08-22 it stopped at its first statement with `ERROR: schema "auth" does not exist`. The
+deployed policies come from migrations `002` and `027` through `036`.
+
+**Deleting is the smaller claim, for the same reason it was in S-064**: a policy set that nothing
+runs, nothing checks, and that disagrees with the shipped model is a liability rather than a
+reference. **Take it unless reading shows a Supabase-hosted path that applies it** — and say what
+you searched, because S-064's deletion rested on its search and not on its gate.
+
+**End state.** Either the file is gone and every pointer to it is repaired (`infra/README.md` and
+`docs/guides/iac-guide.md` both list it), or it is rewritten to match ADR-008 and ADR-047 and
+something applies it. **If it is rewritten, say what runs it**; a second unexecuted copy is the
+defect S-064 just removed.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**If you delete, a green gate proves nothing** and you must say so — give the search instead.
+**Consider whether S-064's guard should widen** to catch a `.sql` file under `infra/` that declares
+a policy, not only a table. If you widen it, plant a policy file and watch it fail.
+
+**Sources.** `infra/supabase/rls_policies.sql:11-16,20-25,29-33`;
+`backend/tests/unit/test_no_parallel_table_ddl_under_infra.py`;
+`docs/decisions/008-rls-defense-in-depth.md`; `docs/decisions/047-rls-seam-sets-clan-id-only.md`;
+`infra/README.md`; `docs/guides/iac-guide.md`.
+
+**Out of scope.** `infra/supabase/seed.sql`. Any Alembic policy. Pulumi.
+
+---
+
+## S-068. Decide what the eight tokenless colour families mean, in ADR-055
+
+**Status:** open · **Blocked by:** S-038, done 2026-08-22 · **Unblocks:** nothing yet
+
+**S-038 swept 289 palette utilities onto semantic tokens and stopped at 41 it could not move,
+because no token exists for them.** It did not invent values, which its own out-of-scope line
+forbids, and it named every one. That list is this seed.
+
+**41 occurrences across 10 files, measured 2026-08-22**, in blue, green, purple, rose, pink, and
+orange:
+
+- **Gender coding**, twice: `components/family-tree/MemberNode.tsx:25,27` (border) and
+  `components/members/MemberAvatar.tsx:22-23` (fill).
+- **Role and status**: `components/admin/RoleSelector.tsx:22` (editor); `admin/PendingUsersList.tsx:72`
+  (approve).
+- **Event kinds**: `components/events/EventCard.tsx:16-17` (birthday, wedding anniversary).
+- **Platform chrome**: `app/[locale]/platform/layout.tsx:16` (super-admin banner).
+- **Stat cards**: `platform/metrics/page.tsx:11-19`, `platform/clans/page.tsx:30`,
+  `(dashboard)/dashboard/page.tsx:9-21`, `backoffice/dashboard/page.tsx:85,138`.
+
+**And three raw hex literals that are not Tailwind classes at all.**
+`components/family-tree/TreeCanvas.tsx` passes `#93c5fd`, `#f9a8d4`, and `#d1d5db` to
+`@xyflow/react` as a `nodeColor` prop. S-038's scope was grep-defined over utility classes, so these
+were outside it. **They carry the same defect: a hex cannot flip with the colour scheme.**
+
+**This is a decision seed and not a sweep, which is why it is separate.** Each group asks a different
+question. Gender coding asks whether this product encodes gender in colour at all — spec § 5 `T-06`
+forbids colour as the only channel, and two surfaces currently lean on it. Stat cards ask whether an
+arbitrary six-colour rotation is information or decoration. **Answer each group before naming a
+token**, because a token invented to cover a use nobody defended is how a palette rots.
+
+**ADR number 055**, allocated here. Confirm it is free before writing, and remember this tracker wins
+over `docs/decisions/README.md` when they disagree.
+
+**One precedent from S-038 worth following.** It found that `globals.css`'s own comment names giỗ
+(death anniversary) as `heritage`'s intended use, and made `EventCard` the first surface to paint it.
+**A token may already exist for a use you think is uncovered — read the comments in `globals.css`
+before concluding anything is missing.**
+
+**End state.** `docs/decisions/055-*.md` decides, per group, whether the use gets a token, loses its
+colour, or gains a second channel. Any token it adds is in `@theme`, **referenced by a generated
+class** (or it will not exist in the built CSS, which is the S-001 defect), and swept into
+`contrast.test.ts` with AA in both schemes.
+
+**Verification.** If the ADR adds tokens and moves code: the **full** web gate, plus S-007's token
+gate, plus `contrast.test.ts` showing every new pair at AA in both schemes, plus an
+`e2e/dark-theme.spec.ts` case per converted surface **watched failing against a planted palette
+class** — the control S-038 established. If the decision is documentation only, say **"no gate"**
+plainly.
+
+**Sources.** The ten files and line numbers above, all read 2026-08-22 by S-038;
+`web/src/components/family-tree/TreeCanvas.tsx` for the three hexes; `web/src/app/globals.css` for
+the token set and its comments; spec § 2.1, § 2.2, and § 5 `T-06`;
+`docs/decisions/045-dark-mode-prefers-color-scheme-only.md`.
+
+**Out of scope.** The 289 uses S-038 already moved. Renaming `accent`, which ADR-045 leaves open.
+Any screen's layout.
+
+---
+
 ## S-038. Move the 393 hardcoded palette utilities onto the semantic tokens
 
-**Status:** open · **Blocked by:** S-061, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-061, done 2026-08-22 · **Unblocks:** nothing yet
 
 **This seed became blocked on 2026-08-22, by a measurement S-039 took.** One of the 393 utilities is
 `bg-gray-50` at `web/src/app/[locale]/backoffice/layout.tsx:32`, and it is the surface the backoffice
@@ -5945,17 +6175,22 @@ been read or run, and the row that replaces it says where.
   is on record**. The screens are covered by component tests and the e2e text-scale suite covers only
   `/vi/login` and `/vi/register`, so `T-04` is unestablished for these three. Recorded 2026-08-22 by
   the coordinator rather than assumed from a green gate. **Owner:** web-engineer.
-- **`clan_settings` is a dead table, not a table with two dormant columns.** Measured 2026-08-22 by
-  S-016: **all seven data columns have zero readers**, nothing constructs a `ClanSettings`, and the
-  only reference is `Clan.settings` (`backend/app/models/clan.py:35`), which no caller consumes.
-  After S-017 and S-018 it has zero rows, five unread columns, and an RLS policy guarding a reader
-  that does not exist. **Owner:** backend-engineer.
-- **`docs/architecture/rbac.md:113-115` promises a screen that cannot exist.** The permission matrix
-  carries "View clan settings" and "Edit clan settings" rows, and **no endpoint reads or writes the
-  table** — confirmed 2026-08-22 over `backend/app/api/` and `backend/app/application/`. This is the
-  design spec's own J22 defect verbatim: **a permission matrix is not evidence that an endpoint
-  exists.** Recorded by S-016, which was fenced out of `docs/architecture/`. **Owner:**
-  backend-engineer.
+- **Two `clan_settings` rows were deleted from this register on 2026-08-22**, when seed S-065 landed
+  ADR-054 and migration `039_drop_clan_settings`. The table is gone and the `rbac.md` rows went with
+  it, so neither claim has a subject any more. **One correction survives them and belongs here**:
+  the "all seven data columns have zero readers" measurement was true of `backend/app` and **false of
+  the tracked tree** — `default_language` was read by
+  `backend/tests/integration/test_rls_phase10_clan_settings.py:198,205` from the moment S-017
+  repointed the RLS payload column at it. Three documents carried the wide claim before anyone read
+  it at source. **The scope of a search is part of the claim it supports.**
+- **`docs/architecture/rbac.md` still carries two permission rows no endpoint backs**, and they are
+  not the clan-settings pair, which S-065 removed. Found 2026-08-22 by S-065 while removing those:
+  **`Export tree as PDF`** — `grep -rni "pdf" backend/app/api/ backend/app/application/` returns
+  nothing, and this is the design spec's *original* J22 instance, recorded at
+  `specs/2026-08-02-design-system-and-screens.md:2404-2409` — and **`Configure notification
+  settings`**, where the only endpoints are `POST`/`DELETE /me/fcm-token` (`auth.py:175,190`), which
+  register a device rather than a preference. **Deliberately left standing** by S-065, which noted
+  them in `rbac.md` itself rather than deciding their fate. **Owner:** backend-engineer.
 - **The three "not verified" boundaries in [`roadmap.md`](roadmap.md).** That file marks which of its
   milestone boundaries rest on no source. Those marks are the claim, and they are not repeated here.
 

@@ -361,6 +361,20 @@ that is not this one:
   using "clan settings" to mean the `PATCH /clans/me` clan-info body rather than this table. It is
   the only mention of settings in the whole contract set, and it reads as covering the table.
 
+> **Amended 2026-08-22 by seed S-065, which closed this hand-off as
+> [ADR-054](054-clan-settings-table-is-dropped.md).** Both named consequences are discharged: the
+> table is dropped whole by migration `039_drop_clan_settings`, and both documents are corrected in
+> that same change.
+>
+> **One claim in this section needs narrowing.** It says Measurement 3 found all seven data columns
+> unread. That is true of `backend/app`, the root Measurement 1 searched, and **false of the tracked
+> tree**: `default_language` was read by
+> `backend/tests/integration/test_rls_phase10_clan_settings.py:198,205` from the moment S-017
+> repointed the RLS payload column at it on 2026-08-22. **This is the same defect as this ADR's own
+> amendment under Measurement 1, one column further along** — and seed S-065 inherited the narrow
+> root from here and restated the wide claim, so it reached a third document before anyone read it
+> at source. It changes nothing about the decision.
+
 ## Consequences
 
 ### What this buys

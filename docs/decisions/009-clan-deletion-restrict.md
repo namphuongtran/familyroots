@@ -26,6 +26,15 @@ never an accidental side effect.
 - **RESTRICT** (11 FKs): `change_requests`, `clan_settings`, `marriages`,
   `user_clan_roles`, `clan_invitations`, `branches`, `clan_memberships`,
   `notification_log`, `parent_child`, `documents`, `events`.
+
+  > **Amended 2026-08-22 by seed S-065, [ADR-054](054-clan-settings-table-is-dropped.md).** The
+  > RESTRICT list is now **ten** foreign keys, not eleven: `clan_settings` was dropped with its
+  > table by migration `039_drop_clan_settings`. **The decision is unchanged and so is every other
+  > row** — a clan-owned table still makes a conscious RESTRICT-versus-SET-NULL choice, and
+  > `tests/integration/test_schema_baseline.py::test_clan_fks_are_restrict` still asserts the clan
+  > foreign keys partition exactly. Only the count moved. With no row ever created, `clan_settings`
+  > blocked nothing in practice, so **no clan deletion behaves differently**. The list is left as
+  > written rather than edited, because this ADR is a dated record of what was decided.
 - **SET NULL** (retained / de-provenanced, *not* destroyed): `persons.created_by_clan_id`
   and `audit_logs.clan_id`. A person outlives its origin clan (its provenance is simply
   cleared); the audit trail is retained for accountability.

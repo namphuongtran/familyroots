@@ -3,7 +3,8 @@
 The tree read path (app/services/tree_builder.py, app/infrastructure/persistence/
 tree_repository.py) and relationship cycle detection (relationship_repository.py,
 relationship_validator.py) call PostgreSQL set-returning functions that were only
-ever defined in the parallel hand-written ``infra/supabase/migrations/{002,003}``
+ever defined in a parallel hand-written SQL set under ``infra/supabase/migrations/``
+    (deleted by seed S-064 on 2026-08-22; see ``infra/README.md``)
 SQL — never in the Alembic chain that ``alembic upgrade head`` actually runs. On a
 freshly-migrated database every tree endpoint and cycle check raised
 ``UndefinedFunction`` (42883). This migration ports those proven definitions
