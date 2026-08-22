@@ -880,7 +880,10 @@ graph LR
   S061 --> S038
   S038 --> S068[S-068 decide the tokenless families, ADR-055]
   S067 --> S069[S-069 guard scripts/ SQL]
-  S070[S-070 an authenticated route in e2e]
+  S071[S-071 web Dockerfile build args] --> S070[S-070 an authenticated route in e2e]
+  S072[S-072 Supabase CLI stack] --> S073[S-073 seed test users in both DBs] --> S070
+  S072 --> S070
+  S070 --> S074[S-074 CI builds the images and runs compose e2e]
   S017 --> S064[S-064 retire infra/supabase/migrations]
   S018 --> S064
   S018 --> S065[S-065 decide what clan_settings is for]
@@ -967,7 +970,11 @@ graph LR
 | S-067 | Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model | done | S-064, done |
 | S-068 | Decide what the eight tokenless colour families mean, in ADR-055 | done | S-038, done |
 | S-069 | Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/` | open | S-067, done |
-| S-070 | Make an authenticated route reachable in the e2e harness | open | none |
+| S-070 | Make an authenticated route reachable in the e2e harness | blocked | S-071, S-072, S-073 |
+| S-071 | Give `web/Dockerfile` the build arguments Next.js inlines at build time | open | none |
+| S-072 | Stand the Supabase CLI stack up beside `pgdb`, mirroring the production split | open | none |
+| S-073 | Seed a test clan, its users and their roles into both databases, reproducibly | open | S-072 |
+| S-074 | Gate: build both images and run the compose e2e suite in CI | blocked | S-070 |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -3512,7 +3519,30 @@ S-067 left alone because three prose citations point at its filename.
 
 ## S-070. Make an authenticated route reachable in the e2e harness
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** blocked · **Blocked by:** S-071, S-072, S-073 · **Unblocks:** S-074
+
+**The decision this seed carried was made by the maintainer on 2026-08-22: the full Supabase
+CLI stack, run in Docker Compose.** The seed offered three options and this is the first. The
+other two lost: signing JWTs in the test would not exercise the login flow at all, and a
+GoTrue-only container would still leave Storage untested. **This seed keeps its end state and
+splits the work into S-071, S-072, and S-073**, each of which is worth landing on its own.
+
+**One thing the coordinator told the maintainer was wrong, and it made the chosen option look
+more expensive than it is.** The question warned that a second Postgres beside `pgdb` would
+create two schema sources to keep in step. Read at source the same day:
+`infra/render/render.yaml:17-20` points `DATABASE_URL` at a **Render-managed Postgres**
+(`databases: familyroots-db`, `postgresMajorVersion: "18"`, `:67-73`), and Supabase supplies
+only `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` (`:50-54`). **Two
+separate databases is the production topology.** Running two locally mirrors it rather than
+diverging from it. Alembic owns the app database; Supabase owns `auth.*`. Neither migrates the
+other.
+
+**Traefik was considered and is not needed today.** Searched 2026-08-22: nothing under
+`web/src/lib/auth/`, `web/src/middleware.ts`, or `web/src/app/api/auth/` sets `secure` or
+`sameSite`, so the cookies take Supabase SSR's defaults and mark `Secure` only over HTTPS.
+Compose service DNS over plain HTTP is enough. **Traefik earns its place only when something
+requires one hostname with TLS** — say so and open a seed if that day arrives, rather than
+adding it now.
 
 **Opened 2026-08-22 by the coordinator. Three seeds have now hit this wall independently**, and the
 third confirmed it for a set of ten files rather than one.
@@ -3562,7 +3592,166 @@ authenticated screen has not been shown to work.
 workaround it used; `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`
 for the first recorded instance.
 
-**Out of scope.** Mobile. Any new screen. Changing what any route requires.
+**Out of scope.** Mobile. Any new screen. Changing what any route requires. The Dockerfiles and the
+Supabase stack, which are S-071 to S-073. CI, which is S-074.
+
+---
+
+## S-071. Give `web/Dockerfile` the build arguments Next.js inlines at build time
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-070
+
+**This is a live defect in the production image, not only a test-harness problem**, which is why it
+is its own seed and lands first.
+
+**Next.js inlines every `NEXT_PUBLIC_*` into the browser bundle during `pnpm build`, not at run
+time.** `web/Dockerfile` contains **zero `ARG` directives**, counted 2026-08-22, and its builder
+stage runs `pnpm build` with only `NEXT_TELEMETRY_DISABLED=1` in scope. `docker-compose.yml:82-84`
+passes `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` through `environment:`, which
+is **run time**.
+
+**So any client component reading one of those gets `undefined`, baked in.**
+`web/src/components/auth/SupabaseSetupNotice.tsx` is `'use client'` and reads both, so a browser
+pointed at the container renders the "Supabase is not configured" banner **whatever compose passes**.
+
+**The server half is fine and must not be changed.** `web/src/middleware.ts:56-57` and
+`web/src/app/api/auth/callback/route.ts` run server-side and read the run-time environment correctly.
+**Do not convert them to build arguments** — that would bake a secret-adjacent value into an image.
+
+**End state.** The web image builds with `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` supplied as build arguments, and `docker-compose.yml` passes them
+under `build.args` as well as keeping the run-time `environment:` entries the server half needs.
+**The image is documented as environment-specific**, because it now is: an image built for staging
+cannot be promoted to production unchanged. Say that where a deployer will meet it.
+
+**Verification.** `docker compose build web` succeeds, then `docker compose up` and **read the page
+in a browser**: the Supabase banner must be **absent**. **Negative control, and it is the whole
+point:** build the image with the build arguments omitted, load the same page, and watch the banner
+return. Quote both readings. A green build proves nothing here — the broken version builds fine
+today.
+
+**Sources.** `web/Dockerfile`, which has no `ARG`; `docker-compose.yml:73-90`;
+`web/src/components/auth/SupabaseSetupNotice.tsx`; `web/src/middleware.ts:56-57`;
+`web/next.config.ts` for `output: 'standalone'`.
+
+**Out of scope.** The backend image. Any other `NEXT_PUBLIC_*` variable that no client component
+reads — check before adding one. Traefik.
+
+---
+
+## S-072. Stand the Supabase CLI stack up beside `pgdb`, mirroring the production split
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-073, S-070
+
+**Read S-070 first for the decision and for the topology**, which was checked at source and is not
+what the coordinator first assumed.
+
+**Production runs two databases on purpose.** `infra/render/render.yaml:17-20` points `DATABASE_URL`
+at a Render-managed Postgres declared at `:67-73`; Supabase supplies only `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` at `:50-54`. **The local stack must keep that
+split**: `pgdb` stays the application database that Alembic migrates, and the Supabase stack owns
+`auth.*` and Storage. **Neither migrates the other, and no Alembic revision may reach into the
+Supabase database.**
+
+**There is no Supabase project in this repository today** — `find . -name config.toml -path
+"*supabase*"` returns nothing, checked 2026-08-22. So this seed creates one.
+
+**End state.** `supabase/config.toml` exists and `supabase start` brings up the stack.
+`docker-compose.yml` reaches it, or documents plainly how the two are run together and why they are
+not one file. The backend's `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`
+resolve to the local stack, and `docs/ops/` records how to start it, how to stop it, and what it
+costs to run.
+
+**Say what the stack actually starts, and what it costs.** Count the containers and record the
+figure with the date. If the CLI's default set includes services this product does not use, **say
+which and whether you disabled them** — `config.toml` can turn several off, and an unused service is
+a thing a later reader will assume is load-bearing.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`, unchanged — this seed must not
+change it. Set your own `TEST_PG_DB_NAME`. Then, and this is the real check: **obtain a real JWT from
+the local stack and have the backend accept it.** The backend validates Supabase JWTs through a JWKS
+flow (`docs/architecture/overview.md:33`), so a token the local stack issues must pass that path.
+Quote the request and the response. **A container that starts is not evidence that a token
+validates.**
+
+**Sources.** `infra/render/render.yaml:17-20,50-54,67-73`; `docker-compose.yml`;
+`backend/app/core/config.py` for the three Supabase settings and how they are read;
+`docs/architecture/auth-flow.md`; `docs/architecture/overview.md:33`.
+
+**Out of scope.** Seeding data, which is S-073. Playwright, which is S-070. CI, which is S-074.
+Deleting `pgdb`. Traefik.
+
+---
+
+## S-073. Seed a test clan, its users and their roles into both databases, reproducibly
+
+**Status:** open · **Blocked by:** S-072 · **Unblocks:** S-070
+
+**A test user exists in two places at once, and that is the whole difficulty.** The identity lives in
+the Supabase stack's `auth.users`. The membership, the role, and the clan live in the application
+database that Alembic migrates. **They are joined by the Supabase `sub` claim**, and if the two halves
+disagree the login succeeds and every clan-scoped request then fails in a way that looks like an
+authorization bug.
+
+**End state.** One command creates, from empty, a clan with at least: an **admin**, an **editor**, a
+**viewer**, and a user who is **a member of a second clan** — the last one because clan isolation
+cannot be tested from inside a single clan, which is the two-sided rule every RLS test here follows.
+Running it twice leaves the same state as running it once. **It fails loudly if either database is
+missing its half**, rather than leaving a user who can log in and do nothing.
+
+**Do not invent a second seeding mechanism if one exists.** `scripts/seed_dev_data.py` is a Prompt-2
+stub, recorded in this file's `Owed` register. Decide whether to finish it or replace it, and say
+which and why.
+
+**Verification.** Run it against a stack brought up from empty, then **log in as each of the four
+users through the real flow** and record what each can reach. **Negative control:** delete the
+membership row for one user while leaving the Supabase identity, and confirm the failure is loud and
+names the missing half rather than presenting as a permissions error. That inversion is the defect
+this seed exists to prevent.
+
+**Sources.** `backend/app/models/` for `clans`, `clan_memberships`, `user_clan_roles`, and
+`user_profiles`; `backend/app/core/security.py:172-181` for `ensure_user_profile` and the race the
+`Not verified` register records against it; `scripts/seed_dev_data.py`;
+`docs/architecture/rbac.md` for what each role may reach.
+
+**Out of scope.** Person, relationship, or event fixtures beyond what a role check needs. Playwright,
+which is S-070. Production data of any kind.
+
+---
+
+## S-074. Gate: build both images and run the compose e2e suite in CI
+
+**Status:** blocked · **Blocked by:** S-070 · **Unblocks:** nothing yet
+
+**Neither image is built by any CI job today.** `grep -rn "docker" .github/workflows/` returns
+nothing, checked 2026-08-22. **`backend/Dockerfile` and `web/Dockerfile` are both production-grade
+and both unverified** — multi-stage, non-root, a `HEALTHCHECK` on the backend, and no evidence that
+either has ever been built by anything but a developer's hand.
+
+**That is the same shape as every other finding this week**: a well-made artefact that nothing
+executes. It is also how the `NEXT_PUBLIC_*` defect in S-071 survived.
+
+**End state.** A CI job builds both images and runs the compose e2e suite against them. It runs on
+the paths that can break it, which is more than `web/**`: `backend/**`, `web/**`, `infra/**`,
+`docker-compose.yml`, `supabase/**`, and the workflow file itself. **Read `.github/workflows/`
+before writing the path filter** — seed S-064 found that a pull request touching only
+`infra/supabase/` ran no gate at all, because `infra-ci.yml` filters on `infra/pulumi/**` and
+`backend-ci.yml` filtered on `backend/**`.
+
+**Say what it costs, with the date.** Record the wall-clock time of the job and the container count.
+A gate nobody will wait for gets disabled, and a disabled gate is worse than none — the reasoning
+S-060 used to argue against a guard with false positives applies here to a slow one.
+
+**Verification.** The job passes on `main`. **Negative control, and it must be planted twice:** break
+something only the container path can see — omit S-071's build argument, so the Supabase banner
+returns — and watch the job fail. Then break something only the authenticated route can see, and
+watch it fail for that reason instead. **Two different failures, named differently.** A job that has
+only ever been green proves nothing.
+
+**Sources.** `.github/workflows/`, all six files; `backend/Dockerfile`; `web/Dockerfile`;
+`docker-compose.yml`; seeds S-070 to S-073.
+
+**Out of scope.** Deploying anything. Mobile CI. Image publishing or a registry.
 
 ---
 
