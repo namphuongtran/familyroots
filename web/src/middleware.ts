@@ -6,11 +6,25 @@ import { CLAN_COOKIE, parseClanCookie } from './shared/http/request-context'
 
 const intlMiddleware = createMiddleware(routing)
 
+/**
+ * `/verify-email` and `/clan-suspended` joined this list with the three blocked-state
+ * screens (S-026). Both are reached by an immediate client-side `router.push`/`.replace`
+ * right after a call made with the session that was already in the browser — `/verify-email`
+ * would be, if the live sign-in path called the backend endpoint that raises
+ * `email_not_verified` (see `components/auth/VerifyEmailScreen.tsx`'s comment for why it does
+ * not yet), and `/clan-suspended` already is, from `select-clan/page.tsx` on a real
+ * `clan_suspended` response. `/pending-approval` is public for the identical reason: a
+ * server-side session check run milliseconds after a client-side sign-in can race the cookie
+ * Supabase's SSR helper just set, and public here means that race can never produce a
+ * redirect-to-login loop on a screen the user is legitimately allowed to see.
+ */
 const PUBLIC_ROUTES = [
   '/login',
   '/register',
   '/auth/callback',
   '/pending-approval',
+  '/verify-email',
+  '/clan-suspended',
 ]
 
 /**
