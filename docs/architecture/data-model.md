@@ -878,7 +878,40 @@ is_deleted = false` backs the live-only read path. See
 [ADR-019](../decisions/019-document-soft-delete-purge.md).
 
 ### `audit_logs`
-Immutable log of all write actions. Not clan-scoped.
+Immutable log of all write actions. `clan_id` is nullable, so a row may belong to one clan or
+to none.
+
+> ⚠️ **RLS (2026-08-22, migration `034_rls_audit_notification`, ADR-008 Phase 9,
+> [ADR-043](../decisions/043-audit-notification-rls-posture.md), seed S-014) — read the shape
+> before writing anything against this table.** It is **not** the clan-isolation template the
+> nine covered tables use. Three answers on one table:
+>
+> | Command | Policy | `familyroots_app` can |
+> |---|---|---|
+> | `SELECT` | `audit_logs_sel USING (clan_id = <app.clan_id GUC>)` | read its own clan only |
+> | `INSERT` | `audit_logs_ins WITH CHECK (true)` | write a row naming any clan, or none |
+> | `UPDATE` | none | nothing — no matching policy means denied |
+> | `DELETE` | none | nothing — same |
+>
+> The permissive `INSERT` is required: `POST /api/v1/auth/register` is unauthenticated and
+> `POST /api/v1/auth/onboard` resolves no clan, yet both write an audit row on the request
+> session, so a clan-keyed `WITH CHECK` compares `<real clan> = NULL` and rejects
+> registration. The absent `UPDATE`/`DELETE` policies are what make "immutable" true at the
+> database rather than by convention.
+>
+> **NULL-`clan_id` rows are kept, hidden from every clan, and still returned by the
+> platform-admin surface.** `NULL = <anything>` is NULL, so `audit_logs_sel` excludes them
+> with no special case; `GET /platform-admin/audit-log` runs on `get_system_db`, which
+> bypasses RLS, so ADR-030's cross-clan newest-first contract is unchanged. ADR-043
+> explicitly rejects widening the predicate to `OR clan_id IS NULL`.
+>
+> **`AuditLog` must keep `__mapper_args__ = {"eager_defaults": False}`** (ADR-038 applied by
+> ADR-043 § 6). Postgres matches a `RETURNING` row against the SELECT policy, and
+> `created_at`'s `server_default` would otherwise make SQLAlchemy append
+> `RETURNING created_at` to every insert — accepted by `audit_logs_ins`, then rejected by
+> `audit_logs_sel` on the way back. Pinned by
+> `backend/tests/integration/test_audit_write_paths_no_clan_guc.py` and
+> `backend/tests/integration/test_rls_phase9_audit_notification.py`.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -909,8 +942,29 @@ Tracks push notification delivery. FCM tokens are stored in `user_fcm_tokens` (n
 | `body` | TEXT | NOT NULL | Nội dung |
 | `status` | VARCHAR(20) | DEFAULT 'pending' | pending, sent, failed |
 | `sent_at` | TIMESTAMPTZ | | Thời điểm gửi |
+| `sent_on` | DATE | | Ngày (giờ nền tảng) đã gửi — khoá dedup, migration `017` |
 | `error_message` | TEXT | | Lỗi nếu có |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
+
+> `sent_on` was missing from this table until 2026-08-22 (seed S-014), five migrations after
+> `017_notification_sent_on` added it. It is the platform-timezone day the scheduler decided
+> to send for, and `(event_id, notification_type, sent_on)` is uniquely indexed — see
+> [notifications-scheduler.md](notifications-scheduler.md).
+
+> ✅ **RLS (2026-08-22, migration `034_rls_audit_notification`, ADR-008 Phase 9, ADR-043 § 2,
+> seed S-014).** The ordinary clan-isolation template, unchanged:
+> `notification_log_clan_isolation USING (clan_id = <app.clan_id GUC>) WITH CHECK (same)`.
+> `clan_id` is `NOT NULL`, so no row is mishandled by the predicate.
+>
+> **The policy is inert today and that is deliberate.** Nothing on a request session touches
+> this table: the anniversary scheduler's dedup `SELECT` and `INSERT` are its only accessors
+> (`backend/app/services/scheduler.py:173, 201`), and the job binds its session to a bare
+> `engine.connect()`, which is not an `RlsSession`, so no seam fires and the login role
+> bypasses. ADR-043 chose a cheap correct policy over a permanent exemption in the coverage
+> list. A naive reading — "the scheduler reads across clans, so this table cannot take a
+> policy" — is the mistake; the scheduler is not subject to the policy at all. Pinned by
+> `backend/tests/integration/test_scheduler_cross_clan_notification_log.py`, which proves one
+> run still writes for two clans **while the policy is live**.
 
 ---
 
@@ -989,12 +1043,14 @@ CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 
 ## RLS Policies
 
-> **Correction (2026-08-22, seed S-012): the SQL below never shipped, and the paragraph
-> under it is out of date about what did.** RLS layer-2 is **active**. Ten tables now carry
-> policies (migrations `002` and `026`–`033`); the request path connects as the non-bypass
-> `familyroots_app` role and sets `app.clan_id` per transaction. Nine of the ten are
-> clan-isolated; `identity_claims` carries a deny-all tripwire that is not clan isolation
-> (ADR-042). **The authority on the covered set is
+> **Correction (2026-08-22, seeds S-012 and S-014): the SQL below never shipped, and the
+> paragraph under it is out of date about what did.** RLS layer-2 is **active**. Twelve
+> tables now carry policies (migrations `002` and `026`–`034`); the request path connects as
+> the non-bypass `familyroots_app` role and sets `app.clan_id` per transaction. **Ten are
+> clan-isolated, and the other two are not, in two different ways**: `identity_claims`
+> carries a deny-all tripwire (ADR-042) and `audit_logs` is clan-keyed on reads only, with a
+> permissive `INSERT` and no `UPDATE`/`DELETE` policy at all (ADR-043). **The authority on the
+> covered set is
 > `backend/tests/integration/test_rls_activation.py`**, which enumerates it and fails on
 > drift — not this file and not the prose list in ADR-008. The SQL below is kept as the
 > 2026-06-28 design sketch. It does not describe the shipped policies: those key on

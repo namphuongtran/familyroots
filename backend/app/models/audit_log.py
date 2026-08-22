@@ -14,6 +14,21 @@ from app.models.base import Base
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
+    # ADR-038's collision, applied to this table by ADR-043 § 6 and shipped with migration
+    # 034. `created_at` below carries a server_default, and SQLAlchemy's default
+    # `eager_defaults="auto"` resolves to True for this mapper on the postgresql dialect —
+    # measured 2026-08-22 on SQLAlchemy 2.0.51 — so every ORM insert would append
+    # `RETURNING created_at`. Postgres matches a RETURNING row against the **SELECT**
+    # policy, and `audit_logs_sel` is `clan_id = <app.clan_id GUC>`. On the two request
+    # routes that write an audit row with no clan GUC at all (`POST /auth/register`,
+    # `POST /auth/onboard`) that predicate is NULL, so the permissive `audit_logs_ins`
+    # would accept the write and `audit_logs_sel` would reject the row on its way back.
+    # Turning eager defaults off costs nothing here: `created_at` is the only server
+    # default, `AuditLogHandler` never reads it back (`event_dispatcher.py:77-90` calls
+    # `self._db.add(...)` and returns), and both session makers set
+    # `expire_on_commit=False`. The database stays the timestamp authority.
+    __mapper_args__ = {"eager_defaults": False}  # noqa: RUF012
+
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # nullable + SET NULL: platform-level actions have no clan, and deleting a clan
     # must not erase its audit trail. The FK (name fk_audit_logs_clan_id_clans via the

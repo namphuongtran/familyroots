@@ -166,11 +166,16 @@ async def test_role_grants_allow_calling_functions(engine: AsyncEngine) -> None:
 
 
 # The RLS-enabled set, split by what the policies actually DO. The split exists because
-# "RLS enabled with at least one policy" is not one claim, it is two different ones, and
-# ADR-042 shipped the first table where they diverge (S-012, migration 033).
+# "RLS enabled with at least one policy" is not one claim, and ADR-042 shipped the first
+# table where the claims diverge (S-012, migration 033). ADR-043 then shipped a third
+# posture (S-014, migration 034), so there are now three sets, not two.
 #
-# CLAN-ISOLATED: the policy compares the row's clan to the app.clan_id GUC, so the request
-# role reads its own clan and nothing else. This is layer-2 clan isolation.
+# CLAN-ISOLATED: every policy's USING clause compares the row's clan to the app.clan_id
+# GUC, so the request role reads its own clan and nothing else, and every write it can make
+# stays inside that clan — either by a clan-keyed WITH CHECK (the 027 template,
+# `persons_ins`) or by a clan-keyed USING deciding which row the command may reach at all
+# (`persons_upd`, `persons_del`). Note that `persons` is already split per command
+# (`029_rls_persons.py:56-63`); being per-command is not what separates the third set below.
 _CLAN_ISOLATED_TABLES = {
     "documents",
     "events",
@@ -181,6 +186,13 @@ _CLAN_ISOLATED_TABLES = {
     "change_requests",
     "clan_memberships",
     "clan_invitations",
+    # Joined 2026-08-22 (S-014, ADR-043 § 2, migration 034). The migration-027 template,
+    # unchanged: clan_id is NOT NULL and the only accessor is the anniversary scheduler,
+    # which runs on a bare connection with no seam and so bypasses. The policy is INERT
+    # today — it guards a reader that does not exist yet. ADR-043 took that over a
+    # permanent exemption row in S-015's list, on the grounds that a second place to
+    # record a fact is a second place to be wrong.
+    "notification_log",
 }
 
 # REQUEST-ROLE-DENIED: the policy compares nothing. USING (false) WITH CHECK (false) locks
@@ -191,6 +203,32 @@ _CLAN_ISOLATED_TABLES = {
 # claim handler is privileged by design (dependencies.py:144, :149), and two of its four
 # routes resolve no clan at all. Its clan isolation is the application layer, alone.
 _REQUEST_ROLE_DENIED_TABLES = {"identity_claims"}
+
+# APPEND-ONLY-WITH-CLAN-KEYED-READS: reads are clan-keyed, the INSERT is admitted
+# unconditionally, and UPDATE and DELETE have no policy at all so they are denied.
+# `audit_logs` is the only member (S-014, ADR-043 § 3, migration 034) and it fits NEITHER
+# set above, which is why this third one exists rather than a name being pushed into
+# whichever half it half-matches:
+#
+#   * it is not clan-isolated — `audit_logs_ins` is `WITH CHECK (true)`, so the request role
+#     can write a row naming ANY clan, or none. That is not an oversight: two request routes
+#     write an audit row with NO clan GUC at all (`POST /auth/register` is unauthenticated,
+#     `POST /auth/onboard` takes `get_current_user` only, `app/api/v1/auth.py:44-49, 63-68`),
+#     and a clan-keyed WITH CHECK would compare `<real clan> = NULL` and reject the whole
+#     registration flow. ADR-043 accepts the write-side hole because the value comes from a
+#     server-assembled `AuditableEvent` and the leak direction layer 2 exists for is READ;
+#   * it is not request-role-denied either — `audit_logs_sel` is a real clan predicate, and
+#     it is the guard the table was brought inside layer 2 for;
+#   * and the ABSENT UPDATE/DELETE policies are load-bearing rather than missing. Under RLS
+#     a command with no matching policy is denied for a non-bypass role, so the trail is
+#     append-only for `familyroots_app`. Nothing else in this file would notice if someone
+#     added an UPDATE policy, so the test below checks for their absence by name.
+#
+# Listing `audit_logs` under _CLAN_ISOLATED_TABLES would have PASSED that set's assertion
+# (which only asks whether some policy's USING reads the GUC) while telling a later reader
+# that its writes are confined to one clan, which is false. That is the class of silent lie
+# the S-012 split exists to stop.
+_PER_COMMAND_TABLES = {"audit_logs"}
 
 # The migration-027 predicate template, present in every clan-isolated policy's `qual`.
 _GUC_MARKER = "app.clan_id"
@@ -213,6 +251,11 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
     the table has ONE layer of clan isolation, in the application layer, where the nine
     above have two. Adding its name to the clan-isolated set would be a lie a later reader
     could not detect, so the two sets are asserted with different questions below.
+
+    `notification_log` and `audit_logs` joined on 2026-08-22 (S-014, ADR-043, migration
+    034), and they went into DIFFERENT sets: `notification_log` takes the 027 template
+    unchanged, while `audit_logs` gets clan-keyed reads, permissive inserts, and no
+    UPDATE/DELETE policy at all. That third shape is `_PER_COMMAND_TABLES`.
     """
     async with engine.connect() as conn:
         rls_tables = set(
@@ -228,9 +271,9 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
             .scalars()
             .all()
         )
-        assert rls_tables == _CLAN_ISOLATED_TABLES | _REQUEST_ROLE_DENIED_TABLES, (
-            f"RLS scope drifted: {rls_tables}"
-        )
+        assert (
+            rls_tables == _CLAN_ISOLATED_TABLES | _REQUEST_ROLE_DENIED_TABLES | _PER_COMMAND_TABLES
+        ), f"RLS scope drifted: {rls_tables}"
 
         for table in rls_tables:
             n_policies = await conn.scalar(
@@ -302,3 +345,70 @@ async def test_each_half_of_the_rls_set_matches_what_its_policies_do(engine: Asy
                 f"{table}.{p['policyname']} is enumerated as deny-all but its WITH CHECK "
                 f"clause is {p['with_check']!r}"
             )
+
+
+async def test_audit_logs_reads_are_clan_keyed_and_it_cannot_be_edited_or_erased(
+    engine: AsyncEngine,
+) -> None:
+    """The third set's own question, and none of the assertions above ask it.
+
+    ADR-043 § 3 gives ``audit_logs`` three separate promises, and each one fails silently in
+    a different way if it drifts:
+
+    * ``audit_logs_sel`` is a real clan predicate. If it were widened to
+      ``USING (clan_id = GUC OR clan_id IS NULL)`` — the shape ADR-043 named as the one a
+      reader reaches for on seeing "nullable on purpose" — every platform-level action would
+      become readable by every clan, and every other test in this repository would still
+      pass.
+    * ``audit_logs_ins`` is ``WITH CHECK (true)`` **on purpose**. Someone "tightening" it to
+      the 027 template would break ``POST /auth/register``, which is unauthenticated and has
+      no clan GUC to compare against. The HTTP tests in
+      ``test_rls_phase9_audit_notification.py`` catch that; this line names the reason.
+    * there is **no** UPDATE and **no** DELETE policy, which is what makes the trail
+      append-only for the request role. An added policy here would hand ``familyroots_app``
+      the ability to edit or erase its own audit rows, and nothing else would notice.
+
+    ``cmd`` is read from ``pg_policies`` rather than inferred from the policy name, because a
+    name is a comment and ``cmd`` is the thing Postgres enforces.
+    """
+    async with engine.connect() as conn:
+        rows = (
+            (
+                await conn.execute(
+                    sa.text(
+                        "SELECT policyname, cmd, qual, with_check FROM pg_policies "
+                        "WHERE schemaname = 'public' AND tablename = 'audit_logs'"
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+    by_cmd = {r["cmd"]: dict(r) for r in rows}
+    assert len(by_cmd) == len(rows), f"two policies share a command on audit_logs: {rows}"
+    assert set(by_cmd) == {"SELECT", "INSERT"}, (
+        f"audit_logs must carry exactly a SELECT and an INSERT policy and nothing else — "
+        f"an UPDATE or DELETE policy would make the trail mutable for familyroots_app, and "
+        f"a missing SELECT policy would take away the clan guard. Found: {rows}"
+    )
+
+    select_policy = by_cmd["SELECT"]
+    assert _GUC_MARKER in (select_policy["qual"] or ""), (
+        f"audit_logs_sel must key reads on the {_GUC_MARKER!r} GUC; found "
+        f"{select_policy['qual']!r}. Note that widening this to `OR clan_id IS NULL` is the "
+        f"exact predicate ADR-043 rejected: it publishes every platform-level action to "
+        f"every clan"
+    )
+    assert "is null" not in (select_policy["qual"] or "").lower(), (
+        f"audit_logs_sel has grown a NULL branch: {select_policy['qual']!r}. NULL-clan rows "
+        f"are meant to be invisible to every clan (ADR-043 § 4) and visible only to the "
+        f"platform-admin surface, which bypasses RLS entirely"
+    )
+
+    insert_policy = by_cmd["INSERT"]
+    assert (insert_policy["with_check"] or "").strip().lower() == "true", (
+        f"audit_logs_ins must stay permissive; found {insert_policy['with_check']!r}. "
+        f"POST /auth/register is unauthenticated and writes an audit row with no clan GUC, "
+        f"so a clan-keyed WITH CHECK here compares <real clan> = NULL and rejects it"
+    )

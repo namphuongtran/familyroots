@@ -112,6 +112,34 @@ of precision.
 - `clan_id` FK is `RESTRICT`, `event_id` FK is `SET NULL` — the log outlives events.
 - The same table is the dedup source (see above), so **never backdate rows manually**.
 
+### The table carries an RLS policy, and this job is not subject to it
+
+Since 2026-08-22 (migration `034_rls_audit_notification`, seed S-014,
+[ADR-043](../decisions/043-audit-notification-rls-posture.md) § 2) `notification_log` has RLS
+enabled with the ordinary clan-isolation policy,
+`USING (clan_id = <app.clan_id GUC>) WITH CHECK (same)`.
+
+**That does not narrow this job, and the reason is worth holding onto.** The policy applies
+only to sessions that ran `SET LOCAL ROLE familyroots_app`, which is the `after_begin` seam on
+`RlsSession` (`backend/app/core/rls.py:63-65`). This job binds its `AsyncSession` to a bare
+`engine.connect()` (`backend/app/services/scheduler.py:90, 102`) — a plain connection, not an
+`RlsSession` — so no seam fires, the connection keeps the `DATABASE_URL` login role, and RLS
+does not apply. One run still scans every clan's events and writes a row per due event
+whatever clan it belongs to.
+
+**The failure this would cause is silent, so it is tested rather than argued.** If the seam
+ever reached this job, the dedup `SELECT` would return nothing and the `INSERT` would be
+rejected — and nothing would raise where anyone looks. Clans would simply stop receiving giỗ
+reminders. `backend/tests/integration/test_scheduler_cross_clan_notification_log.py` runs the
+job once against two clans, asserts a row and a `send_to_clan` call for each, and then reads
+the same two rows back **under the request role** to prove the policy was live the whole time.
+Without that last step the test would pass equally well against a database where migration
+`034` never ran.
+
+**If you ever move this job onto a request session, the policy is the first thing that breaks.**
+It is also why the job must stay one of the sanctioned out-of-band writers described in
+`backend/CLAUDE.md`.
+
 ## Ops knobs (see [ops/configuration.md](../ops/configuration.md))
 
 | Setting | Default | Notes |
