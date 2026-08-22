@@ -19,6 +19,18 @@ const GOLD_IS_NEVER_TEXT =
   'spec § 2.1 `gilt` #8a6a16 to land with S-005. See .claude/rules/tailwind.md § 2.'
 
 const config = [
+  /*
+   * Seed S-042 gave Playwright a second Next.js dist dir so the banner spec can
+   * run a dev server with the Supabase vars forced empty. `eslint-config-next`
+   * ignores `.next/`, but it cannot know about a second one, so `eslint .` swept
+   * the generated bundles and reported 49 errors from code nobody wrote. That
+   * made the lint gate depend on whether `test:e2e` had run first: green on a
+   * clean checkout, red on a developer's machine. A gate whose answer depends on
+   * execution order is not a gate. Found by seed S-031 and fixed here, 2026-08-22.
+   * The directory name is the same literal as `PLAYWRIGHT_SECOND_DIST_DIR` in
+   * `playwright.config.ts:51` and `/.next-banner-e2e/` in `.gitignore:17`.
+   */
+  { ignores: ['.next-banner-e2e/**'] },
   ...nextConfig,
   {
     files: ['src/**/*.{ts,tsx}'],
