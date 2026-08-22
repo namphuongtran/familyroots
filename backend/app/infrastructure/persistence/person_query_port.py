@@ -4,6 +4,52 @@ Every read has a batch form (single ANY-style query for N persons) and the
 single-person methods delegate to it with a one-element list — one SQL
 implementation per concern, so /persons/batch stays O(1) queries per include
 token instead of O(N) per person.
+
+**An edge read carries two soft-delete predicates, not one** (seed S-054,
+2026-08-22). ``Marriage.is_deleted`` / ``ParentChild.is_deleted`` says whether
+someone deleted *the edge*. It says nothing about the persons the edge points
+at, and nothing cascades a person's delete onto its edges — ``PersonDeleted``
+has no consumer (``app/domain/person/entity.py:267-280``; whether a cascade
+should exist at all is seed S-055's decision, and this filter stays correct
+either way). So every edge read here also hides an edge with a soft-deleted
+person on either end, which is what ``get_timelines_batch`` below and the tree
+builder already did. Before this, ``GET /persons/{id}/marriages`` handed a
+client an edge pointing at a person the same API answered ``404`` for.
+
+**Write that predicate as ``NOT EXISTS``, not as a join, and the reason is
+measured.** The obvious shape is the timeline's: join the counterpart person and
+require ``is_deleted = false``. It is correct, and here it is slow, because these
+are batch reads over a set of persons rather than one row. Measured 2026-08-22 on
+PostgreSQL 18.4, against 20,000 persons / 10,000 marriages / 5,000 parent-child
+rows loaded into the migrated test database. ``EXPLAIN (ANALYZE)`` of the
+marriages batch read for 100 person ids, one run, all four in the same session:
+
+* edge filter only, the behaviour before S-054 — ``0.115 ms``
+* **the statement this module now emits**, one ``NOT EXISTS`` over both
+  endpoints — ``0.246 ms``: a Nested Loop Anti Join feeding
+  ``Index Scan using pk_persons``, 50 loops at ~0.004 ms each
+* two inner joins on ``persons`` — ``3.598 ms``: a Hash Join that
+  **sequentially scans all 18,000 live persons twice** to build the hashes
+* two correlated ``EXISTS``, one per endpoint — ``3.922 ms``: Postgres flattens
+  a semi-join into that same hash join, so this buys nothing
+
+Absolute times move by roughly 3x between runs on a laptop; the plans do not.
+**That is the durable part**: the join's cost grows with the size of ``persons``,
+and the anti-join's grows with the number of edges matched, which the read is
+already paying for. ``get_stats_for_persons`` uses the same ``NOT EXISTS`` for
+consistency, though there the choice does not change the plan — its subqueries
+are correlated to one ``p.id``, so every form stayed an index-driven nested loop
+(``0.367`` / ``0.611`` / ``0.758 ms`` for the three shapes, inside the noise).
+The timeline keeps its join because it needs the spouse's **name**, so it has to
+visit the person row either way.
+
+**The anti-join asks "is a deleted person on this edge", which is also the
+safer question under RLS.** A soft delete does not touch ``clan_memberships``,
+so the deleted person's row stays visible to ``persons_sel`` (membership-keyed,
+migration ``029``) and the anti-join sees it and hides the edge. An inner join
+would additionally drop an edge whose counterpart the request role cannot see at
+all — a non-member — which migration ``029``'s load-bearing invariant says
+cannot happen, so the two agree today on every reachable row.
 """
 
 from __future__ import annotations
@@ -12,7 +58,7 @@ import uuid
 from datetime import date
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import ColumnElement, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -35,6 +81,20 @@ def _empty_map(person_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[dict[str, An
     return {pid: [] for pid in person_ids}
 
 
+def _no_deleted_endpoint(*endpoint_ids: ColumnElement[uuid.UUID]) -> ColumnElement[bool]:
+    """``NOT EXISTS (SELECT 1 FROM persons WHERE id IN (…) AND is_deleted)``.
+
+    The second half of every edge predicate in this module — see the module
+    docstring for why it is an anti-join rather than a join.
+    """
+    return ~(
+        select(1)
+        .select_from(Person)
+        .where(Person.id.in_(endpoint_ids), Person.is_deleted.is_(True))
+        .exists()
+    )
+
+
 class SqlAlchemyPersonQueryPort(PersonQueryPort):
     """SQLAlchemy implementation of PersonQueryPort."""
 
@@ -49,11 +109,14 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         out = _empty_map(person_ids)
         if not person_ids:
             return out
+        # Both spouses must be live, not only the marriage row — see the module
+        # docstring, including why this is an anti-join and not a join.
         result = await self._session.execute(
             select(Marriage).where(
                 or_(Marriage.person1_id.in_(person_ids), Marriage.person2_id.in_(person_ids)),
                 Marriage.created_by_clan_id == clan_id,
                 Marriage.is_deleted.is_(False),
+                _no_deleted_endpoint(Marriage.person1_id, Marriage.person2_id),
             )
         )
         for m in result.scalars().all():
@@ -74,11 +137,13 @@ class SqlAlchemyPersonQueryPort(PersonQueryPort):
         out = _empty_map(person_ids)
         if not person_ids:
             return out
+        # Both ends of the lineage edge must be live — see the module docstring.
         result = await self._session.execute(
             select(ParentChild).where(
                 or_(ParentChild.parent_id.in_(person_ids), ParentChild.child_id.in_(person_ids)),
                 ParentChild.created_by_clan_id == clan_id,
                 ParentChild.is_deleted.is_(False),
+                _no_deleted_endpoint(ParentChild.parent_id, ParentChild.child_id),
             )
         )
         for link in result.scalars().all():
