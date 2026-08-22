@@ -546,9 +546,12 @@ Two more facts worth knowing before you change the files:
 
 ## 9. How to write the classes
 
-- Order classes as `prettier-plugin-tailwindcss` would. It is configured in `web/.prettierrc`,
-  but you must not run `pnpm format`: `web/CLAUDE.md` records 112 files with pre-existing
-  Prettier drift, so a format run buries the real diff. Keep new class lists tidy by hand.
+- Order classes as `prettier-plugin-tailwindcss` would. It is configured in `web/.prettierrc`.
+  Seed S-028 (2026-08-22) cleared the pre-existing Prettier drift `web/CLAUDE.md` used to warn
+  about here — it was 99 files at the time S-028 measured it, not the 112 this section used to
+  say — and added `pnpm format:check` to CI so it cannot come back. Running `pnpm format` is safe
+  now. Still keep a formatting pass in its own commit rather than folding it into one that also
+  changes behaviour, for the same reason as before: a mixed diff buries the real change.
 - Arbitrary values are common today, mostly font sizes such as `text-[10px]` and
   `text-[11px]`. Spec § 2.3 defines a real type scale, and it is not implemented. Reuse a
   size that a neighbouring component already uses. Do not invent a new one.

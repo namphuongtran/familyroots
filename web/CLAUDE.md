@@ -13,8 +13,8 @@ pnpm build && pnpm start                       # production build + serve
 pnpm type-check                                # tsc --noEmit (strict)
 pnpm lint                                      # eslint .
 pnpm lint:fix
-pnpm format                                    # prettier --write . — DO NOT run: 112 pre-existing files have drift (§3.2 of the work register); it would bury any real diff
-pnpm format:check
+pnpm format                                    # prettier --write . — the 99-file pre-existing drift (seed S-028, 2026-08-22) is gone; safe to run, but keep it out of a behavioural PR's diff
+pnpm format:check                              # prettier --check . — CI-gated since S-028
 pnpm depcruise                                 # dependency-cruiser — enforces the layer rules below, CI-gated
 pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)
 pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/)
@@ -25,7 +25,18 @@ pnpm test:behavior                             # legacy: node --test on tests/be
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
-Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
+Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
+
+**`pnpm format:check` has been in CI since seed S-028 (2026-08-22).** Before S-028, `web/CLAUDE.md`
+and `.claude/rules/tailwind.md` § 9 both told contributors not to run `pnpm format`, because 112
+files had accumulated pre-existing Prettier drift and a format run would bury the real diff in any
+pull request. Re-counted at the start of S-028: `pnpm format:check` actually named **99** files,
+not 112 — the figure had gone stale across three batches that added and deleted files in `web/`
+since it was first measured, and nobody had re-run the count. S-028 ran `pnpm format --write .`
+once, as its own single-purpose commit, landing all 99 files at once and touching nothing else.
+`pnpm format` is safe to run now. The caution that follows is about diff hygiene, not about the
+tool: running it inside a pull request that also changes behaviour still buries the real diff, so
+keep a mechanical formatting pass in its own commit, the way S-028 did.
 
 Env vars in `.env.local` (see `.env.example`): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
