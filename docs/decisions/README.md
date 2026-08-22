@@ -49,15 +49,17 @@
 | [045](045-dark-mode-prefers-color-scheme-only.md) | Dark Mode Switches on `prefers-color-scheme` Alone, and the Dark Palette Is a Token Override | Accepted, shipped (2026-08-21, seed S-006) |
 | [047](047-rls-seam-sets-clan-id-only.md) | The RLS Seam Sets `app.clan_id` Only, and ADR-008's `app.user_id` Clause Is Corrected by Dated Amendment | Accepted (2026-08-22, seed S-040) — decision only; amends ADR-008 § 2, no code change |
 | [048](048-invitation-accept-runs-on-the-system-session.md) | Only `POST /invitations/{token}/accept` Moves to the System Session, and `clan_invitations` Takes the Clan-Isolation Policy | Accepted, shipped (2026-08-22, seed S-043) |
+| [049](049-contact-pii-is-the-whole-field-visibility-rule.md) | Contact PII Is the Whole of Field-Level Visibility in v1, the Set Stays Fixed at `phone` and `email`, and the Contract Says So | Accepted (2026-08-22, seed S-053) — decision only, no code. The rule has shipped since 2026-07-05; this ADR keeps it fixed and writes it into `rest-persons-api.md`. Not per-clan: that lands on `clan_settings`, which ADR-044 measured dead, and "no row" is universal, so a configurable set must resolve missing to the maximal set or ship as total disclosure. Not extended: `_UPDATABLE_FIELDS` minus `SUBMITTABLE_PERSON_FIELDS` is exactly `_PII_FIELDS` is exactly `EXCLUDED_PERSON_FIELDS`, measured. Failure direction closed at two layers. Found that no test proves any route calls the redaction (S-058), and that `L11`, cited by six files, is defined nowhere |
 | [050](050-user-clan-roles-clan-keyed-mutations.md) | `user_clan_roles` Takes Clan-Keyed UPDATE and DELETE Only, and Every Reader Stays on the Session It Is On | Accepted, shipped (2026-08-22, seed S-052) — migration `036_rls_user_clan_roles`. Half covered on purpose: `SELECT` and `INSERT` are permissive (the authorization gate and `POST /auth/onboard` both run with no clan selected), `UPDATE` and `DELETE` are clan-keyed. The mirror of ADR-043. No handler changed session |
 | [051](051-edge-visibility-derived-not-cascaded.md) | Person Soft-Delete Does Not Cascade to Its Edges — an Edge's Visibility Is Derived, Not Stored | Accepted (2026-08-22, seed S-055) — decision only, no code. Amends ADR-006's update of 2026-07-02 by dated amendment: its cascade clause is superseded, its restore-symmetry clause stands and is satisfied exactly by the derived predicate. No marker column, no `PersonDeleted` consumer, no trigger. The cascade lost chiefly because a cascading **restore** runs migration 022's full `parent_child` guard and can be refused and left half-applied. S-056 gives the two by-id reads the same predicate the batch reads carry, and builds no cascade |
 
-**046 and 049 are allocated and not written.** Seed S-039 carries 046 and **S-053 carries 049**,
-both in [`../SEEDS.md`](../SEEDS.md). **044, 050, 051 and 052 were all written on 2026-08-22** by
-seeds S-016, S-052, S-055 and S-057. **048 was taken by seed S-043 on 2026-08-22**, the same day
-047 went to seed S-040. The gap is deliberate, so that four agents picking work at once cannot pick
-the same number. The next free number is **053** unless [`../SEEDS.md`](../SEEDS.md) has allocated
-it.
+**046 is allocated and not written.** Seed S-039 carries it, in
+[`../SEEDS.md`](../SEEDS.md). **049 was written on 2026-08-22 by seed S-053**, so it has left this
+sentence; the block quote below records why it was allocated twice and is kept. **044, 050, 051 and
+052 were all written on 2026-08-22** by seeds S-016, S-052, S-055 and S-057. **048 was taken by seed
+S-043 on 2026-08-22**, the same day 047 went to seed S-040. The gap is deliberate, so that four
+agents picking work at once cannot pick the same number. The next free number is **053** unless
+[`../SEEDS.md`](../SEEDS.md) has allocated it.
 
 > **049 was allocated twice, and the second allocation is the live one.** Seed S-051 pre-allocated
 > it on 2026-08-22 and then wrote no ADR, because what it had to say is about how this repository
@@ -65,7 +67,7 @@ it.
 > (see its § "Why this is a rule here and not ADR-049"). This paragraph read "049 stays free by
 > decision" for part of that day. Seed S-053 took it the same day for field-level visibility. **A
 > released number is free, not reserved** — say which seed holds a number, not merely that it is
-> taken.
+> taken. **S-053 closed on 2026-08-22 and ADR-049 is now written**, indexed in the table above.
 
 > **This paragraph is a merge point, so re-read it rather than editing it from memory.** It was
 > resolved by hand on 2026-08-22 after seeds S-011 and S-013 ran in parallel and each narrowed the

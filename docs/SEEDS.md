@@ -364,6 +364,57 @@ fire.** S-030 planted cross-feature imports at `server/` and `hooks/` to prove `
 S-042 could not measure its defect at all until it stood up a second dev server, and said plainly
 which three files outside its fence that cost.
 
+**Re-taken again 2026-08-22, after a tenth parallel batch of four: 60 seeds, 47 done, 12 open, and
+1 blocked.** All four figures moved:
+
+- **Done, 43 to 47.** S-031, S-046, S-053, and S-056.
+- **Open, 12 to 12.** The four left for `done`, minus four; S-032 became open as S-031 closed, and
+  S-058, S-059, and S-060 arrived open, plus four.
+- **Blocked, 2 to 1.** Only **S-033** remains blocked, behind S-032.
+- **Seeds, 57 to 60.** S-053 opened all three of S-058, S-059, and S-060.
+
+**The batch found that the web lint gate had been answering differently depending on what ran before
+it, and the coordinator fixed the checker.** S-042 gave Playwright a second Next.js dist dir in the
+ninth batch and added it to `.gitignore:17`, but not to eslint's ignores; `eslint-config-next` ships
+the ignore for `.next/` and cannot know about a second one. On a clean checkout `pnpm lint` was
+green. After `pnpm test:e2e` the directory existed and `eslint .` reported **49 errors, every one of
+them under `.next-banner-e2e/` and none under `web/src`**. S-031 reproduced it and correctly refused
+to fix it, because the file was outside its fence. **A gate whose answer depends on execution order
+is not a gate.** Fixed at `9d5b088` with a control: with the ignore in place, a planted
+`text-gold-500` still fails the S-003 rule, so the ignore is narrow enough that `src/` is still
+linted.
+
+**The sharpest finding of the batch is a fourth instance of "a test pins an outcome, not a setting",
+and it was measured twice.** ADR-049 kept the redacted field set fixed at `phone`/`email`. While
+measuring it, S-053 found that **no test proves any route calls the redaction**: both PII test files
+call `handler.redact_pii(...)` directly and issue no HTTP request, and both route-level suites
+replace the call with a no-op. Delete `backend/app/api/v1/persons.py:337-339`, so `GET /persons/{id}`
+stops redacting entirely, and the suite still reports `1351 passed` and `All checks passed!`. The
+coordinator re-ran it independently and got the same reading. **It is not a live leak** — all three
+call sites are present and correct — and the gap became **S-058**. The evidence is a comment: the
+batch suite says "PII redaction (L11) is covered in test_person_pii_visibility", pointing at a suite
+that does not cover the wiring. **A test author citing another suite is making a citation, and it
+has to be read at source like any other.**
+
+**ADR-049 decided on a measurement rather than an argument.** Three constants, written in three
+layers by three separate changes, draw the same line and agree exactly: `_UPDATABLE_FIELDS` minus
+`SUBMITTABLE_PERSON_FIELDS` is `['email', 'phone']`, and so are `_PII_FIELDS` and
+`EXCLUDED_PERSON_FIELDS`. Configurable lost on the failure direction: it lands on `clan_settings`,
+which ADR-044 measured dead, and **"no row" is the universal case**, so a per-clan set must resolve
+missing to the maximal set or ship as total disclosure on day one.
+
+**S-046 found its own tracker entry had decayed the same way its subject had.** The seed's table of
+where ADR-042's citations had landed was itself the reading at `634a0c5`; four more commits had
+moved them again by the time the seed was worked. It chose section-plus-quoted-sentence over line
+numbers, on the ground that **a line number always resolves and a quotation fails loudly**, and then
+caught the recursion: its own 32-line amendment moved the six line numbers the seed used to cite
+ADR-042. The coordinator repaired those in this file for the same reason.
+
+**S-056 checked what its own change stopped guarding.** Repointing the two isolation tests at the new
+read ports would have left the loader that `PATCH` and `DELETE` use with no isolation proof at all,
+and `grep -rn "marriage_not_found" backend/tests` returns nothing. It added two tests rather than
+moving two. **When a guard moves, check what it stopped guarding** — the S-014 shape, working.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -534,7 +585,9 @@ graph LR
   S016[S-016 decide the privacy toggles] --> S017[S-017 allow_public_tree]
   S016 --> S018[S-018 privacy_level]
   S019[S-019 invitation status]
-  S020[S-020 re-measure the DB review]
+  S020[S-020 re-measure the DB review] --> S053
+  S020 --> S054[S-054 the three edge reads]
+  S020 --> S055[S-055 decide edge cascade, ADR-051]
   S021[S-021 restore drill]
   S023 --> S024[S-024 capabilities]
   S023 --> S025[S-025 auth store]
@@ -548,6 +601,10 @@ graph LR
   S040[S-040 decide the seam GUCs] --> S045[S-045 pin the seam's settings]
   S040 --> S046[S-046 repair ADR-042 citations]
   S047[S-047 repoint the pending-approval citation]
+  S053[S-053 decide field-level visibility] --> S058[S-058 prove a route redacts]
+  S053 --> S059[S-059 repoint the L11 citations]
+  S053 --> S060[S-060 restore advertises its envelope]
+  S055 --> S056[S-056 by-id edge visibility]
   S028[S-028 prettier sweep]
   S034[S-034 wordmark at 200% scale]
   S027 --> S029[S-029 persons model + api]
@@ -591,8 +648,8 @@ graph LR
 | S-028 | Clear the 112-file prettier drift in one sweep | open | none |
 | S-029 | Land `features/persons` model and api against the frozen contract | done | S-027, done in part |
 | S-030 | Land the persons repository, query keys, and hooks | done | S-029, done |
-| S-031 | Land the persons list and detail screens | open | S-030, done |
-| S-032 | Land the persons create and edit forms, with `409 stale_write` | blocked | S-031 |
+| S-031 | Land the persons list and detail screens | done | S-030, done |
+| S-032 | Land the persons create and edit forms, with `409 stale_write` | open | S-031, done |
 | S-033 | Delete the legacy persons code | blocked | S-032 |
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
 | S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
@@ -606,18 +663,21 @@ graph LR
 | S-043 | Decide which session the invitation-accept path runs on, then cover `clan_invitations`, in ADR-048 | done | none |
 | S-044 | Reconcile mobile's two remaining off-spec token values with spec § 2.1 | done | none |
 | S-045 | Pin the exact set of settings the RLS seam writes | done | none |
-| S-046 | Repair ADR-042's four stale line citations into ADR-008 | open | none |
+| S-046 | Repair ADR-042's four stale line citations into ADR-008 | done | none |
 | S-047 | Repoint `pending_approval_page.dart`'s citation at the register that replaced it | done | none |
 | S-048 | Decide what mobile's `outlineVariant` is, and pin it | done | none |
 | S-049 | Make `dividerTheme` do what its comment says, or say what it does | done | none |
 | S-050 | Drill a restore of a dump carrying the RLS migrations, into a fresh cluster | done | none |
 | S-051 | Make "a test pins an outcome, not a setting" a rule rather than a third note | done | none |
 | S-052 | Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050 | done | none |
-| S-053 | Decide what field-level visibility means in v1, in ADR-049 | open | none |
+| S-053 | Decide what field-level visibility means in v1, in ADR-049 | done | none |
 | S-054 | Make the three edge reads agree with the tree and the timeline about a soft-deleted person | done | none |
 | S-055 | Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051 | done | none |
-| S-056 | Give the two by-id relationship reads the same soft-delete predicate the batch reads carry | open | S-055, done |
+| S-056 | Give the two by-id relationship reads the same soft-delete predicate the batch reads carry | done | S-055, done |
 | S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | done | none |
+| S-058 | Make a person read prove, through the API, that a stranger's `phone` comes back `null` | open | none |
+| S-059 | Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for | open | none |
+| S-060 | Make `POST /persons/{id}/restore` advertise the envelope it actually returns | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -625,7 +685,8 @@ on 2026-08-13, and for each one no second decision from the maintainer stands be
 end state. **S-001 and S-034 are done**, so twelve of the fourteen are open. **S-037 is a fifteenth**,
 added 2026-08-14 by ADR-041 and carrying `none` too, so the count in the heading is the 2026-08-13
 count and not today's. **Five more carry `none` as of 2026-08-22**: S-043, S-044, S-045, S-046, and
-S-047. Read the board rather than this paragraph for today's set. **S-006, S-007, and S-035 are also open** without carrying `none`: each had its
+S-047, **and three more the same day**: S-058, S-059, and S-060, all opened by S-053. Read the
+board rather than this paragraph for today's set. **S-006, S-007, and S-035 are also open** without carrying `none`: each had its
 only blocker satisfied rather than never having one. That trio said "S-004, S-007, and S-035" until
 2026-08-14, when S-004 and S-005 both went to `done` and S-006 took the place they left. **Four seeds are themselves the
 decision**: S-011, S-013, and S-016 produce an ADR and nothing else, and S-020 produces seeds and
@@ -2188,7 +2249,7 @@ the suite for a fourth instance, which would be its own seed and needs this rule
 
 ## S-053. Decide what field-level visibility means in v1, in ADR-049
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-058
 
 **The 2026-08-13 measurement this seed replaces was too strong, and the correction is why this is a
 decision rather than a build.** S-020's table said field-level visibility "returned no
@@ -2428,7 +2489,7 @@ this. Hard delete, which ADR-006 settles.
 
 ## S-056. Give the two by-id relationship reads the same soft-delete predicate the batch reads carry
 
-**Status:** open · **Blocked by:** S-055, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-055, done 2026-08-22 · **Unblocks:** nothing yet
 
 **This seed was rewritten on 2026-08-22, because ADR-051 decided against the cascade it was written
 to build.** It adds **no column, no `PersonDeleted` consumer, and no trigger**. Read ADR-051 § 8 and
@@ -2564,6 +2625,138 @@ script reports `DRILL: FAIL` and blames Postgres for being down when it is not.
 `backend/app/core/config.py:71`.
 
 **Out of scope.** Restoring production. Point-in-time recovery. Changing any RLS policy.
+
+---
+
+## S-058. Make a person read prove, through the API, that a stranger's `phone` comes back `null`
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-053, which measured it and correctly did not fix it**, because that is a
+build with its own gate and closing two seeds in one pull request is forbidden here.
+
+**The redaction rule is tested. Nothing tests that any route calls it.** ADR-049 fixed the rule at
+`phone` and `email`. Eight cases cover the function. But both files that exercise it call
+`handler.redact_pii(...)` directly and issue no HTTP request
+(`backend/tests/integration/test_person_pii_visibility.py:74,79,84`;
+`backend/tests/unit/application/test_person_pii_visibility.py`), and both route-level suites replace
+the call with a no-op that returns `None` (`backend/tests/test_persons.py:60`;
+`backend/tests/unit/api/test_persons_batch_endpoint.py:85-86`).
+
+**Measured twice on 2026-08-22, the second time by the coordinator independently.** Delete the three
+lines at `backend/app/api/v1/persons.py:337-339`, so that `GET /persons/{id}` stops redacting
+entirely, and the whole suite still passes: `1351 passed in 53.59s`, and `ruff check .` prints "All
+checks passed!". Reverted immediately both times.
+
+**This is a fourth instance of § "A test pins an outcome, not a setting"** in
+`.claude/rules/seeds.md`, and the sharpest yet, because the comment at
+`test_persons_batch_endpoint.py:86` says in as many words that "PII redaction (L11) is covered in
+test_person_pii_visibility" — pointing at a suite that does not cover the wiring. **A test author
+citing another suite is making a claim about that suite, and it has to be read at source like any
+other citation.**
+
+**State what it is not, so nobody overstates it.** This is **not a live leak**: all three call sites
+are present and correct on `main` at `9d5b088`. It is **not** a claim the logic is untested. The gap
+is the wiring, and it sits one `await` line away from silence.
+
+**End state.** For each of the four redacting routes — `GET /persons`, `GET /persons/{id}`,
+`POST /persons/batch`, and `PATCH /persons/{id}` — a test **sends a request and reads the response
+body**: a `viewer` reading a stranger gets `"phone": null` and `"email": null` out of the JSON, and
+an `admin` reading the same person gets the values. The two route suites stop stubbing `redact_pii`
+to a no-op, or the new tests do not use those fakes.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. **Negative control, one per route:**
+delete the `await handler.redact_pii(...)` call from each of `persons.py:126`, `:267`, `:337` and
+from `handlers.py:148`, one at a time, and quote the named test failing for each. A single control
+covering one route would leave the other three exactly as unwatched as they are today.
+
+**Sources.** `backend/app/api/v1/persons.py:126,267,337`;
+`backend/app/application/person/handlers.py:148,230`;
+`backend/tests/integration/test_person_pii_visibility.py:74,79,84`;
+`backend/tests/unit/application/test_person_pii_visibility.py`; `backend/tests/test_persons.py:60`;
+`backend/tests/unit/api/test_persons_batch_endpoint.py:85-86`;
+`docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md` § 5;
+`.claude/rules/seeds.md` § "A test pins an outcome, not a setting".
+
+**Out of scope.** Changing what is redacted, which ADR-049 fixed. The clan export, which is
+admin-only and unredacted by decision. Repointing the six `L11` citations.
+
+---
+
+## S-059. Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-053, found while measuring something else.** Six files cite `L11` as the
+authority for the contact-PII redaction rule. **Nothing in this repository defines `L11`.** Counted
+2026-08-22 by the coordinator, `grep -rn "L11" backend docs .claude` outside the worktrees returns
+seven lines in six files, and every one is a citing site:
+
+- `backend/app/application/person/handlers.py:29` and `:147`
+- `backend/tests/unit/api/test_persons_batch_endpoint.py:86`
+- `backend/tests/unit/application/test_person_pii_visibility.py:1`
+- `backend/tests/unit/domain/test_person_handlers.py:85`
+- `backend/tests/integration/test_person_pii_visibility.py:1`
+- `docs/decisions/037-change-requests-workflow.md:191`
+
+`git log -S"L11"` shows it entered with commit `8dbf159` on 2026-07-05 as a review-list label that
+was never committed to the tree. **So an ADR rests on a label that names nothing.** This is the
+"pointer that resolves to nothing" failure in its purest form: `L11` is short enough to look like an
+identifier, and no reader has ever checked it.
+
+**ADR-049 is now the definition it was reaching for.**
+
+**End state.** The five citations under `backend/` name
+`docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md` instead of `L11`.
+**`docs/decisions/037-change-requests-workflow.md:191` is left as written**, because prior ADRs are
+immutable here and are dated records of what was believed. If 037 is to say anything, it says it in
+a dated amendment, and the seed should decide which and say why.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`, because five of the six files are
+under `backend/`. No behaviour changes, so there is nothing to plant. **Say plainly that the gate
+proves compilation and not the citations**, and check each new pointer by opening ADR-049 and reading
+the text it names.
+
+**Sources.** The seven lines listed above, all read 2026-08-22;
+`docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md` § "Measurement 8b".
+
+**Out of scope.** Changing the redaction rule, which ADR-049 fixed. Route-level tests, which are
+S-058.
+
+---
+
+## S-060. Make `POST /persons/{id}/restore` advertise the envelope it actually returns
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-053, found while reading the persons routes. Verified by the coordinator
+the same day, and it is narrower than first reported.**
+
+`backend/app/api/v1/persons.py:398` decorates the route `responses=ok(PersonResponse)`, but
+`:414` returns `{"data": {"message": t("person.restored"), "id": str(person_id)}}`. **The generated
+OpenAPI schema therefore promises a person object and the route sends a message envelope.**
+
+**Three facts make this a one-line seed rather than a judgement call.** The sibling route
+`DELETE /persons/{id}` at `:379` already uses the right helper, `responses=ok_message()`, and returns
+the same shape. `docs/contracts/rest-persons-api.md:66-67` already states that **both** `DELETE` and
+`restore` return a message envelope, and `:149` repeats it. So the contract and the runtime agree
+with each other, and the decorator is the only thing that disagrees with both. **The code is right.
+The advertisement is wrong.**
+
+**End state.** `POST /persons/{id}/restore` is decorated `responses=ok_message()`, matching its
+sibling and matching what it returns. `docs/contracts/rest-persons-api.md` needs no change, and the
+seed should confirm that by reading it rather than assuming it.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. **A green gate is not evidence
+here**, because nothing asserts the generated schema. Read the generated OpenAPI document for this
+path and quote the response schema before and after. If nothing in the suite would have caught the
+drift, say so — that absence is the finding, and it may be worth its own guard over every route that
+returns a message envelope.
+
+**Sources.** `backend/app/api/v1/persons.py:379`, `:398`, `:414`;
+`docs/contracts/rest-persons-api.md:66-67`, `:149`.
+
+**Out of scope.** Any other route's decorator. Changing what `restore` returns.
 
 ---
 
@@ -2887,7 +3080,7 @@ watch the new test fail, remove it.
 
 ## S-046. Repair ADR-042's four stale line citations into ADR-008
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by S-040, which found them and could not repair them**: ADR-042 was outside its
 fence for that batch.
@@ -2905,6 +3098,14 @@ written. Read 2026-08-22:
 
 `:36` → lines 56-59 still resolves.
 
+**The `Now at` column above was itself stale by the time the seed was worked, and the correction is
+the point.** It is the reading at `634a0c5` and `943bc5a`. Four more commits touched ADR-008 after
+that — `d0edaf0`, `46a6d80`, `09df8b8`, and `a8782d9` — so re-measured 2026-08-22 the four had moved
+again, to **271-278**, **274-276**, **305**, and **259-260**. ADR-008 went from 177 lines at
+`12ae000^`, the parent of ADR-042's own commit, to **364**. Verified at both ends: all five
+citations were correct when written, and today line 135 reads a sentence about `notification_log`.
+**A table of line numbers recorded in a tracker decays exactly like the citations it is tracking.**
+
 **Read this before choosing the shape of the repair.** A line number in a document that another
 seed edits is a citation that goes stale silently, and this is the second time it has happened here.
 Consider whether the repair should cite a heading or a quoted phrase instead of a line, and say what
@@ -2918,10 +3119,17 @@ silent rewrite erases evidence.
 **Verification.** Documentation only. No gate. Say so plainly rather than leaving the field empty.
 Check each citation by opening ADR-008 at the cited location and reading it.
 
-**Sources.** `docs/decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md` at
-`:36`, `:42`, `:127`, `:267`, `:272`, `:286`; `docs/decisions/008-rls-defense-in-depth.md`;
-`docs/decisions/047-rls-seam-sets-clan-id-only.md` Measurement 5, which is where the table above was
-first recorded.
+**Sources.** `docs/decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md`,
+at § Context Fact 1 (both paragraphs), § Decision 2 last paragraph, § What this ADR deliberately
+does not decide (the `app.user_id` and `FORCE` bullets), and § Related;
+`docs/decisions/008-rls-defense-in-depth.md`; `docs/decisions/047-rls-seam-sets-clan-id-only.md`
+Measurement 5, which is where the table above was first recorded.
+
+**This field named those six places by line number until 2026-08-22, and closing the seed broke it.**
+ADR-042's amendment is 32 lines long, so it pushed `:36`, `:42`, `:127`, `:267`, `:272`, and `:286`
+down by that much. That is the same defect the seed exists to repair, one level up, and the closing
+agent flagged it rather than leaving it. Sections replace the line numbers here for the same reason
+they replaced them inside ADR-042.
 
 **Out of scope.** Anything ADR-042 decided. Any other document's citations into ADR-008.
 
@@ -5009,7 +5217,7 @@ the second slice that needs it.
 
 ## S-031. Land the persons list and detail screens
 
-**Status:** open · **Blocked by:** S-030, done 2026-08-22 · **Unblocks:** S-032
+**Status:** done, 2026-08-22 · **Blocked by:** S-030, done 2026-08-22 · **Unblocks:** S-032
 
 **S-030 left you a complete data layer and one thing it deliberately did not do.** The repository,
 query keys, and hooks exist in `web/src/features/persons/{server,hooks}`, and `index.ts` is the only
@@ -5046,7 +5254,7 @@ the order of work for a screen.
 
 ## S-032. Land the persons create and edit forms, with `409 stale_write`
 
-**Status:** blocked · **Blocked by:** S-031 · **Unblocks:** S-033
+**Status:** open · **Blocked by:** S-031, done 2026-08-22 · **Unblocks:** S-033
 
 **Optimistic concurrency is the part that is easy to skip and expensive to add later.** ADR-017 makes
 a stale write fail with `409`, and the design spec already specifies the screen for it at § 7.7c:
