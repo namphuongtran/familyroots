@@ -23,8 +23,10 @@ them:
 
 **Neither migrates the other.** No Alembic revision may reach into the Supabase database, and
 nothing in `supabase/` may create an application table. A user therefore exists in two places at
-once, joined by the JWT `sub` claim. Getting those two halves in step is seed S-073, not this
-document.
+once, joined by the JWT `sub` claim. **Getting those two halves in step is
+[`seed-test-users.md`](seed-test-users.md)**, landed by S-073 on 2026-08-22, not this
+document. `make seed` is the one command; `make seed-verify` is what tells you which half is
+missing.
 
 ---
 

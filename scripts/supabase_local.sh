@@ -112,8 +112,24 @@ case "${1:-}" in
     # supabase/config.toml pins the token issuer to supabase.localhost so that one string
     # works from the macOS host and from inside a container. A 127.0.0.1 SUPABASE_URL
     # gives 401 invalid_token against a perfectly healthy stack.
+    #
+    # Partial output is the failure this guard exists to stop, and it is not theoretical.
+    # `supabase status -o env` prints NOTHING and exits 1 when any container reports
+    # unhealthy -- including a transient one. Measured 2026-08-22: supabase_db_familyroots
+    # went unhealthy on "Health check exceeded timeout (2s)" while `psql` against it
+    # answered normally, on a loaded machine. Without this guard, `env` printed the
+    # hardcoded SUPABASE_URL line and no keys, exit code 0, and the caller saw a
+    # successful command with two of three variables silently missing. Emit all three or
+    # emit none.
+    if ! keys="$(supa status -o env 2>/dev/null | sed -n 's/^ANON_KEY=/SUPABASE_ANON_KEY=/p;s/^SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/p')" \
+       || [ "$(printf '%s\n' "$keys" | grep -c '^SUPABASE_')" -ne 2 ]; then
+      echo "supabase_local: \`supabase status\` did not return both keys." >&2
+      echo "  The stack is not up, or a container is reporting unhealthy. Check with:" >&2
+      echo "    scripts/supabase_local.sh wait" >&2
+      exit 1
+    fi
     echo "SUPABASE_URL=http://supabase.localhost:54321"
-    supa status -o env 2>/dev/null | sed -n 's/^ANON_KEY=/SUPABASE_ANON_KEY=/p;s/^SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/p'
+    printf '%s\n' "$keys"
     ;;
   *)
     sed -n '2,15p' "${BASH_SOURCE[0]}"

@@ -1,7 +1,7 @@
 .PHONY: help docker-up docker-down backend-dev backend-test backend-lint \
        supabase-up supabase-down supabase-env \
        mobile-run mobile-test web-dev web-build web-lint web-type-check \
-       infra-preview infra-up migrate seed
+       infra-preview infra-up migrate seed seed-verify
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -73,11 +73,39 @@ infra-up: ## Apply infrastructure changes
 	cd infra/pulumi && pulumi up
 
 # ─── Database ─────────────────────────────────────────────────────────
-migrate: ## Run Alembic migrations
-	cd backend && uvx alembic upgrade head
+migrate: ## Run Alembic migrations against the application database
+# `uv run`, not `uvx`: alembic needs the project virtualenv to import app.core.config
+# and the models package (backend/CLAUDE.md). A bare `uvx alembic` fails to import them.
+	cd backend && uv run alembic upgrade head
 
-seed: ## Seed development data
-	cd backend && uv run python ../scripts/seed_dev_data.py
+# The environment both seed targets need, resolved once. Two rules, and both matter.
+# What the caller exported WINS: `SUPABASE_SERVICE_ROLE_KEY=... make seed` never shells
+# out. And scripts/supabase_local.sh is asked only for what is missing, because
+# `supabase status` refuses to print anything while any container reports unhealthy --
+# including a container that is transiently unhealthy and answering queries normally
+# (measured 2026-08-22 on supabase_db_familyroots, "Health check exceeded timeout (2s)").
+SEED_ENV = set -e; \
+	  export DATABASE_URL="$${DATABASE_URL:-postgresql+psycopg://postgres:postgres@localhost:5432/family_roots}"; \
+	  if [ -z "$${SUPABASE_URL:-}" ] || [ -z "$${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then \
+	    eval "$$(scripts/supabase_local.sh env | sed 's/^/export /')"; \
+	  fi; \
+	  [ -n "$${SUPABASE_SERVICE_ROLE_KEY:-}" ] || { echo "make: no SUPABASE_SERVICE_ROLE_KEY. Start the stack with 'make supabase-up', or export the key yourself." >&2; exit 2; }
+
+seed: ## Seed BOTH databases from empty: a test clan, four users, their roles (S-073)
+# One command, and it covers both halves of a test user. Needs `make docker-up` and
+# `make supabase-up` first. A user's identity lives in the Supabase stack's auth.users and
+# the membership lives in the application database, so seeding one without the other
+# leaves a user who logs in and can reach nothing. See docs/ops/seed-test-users.md.
+#
+# DATABASE_URL is taken from the environment when set, and otherwise defaults to
+# docker-compose.yml's pgdb credentials. backend/.env is NOT read here: the seeder takes
+# plain environment variables only, so that what it targets is visible in the command.
+	@$(SEED_ENV); \
+	  cd backend && uv run alembic upgrade head && uv run python ../scripts/seed_dev_data.py apply
+
+seed-verify: ## Check that the two halves of every seeded test user agree
+	@$(SEED_ENV); \
+	  cd backend && uv run python ../scripts/seed_dev_data.py verify
 
 # ─── Packages ─────────────────────────────────────────────────────────
 packages-get: ## Get dependencies for all projects
