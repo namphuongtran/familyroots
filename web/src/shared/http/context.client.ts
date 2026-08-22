@@ -52,8 +52,9 @@ const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365
  * - `sameSite=lax` sends the cookie on a normal top-level navigation (an SSO
  *   redirect, a typed URL) but not on a cross-site subrequest or form post,
  *   which is the standard mitigation for a script-writable cookie. Matches
- *   what the legacy writer (`src/infrastructure/auth/clan-selection-storage.ts`)
- *   already ships.
+ *   what the legacy writer used to ship, back when one existed
+ *   (`src/infrastructure/auth/clan-selection-storage.ts`, deleted by S-027 once nothing
+ *   imported it — S-025 had already moved both real callers off it).
  * - `secure` is added only when the page itself is served over `https:`.
  *   `document.cookie` silently drops a `Secure` attribute set from an
  *   insecure origin rather than erroring, so hard-coding it would break local
@@ -71,9 +72,10 @@ function clanCookieAttributes(): string {
 /**
  * Selecting a clan writes this cookie. `useAuth`'s `selectClan` and
  * `syncAuthContext` call this now (S-025) instead of the legacy
- * `persistCurrentClanId` (`src/infrastructure/auth/clan-selection-storage.ts`,
- * same cookie name, compatible attributes, but it also wrote
- * `localStorage.current_clan_id` — deliberately not carried over here).
+ * `persistCurrentClanId` (`src/infrastructure/auth/clan-selection-storage.ts`, same
+ * cookie name, compatible attributes, but it also wrote `localStorage.current_clan_id` —
+ * deliberately not carried over here). That file had zero importers left after S-025 and
+ * is deleted by S-027.
  */
 export function writeClanCookie(clanId: string): void {
   if (typeof document === 'undefined') return

@@ -1,9 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import {
-  deriveCapabilities,
-} from '../../src/application/auth/use-cases/capabilities.ts'
+// S-027 deleted `src/application/auth/use-cases/capabilities.ts` and, with it, this file's
+// `deriveCapabilities respects clan context, approval state, and role hierarchy` test — that
+// module's only real (non-comment) importer was `src/lib/hooks/useCapabilities.ts`, which
+// S-027 rewired onto `src/domain/capability/capability.ts` instead. Equivalent coverage for
+// the new hook lives in `src/lib/hooks/useCapabilities.test.tsx`. `hydrateAuthContext`,
+// `mapSessionUserToProfile`, and `selectActiveClan` below are untouched: `auth-context.ts`
+// still backs the live `useAuth()` session-sync path and was not deleted by S-027 — see
+// `web/CLAUDE.md`, "Migration notes", for why.
 import {
   hydrateAuthContext,
   mapSessionUserToProfile,
@@ -77,8 +82,20 @@ test('hydrateAuthContext merges backend profile and memberships and resolves pre
       return {
         count: 2,
         clans: [
-          { clan_id: 'clan-1', clan_name: 'Clan One', clan_slug: 'one', role: 'editor', joined_at: null },
-          { clan_id: 'clan-2', clan_name: 'Clan Two', clan_slug: 'two', role: 'viewer', joined_at: null },
+          {
+            clan_id: 'clan-1',
+            clan_name: 'Clan One',
+            clan_slug: 'one',
+            role: 'editor',
+            joined_at: null,
+          },
+          {
+            clan_id: 'clan-2',
+            clan_name: 'Clan Two',
+            clan_slug: 'two',
+            role: 'viewer',
+            joined_at: null,
+          },
         ],
       }
     },
@@ -96,7 +113,11 @@ test('hydrateAuthContext merges backend profile and memberships and resolves pre
     },
   }
 
-  const result = await hydrateAuthContext(sessionPort as never, profileRepository as never, 'clan-1')
+  const result = await hydrateAuthContext(
+    sessionPort as never,
+    profileRepository as never,
+    'clan-1',
+  )
 
   assert.equal(result.user?.full_name, 'Backend Name')
   assert.equal(result.user?.preferred_locale, 'fr')
@@ -198,42 +219,18 @@ test('selectActiveClan delegates to repository and returns backend clan id', asy
   assert.deepEqual(calls, ['clan-9'])
 })
 
-test('deriveCapabilities respects clan context, approval state, and role hierarchy', () => {
-  const viewer = deriveCapabilities(
-    { id: '1', email: 'v@example.com', full_name: 'Viewer', role: 'viewer', is_approved: true, preferred_locale: 'vi' },
-    { hasActiveClan: true, isPendingApproval: false },
-  )
-  const editor = deriveCapabilities(
-    { id: '2', email: 'e@example.com', full_name: 'Editor', role: 'editor', is_approved: true, preferred_locale: 'vi' },
-    { hasActiveClan: true, isPendingApproval: false },
-  )
-  const admin = deriveCapabilities(
-    { id: '3', email: 'a@example.com', full_name: 'Admin', role: 'admin', is_approved: true, preferred_locale: 'vi' },
-    { hasActiveClan: true, isPendingApproval: false },
-  )
-  const superAdmin = deriveCapabilities(
-    { id: '4', email: 's@example.com', full_name: 'Super', role: 'viewer', platform_role: 'super_admin', is_approved: true, preferred_locale: 'vi' },
-    { hasActiveClan: true, isPendingApproval: false },
-  )
-
-  assert.equal(viewer.canEditPersons, false)
-  assert.equal(editor.canEditPersons, true)
-  assert.equal(editor.canDeleteDocuments, false)
-  assert.equal(admin.canDeleteDocuments, true)
-  assert.equal(superAdmin.canAccessPlatform, true)
-  assert.equal(
-    deriveCapabilities(
-      { id: '5', email: 'p@example.com', full_name: 'Pending', role: 'admin', is_approved: false, preferred_locale: 'vi' },
-      { hasActiveClan: true, isPendingApproval: true },
-    ).canManageClan,
-    false,
-  )
-})
-
 test('person invalidation helpers cover list, detail, and tree refreshes', () => {
   assert.deepEqual(personCreateInvalidationKeys(), [['persons', 'list'], ['tree']])
-  assert.deepEqual(personUpdateInvalidationKeys('p-1'), [['persons', 'detail', 'p-1'], ['persons', 'list'], ['tree']])
-  assert.deepEqual(personDeleteInvalidationKeys('p-2'), [['persons', 'detail', 'p-2'], ['persons', 'list'], ['tree']])
+  assert.deepEqual(personUpdateInvalidationKeys('p-1'), [
+    ['persons', 'detail', 'p-1'],
+    ['persons', 'list'],
+    ['tree'],
+  ])
+  assert.deepEqual(personDeleteInvalidationKeys('p-2'), [
+    ['persons', 'detail', 'p-2'],
+    ['persons', 'list'],
+    ['tree'],
+  ])
 })
 
 test('document invalidation helpers cover person document/detail refreshes when linked', () => {
@@ -247,7 +244,10 @@ test('document invalidation helpers cover person document/detail refreshes when 
 })
 
 test('event invalidation helpers cover list, upcoming, detail, and person timeline refreshes', () => {
-  assert.deepEqual(eventMutationInvalidationKeys(), [['events', 'list'], ['events', 'upcoming', 30]])
+  assert.deepEqual(eventMutationInvalidationKeys(), [
+    ['events', 'list'],
+    ['events', 'upcoming', 30],
+  ])
   assert.deepEqual(eventMutationInvalidationKeys({ detailId: 'e-1', personId: 'p-1' }), [
     ['events', 'list'],
     ['events', 'upcoming', 30],
