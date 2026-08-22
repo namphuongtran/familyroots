@@ -57,7 +57,40 @@ ThemeData buildAppTheme() {
       titleLarge: TextStyle(fontFamily: 'PlusJakartaSans'),
     ),
     // The no-line rule: boundaries come from background shifts, not borders.
-    dividerTheme: const DividerThemeData(thickness: 0, space: 0),
+    //
+    // `thickness: 0` does not suppress the line, and this theme claimed that it
+    // did from `0785036` (2026-08-03) until S-049. Flutter states the opposite at
+    // `material/divider.dart:86-87`: "A divider with a [thickness] of 0.0 is
+    // always drawn as a line with a height of exactly one device pixel."
+    // Measured 2026-08-22 by S-049, rasterising a real `Divider` over the page
+    // ground `#FBF8F1` at this host's device pixel ratio of 3.0: two raster
+    // rows changed, to `#D7D1C0` and `#D7D0C0` — one device pixel of ink,
+    // antialiased across the two rows the hairline straddles. That is 1.44:1
+    // against the ground, faint but painted.
+    //
+    // `color` is what actually suppresses it. Without one, the line takes
+    // `colorScheme.outlineVariant`, so the theme was choosing the colour of a
+    // line it believed it had suppressed. `Colors.transparent` is not a colour
+    // choice and so does not belong in `tokens.dart`: it is the absence of
+    // paint, and a token for it would name a colour nothing renders.
+    //
+    // `thickness: 0` and `space: 0` stay so an accidental `Divider` is inert in
+    // layout as well as in paint. Deleting this theme was the other branch and
+    // it loses: `_DividerDefaultsM3` (`material/divider.dart:359-370`) would
+    // then give thickness `1.0`, space `16`, and `outlineVariant` at full
+    // opacity, so honesty would be bought by making the forbidden line larger.
+    //
+    // A high-contrast mode turns the line back on here, and only here: the rule
+    // allows `outline_variant` at 15% opacity in that mode, which is this same
+    // `DividerThemeData` with `color: t.outlineVariant.withValues(alpha: 0.15)`
+    // and `thickness: 1`. Building that mode is out of S-049's scope.
+    //
+    // `test/core/theme/theme_test.dart` asserts the pixels, not this field.
+    dividerTheme: const DividerThemeData(
+      color: Colors.transparent,
+      thickness: 0,
+      space: 0,
+    ),
     cardTheme: CardThemeData(
       elevation: 0,
       color: t.surfaceContainerLow,

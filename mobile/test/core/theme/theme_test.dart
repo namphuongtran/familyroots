@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -72,6 +74,9 @@ void main() {
     // The no-line rule: a card is separated by a background step, not a
     // border, so the two must not be the same colour.
     expect(t.surfaceContainerLow, isNot(t.surface));
+    // Ambient depth, not a rigid drop shadow. Moved here from the divider test
+    // by S-049, which is now about pixels and only about dividers.
+    expect(buildAppTheme().cardTheme.elevation, 0);
   });
 
   test('no colour literal lives outside tokens.dart', () {
@@ -126,11 +131,106 @@ void main() {
     expect(t.ambientOpacity, 0.06);
   });
 
-  testWidgets('the no-line rule: dividers have no thickness', (tester) async {
-    final theme = buildAppTheme();
-    expect(theme.dividerTheme.thickness, 0);
-    expect(theme.cardTheme.elevation, 0);
-    await tester.pumpWidget(const SizedBox());
+  testWidgets('the no-line rule: a real Divider paints no pixel', (
+    tester,
+  ) async {
+    // S-049 replaced `expect(theme.dividerTheme.thickness, 0)` with this.
+    // Thickness zero is not absence: Flutter draws a thickness-0 divider as a
+    // hairline of exactly one device pixel (`material/divider.dart:86-87`),
+    // and before this test the app painted one. Measured 2026-08-22 over the
+    // page ground `#FBF8F1` at device pixel ratio 3.0, two raster rows came
+    // back `#D7D1C0` and `#D7D0C0`. A test that pins the field cannot see
+    // that, so this one rasterises the widget and reads the pixels instead.
+    final t = ArborTokens.light();
+
+    // Two grounds. `surface` is what the app actually paints on, and it is
+    // where a faint hairline hides best; the dark one leaves a blend nowhere
+    // to hide. On it the same line measured `#61645F` against `#102030`.
+    for (final ground in <Color>[t.surface, const Color(0xFF102030)]) {
+      for (final axis in Axis.values) {
+        final key = GlobalKey();
+        const before = SizedBox.square(dimension: 4);
+        const after = SizedBox.square(dimension: 5);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildAppTheme(),
+            home: Center(
+              child: RepaintBoundary(
+                key: key,
+                // Nothing else paints inside the boundary, so every pixel that
+                // is not the ground came from the divider.
+                child: ColoredBox(
+                  color: ground,
+                  child: SizedBox(
+                    width: 9,
+                    height: 9,
+                    child: axis == Axis.horizontal
+                        ? const Column(
+                            children: <Widget>[before, Divider(), after],
+                          )
+                        : const Row(
+                            children: <Widget>[
+                              before,
+                              VerticalDivider(),
+                              after,
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // A divider that draws nothing must also take no room, so an
+        // accidental one is inert in layout too.
+        expect(
+          tester.getSize(
+            find.byType(axis == Axis.horizontal ? Divider : VerticalDivider),
+          ),
+          axis == Axis.horizontal ? const Size(9, 0) : const Size(0, 9),
+          reason: 'the divider should occupy no space on the $axis axis',
+        );
+
+        // A hairline is defined in device pixels, so rasterise at this host's
+        // device pixel ratio rather than at 1.0.
+        final boundary =
+            key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final ui.Image image = boundary.toImageSync(
+          pixelRatio: tester.view.devicePixelRatio,
+        );
+        final data = await tester.runAsync(
+          () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+        );
+        image.dispose();
+
+        final bytes = data!.buffer.asUint8List();
+        final painted = <String>{};
+        for (var i = 0; i < bytes.length; i += 4) {
+          // rawRgba is R,G,B,A; rebuild it as 0xAARRGGBB to compare.
+          final argb =
+              (bytes[i + 3] << 24) |
+              (bytes[i] << 16) |
+              (bytes[i + 1] << 8) |
+              bytes[i + 2];
+          painted.add(
+            '#${argb.toRadixString(16).toUpperCase().padLeft(8, '0')}',
+          );
+        }
+
+        final expected =
+            '#${ground.toARGB32().toRadixString(16).toUpperCase().padLeft(8, '0')}';
+        expect(
+          painted,
+          <String>{expected},
+          reason:
+              'A $axis divider painted a pixel over $expected. The no-line '
+              'rule forbids the line, and `thickness: 0` does not suppress '
+              'it — only `DividerThemeData.color` does.',
+        );
+      }
+    }
   });
 
   testWidgets('body text is Manrope, headings Plus Jakarta Sans', (

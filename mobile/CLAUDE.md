@@ -341,7 +341,9 @@ hardcodes a colour or a radius. Reach them with `context.tokens`.
 - **No-line rule** — no 1px solid borders for sections or separation. Express
   boundaries with subtle background shifts (`surface-container-low` on
   `surface`). Exception: high-contrast accessibility mode → `outline_variant` at
-  15% opacity.
+  15% opacity. **The theme enforces this, it does not merely describe it:**
+  `dividerTheme` sets `color: Colors.transparent`, so a `Divider` a screen adds
+  by accident paints nothing and occupies nothing. See note 6.
 - **Typography** — **Plus Jakarta Sans** for headings, display, storytelling,
   person names, branch titles; **Manrope** for body, labels, data. Fonts are
   **bundled as assets and never fetched at runtime**.
@@ -357,9 +359,9 @@ hardcodes a colour or a radius. Reach them with `context.tokens`.
 - **Layout** — no rigid grids unless the data is tabular. Layouts must survive
   **200% text scale**; goldens run at scale 1.0 and 2.0.
 
-### The palette is the spec's and ADR-041's, and five things about it are load-bearing
+### The palette is the spec's and ADR-041's, and six things about it are load-bearing
 
-Landed by seed S-037 on 2026-08-22, extended by seeds S-044 and S-048 the same day. Each
+Landed by seed S-037 on 2026-08-22, extended by seeds S-044, S-048 and S-049 the same day. Each
 note exists because the obvious move is wrong.
 
 **1. `surface` is `#FBF8F1`, not the `#FDFCF7` mobile used to hold.** ADR-041 decision 3
@@ -478,20 +480,19 @@ needs a correct base value to take 15% of. Building that mode is explicitly out 
 scope, and out of this note's.
 
 **One gap this left open, which is not `outlineVariant`'s defect.** `app_theme.dart`'s
-`dividerTheme: DividerThemeData(thickness: 0, space: 0)` is commented as implementing the
-no-line rule, and `theme_test.dart` pins `thickness == 0` under the name "dividers have no
+`dividerTheme` was `DividerThemeData(thickness: 0, space: 0)`, commented as implementing the
+no-line rule, and `theme_test.dart` pinned `thickness == 0` under the name "dividers have no
 thickness". Thickness zero is not absence. Flutter documents it at
 `packages/flutter/lib/src/material/divider.dart:86-87`: "A divider with a [thickness] of
 0.0 is always drawn as a line with a height of exactly one device pixel." Measured
 2026-08-22 by pumping a bare `Divider` under `buildAppTheme()`:
 `Divider.createBorderSide(context)` returns `color #B3A98F, width 0.0,
-style BorderStyle.solid` — the token, because the theme sets no divider colour — and the
-widget lays out at `Size(800.0, 0.0)` because `space` is 0. So the theme picks the colour
-of a line it believes it has suppressed. Whether that hairline is visible at zero height
-was **not** measured pixel by pixel. No screen in `lib/` uses `Divider`, `TabBar`, `Chip`
-or `Card.outlined` today, so nothing renders either way. Deciding what the theme should do
-instead changes rendering and is its own decision, so S-048 reported it rather than folding
-it in.
+style BorderStyle.solid` — the token, because the theme set no divider colour — and the
+widget lays out at `Size(800.0, 0.0)` because `space` is 0. So the theme picked the colour
+of a line it believed it had suppressed. Whether that hairline is visible at zero height
+was **not** measured pixel by pixel by S-048. Deciding what the theme should do instead
+changes rendering and is its own decision, so S-048 reported it rather than folding it in.
+**Seed S-049 closed it on 2026-08-22. Note 6 is that answer.**
 
 **Contrast, computed 2026-08-22 with the WCAG 2.1 relative-luminance formula**, using an
 implementation checked against note 4's published figures (`onSurface` on `surface` 16.22:1
@@ -502,6 +503,73 @@ them reaches the 3:1 non-text floor of WCAG 1.4.11. That floor governs the bound
 control a user must find; a section separator is decorative and exempt, and the spec puts
 this role behind high-contrast mode at 15% anyway, which is fainter still. The figure is
 recorded so the next reader does not have to re-derive it, not as a compliance claim.
+
+**6. The theme now suppresses the divider line, and the test reads pixels instead of a
+field.** Seed S-049 settled note 5's open gap on 2026-08-22. `dividerTheme` gained
+`color: Colors.transparent`; `thickness: 0` and `space: 0` stayed.
+
+**The hairline was measured, and it is painted.** S-048 established the colour and the
+layout but said plainly that it had not looked at pixels. S-049 did. Method: put a real
+`Divider` in a `Column` inside a `ColoredBox` inside a `RepaintBoundary`, so nothing else
+paints in that subtree, then `toImageSync(pixelRatio: 3.0)` and read every pixel back as
+raw RGBA. Over the page ground `#FBF8F1`, two raster rows changed, to `#D7D1C0` and
+`#D7D0C0`. Over a dark `#102030` control ground the same two rows came back `#61645F` and
+`#626560`. Both grounds show about 50% coverage on each of two rows, which is one device
+pixel of ink antialiased across the boundary it straddles — exactly what Flutter's
+"exactly one device pixel" sentence promises. **The result does not depend on the raster
+scale:** at `pixelRatio: 1.0` it was rows 3 and 4 of 9, at `3.0` rows 11 and 12 of 27.
+
+**How visible is faint enough to ignore? The question does not arise, and that is the
+point.** Each painted row measures **1.44:1** against `surface`, computed with the same
+WCAG 2.1 implementation note 5 used and validated the same way (it reproduces 16.22:1,
+6.54:1 and 2.20:1 exactly). That is faint. But visibility is not a property the code can
+hold: it moves with the ground the divider sits on, with the display, and with the device
+pixel ratio. The no-line rule forbids **drawing the line**, not **noticing** it. So the
+test asserts that no pixel changed, never that no pixel is conspicuous.
+
+**Why suppress rather than stop claiming to.** Both branches were live and the seed named
+them. Deleting `dividerTheme` is the honest-sounding one and it loses on arithmetic:
+`_DividerDefaultsM3` (`material/divider.dart:359-370`, read 2026-08-22) supplies
+`thickness: 1.0`, `space: 16` and `colorScheme.outlineVariant`, so the first accidental
+`Divider` would then paint a full-opacity `#B3A98F` line **1.0 logical pixels** thick plus
+16 pixels of gap, instead of a 1.44:1 hairline. Honesty would have been bought by making
+the forbidden thing larger. Beyond that, "enforced by review at the widget layer" is what
+already failed here: the comment claimed the theme did the job from the day it was written
+(`0785036`, 2026-08-03) and nothing checked it for the 19 days until S-048 looked. This repository prefers a mechanism to a convention everywhere else — see the
+import-boundary test — and a global visual mandate belongs in the one global place.
+
+**Where high-contrast mode turns the line back on.** In this same field, and nowhere else.
+The rule's exception is `outline_variant` at 15% opacity, which is
+`DividerThemeData(color: t.outlineVariant.withValues(alpha: 0.15), thickness: 1)` in place
+of the transparent one. That is why note 5 refused to delete the `outlineVariant` token: a
+mode that renders it at 15% needs a correct base value to take 15% of. Building the mode
+stays out of scope.
+
+**`Colors.transparent` is not a colour, so it does not want a token.** `tokens.dart` owns
+every colour the app paints. Transparent is the absence of paint. A token for it would be
+a value no screen renders, which is note 3's dead-token defect. The literal guard in
+`theme_test.dart` is unaffected: it matches `Color(0x…)` spellings, and this is a named
+framework constant.
+
+**One other widget reads this field, and the change is deliberate for it too.**
+`DividerTheme.of(context)` has exactly four call sites in Flutter 3.44.8, found 2026-08-22
+with `grep -rn "DividerTheme.of(" packages/flutter/lib/src/material/`: `Divider` twice
+(`divider.dart:167` and `:187`), `VerticalDivider` (`:315`), and `SearchAnchor`'s search
+view (`search_anchor.dart:1063`). No screen in `lib/` uses any of the three. If a search
+view lands and wants its divider, it passes `dividerColor` on the widget, which wins over
+the theme at `search_anchor.dart:1076-1080`.
+
+**The test is the part worth copying.** The old assertion was
+`expect(theme.dividerTheme.thickness, 0)` under the name "dividers have no thickness". It
+was true, it was green, and the app painted a line the whole time. **A test that pins a
+setting pins nothing about the outcome.** The replacement, "the no-line rule: a real
+Divider paints no pixel", renders both `Divider` and `VerticalDivider` over two grounds and
+asserts the set of distinct pixels is exactly `{ground}`. It also asserts each divider
+measures `Size(9, 0)` or `Size(0, 9)`, so an accidental one is inert in layout as well as
+in paint. Both halves were watched failing: removing `color` produced
+`Actual: Set:['#FFFBF8F1', '#FFD7D1C0', '#FFD7D0C0']`, and setting `space: 16` produced
+`Actual: _DebugSize:<Size(9.0, 16.0)>`. **When you pin a visual rule, rasterise and read
+the pixels. A field is evidence about the field.**
 
 The design system itself — tokens, components, accessibility rules and the 15
 screen groups — is specced in
