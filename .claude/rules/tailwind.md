@@ -64,6 +64,12 @@ discriminate: "no class asks for it yet" and "the declaration was dropped" look 
 table of seventeen computed values in the S-001 record at `docs/SEEDS.md` could not be reproduced
 on this tree on 2026-08-13. Treat it as not reproducible rather than as a measurement.
 
+**This is one of three instances of a rule that is written once, elsewhere.** The probe read back a
+value the token did not control, so its passing reading and its failing reading were the same. The
+rule, with this instance, the `backend` RLS coverage guard, and the mobile `dividerTheme` field
+beside it, is `.claude/rules/seeds.md`, section "A test pins an outcome, not a setting". Add
+Tailwind-specific evidence here; do not restate the rule here.
+
 Two rules follow, and the second one is the one that costs time:
 
 - **Check a token by reading `globals.css`, not by reading a computed style.** The stylesheet holds
