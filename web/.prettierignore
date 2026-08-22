@@ -1,0 +1,20 @@
+# pnpm owns this file. Seed S-028 added `pnpm format:check` to the web CI job on
+# 2026-08-22, and there was no .prettierignore, so the sweep reformatted
+# pnpm-lock.yaml as well: 4244 insertions, 1493 deletions, YAML flow mappings
+# rewritten as block mappings.
+#
+# That put two tools in charge of one file. Measured on the batch-13 integration
+# tree, 2026-08-22: `pnpm install --lockfile-only` rewrites the lockfile back to
+# pnpm's own style, reversing the prettier diff exactly, and `pnpm format:check`
+# then exits 1 with "[warn] pnpm-lock.yaml". So the next `pnpm add` would have
+# broken CI, and the fix would have been to run prettier over a file pnpm
+# regenerates. Ignoring it hands the file back to the tool that writes it.
+pnpm-lock.yaml
+
+# Build output and generated code. Prettier has no opinion worth having here and
+# `eslint.config.mjs` already ignores the second dist dir for the same reason.
+.next/
+.next-banner-e2e/
+playwright-report/
+test-results/
+src/generated/
