@@ -52,6 +52,13 @@ Headers:
 - Accept fails closed on a non-pending/expired/already-member invitation
   (`invitation.not_pending` / `invitation.expired` / `invitation.already_member`).
 - Invitation create/accept/revoke emit auditable domain events → `audit_logs` rows.
+- **The invitee surface takes no `X-Current-Clan-Id`, and cannot.** The invitee is not a
+  member of the clan yet, so there is no clan for them to select. Sending the header has no
+  effect on this route. The token is the authorization: it is the only thing that decides
+  which clan the caller is granted a role in. Nothing here changed with
+  [ADR-048](../decisions/048-invitation-accept-runs-on-the-system-session.md) — the request,
+  the response and the error codes are identical — but ADR-048 is where the reason is
+  written down, along with what that costs at the database layer.
 
 Response shapes (see [Response envelope](README.md#response-envelope)):
 

@@ -190,6 +190,31 @@ holds. A whole-route assertion would have asserted something untrue.
   (`tests/unit/api/test_invitation_envelope.py`). A future test that overrides only `get_db` and
   then calls accept will reach the real engine. That is the sharpest edge this change leaves.
 
+## One assertion this ADR could not update, and where it lives
+
+`backend/tests/integration/test_rls_activation.py` pins the exact set of RLS-enabled tables at
+its lines 181-190, and its docstring at `:165-166` reads "`clan_invitations` is absent on
+purpose; see test_invitation_accept_no_clan_context for why it cannot join the set yet."
+**Both sentences are false after migration 032**, and the assertion fails:
+
+```
+E   AssertionError: RLS scope drifted: {'events', 'change_requests', 'clan_memberships',
+    'documents', 'branches', 'parent_child', 'marriages', 'persons', 'clan_invitations'}
+E   Extra items in the left set:
+E   'clan_invitations'
+```
+
+Run 2026-08-22. That file was fenced to a concurrent agent (seed **S-045**, which pins the exact
+set of settings the seam writes, and touches the same file at `:70-84`), so seed S-043 left it
+untouched rather than racing it. The edit is two lines: add `"clan_invitations",` to the set, and
+replace the docstring sentence with one saying the table joined the set in migration 032 per
+ADR-048. With that one assertion deselected the suite is `1274 passed, 1 deselected`.
+
+This is written here rather than only in a report, because the report is the one place no future
+agent reads. It also makes the same point ADR-047 makes about coverage pins: a set literal in a
+test is the right guard **and** it is a merge point, so a batch that lands a policy and a batch
+that touches the seam collide on it by construction.
+
 ## What this ADR deliberately does not decide
 
 - **`user_clan_roles` and `clan_settings`**, which are seed S-010. This ADR removes one obstacle
