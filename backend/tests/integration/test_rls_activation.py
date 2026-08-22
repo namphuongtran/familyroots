@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncGenerator, Generator
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
@@ -164,15 +165,55 @@ async def test_role_grants_allow_calling_functions(engine: AsyncEngine) -> None:
         )  # no rows expected; the point is it does not raise on permission
 
 
+# The RLS-enabled set, split by what the policies actually DO. The split exists because
+# "RLS enabled with at least one policy" is not one claim, it is two different ones, and
+# ADR-042 shipped the first table where they diverge (S-012, migration 033).
+#
+# CLAN-ISOLATED: the policy compares the row's clan to the app.clan_id GUC, so the request
+# role reads its own clan and nothing else. This is layer-2 clan isolation.
+_CLAN_ISOLATED_TABLES = {
+    "documents",
+    "events",
+    "branches",
+    "parent_child",
+    "marriages",
+    "persons",
+    "change_requests",
+    "clan_memberships",
+    "clan_invitations",
+}
+
+# REQUEST-ROLE-DENIED: the policy compares nothing. USING (false) WITH CHECK (false) locks
+# the request role out of the table entirely, whatever clan is selected. It is a TRIPWIRE
+# for a mis-wired session, NOT clan isolation, and ADR-042 refuses to call it a second
+# layer. `identity_claims` is here because it has no clan_id to compare
+# (app/models/identity_claim.py reaches a clan only through person_id at :32-36), every
+# claim handler is privileged by design (dependencies.py:144, :149), and two of its four
+# routes resolve no clan at all. Its clan isolation is the application layer, alone.
+_REQUEST_ROLE_DENIED_TABLES = {"identity_claims"}
+
+# The migration-027 predicate template, present in every clan-isolated policy's `qual`.
+_GUC_MARKER = "app.clan_id"
+
+
 async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncEngine) -> None:
     """CI guard (ADR-008): every table with RLS ENABLEd must have at least one policy
     (else it is a silent lockout) AND familyroots_app must hold table privileges. Also
     pins the CURRENT scope, table by table — a later phase updates this set deliberately
-    when it adds one. `clan_invitations` joined the set on 2026-08-22 (S-043, ADR-048,
-    migration 032). It could not before, because accept-by-token ran on the request
-    session with no clan selected; ADR-048 moved accept to its own privileged provider,
-    which is what made the policy safe. See test_rls_phase7_clan_invitations and
-    test_invitation_accept_no_clan_context."""
+    when it adds one.
+
+    `clan_invitations` joined on 2026-08-22 (S-043, ADR-048, migration 032). It could not
+    before, because accept-by-token ran on the request session with no clan selected;
+    ADR-048 moved accept to its own privileged provider, which is what made the policy
+    safe. See test_rls_phase7_clan_invitations and test_invitation_accept_no_clan_context.
+
+    `identity_claims` joined on 2026-08-22 too (S-012, ADR-042, migration 033) and is
+    **enumerated separately on purpose**. Its policy is deny-all. A guard that only asked
+    "is RLS on, and is there a policy" would answer yes for it and mean nothing by it —
+    the table has ONE layer of clan isolation, in the application layer, where the nine
+    above have two. Adding its name to the clan-isolated set would be a lie a later reader
+    could not detect, so the two sets are asserted with different questions below.
+    """
     async with engine.connect() as conn:
         rls_tables = set(
             (
@@ -187,17 +228,9 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
             .scalars()
             .all()
         )
-        assert rls_tables == {
-            "documents",
-            "events",
-            "branches",
-            "parent_child",
-            "marriages",
-            "persons",
-            "change_requests",
-            "clan_memberships",
-            "clan_invitations",
-        }, f"RLS scope drifted: {rls_tables}"
+        assert rls_tables == _CLAN_ISOLATED_TABLES | _REQUEST_ROLE_DENIED_TABLES, (
+            f"RLS scope drifted: {rls_tables}"
+        )
 
         for table in rls_tables:
             n_policies = await conn.scalar(
@@ -209,3 +242,63 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
                 {"t": table},
             )
             assert has_select is True, f"familyroots_app lacks SELECT on {table}"
+
+
+async def test_each_half_of_the_rls_set_matches_what_its_policies_do(engine: AsyncEngine) -> None:
+    """The split above is only worth having if it is CHECKED, not merely written down.
+
+    A comment saying "these nine isolate by clan and this one denies everything" goes stale
+    the first time a migration moves a table between the halves, and nothing would notice.
+    So each half is asserted with the question that belongs to it:
+
+    * a clan-isolated table must have at least one policy whose USING clause reads the
+      ``app.clan_id`` GUC — a table listed here whose policy turned into ``USING (false)``
+      is locked out, not isolated, and its routes would be quietly returning nothing;
+    * a request-role-denied table must have every policy reading ``USING (false)`` and
+      ``WITH CHECK (false)`` — a table listed here whose policy started permitting rows
+      would be handing the request role a table that ADR-042 promises it cannot reach.
+
+    Note the second half also fails if someone "fixes" the deny-all by giving
+    ``identity_claims`` a clan predicate. That is a real decision (it would reopen ADR-042
+    and break ``GET /m/claims``), and it should have to be made deliberately here rather
+    than arriving as a passing migration.
+    """
+    async with engine.connect() as conn:
+        rows = (
+            (
+                await conn.execute(
+                    sa.text(
+                        "SELECT tablename, policyname, qual, with_check FROM pg_policies "
+                        "WHERE schemaname = 'public'"
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+    by_table: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_table.setdefault(row["tablename"], []).append(dict(row))
+
+    for table in _CLAN_ISOLATED_TABLES:
+        policies = by_table.get(table, [])
+        assert policies, f"{table} is listed as clan-isolated but has no policy at all"
+        assert any(_GUC_MARKER in (p["qual"] or "") for p in policies), (
+            f"{table} is listed as clan-isolated but no policy's USING clause reads "
+            f"{_GUC_MARKER!r}: {policies}"
+        )
+
+    for table in _REQUEST_ROLE_DENIED_TABLES:
+        policies = by_table.get(table, [])
+        assert policies, f"{table} is listed as request-role-denied but has no policy at all"
+        for p in policies:
+            assert (p["qual"] or "").strip().lower() == "false", (
+                f"{table}.{p['policyname']} is enumerated as deny-all but its USING clause "
+                f"is {p['qual']!r}. If this table now carries real clan isolation, move it "
+                f"to _CLAN_ISOLATED_TABLES and reopen ADR-042 — do not widen this assertion"
+            )
+            assert (p["with_check"] or "").strip().lower() == "false", (
+                f"{table}.{p['policyname']} is enumerated as deny-all but its WITH CHECK "
+                f"clause is {p['with_check']!r}"
+            )

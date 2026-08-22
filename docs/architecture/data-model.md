@@ -8,8 +8,11 @@ FamilyRoots uses **PostgreSQL 16+** with a single `public` schema. The core data
 - **Edge** = `Marriage` | `ParentChild` (global relationships between persons)
 - **View** = `ClanMembership` (M:N link filtering persons into clan views)
 
-Data isolation between clans is enforced **in the application/repository layer**
-(the active mechanism; DB-level RLS is a deferred layer-2 — see `multi-tenancy.md`):
+Data isolation between clans is enforced **in the application/repository layer** (the
+primary, tested mechanism). DB-level RLS is an **active** layer-2 behind it, not a deferred
+one: this line read "deferred" until 2026-08-22, nine migrations after the first policy
+shipped, and seed S-012 corrected it. See `multi-tenancy.md` for the covered set and for the
+one table whose policy is a deny-all tripwire rather than clan isolation.
 - `ClanMembership` join scopes person visibility per clan (read)
 - `created_by_clan_id` on edges scopes both reads and writes of relationships
 - writes validate that referenced persons belong to the acting clan
@@ -410,6 +413,32 @@ Workflow queue for users claiming an identity in the family tree.
 > **💡 Note (VN) - Ngăn Spam & Race Condition:** 
 > Hệ thống chặn spam bằng Constraint `UNIQUE(user_id) WHERE status = 'PENDING'` (một user chỉ có 1 request đang chờ). Khi claim được Approve, hệ thống gán `user_profile.person_id` và tự động Reject toàn bộ các claims Pending khác vào cùng nhân vật này, ngăn Race Condition.
 
+> **The spam guard is GLOBAL, across every clan.** The index is
+> `uq_identity_claim_user_pending` — `UNIQUE (user_id) WHERE status = 'PENDING'`, created in
+> `backend/migrations/versions/001_initial.py:770` and declared at
+> `backend/app/models/identity_claim.py:17-23`. It carries no clan, so a user holding a
+> pending claim in one clan cannot open a second one in another. The SQL block under
+> "Indexes & Performance Tuning" below names this index `idx_identity_claims_pending_user`,
+> which no migration ever created; the real name is the one above. Enforced in two places:
+> the clan-free `has_pending_claims` query (`claim_repository.py:66-72`), which produces the
+> documented `409 user_already_has_pending_claim`, and the index itself. Pinned by
+> `backend/tests/integration/test_claim_cross_clan_pending_uniqueness.py`.
+
+> ⚠️ **RLS (2026-08-22, migration `033_rls_identity_claims`, ADR-008 Phase 8, seed S-012) —
+> ENABLED, and NOT clan isolation.** The single policy is
+> `identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`. It compares
+> nothing to `app.clan_id`; it locks the request role out of the table entirely. This table
+> has no `clan_id` to compare, both claim handlers are privileged by design
+> (`app/infrastructure/dependencies.py:144`, `:149`), and two of the four claim routes
+> resolve no clan at all, so
+> [ADR-042](../decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md)
+> kept the application layer as this table's only clan isolation and shipped the policy as a
+> **tripwire** for a claims query mis-wired to `get_db`. Do not count it as coverage: a check
+> that asks "is RLS on and is there a policy" answers yes here and means nothing by it. The
+> `ON DELETE CASCADE` from `persons` and `user_profiles` still fires under the policy
+> (measured, not assumed — ADR-042 asked for it to be run). Pinned by
+> `backend/tests/integration/test_rls_phase8_identity_claims.py`.
+
 ### `persons`
 Global person entity — independent of any clan. A person exists once and can appear in multiple clans via `clan_memberships`.
 
@@ -504,12 +533,20 @@ M:N link between persons and clans. Determines which persons appear in which cla
 > nesting is a no-op. Pinned by
 > `backend/tests/integration/test_rls_phase6_clan_memberships.py`.
 
-> ⛔ **`clan_invitations` is deliberately NOT RLS-enabled**, although seed S-009 named it
-> alongside this table. `POST /invitations/{token}/accept` has no clan context — the
-> invitee is not a member yet — but runs on the RLS request session, so the policy would
-> make `get_by_token` return zero rows and every accept answer `invitation.not_found`.
-> Covering it needs a decision about which session the accept path runs on, and an ADR.
-> Pinned by `backend/tests/integration/test_invitation_accept_no_clan_context.py`.
+> ✅ **`clan_invitations` IS RLS-enabled** (2026-08-22, migration `032_rls_clan_invitations`,
+> [ADR-048](../decisions/048-invitation-accept-runs-on-the-system-session.md), seed S-043).
+> This block said the opposite until 2026-08-22 and was corrected in place by seed S-012,
+> which found it after the migration had landed. Seed S-009 deferred the table because
+> `POST /invitations/{token}/accept` has no clan context — the invitee is not a member yet —
+> and ran on the RLS request session, so the policy would have made `get_by_token` return
+> zero rows and every accept answer `invitation.not_found`. ADR-048 moved **that one route**
+> to its own privileged provider (`get_invitation_accept_handler`,
+> `app/infrastructure/dependencies.py:358-362`); create, list and revoke stayed on `get_db`
+> and are what the `clan_invitations_clan_isolation` policy protects. The accept path
+> therefore has one layer of isolation, the token, where the other three have two. Pinned by
+> `backend/tests/integration/test_rls_phase7_clan_invitations.py`,
+> `backend/tests/unit/api/test_invitation_accept_session_wiring.py`, and
+> `backend/tests/integration/test_invitation_accept_no_clan_context.py`.
 
 ### `marriages`
 Global edge linking two persons. Supports polygamy, divorce, remarriage.
@@ -952,6 +989,18 @@ CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 
 ## RLS Policies
 
+> **Correction (2026-08-22, seed S-012): the SQL below never shipped, and the paragraph
+> under it is out of date about what did.** RLS layer-2 is **active**. Ten tables now carry
+> policies (migrations `002` and `026`–`033`); the request path connects as the non-bypass
+> `familyroots_app` role and sets `app.clan_id` per transaction. Nine of the ten are
+> clan-isolated; `identity_claims` carries a deny-all tripwire that is not clan isolation
+> (ADR-042). **The authority on the covered set is
+> `backend/tests/integration/test_rls_activation.py`**, which enumerates it and fails on
+> drift — not this file and not the prose list in ADR-008. The SQL below is kept as the
+> 2026-06-28 design sketch. It does not describe the shipped policies: those key on
+> `app.clan_id`, not the `app.current_clan_id` shown here, and the `persons` policy is
+> per-command rather than the single `SELECT` policy drafted below.
+>
 > **Status (2026-06-28) — ASPIRATIONAL, not yet active.** The policies below are
 > the *target* design for the deferred RLS layer-2 (ADR-008). They are **not**
 > applied to the running database, and the GUC shown here (`app.current_clan_id`)

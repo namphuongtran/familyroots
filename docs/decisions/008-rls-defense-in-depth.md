@@ -92,6 +92,42 @@ the ContextVar so post-commit transactions re-apply it).
   touching no row, default-deny, and an ORM insert with RETURNING). Coverage guard now
   `{documents, events, branches, parent_child, marriages, persons, change_requests}`.
 
+> **Gap in this list, recorded 2026-08-22 by seed S-012 rather than backfilled.** Phases 6
+> and 7 shipped on 2026-08-22 and have no bullet here: `clan_memberships` (migration
+> `031_rls_clan_memberships`, seed S-009, proven by `test_rls_phase6_clan_memberships`) and
+> `clan_invitations` (migration `032_rls_clan_invitations`,
+> [ADR-048](048-invitation-accept-runs-on-the-system-session.md), seed S-043, proven by
+> `test_rls_phase7_clan_invitations`). Both take the Phase-2 template on a NOT-NULL
+> `clan_id`. S-012 did not write their entries, because it did not do that work and an ADR
+> entry is a dated claim about what its author checked. The authority on the covered set is
+> `test_rls_activation.py`, which enumerates it and fails on drift; this prose list is not.
+> **The "Not yet" paragraph below is also stale in one clause as of that date:** it gives
+> `clan_invitations` as excluded because of the unauthenticated accept-by-token path, and
+> ADR-048 resolved exactly that by moving the accept route to the privileged session.
+
+- **Phase 8 (2026-08-22, migration `033_rls_identity_claims`, seed S-012, decided by
+  [ADR-042](042-identity-claims-app-layer-isolation-system-session-lockout.md))** — RLS
+  enabled on `identity_claims` with **one deny-all policy**,
+  `identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`.
+  **This phase adds no clan isolation and must not be counted as coverage.** The table has
+  no `clan_id` to compare (`app/models/identity_claim.py` reaches a clan only through
+  `person_id` at `:32-36`), both claim handlers are wired on the privileged `get_system_db`
+  by design (`app/infrastructure/dependencies.py:144`, `:149`), and two of the four claim
+  routes resolve no clan at all. The policy is a **tripwire**: it converts a claims query
+  mis-wired to `get_db` from a silent cross-clan read into zero rows and a rejected write.
+  It catches a mis-wired *session*; it does not catch a missing *filter* on the correct
+  session, and the application layer stays this table's only clan isolation. Proven by
+  `test_rls_phase8_identity_claims` (denial under either clan and under none, with a
+  privileged control proving the rows existed; INSERT rejected; UPDATE and DELETE touching
+  no row; the system session still reading and writing; all four claim routes still working
+  end to end with `get_db` on the real RLS session) and by
+  `test_claim_cross_clan_pending_uniqueness` (the global one-pending-claim invariant, which
+  a clan-keyed policy would have made uncheckable — ADR-042 § 5). The `ON DELETE CASCADE`
+  from `persons` was measured under the policy and still fires. Because "RLS enabled with at
+  least one policy" now answers yes for a table with no isolation, the coverage guard in
+  `test_rls_activation.py` was split into `_CLAN_ISOLATED_TABLES` and
+  `_REQUEST_ROLE_DENIED_TABLES`, and each half is asserted with its own question.
+
 Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
 tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
 by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break

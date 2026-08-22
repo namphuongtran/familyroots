@@ -11,7 +11,8 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
 > `change_requests`, `clan_memberships`, and `clan_invitations` are RLS-enforced at the DB
 > layer (other clan-scoped tables are added table-by-table, and one of them cannot be — see
-> point 7).
+> point 7). A tenth table, `identity_claims`, has RLS **enabled with a deny-all policy that
+> is not clan isolation** — see point 8, and do not read it as a covered table.
 > `persons` carries two extra rules — see point 6 below and
 > [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
 > describe the application-layer mechanism that remains the primary guarantee.
@@ -130,6 +131,41 @@ PostgreSQL instance
    on, and that decision needs its own ADR. Seed S-009 enabled RLS on `clan_memberships` only
    for this reason; seed S-043 then made the decision for `clan_invitations`, and S-010 still
    owns `user_clan_roles`.
+
+8. **`identity_claims` has RLS enabled and NO clan isolation, and the two facts are not in
+   tension.** Migration `033_rls_identity_claims` (2026-08-22, seed S-012) creates exactly
+   one policy, `identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`.
+   It compares nothing to `app.clan_id`. The request role is locked out of the table whatever
+   clan is selected, and the application layer is this table's **only** clan isolation.
+   [ADR-042](../decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md)
+   made that choice and refuses to call the policy a second layer.
+
+   Three facts forced it, and each is bigger than the missing column. The table has no
+   `clan_id`: it reaches a clan only through `person_id`, and the clan it reaches is the
+   person's **nullable origin** (`persons.created_by_clan_id`, `ON DELETE SET NULL` per
+   ADR-009), which is provenance rather than membership. Both claim handlers are wired on
+   the privileged `get_system_db` on purpose — a claimant resolves a person by global id and
+   is not yet a member of that person's clan — so any predicate added today would be inert.
+   And `POST /persons/{person_id}/claim` runs under the **claimant's** active clan, not the
+   claimed person's, so a clan-keyed policy would reject the one insert the feature exists to
+   perform.
+
+   **What the policy is for.** It is a tripwire for a mis-wired session: a claims query
+   pointed at `get_db` returns zero rows and a rejected write in the author's own test run,
+   instead of quietly reading every clan's claims. It does **not** catch a missing
+   `created_by_clan_id` filter on the correct session. If a future read path forgets that
+   filter, one clan's admin sees another clan's claims — the claimant's user id, the person
+   id, and both note fields. That residual risk is accepted in ADR-042 and mitigated by
+   nothing else.
+
+   **The consequence for any coverage check.** "RLS enabled with at least one policy" answers
+   yes for this table and means nothing by it. The guard in
+   `backend/tests/integration/test_rls_activation.py` is therefore split into
+   `_CLAN_ISOLATED_TABLES` and `_REQUEST_ROLE_DENIED_TABLES`, and each half is asserted with
+   its own question: a clan-isolated table must have a policy whose `USING` clause reads
+   `app.clan_id`, and a denied table must have every policy reading `USING (false)` and
+   `WITH CHECK (false)`. Pinned by `test_rls_phase8_identity_claims.py` and
+   `test_claim_cross_clan_pending_uniqueness.py`.
 
 ## Multi-clan membership (clan switcher)
 
