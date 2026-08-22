@@ -395,7 +395,7 @@ async def delete_person(
     return {"data": {"message": t("person.deleted"), "id": str(person_id)}}
 
 
-@router.post("/{person_id}/restore", responses=ok(PersonResponse))
+@router.post("/{person_id}/restore", responses=ok_message())
 async def restore_person(
     person_id: uuid.UUID,
     current_user: dict[str, Any] = Depends(get_current_user),

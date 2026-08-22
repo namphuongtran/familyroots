@@ -182,3 +182,22 @@ def test_clan_founder_designate_is_envelope_of_founder_designation_response(
     convention this module's docstring pins for every other route)."""
     ref = _response_schema(openapi, "/api/v1/clans/me/founder", "put", "200")
     assert "Envelope" in ref and "FounderDesignationResponse" in ref, ref
+
+
+def test_person_delete_and_restore_both_advertise_the_message_envelope(
+    openapi: dict[str, Any],
+) -> None:
+    """S-060 pin. `docs/contracts/rest-persons-api.md:66-67` states one rule for
+    two routes: `DELETE /persons/{id}` and `POST /persons/{id}/restore` both
+    return `{"data": {"message": ..., "id": ...}}`. Both halves are asserted
+    here, because `restore` shipped decorated `ok(PersonResponse)` while
+    returning a message envelope (persons.py:398 vs :414), and this module
+    samples representative routes rather than sweeping all of them, so nothing
+    read the schema this route generated."""
+    for path, method in (
+        ("/api/v1/persons/{person_id}", "delete"),
+        ("/api/v1/persons/{person_id}/restore", "post"),
+    ):
+        ref = _response_schema(openapi, path, method, "200")
+        assert "MessageData" in ref, f"{method.upper()} {path}: {ref}"
+        assert "PersonResponse" not in ref, f"{method.upper()} {path}: {ref}"
