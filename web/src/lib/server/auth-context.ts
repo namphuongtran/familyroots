@@ -17,8 +17,27 @@ interface ServerAuthContext {
 
 const CURRENT_CLAN_COOKIE = 'current_clan_id'
 
+/**
+ * ADR-056 / seed S-076: `NEXT_PUBLIC_API_URL` is inlined into the JS bundle at
+ * `pnpm build` time (Next.js statically replaces every `process.env.NEXT_PUBLIC_*`
+ * reference across the whole bundler graph, server code included — S-071 proved this
+ * for the two Supabase variables). A server-to-server caller running inside a shared
+ * network (compose, or a future container deploy) needs a *different*, network-internal
+ * origin than the browser does, and that origin can change per deployment without a
+ * rebuild — so it must be read at request time, not baked in.
+ *
+ * `API_URL` carries no `NEXT_PUBLIC_` prefix, so Next.js never inlines it: this
+ * `process.env.API_URL` lookup runs live, in the Node.js runtime, on every call. It
+ * takes priority so a deployment shape with two different real origins (compose today;
+ * any future shared-network container deploy) can set it. On Vercel, where this
+ * function's own request and the browser's request already share one public origin,
+ * `API_URL` is simply left unset and this falls through to `NEXT_PUBLIC_API_URL` — the
+ * same value the browser bundle got baked with, which is also correct as the
+ * server-to-server value there. See ADR-056 for the full decision and cost per
+ * deployment shape.
+ */
 function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'
+  return process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'
 }
 
 export async function getServerAuthContext(): Promise<ServerAuthContext | null> {

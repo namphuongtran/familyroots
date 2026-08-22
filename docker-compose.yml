@@ -97,9 +97,20 @@ services:
       # burned into it and cannot be promoted to production unchanged. Rebuild
       # (`docker compose build web`) with the target environment's `.env` before
       # promoting.
+      #
+      # `NEXT_PUBLIC_API_URL` joined the two above by seed S-076 / ADR-056, which
+      # decided it holds the *browser-facing* origin only — host-reachable from
+      # wherever a browser on the host runs, `http://localhost:8000/api/v1` by default,
+      # since `api`'s port 8000 is published to the host below. It is deliberately NOT
+      # the compose-network hostname `http://api:8000/api/v1`: a browser cannot resolve
+      # that name, only another container on the `familyroots` network can. The
+      # server-to-server value lives in a *separate*, non-public `API_URL` runtime
+      # variable below — see that comment for why the split exists and ADR-056 for the
+      # full decision and what each deployment shape needs.
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     container_name: familyroots-web
     restart: unless-stopped
     # S-072: the server half of Next.js (middleware, route handlers) reaches Supabase
@@ -118,19 +129,23 @@ services:
       # this same `.env`, and not removed, so this file still shows where the value
       # comes from for that case.
       #
-      # `NEXT_PUBLIC_API_URL` was not investigated by S-071 beyond confirming it is
-      # NOT given a `build.args` entry above, on purpose (out of that seed's scope) —
-      # but it reaches a Client Component transitively too (`src/lib/api/axios.ts`,
-      # imported by `'use client'` hooks such as `useMembers.ts`), and its build-time
-      # value differs by caller: `src/lib/server/auth-context.ts` needs the
-      # compose-network hostname `http://api:8000/api/v1` for server-to-server calls,
-      # while a browser needs a host-reachable origin instead. One literal cannot
-      # satisfy both once it is baked at build time, so this is a second, undecided
-      # instance of the same defect class S-071 fixed for Supabase's two variables,
-      # not merely S-071's Out of scope. Flagged to the coordinator; not fixed here.
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000/api/v1}
+      # `NEXT_PUBLIC_API_URL` reaches a Client Component transitively too
+      # (`src/lib/api/axios.ts`, imported by `'use client'` hooks such as
+      # `useMembers.ts`), so it is inert here for the identical reason, in the built
+      # image — kept for the same non-Docker `pnpm dev`/`pnpm build` case, and now
+      # matching the *browser-facing* default the `build.args` above bakes in, not the
+      # compose-network hostname a browser cannot resolve.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      # ADR-056 / S-076: the server-to-server value. `API_URL` carries no `NEXT_PUBLIC_`
+      # prefix, so Next.js never inlines it — `src/lib/server/auth-context.ts` reads
+      # `process.env.API_URL` live, at request time, inside this already-built image.
+      # This is genuinely run time, unlike the two lines above: the compose-network
+      # hostname `http://api:8000/api/v1` is correct here because this fetch runs
+      # inside the `web` container, on the same `familyroots` network as `api`, never
+      # in a browser.
+      API_URL: ${API_URL:-http://api:8000/api/v1}
     depends_on:
       api:
         condition: service_healthy
