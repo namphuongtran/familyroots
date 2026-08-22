@@ -2460,7 +2460,7 @@ and `notification_log`, which are S-013.
 
 ## S-012. Enable RLS on `identity_claims` in the shape S-011 decides
 
-**Status:** blocked · **Blocked by:** S-011 · **Unblocks:** S-015
+**Status:** open · **Blocked by:** S-011, done 2026-08-22 · **Unblocks:** S-015
 
 **Read ADR-042 and implement what it chose.** If it chose the application layer, this seed's end
 state is a recorded absence rather than a migration, and it says so in one sentence plus a row in
@@ -2475,7 +2475,8 @@ rejected. Isolation is two-sided. The migration is reversible.
 cross-clan uniqueness test above, which is the one this table can fail in a way the others cannot.
 Plus the planted inversion.
 
-**Sources.** `docs/decisions/042-*.md`, which does not exist yet;
+**Sources.** `docs/decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md`,
+written 2026-08-22 by S-011 — this seed said "which does not exist yet" and that is no longer true;
 `backend/app/models/identity_claim.py:17-23`; the S-011 body above for the options and their costs.
 
 **Out of scope.** Everything S-011 excluded.
@@ -2577,7 +2578,7 @@ which does not exist.
 
 ## S-014. Enable RLS on the two tables S-013 decides for
 
-**Status:** blocked · **Blocked by:** S-013 · **Unblocks:** S-015
+**Status:** open · **Blocked by:** S-013, done 2026-08-22 · **Unblocks:** S-015
 
 **Read ADR-043 and implement it per table.** The two tables may get different answers, and if either
 is "outside layer 2" then this seed records that and adds a row to
@@ -3029,7 +3030,7 @@ context, which is S-027.
 
 ## S-024. Derive capabilities per clan role, in `domain/capability`
 
-**Status:** blocked · **Blocked by:** S-023 · **Unblocks:** S-026
+**Status:** open · **Blocked by:** S-023, done 2026-08-22 · **Unblocks:** S-026
 
 **A capability is derived, never sent.** The backend enforces permissions; the client decides what
 to render. Putting that derivation in `src/domain/capability` rather than in a component means it is
@@ -3060,7 +3061,7 @@ clan-scoped and belong to PR 7.
 
 ## S-025. Rewrite the auth store around the clan context
 
-**Status:** blocked · **Blocked by:** S-023 · **Unblocks:** S-026, S-027
+**Status:** open · **Blocked by:** S-023, done 2026-08-22 · **Unblocks:** S-026, S-027
 
 **The store holds the clan id today and the cookie holds it after S-023, so one of the two has to
 stop.** `web/src/store/auth.store.ts` holds the session and the current clan. Leaving both means two
