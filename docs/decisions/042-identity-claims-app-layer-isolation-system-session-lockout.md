@@ -10,6 +10,38 @@ part it has to satisfy.
 clan isolation at the database layer. Read "What this decision does not buy you" before
 reporting that as a defect.
 
+> **Amendment (2026-08-22, seed S-046) — every citation from this ADR into ADR-008 now names a
+> section and quotes the sentence, instead of naming a line number.** No claim in this ADR
+> changed. Only the way each claim addresses its source changed, and this note is here because a
+> silent rewrite of a citation would erase the evidence that it ever moved.
+>
+> This ADR made five citations into ADR-008. All five were correct on the day it was written.
+> **Four of them stopped resolving the same day.** `008-rls-defense-in-depth.md` grew from 177
+> lines at `12ae000^`, the parent of this ADR's own commit, to 364 lines at `a8782d9`. Six commits
+> touched that file in between, and five of them moved these spans. The `app.user_id` sentence
+> alone travelled from line 135 to line 305. Every row below was read at both ends on 2026-08-22:
+>
+> | The citation, here | Cited ADR-008 as | Where that text sits on 2026-08-22 | Now cited as |
+> |---|---|---|---|
+> | § Context, Fact 1, first paragraph | lines 56-59 | 56-59, the one that never moved | § Status, the **Phase 4** bullet |
+> | § Context, Fact 1, second paragraph, and § Related | lines 100-107 | 271-278 | § Context, "false security" |
+> | § Decision 2, last paragraph | lines 103-105 | 274-276 | § Context, "connects as a bypassing role" |
+> | § What this ADR deliberately does not decide, `app.user_id` | line 135 | 305 | § Decision, clause 2 |
+> | § What this ADR deliberately does not decide, `FORCE` | lines 89-90 | 259-260 | § Status, the "Not yet" paragraph |
+>
+> Seed S-046 named these six places by their line numbers in **this** file: `:36`, `:42`, `:127`,
+> `:267`, `:272`, and `:286`. Inserting this amendment moved every one of them down, which is the
+> same defect one level up, so the column above names sections instead.
+>
+> **Why a quoted sentence rather than a line number.** A line number always resolves. When the
+> target file grows above it, the pointer still lands on a line, and that line is silently the
+> wrong one. Nothing fails, and no reader is warned. A quoted sentence fails loudly instead:
+> `grep -F` either finds it or returns nothing. A heading on its own was not enough here, because
+> ADR-008's § Status heading sits at line 3 and its § Context heading at line 263 on 2026-08-22,
+> so § Status alone spans over 250 lines. The heading narrows the search and the quote pins the
+> claim. Every sentence quoted below was checked with `grep -cF` against ADR-008 on 2026-08-22,
+> and each one appears exactly once in that file.
+
 ## Context
 
 ### The missing column is the smallest part of the problem
@@ -33,13 +65,16 @@ Both claim handlers are wired to the privileged session:
 RLS seam, so it keeps the privileged connection. Its own docstring says it "bypasses RLS exactly
 like the scheduler/purge". The comment above the wiring, at `dependencies.py:140-143`, records
 why: "Identity claims are a CROSS-CLAN flow (a claimant resolves a person by global id and is
-not yet a member of that person's clan)". ADR-008 Phase 4 says the same at lines 56-59.
+not yet a member of that person's clan)". ADR-008 says the same in the **Phase 4** bullet of
+its § Status list: the identity-claim handlers are one of the "two **cross-clan** person
+readers" that "now run on the privileged **system session** (`get_system_db`), bypassing RLS".
 
 A grep of `backend/app` on 2026-08-22 for `IdentityClaim` and `identity_claims` returns the
 model, the model registry, the domain entity, the repository, the schemas, and the two handler
 factories above. **No request-role code path reads or writes this table.** So a policy added
 today would be inert: it would sit in `pg_policies`, pass a coverage gate, and protect nothing.
-ADR-008 already names that failure at lines 100-107, "false security", and it is the reason
+ADR-008 already names that failure in the § Context paragraph that begins "We want a
+**second** line of defense": "simply enabling RLS would be *false security*". It is the reason
 that ADR exists.
 
 ### Fact 2: two of the four routes have no clan context at all
@@ -124,7 +159,8 @@ whoever reads `pg_policies` next.
 
 The privileged connection is unaffected, exactly as it is for the six covered tables. The policy
 is `ENABLE`, not `FORCE`, and the system path connects as a bypassing role (owner locally,
-service role on Supabase, per ADR-008 lines 103-105).
+service role on Supabase; ADR-008 § Context: "Today the backend connects as a bypassing role
+(local `postgres`; Supabase service-role)").
 
 ### 3. Why the subquery was rejected
 
@@ -264,14 +300,21 @@ migration to a tree this ADR did not read.
 - **`audit_logs` and `notification_log`.** They are seed S-013 and ADR-043. `audit_logs` shares
   the shape of the problem, a privileged cross-clan reader plus a nullable clan, and it should be
   free to reach a different answer. Nothing here binds it.
-- **Whether an `app.user_id` GUC should exist.** ADR-008 line 135 describes the seam as setting
-  `SET LOCAL app.clan_id` **and** `SET LOCAL app.user_id`, but `backend/app/core/rls.py:63-65`
-  sets the role and `app.clan_id` only. A user-keyed policy would have been the one shape that
-  fits `GET /m/claims`, and it does not exist today. Recorded here as a finding; adding it is a
-  seed of its own, and it would still leave the admin queue unsolved.
-- **`FORCE ROW LEVEL SECURITY`**, which ADR-008 lines 89-90 leaves until every table is covered.
-  A deny-all table under FORCE would lock out the system session too, which is a trap worth
-  writing down before that day.
+- **Whether an `app.user_id` GUC should exist.** ADR-008 § Decision clause 2, "App-specific GUC
+  context, not Supabase-native", describes the seam as injecting the context "per transaction
+  with `SET LOCAL app.clan_id = …` / `SET LOCAL app.user_id = …`", but
+  `backend/app/core/rls.py:63-65` sets the role and `app.clan_id` only. A user-keyed policy would
+  have been the one shape that fits `GET /m/claims`, and it does not exist today. Recorded here
+  as a finding; adding it is a seed of its own, and it would still leave the admin queue
+  unsolved. **Read at source on 2026-08-22 while repairing this citation (seed S-046):**
+  [ADR-047](047-rls-seam-sets-clan-id-only.md), seed S-040, has since amended that clause of
+  ADR-008 so that it reads as `SET LOCAL app.clan_id` alone, and it lists the five things a later
+  seed must show before `app.user_id` is added. The finding above is unchanged. What changed is
+  that ADR-008 now says the same thing.
+- **`FORCE ROW LEVEL SECURITY`**, which ADR-008 leaves until every table is covered. Its "Not
+  yet" paragraph under § Status reads "A possible final `FORCE ROW LEVEL SECURITY` comes once all
+  tables are covered." A deny-all table under FORCE would lock out the system session too, which
+  is a trap worth writing down before that day.
 - **The grants.** `familyroots_app` keeps full CRUD on `identity_claims` from
   `002_rls_documents_pilot.py:45`. Revoking them instead of adding a policy would be a second
   mechanism for the same intent, and the policy is the one this repository already reads.
@@ -283,8 +326,8 @@ migration to a tree this ADR did not read.
 - [ADR-007: Identity Claims Workflow](007-identity-claims-workflow.md), whose 2026-07-05 update
   makes review a provenance decision and whose spam guard is the invariant in section 5.
 - [ADR-008: Row-Level Security as Defense-in-Depth Layer-2](008-rls-defense-in-depth.md), for the
-  request-role seam, the fail-closed predicate, the "false security" warning at lines 100-107,
-  and the Phase 4 note that identity-claim handlers run privileged.
+  request-role seam, the fail-closed predicate, the "false security" warning in § Context, and
+  the Phase 4 note that identity-claim handlers run privileged.
 - [ADR-009: Clan Deletion Is RESTRICT-Guarded](009-clan-deletion-restrict.md), for
   `persons.created_by_clan_id` being SET NULL and for the partition test a new clan foreign key
   would have to satisfy.
