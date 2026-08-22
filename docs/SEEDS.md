@@ -292,6 +292,43 @@ marriage row give a client two different answers.
 leave the other legacy slices alone; every one of those slices imports `axios`. Enumerating importers
 first, which the seed itself required, is what caught it.
 
+**Re-taken again 2026-08-22, after an eighth parallel batch of four: 57 seeds, 39 done, 12 open, and
+6 blocked.** Three of the four moved:
+
+- **Done, 35 to 39.** S-015, S-029, S-054, and S-057.
+- **Open, 15 to 12.** The four left for `done`, minus four. S-030 became open, because S-029 was its
+  only blocker, plus one. Net minus three.
+- **Blocked, 7 to 6.** S-030 left it. Nothing became blocked.
+- **Seeds** stayed 57. **This is the first batch since 2026-08-14 that opened no new seed**, and the
+  reason is worth naming: three of the four were building against measurements earlier seeds had
+  already taken, rather than discovering the ground as they went.
+
+**A fourth instance of "a test pins an outcome, not a setting" turned up on the day the rule was
+written.** S-029 found that `api-layer-has-no-react` had **never fired**: dependency-cruiser's
+`to.path` matches a dependency's resolved file path, so an anchored `^react$` can never match
+`node_modules/react/index.js`. Verified independently — a planted `react` import in the api layer
+produced **0 violations** before the fix and a named error after it. **The rule that seed was
+verified by was the rule that could not fail.**
+
+**S-015 inverted what its own seed asked for, and the inversion is the point.** The seed wanted the
+list of clan-owned tables written in one place. It derived the list from `pg_class` instead and wrote
+down only the **exclusions**, each with its reason — because a written inclusion list is the thing
+that goes stale, and because the failure this repository actually suffered is a table shipping
+**unclassified**. The `clan_id` signal is used as a **veto on exemptions** rather than as the
+membership rule, since this repository holds a counterexample in each direction. **Coverage came out
+complete**: 18 ordinary tables, 14 clan-owned, all 14 in exactly one posture.
+
+**A measurement changed an implementation rather than confirming it.** S-054 wrote the obvious join,
+watched it pass, then measured it: two inner joins cost 3.598 ms and seq-scanned 18,000 persons
+twice, where the anti-join it shipped costs 0.246 ms and stays index-driven. **The join's cost grows
+with the table; the anti-join's grows with the work the read already does.** The reasoning went into
+the module docstring so the next reader does not simplify it back.
+
+**The batch closed the operational defect S-050 found.** A restore into a role-free cluster now
+bootstraps the role and its grants, and the drill proves it with a real two-sided query rather than a
+grant count. In the negative control, checks 1, 2, and 3 all still read `OK` — which is exactly what
+reported `DRILL: PASS` on the same broken database before.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -503,7 +540,7 @@ graph LR
 | S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | done | S-011, done |
 | S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
 | S-014 | Enable RLS on the two tables S-013 decides for | done | S-013, done |
-| S-015 | Gate: fail when a clan-owned table carries no policy | open | S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done |
+| S-015 | Gate: fail when a clan-owned table carries no policy | done | S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
 | S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
 | S-018 | Enforce or hide `privacy_level` | blocked | S-016 |
@@ -517,8 +554,8 @@ graph LR
 | S-026 | Land the three blocked-state screens | done | S-024, done; S-025, done |
 | S-027 | Delete the legacy auth transport and the `axios` dependency | done | S-025 done, S-026 done |
 | S-028 | Clear the 112-file prettier drift in one sweep | open | none |
-| S-029 | Land `features/persons` model and api against the frozen contract | open | S-027, done in part |
-| S-030 | Land the persons repository, query keys, and hooks | blocked | S-029 |
+| S-029 | Land `features/persons` model and api against the frozen contract | done | S-027, done in part |
+| S-030 | Land the persons repository, query keys, and hooks | open | S-029, done |
 | S-031 | Land the persons list and detail screens | blocked | S-030 |
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | blocked | S-031 |
 | S-033 | Delete the legacy persons code | blocked | S-032 |
@@ -542,10 +579,10 @@ graph LR
 | S-051 | Make "a test pins an outcome, not a setting" a rule rather than a third note | done | none |
 | S-052 | Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050 | done | none |
 | S-053 | Decide what field-level visibility means in v1, in ADR-049 | open | none |
-| S-054 | Make the three edge reads agree with the tree and the timeline about a soft-deleted person | open | none |
+| S-054 | Make the three edge reads agree with the tree and the timeline about a soft-deleted person | done | none |
 | S-055 | Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051 | open | none |
 | S-056 | Build whatever ADR-051 chose for the edge cascade | blocked | S-055 |
-| S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | open | none |
+| S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | done | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -2169,7 +2206,45 @@ than a per-field one. Any screen. Redaction outside the person aggregate.
 
 ## S-054. Make the three edge reads agree with the tree and the timeline about a soft-deleted person
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**All three reads now hide an edge with a soft-deleted person on either end**, matching the timeline
+and the tree. **No cascade shipped**: `PersonDeleted` still has no consumer and the edge rows still
+carry `is_deleted = false`, which one test proves with raw SQL. S-055's decision is untouched, and
+the filter stays correct whichever way it goes.
+
+**The predicate is an anti-join, and the reason is measured rather than stylistic.** The agent wrote
+the obvious join first, watched it pass, and **then went and measured it**. On PostgreSQL 18.4
+against 20,000 persons / 10,000 marriages / 5,000 parent-child rows, `EXPLAIN (ANALYZE)` of the
+marriages batch read for 100 ids:
+
+| Predicate | Time | Plan |
+|---|---|---|
+| edge's own flag only, before this seed | 0.115 ms | bitmap heap scan |
+| **`NOT EXISTS`, what shipped** | **0.246 ms** | Nested Loop Anti Join over `pk_persons` |
+| two inner joins on `persons` | 3.598 ms | Hash Join, **seq-scanning 18,000 live persons twice** |
+| two correlated `EXISTS` | 3.922 ms | Postgres flattens it into that same hash join |
+
+**The join's cost grows with the size of `persons`; the anti-join's grows with the number of edges
+matched, which the read already pays for.** The timeline keeps its join because it needs the spouse's
+**name**, so it must visit the row anyway. The reasoning is in the module docstring so the next
+reader does not "simplify" it back.
+
+**The negative control ran both ways.** The S-020 assertions restored from `HEAD` and run against the
+fix failed four tests on **four different values**, including the timeline-disagreement test — which
+fails because the two reads now agree. With the two persistence files reverted, seven of the nine new
+tests failed; the two that passed are the `404` premise and the raw-SQL edge-rows check, **neither of
+which is about the filter**. **The file was replaced, not repaired assertion by assertion.**
+
+**It also checked the other direction**, which a read filter can easily overshoot:
+`GET /tree/subtree/{survivor}` returns the same child and spouse sets as the edge reads.
+
+**What leaked is the edge and the uuid, not the name.** Stated that precisely and not overstated.
+
+**Docs in the same commit.** `rest-persons-api.md` carries a dated compatibility note: no field
+changed, but **a count can go down without an edge being deleted**. `domain-rules.md:122`'s
+"invisible everywhere … It's not just reads" is corrected — the write-guard half stands, the read
+claim was false for seven weeks.
 
 **This is the half of the edge-cascade item that needs no decision, and it is the half a client can
 see.** Measured 2026-08-22 by `backend/tests/integration/test_edge_cascade_on_person_soft_delete.py`,
@@ -2299,7 +2374,48 @@ integrity guard takes a per-clan advisory lock;
 
 ## S-057. Make a restore into a new cluster produce a database the application can use, in ADR-052
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Closed by ADR-052.** `scripts/restore_bootstrap_role.sql` holds a guarded `CREATE ROLE` and the
+seven grant statements from migrations 002 and 026; `scripts/restore_drill.sh` runs it and adds a
+fourth check that **queries as the real role, two-sided**. `db_backup.sh` is byte-identical to `main`.
+
+**There is no separate production variant, and that is the decision.** One file is both the drill's
+step and the human recovery step, because **two mechanisms meaning the same thing are two places to
+drift** — and drift is what this seed is about.
+
+**Two more shapes were found and rejected, and one was close.** The fourth shape the seed asked for —
+run the Alembic chain into the target and restore `--data-only` — makes the chain the source of truth
+with no copying, and **stops testing the backup**: it tests the repo's schema plus the dump's data, it
+needs the dump to sit exactly at head while the drill deliberately accepts an older one, and it needs
+the repo and `uv` present at recovery time. The fifth, dropping `--no-privileges` so the dump carries
+its own grants, has zero duplication and lost on two measured facts: it **repairs nothing already in
+the bucket**, and a Supabase dump's grants to `anon`/`authenticated`/`service_role` would abort
+`pg_restore --exit-on-error` on a plain cluster.
+
+**On drift, which is what the fourth-shape hint was really about:** the seven statements are
+schema-wide (`ON ALL TABLES IN SCHEMA public`, and the matching `ALTER DEFAULT PRIVILEGES`), not a
+table list, so a new table needs no edit. **Check 4 runs a real query as the real role rather than
+counting grant rows**, so it turns red when the privilege set actually changes.
+
+**Three negative controls, and the third is the one worth copying.** Bootstrap call deleted:
+`FAIL — role "familyroots_app" does not exist`. Role kept, grants stripped:
+`FAIL — permission denied for table persons`. **And a third planted by hand to check the check fails
+for the right reason**: `persons_sel` flipped to `USING (true)` makes the foreign-clan reading `3`
+instead of `0`, so check 4 catches broken isolation and not only a missing role.
+
+**Checks 1, 2, and 3 all read `OK` during the first control.** That is what makes it worth
+recording: those three are exactly what reported `DRILL: PASS` on the same broken database.
+
+**End state proven in a cluster shown role-free before the restore**, by distinct `system_identifier`
+and a `pg_roles` count of `0`. After: `DRILL: PASS`, 72 grant rows on 18 tables, and
+`OK — familyroots_app sees 3 person(s) under clan 1111…, 0 under a clan that owns nothing`.
+`familyroots_app` is `rolbypassrls = f`, so those are policy decisions rather than privilege ones.
+
+**What it leaves owed, named rather than waved away.** The bootstrap holds a **copy** of what
+migrations 002 and 026 grant, and nothing enforces the two stay equal. A privilege class no query
+exercises — `TRUNCATE`, for example — would not be caught. `docs/ops/migrations.md` carries the rule
+that a migration changing the role's privileges changes the bootstrap in the same pull request.
 
 **Opened 2026-08-22 by S-050**, which measured the failure and did not repair it, because the repair
 contains a decision. **The seed ID moved**: S-050's agent drafted this as S-053, and the coordinator
@@ -3658,7 +3774,52 @@ this seed said "which does not exist yet" and that is no longer true;
 
 ## S-015. Gate: fail when a clan-owned table carries no policy
 
-**Status:** open · **Blocked by:** S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done 2026-08-22 · **Unblocks:** nothing yet
+
+**Built as this body describes, not as the title says**, and the agent said so rather than closing
+the title's question. `test_rls_activation.py` gained two tests; the four posture sets and their four
+assertions are untouched, because merging guards is how this file lost its teeth three times.
+
+**The membership rule is inverted from what the seed asked for, and the inversion is right.** The
+seed said the list of clan-owned tables "lives in one place the check reads". Instead **the list is
+derived from `pg_class` and only the exclusions are written down**: every ordinary table in `public`
+is clan-owned unless named in `_NOT_CLAN_OWNED_TABLES` **with its reason**. A written inclusion list
+is the thing that goes stale; a table added by a migration is inside the gate the moment the
+migration runs.
+
+**The default is the strict one on purpose.** The failure this repository actually suffered is a
+table shipping **unclassified** — eight went uncovered across migrations 027, 028, and 029 with every
+gate green. Defaulting to "global" reproduces exactly that silence.
+
+**"Has a `clan_id` column" is not the membership rule, and this repository holds one counterexample
+in each direction:** `identity_claims` has no clan column and is in scope (ADR-042), `audit_logs.clan_id`
+is nullable by decision (ADR-043 § 4). **So the signal is used as a veto instead** — a table with a
+foreign key to `clans` or a column ending in `clan_id` may **never** be exempted. That is what stops
+the one edit that would otherwise defeat the whole check.
+
+**Two of the four exemptions rest on no ADR**, and the entries say so rather than citing an ADR that
+does not decide it. `user_profiles` and `user_fcm_tokens`: ADR-048 and ADR-050 each state as a
+**fact** that `user_profiles` carries no policy; neither **decides** it should not. ADR-050 also
+records the consequence — the names and emails a `user_clan_roles` leak would expose live in
+`user_profiles`, "which carries no policy at all". That is an `Owed` row below.
+
+**Seven planted controls, each watched failing with its own distinct message.** Two of them reach
+shapes a drop-a-policy control never does: a clan-owned table with row-level security **never
+switched on** (the older guard enumerated only `relrowsecurity` tables, so it was blind to it), and
+an exemption added to hide exactly that — which fired **two independent assertions**.
+
+**The finding is the good kind: coverage is complete.** 18 ordinary tables, 14 clan-owned, all 14
+with RLS and a policy, all 14 in exactly one set. Two independent readings agree: 13 tables have a
+foreign key to `clans`, the same 13 have a column ending in `clan_id`, and `identity_claims` is the
+one clan-owned table with neither.
+
+**ADR-008's "Not yet" paragraph is now stale** — it names `clans`, `user_clan_roles`,
+`clan_invitations`, and `audit_logs` as excluded, and three of those four shipped. `docs/decisions/**`
+was fenced, so the disagreement is recorded in `docs/architecture/multi-tenancy.md` point 6 instead.
+**Someone still needs to amend the ADR.**
+
+**Gate, on the combined tree, 2026-08-22.** 1351 passed; `All checks passed!`; 469 files already
+formatted; mypy clean on 430 source files; `Contracts: 6 kept, 0 broken`.
 
 **Every blocker closed on 2026-08-22, and this seed is not the gate it was written as.** It says
 "fail when a clan-owned table carries no policy". **That question is no longer the coverage
@@ -4527,7 +4688,39 @@ ordering decisions beyond what the plugin does.
 
 ## S-029. Land `features/persons` model and api against the frozen contract
 
-**Status:** open · **Blocked by:** S-027, done in part 2026-08-22 · **Unblocks:** S-030
+**Status:** done, 2026-08-22 · **Blocked by:** S-027, done in part 2026-08-22 · **Unblocks:** S-030
+
+**`web/src/features/persons/{model,api}` land, and they set the pattern every later slice copies.**
+Zod DTOs mirror `components['schemas'][X]` field for field, and a compile-time
+`assert*MatchesGenerated` function makes a contract change **break the build rather than the
+runtime**. The api layer is transport only and returns `Promise<unknown>`; parsing and mapping are
+S-030's `server/`.
+
+**This seed found a lint rule that had never fired, and it is the fourth instance of the rule S-051
+wrote down.** `api-layer-has-no-react` used `to: { path: '^(react|react-dom|@tanstack/react-query)$' }`.
+Dependency-cruiser's `to.path` matches a dependency's **resolved file path**, never the bare
+specifier — so an anchored `^react$` can never match `node_modules/react/index.js`, under any package
+manager, and the rule was **vacuous from the day it was written**. Verified independently by the
+coordinator: a `react` import planted in `features/persons/api/` produced **0 violations** before the
+fix, and after it produced
+`error api-layer-has-no-react: src/features/persons/api/persons-api.ts → node_modules/.pnpm/react@19.2.8/node_modules/react/index.js`.
+
+**That is the same shape as S-001's CSS probe, S-012's coverage guard, and S-049's divider field**: a
+check that asserted its own existence rather than the outcome it names. **The rule this seed was
+verified by was the rule that could not fail.**
+
+**`depcruise` warnings went 4 to 3**, because `historical-date.ts` is no longer an orphan — this
+slice is its first real consumer.
+
+**Four negative controls**, one per thing the seed names — the envelope, `Page<T>`, `400
+invalid_cursor` — plus one on the contract-parity check itself: changing a DTO field's type failed
+`pnpm type-check` at the exact `return dto` line.
+
+**Nothing was found wrong in the contract**, which is worth recording because a concurrent agent was
+editing `rest-persons-api.md` at the same time and this seed was told to report rather than fix.
+
+**Gate, on the combined tree, 2026-08-22.** type-check and lint clean; `depcruise` 0 errors, 3
+warnings; `test:unit` **365 passed**; `test:component` 28; `test:e2e` 38; `build` exit 0.
 
 **S-027 closed in part, and what it could not do lands on whoever takes this seed.** The legacy auth
 transport is **not** gone: `web/src/lib/api/axios.ts` is the shared transport for every remaining
@@ -4575,7 +4768,17 @@ above.
 
 ## S-030. Land the persons repository, query keys, and hooks
 
-**Status:** blocked · **Blocked by:** S-029 · **Unblocks:** S-031
+**Status:** open · **Blocked by:** S-029, done 2026-08-22 · **Unblocks:** S-031
+
+**S-029 left you the parsing.** Its api layer is transport only and returns `Promise<unknown>` on
+purpose: unwrapping the envelope, validating with the zod DTOs, and mapping into domain types is
+`server/`'s job, which is this seed. The DTOs and mappers already exist in
+`web/src/features/persons/model/`.
+
+**Two things S-029 recorded for whoever copies the pattern.** The `HistoricalDate` DTO is duplicated
+rather than shared, deliberately, and **the next slice to need it should factor it out**. And write
+bodies carry no zod validation, because they are caller-constructed rather than untrusted wire data —
+if you disagree, say so rather than adding it silently.
 
 **The repository is where the same function has to work in two runtimes.** It fetches, parses, and
 maps to domain, taking a `RequestContext` that is passed in. `web/CLAUDE.md` states the reason: the
@@ -4701,7 +4904,7 @@ a trigger that is **not met**. It carries no end state and no verification, beca
 actionable. When a trigger is met, the row becomes one or more seeds above and **the row is deleted
 in the same change**. A second place recording completion is a second place to be wrong.
 
-**Eleven rows, re-counted 2026-08-22** by
+**Twelve rows, re-counted 2026-08-22** by
 `awk '/^## Owed/,/^## Not verified/' docs/SEEDS.md | grep '^| ' | grep -v '^| Item' | wc -l`.
 **Re-count it that way rather than adjusting the figure by memory**, which is the same rule the four
 seed counts in this file's header run under.
@@ -4718,6 +4921,7 @@ never lives in both places.
 | **Report the Supabase email-template link format.** Authentication → Emails → Confirm signup: whether the link uses `{{ .ConfirmationURL }}` or `{{ .TokenHash }}`. Authentication → URL Configuration: the Site URL and the Redirect URLs list. Do not send a real verification email or a live token; only the template shape is needed. Not knowable from this repository, because it depends on project configuration | maintainer | Before the real email-verification flow. It does **not** block S-026, which needs only `POST /auth/resend-verification` |
 | **Enable `delete-branch-on-merge` on the repository.** Settings → General, one click. The remote was swept to a single `main` on 2026-08-02 and nothing stops it refilling; every pull request since leaves its branch behind | maintainer | Any time. It is one click and it removes this class of debt permanently |
 | **Walk mobile M0 Task 20 on a device.** Everything in mobile M0 is verified against canned transports and a fake-async widget tester, so `Supabase.initialize` and `SentryFlutter.init` have **never executed**: they need platform channels. Login against real Supabase, token refresh, and session survival across a relaunch are unverified. Three blockers, none solvable from this repository: no device or emulator, no real Supabase credentials, and no test accounts (a verified user with an approved membership, a second multi-clan account, and an unverified one). Start the backend with `--host 0.0.0.0`, because the default binds loopback and a phone cannot reach it, and pass the machine's LAN address as `API_BASE_URL`. The checklist is Task 20 step 3 of `superpowers/plans/2026-08-02-mobile-m0-spine.md` | maintainer | Needs a device or emulator, credentials, and accounts. All three are outside the repository |
+| **An ADR deciding that `user_profiles` and `user_fcm_tokens` are platform-global and stay outside RLS layer 2.** S-015's exemption list names both and cites no ADR, because none exists. ADR-048 and ADR-050 each state as a *fact* that `user_profiles` carries no policy; neither decides it should not. ADR-050 records the consequence in plain words: the names and emails a `user_clan_roles` leak would expose "live in `user_profiles`, which carries no policy at all" | backend-engineer | Not met — no free ADR number is allocated for it, and `docs/decisions/**` was fenced on 2026-08-22. The trigger is the next seed that opens the RLS surface |
 | Mobile M1 through M4 become seeds: M1 persons, M2 tree, M3 events and documents, M4 push and clan administration. Named in `superpowers/specs/2026-08-02-mobile-architecture-design.md` § 6 with no task detail | flutter-engineer | Task 20 walked on a device. Planning M1 against an unproven spine is how you inherit its mistakes |
 | Web PR 3 through PR 7 become seeds: relationships, tree, events, documents, then admin plus platform plus backoffice. The order is fixed at `superpowers/specs/2026-08-02-web-architecture-observability-design.md:213-217`. PR 4, the tree, is the one most likely to slip: XYFlow plus the tree read-model plus performance on a clan of several thousand people | web-engineer | S-033 done, so the reference pattern exists |
 | **Decide whether Pulumi is implemented or retired, in an ADR.** Eight `TODO: implement in Prompt 2` markers remain: `infra/pulumi/__main__.py:9,17,23` and one each in `resources/vercel_project.py:3`, `supabase_project.py:3`, `github_settings.py:3`, `firebase_project.py:3`, plus `scripts/seed_dev_data.py` and `scripts/export_tree_pdf.py`. Stubs that describe resources they do not create are worse than no infrastructure code, because a reader believes an environment is reproducible | maintainer | Before an environment is rebuilt from scratch, or before a second environment is created |
