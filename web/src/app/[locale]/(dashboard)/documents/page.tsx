@@ -7,17 +7,17 @@ export default async function DocumentsPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="font-serif text-2xl text-gray-800">{t('page_title')}</h1>
+      <h1 className="text-foreground font-serif text-2xl">{t('page_title')}</h1>
 
-      <div className="space-y-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-xs">
-        <h2 className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
+      <div className="border-border bg-card space-y-3 rounded-2xl border p-5 shadow-xs">
+        <h2 className="text-muted-foreground text-sm font-semibold tracking-wide uppercase">
           {t('upload_section')}
         </h2>
         <DocumentUpload />
       </div>
 
-      <div className="space-y-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-xs">
-        <h2 className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
+      <div className="border-border bg-card space-y-3 rounded-2xl border p-5 shadow-xs">
+        <h2 className="text-muted-foreground text-sm font-semibold tracking-wide uppercase">
           {t('all_documents')}
         </h2>
         <DocumentGallery />

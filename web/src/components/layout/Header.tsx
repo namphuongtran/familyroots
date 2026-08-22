@@ -21,12 +21,12 @@ export function Header({ title }: HeaderProps) {
 
   return (
     <header className="border-cream-200 flex h-16 shrink-0 items-center justify-between border-b bg-white px-6">
-      <h1 className="truncate font-serif text-lg font-semibold text-gray-800">{title ?? ''}</h1>
+      <h1 className="text-foreground truncate font-serif text-lg font-semibold">{title ?? ''}</h1>
 
       <div className="flex items-center gap-3">
         {clanMemberships.length > 0 && (
-          <label className="hidden items-center gap-2 text-sm text-gray-600 md:flex">
-            <span className="text-xs tracking-wide text-gray-400 uppercase">Clan</span>
+          <label className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
+            <span className="text-muted-foreground text-xs tracking-wide uppercase">Clan</span>
             <select
               value={currentClanId ?? ''}
               disabled={isSwitching || clanMemberships.length === 1}
@@ -41,7 +41,7 @@ export function Header({ title }: HeaderProps) {
                   setMenuOpen(false)
                 })
               }}
-              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 disabled:cursor-default disabled:opacity-70"
+              className="border-input bg-card text-foreground rounded-md border px-2 py-1 text-sm disabled:cursor-default disabled:opacity-70"
             >
               {needsClanSelection && <option value="">Select clan</option>}
               {clanMemberships.map((membership) => (
@@ -59,7 +59,7 @@ export function Header({ title }: HeaderProps) {
         <div className="relative">
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="hover:bg-cream-100 flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-gray-700"
+            className="hover:bg-cream-100 text-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm"
           >
             <User className="h-4 w-4" />
             <span className="hidden max-w-[120px] truncate sm:block">{user?.full_name}</span>
@@ -77,12 +77,14 @@ export function Header({ title }: HeaderProps) {
                 )}
               >
                 <div className="border-cream-100 border-b px-3 py-2">
-                  <p className="truncate text-xs font-medium text-gray-900">{user?.full_name}</p>
-                  <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                  <p className="text-foreground truncate text-xs font-medium">{user?.full_name}</p>
+                  <p className="text-muted-foreground truncate text-xs">{user?.email}</p>
                 </div>
                 {clanMemberships.length > 1 && (
                   <div className="border-cream-100 border-b px-3 py-2">
-                    <p className="mb-1 text-[11px] tracking-wide text-gray-400 uppercase">Clan</p>
+                    <p className="text-muted-foreground mb-1 text-[11px] tracking-wide uppercase">
+                      Clan
+                    </p>
                     <select
                       value={currentClanId ?? ''}
                       disabled={isSwitching}
@@ -97,7 +99,7 @@ export function Header({ title }: HeaderProps) {
                           setMenuOpen(false)
                         })
                       }}
-                      className="w-full rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700"
+                      className="border-input bg-card text-foreground w-full rounded-md border px-2 py-1 text-sm"
                     >
                       {clanMemberships.map((membership) => (
                         <option key={membership.clan_id} value={membership.clan_id}>
@@ -109,7 +111,7 @@ export function Header({ title }: HeaderProps) {
                 )}
                 <button
                   onClick={signOut}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-2 px-3 py-2 text-sm"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   {t('auth.logout')}

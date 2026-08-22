@@ -38,7 +38,7 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
 
   if (documents.length === 0) {
     return (
-      <div className="py-10 text-center text-gray-400">
+      <div className="text-muted-foreground py-10 text-center">
         <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
         <p className="text-sm">{t('no_documents')}</p>
       </div>
@@ -67,18 +67,20 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
       {documents.map((doc) => (
         <div
           key={doc.id}
-          className="group relative flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+          className="group border-border bg-muted relative flex aspect-square items-center justify-center overflow-hidden rounded-xl border"
         >
           <div className="flex flex-col items-center gap-1 p-3">
-            <FileText className="h-8 w-8 text-gray-400" />
-            <p className="line-clamp-2 text-center text-[10px] text-gray-500">{doc.title}</p>
-            <p className="text-[9px] text-gray-400 uppercase">{doc.document_type}</p>
-            <p className="text-[9px] text-gray-400">{formatDate(doc.created_at)}</p>
+            <FileText className="text-muted-foreground h-8 w-8" />
+            <p className="text-muted-foreground line-clamp-2 text-center text-[10px]">
+              {doc.title}
+            </p>
+            <p className="text-muted-foreground text-[9px] uppercase">{doc.document_type}</p>
+            <p className="text-muted-foreground text-[9px]">{formatDate(doc.created_at)}</p>
             <button
               type="button"
               onClick={() => handleOpen(doc.id)}
               disabled={openingId === doc.id}
-              className="mt-1 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="border-border bg-card text-muted-foreground hover:bg-muted mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ExternalLink className="h-3 w-3" />
               <span>{openingId === doc.id ? 'Opening...' : 'Open'}</span>
@@ -93,14 +95,14 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
                     deleteDocument.mutate(doc.id)
                     setConfirmDeleteId(null)
                   }}
-                  className="rounded-full bg-red-500 p-1.5 text-white hover:bg-red-600"
+                  className="bg-destructive hover:bg-destructive/90 rounded-full p-1.5 text-white"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               ) : (
                 <button
                   onClick={() => setConfirmDeleteId(doc.id)}
-                  className="rounded-full bg-white/80 p-1.5 text-red-500 hover:bg-white"
+                  className="text-destructive rounded-full bg-white/80 p-1.5 hover:bg-white"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

@@ -79,3 +79,57 @@ for (const path of PUBLIC_PAGES) {
     })
   })
 }
+
+/**
+ * Seed S-038 (folding in S-035): the sweep that moves the 393 hardcoded
+ * `-gray-*` utilities counted above onto the semantic tokens they already had.
+ * `body` alone (the three cases above) cannot see whether a form field or a
+ * card boundary followed along, because those elements were never `body`.
+ *
+ * Two regions per public page, one text ink and one control boundary, each
+ * read under both emulated schemes. `--color-muted-foreground` and
+ * `--color-input` both flip between light and dark (`globals.css`'s dark
+ * block overrides both), while the palette colours they replaced —
+ * `text-gray-500` and `border-gray-300` — do not: a screen still built on
+ * the palette would report the *light* value again under `dark`, not a
+ * missing value, which is why each case checks both schemes rather than
+ * only asserting dark is "different from light".
+ */
+const REGION = {
+  /** `--color-muted-foreground`: light `#6e6653`, dark `#a99f89`. */
+  mutedForeground: { light: 'rgb(110, 102, 83)', dark: 'rgb(169, 159, 137)' },
+  /** `--color-input`: light `#8a8072`, dark `#a99f89`. */
+  input: { light: 'rgb(138, 128, 114)', dark: 'rgb(169, 159, 137)' },
+}
+
+for (const path of PUBLIC_PAGES) {
+  test.describe(`${path} carries the token sweep past body`, () => {
+    test('the subtitle ink is muted-foreground in both schemes', async ({ page }) => {
+      // The `<p>` right under the wordmark heading: `text-sm text-muted-foreground`
+      // on both `/vi/login` and `/vi/register`, replacing `text-gray-500`.
+      const subtitle = page.locator('h1').locator('xpath=following-sibling::p[1]')
+
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.goto(path)
+      await expect(subtitle).toHaveCSS('color', REGION.mutedForeground.light)
+
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await page.reload()
+      await expect(subtitle).toHaveCSS('color', REGION.mutedForeground.dark)
+    })
+
+    test("the email field's boundary is the input token in both schemes", async ({ page }) => {
+      // Both pages' email field carries `border-input`, replacing
+      // `border-gray-300` — the exact class S-035 named as its whole point.
+      const emailField = page.locator('input[type="email"]')
+
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.goto(path)
+      await expect(emailField).toHaveCSS('border-top-color', REGION.input.light)
+
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await page.reload()
+      await expect(emailField).toHaveCSS('border-top-color', REGION.input.dark)
+    })
+  })
+}

@@ -19,7 +19,7 @@ export function EventListClient() {
   }
 
   if (events.length === 0) {
-    return <p className="text-sm text-gray-400">Chưa có sự kiện nào.</p>
+    return <p className="text-muted-foreground text-sm">Chưa có sự kiện nào.</p>
   }
 
   return (

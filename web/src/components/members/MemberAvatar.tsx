@@ -21,7 +21,7 @@ const SIZE_CLASSES = {
 const GENDER_BG = {
   male: 'bg-blue-100 text-blue-700',
   female: 'bg-rose-100 text-rose-700',
-  unknown: 'bg-gray-100 text-gray-600',
+  unknown: 'bg-muted text-muted-foreground',
 }
 
 function getInitials(fullName: string): string {

@@ -66,7 +66,7 @@ export function Sidebar() {
         )}
         <button
           onClick={toggleSidebar}
-          className="hover:bg-cream-200 ml-auto rounded-md p-1.5 text-gray-500 hover:text-gray-700"
+          className="hover:bg-cream-200 text-muted-foreground hover:text-foreground ml-auto rounded-md p-1.5"
           aria-label={sidebarOpen ? 'Thu gọn' : 'Mở rộng'}
         >
           {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -76,7 +76,7 @@ export function Sidebar() {
       {/* Clan name */}
       {sidebarOpen && user?.clan_name && (
         <div className="border-cream-200 border-b px-4 py-2">
-          <p className="text-xs tracking-wide text-gray-500 uppercase">Dòng họ</p>
+          <p className="text-muted-foreground text-xs tracking-wide uppercase">Dòng họ</p>
           <p className="text-primary truncate text-sm font-medium">{user.clan_name}</p>
         </div>
       )}
@@ -96,7 +96,7 @@ export function Sidebar() {
                 'mx-2 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary-container text-primary-container-foreground'
-                  : 'hover:bg-cream-200 text-gray-600 hover:text-gray-900',
+                  : 'hover:bg-cream-200 text-muted-foreground hover:text-foreground',
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />

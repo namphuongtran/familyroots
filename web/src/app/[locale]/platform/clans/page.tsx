@@ -10,24 +10,24 @@ export default function PlatformClansPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-serif text-2xl text-gray-800">{t('clans_title')}</h1>
+      <h1 className="text-foreground font-serif text-2xl">{t('clans_title')}</h1>
 
       {isLoading ? (
-        <p className="text-sm text-gray-400">Đang tải…</p>
+        <p className="text-muted-foreground text-sm">Đang tải…</p>
       ) : (
-        <div className="divide-y divide-gray-50 rounded-2xl border border-gray-100 bg-white shadow-xs">
+        <div className="divide-border border-border bg-card divide-y rounded-2xl border shadow-xs">
           {(data ?? []).map((clan) => (
             <div key={clan.id} className="flex items-center justify-between px-4 py-3">
               <div>
-                <p className="text-sm font-medium text-gray-700">{clan.name}</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-foreground text-sm font-medium">{clan.name}</p>
+                <p className="text-muted-foreground text-xs">
                   {clan.created_at ? formatDate(clan.created_at) : '-'}
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500">{clan.slug}</span>
+                <span className="text-muted-foreground text-xs">{clan.slug}</span>
                 <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] ${clan.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}
+                  className={`rounded px-1.5 py-0.5 text-[10px] ${clan.is_active ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}
                 >
                   {clan.is_active ? 'Hoạt động' : 'Tạm ngưng'}
                 </span>

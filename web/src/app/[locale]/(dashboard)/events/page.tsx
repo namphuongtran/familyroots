@@ -9,11 +9,11 @@ export default async function EventsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-serif text-2xl text-gray-800">{t('page_title')}</h1>
+      <h1 className="text-foreground font-serif text-2xl">{t('page_title')}</h1>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
         {/* Upcoming events column */}
         <div className="space-y-3 md:col-span-3">
-          <h2 className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
+          <h2 className="text-muted-foreground text-sm font-semibold tracking-wide uppercase">
             {t('upcoming')}
           </h2>
           <EventListClient />

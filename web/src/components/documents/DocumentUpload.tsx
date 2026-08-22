@@ -52,7 +52,11 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
   }
 
   if (!canUploadDocuments) {
-    return <p className="text-sm text-gray-500">You do not have permission to upload documents.</p>
+    return (
+      <p className="text-muted-foreground text-sm">
+        You do not have permission to upload documents.
+      </p>
+    )
   }
 
   return (
@@ -68,14 +72,12 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
         onClick={() => inputRef.current?.click()}
         className={cn(
           'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 transition-colors',
-          isDragging
-            ? 'border-primary bg-primary-container'
-            : 'border-gray-200 hover:border-gray-300',
+          isDragging ? 'border-primary bg-primary-container' : 'border-border hover:border-input',
         )}
       >
-        <Upload className="h-8 w-8 text-gray-300" />
-        <p className="text-sm text-gray-500">{t('drop_hint')}</p>
-        <p className="text-xs text-gray-400">{t('allowed_types')}</p>
+        <Upload className="text-muted-foreground h-8 w-8" />
+        <p className="text-muted-foreground text-sm">{t('drop_hint')}</p>
+        <p className="text-muted-foreground text-xs">{t('allowed_types')}</p>
         <input
           ref={inputRef}
           type="file"
@@ -88,14 +90,14 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
         />
       </div>
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-destructive text-xs">{error}</p>}
 
       {selectedFile && (
-        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
-          <FileText className="h-4 w-4 shrink-0 text-gray-400" />
-          <span className="flex-1 truncate text-xs text-gray-600">{selectedFile.name}</span>
+        <div className="border-border bg-muted flex items-center gap-2 rounded-lg border p-2">
+          <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
+          <span className="text-muted-foreground flex-1 truncate text-xs">{selectedFile.name}</span>
           <button type="button" onClick={() => setSelectedFile(null)}>
-            <X className="h-3.5 w-3.5 text-gray-400" />
+            <X className="text-muted-foreground h-3.5 w-3.5" />
           </button>
         </div>
       )}
@@ -103,12 +105,12 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
       {selectedFile && (
         <>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">{t('title')}</label>
+            <label className="text-foreground mb-1 block text-xs font-medium">{t('title')}</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+              className="focus:ring-ring border-input w-full rounded-md border px-3 py-1.5 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
           <button

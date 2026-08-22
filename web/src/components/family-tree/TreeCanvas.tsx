@@ -70,7 +70,7 @@ function TreeFlowInner({ rootPersonId }: { rootPersonId?: string }) {
                 : '#d1d5db'
           }
           maskColor="rgba(0,0,0,.04)"
-          className="rounded-lg! border! border-gray-200!"
+          className="border-border! rounded-lg! border!"
         />
         <TreeControls />
       </ReactFlow>

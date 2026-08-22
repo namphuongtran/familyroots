@@ -13,8 +13,8 @@ export default function TreePage() {
 
   return (
     <div className="relative h-[calc(100vh-5rem)]">
-      <div className="bg-background/80 absolute top-0 right-0 left-0 z-10 flex items-center justify-between border-b border-gray-100 px-4 py-2 backdrop-blur-xs">
-        <h1 className="font-serif text-lg text-gray-800">{t('page_title')}</h1>
+      <div className="bg-background/80 border-border absolute top-0 right-0 left-0 z-10 flex items-center justify-between border-b px-4 py-2 backdrop-blur-xs">
+        <h1 className="text-foreground font-serif text-lg">{t('page_title')}</h1>
       </div>
 
       <div className="h-full pt-12">

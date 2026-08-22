@@ -13,7 +13,7 @@ export default async function AdminLayout({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-xs font-medium text-red-600">
+      <div className="border-destructive/20 bg-destructive/10 text-destructive rounded-xl border px-4 py-2 text-xs font-medium">
         Khu vực quản trị – chỉ quản trị viên dòng họ mới có quyền truy cập
       </div>
       {children}
