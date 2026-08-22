@@ -353,21 +353,23 @@ hardcodes a colour or a radius. Reach them with `context.tokens`.
 - **Color** — never `#000000`. Primary text is `on_surface` (`#1d1b16`).
   `primary` is the leaf green `#3E5C38` and the page ground is `#FBF8F1`. Both are
   [ADR-041](../docs/decisions/041-primary-green-heritage-family-single-background.md)'s
-  values and they bind web too. See the three notes below.
+  values and they bind web too. See the four notes below.
 - **Layout** — no rigid grids unless the data is tabular. Layouts must survive
   **200% text scale**; goldens run at scale 1.0 and 2.0.
 
-### The palette is ADR-041's, and three things about it are load-bearing
+### The palette is the spec's and ADR-041's, and four things about it are load-bearing
 
-Landed by seed S-037 on 2026-08-22. Each note exists because the obvious move is wrong.
+Landed by seed S-037 on 2026-08-22, extended by seed S-044 the same day. Each note exists
+because the obvious move is wrong.
 
 **1. `surface` is `#FBF8F1`, not the `#FDFCF7` mobile used to hold.** ADR-041 decision 3
 picked the spec's value over *both* incumbents on purpose, so that no client has to
 re-open the question. Mobile's `#FDFCF7` was sourced by nothing: it appears in no spec
 section and in no ADR. Web's `background` is now the same `#FBF8F1` under the same name,
-so the two clients paint one page ground. Contrast is unharmed — `on_surface` `#1D1B16`
-measures 16.22:1 on it, `primary` measures 7.09:1, and `error` measures 8.59:1, all
-computed 2026-08-22 with the WCAG 2.1 relative-luminance formula.
+so the two clients paint one page ground. Contrast is unharmed: `on_surface` `#1D1B16`
+measures 16.22:1 on it, `primary` measures 7.09:1, and `error` measures 7.07:1, all
+computed 2026-08-22 with the WCAG 2.1 relative-luminance formula. The `error` figure is
+note 4's new value; the `#8C1D18` it replaced measured 8.59:1 on the same ground.
 
 **2. `ColorScheme.fromSeed` does not return the seed, so every token it owns is passed
 explicitly.** This is the trap that made the primary change nearly cosmetic. `fromSeed`
@@ -375,10 +377,20 @@ re-derives its argument into a Material tonal palette. Measured 2026-08-22: the 
 seed `#7A5C2E` produced `scheme.primary` `#7E570F`, and the new green seed `#3E5C38`
 produced `#3E6837`. Both are colours that exist in no token file, on an app whose whole
 rule is that colours live in `tokens.dart` only. `buildAppTheme` therefore passes
-`primary`, `onPrimary`, `surface`, `onSurface` and `error` as named overrides; the seed
-now only fills the tones no token names. Spec §2.8 already required this —
-"`ColorScheme` is populated from the same values so Material widgets inherit correctly" —
-and `test/core/theme/theme_test.dart` pins it, so removing an override turns red.
+`primary`, `onPrimary`, `surface`, `onSurface`, `surfaceContainerLow` and `error` as named
+overrides; the seed now only fills the tones no token names. Spec §2.8 already required
+this: "`ColorScheme` is populated from the same values so Material widgets inherit
+correctly". `test/core/theme/theme_test.dart` pins every one of the six, so removing an
+override turns red.
+
+**`surfaceContainerLow` was the override S-037 missed, and S-044 added it.** Measured
+2026-08-22 before the fix: `scheme.surfaceContainerLow` was `#F2F5EB`, a green-tinted tone
+the leaf-green seed derived, while the token said `#F5F1E6`. No shipped screen showed the
+difference, because `cardTheme.color` and both widgets that draw a card ground read the
+token directly. Every M3 widget that *defaults* to `colorScheme.surfaceContainerLow`, such
+as `Drawer`, would have painted the derived tone. **When a token gains a `ColorScheme`
+counterpart, pass it and pin it in the same change.** Checking one token tells you nothing
+about the next one.
 
 **3. Mobile has no `heritage` family yet, and adding one before a screen needs it was
 rejected.** ADR-041 decision 2 creates `heritage` `#A3182F`, `heritage-foreground`
@@ -395,9 +407,41 @@ values no gate can check and no screen can show are the dead-token defect.
 **So the rule is written here instead of in the code.** When the first thủy tổ marker,
 giỗ chip, or ancestral-emphasis surface is built, that seed adds the four fields to
 `ArborTokens` *with* the widget and the golden that renders them, at ADR-041's values
-above. **Never reach for `error` `#8C1D18` for a ceremonial red.** It is one job away and
-one hue away, and reaching for the nearest token is exactly what put red in web's
-`primary` and cost an ADR to undo.
+above. **Never reach for `error` for a ceremonial red.** Since S-044 that warning is
+stricter, not weaker: `error` is now `#A32218` and `heritage` is `#A3182F`, one digit
+apart, so the wrong token no longer looks wrong on screen. Only the meaning separates
+them, and reaching for the nearest token is exactly what put red in web's `primary` and
+cost an ADR to undo. `web/src/app/globals.css:45-48` carries the same warning for the same
+pair.
+
+**4. `surfaceContainerLow` and `error` are spec § 2.1's values, and mobile's originals were
+sourced by nothing.** Seed S-044 moved `surfaceContainerLow` from `#F5F1E6` to `#F4EFE4`
+and `error` from `#8C1D18` to `#A32218`, both read at source on 2026-08-22. Neither
+original appeared in the spec or in any ADR: `grep` found each of them in exactly two
+places, `tokens.dart` and `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md`, which is
+the record of what was built rather than an authority on what it should be. That is the
+same argument ADR-041 decision 3 made for `surface`, so it resolved the same way.
+
+**The spec calls the role `danger`; Flutter calls it `error`, and mobile keeps `error`.**
+`ColorScheme.error` is the field a Material widget reads, and one token spelled differently
+from the field it feeds is a trap. ADR-041 decision 2 made the same call in the other
+direction on web, keeping the repository's `-foreground` suffix over the spec's `on-`
+prefix. The value is the spec's; only the spelling is this repository's.
+
+**Contrast, computed 2026-08-22 with the WCAG 2.1 relative-luminance formula.** `error`
+`#A32218` is a foreground in exactly one place, the message line of `ErrorView`
+(`lib/shared/widgets/error_view.dart:41`), and the ground it renders on is
+`surfaceContainerLow`, not `surface`. On the new `#F4EFE4` it measures **6.54:1**, and on
+`surface` `#FBF8F1` it measures 7.07:1, which reproduces ADR-041's figure for
+`destructive` on `background` exactly. Both clear the 4.5:1 body-text floor. White on
+`#A32218` measures 7.50:1. The move costs contrast, from 7.95:1 on the same ground, and it
+buys one red under one value across both clients.
+
+**A third token is still off-spec and S-044 did not move it.** `outlineVariant` is
+`#CFC7B4`; spec § 2.1 names `outline-variant` `#B3A98F`. Read at source 2026-08-22. It has
+no reader anywhere in `lib/`, so no screen and no golden can show the difference, and
+changing an unpinned token with no consumer is how a wrong value gets in. S-044 reported it
+for its own seed instead of moving it.
 
 The design system itself — tokens, components, accessibility rules and the 15
 screen groups — is specced in

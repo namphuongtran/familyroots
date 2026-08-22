@@ -29,13 +29,23 @@ class ArborTokens extends ThemeExtension<ArborTokens> {
   /// `primary`, `onPrimary` and `surface` are ADR-041's values, taken exactly.
   /// See `docs/decisions/041-primary-green-heritage-family-single-background.md`
   /// decision 1 for the leaf green and decision 3 for the one warm ground.
+  ///
+  /// `surfaceContainerLow` and `error` are spec § 2.1's values, taken exactly,
+  /// by seed S-044. `error` is the spec's `danger` under Flutter's name for the
+  /// role; only the spelling is this repository's, the value is the spec's.
+  /// It is the same hex as web's `destructive`. `mobile/CLAUDE.md` records why
+  /// that makes the `heritage` rule stricter rather than looser.
   factory ArborTokens.light() => const ArborTokens(
     surface: Color(0xFFFBF8F1),
-    surfaceContainerLow: Color(0xFFF5F1E6),
+    surfaceContainerLow: Color(0xFFF4EFE4),
     onSurface: Color(0xFF1D1B16),
     primary: Color(0xFF3E5C38),
     onPrimary: Color(0xFFFFFFFF),
-    error: Color(0xFF8C1D18),
+    error: Color(0xFFA32218),
+    // Off-spec, found 2026-08-22: § 2.1 names `outline-variant` #B3A98F.
+    // Nothing in `lib/` reads this token, so no screen shows the difference,
+    // and moving it was outside S-044's stated end state. Left as found and
+    // reported rather than changed unpinned.
     outlineVariant: Color(0xFFCFC7B4),
     // 9999px for primary buttons, 2rem (32px) for nodes. Never sm or none.
     radiusPill: 9999,
