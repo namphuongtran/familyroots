@@ -14,6 +14,10 @@ UserProfile userProfileFromJson(Object? json) {
   return UserProfile(
     id: UserId(m['id']! as String),
     email: m['email']! as String,
+    // Kept nullable deliberately. The backend declares `full_name: str`
+    // (non-nullable), so this is tolerance rather than a contract reading — a
+    // client that crashes on an unexpected null is worse than one that renders
+    // a blank name.
     fullName: m['full_name'] as String?,
     clanId: clanId is String ? ClanId(clanId) : null,
     clanName: m['clan_name'] as String?,
