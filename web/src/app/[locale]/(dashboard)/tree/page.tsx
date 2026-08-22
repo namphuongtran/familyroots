@@ -4,11 +4,11 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { TreeCanvas } from '@/components/family-tree/TreeCanvas'
 import { MemberSidebar } from '@/components/family-tree/MemberSidebar'
-import { useAuthStore } from '@/store/auth.store'
+import { useCurrentClanId } from '@/shared/http/context.client'
 
 export default function TreePage() {
   const t = useTranslations('tree')
-  const { currentClanId } = useAuthStore()
+  const currentClanId = useCurrentClanId()
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
 
   return (

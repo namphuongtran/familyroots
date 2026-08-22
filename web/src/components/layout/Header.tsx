@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl'
 import { LogOut, User, ChevronDown } from 'lucide-react'
 import { LocaleSwitcher } from './LocaleSwitcher'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { useAuthStore } from '@/store/auth.store'
 import { cn } from '@/lib/utils/cn'
 import { useState } from 'react'
 
@@ -15,8 +14,7 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const t = useTranslations()
-  const { signOut, selectClan } = useAuth()
-  const { user, currentClanId, clanMemberships, needsClanSelection } = useAuthStore()
+  const { user, currentClanId, clanMemberships, needsClanSelection, signOut, selectClan } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [isSwitching, startTransition] = useTransition()
 

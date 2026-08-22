@@ -11,34 +11,37 @@ import {
   selectActiveClan,
 } from '@/application/auth/use-cases/auth-context'
 import { authProfileRepository } from '@/infrastructure/auth/http-auth-profile-repository'
-import {
-  clearCurrentClanId,
-  persistCurrentClanId,
-} from '@/infrastructure/auth/clan-selection-storage'
 import { authSessionPort } from '@/infrastructure/auth/supabase-auth-session-port'
+import {
+  clearClanCookie,
+  readCurrentClanId,
+  useCurrentClanId,
+  writeClanCookie,
+} from '@/shared/http/context.client'
 import { useAuthStore } from '@/store/auth.store'
 
 export function useAuth() {
   const {
     user,
-    currentClanId,
     clanMemberships,
     isLoading,
     isPendingApproval,
     needsOnboarding,
     needsClanSelection,
     setUser,
-    setCurrentClan,
     setClanMemberships,
     setLoading,
     setAccessState,
     clear,
   } = useAuthStore()
+  // The active clan lives in the current_clan_id cookie (S-023), not the
+  // auth store (S-025) — this is the one reactive read, so switching clans
+  // re-renders every consumer without a page reload.
+  const currentClanId = useCurrentClanId() ?? undefined
   const router = useRouter()
 
   const syncAuthContext = useCallback(async () => {
-    const preferredClanId =
-      typeof window !== 'undefined' ? localStorage.getItem('current_clan_id') ?? undefined : undefined
+    const preferredClanId = readCurrentClanId() ?? undefined
     const context = await hydrateAuthContext(authSessionPort, authProfileRepository, preferredClanId)
     if (!context.user) {
       clear()
@@ -49,7 +52,6 @@ export function useAuth() {
     setClanMemberships(context.clanMemberships)
 
     const activeClanId = context.currentClanId ?? context.user.clan_id
-    setCurrentClan(activeClanId)
     setAccessState({
       isPendingApproval: context.isPendingApproval,
       needsOnboarding: context.needsOnboarding,
@@ -58,13 +60,13 @@ export function useAuth() {
 
     if (typeof window !== 'undefined') {
       if (activeClanId) {
-        persistCurrentClanId(activeClanId)
+        writeClanCookie(activeClanId)
       } else {
-        clearCurrentClanId()
+        clearClanCookie()
       }
       localStorage.setItem('preferred_locale', context.user.preferred_locale)
     }
-  }, [clear, setAccessState, setClanMemberships, setCurrentClan, setUser])
+  }, [clear, setAccessState, setClanMemberships, setUser])
 
   // Sync Supabase session → auth store on mount and on auth state change
   useEffect(() => {
@@ -131,7 +133,7 @@ export function useAuth() {
 
     const locale = user?.preferred_locale ?? 'vi'
     if (typeof window !== 'undefined') {
-      clearCurrentClanId()
+      clearClanCookie()
       window.location.href = `/${locale}/login`
     }
   }, [clear, user?.preferred_locale])
@@ -139,16 +141,15 @@ export function useAuth() {
   const selectClan = useCallback(
     async (clanId: string) => {
       const selectedClanId = await selectActiveClan(authProfileRepository, clanId)
-      setCurrentClan(selectedClanId)
 
       if (typeof window !== 'undefined') {
-        persistCurrentClanId(selectedClanId)
+        writeClanCookie(selectedClanId)
       }
 
       await syncAuthContext()
       return selectedClanId
     },
-    [setCurrentClan, syncAuthContext],
+    [syncAuthContext],
   )
 
   const completeOnboarding = useCallback(

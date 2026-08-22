@@ -193,12 +193,14 @@ inherit them rather than re-deciding:**
 `clan_id` takes in the backend (cast `::uuid` throughout `docs/architecture/data-model.md`),
 and returns `null` rather than forwarding garbage as `X-Current-Clan-Id`.
 
-**What still writes the cookie, and why that is not a gap.** The `select-clan` flow still
-writes through the legacy `persistCurrentClanId` (`src/infrastructure/auth/clan-selection-storage.ts`)
-— same cookie name, compatible attributes — because rewiring `useAuth`'s `selectClan` onto the
-spine is S-025's job (rewriting the auth store around this context), not S-023's. `context.client.ts`
-exports `writeClanCookie` / `clearClanCookie` as the canonical writer S-025 adopts, so the
-attributes above stay decided in one place rather than drifting between two writers.
+**The cookie is now the only writer too (S-025).** `useAuth`'s `selectClan` and
+`syncAuthContext` (`src/lib/hooks/useAuth.ts`) call `writeClanCookie` / `clearClanCookie`
+directly. The legacy `persistCurrentClanId` / `clearCurrentClanId`
+(`src/infrastructure/auth/clan-selection-storage.ts`) are unused now — nothing imports
+them — because they also wrote `localStorage.current_clan_id`, which S-025's end state
+forbids. The file is left in place rather than deleted: deleting the legacy auth transport
+is S-027's job, and `pnpm depcruise`'s `no-orphans` check is a warning, not a gate, so an
+unused legacy file costs nothing until S-027 removes it.
 
 **No `features/` repository exists yet to write a cross-runtime test against** (`src/features/`
 lands with S-024 onward). `src/shared/http/context.test.tsx` proves the closest thing that
@@ -227,6 +229,52 @@ No screen consumes it yet — wiring is a later seed — so `pnpm depcruise` rep
 that fourth warning as a debt with an owner, not as background noise:** a module nothing imports is
 the same shape as the dead tokens S-001 fixed and the unread GUC ADR-047 refused.
 
+### The auth store holds session state only (S-025)
+
+**`src/store/auth.store.ts` no longer has a `currentClanId` field or a `setCurrentClan`
+action.** Before S-025 the store held both the session (`user`, `clanMemberships`, the
+access-state flags) and the active clan, while the `current_clan_id` cookie (S-023) held
+the same clan fact for the server to read — two persisted sources for one fact, since the
+store's `zustand/middleware` `persist` wrote `currentClanId` to
+`localStorage['auth-store']` alongside the cookie. That is the exact defect this tracker
+exists to catch, so the clan id was removed from the store rather than kept in sync with
+the cookie.
+
+**The one reactive read is `useCurrentClanId()` (`src/shared/http/context.client.ts`).** It
+wraps `useSyncExternalStore` around the `current_clan_id` cookie: `writeClanCookie` and
+`clearClanCookie` (same file) notify a module-level listener set after they write the
+cookie, since a `document.cookie` write fires no native change event. A component that
+calls `useCurrentClanId()` re-renders on every clan switch, which is what lets a TanStack
+Query key built from the clan id refetch without a page reload — proved by
+`src/shared/http/clan-switch.test.tsx`. A non-reactive one-shot read is
+`readCurrentClanId()`, for a caller that is not a component, such as `useAuth`'s
+`syncAuthContext`.
+
+**`useAuth()` (`src/lib/hooks/useAuth.ts`) still returns `currentClanId`**, now sourced from
+`useCurrentClanId()` rather than the store, so `useClanContext`, `select-clan/page.tsx`, and
+every other existing caller of `useAuth().currentClanId` needed no change. `Header.tsx`,
+`(dashboard)/tree/page.tsx`, and `useCapabilities.ts` read the clan id directly —
+`useCurrentClanId()` for the two client components, since they had no other reason to pull
+in the whole of `useAuth()`.
+
+**`selectClan` and `syncAuthContext` write the cookie through `writeClanCookie` /
+`clearClanCookie` now, not the legacy `persistCurrentClanId` / `clearCurrentClanId`.** See
+"What still writes the cookie" under S-023 above for what that leaves behind.
+
+**The legacy `src/infrastructure/http/request-context.ts` lost its `localStorage` fallback.**
+Before S-025 it read, in order, `useAuthStore.currentClanId`, then `user.clan_id`, then
+`localStorage.getItem('current_clan_id')` — the exact three-way read S-025's seed names as
+what it replaces. It now reads `readCurrentClanId()` (the cookie) then `user.clan_id`, with
+no `localStorage` step. This file backs the legacy `axios.ts` interceptor, which is
+untouched: fixing the read it depends on was in scope, deleting the file it lives in is
+S-027's.
+
+**`grep -rn "localStorage.current_clan_id\|current_clan_id" web/src` after S-025** finds
+only the cookie name itself (`request-context.ts`'s `CLAN_COOKIE` constant and its
+callers, `middleware.test.ts`'s literal cookie header, and the now-dead
+`clan-selection-storage.ts` constant) and prose referencing S-023/S-025 in comments — no
+`localStorage.getItem` or `.setItem` call against that key anywhere in `src`.
+
 ### Backend contract — required headers and query semantics
 
 All clan-scoped requests must send:
@@ -242,9 +290,9 @@ headers plus `traceparent` from a `RequestContext` (`src/shared/http/request-con
 **Legacy code only:** the shared Axios client `src/lib/api/axios.ts` attaches all three via
 interceptors. On `401` it signs out and redirects to `/<locale>/login`. The clan id comes
 from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which reads in
-order: `useAuthStore.currentClanId` → `user.clan_id` → `localStorage.current_clan_id`. SSR
-returns a minimal context (`{ locale: 'vi' }`). Do not extend this path — it is being
-deleted by the slice PRs.
+order (S-025): `readCurrentClanId()` — the `current_clan_id` cookie — → `user.clan_id`. No
+`localStorage` step remains. SSR returns a minimal context (`{ locale: 'vi' }`). Do not
+extend this path — it is being deleted by the slice PRs.
 
 Query semantics that must be preserved when touching list/detail endpoints:
 
@@ -260,7 +308,10 @@ Query semantics that must be preserved when touching list/detail endpoints:
 ### State management split
 
 - **Server state**: TanStack Query (`src/lib/hooks/use*.ts`). Cross-feature invalidation helpers live in `src/lib/hooks/query-invalidation.ts`.
-- **Client state**: Zustand — `src/store/auth.store.ts` (session, current clan), `src/store/ui.store.ts`.
+- **Client state**: Zustand — `src/store/auth.store.ts` (session only, since S-025 — see
+  "The auth store holds session state only" above; the active clan is
+  `useCurrentClanId()` over the `current_clan_id` cookie, not the store),
+  `src/store/ui.store.ts`.
 - Forms: react-hook-form + zod resolvers.
 
 ### UI
