@@ -47,19 +47,33 @@
 | [043](043-audit-notification-rls-posture.md) | `audit_logs` Is Inside RLS Layer 2 with Per-Command Policies, `notification_log` Takes the Template Unchanged | Accepted, shipped (2026-08-22, seed S-013) — **implemented 2026-08-22 by seed S-014**, migration `034_rls_audit_notification` plus `AuditLog.__mapper_args__`. `notification_log` took the template; `audit_logs` took clan-keyed reads, a permissive INSERT, and no UPDATE/DELETE policy. Its Measurement 2 is stale on one row: `POST /invitations/{token}/accept` moved to the system session in ADR-048, so only two request routes write an audit row with no clan GUC |
 | [044](044-privacy-toggles-dropped-from-v1.md) | `allow_public_tree` and `privacy_level` Are Dropped from v1, and the Concept Returns Only as One Column | Accepted (2026-08-22, seed S-016) — decision only; **S-017 and S-018 carry one column each**. Both drop by reversible migration, which loses nothing because the table is empty. The boolean does not come back (it is a projection of the level — ADR-027's single-authority rule); the level may, on four named terms. Nothing creates a `clan_settings` row and nothing should: measured 2026-08-22, an insert on the clan-less register session is rejected by migration `035`'s `WITH CHECK`. Corrects S-016's claim that the value domain is unstated — `data-model.md:836` states `private`, `clan_members`, `public` |
 | [045](045-dark-mode-prefers-color-scheme-only.md) | Dark Mode Switches on `prefers-color-scheme` Alone, and the Dark Palette Is a Token Override | Accepted, shipped (2026-08-21, seed S-006) |
+| [046](046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md) | The Backoffice Aside Stops Being Inverted and Becomes a Surface Step | Accepted (2026-08-22, seed S-039) — decision only, no code; the edit is S-061. Rejects an `inverse-surface` role: M3 defines it as "the reverse of what is seen in the surrounding UI" and it flips (`color_scheme.dart:1313-1316`), a pair is six roles short, and `contrast.test.ts` structurally rejects a token that does not flip. The rail takes `muted`, so every pair it composes is already in `CASES` — zero new tokens. Withdraws the claim that S-006 made the boundary vanish: the rail's neighbour is `bg-gray-50`, so the step is 19.27:1 in both schemes and the 1.09:1 state arrives only with S-038. Found a live AA failure that had shipped since 2026-08-21: the brand mark measures **1.90:1** in dark, and the active pill 2.68:1 in light |
 | [047](047-rls-seam-sets-clan-id-only.md) | The RLS Seam Sets `app.clan_id` Only, and ADR-008's `app.user_id` Clause Is Corrected by Dated Amendment | Accepted (2026-08-22, seed S-040) — decision only; amends ADR-008 § 2, no code change |
 | [048](048-invitation-accept-runs-on-the-system-session.md) | Only `POST /invitations/{token}/accept` Moves to the System Session, and `clan_invitations` Takes the Clan-Isolation Policy | Accepted, shipped (2026-08-22, seed S-043) |
 | [049](049-contact-pii-is-the-whole-field-visibility-rule.md) | Contact PII Is the Whole of Field-Level Visibility in v1, the Set Stays Fixed at `phone` and `email`, and the Contract Says So | Accepted (2026-08-22, seed S-053) — decision only, no code. The rule has shipped since 2026-07-05; this ADR keeps it fixed and writes it into `rest-persons-api.md`. Not per-clan: that lands on `clan_settings`, which ADR-044 measured dead, and "no row" is universal, so a configurable set must resolve missing to the maximal set or ship as total disclosure. Not extended: `_UPDATABLE_FIELDS` minus `SUBMITTABLE_PERSON_FIELDS` is exactly `_PII_FIELDS` is exactly `EXCLUDED_PERSON_FIELDS`, measured. Failure direction closed at two layers. Found that no test proves any route calls the redaction (S-058), and that `L11`, cited by six files, is defined nowhere |
 | [050](050-user-clan-roles-clan-keyed-mutations.md) | `user_clan_roles` Takes Clan-Keyed UPDATE and DELETE Only, and Every Reader Stays on the Session It Is On | Accepted, shipped (2026-08-22, seed S-052) — migration `036_rls_user_clan_roles`. Half covered on purpose: `SELECT` and `INSERT` are permissive (the authorization gate and `POST /auth/onboard` both run with no clan selected), `UPDATE` and `DELETE` are clan-keyed. The mirror of ADR-043. No handler changed session |
 | [051](051-edge-visibility-derived-not-cascaded.md) | Person Soft-Delete Does Not Cascade to Its Edges — an Edge's Visibility Is Derived, Not Stored | Accepted (2026-08-22, seed S-055) — decision only, no code. Amends ADR-006's update of 2026-07-02 by dated amendment: its cascade clause is superseded, its restore-symmetry clause stands and is satisfied exactly by the derived predicate. No marker column, no `PersonDeleted` consumer, no trigger. The cascade lost chiefly because a cascading **restore** runs migration 022's full `parent_child` guard and can be refused and left half-applied. S-056 gives the two by-id reads the same predicate the batch reads carry, and builds no cascade |
+| [052](052-restore-bootstraps-the-request-role.md) | A Restore Bootstraps the `familyroots_app` Role and Its Grants, and the Drill Proves It Two-Sided | Accepted, shipped (2026-08-22, seed S-057, opened by S-050). **Indexed 2026-08-22, one batch late** — the ADR landed without a row here, which is the defect this index exists to prevent |
+| [053](053-invitation-status-is-derived-not-stored.md) | An Invitation's Reported Status Is Derived From `expires_at`, Not Stored | Accepted, shipped (2026-08-22, seed S-019). **Supersedes an owner decision**, recorded at `specs/2026-07-25-invitation-expiry-reinvite-design.md:5` as "not a list-display change"; the maintainer was asked on 2026-08-22 and chose the reversal, and that spec carries a dated amendment. One predicate, `is_expired`, with two callers, so the read and the accept refusal cannot drift. No sweep: it would add a third out-of-band writer for a value no reader needs. Makes design-spec § J20's client-side rule redundant rather than contradicted, so no web or mobile work is owed. Nothing about the stored data changed |
 
-**046 is allocated and not written.** Seed S-039 carries it, in
-[`../SEEDS.md`](../SEEDS.md). **049 was written on 2026-08-22 by seed S-053**, so it has left this
-sentence; the block quote below records why it was allocated twice and is kept. **044, 050, 051 and
-052 were all written on 2026-08-22** by seeds S-016, S-052, S-055 and S-057. **048 was taken by seed
-S-043 on 2026-08-22**, the same day 047 went to seed S-040. The gap is deliberate, so that four
-agents picking work at once cannot pick the same number. The next free number is **053** unless
-[`../SEEDS.md`](../SEEDS.md) has allocated it.
+**No number is allocated and unwritten.** Every ADR from 001 to 053 that a seed has claimed is
+written and indexed above. **046 left this sentence on 2026-08-22**, written by seed S-039, as **049**
+did the same day by seed S-053; the block quote below records why 049 was allocated twice and is
+kept. **044, 050, 051, 052 and 053 were all written on 2026-08-22** by seeds S-016, S-052, S-055,
+S-057 and S-019. **048 was taken by seed S-043 on 2026-08-22**, the same day 047 went to seed S-040.
+Pre-allocating in the seed is deliberate, so that four agents picking work at once cannot pick the
+same number. The next free number is **054** unless [`../SEEDS.md`](../SEEDS.md) has allocated it.
+
+> **ADR-052 landed on 2026-08-22 without a row here and was indexed one batch late**, on the same
+> day, by the coordinator. Nothing caught it: an ADR file and this index are two places, and only
+> this one is read when someone asks which numbers are taken. The check that found it compares the
+> files on disk against the rows here in both directions, and it is worth re-running whenever an ADR
+> lands:
+>
+> ```bash
+> for f in docs/decisions/0*.md; do n=$(basename "$f" | cut -c1-3); \
+>   grep -q "^| \[$n\]" docs/decisions/README.md || echo "ADR $n not indexed"; done
+> ```
 
 > **049 was allocated twice, and the second allocation is the live one.** Seed S-051 pre-allocated
 > it on 2026-08-22 and then wrote no ADR, because what it had to say is about how this repository

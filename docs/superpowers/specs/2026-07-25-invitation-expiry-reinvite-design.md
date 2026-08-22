@@ -4,6 +4,20 @@
 **Source finding:** M11 in `docs/architecture/backend-review-2026-07-18.md`.
 **Owner decision:** create-path lazy expire-on-read (not a background job; not a list-display change).
 
+> **Amendment (2026-08-22, seed S-019 and [ADR-053](../../decisions/053-invitation-status-is-derived-not-stored.md)):
+> the "not a list-display change" half of the owner decision is superseded. The maintainer was
+> asked on 2026-08-22 and chose the reversal.** The list read now derives the reported status from
+> `expires_at` rather than returning the stored column. The other three clauses of this design stand
+> unchanged: there is still **no background sweep**, expiry is still realized lazily in storage on
+> re-invite, the accept path still refuses an expired token, and a re-invite still inserts a fresh
+> row. **Nothing about the stored data changed** — only what a reader is told about it.
+>
+> Why it was reversed, in one sentence: this document's reasoning was that "a client can render
+> 'expired'", and by 2026-08-02 the design spec had met that in practice and named it
+> § J20 "**A status field that lies**", requiring every client to learn the rule independently or be
+> wrong. The full argument, the three readings that found no client depending on the stored value,
+> and the rejected sweep are in ADR-053.
+
 ## Problem
 
 An invitation whose `expires_at` has passed **stays `status='pending'` forever** —
@@ -86,8 +100,11 @@ state, the way the scheduler/purge system writers operate without an actor.)
 - **No background sweep job** — expiry is realized lazily when the email is
   re-invited (the only moment the stale row actually matters). A never-re-invited
   expired row simply stays `pending` in storage; it blocks nothing.
-- **List endpoint unchanged** — `list_by_clan` still returns the stored `status`; it
-  already returns `expires_at`, so a client can render "expired". Not reshaped here.
+- ~~**List endpoint unchanged** — `list_by_clan` still returns the stored `status`; it
+  already returns `expires_at`, so a client can render "expired". Not reshaped here.~~
+  **Superseded 2026-08-22 by seed S-019 and ADR-053: `list_by_clan` derives the status from
+  `expires_at`.** Struck rather than deleted, because this document is a dated record of what was
+  decided on 2026-07-25 and a silent rewrite would erase the evidence that it changed.
 - Accept path unchanged — the aggregate already refuses an expired token
   (`invitation.expired`); a re-invite is the documented path forward.
 - Re-invite **inserts a fresh row** (new token, new `expires_at`); the expired row

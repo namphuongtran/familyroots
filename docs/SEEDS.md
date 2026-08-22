@@ -415,6 +415,54 @@ read ports would have left the loader that `PATCH` and `DELETE` use with no isol
 and `grep -rn "marriage_not_found" backend/tests` returns nothing. It added two tests rather than
 moving two. **When a guard moves, check what it stopped guarding** — the S-014 shape, working.
 
+**Re-taken again 2026-08-22, after an eleventh parallel batch of four: 61 seeds, 51 done, 9 open, and
+1 blocked.** All four figures moved:
+
+- **Done, 47 to 51.** S-019, S-032, S-039, and S-058.
+- **Open, 12 to 9.** The four left for `done`, minus four; S-033 became open as S-032 closed and
+  S-061 arrived open, plus two; S-038 became blocked, minus one.
+- **Blocked, 1 to 1.** S-033 left it and **S-038** entered it, for the reason below.
+- **Seeds, 60 to 61.** S-039 opened S-061.
+
+**One seed reversed a recorded owner decision, and the maintainer was asked before it merged.**
+S-019's brief told it to read the *contract* before choosing between a sweep and a derived read. It
+read further, and found that `specs/2026-07-25-invitation-expiry-reinvite-design.md:5` records an
+**owner decision** — "not a list-display change" — that excludes the option the seed recommended.
+**The seed's own text asserts the choice "is not a maintainer decision", and that sentence is
+wrong.** The work was finished and green; it was held, the conflict was put to the maintainer with
+the three dated records side by side, and the maintainer chose to merge and record the reversal.
+That is [ADR-053](decisions/053-invitation-status-is-derived-not-stored.md), and the 2026-07-25 spec
+now carries a dated amendment with its superseded clause struck rather than deleted. **A seed is not
+authority to overturn a decision the maintainer made. Read the spec, not only the contract.**
+
+**S-039 withdrew the measurement its own seed was built on, and found a live accessibility failure
+underneath.** The seed said S-006 had made the backoffice rail nearly vanish against the page.
+Re-measured, and re-checked independently by the coordinator: the rail's neighbour is not the page
+but `bg-gray-50` at `backoffice/layout.tsx:32`, so the step is **19.27:1 in both schemes** and
+**S-006 changed nothing there**. What is broken is the thing the seed asked to protect: the brand
+mark is a token that flips on a ground that cannot, measuring 15.19:1 in light and **1.90:1 in
+dark**, below AA, shipped since 2026-08-21, invisible to every gate because `contrast.test.ts` only
+sweeps token pairs. **The 1.09:1 state the seed described is real but arrives with S-038**, which is
+why S-038 is now blocked by S-061. An ordering nobody would have found by reading the code.
+
+**S-058 closed the fourth instance of "a test pins an outcome, not a setting" with four controls, one
+per route.** Each deletion fails exactly one named test and no other, every one reading
+`'0900000058' != None`. The coordinator re-ran one independently. It changed **no production code**:
+368 insertions, all in tests. It also fixed the comment that caused the gap — a test author's claim
+that redaction "is covered in test_person_pii_visibility", pointing at a suite that issues no HTTP
+request at all.
+
+**S-032 measured its 409 path failing before trusting it**, and found a real `T-04` defect while
+checking the conflict dialog at 320 px and 200% scale: a flexbox `min-width:auto` overflow of 38 px
+that no page-level scrollbar revealed, because Radix computes `overflow-x` to `auto`. It also named
+what it did not look at, which is the half that is usually left out.
+
+**The ADR index was wrong, and the check that found it is now written down there.** ADR-052 landed in
+the previous batch with no row in `docs/decisions/README.md`. Nothing caught it, because an ADR file
+and the index are two places and only the index is read when someone asks which numbers are taken.
+Three rows were added this batch — 046, 052, and 053 — and the index now carries a two-directional
+check to run whenever an ADR lands.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -604,6 +652,8 @@ graph LR
   S053[S-053 decide field-level visibility] --> S058[S-058 prove a route redacts]
   S053 --> S059[S-059 repoint the L11 citations]
   S053 --> S060[S-060 restore advertises its envelope]
+  S006 --> S039[S-039 decide the backoffice aside] --> S061[S-061 convert the aside]
+  S061 --> S038[S-038 the 393 palette utilities]
   S055 --> S056[S-056 by-id edge visibility]
   S028[S-028 prettier sweep]
   S034[S-034 wordmark at 200% scale]
@@ -636,7 +686,7 @@ graph LR
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | done | none |
 | S-017 | Drop `allow_public_tree` by reversible migration, per ADR-044 § 1 | open | S-016, done |
 | S-018 | Drop `privacy_level` by reversible migration, per ADR-044 § 2 | open | S-016, done |
-| S-019 | Make a clan invitation's reported status agree with its `expires_at` | open | none |
+| S-019 | Make a clan invitation's reported status agree with its `expires_at` | done | none |
 | S-020 | Re-measure the four dormant database-review items against the code | done | none |
 | S-021 | Run the restore drill against a real dump, and date the result | done | none |
 | S-022 | Move `<html>` and `<body>` into the locale-aware layout | done | none |
@@ -649,14 +699,14 @@ graph LR
 | S-029 | Land `features/persons` model and api against the frozen contract | done | S-027, done in part |
 | S-030 | Land the persons repository, query keys, and hooks | done | S-029, done |
 | S-031 | Land the persons list and detail screens | done | S-030, done |
-| S-032 | Land the persons create and edit forms, with `409 stale_write` | open | S-031, done |
-| S-033 | Delete the legacy persons code | blocked | S-032 |
+| S-032 | Land the persons create and edit forms, with `409 stale_write` | done | S-031, done |
+| S-033 | Delete the legacy persons code | open | S-032, done |
 | S-034 | Make the `FamilyRoots` wordmark survive 200% text scale at 320 px | done | none |
 | S-035 | Draw form boundaries with `border-input` rather than `border-gray-300` | open | S-003, done |
 | S-036 | Give the calendar's event marker a channel other than gold | open | none |
 | S-037 | Move the mobile `ArborTokens` primary onto ADR-041's leaf green | done | none |
-| S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | open | S-006, done |
-| S-039 | Decide what the backoffice aside is made of, in ADR-046 | open | S-006, done |
+| S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | blocked | S-061 |
+| S-039 | Decide what the backoffice aside is made of, in ADR-046 | done | S-006, done |
 | S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | done | none |
 | S-041 | Make the web e2e gate supply its own environment | done | none |
 | S-042 | Make the missing-Supabase banner survive 200% text scale at 320 px | done | S-041, done |
@@ -675,9 +725,10 @@ graph LR
 | S-055 | Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051 | done | none |
 | S-056 | Give the two by-id relationship reads the same soft-delete predicate the batch reads carry | done | S-055, done |
 | S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | done | none |
-| S-058 | Make a person read prove, through the API, that a stranger's `phone` comes back `null` | open | none |
+| S-058 | Make a person read prove, through the API, that a stranger's `phone` comes back `null` | done | none |
 | S-059 | Repoint the six `L11` citations at ADR-049, which is the definition they were reaching for | open | none |
 | S-060 | Make `POST /persons/{id}/restore` advertise the envelope it actually returns | open | none |
+| S-061 | Convert the backoffice aside off `bg-gray-950` in one edit, per ADR-046 | open | S-039, done |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -2630,7 +2681,7 @@ script reports `DRILL: FAIL` and blames Postgres for being down when it is not.
 
 ## S-058. Make a person read prove, through the API, that a stranger's `phone` comes back `null`
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by S-053, which measured it and correctly did not fix it**, because that is a
 build with its own gate and closing two seeds in one pull request is forbidden here.
@@ -2760,9 +2811,74 @@ returns a message envelope.
 
 ---
 
+## S-061. Convert the backoffice aside off `bg-gray-950` in one edit, per ADR-046
+
+**Status:** open · **Blocked by:** S-039, done 2026-08-22 · **Unblocks:** S-038
+
+**ADR-046 already decided this. Read it and do not re-open the choice**:
+`docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`, whose "What has to
+change" section carries the per-line edit. This seed cites it rather than restating it.
+
+**You are closing a live AA failure, not tidying a colour.** `BackofficeSidebar.tsx:42` is
+`text-primary-container`, a token that flips with the scheme, on `bg-gray-950` at `:30`, a palette
+colour that cannot. Computed from `web/src/app/globals.css` on 2026-08-22: `#d6e4ce` on `#030712` is
+**15.19:1**; `#2b4526` on `#030712` is **1.90:1**. It has shipped that way since 2026-08-21, and
+`contrast.test.ts` cannot see it because it only sweeps token pairs.
+
+**The one non-obvious requirement: convert the aside whole, in one edit.** A partial conversion is
+worse than none. `text-gray-100`, the aside's current ink, measures **1.00:1** on `muted` in light —
+invisible. `text-gray-400` measures 2.36:1. So the ground and every ink move together or not at all.
+`web/src/app/[locale]/backoffice/layout.tsx:30` and `:32` move in the **same** change, because `:32`
+is the surface the rail is measured against.
+
+**Two things this seed owes besides the colour.**
+
+- **`.claude/rules/tailwind.md` § 3's last paragraph stops being true** once the aside is not a
+  hand-built dark surface. Rewrite it, do not delete it: it should say what replaced the exception.
+- **A `Backoffice.rail_label` message in `web/messages/*.json`.** ADR-046 makes this a condition of
+  landing, and the reason is measured: `t(labelKey)` gives real Vietnamese for the four nav items,
+  but `BackofficeSidebar.tsx:44-45` and `:80` are the literal strings `FamilyRoots`, `Backoffice`,
+  and `Sign out`. `vi` is the default locale, so promoting the rail without this puts an English word
+  at the top of a Vietnamese rail.
+
+**End state.** The aside takes `muted` as its ground and the ordinary semantic tokens as its ink. No
+token is added to `@theme`, because every pair the rail composes is already in `contrast.test.ts`'s
+`CASES`. The brand mark reaches AA **in both schemes**, and the numbers are recorded with their date.
+
+**One question ADR-046 left open on purpose, and this seed may not close it silently.** The chosen
+step is thin: `muted` against the content ground is **1.04:1** in light, weaker than the decorative
+`border` token at 1.13. Web's light `muted` is `#f3f4f6`, a cool Tailwind grey, where spec § 2.1
+publishes `surface-container` `#EDE6D7` (step 1.17). Moving that token would hide a palette change
+inside a backoffice change. **If you think the step must be stronger, say so and open a seed. Do not
+change `muted`.**
+
+**Verification.** The **full** web gate in `web/CLAUDE.md`. Plus S-007's `@theme` token gate, which
+must still pass, and `contrast.test.ts`, which must show every rail pair at AA **in both schemes**.
+**Negative control:** the assertions that fail must be about the pairs you changed. Revert the ground
+alone, leaving the inks, and watch the light-mode `text-gray-100` case read 1.00:1 — that is the
+partial conversion this seed forbids, and seeing it fail is what proves the whole-file rule.
+
+**Sources.** `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`;
+`web/src/components/backoffice/BackofficeSidebar.tsx:30,42,44-45,80`;
+`web/src/app/[locale]/backoffice/layout.tsx:30,32`; `web/src/app/globals.css:30,250`;
+`web/src/app/contrast.test.ts`; `.claude/rules/tailwind.md` § 3.
+
+**Out of scope.** The other 392 palette utilities, which are S-038 and wait on this. Changing
+`muted`. Any backoffice screen's content.
+
+---
+
 ## S-038. Move the 393 hardcoded palette utilities onto the semantic tokens
 
-**Status:** open · **Blocked by:** S-006, done 2026-08-21 · **Unblocks:** nothing yet
+**Status:** blocked · **Blocked by:** S-061 · **Unblocks:** nothing yet
+
+**This seed became blocked on 2026-08-22, by a measurement S-039 took.** One of the 393 utilities is
+`bg-gray-50` at `web/src/app/[locale]/backoffice/layout.tsx:32`, and it is the surface the backoffice
+rail faces. Tokenising it while the rail is still `bg-gray-950` puts `#030712` against the dark page
+`#15140f`, which measures **1.09:1** — the rail stops reading as a separate region at all. Verified
+independently by the coordinator the same day. **S-061 converts the rail; do that first.** Nothing
+would catch this if the order were reversed, because `contrast.test.ts` only sweeps token pairs and
+both values here are palette colours.
 
 **This is the gap between "dark mode works" and "the app is dark", and it is most of the app.**
 S-006 landed a dark palette that every gate confirms and that flips nothing but `body`, because a
@@ -2823,7 +2939,26 @@ covered `gray` only.
 
 ## S-039. Decide what the backoffice aside is made of, in ADR-046
 
-**Status:** open · **Blocked by:** S-006, done 2026-08-21 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-006, done 2026-08-21 · **Unblocks:** S-061
+
+**Closed as ADR-046, `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`.**
+The choice is the second option: the aside stops being inverted, takes `muted` as its ground and the
+ordinary semantic tokens as its ink, and the boundary becomes a background step. **Two claims in this
+seed are withdrawn, both re-measured by the coordinator on 2026-08-22.**
+
+- **The aside does not sit against the page.** Its neighbour is `bg-gray-50` `#f9fafb` at
+  `web/src/app/[locale]/backoffice/layout.tsx:32`, with the wrapper `bg-gray-900` at `:30`. So the
+  step measures **19.27:1 under both schemes**, and **S-006 changed nothing here**. The 1.09:1 state
+  is real but arrives with S-038's edit to that same line, which is why S-038 is now blocked by
+  **S-061**.
+- **The brand mark this seed asked to protect is already broken.** `text-primary-container` at
+  `:42` is a token and flips; `bg-gray-950` is a palette colour and cannot. Computed from
+  `globals.css`: `#d6e4ce` on `#030712` is **15.19:1**, and `#2b4526` on `#030712` is **1.90:1**.
+  **That is a live AA failure, shipped since 2026-08-21, and no gate can see it** because
+  `contrast.test.ts` only measures token pairs. The active nav pill `bg-primary` measures 2.68:1
+  against its own ground in light, under WCAG 1.4.11's 3:1 for a control indicator.
+
+Documentation only; no gate was required. The edit is **S-061**.
 
 **This is a decision seed, and the decision is that the design system has no name for a
 permanently-inverted surface.** `web/src/components/backoffice/BackofficeSidebar.tsx:30` is
@@ -4379,7 +4514,7 @@ seed removes with the column.
 
 ## S-019. Make a clan invitation's reported status agree with its `expires_at`
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **The security half is already right, and saying so keeps this seed the right size.**
 `backend/app/domain/invitation/entity.py:90` refuses to accept an invitation whose `expires_at` has
@@ -5254,7 +5389,7 @@ the order of work for a screen.
 
 ## S-032. Land the persons create and edit forms, with `409 stale_write`
 
-**Status:** open · **Blocked by:** S-031, done 2026-08-22 · **Unblocks:** S-033
+**Status:** done, 2026-08-22 · **Blocked by:** S-031, done 2026-08-22 · **Unblocks:** S-033
 
 **Optimistic concurrency is the part that is easy to skip and expensive to add later.** ADR-017 makes
 a stale write fail with `409`, and the design spec already specifies the screen for it at § 7.7c:
@@ -5284,7 +5419,7 @@ Deleting a person. Bulk edit.
 
 ## S-033. Delete the legacy persons code
 
-**Status:** blocked · **Blocked by:** S-032 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-032, done 2026-08-22 · **Unblocks:** nothing yet
 
 **PR 2 closes here, on the same rule S-027 closed PR 1 with.** No pull request only adds.
 
