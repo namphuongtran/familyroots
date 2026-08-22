@@ -96,8 +96,9 @@ Two trees coexist during the migration described in
   └── generated/api-types.ts  # generated from /openapi.json, committed, CI-verified
   ```
 
-  `src/features/` does not exist yet — it lands with the first feature slice PR. New code
-  that isn't a feature slice belongs in `src/domain/` or `src/shared/http/`, never in the
+  `src/features/persons/{model,api}` landed 2026-08-22 by seed S-029, the first feature
+  slice — `server/`, `hooks/`, and `ui/` are still to come (S-030 onward). New code that
+  isn't a feature slice belongs in `src/domain/` or `src/shared/http/`, never in the
   legacy trees above.
 
 Path alias `@/*` → `./src/*` (tsconfig).
@@ -118,7 +119,7 @@ has no allow-list concept — so a rule name is the thing to grep for when a bui
 | `app-does-not-call-transport` | `src/app/**` importing `features/*/api/**` | error |
 | `nothing-imports-app` | anything outside `src/app/` importing `src/app/**` | error |
 | `no-circular` | import cycles | error |
-| `no-orphans` | modules nothing imports — 3 known and accepted today | **warn** |
+| `no-orphans` | modules nothing imports — 3 known and accepted, measured 2026-08-22 by S-029: `shared/http/refresh.ts`, `lib/utils/pagination.ts`, `domain/capability/capability.ts` (the last is a known tool blind spot, see "Clan capabilities" below) | **warn** |
 
 The exit code is the count of error-level violations, so one error returns 1. Warnings do
 not fail the build.
@@ -137,6 +138,95 @@ sub-project B decision that has not been made.
 The legacy trees (`src/lib/api`, `src/lib/hooks`, `src/application`, `src/infrastructure`,
 `src/types`) are excluded from these rules — they are being deleted, not refactored into
 compliance.
+
+**`api-layer-has-no-react` was vacuous from the day it was written, on every package
+manager, and S-029 (2026-08-22) is what found it.** `to.path` in dependency-cruiser
+matches a dependency's *resolved file path*
+(`node_modules/dependency-cruiser/src/validate/matchers.mjs`, `matchesToPath` →
+`pDependency.resolved`), never the bare import specifier. The rule's original `to.path`
+was `'^(react|react-dom|@tanstack/react-query)$'` — an exact-match anchor against a
+string that can never equal a resolved path, because a resolved npm import is always a
+file: `node_modules/react/index.js` under plain npm, or
+`node_modules/.pnpm/react@19.2.8/node_modules/react/index.js` under pnpm. Proved by
+planting `import { useState } from 'react'` in a throwaway `features/persons/api/` file:
+`pnpm depcruise` reported zero violations, and `--output-type json` marked that edge
+`"valid": true`. Fixed to `'node_modules/(react|react-dom|@tanstack/react-query)/'`
+(unanchored, matching the trailing `node_modules/<pkg>/` segment every resolver
+produces), replanted the same import, and got `error api-layer-has-no-react:
+src/features/persons/api/persons-api.ts → node_modules/.pnpm/react@19.2.8/...` by name.
+**If you add a `to.path` rule against an npm package name, match the resolved-path shape
+above, not the specifier** — the anchored form compiles, lints clean, and silently
+protects nothing.
+
+`cross-feature-only-via-index` was checked the same way and does fire correctly: a
+throwaway `features/relationships/probe.ts` importing
+`../persons/model/person-dto` (not through `persons/index.ts`) produced `error
+cross-feature-only-via-index: src/features/relationships/probe.ts →
+src/features/persons/model/person-dto.ts`. Both throwaway files were removed after the
+check; neither reached a commit.
+
+### The `persons` slice — the pattern S-029 set (`src/features/persons/{model,api}`)
+
+**This is the first slice built on the spine alone, so read this before copying its
+shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
+
+- **`model/` holds one zod schema per wire shape, matching the generated type's
+  optionality and nullability *exactly*** — not a defensively widened version of it.
+  `person-dto.ts`'s own header comment explains why: each schema's inferred type is
+  checked against `src/generated/api-types.ts` by a function whose body is nothing but
+  `return dto`, for example `assertPersonResponseDtoMatchesGenerated`. That function only
+  compiles while the DTO type stays assignable to the generated one, so **a backend
+  contract change that adds a required field, removes one, or changes a type fails
+  `pnpm type-check` at that function** — not at runtime, and not in a test that could be
+  skipped. Verified during S-029 by changing `gender: z.enum(GENDERS)` to `z.number()`:
+  `tsc` failed at the assert function's `return dto` line and separately at the mapper's
+  assignment into the domain `Gender` type, naming both. Widening a field (e.g. adding
+  `.nullable()` where the contract does not) breaks the same check in the same way — it
+  is not a safety margin, it is a lie about the contract.
+- **Each DTO's mapper (`toPerson`, `toPersonSearchHit`, `toPersonActionResult`) turns
+  wire `snake_case` into domain `camelCase` and normalises "key absent" into "value
+  null"** — `historical-date-dto.ts`'s `toHistoricalDateOrNull` is the one place that
+  does it for dates, per `historical-date.ts`'s own doc comment that the domain type
+  should only ever think about one absent value.
+- **`api/` returns `Promise<unknown>` from every function — the raw enveloped body,
+  unparsed.** `unwrapData`/`unwrapPage` plus the model schema and mapper are composed by
+  the caller (today, the test; from S-030 on, the repository in `server/`). This is
+  deliberate, not a placeholder: it is what lets `api-layer-has-no-react` mean something,
+  and it is what `server/` in S-030 is *for* — "fetch → parse → map to domain" in
+  `web/CLAUDE.md`'s own Architecture section names three separate steps, and this slice
+  is proof they run in three separate places.
+- **`domain/person/person.ts` is plain TypeScript with no functions, only types** —
+  `Person`, `PersonSearchHit`, `PersonActionResult`, and the `Gender` union sourced from
+  `backend/app/schemas/person.py:37`'s regex, not invented. There was nothing to test:
+  a type declaration has no behaviour to assert on.
+- **`historical-date-dto.ts` is deliberately duplicated the day a second feature needs
+  it, not factored out pre-emptively.** Every future date-bearing slice (marriages,
+  events, tree nodes) parses the identical wire `HistoricalDate` object, but
+  `src/domain/` cannot hold a zod schema (`domain-is-pure`) and `src/shared/` is today
+  only `http/`, `telemetry/`, and `testing/` — adding a `shared/` subtree is a structural
+  decision this seed did not make alone. **Copy the file rather than importing it
+  cross-feature** (`cross-feature-only-via-index` would refuse the import anyway), and
+  whoever copies it a *second* time should turn the duplication into a real `shared/`
+  module instead of shipping a third copy.
+- **Write DTOs skip zod on purpose.** `PersonCreateRequest`/`PersonUpdateRequest` are
+  typed straight from `components['schemas'][...]` in `persons-api.ts` — no zod schema
+  validates them, because the caller constructs them and TypeScript already checks the
+  shape at the call site. Zod DTOs in `model/` exist to validate *untrusted* data arriving
+  over the wire; an outgoing request body is not that.
+- **Excluded on purpose:** the `/persons/{id}/{marriages,parent-child,documents,events,
+  timeline,claim}` sub-resources. Their payloads (`MarriageResponse`,
+  `ParentChildResponse`, …) belong to the relationships, documents, events, and claims
+  slices, not to this one, even though the route is nested under `/persons`.
+- **Tests:** `model/person-dto.test.ts` feeds each mapper a full fixture (the
+  `HistoricalDate` half taken verbatim from `docs/contracts/README.md`'s own example) and
+  asserts on the *mapped output values*, not on schema shape. `api/persons-api.test.ts`
+  exercises `listPersons`/`getPerson`/`searchPersons` against a mocked `fetchImpl`
+  (`vi.fn<FetchLike>()`, same convention as `api-client.test.ts`) and covers the three
+  things S-029 names: the `{"data": ...}` envelope, `Page<T>` via `unwrapPage`, and a
+  `400 invalid_cursor` surfacing as `ApiError` with that `code`. All three have a proven
+  negative control: breaking the mapper's `fullName` field, dropping the list query
+  params, and swallowing the transport error each failed the named test for that reason,
+  then were reverted.
 
 ### The spine (`src/shared/http/`, `src/shared/telemetry/`, `src/domain/date/`)
 
