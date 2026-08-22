@@ -86,6 +86,11 @@ def _no_deleted_endpoint(*endpoint_ids: ColumnElement[uuid.UUID]) -> ColumnEleme
 
     The second half of every edge predicate in this module — see the module
     docstring for why it is an anti-join rather than a join.
+
+    Also imported by ``relationship_repository.py``, where the two by-id read
+    ports carry the same predicate (seed S-056, 2026-08-22). It stays private
+    because nothing outside ``app.infrastructure.persistence`` may use it, and
+    it stays one definition because two copies of a visibility rule drift.
     """
     return ~(
         select(1)

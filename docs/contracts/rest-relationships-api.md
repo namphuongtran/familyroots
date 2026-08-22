@@ -75,6 +75,21 @@ Validation rules (current behavior):
   (marriage) re-runs the same rules `create` enforces, excluding the edge being
   updated itself
 
+Read visibility (seed S-056, 2026-08-22; [ADR-051](../decisions/051-edge-visibility-derived-not-cascaded.md)):
+- `GET /marriages/{id}` and `GET /parent-child/{id}` answer **404**
+  (`marriage_not_found` / `parent_child_not_found`) when the edge row is
+  soft-deleted **or** when either person it points at is soft-deleted. The second
+  half is derived at read time: nothing cascades a person's delete onto its edge
+  rows, so the edge keeps `is_deleted: false` and is hidden anyway. This matches
+  the four edge reads under `/persons` (see
+  [rest-persons-api.md](rest-persons-api.md)) and the tree.
+- **`PATCH` and `DELETE` on the same id still succeed.** An admin must be able to
+  repair or remove an edge whose endpoint person was deleted, so the write paths
+  do not carry the second predicate. A client that holds an edge id can therefore
+  get `404` from `GET` and `200` from `DELETE` for that id, and that is deliberate.
+- Restoring the person (clearing `is_deleted`) makes the same `GET` answer `200`
+  again. No edge data is lost while the person is deleted.
+
 Response shapes (see [Response envelope](README.md#response-envelope)):
 - All endpoints return the resource under `data`
   (`{"data": {...}}`); `DELETE` endpoints return a message envelope
@@ -107,6 +122,14 @@ Response shapes (see [Response envelope](README.md#response-envelope)):
   `expected_version` (soft-delete only) but still bump `version`.
 
 ## Versioning & Compatibility Rules
+- **2026-08-22 (seed S-056), behaviour change, no schema change**: `GET
+  /marriages/{id}` and `GET /parent-child/{id}` began answering `404` for an edge
+  whose endpoint person is soft-deleted. No field was added, removed, or renamed.
+  A client will notice one thing: an id that returned `200` can now return `404`
+  without the edge being deleted. That old `200` was a defect — it handed back an
+  edge naming a person the same API answered `404` for — so there is no behaviour
+  worth preserving and no compatibility period. `PATCH` and `DELETE` on that id
+  are unchanged, on purpose.
 - Any rule tightening that can reject previously accepted writes is a behavior-breaking change.
 - Document behavior-breaking changes in a new ADR and release notes.
 - Keep response and error envelopes stable across versions.

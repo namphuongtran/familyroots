@@ -18,6 +18,7 @@ from app.application.relationship.commands import (
     UpdateParentChild,
 )
 from app.domain.relationship.entities import Marriage, ParentChild
+from app.domain.relationship.query_port import MarriageReadPort, ParentChildReadPort
 from app.domain.relationship.repository import MarriageRepository, ParentChildRepository
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.domain.shared.exceptions import EntityNotFoundError, ValidationError
@@ -191,16 +192,26 @@ class ParentChildCommandHandler:
 
 
 class MarriageQueryHandler:
-    def __init__(self, repo: MarriageRepository) -> None:
-        self._repo = repo
+    """The read side of ``/relationships/marriages/{id}``.
+
+    Takes a ``MarriageReadPort``, **not** the repository the command handlers
+    above use. The repository's ``get_by_id`` must keep returning an edge whose
+    spouse is soft-deleted so that update and delete can still reach it; this
+    handler must not (ADR-051 § 8, seed S-056).
+    """
+
+    def __init__(self, read_port: MarriageReadPort) -> None:
+        self._read_port = read_port
 
     async def get_by_id(self, marriage_id: uuid.UUID, clan_id: uuid.UUID) -> Marriage | None:
-        return await self._repo.get_by_id(marriage_id, clan_id)
+        return await self._read_port.get_visible_by_id(marriage_id, clan_id)
 
 
 class ParentChildQueryHandler:
-    def __init__(self, repo: ParentChildRepository) -> None:
-        self._repo = repo
+    """The read side of ``/relationships/parent-child/{id}``. See above."""
+
+    def __init__(self, read_port: ParentChildReadPort) -> None:
+        self._read_port = read_port
 
     async def get_by_id(self, link_id: uuid.UUID, clan_id: uuid.UUID) -> ParentChild | None:
-        return await self._repo.get_by_id(link_id, clan_id)
+        return await self._read_port.get_visible_by_id(link_id, clan_id)

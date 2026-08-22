@@ -12,6 +12,7 @@ from app.domain.relationship.entities import Marriage as MarriageEntity
 from app.domain.relationship.entities import ParentChild as ParentChildEntity
 from app.domain.relationship.validator import BirthDate
 from app.domain.shared.exceptions import ConflictError
+from app.infrastructure.persistence.person_query_port import _no_deleted_endpoint
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.clan_membership import ClanMembership
 from app.models.marriage import Marriage as MarriageModel
@@ -221,6 +222,61 @@ class SqlAlchemyParentChildRepository:
             raise ConflictError("stale_write", detail={"current_version": current})
         await self._session.refresh(existing)
         link.version = existing.version
+
+
+# ── Read ports (the by-id GETs) ──────────────────────────────────
+#
+# Deliberately not methods on the repositories above. Those load an edge for a
+# write, and update and delete must keep reaching an edge whose endpoint person
+# is soft-deleted — hiding the row there would leave it unreachable through the
+# API entirely (ADR-051 § 8). These answer the read question instead.
+#
+# ``_no_deleted_endpoint`` is imported from ``person_query_port`` rather than
+# copied. It stays private there because nothing outside
+# ``app.infrastructure.persistence`` may use it, and it stays one definition
+# because two copies of a visibility rule drift (seed S-056).
+
+
+class SqlAlchemyMarriageReadPort:
+    """Implements ``MarriageReadPort`` for ``GET /relationships/marriages/{id}``."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_visible_by_id(
+        self, marriage_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> MarriageEntity | None:
+        result = await self._session.execute(
+            select(MarriageModel).where(
+                MarriageModel.id == marriage_id,
+                MarriageModel.created_by_clan_id == clan_id,
+                MarriageModel.is_deleted.is_(False),
+                _no_deleted_endpoint(MarriageModel.person1_id, MarriageModel.person2_id),
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _marriage_to_domain(model) if model else None
+
+
+class SqlAlchemyParentChildReadPort:
+    """Implements ``ParentChildReadPort`` for ``GET /relationships/parent-child/{id}``."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_visible_by_id(
+        self, link_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> ParentChildEntity | None:
+        result = await self._session.execute(
+            select(ParentChildModel).where(
+                ParentChildModel.id == link_id,
+                ParentChildModel.created_by_clan_id == clan_id,
+                ParentChildModel.is_deleted.is_(False),
+                _no_deleted_endpoint(ParentChildModel.parent_id, ParentChildModel.child_id),
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _pc_to_domain(model) if model else None
 
 
 # ── Query Port (for validator) ───────────────────────────────────

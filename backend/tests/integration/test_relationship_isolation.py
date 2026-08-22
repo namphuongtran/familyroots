@@ -1,4 +1,9 @@
-"""A clan must not read relationship edges created by another clan (strict isolation)."""
+"""A clan must not read relationship edges created by another clan (strict isolation).
+
+Both handlers took a repository until seed S-056 (2026-08-22); they now take a
+read port, which carries the same clan predicate plus the soft-deleted-endpoint
+one. The clan question these two tests ask is unchanged.
+"""
 
 import uuid
 from collections.abc import AsyncGenerator
@@ -8,12 +13,10 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.application.relationship.handlers import MarriageQueryHandler, ParentChildQueryHandler
-from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.relationship_repository import (
-    SqlAlchemyMarriageRepository,
-    SqlAlchemyParentChildRepository,
+    SqlAlchemyMarriageReadPort,
+    SqlAlchemyParentChildReadPort,
 )
-from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.fixture()
@@ -66,8 +69,7 @@ async def _seed(session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID,
 @pytest.mark.asyncio
 async def test_marriage_not_readable_cross_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b, marriage_id, _ = await _seed(async_session)
-    uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = MarriageQueryHandler(SqlAlchemyMarriageRepository(uow))
+    handler = MarriageQueryHandler(SqlAlchemyMarriageReadPort(async_session))
     assert await handler.get_by_id(marriage_id, clan_a) is not None
     assert await handler.get_by_id(marriage_id, clan_b) is None
 
@@ -75,7 +77,6 @@ async def test_marriage_not_readable_cross_clan(async_session: AsyncSession) -> 
 @pytest.mark.asyncio
 async def test_parent_child_not_readable_cross_clan(async_session: AsyncSession) -> None:
     clan_a, clan_b, _, link_id = await _seed(async_session)
-    uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = ParentChildQueryHandler(SqlAlchemyParentChildRepository(uow))
+    handler = ParentChildQueryHandler(SqlAlchemyParentChildReadPort(async_session))
     assert await handler.get_by_id(link_id, clan_a) is not None
     assert await handler.get_by_id(link_id, clan_b) is None
