@@ -168,7 +168,9 @@ async def test_role_grants_allow_calling_functions(engine: AsyncEngine) -> None:
 # The RLS-enabled set, split by what the policies actually DO. The split exists because
 # "RLS enabled with at least one policy" is not one claim, and ADR-042 shipped the first
 # table where the claims diverge (S-012, migration 033). ADR-043 then shipped a third
-# posture (S-014, migration 034), so there are now three sets, not two.
+# posture (S-014, migration 034) and ADR-050 a fourth (S-052, migration 036), so there are
+# now four sets, not two. Which tables the four are OBLIGED to cover is a separate question
+# and no assertion here asked it until S-015; that gate is below the sets.
 #
 # CLAN-ISOLATED: every policy's USING clause compares the row's clan to the app.clan_id
 # GUC, so the request role reads its own clan and nothing else, and every write it can make
@@ -276,6 +278,136 @@ _CLAN_KEYED_MUTATION_TABLES = {"user_clan_roles"}
 # The migration-027 predicate template, present in every clan-isolated policy's `qual`.
 _GUC_MARKER = "app.clan_id"
 
+# ---------------------------------------------------------------------------
+# WHICH TABLES THE FOUR SETS ARE OBLIGED TO COVER (seed S-015)
+#
+# The four sets above answer "what does THIS table's policy do". None of them can answer
+# "is every table that needs a policy in one of them", because each assertion iterates
+# its own members: a table nobody listed is a table nobody checks. That silence is how
+# all three gaps survived — S-012's deny-all, S-014's per-command reads, S-052's
+# clan-keyed mutations — and it is the gap S-015 closes. Eight tables also went uncovered
+# across migrations 027, 028 and 029 with every gate green, found on 2026-08-13 by
+# listing `__tablename__` and grepping the migrations by hand.
+#
+# So the universe is read from the SCHEMA: every ordinary table in `public`. A table is
+# CLAN-OWNED unless it is named in `_NOT_CLAN_OWNED_TABLES` below. The default is the
+# strict one on purpose. The failure this repository has actually suffered is a table
+# shipping UNCLASSIFIED, so defaulting to "global" reproduces exactly that silence, while
+# defaulting to "clan-owned" turns an omission into a named failure on the day it lands.
+#
+# The obvious signal — "it has a clan_id column" — is NOT what decides membership, because
+# it is wrong in both directions and this repository holds one instance of each:
+#
+#   * `identity_claims` has NO clan column at all. It reaches a clan only through
+#     `person_id` (`app/models/identity_claim.py:34`) and it is in scope — ADR-042;
+#   * `audit_logs.clan_id` is NULLABLE by decision, so the column's presence says nothing
+#     about whether every row has an owning clan — ADR-043 § 4.
+#
+# The signal is used for the one job it IS sufficient for: a VETO on the list below. A
+# table carrying a foreign key to `clans`, or a column whose name ends in `clan_id`, may
+# never be named as not-clan-owned. That is what stops an exemption being added quietly to
+# make this gate pass, and it is asserted by
+# `test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_global`.
+#
+# Measured 2026-08-22 at migration `036_rls_user_clan_roles`: `public` holds 18 ordinary
+# tables, exactly 13 carry a clan signal, the four named below carry none, and
+# `identity_claims` is the one table with no signal that is still clan-owned.
+_NOT_CLAN_OWNED_TABLES: dict[str, str] = {
+    "alembic_version": (
+        "Alembic's own migration bookkeeping, created by the tool and not by this "
+        "repository's schema (`backend/migrations/env.py`). One column, one row, no "
+        "application data. No ADR, because there is no decision here to record."
+    ),
+    "clans": (
+        "The tenant registry itself. A `clans` row IS a tenant rather than a row "
+        "belonging to one, so there is no owning clan for a policy to key on. ADR-008 "
+        "keeps it outside layer 2: its `Not yet` paragraph excludes the auth-flow tables "
+        "because `get_current_clan_id` reads them before it sets the GUC, and its "
+        "Phase-11 amendment restates `clans remains outside layer 2` after ADR-050 "
+        "brought `user_clan_roles` in "
+        "(`docs/decisions/008-rls-defense-in-depth.md:227`, `:239-242`). ADR-002 is the "
+        "tenancy model the table comes from."
+    ),
+    "user_profiles": (
+        "The per-user identity record, keyed to a Supabase auth user. A profile exists "
+        "before any clan and may belong to several, so no single clan owns the row. Its "
+        "only path to `clans` is the nullable `person_id` link "
+        "(`app/models/user_profile.py:38`, ON DELETE SET NULL), which is an optional "
+        "self-link and not provenance. NO ADR DECIDES THIS. ADR-048 and ADR-050 each "
+        "state as a fact that the table carries no policy "
+        "(`048-invitation-accept-runs-on-the-system-session.md:144`, "
+        "`050-user-clan-roles-clan-keyed-mutations.md:224`); neither decides that it "
+        "should not. S-015 recorded the decision as owed rather than citing an ADR that "
+        "does not say it."
+    ),
+    "user_fcm_tokens": (
+        "One row per device push token, owned by a user and not by a clan. `user_id` is "
+        "its only foreign key (`app/models/user_fcm_token.py:24`) and every statement "
+        "against it keys on the token or the user "
+        "(`app/infrastructure/persistence/auth_repository.py:165`, `:175`, "
+        "`app/services/notification.py:43`). `docs/architecture/data-model.md:701-712` "
+        "is the table's own description. NO ADR DECIDES THIS either — the same owed row "
+        "as `user_profiles`."
+    ),
+}
+
+
+async def _public_base_tables(conn: AsyncConnection) -> set[str]:
+    """Every ordinary table in `public`, read from the catalog rather than from a list.
+
+    This is the half of the gate that cannot go stale: a table added by a migration is in
+    here the moment the migration runs, whether or not anybody remembered to classify it.
+    """
+    rows = (
+        await conn.execute(
+            sa.text(
+                "SELECT c.relname FROM pg_class c JOIN pg_namespace n "
+                "ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r'"
+            )
+        )
+    ).scalars()
+    return {str(name) for name in rows.all()}
+
+
+async def _tables_carrying_a_clan_signal(conn: AsyncConnection) -> set[str]:
+    """Tables with a foreign key to `clans`, or a column whose name ends in ``clan_id``.
+
+    Both signals are read, not one. The foreign key is the load-bearing one; the column
+    name catches a `clan_id` that ships without a constraint, which is a shape no
+    migration here has used yet and which the foreign-key query alone would miss.
+
+    This set is never used to decide that a table IS clan-owned — see the comment above
+    for the two tables that prove it cannot be. It is used only to refuse an entry in
+    ``_NOT_CLAN_OWNED_TABLES``.
+    """
+    by_fk = (
+        await conn.execute(
+            sa.text(
+                "SELECT DISTINCT child.relname FROM pg_constraint k "
+                "JOIN pg_class child ON child.oid = k.conrelid "
+                "JOIN pg_class parent ON parent.oid = k.confrelid "
+                "JOIN pg_namespace n ON n.oid = child.relnamespace "
+                "WHERE k.contype = 'f' AND n.nspname = 'public' AND parent.relname = 'clans'"
+            )
+        )
+    ).scalars()
+    columns = (
+        (
+            await conn.execute(
+                sa.text(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'public'"
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    by_column = {
+        str(row["table_name"]) for row in columns if str(row["column_name"]).endswith("clan_id")
+    }
+    return {str(name) for name in by_fk.all()} | by_column
+
 
 async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncEngine) -> None:
     """CI guard (ADR-008): every table with RLS ENABLEd must have at least one policy
@@ -340,6 +472,188 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
                 {"t": table},
             )
             assert has_select is True, f"familyroots_app lacks SELECT on {table}"
+
+
+async def test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_global(
+    engine: AsyncEngine,
+) -> None:
+    """``_NOT_CLAN_OWNED_TABLES`` is the one hand-written half of the gate below, so it is
+    the half somebody under time pressure can edit to make a red gate go green. Three
+    readings stop that, and every one of them comes from the catalog rather than from the
+    list itself:
+
+    * a name that is not a real table is a stale entry. It would silently shrink the
+      universe if the table were ever re-added under the same name;
+    * a name carrying a **clan signal** — a foreign key to ``clans``, or a column ending
+      in ``clan_id`` — may not be there at all. This is the assertion that makes an
+      exemption cost something: the two shapes the signal misses (``identity_claims``
+      with no clan column, ``audit_logs`` with a nullable one) both argue that the signal
+      is too weak to INCLUDE a table, and neither weakens it as a refusal to EXCLUDE one;
+    * a name that already has RLS enabled or a policy is a contradiction. Somebody
+      covered the table and left it classified as global, and the four posture sets below
+      would go on ignoring it.
+    """
+    async with engine.connect() as conn:
+        tables = await _public_base_tables(conn)
+        signalled = await _tables_carrying_a_clan_signal(conn)
+        covered = {
+            str(name)
+            for name in (
+                await conn.execute(
+                    sa.text(
+                        "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON "
+                        "n.oid = c.relnamespace WHERE n.nspname = 'public' AND "
+                        "c.relkind = 'r' AND c.relrowsecurity"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        policied = {
+            str(name)
+            for name in (
+                await conn.execute(
+                    sa.text(
+                        "SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+
+    exempt = set(_NOT_CLAN_OWNED_TABLES)
+
+    assert not exempt - tables, (
+        f"_NOT_CLAN_OWNED_TABLES names {sorted(exempt - tables)}, which is not a table in "
+        f"`public`. Delete the entry — a stale name silently shrinks the universe the "
+        f"coverage gate reads"
+    )
+
+    assert not exempt & signalled, (
+        f"{sorted(exempt & signalled)} is listed as NOT clan-owned, but the schema says "
+        f"otherwise: the table has a foreign key to `clans` or a column ending in "
+        f"`clan_id`. A table with an owning clan is clan-owned. Give it a policy and put "
+        f"it in one of the four posture sets — do not exempt it, and do not widen this "
+        f"assertion"
+    )
+
+    assert not exempt & (covered | policied), (
+        f"{sorted(exempt & (covered | policied))} is listed as NOT clan-owned, yet it has "
+        f"row-level security enabled or carries a policy. One of the two is wrong. If the "
+        f"table was brought inside layer 2, remove its entry here and add it to the "
+        f"posture set that matches what its policy DOES"
+    )
+
+
+async def test_every_clan_owned_table_is_covered_by_exactly_one_of_the_four_postures(
+    engine: AsyncEngine,
+) -> None:
+    """The gate seed S-015 exists for: a clan-owned table in NONE of the four sets fails.
+
+    Every other assertion in this file iterates a set and asks what its members' policies
+    do. That leaves the complement silent, and the complement is where every gap this file
+    has ever had was found — a name in no set is a name no question is asked about. Here
+    the direction is reversed: the schema names the tables, and each one has to appear.
+
+    Four failures, and the first is the one a drop-a-policy control does not reach:
+
+    * a clan-owned table in none of the four sets. That is a NEW table shipping with no
+      policy, or with a policy in a shape nobody anticipated. It is silent today;
+    * a set naming a table that is not clan-owned — a typo, or a global table pushed into
+      a set to quiet the assertion above;
+    * a table in two sets at once, which makes "the posture" ambiguous and lets one set's
+      weaker question stand in for another's;
+    * a clan-owned table with row-level security disabled, or enabled with no policy at
+      all. RLS off is the silent one: the older guard enumerated `relrowsecurity` tables
+      and so could not see a table that never had it switched on.
+    """
+    all_sets = {
+        "_CLAN_ISOLATED_TABLES": _CLAN_ISOLATED_TABLES,
+        "_REQUEST_ROLE_DENIED_TABLES": _REQUEST_ROLE_DENIED_TABLES,
+        "_PER_COMMAND_TABLES": _PER_COMMAND_TABLES,
+        "_CLAN_KEYED_MUTATION_TABLES": _CLAN_KEYED_MUTATION_TABLES,
+    }
+    classified: set[str] = set()
+    for name, members in all_sets.items():
+        overlap = classified & members
+        assert not overlap, (
+            f"{sorted(overlap)} is in {name} and in another posture set as well. Each set "
+            f"asks a different question, so a table in two of them has whichever posture "
+            f"the reader happens to look at first"
+        )
+        classified |= members
+
+    async with engine.connect() as conn:
+        tables = await _public_base_tables(conn)
+        rls_on = {
+            str(name)
+            for name in (
+                await conn.execute(
+                    sa.text(
+                        "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON "
+                        "n.oid = c.relnamespace WHERE n.nspname = 'public' AND "
+                        "c.relkind = 'r' AND c.relrowsecurity"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        policy_counts = {
+            str(row["tablename"]): int(row["n"])
+            for row in (
+                (
+                    await conn.execute(
+                        sa.text(
+                            "SELECT tablename, count(*) AS n FROM pg_policies "
+                            "WHERE schemaname = 'public' GROUP BY tablename"
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        }
+
+        clan_owned = tables - set(_NOT_CLAN_OWNED_TABLES)
+
+        assert not clan_owned - classified, (
+            f"{sorted(clan_owned - classified)} is a clan-owned table in NONE of the four "
+            f"posture sets, so nothing in this repository checks what its policies do. "
+            f"Decide its posture and add it to the set that matches — or, if it is not "
+            f"clan-owned, add it to _NOT_CLAN_OWNED_TABLES with the reason and the ADR "
+            f"that decided it. Do not pick whichever set makes this pass: the last three "
+            f"tables that fitted no set (identity_claims, audit_logs, user_clan_roles) "
+            f"each PASSED an existing set's assertion while lying to the next reader"
+        )
+
+        assert not classified - clan_owned, (
+            f"{sorted(classified - clan_owned)} is named in a posture set but is not a "
+            f"clan-owned table in this schema — it does not exist, or it is in "
+            f"_NOT_CLAN_OWNED_TABLES. A set member nobody can look up pins nothing"
+        )
+
+        for table in sorted(clan_owned):
+            assert table in rls_on, (
+                f"{table} is clan-owned but row-level security is DISABLED on it, so its "
+                f"policies (if any) do nothing and layer 2 is absent for the table. This "
+                f"is the shape a drop-the-policy control never reaches: the older coverage "
+                f"guard enumerated only tables that already had RLS switched on"
+            )
+            assert policy_counts.get(table, 0) >= 1, (
+                f"{table} is clan-owned with RLS enabled and NO policy, which is a silent "
+                f"lockout: familyroots_app reads zero rows and nothing raises"
+            )
+            has_select = await conn.scalar(
+                sa.text("SELECT has_table_privilege('familyroots_app', :t, 'SELECT')"),
+                {"t": table},
+            )
+            assert has_select is True, (
+                f"familyroots_app lacks SELECT on the clan-owned table {table}; migration "
+                f"026's grants did not reach it"
+            )
 
 
 async def test_each_half_of_the_rls_set_matches_what_its_policies_do(engine: AsyncEngine) -> None:
