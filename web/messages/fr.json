@@ -198,6 +198,7 @@
     "page_title": "Événements",
     "upcoming": "Événements à venir",
     "no_events_on_day": "Aucun événement ce jour-là",
+    "day_events_count": "{count, plural, =1 {1 événement} other {# événements}}",
     "type": {
       "death_anniversary": "Anniversaire de décès",
       "birthday": "Anniversaire",

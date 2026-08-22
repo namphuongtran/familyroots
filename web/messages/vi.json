@@ -110,6 +110,7 @@
     "page_title": "Sự kiện",
     "upcoming": "Sự kiện sắp tới",
     "no_events_on_day": "Không có sự kiện nào trong ngày này",
+    "day_events_count": "{count, plural, =1 {1 sự kiện} other {# sự kiện}}",
     "type": {
       "death_anniversary": "Ngày giỗ",
       "birthday": "Sinh nhật",
