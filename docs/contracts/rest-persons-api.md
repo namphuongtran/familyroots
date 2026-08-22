@@ -101,6 +101,71 @@ them, because the edge rows were never changed.
 and hides that one edge on its own. Nothing about the response schema changed:
 `MarriageResponse` and `ParentChildResponse` carry the same fields as before.
 
+### `phone` and `email` are redacted by role (ADR-049)
+
+`phone` and `email` are the **only** two fields on a person whose value depends on who is
+asking. Every other field, including names, dates, places, lineage, `occupation`, `religion`,
+`biography` and `notes`, is the same for every member of the clan. The set is fixed: it is not
+configurable per clan, per person, or per branch, and no endpoint changes it.
+
+**Who gets the real value:**
+
+| Caller | Sees `phone` and `email` of |
+|---|---|
+| `admin` of the active clan | every person in the clan |
+| `editor` | their own linked person only |
+| `viewer` | their own linked person only |
+| a caller whose account is not linked to a person | nobody |
+
+"Their own linked person" is the person the caller's account is linked to. A caller who has not
+been linked yet, or whose claim is still pending, is in the last row.
+
+**Everyone else gets `null`.**
+
+**A `null` does not mean the person has no phone number.** This is the one thing a client has to
+get right. The response carries **no** marker distinguishing "redacted because of your role" from
+"this field is empty". Both are JSON `null`, both come back with `200`, and there is no `403` on a
+per-field basis. That is deliberate: a marker would tell any member exactly which relatives have a
+contact number on file, which is the same information the rule exists to protect. Three
+consequences for a client:
+
+- Do **not** render "chưa có số điện thoại" / "no phone number on file" from a `null`. Render the
+  field as unavailable, not as absent.
+- Do **not** cache a person read by one user and serve it to another. A cached `null` from a
+  `viewer` would hide the number from an `admin`; a cached number from an `admin` would leak it.
+  Key any person cache by the viewer, or do not cache these two fields.
+- Do **not** treat a `null` as permission to write. `PATCH` with `phone: null` clears the stored
+  value for real.
+
+**Where the rule applies:**
+
+| Route | Behaviour |
+|---|---|
+| `GET /persons` | redacted |
+| `GET /persons/{id}` | redacted |
+| `POST /persons/batch` | redacted |
+| `PATCH /persons/{id}` | the echoed person in the response is redacted, so editing a stranger's record does not reveal their contact details |
+| `POST /persons` | **not** redacted. The response echoes the values the creator just sent in the same request |
+| `DELETE /persons/{id}`, `POST /persons/{id}/restore` | no person fields in the response at all |
+| `GET /persons/search` | `PersonSearchResult` carries no contact field, for any caller |
+
+The fields are declared only on the **full** person projection. `profile=summary` and
+`profile=detail` never carry `phone` or `email`, whoever is asking. `profile=full` is the default,
+and `fields=` cannot widen what the role allows: redaction runs before the projection is built, so
+it cannot be bypassed through `profile`, `fields`, or `include`.
+
+**Writing them is a separate rule, and it is narrower.** `PATCH /persons/{id}` accepts `phone` and
+`email`. An `editor` or `admin` may write them on any person in the clan. A `viewer` may write them
+on their **own** linked person only, and gets `403 field_not_updatable` otherwise.
+
+**Two other surfaces, for completeness:**
+
+- **Change requests never carry them.** `phone` and `email` are not proposable, so neither the
+  proposal nor the `target` block that echoes current values can contain one. See
+  [rest-change-requests-api.md](rest-change-requests-api.md).
+- **The clan archive carries them unredacted.** `GET /exports/clan` is admin-only and returns both
+  fields whole. See the PII note in [rest-exports-api.md](rest-exports-api.md).
+
 ### `avatar_url` is read-only (ADR-036) — **breaking for writers**
 
 `avatar_url` is returned on every person projection (`PersonResponse`, `PersonSummary`,
@@ -157,6 +222,11 @@ Example error shape:
 }
 
 ## Versioning & Compatibility Rules
+- **2026-08-22 (seed S-053, ADR-049), documentation only, no change of any kind**: the
+  `phone`/`email` redaction rule above has been in force since 2026-07-05 and was never
+  written down here. Nothing about the API changed on this date. A client that assumed a
+  `null` `phone` meant "no number on file" was wrong before this section existed and is
+  wrong after it; the section says so out loud.
 - **2026-08-22 (seed S-054), behaviour change, no schema change**: the four edge
   reads listed above stopped returning edges whose counterpart person is
   soft-deleted, and `spouse_count`/`child_count` stopped counting them. No field

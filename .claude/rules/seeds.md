@@ -182,7 +182,11 @@ carries, add a set. Do not move the name into a set that passes.
 ### Why this is a rule here and not ADR-049
 
 S-051 pre-allocated ADR number 049 and left the choice to the agent closing it. **No ADR was
-written. 049 stays free.** Three reasons, recorded so nobody re-opens the question:
+written by S-051, and it released the number.** Seed **S-053** took 049 the same day, on
+2026-08-22, for field-level visibility, so
+[`ADR-049`](../../docs/decisions/049-contact-pii-is-the-whole-field-visibility-rule.md) exists and
+is not this rule. A released number is free, not reserved. Three reasons S-051 wrote no ADR,
+recorded so nobody re-opens the question:
 
 - **Every ADR in this repository decides something about the system it builds**, and this decides
   how the repository verifies. Counted 2026-08-22 by reading all 46 rows of
