@@ -53,7 +53,8 @@ Single linear chain:
 `027_rls_events_branches` → `028_rls_edges` →
 `029_rls_persons` → `030_rls_change_requests` → `031_rls_clan_memberships` →
 `032_rls_clan_invitations` → `033_rls_identity_claims` →
-`034_rls_audit_notification` → `035_rls_clan_settings`.
+`034_rls_audit_notification` → `035_rls_clan_settings` →
+`036_rls_user_clan_roles` → `037_drop_allow_public_tree`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -109,6 +110,20 @@ ADR-050**: it is the table the authorization gate reads, and a policy there make
 raise `InsufficientPrivilege`. See `data-model.md` and
 `backend/tests/integration/test_rls_login_two_clans.py`.
 
+`036_rls_user_clan_roles` gives `user_clan_roles` **four per-command policies** (SP-3
+Phase 11, S-052, ADR-050); reversible. It is not the 027 template: `SELECT USING (true)`
+and `INSERT WITH CHECK (true)` are permissive **by decision**, because four request-session
+readers run before any clan is selected, starting with `get_current_clan_id` itself; the
+`UPDATE` and `DELETE` halves are clan-keyed, and they are what the migration is for. See
+the migration docstring and `backend/tests/integration/test_rls_login_two_clans.py`.
+
+`037_drop_allow_public_tree` drops `clan_settings.allow_public_tree` (S-017, ADR-044 § 1);
+reversible, and exactly so. The table has no rows — nothing constructs a `ClanSettings` and
+no trigger creates one — so there is no per-row value to reconstruct, and `downgrade()`
+re-adds the column with the same `NOT NULL` and the same `server_default false` that
+`001_initial.py:600` gave it. No API shape changes: no contract ever documented the column.
+**The column does not come back**; the concept returns as `privacy_level` alone, if at all.
+
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
@@ -116,7 +131,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `035_rls_clan_settings`; verify with `cd backend && uv run alembic history`.
+Head = `037_drop_allow_public_tree`; verify with `cd backend && uv run alembic heads`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 
