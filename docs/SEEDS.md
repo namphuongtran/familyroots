@@ -215,6 +215,42 @@ outcome**, after S-001's CSS probe and S-012's coverage guard. Three folder note
 thing in three places, and none of them is where the fourth instance will be found. That became
 **S-051**.
 
+**Re-taken again 2026-08-22, after a sixth parallel batch of four: 52 seeds, 31 done, 13 open, and
+8 blocked.** All four moved:
+
+- **Seeds, 51 to 52.** S-010 split and opened **S-052**.
+- **Done, 27 to 31.** S-010, S-026, S-047, and S-051.
+- **Open, 15 to 13.** The four left for `done`, minus four. S-027 became open, because S-026 was its
+  last blocker, plus one. S-052 arrived open, plus one. Net minus two.
+- **Blocked, 9 to 8.** S-027 left it. Nothing became blocked.
+
+**A seed about evidence caught the coordinator overstating evidence.** S-051 was commissioned to
+write down "a test pins an outcome, not a setting". Reading its own commissioning text at source, it
+found the claim that the mobile app "painted a line for 19 days" was false — no widget used a
+`Divider` at all. That sentence was written by the coordinator in two places, and both are corrected
+above rather than quietly edited. **The rule earned its place before it was finished being written.**
+
+**One agent hit a session limit mid-edit having committed nothing.** Its worktree held three screens,
+their tests, four locale files, and a middleware change. The coordinator ran the full gate on that
+tree **unchanged**, found it coherent and green, and committed it as recovered work with the
+interruption recorded in the commit message. **What could not be recovered is the report**, so the
+`T-04` check S-026 requires is recorded as a `Not verified` row rather than assumed from a green
+gate. A gate is not evidence about a claim the gate does not check.
+
+**S-026 was told to close an inherited debt and correctly refused.** Its own text, written by the
+coordinator when closing S-024, assigned the orphaned `capability.ts` here. All three of its screens
+are pre-authorization surfaces where the user has no clan role, so there is nothing to derive.
+Wiring a consumer in would have created a module that exists to silence a checker — the defect this
+tracker has now named three times. The debt moves to S-027, which owns the legacy hook that is the
+real consumer.
+
+**S-010 split exactly where its own text predicted, and found the other half of a hazard nobody had
+recorded.** The seed knew `user_clan_roles` reads fail silently. It did not know the writes fail
+loudly: `add_membership` inserts on the same clan-less session, so a single policy would produce a
+silent lockout on `/auth/login` and a 500 on `/auth/onboard`. It also established that
+`clan_settings` is **dead scaffold** — nothing anywhere constructs a row — which is a hidden
+precondition for S-016, S-017, and S-018.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -421,12 +457,12 @@ graph LR
 | S-007 | Gate: fail the build when an `@theme` token cannot resolve | done | S-001, done |
 | S-008 | Enable clan-isolation RLS on `change_requests` | done | none |
 | S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | done | none |
-| S-010 | Enable clan-isolation RLS on `user_clan_roles` and `clan_settings` | open | none |
+| S-010 | Enable clan-isolation RLS on `user_clan_roles` and `clan_settings` | done | none |
 | S-011 | Decide the policy shape for `identity_claims`, which has no `clan_id`, in ADR-042 | done | none |
 | S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | done | S-011, done |
 | S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
 | S-014 | Enable RLS on the two tables S-013 decides for | done | S-013, done |
-| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-012 done, S-014 done, S-043 done, S-010 |
+| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-010 done, S-012 done, S-014 done, S-043 done, S-052 |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
 | S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
 | S-018 | Enforce or hide `privacy_level` | blocked | S-016 |
@@ -437,8 +473,8 @@ graph LR
 | S-023 | Land the `current_clan_id` cookie and the server request context on it | done | S-022, done |
 | S-024 | Derive capabilities per clan role, in `domain/capability` | done | S-023, done |
 | S-025 | Rewrite the auth store around the clan context | done | S-023, done |
-| S-026 | Land the three blocked-state screens | open | S-024, done; S-025, done |
-| S-027 | Delete the legacy auth transport and the `axios` dependency | blocked | S-025 done, S-026 |
+| S-026 | Land the three blocked-state screens | done | S-024, done; S-025, done |
+| S-027 | Delete the legacy auth transport and the `axios` dependency | open | S-025 done, S-026 done |
 | S-028 | Clear the 112-file prettier drift in one sweep | open | none |
 | S-029 | Land `features/persons` model and api against the frozen contract | blocked | S-027 |
 | S-030 | Land the persons repository, query keys, and hooks | blocked | S-029 |
@@ -458,11 +494,12 @@ graph LR
 | S-044 | Reconcile mobile's two remaining off-spec token values with spec § 2.1 | done | none |
 | S-045 | Pin the exact set of settings the RLS seam writes | done | none |
 | S-046 | Repair ADR-042's four stale line citations into ADR-008 | open | none |
-| S-047 | Repoint `pending_approval_page.dart`'s citation at the register that replaced it | open | none |
+| S-047 | Repoint `pending_approval_page.dart`'s citation at the register that replaced it | done | none |
 | S-048 | Decide what mobile's `outlineVariant` is, and pin it | done | none |
 | S-049 | Make `dividerTheme` do what its comment says, or say what it does | done | none |
 | S-050 | Drill a restore of a dump carrying the RLS migrations, into a fresh cluster | open | none |
-| S-051 | Make "a test pins an outcome, not a setting" a rule rather than a third note | open | none |
+| S-051 | Make "a test pins an outcome, not a setting" a rule rather than a third note | done | none |
+| S-052 | Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050 | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -1783,8 +1820,14 @@ claimed the theme did the job from `0785036` on 2026-08-03, and nothing checked 
 S-048 was right to keep the token rather than delete it.
 
 **The test was the real defect, and it is the part worth copying.**
-`expect(theme.dividerTheme.thickness, 0)`, named "dividers have no thickness", was true, was green,
-and the app painted a line the whole time. **A test that pins a setting is evidence about the
+`expect(theme.dividerTheme.thickness, 0)`, named "dividers have no thickness", was true and green
+while the theme went on choosing the colour of the line it claimed to suppress. **Corrected
+2026-08-22 by S-051**: this note first said "the app painted a line the whole time", which is false.
+No file under `mobile/lib` used `Divider` or `VerticalDivider` in that window —
+`grep -rn "Divider" mobile/lib` returns 14 lines, every one a localisation key named `orDivider`, a
+comment, or the `dividerTheme` declaration, re-checked by the coordinator. The real defect is that
+the first screen to add a divider would have drawn the forbidden line with the suite still green.
+That is bad enough; do not overstate it. **A test that pins a setting is evidence about the
 setting.** That is now the third instance here, after S-001's probe and S-012's coverage guard, and
 it became **S-051**.
 
@@ -1905,7 +1948,39 @@ should be dumped at all, which is a decision and would be its own seed.
 
 ## S-051. Make "a test pins an outcome, not a setting" a rule rather than a third note
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**The rule is a section in `.claude/rules/seeds.md`, "A test pins an outcome, not a setting", and no
+ADR was written, so 049 stays free.** That file already owns this repository's verification
+discipline — the gate-set table, "verify lint with the plain command", and "demand a negative
+control", which this rule extends. **It is also the file observed to load**: the session that closed
+this seed received the root `CLAUDE.md` and `seeds.md` as project instructions and did **not** receive
+`nextjs.md` or `tailwind.md`, which carry `paths: web/**`. That is one observation, not a mechanism,
+and the `Not verified` row about `paths:` is unchanged — so no new `paths`-less file was created on
+an untested assumption.
+
+**No ADR**, because all 46 rows of `docs/decisions/README.md`, read 2026-08-22, decide something
+about the system this repository builds rather than how an agent works; because an ADR does not load
+into a session; and because the ADR index was fenced to another agent this batch.
+
+**This seed's own table was wrong on one row, and the seed that wrote it caught the seed that
+commissioned it.** The mobile row said the app "painted a line for 19 days". It did not. The
+correction is recorded above in this table and in the S-049 body, and `mobile/CLAUDE.md` note 6 was
+corrected in place rather than deleted, because it had been cited. **A seed about evidence caught its
+own author overstating evidence**, which is the strongest argument for writing the rule down at all.
+
+**One nuance the rule records.** The `web` instance was a probe run by hand as a seed's evidence, not
+a committed test, and it is the loosest fit to the rule's wording, because the probe was reaching for
+an outcome that did not depend on the token. That is why the rule carries **two** check questions
+rather than one.
+
+**`.claude/rules/tailwind.md` § 2 and `mobile/CLAUDE.md` note 6 now point at the rule** instead of
+restating it. `backend/CLAUDE.md` was fenced to a concurrent agent, so its pointer text was returned
+to the coordinator and applied on the integration tree.
+
+**No gate was run, and that is correct.** Three Markdown files changed. Running a backend or mobile
+gate would have produced a green result that is evidence about nothing this change touched — the
+exact failure the rule describes.
 
 **Opened 2026-08-22 by S-049, which was the third instance in three weeks.** Each time the defect was
 found by accident, by someone doing something else, and each time it was written down only where that
@@ -1917,7 +1992,7 @@ one agent happened to be working.
 |---|---|---|
 | `web`, in S-001 and S-003 | a CSS probe read back a token's computed value | Tailwind emits an `@theme` variable only when a rule references it, so the probe returned the inherited body colour and could not tell a resolved token from a dead one. S-003 withdrew S-001's whole measurement table |
 | `backend`, in S-012 | "RLS is on and the table has at least one policy" | a policy flipped to `USING (true) WITH CHECK (true)` — handing the request role every clan's rows — **passed**. S-014 then found the split still passed for a third posture |
-| `mobile`, in S-049 | `theme.dividerTheme.thickness == 0`, named "dividers have no thickness" | Flutter draws a thickness-0 divider as exactly one device pixel. The assertion was true, the suite was green, and the app painted a line for 19 days |
+| `mobile`, in S-049 | `theme.dividerTheme.thickness == 0`, named "dividers have no thickness" | Flutter draws a thickness-0 divider as exactly one device pixel. The assertion was true and green from 2026-08-03 to 2026-08-22 while the theme chose the colour of a line it claimed to suppress. **This row first said the app "painted a line for 19 days"; that was wrong** — no widget used a `Divider`, so the defect is that the first screen to add one would have drawn it with the suite green |
 
 **The common shape.** Each test asserted a **setting the code sets**, which is a fact the code already
 guarantees, instead of the **outcome the setting is supposed to produce**. Such a test cannot fail for
@@ -2142,7 +2217,24 @@ on purpose: ADR-043 records that one, and it is a different disagreement.
 
 ## S-047. Repoint `pending_approval_page.dart`'s citation at the register that replaced it
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**The comment now quotes the `Owed` row directly rather than naming a section number**, so the
+citation carries its own claim and survives the row moving inside this file. That is the fix for the
+defect S-046 exists to repair elsewhere: four of ADR-042's five line citations went stale within a
+day. `grep -rn "work-register" mobile/` returns nothing, confirmed by the coordinator.
+
+**No negative control applies, and the seed said so rather than inventing one.** A comment has no
+behaviour to invert. The end state is checked by the grep, seen returning one hit before and zero
+after.
+
+**The nine other pointers into the deleted `work-register.md` were left alone**, after reading at
+source that this tracker deliberately preserves them as dated historical records — which is exactly
+what that `Owed` row exists to prevent a later reader from "repairing".
+
+**Gate, on the combined tree, 2026-08-22.** `dart format` 73 files, 0 changed; `build_runner` wrote 0
+outputs; `git diff --exit-code` clean; `flutter analyze` "No issues found!"; `flutter test` 134
+passed, 132 excluding goldens. No golden shifted.
 
 **This was an `Owed` row until 2026-08-22, when its trigger was met.** The row read: not changed
 "because `flutter` and `dart` are absent from this machine", so the mobile gate could not be run and
@@ -2677,7 +2769,57 @@ inversion if a policy lands.
 
 ## S-010. Enable clan-isolation RLS on `user_clan_roles` and `clan_settings`
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-015
+**Status:** done, 2026-08-22, on `clan_settings` only · **Blocked by:** none · **Unblocks:** S-015
+
+**This seed split, and the split is the outcome its own text predicted.** `clan_settings` is covered
+by `backend/migrations/versions/035_rls_clan_settings.py`, reversible, using the migration-027
+predicate. `user_clan_roles` is **not** covered and became **S-052**, which carries the decision.
+S-015 now waits on S-052 rather than on this seed.
+
+**The hazard was re-measured rather than trusted, and the seed understated it by half.** The read
+half reproduced exactly: `POST /auth/login` answers `200` with `clan_id: None`, `GET /me/clans`
+returns `[]`, nothing raises. The line numbers had drifted — `get_current_clan_id` is at
+`backend/app/core/security.py:249-254`, not `:246-253`.
+
+**The write half is new and fails loudly.** `SqlAlchemyAuthRepository.add_membership`
+(`backend/app/infrastructure/persistence/auth_repository.py:69-88`) inserts the `user_clan_roles`
+row on the same clan-less request session — verified by the coordinator, it calls
+`self._session.add(UserClanRole(...))`, and `get_auth_command_handler` is wired to `get_db`. Both
+`POST /auth/onboard` flows raise `InsufficientPrivilege` and answer **500**. **One policy therefore
+produces a silent lockout on one route and a 500 on another**, which is the clearest statement of
+why this is a decision rather than a patch.
+
+**`clan_settings` is dead scaffold, not merely unenforced, and that matters to three other seeds.**
+Measured 2026-08-22 and confirmed by the coordinator: `grep -rn "ClanSettings(" backend/app/` matches
+only the class definition. **Nothing ever creates a row**, and `001_initial.py` installs only
+`updated_at` triggers, so the table is empty in the running system.
+`docs/architecture/data-model.md` claimed rows are "auto-created with new clans"; that was false and
+is corrected. **S-016, S-017, and S-018 are about enforcing `allow_public_tree` and `privacy_level`,
+and none of them currently says who creates the row or what the default is for clans that have
+none.** That is a hidden precondition all three inherit.
+
+**Because the table is empty, "zero rows" is also its answer with no policy at all**, so every
+denial assertion ends with a privileged read proving the rows were there. That is the S-012 rule at
+its sharpest.
+
+**One live read path had to be checked, and it is a trap worth carrying.** `Clan.settings` is
+`lazy="selectin"` (`backend/app/models/clan.py:35`), so `get_clan_by_slug` and `get_clan_by_id` emit
+a SELECT against this table on the request session with **no clan GUC** during register and onboard.
+It returns nothing, and both flows still answer `201`. `Clan` declares five `lazy="selectin"`
+relationships and three of those targets already carry policies, so the clan-less auth path has been
+loading a `Clan` with empty eager collections since Phase 2.
+
+**Negative control, two plants, each restored.** Predicate replaced by `true`: 10 failed, and **note
+which test caught it** — `test_each_half_of_the_rls_set_matches_what_its_policies_do`, the S-012
+split doing its job; the older single-set assertion would have passed. Migration emptied: 11 failed.
+Restoring both: 26 passed.
+
+**Gate, on the combined tree, 2026-08-22.** 1326 passed; `All checks passed!`; 466 files already
+formatted; mypy `Success: no issues found in 428 source files`; `Contracts: 6 kept, 0 broken`.
+Migration 035 verified up, down, and up again.
+
+**Two stale documents were corrected in the same commit.** `docs/ops/migrations.md` named `031` as
+head after `032`, `033`, and `034` had shipped, and described none of them.
 
 **Both carry a non-optional `clan_id`**, at `backend/app/models/user_clan_role.py:20` and
 `backend/app/models/clan_settings.py:17`.
@@ -2725,6 +2867,69 @@ the columns; `docs/architecture/rbac.md` for the permission model;
 
 **Out of scope.** Whether `clan_settings` enforces anything, which is S-016 through S-018. Role
 assignment surfaces. The platform-admin role, which is not clan-scoped.
+
+---
+
+## S-052. Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-015
+
+**Split out of S-010 on 2026-08-22, because it contains a decision.** The ADR number is **050**,
+allocated here.
+
+**This is the same shape as S-043 and sharper than it.** `user_clan_roles` is the table the
+authorization gate reads (`backend/app/core/permissions.py:46-52` and `:93-98` re-derive the caller's
+role from it). **A policy that hides a role row does not merely hide data: it silently downgrades
+what the caller may do.**
+
+**The measurement that forces this, run 2026-08-22 by S-010**, by adding `user_clan_roles` to
+migration 035's table list. It breaks in two ways that look nothing alike:
+
+- **Reads fail silently.** `get_current_clan_id` queries the table on the request session
+  (`backend/app/core/security.py:249-254`) and sets `app.clan_id` only afterwards at `:290`, so the
+  predicate is NULL for its own read. `get_login_profile`
+  (`backend/app/infrastructure/persistence/auth_repository.py:120-137`) and `list_clans`
+  (`me_query_port.py:19-42`) read it before any clan exists to select. `POST /auth/login` answers
+  `200` with `clan_id: null`; `GET /me/clans` returns `[]`. **Nothing raises and nothing is logged.**
+- **Writes fail loudly.** `add_membership` (`auth_repository.py:69-88`) inserts on that same
+  clan-less session — `get_auth_command_handler` is wired to `get_db`
+  (`backend/app/infrastructure/dependencies.py:192-202`). Both `POST /auth/onboard` flows raise
+  `InsufficientPrivilege` and answer 500.
+
+**Why it is a decision and not a fix. There are at least three answers and they trade differently.**
+(a) Move the clan-resolution reads and `add_membership` to the privileged session: that strips layer
+2 from every other reader of the table, including the member list and role mutations, which **are**
+clan-scoped. (b) Set `app.clan_id` before `get_current_clan_id` runs: there is no clan to set yet, so
+this means restructuring how the active clan is chosen, and `GET /me/clans` is cross-clan by design
+and would still return `[]`. (c) Leave the table outside layer 2 permanently: honest, and it owes a
+`Not verified` row saying the authorization table has one layer of isolation.
+
+**Read S-043 and ADR-048 first.** They resolved the equivalent case for `clan_invitations` by
+splitting **per route rather than per aggregate**, and named what the choice costs. Whether that
+shape transfers is the first thing to establish: `user_clan_roles` has more request-role readers than
+`clan_invitations` did, and one of them is the authorization gate itself.
+
+**End state.** `docs/decisions/050-*.md` records which session resolves a caller's roles and states,
+by name, what the choice does to every other reader and writer of the table. If the decision is to
+cover it, a migration enables a policy, isolation is proven in both directions, and
+`backend/tests/integration/test_rls_login_two_clans.py` is **updated rather than deleted**: its two
+login cases and its two onboard cases must all still pass. If the decision is to leave the table
+outside layer 2, the end state is a recorded absence plus a `Not verified` row, and no migration.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`, plus `upgrade` and `downgrade` if a
+migration lands. Set your own `TEST_PG_DB_NAME`. Plus the planted inversion if a policy lands. Plus a
+role-check test for a user holding different roles in two clans, asserting the right role resolves in
+each clan context — the assertion S-010 named and could not run.
+
+**Sources**, all read 2026-08-22. `backend/app/core/security.py:249-254` and `:290`;
+`backend/app/infrastructure/persistence/auth_repository.py:69-88` and `:120-137`;
+`backend/app/infrastructure/persistence/me_query_port.py:19-42`;
+`backend/app/infrastructure/dependencies.py:192-202`; `backend/app/core/permissions.py:46-52`;
+`backend/tests/integration/test_rls_login_two_clans.py` for both halves;
+`docs/decisions/048-invitation-accept-runs-on-the-system-session.md` for the worked precedent.
+
+**Out of scope.** `clan_settings`, which S-010 closed. The platform-admin role, which is not
+clan-scoped. Whether `clan_settings` enforces anything, which is S-016 through S-018.
 
 ---
 
@@ -3641,7 +3846,42 @@ Token refresh, which the spine already owns in `web/src/shared/http/refresh.ts`.
 
 ## S-026. Land the three blocked-state screens
 
-**Status:** open · **Blocked by:** S-024, done 2026-08-22; S-025, done 2026-08-22 · **Unblocks:** S-027
+**Status:** done, 2026-08-22 · **Blocked by:** S-024, done 2026-08-22; S-025, done 2026-08-22 · **Unblocks:** S-027
+
+**All three screens landed**, each routing on the error `code` and never the `message`, each with a
+way forward so none is a dead end (`T-17`), each covered by component tests serving the real envelope
+through MSW. `test:component` went from 9 to **23**.
+
+**The inherited `capability.ts` debt was NOT closed, and this seed's own text was wrong to assign it
+here.** The paragraph above said closing the fourth `no-orphans` warning was part of this seed. On
+the evidence it is not: all three screens are **pre-authorization** surfaces — unverified email,
+pending approval, suspended clan — where the user has no usable clan role, so there is no capability
+to derive. Wiring one in would have created a consumer that exists only to silence a checker, which
+is the defect this repository has now named three times. `pnpm depcruise` still reports
+`no-orphans: src/domain/capability/capability.ts`, 0 errors and 4 warnings. **The debt moves to
+S-027**, which owns the legacy `application/auth/use-cases/capabilities.ts` that `useCapabilities`
+still calls; rewiring that hook onto `domain/capability` is the real consumer.
+
+**One screen has no caller yet and says so in its own source rather than being wired around.**
+`VerifyEmailScreen` handles `403 email_not_verified`, but the live sign-in path calls
+`supabase.auth.signInWithPassword` directly and never reaches the backend endpoint that raises that
+code. Making it reachable is a legacy-transport change, which is S-027.
+
+**`/verify-email` and `/clan-suspended` joined the public list in `middleware.ts`**, for the reason
+`/pending-approval` already was: a server-side session check run milliseconds after a client-side
+sign-in can race the cookie Supabase's SSR helper just set, and a redirect-to-login loop on a screen
+the user is allowed to see is worse than the check.
+
+**This seed's agent hit a session limit mid-edit and had committed nothing.** The coordinator
+recovered the work: the tree it left was coherent, the full gate passed on it **unchanged**, and the
+interrupted step was an optional refactor of one catch block rather than a broken state. No code was
+added or altered during recovery, and the commit says so. **What is missing is the agent's report**,
+so the `T-04` check the seed requires — each screen at 200% text scale in Vietnamese — **was not
+performed and is not claimed.** That is recorded as a `Not verified` row rather than assumed.
+
+**Gate, on the combined tree, 2026-08-22.** `type-check` and `lint` clean; `depcruise` 0 errors, 4
+warnings; `test:unit` 350 passed; `test:component` **23 passed**; `test:e2e` 38 passed; `build` exit
+0.
 
 **Both blockers closed on 2026-08-22, and this seed inherits a debt from one of them.**
 `web/src/domain/capability/capability.ts` exists and nothing imports it, which is the fourth
@@ -3681,7 +3921,26 @@ verification email itself. Any notification, because none exists for any queue e
 
 ## S-027. Delete the legacy auth transport and the `axios` dependency
 
-**Status:** blocked · **Blocked by:** S-025, S-026 · **Unblocks:** S-029
+**Status:** open · **Blocked by:** S-025, done 2026-08-22; S-026, done 2026-08-22 · **Unblocks:** S-029
+
+**This seed inherits two things its own text does not mention, both handed over deliberately.**
+
+**One: the orphaned capability module.** `web/src/domain/capability/capability.ts` landed in S-024
+and nothing imports it, which is the fourth `no-orphans` warning `pnpm depcruise` reports. S-024
+assigned that debt to S-026; S-026 declined it with reasons, because its three screens are
+pre-authorization surfaces where the user has no clan role and there is nothing to derive. **The real
+consumer is here**: `web/src/lib/hooks/useCapabilities.ts` calls `deriveCapabilities` from
+`web/src/application/auth/use-cases/capabilities.ts`, which is exactly the legacy tree this seed
+deletes. Rewiring that hook onto `domain/capability` closes the warning **and** is this seed's own
+work, rather than a consumer invented to silence a checker.
+
+**Two: the sign-in path that cannot raise `email_not_verified`.**
+`web/src/components/auth/VerifyEmailScreen.tsx` handles `403 email_not_verified` and has no live
+caller, and its own source comment says why: `useAuth().signInWithEmail` calls
+`supabase.auth.signInWithPassword` directly and never reaches the backend `POST /auth/login`, the one
+endpoint that raises the code. `authApi.login` in the legacy `web/src/lib/api/auth.ts` is dead today.
+Whether replacing the transport makes that screen reachable is this seed's to establish and to say
+plainly either way.
 
 **"No PR only adds" is the rule this seed enforces**, from
 `web-architecture-observability-design.md:219`. PR 1 is not finished until its legacy half is gone.
@@ -4032,6 +4291,12 @@ been read or run, and the row that replaces it says where.
   path carries that filter. Recorded 2026-08-22 by S-012. Removing this row needs either a
   clan-scoped redesign of the claim flow, which ADR-042 excludes as "a redesign with its own ADR", or
   a source-scanning gate over the claim query port. **Owner:** backend-engineer.
+- **The three blocked-state screens have not been checked at 200% text scale in Vietnamese.** S-026's
+  `Verification` field requires it and says to state plainly what was checked in a browser and what
+  was not. The agent that built the screens hit a session limit before reporting, so **no such check
+  is on record**. The screens are covered by component tests and the e2e text-scale suite covers only
+  `/vi/login` and `/vi/register`, so `T-04` is unestablished for these three. Recorded 2026-08-22 by
+  the coordinator rather than assumed from a green gate. **Owner:** web-engineer.
 - **The three "not verified" boundaries in [`roadmap.md`](roadmap.md).** That file marks which of its
   milestone boundaries rest on no source. Those marks are the claim, and they are not repeated here.
 
@@ -4053,10 +4318,12 @@ been read or run, and the row that replaces it says where.
 - The four counts in the head of this file are a measurement. Re-take them by reading the board's own
   `Status` cell rather than by adding one to the previous figures, and say which of the four moved.
 - Every ADR number a seed allocates is written in that seed. 041 through 048 are taken by S-004,
-  S-011, S-013, S-016, S-006, S-039, S-040, and S-043, in that order. **Written so far: 041 on
-  2026-08-14 by S-004, 045 on 2026-08-21 by S-006, and 042, 043, 047, and 048 on 2026-08-22 by
-  S-011, S-013, S-040, and S-043.** 044 and 046 are still allocations rather than files. The next
-  free number is **049**.
+  S-011, S-013, S-016, S-006, S-039, S-040, and S-043, in that order, and **050 by S-052**.
+  **Written so far: 041 on 2026-08-14 by S-004, 045 on 2026-08-21 by S-006, and 042, 043, 047, and
+  048 on 2026-08-22 by S-011, S-013, S-040, and S-043.** 044, 046, and 050 are still allocations
+  rather than files. **049 was allocated to S-051 and released unused**, because S-051 decided the
+  rule belongs in `.claude/rules/seeds.md` rather than in an ADR — see its body for the reasoning.
+  The next free number is **049**, then 051.
 - **`docs/decisions/README.md` is not the authority on which numbers are taken.** It said 046 was
   free on 2026-08-21 while this file had already given 046 to S-039. A seed allocates its number in
   its own text, so this file wins and the index is the bug. That index now carries a note saying so.
