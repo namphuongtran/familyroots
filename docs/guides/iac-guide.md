@@ -37,18 +37,25 @@ infra/
 ├── render/
 │   └── render.yaml           # Backend deployment config
 ├── supabase/
-│   ├── seed.sql              # Dev seed data (unimplemented scaffold)
-│   └── rls_policies.sql      # NOT the deployed policies — see infra/README.md
+│   └── seed.sql              # Dev seed data (unimplemented scaffold)
 ├── firebase/
 │   └── google-services-template.json
 └── sentry/
     └── sentry.properties
 ```
 
-> **The database schema is not under `infra/`.** The Alembic chain in `backend/migrations/` is
-> the only source of truth; `docs/ops/migrations.md` owns it. `infra/supabase/migrations/` held
-> a hand-written mirror that nothing executed and no check read, and seed S-064 deleted it on
-> 2026-08-22. `infra/README.md` records what it had drifted into.
+> **Neither the database schema nor the RLS policy set is under `infra/`.** The Alembic chain in
+> `backend/migrations/` is the only source of truth; `docs/ops/migrations.md` owns it.
+> `infra/supabase/migrations/` held a hand-written mirror of the schema that nothing executed
+> and no check read, and seed S-064 deleted it on 2026-08-22. `infra/supabase/rls_policies.sql`
+> held a hand-written mirror of the **policies**, and seed S-067 deleted it the same day: it
+> keyed every policy on `auth.uid()`, which ADR-008 § 2 rejects, and because policies compose
+> rather than replace, applying it to a Supabase-hosted database would have *widened* clan
+> isolation instead of enforcing it. `infra/README.md` records both measurements.
+>
+> `backend/tests/unit/test_no_parallel_table_ddl_under_infra.py` fails on any `.sql` file under
+> `infra/` that declares `CREATE TABLE` or any RLS or policy DDL. If you need either, write an
+> Alembic revision.
 
 ## Pulumi Setup
 
