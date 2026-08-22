@@ -215,6 +215,14 @@ empty even if every row had been rewritten, and the claim would be untestable.
 A **repair** run writes only what drifted. With one role row deleted, `apply` reported
 `clans 0, user_profiles 0, user_clan_roles 1`.
 
+**A `dump` taken after somebody logged in is not comparable to one taken before, and that
+is not the seeder's doing.** `ensure_user_profile` (`backend/app/core/security.py:142`)
+refreshes `last_login_at` on an authenticated request, at most once every five minutes, and
+`TimestampMixin.updated_at` carries `onupdate=func.now()`
+(`backend/app/models/base.py:34-39`), so that ORM update bumps `user_profiles.updated_at`
+too. Take both dumps with nothing logging in between, or the diff measures the login rather
+than the seeder.
+
 **One thing `apply` does not notice: a password changed by hand.** A password cannot be
 read back, so the identity half compares the email, the confirmation and the display name
 only. If a fixture user's password stops working, delete that user from `auth.users` and
