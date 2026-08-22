@@ -4,17 +4,18 @@
 
 FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 
-> **Status (2026-08-02):** Isolation is enforced **in the application/repository
+> **Status (2026-08-22):** Isolation is enforced **in the application/repository
 > layer** — this is the primary, tested guarantee. Row-Level Security is the
 > **defense-in-depth layer-2** (ADR-008) and is **ACTIVE**: request traffic runs under
 > the non-bypass `familyroots_app` role with a per-request `app.clan_id` GUC, so
 > `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
-> `change_requests`, `clan_memberships`, and `clan_invitations` are RLS-enforced at the DB
-> layer (other clan-scoped tables are added table-by-table, and one of them cannot be — see
-> point 7). A tenth table, `identity_claims`, has RLS **enabled with a deny-all policy that
-> is not clan isolation** — see point 8, and do not read it as a covered table.
-> `persons` carries two extra rules — see point 6 below and
-> [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
+> `change_requests`, `clan_memberships`, `clan_invitations`, and `notification_log` are
+> RLS-enforced at the DB layer (other clan-scoped tables are added table-by-table, and one
+> of them cannot be — see point 7). Twelve tables have RLS enabled and **the number of
+> covered tables is not twelve**, because two of them carry policies that are not clan
+> isolation: `identity_claims` is a deny-all tripwire (point 8) and `audit_logs` is
+> clan-keyed on reads only (point 9). `persons` carries two extra rules — see point 6 below
+> and [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
 > describe the application-layer mechanism that remains the primary guarantee.
 
 ## Why not separate schemas?
@@ -70,7 +71,8 @@ PostgreSQL instance
    `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
 6. **RLS layer-2 (ACTIVE for `documents`, `events`, `branches`, `parent_child`,
-   `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`).** The request path drops to the non-bypass `familyroots_app`
+   `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`,
+   `notification_log`; and clan-keyed on reads only for `audit_logs`, see point 9).** The request path drops to the non-bypass `familyroots_app`
    role and sets the transaction-local `app.clan_id` GUC (an `after_begin` seam on the
    request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
    RLS-enforced at the DB layer behind the primary application filters. System paths
@@ -166,6 +168,52 @@ PostgreSQL instance
    `app.clan_id`, and a denied table must have every policy reading `USING (false)` and
    `WITH CHECK (false)`. Pinned by `test_rls_phase8_identity_claims.py` and
    `test_claim_cross_clan_pending_uniqueness.py`.
+
+9. **`audit_logs` is clan-keyed on reads, wide open on writes, and closed to edits — three
+   different answers on one table.** Migration `034_rls_audit_notification` (2026-08-22, seed
+   S-014) implements
+   [ADR-043](../decisions/043-audit-notification-rls-posture.md) and creates two policies and
+   deliberately no third:
+
+   | Command | Policy | Effect on `familyroots_app` |
+   |---|---|---|
+   | `SELECT` | `audit_logs_sel USING (clan_id = <app.clan_id GUC>)` | reads its own clan only |
+   | `INSERT` | `audit_logs_ins WITH CHECK (true)` | may write a row naming any clan, or none |
+   | `UPDATE` | none | denied — no matching policy |
+   | `DELETE` | none | denied — no matching policy |
+
+   **The permissive INSERT is the decision, not the oversight.** Most audit rows are written
+   by the request role: `AuditLogHandler` is wired by `create_event_dispatcher(db)`, and 13
+   of its 16 sites in `backend/app/infrastructure/dependencies.py` hang off `Depends(get_db)`.
+   Two of those routes have no clan GUC at all — `POST /api/v1/auth/register`, which is
+   unauthenticated, and `POST /api/v1/auth/onboard` — so a clan-keyed `WITH CHECK` would
+   compare `<real clan> = NULL` and reject registration outright.
+
+   **NULL-`clan_id` rows are retained, invisible to every clan, and fully visible to the
+   platform surface.** `clan_id` is nullable on purpose (`backend/app/models/audit_log.py:18-21`):
+   platform-level actions have no clan, and ADR-009's `ON DELETE SET NULL` means deleting a
+   clan does not erase its trail. `NULL = <anything>` is NULL in SQL, so `audit_logs_sel`
+   hides those rows from every clan with no special case. ADR-030's super-admin surface is
+   untouched because `get_audit_log` runs on `get_system_db`, which never issues
+   `SET LOCAL ROLE`. **Do not "fix" this with `USING (clan_id = GUC OR clan_id IS NULL)`** —
+   ADR-043 names that as the predicate a reader reaches for and rejects it, because it
+   publishes every platform action to every clan.
+
+   **The absent UPDATE/DELETE policies make the trail append-only at the database.** Under
+   RLS a command with no matching policy is denied for a non-bypass role. `audit_logs` was
+   already documented as an "immutable log of all write actions"; this is the first thing
+   that enforces it.
+
+   **Consequences for a coverage check, on top of point 8's.** `audit_logs` fits neither
+   `_CLAN_ISOLATED_TABLES` nor `_REQUEST_ROLE_DENIED_TABLES`, so
+   `backend/tests/integration/test_rls_activation.py` carries a third set,
+   `_PER_COMMAND_TABLES`, asserted by its own test: exactly a SELECT and an INSERT policy,
+   the SELECT keyed on the GUC with no NULL branch, the INSERT permissive. Pinned two-sided
+   at the DB layer by `test_rls_phase9_audit_notification.py`, and at the HTTP layer by
+   `test_audit_write_paths_no_clan_guc.py`, which drives the two no-GUC writers through a
+   real `RlsSession`. `notification_log` took the ordinary template in the same migration and
+   needs none of this; its only accessor is the anniversary scheduler, which bypasses, and
+   `test_scheduler_cross_clan_notification_log.py` proves that run still crosses clans.
 
 ## Multi-clan membership (clan switcher)
 

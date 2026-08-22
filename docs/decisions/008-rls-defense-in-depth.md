@@ -128,6 +128,42 @@ the ContextVar so post-commit transactions re-apply it).
   `test_rls_activation.py` was split into `_CLAN_ISOLATED_TABLES` and
   `_REQUEST_ROLE_DENIED_TABLES`, and each half is asserted with its own question.
 
+- **Phase 9 (2026-08-22, migration `034_rls_audit_notification`, seed S-014, decided by
+  [ADR-043](043-audit-notification-rls-posture.md))** — RLS enabled on **two** tables with
+  **two different shapes**, and the pair is the clearest statement of what decides membership
+  of this layer: the reader, not the writer.
+  - `notification_log` takes the Phase-2 template unchanged on a NOT-NULL `clan_id`. Its only
+    accessors are the anniversary scheduler's dedup `SELECT` and `INSERT`
+    (`app/services/scheduler.py:173`, `:201`), which run on a bare `engine.connect()` with no
+    seam, so the policy is **inert today**. ADR-043 § 2 took that over a permanent exemption
+    row in the coverage list. Proven by `test_scheduler_cross_clan_notification_log` (one job
+    run writes for two clans while the policy is live) and by the two-sided DB-layer tests in
+    `test_rls_phase9_audit_notification`.
+  - `audit_logs` takes **per-command** policies: `audit_logs_sel` keyed on the GUC,
+    `audit_logs_ins WITH CHECK (true)`, and **no `UPDATE` or `DELETE` policy**, which denies
+    both commands to the request role and makes the trail append-only at the database. The
+    permissive INSERT is forced by measurement, not preference: 13 of the 16
+    `create_event_dispatcher` sites in `app/infrastructure/dependencies.py` hang off
+    `Depends(get_db)`, and two of those routes — `POST /auth/register` (unauthenticated) and
+    `POST /auth/onboard` — write an audit row with **no clan GUC at all**, so a clan-keyed
+    `WITH CHECK` would compare `<real clan> = NULL` and reject registration. NULL-`clan_id`
+    rows stay in the table, are invisible to every clan (`NULL = anything` is NULL), and are
+    still returned in full by `GET /platform-admin/audit-log`, which runs on `get_system_db`
+    and bypasses — so ADR-030 is untouched. ADR-043 explicitly rejects
+    `USING (clan_id = GUC OR clan_id IS NULL)`. The ADR-038 `RETURNING` trap **was** live
+    here and is fixed in the ORM in the same commit
+    (`AuditLog.__mapper_args__ = {"eager_defaults": False}`), proven by
+    `test_audit_write_paths_no_clan_guc` driving the two no-GUC routes over HTTP on a real
+    `RlsSession`.
+  - `audit_logs` fits neither half of the Phase-8 split, so `test_rls_activation.py` gained a
+    third set, `_PER_COMMAND_TABLES`, with its own assertion: exactly a SELECT and an INSERT
+    policy, the SELECT keyed on the GUC with no NULL branch, the INSERT permissive.
+  - **This phase corrects one clause of the "Not yet" paragraph below**, which gives
+    `audit_logs` as excluded for "nullable-clan platform rows + a super-admin cross-clan
+    reader". Both facts are true and neither excludes the table: the nullable rows are the
+    reason for a `SELECT`-only clan predicate, and the super-admin reader bypasses RLS
+    entirely. The paragraph is left as the dated record of what was believed in 2026-06.
+
 Not yet: RLS on the remaining clan-scoped tables. The **auth-flow / token / platform
 tables are deliberately excluded for now** — `clans` and `user_clan_roles` are queried
 by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny and break
