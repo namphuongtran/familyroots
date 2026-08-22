@@ -184,6 +184,37 @@ within the previous two days: S-048 cited a line that had moved and offered an a
 `Out of scope` forbade, S-012's governing ADR mispredicted an error path, and S-024's premise about
 role nesting held only by luck. The code was right in every case.
 
+**Re-taken again 2026-08-22, after a fifth parallel batch of four: 51 seeds, 27 done, 15 open, and
+9 blocked.** All four moved:
+
+- **Seeds, 49 to 51.** S-021 opened **S-050** and S-049 opened **S-051**.
+- **Done, 23 to 27.** S-014, S-021, S-025, and S-049.
+- **Open, 16 to 15.** The four left for `done`, minus four. S-026 became open, because S-024 and
+  S-025 were its only blockers, plus one. S-050 and S-051 arrived open, plus two. Net minus one.
+- **Blocked, 10 to 9.** S-026 left it. Nothing became blocked.
+
+**This batch found a claim in this file that was simply wrong, rather than stale.** S-021's premise,
+and the `Not verified` row repeating it, said no dated restore-drill result existed. One had existed
+since 2026-07-14, in the very runbook the seed cites. The row was **deleted rather than softened**,
+because softening a wrong claim leaves a reader believing a weaker version of something that was
+never true. What was actually missing was a **current** result, not a dated one.
+
+**The batch also found a real gap behind that false one.** No drill has ever restored an RLS-carrying
+dump, and the drill structurally cannot notice: the dump carries no cluster role, a role is
+cluster-wide so the same-cluster drill finds one already there, and all three checks run as a
+superuser that bypasses RLS. That is S-050.
+
+**The coverage guard needed a third posture, one batch after it needed a second.** S-012 split it in
+two because a permissive policy passed. S-014 found that `audit_logs` — clan-keyed on reads,
+permissive on inserts, and with **no** UPDATE or DELETE policy — passes the clan-isolated half while
+telling a later reader something false about its writes. **Each split was found by planting an
+inversion, never by reading the code.**
+
+**S-049 is the third time in three weeks that a green test asserted a setting rather than an
+outcome**, after S-001's CSS probe and S-012's coverage guard. Three folder notes now say the same
+thing in three places, and none of them is where the fourth instance will be found. That became
+**S-051**.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -394,20 +425,20 @@ graph LR
 | S-011 | Decide the policy shape for `identity_claims`, which has no `clan_id`, in ADR-042 | done | none |
 | S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | done | S-011, done |
 | S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
-| S-014 | Enable RLS on the two tables S-013 decides for | open | S-013, done |
-| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-012 done, S-043 done, S-010, S-014 |
+| S-014 | Enable RLS on the two tables S-013 decides for | done | S-013, done |
+| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-012 done, S-014 done, S-043 done, S-010 |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
 | S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
 | S-018 | Enforce or hide `privacy_level` | blocked | S-016 |
 | S-019 | Make a clan invitation's reported status agree with its `expires_at` | open | none |
 | S-020 | Re-measure the four dormant database-review items against the code | open | none |
-| S-021 | Run the restore drill against a real dump, and date the result | open | none |
+| S-021 | Run the restore drill against a real dump, and date the result | done | none |
 | S-022 | Move `<html>` and `<body>` into the locale-aware layout | done | none |
 | S-023 | Land the `current_clan_id` cookie and the server request context on it | done | S-022, done |
 | S-024 | Derive capabilities per clan role, in `domain/capability` | done | S-023, done |
-| S-025 | Rewrite the auth store around the clan context | open | S-023, done |
-| S-026 | Land the three blocked-state screens | blocked | S-024, S-025 |
-| S-027 | Delete the legacy auth transport and the `axios` dependency | blocked | S-025, S-026 |
+| S-025 | Rewrite the auth store around the clan context | done | S-023, done |
+| S-026 | Land the three blocked-state screens | open | S-024, done; S-025, done |
+| S-027 | Delete the legacy auth transport and the `axios` dependency | blocked | S-025 done, S-026 |
 | S-028 | Clear the 112-file prettier drift in one sweep | open | none |
 | S-029 | Land `features/persons` model and api against the frozen contract | blocked | S-027 |
 | S-030 | Land the persons repository, query keys, and hooks | blocked | S-029 |
@@ -429,7 +460,9 @@ graph LR
 | S-046 | Repair ADR-042's four stale line citations into ADR-008 | open | none |
 | S-047 | Repoint `pending_approval_page.dart`'s citation at the register that replaced it | open | none |
 | S-048 | Decide what mobile's `outlineVariant` is, and pin it | done | none |
-| S-049 | Make `dividerTheme` do what its comment says, or say what it does | open | none |
+| S-049 | Make `dividerTheme` do what its comment says, or say what it does | done | none |
+| S-050 | Drill a restore of a dump carrying the RLS migrations, into a fresh cluster | open | none |
+| S-051 | Make "a test pins an outcome, not a setting" a rule rather than a third note | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -1720,7 +1753,52 @@ which `mobile/CLAUDE.md` pairs with its first consumer.
 
 ## S-049. Make `dividerTheme` do what its comment says, or say what it does
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**The theme now suppresses the line: `dividerTheme` gained `color: Colors.transparent`.**
+`thickness: 0` and `space: 0` stayed, so an accidental `Divider` is inert in layout as well as in
+paint.
+
+**The part this seed refused to assume was measured, and the hairline is painted.** A real `Divider`
+inside a `ColoredBox` inside a `RepaintBoundary`, then `toImageSync` and every pixel read back as raw
+RGBA. Over the page ground `#FBF8F1` at device pixel ratio 3.0, two raster rows changed, to `#D7D1C0`
+and `#D7D0C0`; over a dark `#102030` control ground, `#61645F` and `#626560`. About 50% coverage on
+each of two rows — one device pixel of ink antialiased across the boundary it straddles, which is
+exactly what Flutter's "exactly one device pixel" promises.
+
+**Visibility was measured and then deliberately not used as the reason.** It moves with the ground,
+the display, and the device pixel ratio, so no code can hold it. **The rule forbids drawing the line,
+not noticing it**, so the test asserts that no pixel changed rather than that no pixel is
+conspicuous.
+
+**The other branch lost on arithmetic, not on taste.** Deleting `dividerTheme` sounds like the honest
+answer. Verified by the coordinator at source: `_DividerDefaultsM3` (`material/divider.dart:359-370`)
+would then supply `thickness: 1.0`, `space: 16`, and `colorScheme.outlineVariant` at full opacity —
+so honesty would have been bought by making the forbidden line **larger** than the hairline it
+replaced. "Enforced by review at the widget layer" is also exactly what already failed: the comment
+claimed the theme did the job from `0785036` on 2026-08-03, and nothing checked it for 19 days.
+
+**High contrast turns the line back on in this field and nowhere else:**
+`color: t.outlineVariant.withValues(alpha: 0.15)`, `thickness: 1`. That is the second half of why
+S-048 was right to keep the token rather than delete it.
+
+**The test was the real defect, and it is the part worth copying.**
+`expect(theme.dividerTheme.thickness, 0)`, named "dividers have no thickness", was true, was green,
+and the app painted a line the whole time. **A test that pins a setting is evidence about the
+setting.** That is now the third instance here, after S-001's probe and S-012's coverage guard, and
+it became **S-051**.
+
+**Negative controls, three, all watched failing, all undone by inverse edit.** The third exists
+because the first two both stop at the horizontal case, leaving the `VerticalDivider` half never seen
+failing. **A loop needs a control per branch, not per test.**
+
+**Goldens did not shift and were not re-baselined**, as predicted, confirmed with
+`git status --porcelain`. **Gate, on the combined tree:** `flutter test` **134 passed**. Net zero on
+the count — one test replaced one test.
+
+**One reproduction caveat.** `Size(800.0, 0.0)` holds for a loose-height parent; the same `Divider`
+as `MaterialApp.home` reports `Size(800.0, 600.0)` because tight constraints override the internal
+`SizedBox`. A reader who reproduces it differently should not conclude the seed was wrong.
 
 **Opened 2026-08-22 by S-048**, which found it while establishing that `outlineVariant` is reachable
 from a widget.
@@ -1771,6 +1849,102 @@ no-line rule and note 5.
 
 **Out of scope.** Building a high-contrast mode. The `outlineVariant` value, which S-048 settled.
 Adding a divider to any screen.
+
+---
+
+## S-050. Drill a restore of a dump carrying the RLS migrations, into a fresh cluster
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-021**, which found it while doing what it was asked and reported it rather
+than folding in the fix.
+
+**The two drills on record both restored a pre-RLS dump, and the drill cannot see what that misses.**
+`docs/ops/backup-restore.md`'s log holds 2026-07-14 and 2026-08-22, both against a dump reporting
+`016_document_soft_delete`. RLS arrived in migrations 026 to 034. Three facts compose into the gap,
+each verified at source on 2026-08-22:
+
+- `scripts/db_backup.sh:40` and `scripts/restore_drill.sh:116` both pass
+  `--no-owner --no-privileges`, so no cluster role and no `GRANT` is carried.
+- Migration 002 creates the role: `CREATE ROLE ... NOLOGIN` at
+  `backend/migrations/versions/002_rls_documents_pilot.py:38`; `026_rls_activation_grants.py:30-36`
+  extends its grants.
+- **A role is cluster-wide.** A drill restoring into the same cluster finds `familyroots_app` already
+  present and notices nothing. A real recovery restores into a **new** cluster, where
+  `SET LOCAL ROLE familyroots_app` (`backend/app/core/rls.py:63`) has nothing to switch to.
+
+**The drill's own checks would not catch it.** All three connect as the superuser that created the
+scratch database, and that role bypasses RLS. A restored database with no `familyroots_app` role and
+no grants still reports `DRILL: PASS`.
+
+**End state.** A dated row in `docs/ops/backup-restore.md`'s drill log records a restore of a dump
+taken at chain head, into a cluster that did not previously hold the `familyroots_app` role, and
+states whether the restored database can serve a request-role session. **Whatever it reports is
+recorded as it was.** If the restore leaves the database unusable by the app, that failure is the
+result and the repair is its own seed — the same rule S-021 ran under.
+
+**Verification.** `bash scripts/restore_drill.sh <dump.gz>` against a dump at head, plus one explicit
+check the drill does not make: connect to the restored database and run
+`SET LOCAL ROLE familyroots_app`. Record both the `DRILL:` line and that statement's outcome. No
+application gate applies unless a script changes.
+
+**Two things the next agent needs.** The local dev database `family_roots` is still at `016`, so a
+head dump means migrating it first or dumping the integration test database instead. And Homebrew's
+`libpq` is keg-only on this machine, so prepend `/opt/homebrew/opt/libpq/bin` to `PATH` or the script
+will report `DRILL: FAIL` and blame Postgres for being down when it is not.
+
+**Sources.** `docs/ops/backup-restore.md`, the 2026-08-22 drill-log row written by S-021;
+`scripts/db_backup.sh:40`; `scripts/restore_drill.sh:116`;
+`backend/migrations/versions/002_rls_documents_pilot.py:38`;
+`backend/migrations/versions/026_rls_activation_grants.py:30-36`; `backend/app/core/rls.py:63`.
+
+**Out of scope.** Restoring production. Changing what `db_backup.sh` dumps. Deciding whether roles
+should be dumped at all, which is a decision and would be its own seed.
+
+---
+
+## S-051. Make "a test pins an outcome, not a setting" a rule rather than a third note
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-049, which was the third instance in three weeks.** Each time the defect was
+found by accident, by someone doing something else, and each time it was written down only where that
+one agent happened to be working.
+
+**The three instances, each measured, each in a different language and layer:**
+
+| Where | The test asserted | What was actually true |
+|---|---|---|
+| `web`, in S-001 and S-003 | a CSS probe read back a token's computed value | Tailwind emits an `@theme` variable only when a rule references it, so the probe returned the inherited body colour and could not tell a resolved token from a dead one. S-003 withdrew S-001's whole measurement table |
+| `backend`, in S-012 | "RLS is on and the table has at least one policy" | a policy flipped to `USING (true) WITH CHECK (true)` — handing the request role every clan's rows — **passed**. S-014 then found the split still passed for a third posture |
+| `mobile`, in S-049 | `theme.dividerTheme.thickness == 0`, named "dividers have no thickness" | Flutter draws a thickness-0 divider as exactly one device pixel. The assertion was true, the suite was green, and the app painted a line for 19 days |
+
+**The common shape.** Each test asserted a **setting the code sets**, which is a fact the code already
+guarantees, instead of the **outcome the setting is supposed to produce**. Such a test cannot fail for
+the reason anyone cares about. It is the same defect as an unsourced citation reaching a later reader:
+it passes every mechanical check and carries no evidence.
+
+**Why this is a seed and not a note.** It has been written three times as a folder-level note, in
+`.claude/rules/tailwind.md`, `backend/CLAUDE.md`, and `mobile/CLAUDE.md`. A reader in one folder does
+not see the other two, and the fourth instance will be found the same way — by accident.
+
+**End state.** The rule is written once where every session reads it, with the three instances as its
+evidence, and each folder note points at it rather than restating it. The rule says what to assert
+instead: render and read pixels, execute and read the statement, request and read the response.
+**Whether it earns an ADR is this seed's call to make and to write down** — it is a rule about how
+this repository verifies things, not a technical decision, and `.claude/rules/` may be the right home.
+The ADR number, if one is used, is **049**.
+
+**Verification.** Documentation only, so no gate. Say so plainly. The check is that each of the three
+folder notes now points at one place, and that the rule names all three instances with their file
+references.
+
+**Sources.** The S-001, S-003, S-012, S-014, and S-049 bodies in this file, all closed and all
+carrying their own measurements; `.claude/rules/seeds.md`, the "Demand a negative control" paragraph,
+which this rule extends rather than replaces.
+
+**Out of scope.** Rewriting any of the three tests — all three are already fixed. Auditing the rest of
+the suite for a fourth instance, which would be its own seed and needs this rule written first.
 
 ---
 
@@ -2805,7 +2979,68 @@ which does not exist.
 
 ## S-014. Enable RLS on the two tables S-013 decides for
 
-**Status:** open · **Blocked by:** S-013, done 2026-08-22 · **Unblocks:** S-015
+**Status:** done, 2026-08-22 · **Blocked by:** S-013, done 2026-08-22 · **Unblocks:** S-015
+
+**Both tables were inside layer 2 and got different shapes, so no `Not verified` row is owed.**
+Migration `034_rls_audit_notification` gives `notification_log` the migration-027 template unchanged,
+and `audit_logs` three answers on one table: `audit_logs_sel FOR SELECT USING (clan_id = <GUC>)`,
+`audit_logs_ins FOR INSERT WITH CHECK (true)`, and **no UPDATE and no DELETE policy** — which denies
+both commands to `familyroots_app` and makes the trail append-only at the database rather than by
+convention.
+
+**The permissive INSERT is forced by measurement, not preference.** 13 of the 16
+`create_event_dispatcher` sites hang off `Depends(get_db)`, and two of those routes write an audit
+row with no clan GUC at all: `POST /auth/register`, which the coordinator verified takes **no auth
+dependency and no clan** (`backend/app/api/v1/auth.py:46-49`), and `POST /auth/onboard`. A clan-keyed
+`WITH CHECK` compares `<real clan> = NULL` and rejects registration outright.
+
+**NULL-`clan_id` platform rows: retained, invisible to every clan, still fully visible to the
+platform surface.** Measured both ways 2026-08-22 — zero rows under clan A and under clan B, and the
+row returned by the real `SqlAlchemyPlatformAdminQueryPort.get_audit_log` alongside both clans' rows.
+No special case was needed: `NULL = <anything>` is NULL. ADR-030 is untouched because that reader
+runs on `get_system_db`.
+
+**The coverage guard needed a THIRD set, and that is this seed's finding.** `audit_logs` fits neither
+`_CLAN_ISOLATED_TABLES` — its INSERT admits any clan or none — nor `_REQUEST_ROLE_DENIED_TABLES`, its
+SELECT being a real clan predicate; and neither half asks about the two commands that have **no
+policy at all**. Measured 2026-08-22: listing it as clan-isolated **passes**, because that half only
+asks whether some policy's `USING` reads the GUC, while telling a later reader its writes are
+confined to one clan. That is the silent lie the S-012 split exists to stop, so a set was added
+rather than a name moved. **Being per-command is not the distinction**: `persons` is already
+per-command (`029_rls_persons.py:56-63`) and correctly sits in the clan-isolated set, because every
+one of its `USING` clauses is clan-keyed. **S-015's list must record three postures, not two.**
+
+**The ADR-038 collision was live and is fixed in the same commit.**
+`AuditLog.__mapper_args__ = {"eager_defaults": False}`. Removing it reproduces ADR-038's failure
+verbatim on a real route: `(psycopg.errors.InsufficientPrivilege) new row violates row-level security
+policy for table "audit_logs"`, on `INSERT INTO audit_logs (…) RETURNING audit_logs.created_at` —
+accepted by `audit_logs_ins`, then rejected by `audit_logs_sel`.
+
+**The scheduler test cannot pass against a tree where 034 never ran.** It runs the job once against
+two clans, then re-reads the rows **under the request role**, so it proves the policy was live during
+that run. The failure a naive policy would cause here is silent: the dedup read returns nothing, the
+insert is rejected, nothing raises, and clans simply stop getting giỗ reminders. The seed pointed at
+`backend/tests/test_notifications.py`, but that file is mock-based and cannot exercise a policy, so a
+real-DB file was written instead.
+
+**Negative control, five plants, each restored.** `audit_logs_sel` → `USING (true)`: 5 failed, and
+**note which test passed** — `test_each_half_of_the_rls_set_matches_what_its_policies_do` stayed
+green, because `audit_logs` is in neither of its sets. Only the new per-command test caught it, which
+is the S-012 lesson repeating one level up. `notification_log` → permit: 5 failed. A permitting
+`audit_logs_upd` added: 3 failed. The ORM line removed: 3 failed. The migration emptied: 14 failed.
+Restoring all five gave `1312 passed`.
+
+**Three ADR-043 claims are stale and the code is the truth, recorded rather than backfilled.** Its
+Measurement 2 lists `POST /invitations/{token}/accept` as a third no-GUC request-role audit writer;
+**ADR-048 moved it to `get_system_db` the same day ADR-043 was written**, so two remain. Its
+Measurement 1 counts 15 dispatcher sites where there are 16. Its item 3 says the coverage set goes
+"from six tables to eight"; it was ten and is now twelve. ADR-043 itself was not edited, because it
+is a dated record.
+
+**Gate, on the combined tree, 2026-08-22.** 1312 passed; `All checks passed!`; 464 files already
+formatted; mypy `Success: no issues found in 427 source files`; `Contracts: 6 kept, 0 broken`.
+Migration 034 verified up, down, and up again, reading `pg_policies` and `relrowsecurity` back each
+time.
 
 **Read ADR-043 and implement it per table.** The two tables may get different answers, and if either
 is "outside layer 2" then this seed records that and adds a row to
@@ -3047,7 +3282,41 @@ the rule gives for a survey.
 
 ## S-021. Run the restore drill against a real dump, and date the result
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**`DRILL: PASS`, exit 0, one run, with an alembic WARN recorded as it was:**
+`WARN — dump at 016_document_soft_delete, repo head is 033_rls_identity_claims`. The dump was
+produced the same day from the **local dev database**, not production, and
+`docs/ops/backup-restore.md` says so rather than implying more. It restored into
+`familyroots_restore_drill`; the dev database `family_roots` was untouched, proven by identical row
+counts before and after.
+
+**This seed's own premise was false, and that is the finding.** It says "No dated record of a
+successful run exists in this repository. Searched 2026-08-13." **One did.** Verified by the
+coordinator: commit `a533d75` is an ancestor of `main`, and the `docs/ops/backup-restore.md` it added
+already carried a drill log with `DRILL: PASS` dated `2026-07-12`. What was actually missing on
+2026-08-13 was not a **dated** result but a **current** one: the newest was five weeks old and 17
+revisions behind. The `Not verified` row that repeated the claim has been **deleted rather than
+softened**, because it was wrong when written, not merely superseded.
+
+**No drill has ever restored an RLS-carrying dump, and the drill cannot see the gap.** Both recorded
+results, 2026-07-14 and 2026-08-22, restored a dump reporting `016_document_soft_delete`, while RLS
+arrived in migrations 026 to 034. The coordinator verified each link: both scripts pass
+`--no-owner --no-privileges` (`db_backup.sh:40`, `restore_drill.sh:116`), migration 002 creates the
+role (`CREATE ROLE ... NOLOGIN`, `002_rls_documents_pilot.py:38`), and the seam runs `SET LOCAL ROLE`
+(`rls.py:63`). **A role is cluster-wide**, so a drill restoring into the same cluster finds
+`familyroots_app` already there and notices nothing. A real recovery restores into a new cluster,
+where the role and its grants are absent. **The drill's three checks would still pass**, because all
+three connect as the superuser that created the scratch database, and that role bypasses RLS. That
+became **S-050**; this seed did not fix it.
+
+**A third finding, recorded in the runbook rather than fixed.** Homebrew's `libpq` is keg-only, so
+`psql`, `pg_dump`, and `pg_restore` are installed but absent from `PATH`. When that happens the
+script prints `cannot reach Postgres … — is pgdb up?` and `DRILL: FAIL` while Postgres is up
+throughout. **The script blames the wrong thing.** It was not changed, because it runs correctly once
+the tools are on `PATH`.
+
+**No application gate applies**, and none was run. This seed ran a script and wrote one document.
 
 **A backup nobody has restored is not a backup, and this is the last thing that should be unproven
 before real family data arrives.** The machinery exists: `scripts/db_backup.sh` writes the dump,
@@ -3319,7 +3588,33 @@ clan-scoped and belong to PR 7.
 
 ## S-025. Rewrite the auth store around the clan context
 
-**Status:** open · **Blocked by:** S-023, done 2026-08-22 · **Unblocks:** S-026, S-027
+**Status:** done, 2026-08-22 · **Blocked by:** S-023, done 2026-08-22 · **Unblocks:** S-026, S-027
+
+**The two sources for one fact are now one.** `web/src/store/auth.store.ts` no longer carries
+`currentClanId` or `setCurrentClan` — verified by the coordinator, whose only remaining mention in
+that file is a comment recording what it used to hold. The active clan is read through
+`useCurrentClanId()`, a `useSyncExternalStore` wrapper over the cookie, or `readCurrentClanId()` for
+non-component callers. **No `localStorage` read of the clan survives anywhere in `web/src`.**
+
+**`writeClanCookie`/`clearClanCookie` are the only writers now.** `useAuth`'s `selectClan` and
+`syncAuthContext` call them instead of the legacy `persistCurrentClanId`/`clearCurrentClanId`, which
+also wrote `localStorage` and now have zero callers. The legacy file is left in place because
+deleting it is **S-027**. The legacy `infrastructure/http/request-context.ts` lost its `localStorage`
+step and now reads the cookie, then `user.clan_id`.
+
+**Both halves of the end state are proven by test, and the substitutions are honest ones.** A clan
+switch refetches a running TanStack Query **without unmounting anything**, which is what stands in
+for "no page reload"; and a fresh mount with no `writeClanCookie` call resolves the previously
+selected clan, which stands in for what a real reload would find already in the browser.
+
+**Negative control.** Replacing the hook's subscription with a no-op failed the switch test on its
+second assertion while the reload test **stayed green** — correctly, since that one needs only the
+initial read, not reactivity. Restored by inverse edit, both green.
+
+**Gate, on the combined tree, 2026-08-22.** `type-check` and `lint` clean; `depcruise` 0 errors and 4
+warnings, unchanged; `test:unit` 346 passed; `test:component` **9 passed**, up from 7; `test:e2e`
+**38 passed**; `build` exit 0. This is the first web seed since S-007 whose e2e run had no failures
+to explain away, because S-041 landed in the previous batch.
 
 **The store holds the clan id today and the cookie holds it after S-023, so one of the two has to
 stop.** `web/src/store/auth.store.ts` holds the session and the current clan. Leaving both means two
@@ -3346,7 +3641,13 @@ Token refresh, which the spine already owns in `web/src/shared/http/refresh.ts`.
 
 ## S-026. Land the three blocked-state screens
 
-**Status:** blocked · **Blocked by:** S-024, S-025 · **Unblocks:** S-027
+**Status:** open · **Blocked by:** S-024, done 2026-08-22; S-025, done 2026-08-22 · **Unblocks:** S-027
+
+**Both blockers closed on 2026-08-22, and this seed inherits a debt from one of them.**
+`web/src/domain/capability/capability.ts` exists and nothing imports it, which is the fourth
+`no-orphans` warning `pnpm depcruise` now reports. S-024 named this seed as the one that consumes it.
+A module nothing reads is the same shape as the dead tokens S-001 fixed and the unread GUC ADR-047
+refused, so closing that warning is part of this seed rather than a tidy-up for later.
 
 **Three states where a signed-in user may not proceed, and each needs a different way out.** Spec
 `web-architecture-observability-design.md:211` names them as PR 1 scope: unverified email, suspended
@@ -3692,9 +3993,21 @@ been read or run, and the row that replaces it says where.
 - **Whether a `paths:` glob in `.claude/rules/` loads the file when a matching file is edited.**
   `nextjs.md` and `tailwind.md` both carry the field and both scope to `web/**`. The whole value of
   the scoping depends on this and it has not been tested here. Treat both files as best-effort.
-- **No dated restore-drill result exists.** Searched 2026-08-13, nothing under `docs/ops/` records a
-  run of `scripts/restore_drill.sh` with a date and a `DRILL:` line. So "backups work" is not
-  established. S-021 is the seed that settles it.
+- **No restore drill has ever run against an RLS-carrying dump.** Both recorded results,
+  2026-07-14 and 2026-08-22, restored a dump reporting `016_document_soft_delete`, while the chain
+  head on 2026-08-22 is `034_rls_audit_notification`. Both scripts pass `--no-owner --no-privileges`,
+  so neither carries the `familyroots_app` role or its grants, and a role is cluster-wide — so a
+  drill restoring into the **same** cluster cannot see the gap, and the drill's own three checks
+  connect as a superuser that bypasses RLS. So "the backup restores" is established for the pre-RLS
+  schema only. **S-050** is the seed that settles it. **This row replaces a different one that said
+  "No dated restore-drill result exists", which was simply wrong**: `docs/ops/backup-restore.md` had
+  carried a dated `DRILL: PASS` since commit `a533d75` on 2026-07-14, verified 2026-08-22.
+- **`NotificationLog` is safe from the ADR-038 `RETURNING` collision.** Its mapper resolves
+  `eager_defaults` to True with `created_at` as its one server default, measured 2026-08-22. It is
+  safe today **only** because its sole writer is the scheduler's raw `text()` INSERT on a bypassing
+  session, and migration 034 has now given the table a clan-keyed policy. Nobody has established what
+  happens if it is ever written through the ORM on a request session. Recorded by S-014.
+  **Owner:** backend-engineer.
 - **`ensure_user_profile`'s concurrent first-login upsert is not race-safe.**
   `backend/app/core/security.py:172-181` guards the insert with
   `.on_conflict_do_nothing(index_elements=["id"])`, and the comment at `:170-171` claims the PK is

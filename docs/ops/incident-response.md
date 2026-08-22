@@ -21,9 +21,14 @@ engineer owns triage and may escalate to the maintainer for SEV-1.
    capture `audit_logs` for the window, then patch.
 
 ## Known high-severity classes (watch these)
-- **Cross-clan access** — isolation is enforced in the app layer (RLS is not yet
-  active). A regression in a repository filter or a write-path membership check is a
-  SEV-1; the `test_tenant_isolation` / `test_cross_clan_writes` suites guard against it.
+- **Cross-clan access** — isolation is enforced in the app layer, and since 2026-08-22
+  RLS layer 2 is **active** for ten clan-isolated tables plus a deny-all tripwire on
+  `identity_claims` (ADR-008 Phases 1-9, migrations 002 and 026-034). This line read "RLS
+  is not yet active" until 2026-08-22, which was true when written and stale for weeks;
+  `backend/CLAUDE.md` is the current record. A regression in a repository filter or a
+  write-path membership check is still a SEV-1, because the app layer remains the primary
+  guarantee and two tables have no clan-keyed policy at all; the `test_tenant_isolation` /
+  `test_cross_clan_writes` suites guard against it.
 - **Migration-blocked deploy** — the Render pre-deploy `alembic upgrade head` blocks
   the release on failure (good), but leaves prod on the old version until fixed.
 - **Auth surface** — JWT/JWKS validation and the suspended-clan check gate every

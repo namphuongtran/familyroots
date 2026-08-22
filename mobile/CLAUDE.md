@@ -52,8 +52,8 @@ ignored". Do not add it back.
 
 ```bash
 flutter pub get                                    # install deps
-flutter test                                       # full suite (131 tests)
-flutter test --exclude-tags golden                 # what CI runs (129)
+flutter test                                       # full suite (134 tests)
+flutter test --exclude-tags golden                 # what CI runs (132)
 flutter test test/core/network/api_client_test.dart   # single file
 flutter test --plain-name "describes the case"     # single test by name
 flutter test --update-goldens test/goldens/        # re-baseline goldens (macOS only)
