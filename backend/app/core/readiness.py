@@ -10,16 +10,30 @@ mystery to debug one endpoint at a time.
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
+from importlib import resources
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# backend/ (this file lives at backend/app/core/readiness.py). Resolved from the
-# file location, not the CWD, so it works however the process is launched.
-_BACKEND_DIR = Path(__file__).resolve().parents[2]
+# The migration scripts travel *inside* the distribution as the top-level
+# ``migrations`` package, so this module finds them by import rather than by
+# counting directories upwards from its own file. ``pyproject.toml``'s
+# ``[tool.hatch.build.targets.wheel] packages`` is what puts them in the wheel,
+# and ``tests/unit/test_wheel_carries_migration_scripts.py`` is what proves it.
+#
+# S-075: the previous form was ``Path(__file__).resolve().parents[2]``, under a
+# comment reading "resolved from the file location, not the CWD, so it works
+# however the process is launched". That is true of *launching* and false of
+# *installing*. ``backend/Dockerfile`` runs ``uv sync --no-editable``, so in the
+# image this module sits at
+# ``/app/.venv/lib/python3.14/site-packages/app/core/readiness.py`` and
+# ``parents[2]`` is ``site-packages``, which holds no ``migrations`` directory.
+# ``expected_head()`` returned ``None``, ``migration_status()`` returned
+# ``unknown``, and ``app/main.py`` refused to boot under ``APP_ENV=production``
+# however healthy the database was. Measured 2026-08-22 from a built image.
+_MIGRATIONS_PACKAGE = "migrations"
 
 MIGRATIONS_CURRENT = "current"
 MIGRATIONS_BEHIND = "behind"
@@ -31,11 +45,18 @@ def expected_head() -> str | None:
     """Head revision id from the migration scripts (filesystem read, cached).
 
     ``ScriptDirectory`` only parses the version files — it does not run
-    ``env.py`` — so this is safe to call without a database."""
+    ``env.py`` — so this is safe to call without a database.
+
+    ``alembic.ini`` is deliberately not read here. Its ``[alembic]`` section
+    carries only ``script_location``, which this function supplies itself, plus
+    options that apply to generating revisions rather than reading them. Not
+    reading it removes the last reason for this module to know where the
+    project root is."""
     try:
-        cfg = Config(str(_BACKEND_DIR / "alembic.ini"))
-        cfg.set_main_option("script_location", str(_BACKEND_DIR / "migrations"))
-        return ScriptDirectory.from_config(cfg).get_current_head()
+        with resources.as_file(resources.files(_MIGRATIONS_PACKAGE)) as scripts_dir:
+            cfg = Config()
+            cfg.set_main_option("script_location", str(scripts_dir))
+            return ScriptDirectory.from_config(cfg).get_current_head()
     except Exception:
         return None
 

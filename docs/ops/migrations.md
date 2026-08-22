@@ -177,6 +177,41 @@ reports a `migrations` field and degrades on mismatch. As a dev bootstrap, the
 docker-compose `api` service runs `python -m alembic upgrade head` before
 starting uvicorn.
 
+**The gate needs the migration scripts at run time, so they ship inside the
+distribution.** `app/core/readiness.py` reads the head revision through
+`importlib.resources.files("migrations")`, and `backend/pyproject.toml` lists
+`migrations` in `[tool.hatch.build.targets.wheel] packages` so the wheel carries
+it. Two consequences, and both are load-bearing:
+
+- `backend/migrations/__init__.py` must stay. Without it `migrations` is not a
+  package, so it is neither importable nor installed. Do **not** add an
+  `__init__.py` to `migrations/versions/`; Alembic reads every `.py` file there
+  as a revision script.
+- A revision file that is not committed is not in the wheel. There is no second
+  place the running app can find one.
+
+**Why it is written this way (S-075, measured 2026-08-22).** `readiness.py`
+previously located the scripts with `Path(__file__).resolve().parents[2]`, under
+a comment reading "resolved from the file location, not the CWD, so it works
+however the process is launched". That is true of *launching* and false of
+*installing*. `backend/Dockerfile` runs `uv sync --no-editable`, so in the image
+the module sits at `/app/.venv/lib/python3.14/site-packages/app/core/readiness.py`
+and `parents[2]` is `site-packages`, which held no `migrations` directory — the
+Dockerfile copies `alembic.ini` and `migrations/` to `/app`. `expected_head()`
+returned `None`, the status was `unknown`, and **every production boot failed
+whatever the database said**. Read from a built image on 2026-08-22:
+
+| Image | `APP_ENV` | Database | Result |
+|---|---|---|---|
+| before the fix | `production` | at head `039_drop_clan_settings` | `RuntimeError: Database is not ready (migrations: unknown)`, exit 3 |
+| after the fix | `production` | at head `039_drop_clan_settings` | boots; `GET /health` → 200 `{"status":"ok","database":"connected","migrations":"current"}` |
+| after the fix | `production` | one revision behind (`038_drop_privacy_level`) | `RuntimeError: Database is not ready (migrations: behind)`, exit 3 |
+| after the fix | `development` | one revision behind | boots with a loud error; `GET /health` → 503 `{"status":"degraded","database":"connected","migrations":"behind"}` |
+
+The local compose stack never showed this, because `docker-compose.yml`
+bind-mounts `./backend/app:/app/app:ro`, which puts `app` back at `/app/app` and
+makes the old arithmetic correct again.
+
 ## Known risks
 - The Alembic chain is the **only** source of truth for the deployed schema. There is no second
   copy. `infra/supabase/migrations/`, a hand-written mirror that nothing executed and no check
