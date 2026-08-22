@@ -30,7 +30,7 @@ export function PendingUsersList({ users, isLoading, onApprove, onReject }: Pend
     return (
       <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-lg border border-gray-100 p-3">
+          <div key={i} className="border-border flex items-center gap-3 rounded-lg border p-3">
             <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
             <div className="flex-1 space-y-1">
               <Skeleton className="h-4 w-32" />
@@ -46,7 +46,7 @@ export function PendingUsersList({ users, isLoading, onApprove, onReject }: Pend
 
   if (users.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
+      <div className="text-muted-foreground flex flex-col items-center gap-2 py-10">
         <CheckCircle className="h-8 w-8 opacity-40" />
         <p className="text-sm">{t('no_pending_users')}</p>
       </div>
@@ -54,14 +54,14 @@ export function PendingUsersList({ users, isLoading, onApprove, onReject }: Pend
   }
 
   return (
-    <div className="divide-y divide-gray-100">
+    <div className="divide-border divide-y">
       {users.map((user) => (
         <div key={user.id} className="flex items-center gap-3 py-3">
           <MemberAvatar fullName={user.label} gender="unknown" size="md" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-gray-800">{user.label}</p>
-            {user.role && <p className="truncate text-xs text-gray-400">{user.role}</p>}
-            <p className="mt-0.5 flex items-center gap-1 text-[10px] text-gray-300">
+            <p className="text-foreground truncate text-sm font-medium">{user.label}</p>
+            {user.role && <p className="text-muted-foreground truncate text-xs">{user.role}</p>}
+            <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[10px]">
               <Clock className="h-2.5 w-2.5" />
               {formatDate(user.created_at)}
             </p>
@@ -76,7 +76,7 @@ export function PendingUsersList({ users, isLoading, onApprove, onReject }: Pend
             </button>
             <button
               onClick={() => onReject(user.id)}
-              className="flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 transition-colors hover:bg-red-100"
+              className="border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15 flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs transition-colors"
             >
               <XCircle className="h-3 w-3" />
               {t('reject')}

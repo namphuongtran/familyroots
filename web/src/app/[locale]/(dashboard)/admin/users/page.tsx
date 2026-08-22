@@ -17,10 +17,10 @@ export default function AdminUsersPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="font-serif text-2xl text-gray-800">{t('users_title')}</h1>
+      <h1 className="text-foreground font-serif text-2xl">{t('users_title')}</h1>
 
-      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs">
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-gray-500 uppercase">
+      <section className="border-border bg-card rounded-2xl border p-5 shadow-xs">
+        <h2 className="text-muted-foreground mb-3 text-sm font-semibold tracking-wide uppercase">
           {t('pending_approval')}
         </h2>
         <PendingUsersList
@@ -36,18 +36,18 @@ export default function AdminUsersPage() {
         />
       </section>
 
-      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs">
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-gray-500 uppercase">
+      <section className="border-border bg-card rounded-2xl border p-5 shadow-xs">
+        <h2 className="text-muted-foreground mb-3 text-sm font-semibold tracking-wide uppercase">
           {t('all_members')}
         </h2>
         {approved.map((user) => (
           <div
             key={user.id}
-            className="flex items-center justify-between border-b border-gray-50 py-2 last:border-0"
+            className="border-border flex items-center justify-between border-b py-2 last:border-0"
           >
             <div>
-              <p className="text-sm font-medium text-gray-700">{user.user_id}</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-foreground text-sm font-medium">{user.user_id}</p>
+              <p className="text-muted-foreground text-xs">
                 {user.person_id ? `Person: ${user.person_id}` : 'No linked person'}
               </p>
             </div>

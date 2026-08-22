@@ -16,12 +16,16 @@ export default function PlatformMetricsPage() {
       color: 'bg-rose-50 text-rose-700',
     },
     { label: t('total_members'), value: data?.total_members, color: 'bg-green-50 text-green-700' },
-    { label: t('total_users'), value: data?.total_users, color: 'bg-amber-50 text-amber-700' },
+    {
+      label: t('total_users'),
+      value: data?.total_users,
+      color: 'bg-accent text-accent-foreground',
+    },
   ]
 
   return (
     <div className="space-y-4">
-      <h1 className="font-serif text-2xl text-gray-800">{t('metrics_title')}</h1>
+      <h1 className="text-foreground font-serif text-2xl">{t('metrics_title')}</h1>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {metrics.map(({ label, value, color }) => (

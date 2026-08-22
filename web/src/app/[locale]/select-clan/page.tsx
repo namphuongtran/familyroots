@@ -110,10 +110,10 @@ export default function SelectClanPage() {
 
   return (
     <div className="bg-background min-h-screen px-4 py-12">
-      <div className="mx-auto max-w-xl rounded-3xl border border-gray-100 bg-white p-8 shadow-xs">
+      <div className="border-border bg-card mx-auto max-w-xl rounded-3xl border p-8 shadow-xs">
         <div className="space-y-2">
-          <h1 className="font-serif text-3xl text-gray-900">Choose your clan</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-foreground font-serif text-3xl">Choose your clan</h1>
+          <p className="text-muted-foreground text-sm">
             Select the clan context you want to work in. This controls permissions and all
             clan-scoped data.
           </p>
@@ -126,7 +126,7 @@ export default function SelectClanPage() {
               className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-4 transition-colors ${
                 selectedClanId === membership.clan_id
                   ? 'border-primary bg-primary-container'
-                  : 'border-gray-200 hover:border-gray-300'
+                  : 'border-border hover:border-input'
               }`}
             >
               <input
@@ -138,13 +138,13 @@ export default function SelectClanPage() {
                 className="mt-1"
               />
               <span className="min-w-0">
-                <span className="block text-base font-medium text-gray-900">
+                <span className="text-foreground block text-base font-medium">
                   {membership.clan_name}
                 </span>
-                <span className="block text-xs tracking-wide text-gray-400 uppercase">
+                <span className="text-muted-foreground block text-xs tracking-wide uppercase">
                   {membership.clan_slug}
                 </span>
-                <span className="mt-1 inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                <span className="bg-muted text-muted-foreground mt-1 inline-flex rounded-full px-2 py-0.5 text-xs">
                   {membership.role}
                 </span>
               </span>
@@ -153,7 +153,7 @@ export default function SelectClanPage() {
         </div>
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="border-destructive/30 bg-destructive/10 text-destructive mt-4 rounded-lg border px-3 py-2 text-sm">
             {error}
           </div>
         )}

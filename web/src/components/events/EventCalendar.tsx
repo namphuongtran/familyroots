@@ -44,23 +44,23 @@ export function EventCalendar() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => setCurrentMonth((m) => subMonths(m, 1))}
-          className="rounded p-1 hover:bg-gray-100"
+          className="hover:bg-muted rounded p-1"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-semibold text-gray-700 capitalize">
+        <span className="text-foreground text-sm font-semibold capitalize">
           {format(currentMonth, 'MMMM yyyy', { locale: vi })}
         </span>
         <button
           onClick={() => setCurrentMonth((m) => addMonths(m, 1))}
-          className="rounded p-1 hover:bg-gray-100"
+          className="hover:bg-muted rounded p-1"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 text-center text-[10px] font-medium text-gray-400">
+      <div className="text-muted-foreground grid grid-cols-7 text-center text-[10px] font-medium">
         {['CN', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7'].map((d) => (
           <div key={d}>{d}</div>
         ))}
@@ -83,10 +83,10 @@ export function EventCalendar() {
               }
               className={cn(
                 'relative flex h-8 flex-col items-center justify-center rounded text-xs',
-                !isSameMonth(day, currentMonth) && 'text-gray-300',
+                !isSameMonth(day, currentMonth) && 'text-muted-foreground',
                 isToday(day) && 'text-primary font-bold',
                 isSelected && 'bg-primary-container ring-ring ring-1',
-                !isSelected && 'hover:bg-gray-100',
+                !isSelected && 'hover:bg-muted',
               )}
             >
               {day.getDate()}
@@ -100,12 +100,12 @@ export function EventCalendar() {
 
       {/* Selected day events */}
       {selectedDate && (
-        <div className="space-y-2 border-t border-gray-100 pt-2">
-          <p className="text-xs font-medium text-gray-500">
+        <div className="border-border space-y-2 border-t pt-2">
+          <p className="text-muted-foreground text-xs font-medium">
             {format(selectedDate, 'd MMMM yyyy', { locale: vi })}
           </p>
           {selectedDayEvents.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">{t('no_events_on_day')}</p>
+            <p className="text-muted-foreground text-xs italic">{t('no_events_on_day')}</p>
           ) : (
             selectedDayEvents.map((e) => <EventCard key={e.id} event={e} />)
           )}

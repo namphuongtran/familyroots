@@ -25,7 +25,7 @@ export const MemberNode = memo(function MemberNode({
       ? 'border-blue-400'
       : data.gender === 'female'
         ? 'border-pink-400'
-        : 'border-gray-300'
+        : 'border-border'
 
   return (
     <div
@@ -47,7 +47,7 @@ export const MemberNode = memo(function MemberNode({
       */}
       {isFounder && <span className="absolute -top-2 text-xs">👑</span>}
 
-      <Handle type="target" position={Position.Top} className="h-2! w-2! bg-gray-400!" />
+      <Handle type="target" position={Position.Top} className="bg-muted-foreground! h-2! w-2!" />
 
       <MemberAvatar
         avatarUrl={data.avatar_url ?? undefined}
@@ -58,18 +58,18 @@ export const MemberNode = memo(function MemberNode({
       />
 
       <div className="w-full min-w-0 text-center">
-        <p className="truncate text-[11px] leading-tight font-semibold text-gray-800">
+        <p className="text-foreground truncate text-[11px] leading-tight font-semibold">
           {data.full_name}
         </p>
         {data.birth_date && (
-          <p className="text-[9px] text-gray-400">
+          <p className="text-muted-foreground text-[9px]">
             {data.birth_date.slice(0, 4)}
             {data.death_date ? ` – ${data.death_date.slice(0, 4)}` : ''}
           </p>
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="h-2! w-2! bg-gray-400!" />
+      <Handle type="source" position={Position.Bottom} className="bg-muted-foreground! h-2! w-2!" />
     </div>
   )
 })

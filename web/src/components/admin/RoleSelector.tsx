@@ -18,9 +18,9 @@ const ROLES: Array<{ value: ClanRole; labelKey: string; descKey: string }> = [
 ]
 
 const ROLE_COLORS: Record<ClanRole, string> = {
-  viewer: 'bg-gray-100 text-gray-700 border-gray-300',
+  viewer: 'bg-muted text-foreground border-input',
   editor: 'bg-blue-50 text-blue-700 border-blue-300',
-  admin: 'bg-red-50 text-red-700 border-red-300',
+  admin: 'bg-destructive/10 text-destructive border-destructive/30',
 }
 
 export function RoleSelector({ value, onChange, disabled }: RoleSelectorProps) {
@@ -38,7 +38,7 @@ export function RoleSelector({ value, onChange, disabled }: RoleSelectorProps) {
             'flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition-all',
             value === role.value
               ? ROLE_COLORS[role.value]
-              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300',
+              : 'border-border bg-card text-muted-foreground hover:border-input',
             disabled && 'cursor-not-allowed opacity-50',
           )}
         >

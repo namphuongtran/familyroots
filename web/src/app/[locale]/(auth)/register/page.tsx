@@ -104,10 +104,10 @@ export default function RegisterPage() {
   if (success) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-xs">
+        <div className="border-border bg-card w-full max-w-sm rounded-2xl border p-8 text-center shadow-xs">
           <div className="mb-3 text-4xl">OK</div>
-          <h2 className="mb-2 font-serif text-xl text-gray-800">{t('register_title')}</h2>
-          <p className="text-sm text-gray-500">{success}</p>
+          <h2 className="text-foreground mb-2 font-serif text-xl">{t('register_title')}</h2>
+          <p className="text-muted-foreground text-sm">{success}</p>
           <Link
             href={`/${locale}/login`}
             className="text-primary mt-4 inline-flex text-sm hover:underline"
@@ -129,22 +129,24 @@ export default function RegisterPage() {
             <wbr />
             Roots
           </h1>
-          <p className="mt-1 text-sm text-gray-500">{t('register_subtitle')}</p>
+          <p className="text-muted-foreground mt-1 text-sm">{t('register_subtitle')}</p>
         </div>
 
         <SupabaseSetupNotice />
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs"
+          className="border-border bg-card space-y-4 rounded-2xl border p-6 shadow-xs"
         >
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-foreground text-lg font-semibold">
             {isOAuthMode ? t('oauth_onboarding_title') : t('register_title')}
           </h2>
-          {isOAuthMode && <p className="text-sm text-gray-500">{t('oauth_onboarding_subtitle')}</p>}
+          {isOAuthMode && (
+            <p className="text-muted-foreground text-sm">{t('oauth_onboarding_subtitle')}</p>
+          )}
 
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm">
               {error}
             </div>
           )}
@@ -155,31 +157,33 @@ export default function RegisterPage() {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading || isGoogleLoading}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="border-input text-foreground hover:bg-muted w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isGoogleLoading ? t('google_signing_in') : t('google_register')}
               </button>
 
-              <div className="flex items-center gap-3 text-xs tracking-wide text-gray-400 uppercase">
-                <span className="h-px flex-1 bg-gray-200" />
+              <div className="text-muted-foreground flex items-center gap-3 text-xs tracking-wide uppercase">
+                <span className="bg-border h-px flex-1" />
                 <span>{t('or')}</span>
-                <span className="h-px flex-1 bg-gray-200" />
+                <span className="bg-border h-px flex-1" />
               </div>
             </>
           )}
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">{t('full_name')}</label>
+            <label className="text-foreground mb-1 block text-sm font-medium">
+              {t('full_name')}
+            </label>
             <input
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+              className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">{t('email')}</label>
+            <label className="text-foreground mb-1 block text-sm font-medium">{t('email')}</label>
             <input
               type="email"
               required
@@ -187,13 +191,13 @@ export default function RegisterPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={isOAuthMode}
-              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+              className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
 
           {!isOAuthMode && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="text-foreground mb-1 block text-sm font-medium">
                 {t('password')}
               </label>
               <input
@@ -203,14 +207,14 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+                className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
               />
             </div>
           )}
 
           <div className="space-y-2">
-            <p className="block text-sm font-medium text-gray-700">{t('register_subtitle')}</p>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <p className="text-foreground block text-sm font-medium">{t('register_subtitle')}</p>
+            <label className="text-foreground flex items-center gap-2 text-sm">
               <input
                 type="radio"
                 name="clanAction"
@@ -219,7 +223,7 @@ export default function RegisterPage() {
               />
               {t('join_clan')}
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="text-foreground flex items-center gap-2 text-sm">
               <input
                 type="radio"
                 name="clanAction"
@@ -232,7 +236,7 @@ export default function RegisterPage() {
 
           {clanAction === 'join' ? (
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="text-foreground mb-1 block text-sm font-medium">
                 {t('clan_slug')}
               </label>
               <input
@@ -240,31 +244,31 @@ export default function RegisterPage() {
                 value={clanId}
                 onChange={(e) => setClanId(e.target.value)}
                 placeholder="UUID"
-                className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+                className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
               />
             </div>
           ) : (
             <>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="text-foreground mb-1 block text-sm font-medium">
                   {t('clan_name')}
                 </label>
                 <input
                   required
                   value={clanName}
                   onChange={(e) => setClanName(e.target.value)}
-                  className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+                  className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="text-foreground mb-1 block text-sm font-medium">
                   {t('clan_slug')}
                 </label>
                 <input
                   required
                   value={clanSlug}
                   onChange={(e) => setClanSlug(e.target.value)}
-                  className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+                  className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
                 />
               </div>
             </>
@@ -284,7 +288,7 @@ export default function RegisterPage() {
                 : t('register')}
           </button>
 
-          <p className="text-center text-xs text-gray-500">
+          <p className="text-muted-foreground text-center text-xs">
             {isOAuthMode ? (
               t('oauth_onboarding_hint')
             ) : (

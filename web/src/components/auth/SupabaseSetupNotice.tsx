@@ -49,9 +49,9 @@ export function SupabaseSetupNotice() {
   }
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+    <div className="border-accent-foreground/30 bg-accent text-accent-foreground rounded-xl border px-4 py-3 text-sm">
       <p className="font-medium">{t('missing_supabase_config_title')}</p>
-      <p className="mt-1 text-amber-800">
+      <p className="text-accent-foreground mt-1">
         {withBreakOpportunities(t('missing_supabase_config_hint'))}
       </p>
     </div>

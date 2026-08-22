@@ -15,30 +15,30 @@ export function TreeControls() {
       <button
         onClick={() => zoomIn()}
         title={t('zoom_in')}
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white shadow-xs hover:bg-gray-50"
+        className="border-border bg-card hover:bg-muted flex h-8 w-8 items-center justify-center rounded-md border shadow-xs"
       >
-        <ZoomIn className="h-4 w-4 text-gray-600" />
+        <ZoomIn className="text-muted-foreground h-4 w-4" />
       </button>
 
       <button
         onClick={() => zoomOut()}
         title={t('zoom_out')}
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white shadow-xs hover:bg-gray-50"
+        className="border-border bg-card hover:bg-muted flex h-8 w-8 items-center justify-center rounded-md border shadow-xs"
       >
-        <ZoomOut className="h-4 w-4 text-gray-600" />
+        <ZoomOut className="text-muted-foreground h-4 w-4" />
       </button>
 
       <button
         onClick={() => fitView({ padding: 0.15, duration: 400 })}
         title={t('fit_view')}
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white shadow-xs hover:bg-gray-50"
+        className="border-border bg-card hover:bg-muted flex h-8 w-8 items-center justify-center rounded-md border shadow-xs"
       >
-        <Maximize2 className="h-4 w-4 text-gray-600" />
+        <Maximize2 className="text-muted-foreground h-4 w-4" />
       </button>
 
       {/* Generation depth selector */}
-      <div className="mt-2 flex w-28 flex-col gap-1 rounded-md border border-gray-200 bg-white p-2 text-xs shadow-xs">
-        <div className="flex items-center gap-1 text-gray-500">
+      <div className="border-border bg-card mt-2 flex w-28 flex-col gap-1 rounded-md border p-2 text-xs shadow-xs">
+        <div className="text-muted-foreground flex items-center gap-1">
           <GitBranch className="h-3 w-3" />
           {t('generations')}
         </div>

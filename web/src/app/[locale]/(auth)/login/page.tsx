@@ -57,19 +57,19 @@ export default function LoginPage() {
             <wbr />
             Roots
           </h1>
-          <p className="mt-1 text-sm text-gray-500">{t('login_subtitle')}</p>
+          <p className="text-muted-foreground mt-1 text-sm">{t('login_subtitle')}</p>
         </div>
 
         <SupabaseSetupNotice />
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs"
+          className="border-border bg-card space-y-4 rounded-2xl border p-6 shadow-xs"
         >
-          <h2 className="text-lg font-semibold text-gray-800">{t('login_title')}</h2>
+          <h2 className="text-foreground text-lg font-semibold">{t('login_title')}</h2>
 
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm">
               {error}
             </div>
           )}
@@ -78,38 +78,40 @@ export default function LoginPage() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={isLoading || isGoogleLoading}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="border-input text-foreground hover:bg-muted w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isGoogleLoading ? t('google_signing_in') : t('google')}
           </button>
 
-          <div className="flex items-center gap-3 text-xs tracking-wide text-gray-400 uppercase">
-            <span className="h-px flex-1 bg-gray-200" />
+          <div className="text-muted-foreground flex items-center gap-3 text-xs tracking-wide uppercase">
+            <span className="bg-border h-px flex-1" />
             <span>{t('or')}</span>
-            <span className="h-px flex-1 bg-gray-200" />
+            <span className="bg-border h-px flex-1" />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">{t('email')}</label>
+            <label className="text-foreground mb-1 block text-sm font-medium">{t('email')}</label>
             <input
               type="email"
               required
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+              className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">{t('password')}</label>
+            <label className="text-foreground mb-1 block text-sm font-medium">
+              {t('password')}
+            </label>
             <input
               type="password"
               required
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+              className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
 
@@ -121,7 +123,7 @@ export default function LoginPage() {
             {isLoading ? t('signing_in') : t('sign_in')}
           </button>
 
-          <p className="text-center text-xs text-gray-500">
+          <p className="text-muted-foreground text-center text-xs">
             {t('no_account')}{' '}
             <Link href={`/${locale}/register`} className="text-primary hover:underline">
               {t('register_link')}

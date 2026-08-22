@@ -56,8 +56,8 @@ export default async function BackofficeDashboardPage({
     <div className="p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">{t('dashboard_title')}</h1>
-        <p className="mt-1 text-sm text-gray-500">{t('dashboard_subtitle')}</p>
+        <h1 className="text-foreground text-2xl font-bold">{t('dashboard_title')}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t('dashboard_subtitle')}</p>
       </div>
 
       {/* Stats grid */}
@@ -67,16 +67,18 @@ export default async function BackofficeDashboardPage({
           return (
             <div
               key={stat.label}
-              className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs"
+              className="border-border bg-card overflow-hidden rounded-xl border shadow-xs"
             >
               <div className="p-5">
                 <div className="flex items-center gap-4">
-                  <div className="rounded-lg bg-amber-50 p-3">
-                    <Icon className="h-5 w-5 text-amber-700" />
+                  <div className="bg-accent rounded-lg p-3">
+                    <Icon className="text-accent-foreground h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium text-gray-500">{stat.label}</p>
-                    <p className="mt-0.5 text-2xl font-semibold text-gray-900">{stat.value}</p>
+                    <p className="text-muted-foreground truncate text-xs font-medium">
+                      {stat.label}
+                    </p>
+                    <p className="text-foreground mt-0.5 text-2xl font-semibold">{stat.value}</p>
                   </div>
                 </div>
                 <p
@@ -92,7 +94,7 @@ export default async function BackofficeDashboardPage({
 
       {/* Quick actions */}
       <div className="mt-8">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('quick_actions')}</h2>
+        <h2 className="text-foreground mb-4 text-lg font-semibold">{t('quick_actions')}</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <QuickAction
             href={`/${locale}/backoffice/persons`}
@@ -130,15 +132,15 @@ function QuickAction({
   return (
     <a
       href={href}
-      className="relative flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-xs transition-all hover:border-amber-400 hover:shadow-sm"
+      className="border-border bg-card hover:border-accent-foreground/40 relative flex flex-col rounded-xl border p-5 shadow-xs transition-all hover:shadow-sm"
     >
       {badge && (
         <span className="absolute top-4 right-4 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-xs font-medium text-white">
           {badge}
         </span>
       )}
-      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-      <p className="mt-1 text-xs text-gray-500">{description}</p>
+      <h3 className="text-foreground text-sm font-semibold">{title}</h3>
+      <p className="text-muted-foreground mt-1 text-xs">{description}</p>
     </a>
   )
 }

@@ -8,7 +8,12 @@ export default async function DashboardPage() {
   const quickLinks = [
     { href: '../tree', icon: GitBranch, label: t('tree'), color: 'bg-blue-50 text-blue-700' },
     { href: '../members', icon: Users, label: t('members'), color: 'bg-green-50 text-green-700' },
-    { href: '../events', icon: Calendar, label: t('events'), color: 'bg-amber-50 text-amber-700' },
+    {
+      href: '../events',
+      icon: Calendar,
+      label: t('events'),
+      color: 'bg-accent text-accent-foreground',
+    },
     {
       href: '../documents',
       icon: FileText,
@@ -20,8 +25,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-serif text-2xl text-gray-800">{t('welcome')}</h1>
-        <p className="mt-1 text-sm text-gray-500">{t('overview')}</p>
+        <h1 className="text-foreground font-serif text-2xl">{t('welcome')}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t('overview')}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -29,12 +34,12 @@ export default async function DashboardPage() {
           <Link
             key={href}
             href={href}
-            className="flex flex-col items-center gap-2 rounded-2xl border border-gray-100 bg-white p-4 shadow-xs transition-all hover:border-gray-200 hover:shadow-md"
+            className="border-border bg-card hover:border-input flex flex-col items-center gap-2 rounded-2xl border p-4 shadow-xs transition-all hover:shadow-md"
           >
             <div className={`rounded-xl p-3 ${color}`}>
               <Icon className="h-5 w-5" />
             </div>
-            <span className="text-xs font-medium text-gray-700">{label}</span>
+            <span className="text-foreground text-xs font-medium">{label}</span>
           </Link>
         ))}
       </div>
