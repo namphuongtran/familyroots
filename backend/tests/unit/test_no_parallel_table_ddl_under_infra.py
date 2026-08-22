@@ -68,6 +68,22 @@ the Alembic chain, so both sweeps read every `.sql` file under `infra/` and matc
 statement. A new `infra/supabase/schema.sql` or `infra/anything/hardening.sql` is caught the
 same way the deleted files would be.
 
+## The asymmetry these two guards leave behind (seed S-069, 2026-08-22)
+
+**Both sweeps above watch a directory where SQL never ran.** Everything under `infra/` is
+inert: nothing in the tree reads it and no workflow applies it, which is exactly why S-064 and
+S-067 could delete two files from it without changing any behaviour. The one place SQL
+genuinely executes is `scripts/` — `scripts/restore_drill.sh:149` feeds
+`scripts/restore_bootstrap_role.sql` to `psql` against a live database — and no check here
+reads it. S-067 wrote that finding down rather than widening these sweeps, because widening
+them would have closed two seeds in one change.
+
+`test_scripts_sql_is_sanctioned.py` closes it, and it could not be this file's rule applied to
+a second directory: `restore_bootstrap_role.sql` **is** DDL and must stay, so that guard
+allow-lists files by name with the DDL classes their ADR sanctions, defaults every other class
+to deny, and forbids privilege escalation in any file regardless of the allow-list. Read its
+docstring before adding anything to either guard.
+
 ## On detector fragility
 
 A scanner that silently matches nothing would go green forever. Six parametrised tests below
