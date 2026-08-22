@@ -168,8 +168,11 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
     """CI guard (ADR-008): every table with RLS ENABLEd must have at least one policy
     (else it is a silent lockout) AND familyroots_app must hold table privileges. Also
     pins the CURRENT scope, table by table — a later phase updates this set deliberately
-    when it adds one. `clan_invitations` is absent on purpose; see
-    test_invitation_accept_no_clan_context for why it cannot join the set yet."""
+    when it adds one. `clan_invitations` joined the set on 2026-08-22 (S-043, ADR-048,
+    migration 032). It could not before, because accept-by-token ran on the request
+    session with no clan selected; ADR-048 moved accept to its own privileged provider,
+    which is what made the policy safe. See test_rls_phase7_clan_invitations and
+    test_invitation_accept_no_clan_context."""
     async with engine.connect() as conn:
         rls_tables = set(
             (
@@ -193,6 +196,7 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
             "persons",
             "change_requests",
             "clan_memberships",
+            "clan_invitations",
         }, f"RLS scope drifted: {rls_tables}"
 
         for table in rls_tables:
