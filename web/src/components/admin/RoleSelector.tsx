@@ -17,9 +17,16 @@ const ROLES: Array<{ value: ClanRole; labelKey: string; descKey: string }> = [
   { value: 'admin', labelKey: 'role.admin', descKey: 'role.admin_desc' },
 ]
 
+// ADR-055: `editor` used to be `bg-blue-50 text-blue-700 border-blue-300`, a
+// hardcoded blue with no token and no dark value. Each role's own label is
+// already the identifying channel (T-06), so the colour here is reinforcing,
+// not the only signal — no new token was defended for a third state between
+// the existing neutral `viewer` and elevated-risk `destructive` `admin`.
+// `editor` takes the already-tokened, already-AA-gated `primary-container`
+// pair instead: the leaf-green "this is the normal collaborating role".
 const ROLE_COLORS: Record<ClanRole, string> = {
   viewer: 'bg-muted text-foreground border-input',
-  editor: 'bg-blue-50 text-blue-700 border-blue-300',
+  editor: 'bg-primary-container text-primary-container-foreground border-primary',
   admin: 'bg-destructive/10 text-destructive border-destructive/30',
 }
 

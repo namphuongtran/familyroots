@@ -81,8 +81,17 @@ export default async function BackofficeDashboardPage({
                     <p className="text-foreground mt-0.5 text-2xl font-semibold">{stat.value}</p>
                   </div>
                 </div>
+                {/*
+                  ADR-055: was `text-green-600` / `text-orange-600`, neither
+                  tokened. The trend direction is genuine information (a real
+                  positive/negative reading, once this stops being mock data)
+                  and the change text itself already says which — "+12 this
+                  month" versus "3 new today" — so colour reinforces rather
+                  than carries it alone. `success` is new (spec § 2.1/2.2);
+                  `destructive` was already gated.
+                */}
                 <p
-                  className={`mt-3 text-xs ${stat.positive ? 'text-green-600' : 'text-orange-600'}`}
+                  className={`mt-3 text-xs ${stat.positive ? 'text-success' : 'text-destructive'}`}
                 >
                   {stat.change}
                 </p>
@@ -134,8 +143,15 @@ function QuickAction({
       href={href}
       className="border-border bg-card hover:border-accent-foreground/40 relative flex flex-col rounded-xl border p-5 shadow-xs transition-all hover:shadow-sm"
     >
+      {/*
+        ADR-055: was `bg-orange-500 text-white`, untokened. A count badge on
+        a pending-approval action is the same "needs attention" reading
+        `destructive` already carries elsewhere in this codebase (the reject
+        button, the admin role state) — reused rather than adding a solid
+        warning-fill token nothing else needs yet.
+      */}
       {badge && (
-        <span className="absolute top-4 right-4 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-xs font-medium text-white">
+        <span className="bg-destructive text-destructive-foreground absolute top-4 right-4 flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium">
           {badge}
         </span>
       )}

@@ -5,21 +5,18 @@ import Link from 'next/link'
 export default async function DashboardPage() {
   const t = await getTranslations('dashboard')
 
+  // ADR-055: three of these four icon tiles used to rotate through untokened
+  // hues (blue, green, purple), with `events` alone already on `accent`. No
+  // link is more urgent or more successful than another, so the colour was
+  // decoration, not information — the same finding the stat-tile groups
+  // reached. All four now share the one pair `events` already used, matching
+  // `backoffice/dashboard/page.tsx`'s own icon tiles, which were uniform
+  // `accent` from the start.
   const quickLinks = [
-    { href: '../tree', icon: GitBranch, label: t('tree'), color: 'bg-blue-50 text-blue-700' },
-    { href: '../members', icon: Users, label: t('members'), color: 'bg-green-50 text-green-700' },
-    {
-      href: '../events',
-      icon: Calendar,
-      label: t('events'),
-      color: 'bg-accent text-accent-foreground',
-    },
-    {
-      href: '../documents',
-      icon: FileText,
-      label: t('documents'),
-      color: 'bg-purple-50 text-purple-700',
-    },
+    { href: '../tree', icon: GitBranch, label: t('tree') },
+    { href: '../members', icon: Users, label: t('members') },
+    { href: '../events', icon: Calendar, label: t('events') },
+    { href: '../documents', icon: FileText, label: t('documents') },
   ]
 
   return (
@@ -30,13 +27,13 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {quickLinks.map(({ href, icon: Icon, label, color }) => (
+        {quickLinks.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}
             href={href}
             className="border-border bg-card hover:border-input flex flex-col items-center gap-2 rounded-2xl border p-4 shadow-xs transition-all hover:shadow-md"
           >
-            <div className={`rounded-xl p-3 ${color}`}>
+            <div className="bg-accent text-accent-foreground rounded-xl p-3">
               <Icon className="h-5 w-5" />
             </div>
             <span className="text-foreground text-xs font-medium">{label}</span>

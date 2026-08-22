@@ -18,11 +18,17 @@ const SIZE_CLASSES = {
   lg: 'h-14 w-14 text-base',
 }
 
-const GENDER_BG = {
-  male: 'bg-blue-100 text-blue-700',
-  female: 'bg-rose-100 text-rose-700',
-  unknown: 'bg-muted text-muted-foreground',
-}
+/**
+ * ADR-055 removed the per-gender fill this used to hold
+ * (`bg-blue-100 text-blue-700` male, `bg-rose-100 text-rose-700` female).
+ * Nothing on this avatar carries gender through text or an icon, so colour
+ * was T-06's forbidden *only* channel, and the two hexes could not flip with
+ * the colour scheme besides. Every avatar now takes the one neutral fill the
+ * `'unknown'` case already used. `gender` stays a prop — every caller already
+ * passes it and a future icon-based indicator would still need it — but a
+ * `data-gender` attribute is the only place it reaches the DOM today.
+ */
+const AVATAR_FILL = 'bg-muted text-muted-foreground'
 
 function getInitials(fullName: string): string {
   return fullName
@@ -43,10 +49,11 @@ export function MemberAvatar({
 }: MemberAvatarProps) {
   return (
     <span
+      data-gender={gender}
       className={cn(
         'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold',
         SIZE_CLASSES[size],
-        !avatarUrl && GENDER_BG[gender],
+        !avatarUrl && AVATAR_FILL,
         isDeceased && 'opacity-60 grayscale',
         className,
       )}
