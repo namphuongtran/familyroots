@@ -6,9 +6,13 @@ import { useLocale, useTranslations } from 'next-intl'
 import { useAuth } from '@/lib/hooks/useAuth'
 
 /**
- * `selectClan` (`useAuth.ts`) calls the legacy axios client
- * (`src/lib/api/axios.ts`, frozen — S-027 deletes it, not this seed), whose response
- * interceptor rejects with the raw `AxiosError` on anything but a 401 rather than
+ * `selectClan` (`useAuth.ts`) calls the legacy axios client (`src/lib/api/axios.ts`,
+ * frozen). S-027 audited whether this seed deletes it and found it cannot: `axios.ts` is
+ * the shared transport for every remaining legacy slice (admin, documents, events, persons,
+ * relationships, tree — `grep -rln "lib/api/axios\|from 'axios'" src`, 2026-08-22), not an
+ * auth-only file, and deleting it would break all of them. It leaves only when the last
+ * slice PR replaces it — see `web/CLAUDE.md`, "Migration notes". Its response interceptor
+ * rejects with the raw `AxiosError` on anything but a 401 rather than
  * normalizing it into `ApiError` (`shared/http/errors.ts`). The backend's envelope
  * (`docs/contracts/error-codes.md`: `{"error": {"code", "message", "detail"}}`) still sits at
  * `error.response.data.error.code` on that rejection — this reads it there without importing
@@ -105,12 +109,13 @@ export default function SelectClanPage() {
   ])
 
   return (
-    <div className="min-h-screen bg-background px-4 py-12">
+    <div className="bg-background min-h-screen px-4 py-12">
       <div className="mx-auto max-w-xl rounded-3xl border border-gray-100 bg-white p-8 shadow-xs">
         <div className="space-y-2">
           <h1 className="font-serif text-3xl text-gray-900">Choose your clan</h1>
           <p className="text-sm text-gray-500">
-            Select the clan context you want to work in. This controls permissions and all clan-scoped data.
+            Select the clan context you want to work in. This controls permissions and all
+            clan-scoped data.
           </p>
         </div>
 
@@ -133,8 +138,12 @@ export default function SelectClanPage() {
                 className="mt-1"
               />
               <span className="min-w-0">
-                <span className="block text-base font-medium text-gray-900">{membership.clan_name}</span>
-                <span className="block text-xs uppercase tracking-wide text-gray-400">{membership.clan_slug}</span>
+                <span className="block text-base font-medium text-gray-900">
+                  {membership.clan_name}
+                </span>
+                <span className="block text-xs tracking-wide text-gray-400 uppercase">
+                  {membership.clan_slug}
+                </span>
                 <span className="mt-1 inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                   {membership.role}
                 </span>
@@ -166,7 +175,7 @@ export default function SelectClanPage() {
                 }
               })
             }}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+            className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
             {isSubmitting ? t('loading') : 'Continue'}
           </button>

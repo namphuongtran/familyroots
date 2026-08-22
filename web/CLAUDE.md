@@ -224,10 +224,35 @@ client offers to render.
 `editor` ❌ for deleting a relationship and a person. The nesting is empirical, not guaranteed, and a
 hierarchy shortcut would hide that.
 
-No screen consumes it yet — wiring is a later seed — so `pnpm depcruise` reports it as a
-`no-orphans` warning. That count went 3 to 4 on 2026-08-22 and the warnings are not gated. **Treat
-that fourth warning as a debt with an owner, not as background noise:** a module nothing imports is
-the same shape as the dead tokens S-001 fixed and the unread GUC ADR-047 refused.
+**Consumed since S-027 (2026-08-22) — and the `no-orphans` warning above still fires anyway,
+which is itself worth recording.** `src/lib/hooks/useCapabilities.ts` now calls
+`getCapabilities(role)` here instead of the deleted `deriveCapabilities` in
+`src/application/auth/use-cases/capabilities.ts`. The hook keeps its old external shape — the
+four capability names (`canEditPersons`, `canUploadDocuments`, `canDeleteDocuments`,
+`canEditRelationships`) the four real callers destructure (`grep -rn "useCapabilities()" src`) —
+mapped from this module's names, rather than pushing the full 25-key `CapabilitySet` onto those
+callers as a drive-by rename. **`pnpm depcruise` on 2026-08-22 still reports 4 warnings, not 3,
+and that is the tool's own blind spot rather than a failed rewire.** `.dependency-cruiser.cjs`'s
+`LEGACY` pattern (`^src/(lib/(api|hooks)|application|infrastructure|types)/`) is in the
+`options.exclude` list, so `src/lib/hooks/**` is not a node in the graph at all — an import
+*from* an excluded file draws no edge, so `capability.ts` reads as orphaned no matter how real
+its consumer is, for as long as the consumer lives in `lib/hooks`. Confirmed by inspecting
+`depcruise --output-type json`'s own module list on 2026-08-22: it contains no `src/lib/hooks/*`
+entry at all. The real consumption is proven by `grep -rn "domain/capability/capability"
+src/lib/hooks/useCapabilities.ts`, by `pnpm type-check`, and by
+`src/lib/hooks/useCapabilities.test.tsx`, not by this warning count — do not read a future "3
+warnings" as this having regressed, and do not read today's "4" as the rewire having failed.
+Widening `LEGACY` to stop excluding `lib/hooks` would fix the tool's blind spot but was not
+attempted here: it would newly subject every file in that tree to orphan-checking in one step,
+which is a change to what the gate covers, not a deletion, and is not this seed's to make.
+
+**One behaviour changed on purpose while rewiring.** The deleted legacy module hardcoded
+`canDeleteEvents: isAdmin`. This module's own `deleteEvent` entry, cited to
+`docs/architecture/rbac.md:78` two paragraphs up, grants `editor` too. `useCapabilities.ts` does
+not expose `canDeleteEvents` at all — nothing read it (`grep -rn "canDeleteEvents" src` before
+S-027 found only the legacy definition) — so nothing regressed, but the discrepancy is real and
+recorded in that hook's own doc comment so a future reader who wires the field back in reaches
+for the wider, correct grant rather than reintroducing the narrower one.
 
 ### The auth store holds session state only (S-025)
 
@@ -271,9 +296,9 @@ S-027's.
 
 **`grep -rn "localStorage.current_clan_id\|current_clan_id" web/src` after S-025** finds
 only the cookie name itself (`request-context.ts`'s `CLAN_COOKIE` constant and its
-callers, `middleware.test.ts`'s literal cookie header, and the now-dead
-`clan-selection-storage.ts` constant) and prose referencing S-023/S-025 in comments — no
-`localStorage.getItem` or `.setItem` call against that key anywhere in `src`.
+callers, `middleware.test.ts`'s literal cookie header) and prose referencing S-023/S-025 in
+comments — no `localStorage.getItem` or `.setItem` call against that key anywhere in `src`.
+`clan-selection-storage.ts`, the file that constant used to live in, is deleted (S-027, below).
 
 ### Backend contract — required headers and query semantics
 
@@ -293,6 +318,35 @@ from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which
 order (S-025): `readCurrentClanId()` — the `current_clan_id` cookie — → `user.clan_id`. No
 `localStorage` step remains. SSR returns a minimal context (`{ locale: 'vi' }`). Do not
 extend this path — it is being deleted by the slice PRs.
+
+**S-027 tried to delete `axios.ts`, `src/lib/api/auth.ts`, and
+`src/infrastructure/http/request-context.ts` outright, and could only close two of the
+three.** Its seed text named all three, plus the auth halves of `application/auth` and
+`infrastructure/auth`, as this repository's "no PR only adds" rule applied to PR 1. Enumerating
+every importer first (`grep -rln "lib/api/axios\|from 'axios'" src`, 2026-08-22) found `axios.ts`
+imported not just by the auth infrastructure but by `src/infrastructure/admin/http-admin-repositories.ts`
+(four live pages: `platform/clans`, `platform/metrics`, `admin/users`, `admin/clan`) and, through
+`src/lib/api/{documents,events,members,relationships,tree}.ts`, by every other legacy slice's
+repositories too. `request-context.ts` backs `axios.ts` the same way for all of them. Deleting
+either would have broken the persons, tree, events, documents, and admin halves this same seed's
+own "Out of scope" line says stay until their own slice PR — `axios.ts` is the legacy app's one
+shared transport, not an auth-only file, and this file's own "Migration notes" section already
+said so before S-027 ran; the seed text did not cross-reference it. **What actually left:**
+`src/lib/api/auth.ts` (`authApi`, dead — its sole in-code match on `grep -rn "lib/api/auth" src`
+was a comment quoting a grep command, not an import) and
+`src/infrastructure/auth/clan-selection-storage.ts` (dead per S-025, above). **What stays, and
+why it is not a smaller version of "done":** `application/auth/ports/auth-repository.ts`,
+`application/auth/use-cases/auth-context.ts`, `infrastructure/auth/http-auth-profile-repository.ts`,
+and `infrastructure/auth/supabase-auth-session-port.ts` are the live implementation
+`useAuth()`'s session sync, sign-in redirect, onboarding, and clan selection call today — deleting
+them needs a spine replacement (`apiFetch` calls where `http-auth-profile-repository.ts` calls
+`axios.ts`) that does not exist yet, since `src/features/auth/` has not landed. Building that
+replacement as a side effect of a deletion seed would be a materially larger, differently-tested
+change than "delete legacy code with a live-behind replacement", so S-027 left it as future work
+rather than rewriting it under this seed's name. `axios.ts` and `request-context.ts` leave only
+when the last legacy slice PR (persons, tree, events, documents, admin, and then auth's own
+transport) replaces its own repository, per this section's existing rule that they are "being
+deleted by the slice PRs" — plural, and not yet all landed.
 
 Query semantics that must be preserved when touching list/detail endpoints:
 
@@ -361,8 +415,36 @@ backend-only PR that changes response shapes cannot skip it.
   `src/infrastructure/<feature>/` predate the envelope contract and the spine built above.
   They are frozen, not extended: no new feature should add to them, and each is deleted
   outright when the matching feature slice PR lands (§3.2 of the architecture spec).
+- **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
+  S-027 (2026-08-22) went looking for it while deleting the legacy auth transport and found
+  `src/infrastructure/admin/http-admin-repositories.ts` and every one of
+  `src/lib/api/{documents,events,members,relationships,tree}.ts` importing it too
+  (`grep -rln "lib/api/axios\|from 'axios'" src`). So it, and the
+  `src/infrastructure/http/request-context.ts` it depends on, cannot leave until the **last**
+  slice PR lands, not the first — "each is deleted outright when the matching feature slice PR
+  lands" above is true per-slice-repository-file, not true of this shared pair. See
+  "Backend contract" above for the full account and what S-027 could and could not delete.
 - `src/domain/` is currently `shared/` plus `date/` (the `HistoricalDate` model added by the
   spine PR). As features land, domain types move out of `src/types/` and `src/lib/types/`
   into `src/domain/<feature>/`.
 - New transport code goes in `src/shared/http/` (or, once a feature slice PR lands,
   `src/features/<slice>/api/`) — never in `src/lib/api/` or `src/infrastructure/`.
+- **The auth slice's legacy tree is now split between dead and live, not simply "frozen".**
+  S-027 deleted `src/lib/api/auth.ts` and `src/infrastructure/auth/clan-selection-storage.ts`
+  outright (both had zero real importers). It left
+  `src/application/auth/{ports/auth-repository.ts,use-cases/auth-context.ts}` and
+  `src/infrastructure/auth/{http-auth-profile-repository.ts,supabase-auth-session-port.ts}` in
+  place: `useAuth()` (`src/lib/hooks/useAuth.ts`) still calls all four for session sync,
+  sign-in, onboarding, and clan selection, and no `features/auth/` slice exists yet to replace
+  them. Whichever seed builds that slice deletes these four along with `axios.ts` and
+  `request-context.ts`, together, once every remaining legacy repository has a replacement —
+  not auth's four files alone.
+- **`VerifyEmailScreen` (`src/components/auth/VerifyEmailScreen.tsx`) is still unreachable
+  from a real sign-in after S-027.** It handles `403 email_not_verified`, which only
+  `POST /auth/login` can raise, and the live sign-in path
+  (`useAuth().signInWithEmail` → `authSessionPort.signInWithEmail`) calls
+  `supabase.auth.signInWithPassword` directly, bypassing the backend endpoint entirely. S-027
+  left this path untouched for the same reason it left `http-auth-profile-repository.ts` in
+  place: swapping `useAuth()`'s Supabase-direct sign-in for a backend-calling one is the
+  auth slice's transport rewrite, not a deletion. The screen stays reachable only by direct
+  navigation to `/{locale}/verify-email?email=...` and by its own component test.
