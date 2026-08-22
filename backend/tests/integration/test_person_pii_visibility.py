@@ -2,6 +2,17 @@
 
 Proves the whole gate: an ordinary member viewing someone else gets phone/email nulled;
 viewing their OWN linked person (resolved via user_profiles.person_id) keeps them.
+
+**AMENDED 2026-08-22 by seed S-058: "end-to-end" above means the handler and the real
+database, not the API.** Every case below calls ``handler.redact_pii(...)`` itself and no
+case issues an HTTP request, so this file proves the function and proves nothing about
+whether any route calls it. ADR-049 § "Measurement 5" deleted a route's redaction call
+and watched the whole suite stay at ``1351 passed``. Two other files cited this one as
+covering that wiring, and both citations were wrong.
+
+The four routes that redact are proved separately, by request and response body, in
+``tests/integration/test_person_pii_over_http.py``. Keep the two files apart: this one
+owns the rule, that one owns the wiring.
 """
 
 import uuid

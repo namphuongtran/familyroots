@@ -58,6 +58,11 @@ class _FakePersonQueryHandler:
         return self._persons, self._meta
 
     async def redact_pii(self, persons: Any, *, viewer_role: str, viewer_user_id: Any) -> None:
+        # A no-op on purpose, and it proves nothing about redaction — _FakePerson carries
+        # no phone or email to redact. That the list route really calls this, and that a
+        # viewer reads null while an admin reads the number, is proved over HTTP against
+        # a real database in tests/integration/test_person_pii_over_http.py (seed S-058).
+        # This module is about the {data, meta} envelope.
         return None
 
     async def get_persons_stats(
