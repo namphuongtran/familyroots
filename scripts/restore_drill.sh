@@ -8,10 +8,18 @@
 # Never touches production: restores into a scratch DB (familyroots_restore_drill) on
 # PGHOST:PGPORT (default localhost:5432, user/password default postgres/postgres),
 # dropping and recreating it first (idempotent — safe to re-run).
+# After the restore it runs scripts/restore_bootstrap_role.sql (ADR-052), which creates
+# the cluster-wide familyroots_app role and re-grants what migrations 002 and 026 grant.
+# A single-database dump carries neither, so without this step a restore into a new
+# cluster yields a database the application cannot use.
 # Then verifies: (1) alembic_version vs `uv run alembic heads` (warn, not fail, if
 # behind — an old dump is still a valid backup); (2) row-count smoke report for the
 # core tables; (3) one get_family_tree_flat() call (skipped with a WARN if the
-# restored DB has no persons). Prints DRILL: PASS or DRILL: FAIL and exits 0/1.
+# restored DB has no persons); (4) a request-role session — `SET LOCAL ROLE
+# familyroots_app` plus the app.clan_id GUC, two-sided: the owning clan sees its
+# persons and a clan that owns nothing sees 0. Check 4 is the one that makes
+# DRILL: PASS mean the application can use the result; it FAILS, and names the role,
+# when the bootstrap has not run. Prints DRILL: PASS or DRILL: FAIL and exits 0/1.
 set -euo pipefail
 
 DUMP_ARG=""
@@ -98,6 +106,12 @@ SCRATCH_DB="familyroots_restore_drill"
 ADMIN_DSN="postgresql://${PGUSER_}:${PGPASSWORD_}@${PGHOST_}:${PGPORT_}/postgres"
 SCRATCH_DSN="postgresql://${PGUSER_}:${PGPASSWORD_}@${PGHOST_}:${PGPORT_}/${SCRATCH_DB}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BOOTSTRAP_SQL="${SCRIPT_DIR}/restore_bootstrap_role.sql"
+# Spelled out, not read from settings: migrations 002 and 026 spell it out too.
+APP_ROLE="familyroots_app"
+
 echo "==> dropping scratch DB if it exists: ${SCRATCH_DB}"
 if ! psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE)"; then
   echo "::error::cannot reach Postgres at ${PGHOST_}:${PGPORT_} — is pgdb up?" >&2
@@ -121,10 +135,24 @@ else
   exit 1
 fi
 
- # --- Check 1: alembic head (warn-not-fail - an old dump is still a valid backup) ---
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ # --- Role bootstrap: the cluster role + its grants (ADR-052) ------------------------
+# Runs AFTER pg_restore, because `GRANT ... ON ALL TABLES` needs the tables to exist.
+# The current dumps are taken with --no-privileges, so nothing in the archive names the
+# role and the restore itself does not need it. Idempotent: safe on a cluster that
+# already holds the role, which is what a same-cluster drill hits.
+echo "==> bootstrapping the ${APP_ROLE} role + grants (${BOOTSTRAP_SQL})"
+if [ ! -f "$BOOTSTRAP_SQL" ]; then
+  echo "::error::role bootstrap file not found: ${BOOTSTRAP_SQL}" >&2
+  echo "DRILL: FAIL"
+  exit 1
+fi
+if ! psql "$SCRATCH_DSN" -q -v ON_ERROR_STOP=1 -f "$BOOTSTRAP_SQL"; then
+  echo "::error::role bootstrap failed — the restored database cannot serve a request-role session" >&2
+  echo "DRILL: FAIL"
+  exit 1
+fi
 
+ # --- Check 1: alembic head (warn-not-fail - an old dump is still a valid backup) ---
 echo "==> checking alembic head"
 db_version="$(psql "$SCRATCH_DSN" -tA -c 'SELECT version_num FROM alembic_version' 2>/dev/null || true)"
 db_version="$(echo "$db_version" | tr -d '[:space:]')"
@@ -181,6 +209,73 @@ else
 fi
 echo "  ${tree_line}"
 
+ # --- Check 4: request-role session, two-sided (ADR-052) -----------------------------
+# The first three checks all connect as the superuser that created the scratch DB, and a
+# superuser bypasses RLS. This one drops to the role the request path actually uses
+# (backend/app/core/rls.py:63) and asserts the OUTCOME rather than the grant count: the
+# owning clan sees its persons, a clan that owns nothing sees none.
+echo "==> request-role check (SET LOCAL ROLE ${APP_ROLE})"
+
+app_role_persons() {  # $1 = uuid for app.clan_id. Prints psql output; last line = count on success.
+  psql "$SCRATCH_DSN" -tA -q -v ON_ERROR_STOP=1 --single-transaction \
+    -c "SET LOCAL ROLE ${APP_ROLE}" \
+    -c "SELECT set_config('app.clan_id', '$1', true)" \
+    -c "SELECT count(*) FROM persons" 2>&1
+}
+first_error() {  # $1 = psql output. Prints the first ERROR line, or the whole thing squashed.
+  printf '%s\n' "$1" | grep -m1 'ERROR' || printf '%s' "$1" | tr '\n' ' '
+}
+
+role_present="$(psql "$SCRATCH_DSN" -tA \
+  -c "SELECT count(*) FROM pg_roles WHERE rolname = '${APP_ROLE}'" 2>&1 | tr -d '[:space:]')"
+if [ "$role_present" != "1" ]; then
+  role_line="FAIL — role \"${APP_ROLE}\" does not exist in this cluster; every clan-scoped request would fail"
+  FAILURES=$((FAILURES + 1))
+else
+  owner_clan="$(psql "$SCRATCH_DSN" -tA \
+    -c "SELECT clan_id FROM clan_memberships GROUP BY clan_id ORDER BY count(*) DESC, clan_id LIMIT 1" \
+    2>/dev/null | tr -d '[:space:]')" || true
+  foreign_clan="00000000-0000-0000-0000-000000000000"
+  if [ "$(psql "$SCRATCH_DSN" -tA -c "SELECT count(*) FROM clans WHERE id = '${foreign_clan}'" \
+      2>/dev/null | tr -d '[:space:]')" != "0" ]; then
+    foreign_clan="$(psql "$SCRATCH_DSN" -tA -c "SELECT gen_random_uuid()" 2>/dev/null | tr -d '[:space:]')"
+  fi
+
+  if [[ ! "$owner_clan" =~ ^[0-9a-f-]{36}$ ]]; then
+    # No membership rows: isolation cannot be shown two-sided, but the role must still
+    # be able to query at all — this is where a missing GRANT surfaces.
+    probe_out="$(app_role_persons "$foreign_clan")" || true
+    probe_n="$(printf '%s\n' "$probe_out" | tail -n 1 | tr -d '[:space:]')"
+    if [[ "$probe_n" =~ ^[0-9]+$ ]]; then
+      role_line="WARN — restored DB has no clan_memberships rows; ${APP_ROLE} can query persons, isolation not proven"
+    else
+      role_line="FAIL — $(first_error "$probe_out")"
+      FAILURES=$((FAILURES + 1))
+    fi
+  else
+    own_out="$(app_role_persons "$owner_clan")" || true
+    own_n="$(printf '%s\n' "$own_out" | tail -n 1 | tr -d '[:space:]')"
+    foreign_out="$(app_role_persons "$foreign_clan")" || true
+    foreign_n="$(printf '%s\n' "$foreign_out" | tail -n 1 | tr -d '[:space:]')"
+    if [[ ! "$own_n" =~ ^[0-9]+$ ]]; then
+      role_line="FAIL — $(first_error "$own_out")"
+      FAILURES=$((FAILURES + 1))
+    elif [[ ! "$foreign_n" =~ ^[0-9]+$ ]]; then
+      role_line="FAIL — $(first_error "$foreign_out")"
+      FAILURES=$((FAILURES + 1))
+    elif [ "$own_n" -eq 0 ]; then
+      role_line="FAIL — ${APP_ROLE} sees 0 persons under owning clan ${owner_clan}, which has memberships"
+      FAILURES=$((FAILURES + 1))
+    elif [ "$foreign_n" -ne 0 ]; then
+      role_line="FAIL — clan isolation broken: ${foreign_n} person(s) visible under clan ${foreign_clan}, which owns nothing"
+      FAILURES=$((FAILURES + 1))
+    else
+      role_line="OK   — ${APP_ROLE} sees ${own_n} person(s) under clan ${owner_clan}, ${foreign_n} under a clan that owns nothing"
+    fi
+  fi
+fi
+echo "  ${role_line}"
+
  # --- Report table -------------------------------------------------------------------
 echo ""
 echo "===== Restore Drill Report ====="
@@ -190,6 +285,7 @@ echo "alembic:     ${alembic_line}"
 echo "row counts:"
 printf '%s' "$ROW_REPORT"
 echo "tree query:  ${tree_line}"
+echo "request role: ${role_line}"
 echo "================================="
 
 if [ "$FAILURES" -eq 0 ]; then
