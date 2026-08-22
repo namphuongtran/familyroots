@@ -9,12 +9,12 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > **defense-in-depth layer-2** (ADR-008) and is **ACTIVE**: request traffic runs under
 > the non-bypass `familyroots_app` role with a per-request `app.clan_id` GUC, so
 > `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
-> `change_requests`, `clan_memberships`, `clan_invitations`, and `notification_log` are
-> RLS-enforced at the DB layer (other clan-scoped tables are added table-by-table, and one
-> of them cannot be — see point 7). Twelve tables have RLS enabled and **the number of
-> covered tables is not twelve**, because two of them carry policies that are not clan
-> isolation: `identity_claims` is a deny-all tripwire (point 8) and `audit_logs` is
-> clan-keyed on reads only (point 9). `persons` carries two extra rules — see point 6 below
+> `change_requests`, `clan_memberships`, `clan_invitations`, `notification_log`, and
+> `clan_settings` are RLS-enforced at the DB layer (other clan-scoped tables are added
+> table-by-table, and one of them cannot be — see point 7). Thirteen tables have RLS enabled
+> and **the number of covered tables is not thirteen**, because two of them carry policies
+> that are not clan isolation: `identity_claims` is a deny-all tripwire (point 8) and
+> `audit_logs` is clan-keyed on reads only (point 9). `persons` carries two extra rules — see point 6 below
 > and [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
 > describe the application-layer mechanism that remains the primary guarantee.
 
@@ -72,7 +72,7 @@ PostgreSQL instance
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
 6. **RLS layer-2 (ACTIVE for `documents`, `events`, `branches`, `parent_child`,
    `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`,
-   `notification_log`; and clan-keyed on reads only for `audit_logs`, see point 9).** The request path drops to the non-bypass `familyroots_app`
+   `notification_log`, `clan_settings`; and clan-keyed on reads only for `audit_logs`, see point 9).** The request path drops to the non-bypass `familyroots_app`
    role and sets the transaction-local `app.clan_id` GUC (an `after_begin` seam on the
    request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
    RLS-enforced at the DB layer behind the primary application filters. System paths
@@ -131,8 +131,24 @@ PostgreSQL instance
 
    Covering a table in this shape means first deciding which session its clan-less path runs
    on, and that decision needs its own ADR. Seed S-009 enabled RLS on `clan_memberships` only
-   for this reason; seed S-043 then made the decision for `clan_invitations`, and S-010 still
-   owns `user_clan_roles`.
+   for this reason; seed S-043 then made the decision for `clan_invitations`; and seed S-010
+   split the same way, shipping `clan_settings` (migration `035`) and leaving
+   `user_clan_roles` for the ADR named below.
+
+   **`user_clan_roles` is the sharpest instance of this shape, because it is the table the
+   authorization gate reads.** A policy there does not merely hide data: it silently
+   downgrades what the caller may do. Re-measured 2026-08-22 by S-010, and it breaks in two
+   unlike ways. **Silently on reads:** `get_current_clan_id` queries the table on the request
+   session (`backend/app/core/security.py:249-254`) and sets `app.clan_id` only afterwards at
+   `:290`; `get_login_profile`
+   (`backend/app/infrastructure/persistence/auth_repository.py:120-137`) and `list_clans`
+   (`backend/app/infrastructure/persistence/me_query_port.py:19-42`) run before any clan
+   exists to select. `POST /auth/login` answers `200` with `clan_id: null` and
+   `GET /me/clans` returns `[]`, with no error anywhere. **Loudly on writes:**
+   `add_membership` (`auth_repository.py:69-88`) INSERTs the row on that same session, so both
+   `POST /auth/onboard` flows raise `InsufficientPrivilege` and answer 500. Both halves are
+   pinned by `backend/tests/integration/test_rls_login_two_clans.py`. The decision is
+   pre-allocated as **ADR-050**.
 
 8. **`identity_claims` has RLS enabled and NO clan isolation, and the two facts are not in
    tension.** Migration `033_rls_identity_claims` (2026-08-22, seed S-012) creates exactly

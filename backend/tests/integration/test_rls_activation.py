@@ -193,6 +193,23 @@ _CLAN_ISOLATED_TABLES = {
     # permanent exemption row in S-015's list, on the grounds that a second place to
     # record a fact is a second place to be wrong.
     "notification_log",
+    # Joined 2026-08-22 (S-010, ADR-008 Phase 10, migration 035). The migration-027
+    # template, unchanged: clan_id is NOT NULL and UNIQUE, one row per clan. This one is
+    # INERT for the same reason as notification_log and a stronger one — measured
+    # 2026-08-22, NOTHING in `backend/app` reads or writes the table except the
+    # `Clan.settings` relationship (`app/models/clan.py:35`), whose result no caller
+    # consumes, and no trigger creates a row, so the table is empty in production.
+    # It belongs in THIS set and not the third one: both halves of its single policy are
+    # clan-keyed, unlike `audit_logs`, whose INSERT admits any clan or none.
+    #
+    # S-010's OTHER table, `user_clan_roles`, is deliberately absent from all three sets
+    # and from the schema. Re-measured 2026-08-22: a policy on it makes `POST /auth/login`
+    # answer 200 with `clan_id: null` and `GET /me/clans` return `[]` (silent), and makes
+    # `POST /auth/onboard` raise `InsufficientPrivilege` on the `user_clan_roles` INSERT
+    # (loud). See `migrations/versions/035_rls_clan_settings.py` and
+    # `test_rls_login_two_clans.py`. Do not add it here without the ADR that decides which
+    # session resolves a caller's roles.
+    "clan_settings",
 }
 
 # REQUEST-ROLE-DENIED: the policy compares nothing. USING (false) WITH CHECK (false) locks
@@ -256,6 +273,12 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
     034), and they went into DIFFERENT sets: `notification_log` takes the 027 template
     unchanged, while `audit_logs` gets clan-keyed reads, permissive inserts, and no
     UPDATE/DELETE policy at all. That third shape is `_PER_COMMAND_TABLES`.
+
+    `clan_settings` joined on 2026-08-22 (S-010, migration 035), into the clan-isolated
+    set, because both halves of its one policy are clan-keyed. S-010's other table,
+    `user_clan_roles`, did NOT join: it is the table the authorization gate reads, and a
+    policy on it downgrades the caller's permissions rather than merely hiding data. That
+    half of S-010 is a decision seed, not an omission — see the comment on the set above.
     """
     async with engine.connect() as conn:
         rls_tables = set(

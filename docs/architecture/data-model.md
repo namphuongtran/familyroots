@@ -673,6 +673,31 @@ Maps users to clans with RBAC roles.
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
+> ❌ **NOT RLS-enabled, and it cannot be until ADR-050 decides how (2026-08-22, seed
+> S-010).** Seed S-010 named this table alongside `clan_settings`; only `clan_settings`
+> shipped. This is the table the authorization gate reads, so a policy that hides a role row
+> does not merely hide data — it silently downgrades what the caller may do.
+>
+> Re-measured 2026-08-22 by adding it to migration `035`'s table list. It breaks in two ways
+> that look nothing alike:
+>
+> - **Reads fail silently.** `get_current_clan_id` queries this table on the request session
+>   (`backend/app/core/security.py:249-254`) and sets `app.clan_id` only afterwards at
+>   `:290`, so the predicate is NULL for its own read.
+>   `SqlAlchemyAuthQueryPort.get_login_profile`
+>   (`backend/app/infrastructure/persistence/auth_repository.py:120-137`) and
+>   `SqlAlchemyMeQueryPort.list_clans`
+>   (`backend/app/infrastructure/persistence/me_query_port.py:19-42`) read it before any clan
+>   exists to select. `POST /auth/login` still answers `200`, with `clan_id: null`, and
+>   `GET /me/clans` returns `[]`. Nothing raises and nothing is logged.
+> - **Writes fail loudly.** `SqlAlchemyAuthRepository.add_membership`
+>   (`auth_repository.py:69-88`) INSERTs the row on that same clan-less request session, so a
+>   clan-keyed `WITH CHECK` compares `<real clan> = NULL`. Both `POST /auth/onboard` flows
+>   raise `psycopg.errors.InsufficientPrivilege: new row violates row-level security policy
+>   for table "user_clan_roles"` and answer 500.
+>
+> Both halves are pinned by `backend/tests/integration/test_rls_login_two_clans.py`.
+
 ### `user_fcm_tokens`
 Firebase Cloud Messaging tokens per device, for push notifications. This is the
 table the runtime actually uses (migration `004_fcm_tokens`); the earlier
@@ -763,7 +788,34 @@ Chi/phái/nhánh within a clan. Supports nested hierarchy.
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 ### `clan_settings`
-Per-clan configuration. Auto-created with new clans.
+Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
+
+> ❌ **Correction (2026-08-22, seed S-010).** This section said "Auto-created with new
+> clans". That is **false**, and the code is the truth. Measured by
+> `grep -rn 'clan_settings\|ClanSettings' backend/app` and by reading
+> `backend/migrations/versions/001_initial.py`: nothing in the application constructs a
+> `ClanSettings`, no route, repository or query port touches the table, and the only triggers
+> the baseline migration installs are `trg_<table>_updated_at` (`001_initial.py:930-937`).
+> **The table is empty in the running system.** The only reference outside the ORM model is
+> the `Clan.settings` relationship (`backend/app/models/clan.py:35`), whose result no caller
+> reads.
+
+> ✅ **RLS (2026-08-22, migration `035_rls_clan_settings`, ADR-008 Phase 10, seed S-010).**
+> The table carries the migration-027 template unchanged —
+> `clan_settings_clan_isolation USING (clan_id = <app.clan_id GUC>) WITH CHECK (…)` — on both
+> reads and writes. The application-layer filter stays the primary guarantee; this is the
+> layer-2 backstop. Because the table is empty and unread today the policy is **inert**: it
+> guards a reader that does not exist yet, which ADR-043 § 2 already chose over a permanent
+> exemption row in S-015's list. **One live read path does exist and was checked before
+> shipping:** `Clan.settings` is `lazy="selectin"`, so `get_clan_by_slug` and
+> `get_clan_by_id` (`backend/app/infrastructure/persistence/auth_repository.py:47-49`,
+> `:51-52`) emit a SELECT against this table on the request session with **no clan GUC**
+> during `POST /auth/register` and `POST /auth/onboard`. It returns nothing, `clan.settings`
+> is `None`, and both flows still answer `201` — measured 2026-08-22 and pinned by
+> `backend/tests/integration/test_rls_phase10_clan_settings.py`, which also proves two-sided
+> isolation at the DB layer. Every denial assertion there ends with a **privileged** read
+> proving the rows were present, because on an empty table "zero rows" is the answer a broken
+> policy and a working one both give.
 
 > ⚠️ **Status (2026-07-02) — mostly not enforced yet.** Only the row/columns exist;
 > the runtime does **not** read most knobs. In particular `max_upload_size_mb`
