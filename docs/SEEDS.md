@@ -681,6 +681,58 @@ counted top-level entries where the flattened total was 40, because `relationshi
 nested objects. And S-067's seed named the unused function. **None changed a decision. All three
 would have reached a later reader as fact.**
 
+**Re-taken 2026-08-22, after a sixteenth batch of three: 77 seeds, 71 done, 4 open, 2 blocked.** The
+batch was three rather than four because only three seeds were unblocked; S-073 and S-070 waited on
+S-072 and now S-070 waits on S-073 alone.
+
+**The batch's finding is not on any of its three seeds. The production backend image cannot boot.**
+S-072 found it while checking something else, and the coordinator verified all four links at source.
+`render.yaml:8` builds `backend/Dockerfile` and `:13-14` sets `APP_ENV: production`.
+`readiness.py:22` takes `Path(__file__).resolve().parents[2]`, which is `backend/` in the source tree
+and **`site-packages` in the image**, because the Dockerfile installs the app as a wheel while
+copying `alembic.ini` to `/app`. So `expected_head()` returns `None`, `migration_status` returns
+`unknown`, and `main.py:113-119` raises `RuntimeError` in production mode. Measured against a
+database at `039_drop_clan_settings`: 503, `"migrations":"unknown"`, `Application startup failed`.
+
+**The comment above the broken line is the lesson**: "it works however the process is **launched**".
+True of launching, false of **installing**. And `docker-compose.yml:52` bind-mounts
+`./backend/app:/app/app:ro`, so **compose hides the defect it would otherwise be first to catch**.
+That is **S-075**, and it is the highest-priority open seed on this board.
+
+**Two seeds corrected the coordinator's own text, both in the direction that matters.** S-071's seed
+said the server half "reads the run-time environment correctly". Measured false by probe:
+`NEXT_PUBLIC_*` inlining is a build-time substitution across the whole bundler graph, not scoped to
+Client Components, so `middleware.ts` was baked too — and its `if (!supabaseUrl || !supabaseKey)`
+branch meant **the built image performed no session check at all**. No user was exposed: nothing
+builds or ships the web image, and production web goes out through `vercel deploy --prod`. **S-074's
+framing was flattened in the same way** and is now sharpened: the two images are not equally exposed,
+and the unverified one that actually ships is the backend.
+
+**S-069 refused the rule that would have passed with the least thought.** "Forbid table and policy
+DDL" admits `CREATE INDEX`, `CREATE EXTENSION`, `CREATE FUNCTION`, `DROP DATABASE`, and `DROP OWNED`
+by omission. Its classifier **defaults to deny** — an unclassified statement is `unknown`, which no
+sanction covers — and its third check, on `SUPERUSER`, `BYPASSRLS`, `CREATEROLE`, a `PUBLIC` grantee,
+and `WITH GRANT OPTION`, **can never be overridden by the allow-list**. The coordinator verified that
+independently: `ALTER ROLE familyroots_app BYPASSRLS` planted inside the allow-listed file is class
+`role`, which check 2 permits there, and check 3 still caught it. **Being on the list is not a blank
+cheque**, and it was proven rather than asserted.
+
+**The CI path-filter hole was found for the third directory.** S-064 found `infra/`. S-069 found
+`scripts/`: no workflow carried `scripts/**`, so a pull request touching only that directory ran no
+gate at all — **including the guard built to watch it**. Verified across all six workflow files.
+
+**S-072 caught a "set is a setting" defect in its own health check, the fourth recorded instance.**
+Its first `wait_for_health` looped over `docker ps`, which lists only **running** containers, so
+stopping `supabase_auth` — the container the whole stack exists for — removed it from the set and the
+check printed `all containers healthy`, rc=0. Fixed to pin the roster first, then assert over
+`docker ps -a`, with three planted failures each caught and named.
+
+**And it found the trap that would have cost the next person an afternoon**, with a control:
+`SUPABASE_URL=http://supabase.localhost:54321` returns 200, `http://127.0.0.1:54321` returns **401
+`invalid_token`** — on the same healthy stack, with the same token. `supabase status` prints the
+`127.0.0.1` form. `127.0.0.1` cannot mean both the host and the inside of a container, so
+`[auth] external_url` pins the issuer to a name that can.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -884,6 +936,9 @@ graph LR
   S072[S-072 Supabase CLI stack] --> S073[S-073 seed test users in both DBs] --> S070
   S072 --> S070
   S070 --> S074[S-074 CI builds the images and runs compose e2e]
+  S075[S-075 the backend image cannot boot in production mode]
+  S071 --> S076[S-076 decide NEXT_PUBLIC_API_URL, ADR-056]
+  S069 --> S077[S-077 scan inline DDL in shell scripts]
   S017 --> S064[S-064 retire infra/supabase/migrations]
   S018 --> S064
   S018 --> S065[S-065 decide what clan_settings is for]
@@ -969,12 +1024,15 @@ graph LR
 | S-066 | Bring `zh.json` and `fr.json` up to the 61 keys `vi` and `en` already carry | done | S-062, done |
 | S-067 | Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model | done | S-064, done |
 | S-068 | Decide what the eight tokenless colour families mean, in ADR-055 | done | S-038, done |
-| S-069 | Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/` | open | S-067, done |
-| S-070 | Make an authenticated route reachable in the e2e harness | blocked | S-071, S-072, S-073 |
-| S-071 | Give `web/Dockerfile` the build arguments Next.js inlines at build time | open | none |
-| S-072 | Stand the Supabase CLI stack up beside `pgdb`, mirroring the production split | open | none |
-| S-073 | Seed a test clan, its users and their roles into both databases, reproducibly | open | S-072 |
+| S-069 | Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/` | done | S-067, done |
+| S-070 | Make an authenticated route reachable in the e2e harness | blocked | S-071 and S-072 done; S-073 |
+| S-071 | Give `web/Dockerfile` the build arguments Next.js inlines at build time | done | none |
+| S-072 | Stand the Supabase CLI stack up beside `pgdb`, mirroring the production split | done | none |
+| S-073 | Seed a test clan, its users and their roles into both databases, reproducibly | open | S-072, done |
 | S-074 | Gate: build both images and run the compose e2e suite in CI | blocked | S-070 |
+| S-075 | Make the backend image able to boot, which today it cannot in production mode | open | none |
+| S-076 | Decide what `NEXT_PUBLIC_API_URL` should be, given it is baked at build time | open | none |
+| S-077 | Scan the DDL that shell scripts run inline, which no guard sees | open | S-069, done |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -3476,7 +3534,7 @@ Any screen's layout.
 
 ## S-069. Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/`
 
-**Status:** open · **Blocked by:** S-067, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-067, done 2026-08-22 · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by the coordinator, from a finding S-067 made about its own guard.** Both guards
 in `backend/tests/unit/test_no_parallel_table_ddl_under_infra.py` are scoped to `infra/`. **`infra/`
@@ -3519,7 +3577,7 @@ S-067 left alone because three prose citations point at its filename.
 
 ## S-070. Make an authenticated route reachable in the e2e harness
 
-**Status:** blocked · **Blocked by:** S-071, S-072, S-073 · **Unblocks:** S-074
+**Status:** blocked · **Blocked by:** S-071 and S-072 done 2026-08-22; S-073 · **Unblocks:** S-074
 
 **The decision this seed carried was made by the maintainer on 2026-08-22: the full Supabase
 CLI stack, run in Docker Compose.** The seed offered three options and this is the first. The
@@ -3599,7 +3657,7 @@ Supabase stack, which are S-071 to S-073. CI, which is S-074.
 
 ## S-071. Give `web/Dockerfile` the build arguments Next.js inlines at build time
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-070
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-070
 
 **This is a live defect in the production image, not only a test-harness problem**, which is why it
 is its own seed and lands first.
@@ -3617,6 +3675,22 @@ pointed at the container renders the "Supabase is not configured" banner **whate
 **The server half is fine and must not be changed.** `web/src/middleware.ts:56-57` and
 `web/src/app/api/auth/callback/route.ts` run server-side and read the run-time environment correctly.
 **Do not convert them to build arguments** — that would bake a secret-adjacent value into an image.
+
+> **This paragraph is wrong, and the agent that closed the seed measured it wrong rather than
+> assuming it.** `NEXT_PUBLIC_*` inlining is **not scoped to Client Components**: it is a build-time
+> text substitution across the whole bundler graph. Proven 2026-08-22 by probe — one image built with
+> both variables as empty build arguments, then run twice with different run-time values on the same
+> names, hitting a protected route and the callback route. **Both times the value read was the empty
+> build-time one, never the run-time one.**
+>
+> **So the defect was worse than this seed described.** `middleware.ts:60-62` skips the auth check
+> entirely when either variable is falsy, so the built image was always taking the "Supabase is not
+> configured" branch — the middleware performed no session check at all. **No user was ever exposed**:
+> `web-ci.yml:209` deploys the web app with `vercel deploy --prod`, and nothing builds or ships the
+> web image, so it is a local and compose artefact only. Checked by the coordinator the same day.
+>
+> No extra build argument was needed or possible for those two files — same variable name, same
+> substitution — so fixing the client banner fixed the middleware with it.
 
 **End state.** The web image builds with `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` supplied as build arguments, and `docker-compose.yml` passes them
@@ -3641,7 +3715,7 @@ reads — check before adding one. Traefik.
 
 ## S-072. Stand the Supabase CLI stack up beside `pgdb`, mirroring the production split
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-073, S-070
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-073, S-070
 
 **Read S-070 first for the decision and for the topology**, which was checked at source and is not
 what the coordinator first assumed.
@@ -3685,7 +3759,7 @@ Deleting `pgdb`. Traefik.
 
 ## S-073. Seed a test clan, its users and their roles into both databases, reproducibly
 
-**Status:** open · **Blocked by:** S-072 · **Unblocks:** S-070
+**Status:** open · **Blocked by:** S-072, done 2026-08-22 · **Unblocks:** S-070
 
 **A test user exists in two places at once, and that is the whole difficulty.** The identity lives in
 the Supabase stack's `auth.users`. The membership, the role, and the clan live in the application
@@ -3728,6 +3802,14 @@ nothing, checked 2026-08-22. **`backend/Dockerfile` and `web/Dockerfile` are bot
 and both unverified** — multi-stage, non-root, a `HEALTHCHECK` on the backend, and no evidence that
 either has ever been built by anything but a developer's hand.
 
+> **Sharpened 2026-08-22, after S-071 and S-072 landed. The two images are not equally exposed, and
+> this seed's original wording flattened them.** `infra/render/render.yaml:8` builds
+> **`backend/Dockerfile`** and runs it in production; the web app deploys through
+> `vercel deploy --prod` (`web-ci.yml:209`) and **nothing builds or ships `web/Dockerfile`**. So the
+> unverified image that actually ships is the backend one — **and S-075 measured that it cannot boot
+> at all with `APP_ENV=production`.** That defect is exactly what a CI image build would have caught,
+> which is this seed's whole argument, now with an instance behind it.
+
 **That is the same shape as every other finding this week**: a well-made artefact that nothing
 executes. It is also how the `NEXT_PUBLIC_*` defect in S-071 survived.
 
@@ -3752,6 +3834,156 @@ only ever been green proves nothing.
 `docker-compose.yml`; seeds S-070 to S-073.
 
 **Out of scope.** Deploying anything. Mobile CI. Image publishing or a registry.
+
+---
+
+## S-075. Make the backend image able to boot, which today it cannot in production mode
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Found 2026-08-22 by S-072, which was doing something else, and verified mattress-to-wall by the
+coordinator the same day. This is the highest-priority open seed on this board.**
+
+**`backend/Dockerfile` is the production artefact.** `infra/render/render.yaml:8` names it directly
+(`dockerfilePath: ./backend/Dockerfile`), `:13-14` sets `APP_ENV: production`, and `:59` sets
+`healthCheckPath: /health`.
+
+**The image cannot pass its own startup guard.** Four links, each read at source:
+
+1. `backend/app/core/readiness.py:22` is `_BACKEND_DIR = Path(__file__).resolve().parents[2]`.
+2. The Dockerfile installs the app **as a wheel** (`uv sync --no-editable`), so in the image the
+   module lives at `/app/.venv/lib/python3.14/site-packages/app/core/readiness.py` and `parents[2]`
+   resolves to **`site-packages`**. The Dockerfile copies `alembic.ini` and `migrations/` to
+   **`/app`**. They are not in the same place.
+3. `expected_head()` therefore returns `None`, and `migration_status` returns
+   `MIGRATIONS_UNKNOWN` (`readiness.py:50`).
+4. `backend/app/main.py:113-119`: `if status != MIGRATIONS_CURRENT` and `APP_ENV == "production"`,
+   it raises `RuntimeError` and the application exits.
+
+**So a production boot always fails, whatever the database says.** S-072 measured it against a
+database fully migrated to `039_drop_clan_settings`: `GET /health` returned
+`{"status":"degraded","database":"connected","migrations":"unknown"}` with 503, and production mode
+raised `Application startup failed. Exiting.`
+
+**The comment above the broken line is the lesson.** It reads "Resolved from the file location, not
+the CWD, so it works however the process is launched." **That is true of launching and false of
+installing.** The wheel moves the file, and the arithmetic that was correct in the source tree is
+wrong in the image.
+
+**Two reasons nobody noticed, and both are worth keeping.** `docker-compose.yml` bind-mounts
+`./backend/app:/app/app:ro`, so locally `app` imports from `/app/app`, `parents[2]` is `/app`, and
+`expected_head()` finds the file. **Compose hides the defect it would otherwise be the first to
+catch.** And no CI job builds this image — checked 2026-08-22, `grep -rn "docker" .github/workflows/`
+returns nothing — which is S-074.
+
+**The irony is worth writing down.** That guard exists so that "the deploy fails and the previous
+version keeps serving". It works. It just fails for the wrong reason, permanently.
+
+**End state.** The backend image boots with `APP_ENV=production` against a migrated database, and
+`GET /health` reports `migrations: current`. **How it locates the migration head is the decision**:
+resolve from an installed package resource, ship the file inside the wheel, take a path from the
+environment, or ask the database alone and stop reading the filesystem. **Say what you chose and what
+it costs when the image is run some other way.** Do not simply add `..` until today's layout passes —
+that is the same arithmetic, one step further from being checkable.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**The gate cannot see this defect and you must say so** — the whole suite passes today with the
+image broken, because the suite runs from the source tree where the arithmetic is correct.
+
+**The real check is a built image.** Build it, run it with `APP_ENV=production` against a database at
+head, and quote `GET /health`. **Negative control:** run the same image against a database that is
+one revision behind and confirm it reports `behind` and refuses to boot — that is the behaviour the
+guard exists for, and it has never been observed from an image. **A test that runs from the source
+tree pins the source tree, not the artefact.**
+
+**Sources.** `infra/render/render.yaml:8,13-14,59`; `backend/Dockerfile`, the `--no-editable` sync
+and the `alembic.ini`/`migrations/` copies; `backend/app/core/readiness.py:22,50`;
+`backend/app/main.py:113-119`; `docker-compose.yml:52` for the mount that hides it.
+
+**Out of scope.** The web image, which is S-071 and is done. CI, which is S-074. Changing what
+`/health` reports.
+
+---
+
+## S-076. Decide what `NEXT_PUBLIC_API_URL` should be, given it is baked at build time
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-071, which found it while fixing the two Supabase variables and correctly
+did not fix it**, because unlike those two it has no single correct value.
+
+**S-071 established the mechanism, correcting its own seed in the process.** `NEXT_PUBLIC_*`
+inlining is **not** scoped to Client Components: it is a build-time text substitution across the
+whole bundler graph. S-071 proved this by probe — one image, two runs with different run-time values
+on the same names, and both read the build-time value, in `middleware.ts` and in the auth callback
+route as well as in a client component.
+
+**`NEXT_PUBLIC_API_URL` reaches a Client Component transitively** through
+`web/src/lib/api/axios.ts`, imported by `'use client'` hooks. So it has the identical exposure.
+
+**But its correct value differs by caller, which is why this is a decision.** Server-to-server calls
+inside compose want `http://api:8000/api/v1`; the browser wants a host-reachable origin. **One baked
+value cannot be both.** `docker-compose.yml` currently defaults it to the compose-network hostname,
+which is wrong for the browser half.
+
+**Options, none obviously right.** Bake the browser-facing origin and give the server half a separate
+non-public variable. Use a same-origin path and proxy through Next.js. Or serve the value at run time
+from a server component and stop treating it as `NEXT_PUBLIC_*` at all. **Say which and what it costs
+in each deployment shape** — Vercel, compose, and any future container deploy.
+
+**End state.** `docs/decisions/056-*.md` decides, and the value each deployment shape needs is
+written where a deployer meets it. **056 is allocated here**; confirm it is free in
+`docs/decisions/README.md` before writing, and remember this tracker wins when the two disagree.
+
+**Verification.** If code changes, the **full** web gate in `web/CLAUDE.md`. **A green gate is not
+evidence here**, because nothing today asserts what the browser bundle was built with. **The control
+is S-071's**: build an image, load a page in a real browser, and read the value the client actually
+uses. Quote it for both the server and the browser path.
+
+**Sources.** `web/src/lib/api/axios.ts` and the `'use client'` hooks that import it;
+`docker-compose.yml`'s `web` service comment, written by S-071; `web/Dockerfile`.
+
+**Out of scope.** The two Supabase variables, which S-071 fixed. Any backend change.
+
+---
+
+## S-077. Scan the DDL that shell scripts run inline, which no guard sees
+
+**Status:** open · **Blocked by:** S-069, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-069, which named this as the largest thing its own guard misses.** That is
+the right way to hand over a limitation, and this seed exists because the alternative was widening
+S-069's rule on a second decision.
+
+**The guards read `.sql` files. The dangerous statements are not all in `.sql` files.**
+`scripts/restore_drill.sh` itself runs `DROP DATABASE … WITH (FORCE)` at `:116` and `CREATE DATABASE`
+at `:122` through `psql -c`, and **no guard sees either**. Verify those line numbers yourself; they
+move.
+
+**Nothing is wrong today** — the drill is meant to drop and create its own throwaway database. **The
+gap is that a privilege escalation written inline would be invisible**, while the same statement in a
+`.sql` file would be caught. That asymmetry is the defect.
+
+**This contains a decision, and it is the hard part.** Scanning heredocs and `-c` arguments without
+drowning in false positives is not obvious. **S-060's rule applies**: a guard with a high
+false-positive rate gets suppressed, and a suppressed guard is worse than none. So decide the shape
+and **say what it will miss**, as S-069 did.
+
+**End state.** A check sees DDL and privilege statements that shell scripts execute inline, or the
+decision is recorded that it cannot be done reliably and why. **Either outcome closes this seed**; a
+guard that matches nothing does not.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**Two planted controls, following S-064, S-067 and S-069:** an inline `ALTER ROLE … BYPASSRLS` in a
+script that has no `.sql` file at all, and one inside a heredoc. Quote both failing, then the tree
+green. **If your scanner cannot see one of those shapes, say which** — that is the limitation, and
+naming it is worth more than a guard that pretends to cover it.
+
+**Sources.** `scripts/restore_drill.sh:116,122,149`;
+`backend/tests/unit/test_scripts_sql_is_sanctioned.py` and its "what it would miss" section;
+`backend/tests/unit/test_no_parallel_table_ddl_under_infra.py`.
+
+**Out of scope.** `.sql` files, which S-069 covers. Changing what any script does.
 
 ---
 

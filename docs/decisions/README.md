@@ -65,7 +65,10 @@ kept. **044, 050, 051, 052 and 053 were all written on 2026-08-22** by seeds S-0
 S-057 and S-019. **048 was taken by seed S-043 on 2026-08-22**, the same day 047 went to seed S-040.
 Pre-allocating in the seed is deliberate, so that four agents picking work at once cannot pick the
 same number. **054 was written on 2026-08-22 by seed S-065**, which dropped the table rather than
-deciding what it was for. **055 was written on 2026-08-22 by seed S-068.** The next free number is **056**. This index is not the
+deciding what it was for. **055 was written on 2026-08-22 by seed S-068.** **056 is allocated to seed S-076** as of
+2026-08-22, for what `NEXT_PUBLIC_API_URL` should be given that Next.js bakes it at build time. The
+next free number is **057**. This index is not the authority: read [`../SEEDS.md`](../SEEDS.md),
+which wins when the two disagree. This index is not the
 authority: read [`../SEEDS.md`](../SEEDS.md), which wins when the two disagree.
 
 > **ADR-052 landed on 2026-08-22 without a row here and was indexed one batch late**, on the same

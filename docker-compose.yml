@@ -34,7 +34,12 @@ services:
       APP_ENV: development
       APP_DEBUG: "true"
       APP_SECRET_KEY: ${APP_SECRET_KEY:-change-me-in-production}
-      SUPABASE_URL: ${SUPABASE_URL}
+      # S-072: `supabase.localhost`, never `127.0.0.1`. The Supabase stack pins its
+      # token issuer to this hostname via `[auth] external_url` in supabase/config.toml,
+      # because 127.0.0.1 cannot mean both the host and the inside of a container.
+      # `supabase status` prints the 127.0.0.1 form; pasting it here yields 401
+      # invalid_token against a perfectly healthy stack. Measured 2026-08-22.
+      SUPABASE_URL: ${SUPABASE_URL:-http://supabase.localhost:54321}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
@@ -48,6 +53,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # S-072: resolves `supabase.localhost` to the host, where the Supabase stack runs.
+    # This line is load-bearing: without it the container cannot reach the issuer and
+    # every token is rejected. Verified on macOS 2026-08-22; S-074 must re-check it on
+    # CI, where an /etc/hosts entry is the fallback.
+    extra_hosts:
+      - "supabase.localhost:host-gateway"
     volumes:
       - ./backend/app:/app/app:ro
     # Dev bootstrap: migrate to head before serving so a fresh pgdb volume works
@@ -91,6 +102,10 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     container_name: familyroots-web
     restart: unless-stopped
+    # S-072: the server half of Next.js (middleware, route handlers) reaches Supabase
+    # by this name too. See the api service above for why it is not 127.0.0.1.
+    extra_hosts:
+      - "supabase.localhost:host-gateway"
     ports:
       - "3000:3000"
     environment:

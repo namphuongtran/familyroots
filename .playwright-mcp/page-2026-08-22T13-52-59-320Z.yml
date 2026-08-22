@@ -1,0 +1,21 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e3]:
+    - generic [ref=f3e4]:
+      - heading "FamilyRoots" [level=1] [ref=f3e5]
+      - paragraph [ref=f3e6]: Đăng nhập để xem gia phả dòng họ
+    - generic [ref=f3e7]:
+      - heading "Đăng nhập" [level=2] [ref=f3e8]
+      - button "Đăng nhập với Google" [ref=f3e9]
+      - generic [ref=f3e10]: hoặc
+      - generic [ref=f3e14]:
+        - generic [ref=f3e15]: Email
+        - textbox [ref=f3e16]
+      - generic [ref=f3e17]:
+        - generic [ref=f3e18]: Mật khẩu
+        - textbox [ref=f3e19]
+      - button "Đăng nhập" [ref=f3e20]
+      - paragraph [ref=f3e21]:
+        - text: Chưa có tài khoản?
+        - link "Đăng ký" [ref=f3e22] [cursor=pointer]:
+          - /url: /vi/register
+  - alert [ref=f3e23]
