@@ -1,9 +1,31 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { useAuth } from '@/lib/hooks/useAuth'
+
+/**
+ * `selectClan` (`useAuth.ts`) calls the legacy axios client
+ * (`src/lib/api/axios.ts`, frozen — S-027 deletes it, not this seed), whose response
+ * interceptor rejects with the raw `AxiosError` on anything but a 401 rather than
+ * normalizing it into `ApiError` (`shared/http/errors.ts`). The backend's envelope
+ * (`docs/contracts/error-codes.md`: `{"error": {"code", "message", "detail"}}`) still sits at
+ * `error.response.data.error.code` on that rejection — this reads it there without importing
+ * anything from the axios tree, so the routing decision below is on the real `code`, per
+ * `web/CLAUDE.md`'s "branch on the error code, never on message" rule, and not on a guess.
+ */
+function backendErrorCode(cause: unknown): string | null {
+  if (typeof cause !== 'object' || cause === null || !('response' in cause)) return null
+  const response = (cause as { response?: unknown }).response
+  if (typeof response !== 'object' || response === null || !('data' in response)) return null
+  const data = (response as { data?: unknown }).data
+  if (typeof data !== 'object' || data === null || !('error' in data)) return null
+  const error = (data as { error?: unknown }).error
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : null
+}
 
 export default function SelectClanPage() {
   const t = useTranslations('auth')
@@ -22,6 +44,22 @@ export default function SelectClanPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, startTransition] = useTransition()
 
+  /** Shared by the manual submit handler and the single-clan auto-select effect below. */
+  const routeOnSelectClanFailure = useCallback(
+    (cause: unknown, clanId: string) => {
+      const code = backendErrorCode(cause)
+      if (code === 'clan_suspended') {
+        const membership = clanMemberships.find((entry) => entry.clan_id === clanId)
+        const params = new URLSearchParams({ clanId })
+        if (membership?.clan_name) params.set('clanName', membership.clan_name)
+        router.push(`/${locale}/clan-suspended?${params.toString()}`)
+        return true
+      }
+      return false
+    },
+    [clanMemberships, locale, router],
+  )
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push(`/${locale}/login`)
@@ -39,11 +77,32 @@ export default function SelectClanPage() {
     }
 
     if (!isLoading && clanMemberships.length === 1 && clanMemberships[0]?.clan_id) {
-      void selectClan(clanMemberships[0].clan_id).then(() => {
-        router.push(`/${locale}/dashboard`)
-      })
+      const onlyClanId = clanMemberships[0].clan_id
+      void selectClan(onlyClanId)
+        .then(() => {
+          router.push(`/${locale}/dashboard`)
+        })
+        .catch((cause: unknown) => {
+          // This branch used to have no `.catch()` at all — a suspended single-clan
+          // user's auto-select rejected silently (an unhandled promise rejection),
+          // never reaching a screen. Routed the same way the manual path below is.
+          if (!routeOnSelectClanFailure(cause, onlyClanId)) {
+            setError(cause instanceof Error ? cause.message : t('pending_subtitle'))
+          }
+        })
     }
-  }, [clanMemberships, isAuthenticated, isLoading, isPendingApproval, needsOnboarding, locale, router, selectClan])
+  }, [
+    clanMemberships,
+    isAuthenticated,
+    isLoading,
+    isPendingApproval,
+    needsOnboarding,
+    locale,
+    router,
+    routeOnSelectClanFailure,
+    selectClan,
+    t,
+  ])
 
   return (
     <div className="min-h-screen bg-background px-4 py-12">
@@ -101,7 +160,9 @@ export default function SelectClanPage() {
                   await selectClan(selectedClanId)
                   router.push(`/${locale}/dashboard`)
                 } catch (cause) {
-                  setError(cause instanceof Error ? cause.message : t('pending_subtitle'))
+                  if (!routeOnSelectClanFailure(cause, selectedClanId)) {
+                    setError(cause instanceof Error ? cause.message : t('pending_subtitle'))
+                  }
                 }
               })
             }}
