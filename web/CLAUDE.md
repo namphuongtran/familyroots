@@ -134,6 +134,46 @@ compliance.
 - next-intl with locales `vi | en | zh | fr`, **default `vi`**, `localePrefix: 'always'` — every route is prefixed (`/vi/...`, `/en/...`). See `src/i18n/routing.ts` and `messages/*.json`.
 - Route groups under `src/app/[locale]/`: `(auth)` (login/register/callback/pending-approval — public), `(dashboard)` (protected), plus `backoffice/`, `platform/`, `select-clan/`.
 - `src/middleware.ts` runs the intl middleware first, strips the locale prefix, lets `PUBLIC_ROUTES` through, and for everything else creates a Supabase SSR client (`@supabase/ssr`) and redirects to `/<locale>/login` when there is no session. If Supabase env vars are missing the auth check is skipped — be aware in local dev.
+- **After the session check, `src/middleware.ts` gates `CLAN_SCOPED_SEGMENTS` (`dashboard`, `documents`, `events`, `members`, `tree`, `admin` — everything under the `(dashboard)` route group) on the `current_clan_id` cookie.** Missing and unparseable (not a UUID) are the same case, both read as "no clan selected" through `parseClanCookie` (`src/shared/http/request-context.ts`), and both redirect to `/<locale>/select-clan` rather than letting the route render and fire a clan-scoped `apiFetch` call with no `X-Current-Clan-Id`. `platform/*`, `backoffice/*`, and `select-clan` itself are deliberately not gated: the first two are cross-clan super-admin surfaces (`docs/architecture/multi-tenancy.md`), and gating the picker page would loop. Landed by seed S-023; see `web/src/middleware.test.ts`.
+
+### The `current_clan_id` cookie (S-023)
+
+The cookie is the single source for the active clan: `context.server.ts` reads it through
+`cookies()`, `context.client.ts` reads the identical value through `document.cookie`, and
+both run it through the same `parseClanCookie` (`src/shared/http/request-context.ts`) so a
+Server Component and a browser session never disagree about which clan is active. A
+`localStorage`-only value (the legacy path's third fallback) is invisible to a Server
+Component, which is the whole reason this moved to a cookie.
+
+**Attributes, decided once in `context.client.ts` so nine later seeds (S-024 through S-033)
+inherit them rather than re-deciding:**
+
+| Attribute | Value | Why |
+|---|---|---|
+| `httpOnly` | not set (false) | Forced, not chosen: `context.client.ts` reads the cookie through `document.cookie`, and a script that can read a cookie can set it, so declaring `httpOnly` would be theatre. The cookie is also not a credential — the backend re-validates it against the caller's actual memberships on every request (`get_current_clan_id`) — so nothing sensitive leaks by it being script-readable. |
+| `sameSite` | `lax` | Sent on a normal top-level navigation, withheld on a cross-site subrequest or form post — the standard mitigation for a script-writable cookie. Matches the legacy writer, `src/infrastructure/auth/clan-selection-storage.ts`. |
+| `secure` | only when `location.protocol === 'https:'` | `document.cookie` silently drops a hard-coded `Secure` attribute set from an insecure origin rather than erroring, which would break local `http://localhost` dev instead of protecting anything. |
+| `path` | `/` | Every locale-prefixed route reads it, and so does `src/middleware.ts`, which runs before any narrower path is known. |
+| `max-age` | one year | A UI preference the backend re-validates, not a session credential — no security reason to expire it sooner. |
+
+`parseClanCookie` treats the value as unparseable unless it matches the UUID shape every
+`clan_id` takes in the backend (cast `::uuid` throughout `docs/architecture/data-model.md`),
+and returns `null` rather than forwarding garbage as `X-Current-Clan-Id`.
+
+**What still writes the cookie, and why that is not a gap.** The `select-clan` flow still
+writes through the legacy `persistCurrentClanId` (`src/infrastructure/auth/clan-selection-storage.ts`)
+— same cookie name, compatible attributes — because rewiring `useAuth`'s `selectClan` onto the
+spine is S-025's job (rewriting the auth store around this context), not S-023's. `context.client.ts`
+exports `writeClanCookie` / `clearClanCookie` as the canonical writer S-025 adopts, so the
+attributes above stay decided in one place rather than drifting between two writers.
+
+**No `features/` repository exists yet to write a cross-runtime test against** (`src/features/`
+lands with S-024 onward). `src/shared/http/context.test.tsx` proves the closest thing that
+exists today: `getServerRequestContext` and `getClientRequestContext` resolve the same
+`clanId` for one cookie, and a bare `apiFetch` call — what a repository function does under the
+hood — carries the identical `X-Current-Clan-Id` from both. Read the file's own comment before
+assuming a later slice's repository test can copy this shape verbatim; it is a stand-in, not the
+real pattern.
 
 ### Backend contract — required headers and query semantics
 

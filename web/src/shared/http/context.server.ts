@@ -2,7 +2,13 @@ import 'server-only'
 
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { CLAN_COOKIE, LOCALE_COOKIE, normalizeLocale, type RequestContext } from './request-context'
+import {
+  CLAN_COOKIE,
+  LOCALE_COOKIE,
+  normalizeLocale,
+  parseClanCookie,
+  type RequestContext,
+} from './request-context'
 
 /**
  * Request context inside a Server Component or route handler.
@@ -25,7 +31,7 @@ export async function getServerRequestContext(): Promise<RequestContext> {
 
   return {
     locale: normalizeLocale(store.get(LOCALE_COOKIE)?.value),
-    clanId: store.get(CLAN_COOKIE)?.value ?? null,
+    clanId: parseClanCookie(store.get(CLAN_COOKIE)?.value),
     accessToken,
   }
 }
