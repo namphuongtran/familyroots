@@ -27,9 +27,9 @@ export default async function BackofficeLayout({
   await requireRole(['admin', 'super_admin'], locale)
 
   return (
-    <div className="flex min-h-screen bg-gray-900">
+    <div className="flex min-h-screen bg-background">
       <BackofficeSidebar locale={locale} />
-      <main className="ml-60 flex-1 min-h-screen overflow-y-auto bg-gray-50">
+      <main className="ml-60 flex-1 min-h-screen overflow-y-auto bg-background">
         {children}
       </main>
     </div>

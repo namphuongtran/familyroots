@@ -377,7 +377,8 @@
     "nav_dashboard": "Tableau de bord",
     "nav_members": "Membres",
     "nav_clans": "Clans",
-    "nav_tree": "Arbre généalogique"
+    "nav_tree": "Arbre généalogique",
+    "rail_label": "Back-office"
   },
   "common": {
     "loading": "Chargement...",

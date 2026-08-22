@@ -434,7 +434,8 @@
     "nav_dashboard": "Dashboard",
     "nav_members": "Members",
     "nav_clans": "Clans",
-    "nav_tree": "Family Tree"
+    "nav_tree": "Family Tree",
+    "rail_label": "Backoffice"
   },
   "common": {
     "loading": "Loading...",
