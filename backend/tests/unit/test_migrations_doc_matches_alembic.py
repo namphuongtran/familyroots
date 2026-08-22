@@ -35,8 +35,9 @@ word in that block fails the check rather than being skipped. Two further tests,
 synthetic documents, so its ability to both match and refuse is pinned independently of what the
 real document currently says.
 
-Out of scope: `infra/supabase/migrations/`, the hand-written parallel set the document already
-records as drifted with Alembic as the source of truth. Any migration's content.
+Out of scope: any migration's content. `infra/supabase/migrations/`, the hand-written parallel
+set this docstring used to exclude, no longer exists — seed S-064 deleted it on 2026-08-22, and
+`test_no_parallel_table_ddl_under_infra.py` keeps it from coming back.
 """
 
 from __future__ import annotations

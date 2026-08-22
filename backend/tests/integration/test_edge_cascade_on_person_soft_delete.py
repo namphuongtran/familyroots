@@ -403,10 +403,11 @@ async def test_the_subtree_read_agrees_with_the_edge_reads_about_the_same_child(
 ) -> None:
     """The tree was already right; check S-054 did not push the reads past it.
 
-    The tree functions filter soft-deleted persons
-    (``infra/supabase/migrations/002_tree_functions.sql``), so the survivor's
-    subtree already showed one child and one spouse. The edge reads now say the
-    same. A filter that hid the live pair as well would agree with nothing.
+    The tree functions filter soft-deleted persons — the Alembic chain installs
+    them, from ``backend/migrations/versions/003_tree_functions.py`` onward — so
+    the survivor's subtree already showed one child and one spouse. The edge
+    reads now say the same. A filter that hid the live pair as well would agree
+    with nothing.
     """
     resp = await client.get(f"/api/v1/tree/subtree/{seeded['survivor']}", headers=viewer_headers)
     assert resp.status_code == 200, resp.text
