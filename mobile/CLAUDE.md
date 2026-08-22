@@ -560,16 +560,26 @@ view lands and wants its divider, it passes `dividerColor` on the widget, which 
 the theme at `search_anchor.dart:1076-1080`.
 
 **The test is the part worth copying.** The old assertion was
-`expect(theme.dividerTheme.thickness, 0)` under the name "dividers have no thickness". It
-was true, it was green, and the app painted a line the whole time. **A test that pins a
-setting pins nothing about the outcome.** The replacement, "the no-line rule: a real
+`expect(theme.dividerTheme.thickness, 0)` under the name "dividers have no thickness"
+(`theme_test.dart:129,131` at commit `27a446f`). It was true, it was green, and it would have
+stayed green the day a screen added its first `Divider`. **No screen ever added one**, checked
+2026-08-22 by S-049 and re-checked the same day by S-051: `grep -rn "Divider" mobile/lib` returns
+14 lines and every one is the `orDivider` localisation key, a comment, or the `dividerTheme`
+declaration itself. So nothing was painted on any screen, and the sentence "the app painted a line
+the whole time" that this note used to carry was wrong. It is corrected here rather than deleted,
+because it was cited. The replacement, "the no-line rule: a real
 Divider paints no pixel", renders both `Divider` and `VerticalDivider` over two grounds and
 asserts the set of distinct pixels is exactly `{ground}`. It also asserts each divider
 measures `Size(9, 0)` or `Size(0, 9)`, so an accidental one is inert in layout as well as
 in paint. Both halves were watched failing: removing `color` produced
 `Actual: Set:['#FFFBF8F1', '#FFD7D1C0', '#FFD7D0C0']`, and setting `space: 16` produced
-`Actual: _DebugSize:<Size(9.0, 16.0)>`. **When you pin a visual rule, rasterise and read
-the pixels. A field is evidence about the field.**
+`Actual: _DebugSize:<Size(9.0, 16.0)>`.
+
+**The general rule is written once, and not here.** A test that pins a setting cannot fail for the
+reason anyone cares about. `.claude/rules/seeds.md`, section "A test pins an outcome, not a
+setting", holds it, with this instance, the `web` token probe, and the `backend` RLS coverage guard
+beside it. That file loads in every session. This note keeps the Flutter-specific evidence and does
+not restate the rule.
 
 The design system itself — tokens, components, accessibility rules and the 15
 screen groups — is specced in
