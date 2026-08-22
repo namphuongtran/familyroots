@@ -1,34 +1,12 @@
-import type {
-  CursorPage,
-  DocumentSummary,
-  Marriage,
-  ParentChild,
-  Person,
-  PersonBatchGetInput,
-  PersonBatchGetResponse,
-  PersonSummary,
-  TimelineEvent,
-} from '@/lib/types'
+import type { Person } from '@/lib/types'
 
-export interface PersonsListQuery {
-  cursor?: string
-  limit?: number
-  generation?: number
-  gender?: string
-  is_alive?: boolean
-  search?: string
-  profile?: 'summary' | 'detail' | 'full'
-  include?: string
-  fields?: string
-}
+// S-033 trimmed this port to the one method `getPerson` (and, through it,
+// `useMembers.ts`'s `usePerson`) still calls. `PersonsListQuery` and the
+// `list`/`search`/`getMarriages`/`getParentChild`/`getTimeline`/
+// `getDocuments`/`batchGet` methods it described are gone: nothing has
+// called them since `src/components/members/{MemberList,MemberSearch,
+// MemberDetailClient}.tsx` were deleted by this same seed.
 
 export interface PersonQueryRepository {
-  list(params: PersonsListQuery): Promise<CursorPage<PersonSummary>>
-  search(query: string, limit: number): Promise<PersonSummary[]>
   get(id: string): Promise<Person>
-  getMarriages(id: string): Promise<Marriage[]>
-  getParentChild(id: string): Promise<ParentChild[]>
-  getTimeline(id: string): Promise<TimelineEvent[]>
-  getDocuments(id: string): Promise<DocumentSummary[]>
-  batchGet(input: PersonBatchGetInput): Promise<PersonBatchGetResponse>
 }

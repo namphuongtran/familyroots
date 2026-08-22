@@ -1,4 +1,20 @@
-// Person types — aligned with backend PersonResponse / PersonCreateRequest
+// Person types — aligned with backend PersonResponse
+//
+// S-033 deleted `PersonCreateInput`, `PersonUpdateInput`, `TimelineEvent`,
+// `PersonProfile`, `PersonBatchGetInput`, `PersonBatchGetError`, and
+// `PersonBatchGetResponse` from this file: each one's last real reader was
+// legacy code this same seed deleted (`src/lib/api/members.ts`'s removed
+// methods, `src/infrastructure/http/query-policy.ts`, and
+// `src/components/members/*.tsx`).
+//
+// `Person` stays because `src/lib/hooks/useMembers.ts`'s `usePerson` (kept
+// for `MemberSidebar.tsx`, the tree feature) still returns it. `PersonSummary`
+// stays because `src/lib/types/tree.ts`'s `RelationshipPath.from_person`/
+// `to_person` (kept for the tree feature) still types against it — neither
+// of those consumers is a persons-slice file, so neither type could leave
+// with the rest. `src/domain/person/person.ts` is the target-contract
+// replacement new code should use; this file is what the two legacy
+// consumers above still read.
 
 export interface Person {
   id: string
@@ -54,68 +70,4 @@ export interface PersonSummary {
   avatar_url?: string
   membership_role?: 'blood' | 'spouse' | 'adopted'
   is_founder?: boolean
-}
-
-/** Fields for creating or updating a person — mirrors PersonCreateRequest */
-export interface PersonCreateInput {
-  full_name: string
-  birth_name?: string
-  courtesy_name?: string
-  posthumous_name?: string
-  alias_name?: string
-  gender: 'male' | 'female' | 'unknown'
-  birth_date?: string
-  birth_date_lunar?: string
-  birth_date_approx: boolean
-  death_date?: string
-  death_date_lunar?: string
-  death_date_approx: boolean
-  birth_place?: string
-  death_place?: string
-  burial_place?: string
-  tomb_location?: string
-  residence_place?: string
-  religion?: string
-  nationality?: string
-  occupation?: string
-  education_level?: string
-  title_rank?: string
-  phone?: string
-  email?: string
-  biography?: string
-  avatar_url?: string
-  notes?: string
-}
-
-export type PersonUpdateInput = Partial<PersonCreateInput>
-
-/** Timeline event returned by GET /persons/{id}/timeline */
-export interface TimelineEvent {
-  event_date?: string
-  date_approx: boolean
-  event_type: string
-  title: string
-  description?: string
-  related_person_id?: string
-  related_person_name?: string
-}
-
-export type PersonProfile = 'summary' | 'detail' | 'full'
-
-export interface PersonBatchGetInput {
-  ids: string[]
-  profile?: PersonProfile
-  include?: string
-  fields?: string
-  include_by_id?: Record<string, string>
-}
-
-export interface PersonBatchGetError {
-  id: string
-  code: string
-}
-
-export interface PersonBatchGetResponse {
-  data: Array<Record<string, unknown>>
-  errors: PersonBatchGetError[]
 }

@@ -1,25 +1,9 @@
-export function personCreateInvalidationKeys() {
-  return [
-    ['persons', 'list'],
-    ['tree'],
-  ] as const
-}
-
-export function personUpdateInvalidationKeys(id: string) {
-  return [
-    ['persons', 'detail', id],
-    ['persons', 'list'],
-    ['tree'],
-  ] as const
-}
-
-export function personDeleteInvalidationKeys(id: string) {
-  return [
-    ['persons', 'detail', id],
-    ['persons', 'list'],
-    ['tree'],
-  ] as const
-}
+// S-033 deleted `personCreateInvalidationKeys`, `personUpdateInvalidationKeys`, and
+// `personDeleteInvalidationKeys`: their one caller, `useMembers.ts`'s `usePersonMutations`,
+// was deleted the same seed (its own one caller, `MemberForm.tsx`, was already
+// unreachable — S-032 flagged it, S-033 confirmed and deleted it). See
+// `tests/behavior/auth-and-invalidation.test.ts` for the test that covered only these three
+// and was deleted with them.
 
 export function documentUploadInvalidationKeys(personId?: string) {
   const keys: Array<readonly unknown[]> = [['documents']]
