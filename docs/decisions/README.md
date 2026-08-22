@@ -50,15 +50,21 @@
 | [048](048-invitation-accept-runs-on-the-system-session.md) | Only `POST /invitations/{token}/accept` Moves to the System Session, and `clan_invitations` Takes the Clan-Isolation Policy | Accepted, shipped (2026-08-22, seed S-043) |
 | [050](050-user-clan-roles-clan-keyed-mutations.md) | `user_clan_roles` Takes Clan-Keyed UPDATE and DELETE Only, and Every Reader Stays on the Session It Is On | Accepted, shipped (2026-08-22, seed S-052) — migration `036_rls_user_clan_roles`. Half covered on purpose: `SELECT` and `INSERT` are permissive (the authorization gate and `POST /auth/onboard` both run with no clan selected), `UPDATE` and `DELETE` are clan-keyed. The mirror of ADR-043. No handler changed session |
 
-**044, 046 and 049 are allocated and not written.** Seed S-016 carries 044 and seed S-039
-carries 046, both in [`../SEEDS.md`](../SEEDS.md). **049 stays free by decision**: seed S-051
-pre-allocated it and then wrote no ADR, because what it had to say is about how this repository
-verifies rather than about the system it builds, and that belongs in `.claude/rules/seeds.md`
-(see its § "Why this is a rule here and not ADR-049"). **050 was written on 2026-08-22 by seed
-S-052**, which S-010 split out for the `user_clan_roles` decision. The gap is deliberate, so that
-four agents picking work at once cannot pick the same number. **048 was taken by seed S-043 on
-2026-08-22**, the same day 047 went to seed S-040. The next free number is **051** unless
-[`../SEEDS.md`](../SEEDS.md) has allocated it.
+**044, 046, 049, 051 and 052 are allocated and not written.** Seed S-016 carries 044, S-039
+carries 046, **S-053 carries 049**, **S-055 carries 051**, and **S-057 carries 052**, all in
+[`../SEEDS.md`](../SEEDS.md). **050 was written on 2026-08-22 by seed S-052**, which S-010 split
+out for the `user_clan_roles` decision. **048 was taken by seed S-043 on 2026-08-22**, the same day
+047 went to seed S-040. The gap is deliberate, so that four agents picking work at once cannot pick
+the same number. The next free number is **053** unless [`../SEEDS.md`](../SEEDS.md) has allocated
+it.
+
+> **049 was allocated twice, and the second allocation is the live one.** Seed S-051 pre-allocated
+> it on 2026-08-22 and then wrote no ADR, because what it had to say is about how this repository
+> verifies rather than about the system it builds, and that belongs in `.claude/rules/seeds.md`
+> (see its § "Why this is a rule here and not ADR-049"). This paragraph read "049 stays free by
+> decision" for part of that day. Seed S-053 took it the same day for field-level visibility. **A
+> released number is free, not reserved** — say which seed holds a number, not merely that it is
+> taken.
 
 > **This paragraph is a merge point, so re-read it rather than editing it from memory.** It was
 > resolved by hand on 2026-08-22 after seeds S-011 and S-013 ran in parallel and each narrowed the

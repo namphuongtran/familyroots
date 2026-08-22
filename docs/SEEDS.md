@@ -251,6 +251,47 @@ silent lockout on `/auth/login` and a 500 on `/auth/onboard`. It also establishe
 `clan_settings` is **dead scaffold** — nothing anywhere constructs a row — which is a hidden
 precondition for S-016, S-017, and S-018.
 
+**Re-taken again 2026-08-22, after a seventh parallel batch of four: 57 seeds, 35 done, 15 open, and
+7 blocked.** All four moved:
+
+- **Seeds, 52 to 57.** S-020 opened **S-053**, **S-054**, **S-055**, and **S-056**; S-050 opened
+  **S-057**.
+- **Done, 31 to 35.** S-020, S-027, S-050, and S-052.
+- **Open, 13 to 15.** The four left for `done`, minus four. S-015 became open, because S-052 was its
+  last blocker, and S-029 because S-027 was, plus two. Four of the five new seeds arrived open, plus
+  four; S-056 arrived `blocked`. Net plus two.
+- **Blocked, 8 to 7.** S-015 and S-029 left it, minus two. S-056 arrived blocked, plus one.
+
+**Two agents drafted a seed at the same number, and the coordinator resolved it.** S-050 and S-020
+each proposed an S-053. S-020's four seeds kept the numbers, because renumbering the larger drafted
+block risks more stale cross-references than renumbering one; S-050's became **S-057**. Its body says
+so, so a reader arriving from S-050's text is not left wondering.
+
+**The most serious finding of this batch is operational, not architectural.** A restore into a new
+cluster produces a database the application **cannot use**, and the drill reports `DRILL: PASS`.
+Everything structural survives — 18 tables, 85 indexes, 13 RLS-enabled tables, 17 policies, all
+identical — while grants to `familyroots_app` go from 72 to 0 and the role itself is absent, so
+`SET LOCAL ROLE` fails on every request transaction. **`pg_restore` emits no warning**, because the
+policies target `PUBLIC` and nothing in the dump names the role. S-050 established the role-free
+cluster rather than assuming it, by system identifier, which is what makes the result mean anything.
+
+**The coverage guard needed a fourth posture, one batch after it needed a third.** S-052 found that
+`user_clan_roles` mutations are keyed on the primary key alone, with no `clan_id` predicate, and
+covered exactly those — permissive reads, clan-keyed writes, the **mirror of ADR-043**: a record leaks
+by being read, a capability leaks by being written. **Every one of the four splits was found by
+planting an inversion, and none by reading the code.** S-015 is now open and its body records that its
+own question has changed.
+
+**An absence claim built on a name search is a claim about names.** S-020 found its own 2026-08-13
+measurement false: field-level visibility does ship, as a tuple constant and a function, and
+`grep "field_visibility\|visible_fields"` searched for column names nobody ever chose. It also
+established that the edge-cascade defect is **client-visible**, not dormant — two reads over one
+marriage row give a client two different answers.
+
+**A seed's end state can contradict its own `Out of scope`.** S-027 was told to delete `axios` and to
+leave the other legacy slices alone; every one of those slices imports `axios`. Enumerating importers
+first, which the seed itself required, is what caught it.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -462,21 +503,21 @@ graph LR
 | S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | done | S-011, done |
 | S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
 | S-014 | Enable RLS on the two tables S-013 decides for | done | S-013, done |
-| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-010 done, S-012 done, S-014 done, S-043 done, S-052 |
+| S-015 | Gate: fail when a clan-owned table carries no policy | open | S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
 | S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
 | S-018 | Enforce or hide `privacy_level` | blocked | S-016 |
 | S-019 | Make a clan invitation's reported status agree with its `expires_at` | open | none |
-| S-020 | Re-measure the four dormant database-review items against the code | open | none |
+| S-020 | Re-measure the four dormant database-review items against the code | done | none |
 | S-021 | Run the restore drill against a real dump, and date the result | done | none |
 | S-022 | Move `<html>` and `<body>` into the locale-aware layout | done | none |
 | S-023 | Land the `current_clan_id` cookie and the server request context on it | done | S-022, done |
 | S-024 | Derive capabilities per clan role, in `domain/capability` | done | S-023, done |
 | S-025 | Rewrite the auth store around the clan context | done | S-023, done |
 | S-026 | Land the three blocked-state screens | done | S-024, done; S-025, done |
-| S-027 | Delete the legacy auth transport and the `axios` dependency | open | S-025 done, S-026 done |
+| S-027 | Delete the legacy auth transport and the `axios` dependency | done | S-025 done, S-026 done |
 | S-028 | Clear the 112-file prettier drift in one sweep | open | none |
-| S-029 | Land `features/persons` model and api against the frozen contract | blocked | S-027 |
+| S-029 | Land `features/persons` model and api against the frozen contract | open | S-027, done in part |
 | S-030 | Land the persons repository, query keys, and hooks | blocked | S-029 |
 | S-031 | Land the persons list and detail screens | blocked | S-030 |
 | S-032 | Land the persons create and edit forms, with `409 stale_write` | blocked | S-031 |
@@ -497,9 +538,14 @@ graph LR
 | S-047 | Repoint `pending_approval_page.dart`'s citation at the register that replaced it | done | none |
 | S-048 | Decide what mobile's `outlineVariant` is, and pin it | done | none |
 | S-049 | Make `dividerTheme` do what its comment says, or say what it does | done | none |
-| S-050 | Drill a restore of a dump carrying the RLS migrations, into a fresh cluster | open | none |
+| S-050 | Drill a restore of a dump carrying the RLS migrations, into a fresh cluster | done | none |
 | S-051 | Make "a test pins an outcome, not a setting" a rule rather than a third note | done | none |
-| S-052 | Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050 | open | none |
+| S-052 | Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050 | done | none |
+| S-053 | Decide what field-level visibility means in v1, in ADR-049 | open | none |
+| S-054 | Make the three edge reads agree with the tree and the timeline about a soft-deleted person | open | none |
+| S-055 | Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051 | open | none |
+| S-056 | Build whatever ADR-051 chose for the edge cascade | blocked | S-055 |
+| S-057 | Make a restore into a new cluster produce a database the application can use, in ADR-052 | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -1897,7 +1943,52 @@ Adding a divider to any screen.
 
 ## S-050. Drill a restore of a dump carrying the RLS migrations, into a fresh cluster
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-057
+
+**`DRILL: PASS`, exit 0, one run — and the restored database could not serve a request-role session.**
+The seed's prediction was right and **the failure is the result**. No script was changed; verified,
+`git diff main -- scripts/` is empty.
+
+**It was the first drill here to run at chain head:** `OK — dump at 035_rls_clan_settings, matches
+repo head`, where both earlier runs reported a `016` dump against a `WARN`.
+
+**The role-free cluster was established rather than assumed**, which is the part that makes the
+result mean anything. A second container is a second `initdb`, proven by a distinct
+`system_identifier` (`7676696829999001645` against the dev cluster's `7656068655264079917`) and one
+non-builtin role, `postgres`. Then:
+
+```
+BEGIN
+ERROR:  role "familyroots_app" does not exist
+psql exit: 1
+```
+
+**Why that breaks everything.** Verified by the coordinator: `RLS_ENABLED` defaults to `True`
+(`backend/app/core/config.py:71`), and the seam issues `SET LOCAL ROLE` (`backend/app/core/rls.py:63`)
+at the start of **every** request transaction. The restored database is **armed but unusable**.
+
+**What restores and what does not.** Tables 18, indexes 85, constraints 228, functions 55, triggers
+13, extensions 4, RLS-enabled tables 13, policies 17 — **identical** in source and restored. Grant
+rows to `familyroots_app`: **72 against 0**. The role itself: absent. **`pg_restore` emitted no
+warning at all**, because the 17 policies target `PUBLIC` and nothing in the dump names the role.
+
+**The obvious way to build the head dump was wrong, and catching it changed the number.** Restoring
+the `016` dump and running `017` to `035` on top left **0** table grants, because
+`pg_restore --no-privileges` had already dropped what migration `002` granted. Dumping that would
+have **overstated** the gap. Rebuilt from base: 18 tables, 72 grant rows.
+
+**Three probes, labelled as probes rather than as drill results, bound the repair.** Creating the
+role alone gives `permission denied for table persons`. Role **plus** the grants from `002` and `026`
+works, and isolation holds two-sided, 3 rows against 0. Dropping `--no-privileges` makes
+`pg_restore --exit-on-error` fail with exit 1 — it converts a silent breakage into a loud one rather
+than fixing anything. **Probe D was run twice** and both runs are recorded: the first exit-code
+reading went through zsh's `PIPESTATUS` and read `0` incorrectly.
+
+**A single-database `pg_dump` cannot carry a role, because a role is cluster-wide.** It belongs to
+`pg_dumpall --roles-only` or to a bootstrap step, and choosing between them is a decision. That is
+**S-057**.
+
+**No application gate applies, and none was run.** One Markdown file changed.
 
 **Opened 2026-08-22 by S-021**, which found it while doing what it was asked and reported it rather
 than folding in the fix.
@@ -2020,6 +2111,247 @@ which this rule extends rather than replaces.
 
 **Out of scope.** Rewriting any of the three tests — all three are already fixed. Auditing the rest of
 the suite for a fourth instance, which would be its own seed and needs this rule written first.
+
+---
+
+## S-053. Decide what field-level visibility means in v1, in ADR-049
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**The 2026-08-13 measurement this seed replaces was too strong, and the correction is why this is a
+decision rather than a build.** S-020's table said field-level visibility "returned no
+implementation". Re-measured 2026-08-22, that is false. A field-level visibility rule ships today. It
+is hardcoded, it covers exactly two fields, and it is keyed on role plus self:
+
+- `backend/app/application/person/handlers.py:31` — `_PII_FIELDS = ("phone", "email")`.
+- `:35-54` — `_redact_person_pii` returns early for `admin`, resolves the viewer's own linked person,
+  and nulls both fields on every other person.
+- `:148` and `:239` apply it on the read path **and** on the update-response path, so
+  `?profile=full` cannot bypass it.
+- `backend/tests/integration/test_person_pii_visibility.py` proves both sides end to end.
+
+**What the old search missed, and it is a lesson worth keeping.**
+`grep -rni "field_visibility\|visible_fields"` searches for **column names nobody ever chose**. It
+cannot find a rule expressed as a tuple constant and a function. **An absence claim built on a name
+search is a claim about names, not about behaviour.**
+
+**So the real question is not "does it exist" but "is two fields, fixed, the v1 answer".** Three
+options, each defensible. Keep the rule fixed at `phone`/`email` and say so in the contract, which is
+the smallest honest change. Make the field set configurable per clan, which lands on `clan_settings`
+and therefore on ADR-044's territory. Extend the fixed set without making it configurable.
+
+**A second defect, found while measuring, closable inside whichever option wins.**
+`docs/contracts/rest-persons-api.md` never mentions the rule. Checked 2026-08-22,
+`grep -rn "phone" docs/contracts/*.md` matches `error-codes.md`, `rest-change-requests-api.md`,
+`rest-exports-api.md`, and `rest-clans-api.md` — and **not** the persons contract, which is the one a
+client reads before rendering a person card. **A client today cannot tell a null `phone` from a
+redacted one.**
+
+**End state.** `docs/decisions/049-*.md` exists and chooses one option. It names the field set, the
+roles that see each field, and the failure direction, which must be closed: an unresolvable viewer
+role **redacts rather than reveals**. `docs/contracts/rest-persons-api.md` states the rule in the
+same pull request. The ADR number is **049**, allocated here — released by S-051, which pre-allocated
+it and wrote a rule instead.
+
+**Verification.** If the ADR chooses "keep it fixed", this is one ADR, one contract file, and one
+index row: **no gate**, and say so. If it changes what is redacted, the backend full quality gate,
+plus a test per newly covered field watched failing against a deleted check. **A redaction test that
+has only ever seen the admin case proves nothing.**
+
+**Sources.** `backend/app/application/person/handlers.py:31`, `:35-54`, `:148`, `:239`;
+`backend/tests/integration/test_person_pii_visibility.py`;
+`docs/contracts/rest-persons-api.md` for the surface that omits it; `docs/architecture/rbac.md`.
+
+**Out of scope.** `clan_settings.privacy_level`, which is S-018 and is a whole-tree control rather
+than a per-field one. Any screen. Redaction outside the person aggregate.
+
+---
+
+## S-054. Make the three edge reads agree with the tree and the timeline about a soft-deleted person
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**This is the half of the edge-cascade item that needs no decision, and it is the half a client can
+see.** Measured 2026-08-22 by `backend/tests/integration/test_edge_cascade_on_person_soft_delete.py`,
+which S-020 added: with one spouse and one child soft-deleted,
+`GET /persons/{survivor}/marriages` returns the edge to the deleted spouse,
+`GET /persons/{survivor}/parent-child` returns the edge to the deleted child, and
+`POST /persons/batch` with `include=stats` answers `spouse_count: 2, child_count: 2` for a survivor
+with one live spouse and one live child. **The same API answers `404` for the deleted person in the
+same run.**
+
+**Two reads over one marriage row disagree today**, confirmed at source.
+`GET /persons/{id}/timeline` joins both persons and filters the counterpart
+(`person_query_port.py:207-216`), and so does the tree builder. The three reads above filter only the
+**edge's own** `is_deleted` (`person_query_port.py:56,81`; `person_repository.py:260-270`) and never
+look at the person the edge points at.
+
+**Why this is separable from the cascade, which is S-055.** A read filter needs no schema change, no
+event consumer, and no answer to the restore-symmetry question. **It also stays correct whatever
+S-055 decides**, because rows written before a cascade ships would not carry the cascade's flag, so
+the reads would still need the predicate.
+
+**What leaks is the edge and the uuid, not the name.** `app/schemas/marriage.py:61-85` and
+`app/schemas/parent_child.py:40-59` carry ids and no name field. **State it that precisely; do not
+overstate it.**
+
+**End state.** All three reads omit an edge whose counterpart person is soft-deleted, matching the
+timeline and the tree. `docs/contracts/rest-persons-api.md` says so, in the same pull request.
+`docs/architecture/domain-rules.md:122` is corrected: it claims a soft-deleted person is "invisible
+everywhere" and that "It's not just reads", and the four readings above show the read side was not
+closed.
+
+**Verification.** The backend full quality gate. **The negative control comes free and is already
+written**: `test_edge_cascade_on_person_soft_delete.py` asserts today's behaviour, so every
+`surfaces`/`counts` test in it **must fail** when this seed lands. Replace that file with
+wanted-behaviour tests; **do not edit its assertions one at a time to make a change land green.**
+Keep its two-sided shape — the live spouse and live child must still appear, or a read that returned
+nothing would pass.
+
+**Sources.** `backend/tests/integration/test_edge_cascade_on_person_soft_delete.py`, dated
+2026-08-22; `person_query_port.py:56,81` and `:207-216`; `person_repository.py:260-270`;
+`backend/tests/integration/test_soft_deleted_spouse_filtering.py`;
+`docs/architecture/domain-rules.md:122`; `docs/decisions/006-soft-vs-hard-delete.md`.
+
+**Out of scope.** Cascading `is_deleted` onto the edge rows, which is S-055 and S-056. Restore
+semantics. Any write guard.
+
+---
+
+## S-055. Decide whether person soft-delete cascades to its edges, and how restore identifies them, in ADR-051
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-056
+
+**An ADR already decided this once, and it was never built.**
+`docs/decisions/006-soft-vs-hard-delete.md`, in its update dated 2026-07-02: "soft-deleting a person
+will also soft-delete its edges; `restore` re-activates only the edges hidden by that same delete."
+Re-measured 2026-08-22: `Person.soft_delete` (`backend/app/domain/person/entity.py:267-280`) sets the
+person's own three flags and emits `PersonDeleted`, and `grep -rn "PersonDeleted"` outside
+`backend/app/domain/person` returns one catalog row, one architecture sentence, and two test
+references — **no consumer**. The decision stands unimplemented after seven weeks.
+
+**This is a decision seed because of the second clause.** "Re-activates only the edges hidden by that
+same delete" needs a way to tell an edge the cascade hid from an edge an admin deleted through
+`DELETE /marriages/{id}` **before** the person was deleted. That needs a marker on the row, a rule
+reading `deleted_at` against the person's, or a narrower promise. **That is a schema decision.**
+
+**Three shapes, each defensible.** Cascade with a marker column: honest, costs a migration. Cascade
+with no marker and drop the restore-symmetry promise, amending ADR-006 by dated amendment rather than
+leaving it contradicted. Do not cascade at all, and close the client-visible half with S-054's read
+filter alone, which also amends ADR-006.
+
+**The third option is not obviously wrong, and the ADR must say why it lost or won.** S-054 makes the
+reads agree without touching data. The remaining argument for cascading is that restore then yields a
+consistent graph, and that an export or a future consumer reading the edge tables directly sees what
+the API sees. `docs/contracts/rest-exports-api.md` is the surface to check first.
+
+**End state.** `docs/decisions/051-*.md` chooses one shape and states the failure direction, which
+must be closed: **an edge whose cascade state cannot be determined stays hidden rather than
+reappearing.** If it cascades, the ADR names where — a `PersonDeleted` consumer, the command handler,
+or a database trigger — and says why, **given that `backend/CLAUDE.md` records the in-process
+dispatcher is not a durable integration channel.** ADR-006's 2026-07-02 update is amended by dated
+amendment. The ADR number is **051**, allocated here.
+
+**Verification.** No gate. One ADR, one amendment, one index row. Say so plainly.
+
+**Sources.** `docs/decisions/006-soft-vs-hard-delete.md`, the 2026-07-02 update;
+`backend/app/domain/person/entity.py:267-280` and `:283-296`;
+`backend/tests/integration/test_edge_cascade_on_person_soft_delete.py`;
+`docs/decisions/025-per-clan-edge-write-serialization.md`;
+`docs/decisions/019-document-soft-delete-purge.md` for the one aggregate that changed its delete
+posture and how that was written up; `backend/CLAUDE.md` for the dispatcher's durability posture.
+
+**Out of scope.** Building it, which is S-056. The read filter, which is S-054 and does not wait for
+this. Hard delete, which ADR-006 settles.
+
+---
+
+## S-056. Build whatever ADR-051 chose for the edge cascade
+
+**Status:** blocked · **Blocked by:** S-055 · **Unblocks:** nothing yet
+
+**Read ADR-051 and implement what it chose. Do not re-open the choice.**
+
+**End state**, one of three, and the seed states which once ADR-051 lands. The cascade runs where the
+ADR names, with the marker it defines, and a test proves that soft-deleting a person hides its edges
+**and** that restoring re-activates exactly the edges the cascade hid, not one deleted separately
+beforehand. Or the cascade runs with no restore symmetry and the test proves restore leaves them
+hidden. Or ADR-051 chose not to cascade, this seed closes with no code and a note saying so, and
+S-054 is the whole answer.
+
+**The failure direction is closed in every branch:** an edge whose cascade state cannot be determined
+stays hidden.
+
+**Verification.** The backend full quality gate, plus `upgrade` and `downgrade` if a migration lands.
+**The negative control is the point**: delete the cascade and watch the named test fail. **A test that
+has only ever seen the delete case proves nothing about restore**, so write one that soft-deletes an
+edge directly, then soft-deletes and restores the person, and asserts that edge is still hidden.
+
+**Sources.** `docs/decisions/051-*.md`, which does not exist yet;
+`backend/app/domain/person/entity.py:267-296`; `backend/app/infrastructure/event_dispatcher.py`;
+`docs/decisions/025-per-clan-edge-write-serialization.md`, because a cascade is an edge write and the
+integrity guard takes a per-clan advisory lock;
+`backend/tests/integration/test_edge_write_serialization.py`.
+
+**Out of scope.** The read filter, S-054. Re-litigating ADR-051.
+
+---
+
+## S-057. Make a restore into a new cluster produce a database the application can use, in ADR-052
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-050**, which measured the failure and did not repair it, because the repair
+contains a decision. **The seed ID moved**: S-050's agent drafted this as S-053, and the coordinator
+renumbered it because a concurrent agent had drafted four seeds at those numbers.
+
+**A restore into a new cluster produces a database the application cannot use, and the drill reports
+`DRILL: PASS`.** Measured 2026-08-22, third row of `docs/ops/backup-restore.md`'s drill log. A dump at
+`035_rls_clan_settings` restored into a cluster holding no `familyroots_app` role; the drill exited 0;
+`SET LOCAL ROLE familyroots_app` on the restored database returned
+`ERROR:  role "familyroots_app" does not exist`.
+
+**What restores and what does not.** Base tables 18, indexes 85, constraints 228, functions 55,
+triggers 13, extensions 4, RLS-enabled tables 13, policies 17: identical. Grant rows to
+`familyroots_app`: **72 in the source, 0 in the restored.** The role itself: absent.
+
+**Three probes bound the repair, all 2026-08-22.** Creating the role alone yields
+`permission denied for table persons`. Role plus the seven grant statements from
+`002_rls_documents_pilot.py:44-50` and `026_rls_activation_grants.py:30-36` works, and isolation holds
+two-sided. Dropping `--no-privileges` makes `pg_restore --exit-on-error` fail with exit 1, because
+the `GRANT` names a role the target cluster lacks — **it does not fix anything.**
+
+**The decision, which is why this needs an ADR.** Where the role and its grants come from on
+recovery. At least three shapes: a `pg_dumpall --roles-only` companion object beside each dump; a
+documented bootstrap step a human runs before `pg_restore`; or an idempotent bootstrap inside
+`scripts/restore_drill.sh` plus a production variant. Each trades recovery-time simplicity against
+carrying role definitions off-provider. **Decide it in the ADR before writing code.** The number is
+**052**, allocated here.
+
+**End state.** A restore into a cluster that did not previously hold `familyroots_app` yields a
+database where `SET LOCAL ROLE familyroots_app; SELECT count(*) FROM persons` succeeds under the
+owning clan and returns 0 under another. **`scripts/restore_drill.sh` makes that check itself**, so
+`DRILL: PASS` means the application can use the result. The drill log carries a dated row proving it.
+
+**Verification.** The drill against a dump at head, into a cluster confirmed by
+`SELECT count(*) FROM pg_roles WHERE rolname='familyroots_app'` returning `0` **before** the restore.
+**Negative control:** with the bootstrap removed, the drill must print `DRILL: FAIL` and name the
+missing role. **A drill that stays green without the fix pins nothing** — that is precisely the defect
+this seed removes. If a script changes, the backend full quality gate.
+
+**Two things the next agent needs**, both learned by S-050. The dev database `family_roots` is still
+at `016`, so a head dump means migrating it or building a staging database from base — and **restoring
+the `016` dump then migrating on top gives 0 grants**, which understates the source and overstates the
+gap. Homebrew's `libpq` is keg-only here, so prepend `/opt/homebrew/opt/libpq/bin` to `PATH` or the
+script reports `DRILL: FAIL` and blames Postgres for being down when it is not.
+`scripts/restore_drill.sh` honours `PGPORT`, so a fresh container needs no script edit.
+
+**Sources.** `docs/ops/backup-restore.md`, the 2026-08-22 fresh-cluster section; `scripts/db_backup.sh:40`;
+`scripts/restore_drill.sh:116`; `backend/migrations/versions/002_rls_documents_pilot.py:38,44-50`;
+`backend/migrations/versions/026_rls_activation_grants.py:30-36`; `backend/app/core/rls.py:63`;
+`backend/app/core/config.py:71`.
+
+**Out of scope.** Restoring production. Point-in-time recovery. Changing any RLS policy.
 
 ---
 
@@ -2872,7 +3204,61 @@ assignment surfaces. The platform-admin role, which is not clan-scoped.
 
 ## S-052. Decide which session resolves a caller's clan roles, then cover `user_clan_roles`, in ADR-050
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-015
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-015
+
+**Closed by ADR-050 and migration `036_rls_user_clan_roles`. A fourth answer won, and it is none of
+the three this seed offered.** The table is **half covered**: `SELECT USING (true)` and
+`INSERT WITH CHECK (true)`, both permissive **by decision**, plus clan-keyed `UPDATE` and `DELETE`.
+**No handler, repository, or route changed the session it runs on.**
+
+**What settled it was a census this seed did not have.** Eleven modules touch the table, not four.
+Every clan-less accessor is a `SELECT` or the one `INSERT`. And the four statements that mutate it on
+a request session are keyed on the **primary key alone**: verified by the coordinator, `approve_if_pending`,
+`delete_role_by_id`, `delete_if_pending`, and `change_role_if`
+(`backend/app/infrastructure/persistence/clan_repository.py:150,184,201,219`) all read
+`.where(UserClanRole.id == ucr_id, …)` with **no `clan_id` predicate**. Their clan safety is that
+`ucr_id` came from a clan-filtered read a few lines earlier — **a read-then-write pair, not a
+filter**, which is exactly what layer 2 exists to back up. A cross-clan `change_role_if` is privilege
+escalation.
+
+**It is the mirror of ADR-043.** `audit_logs` has clan-keyed reads and a permissive insert, because
+**a record leaks by being read**. This table has permissive reads and clan-keyed mutations, because
+**a capability leaks by being written**.
+
+**This seed was wrong on one point, and the correction is the same one ADR-048 made to S-043.**
+Option (a) claimed that moving the clan-resolution reads privileged would strip layer 2 from the
+member list and the role mutations. It would not: those run through `get_clan_query_handler` and
+`get_clan_command_handler` (`dependencies.py:254`, `:259`), separate providers from `get_auth_*` and
+`get_me_*`. The real cost of (a) is that `get_current_clan_id` is a **shared dependency**, so covering
+it means a second pooled connection on every clan-scoped request.
+
+**The seed's reader census was short by four**: `me_query_port.get_clan_membership`,
+`auth_repository.get_profile` / `has_pending_membership`, `Clan.user_roles` (`lazy="selectin"`, fires
+on every `Clan` load), and `notification.py:127`.
+
+**The coverage guard gained a FOURTH set**, `_CLAN_KEYED_MUTATION_TABLES`. Listing this table as
+clan-isolated would have **passed** that set's assertion, because its UPDATE policy's `USING` does
+read the GUC. **Three seeds in a row have now found a guard passing over the wrong thing** — S-012,
+S-014, and this one.
+
+**ADR-038's `RETURNING` trap recurs here and nobody had recorded it for this table.** Found by a
+plant: with `INSERT WITH CHECK (true)` intact but `SELECT` clan-keyed, both onboard flows still fail
+with `new row violates row-level security policy for table "user_clan_roles"`, because
+`TimestampMixin` makes SQLAlchemy append `RETURNING created_at, updated_at` and Postgres matches that
+row against the **SELECT** policy. **Tightening the read half breaks the write half, and the error
+names the wrong policy while doing it.**
+
+**Negative control, three plants, each restored.** Predicate → `true`: 6 failed, including the new
+guard. `SELECT` tightened: 9 failed. Migration emptied: 7 failed. Restored: 28 passed.
+
+**The two-clan role test the seed asked for exists, with two companions**, because a 403 alone proves
+nothing: one drives a `RequireViewer` route in the second clan to prove the membership is real rather
+than invisible, and one asserts the switcher reports both roles against the right clans. All three
+assert through the response body, never a value `require_role` returned.
+
+**Gate, on the combined tree, 2026-08-22.** 1347 passed; `All checks passed!`; 469 files already
+formatted; mypy `Success: no issues found in 430 source files`; `Contracts: 6 kept, 0 broken`.
+Migration 036 verified up, down, and up again.
 
 **Split out of S-010 on 2026-08-22, because it contains a decision.** The ADR number is **050**,
 allocated here.
@@ -3272,7 +3658,30 @@ this seed said "which does not exist yet" and that is no longer true;
 
 ## S-015. Gate: fail when a clan-owned table carries no policy
 
-**Status:** blocked · **Blocked by:** S-008, S-009, S-010, S-012, S-014 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-008, S-009, S-010, S-012, S-014, S-043, S-052 — all done 2026-08-22 · **Unblocks:** nothing yet
+
+**Every blocker closed on 2026-08-22, and this seed is not the gate it was written as.** It says
+"fail when a clan-owned table carries no policy". **That question is no longer the coverage
+question**, and four batches of evidence say so. `tests/integration/test_rls_activation.py` now
+carries **four** sets, each asserted with its own question, and each split was found by planting an
+inversion rather than by reading code:
+
+| Set | Added by | The shape it exists for |
+|---|---|---|
+| `_CLAN_ISOLATED_TABLES` | original | both halves of one policy read `app.clan_id` |
+| `_REQUEST_ROLE_DENIED_TABLES` | S-012 | `identity_claims`, a deny-all tripwire that compares nothing |
+| `_PER_COMMAND_TABLES` | S-014 | `audit_logs`, clan-keyed reads, permissive INSERT, **no** UPDATE or DELETE policy |
+| `_CLAN_KEYED_MUTATION_TABLES` | S-052 | `user_clan_roles`, permissive reads by decision, clan-keyed mutations |
+
+**Each time, the previous guard passed over the new shape.** A policy flipped to
+`USING (true) WITH CHECK (true)` passed the original assertion (S-012). Listing `audit_logs` as
+clan-isolated passed the two-set split (S-014). Listing `user_clan_roles` as clan-isolated passed the
+three-set split, because its UPDATE policy's `USING` does read the GUC (S-052).
+
+**So this seed's real end state is a gate over the four postures, not over "has a policy".** It must
+also decide what happens to a clan-owned table that is in **none** of the four sets — today that is
+silent, and silence is how each of the three gaps above survived. Read all four set definitions and
+the four ADRs (042, 043, 048, 050) before writing anything.
 
 **Eight tables went uncovered for four migrations and nothing said so.** Migrations `027`, `028`,
 and `029` each added policies, every gate stayed green, and the coverage gap was found on 2026-08-13
@@ -3313,6 +3722,20 @@ through S-014 do. Global tables. Grants.
 ## S-016. Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044
 
 **Status:** open · **Blocked by:** none · **Unblocks:** S-017, S-018
+
+**A precondition S-016, S-017, and S-018 did not name, added 2026-08-22 by S-020 and S-010.** The
+table is not merely unread — **it is empty, and nothing can put a row in it.** Measured 2026-08-22 and
+confirmed by the coordinator: `grep -rn "ClanSettings(" backend/app` matches exactly one line, the
+class statement. Nothing constructs a `ClanSettings`, and `001_initial.py` installs no trigger that
+would create one. `docs/architecture/data-model.md` carries a dated correction, because it claimed
+rows are "Auto-created with new clans".
+
+**Two consequences for whoever closes these three seeds.** First, "enforce the flag" is not one change
+but two: **something must create the row before anything can read it**, and ADR-044 has to say what
+creates it and with what defaults. Second, migration `035` gave the table an RLS policy (Phase 10,
+S-010), so the row's creator has to run on a session that can pass it — `Clan.settings` is
+`lazy="selectin"` (`backend/app/models/clan.py:35`) and already emits a SELECT against the table
+during register and onboard with **no clan GUC set**.
 
 **This is a decision seed, and the reason is that shipping the wrong answer is worse than shipping
 nothing.** `backend/app/models/clan_settings.py:28` declares `allow_public_tree` and `:30` declares
@@ -3446,7 +3869,50 @@ need.
 
 ## S-020. Re-measure the four dormant database-review items against the code
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-053, S-054, S-055, S-056
+
+**One of this seed's own measurements was false, and finding that is the most useful thing it did.**
+It recorded that field-level visibility "returned no implementation". **A field-level visibility rule
+ships today.** Verified by the coordinator: `backend/app/application/person/handlers.py:31` sets
+`_PII_FIELDS = ("phone", "email")`, `_redact_person_pii` at `:35-54` redacts them for any non-admin
+viewing anyone but their own linked person, and it is applied at **both** `:148` (read) and `:239`
+(update response), so `?profile=full` cannot bypass it.
+`backend/tests/integration/test_person_pii_visibility.py` already proves it end to end.
+
+**Why the old search missed it, and this is the lesson worth keeping.**
+`grep -rni "field_visibility\|visible_fields"` searches for **column names nobody ever chose**. It
+cannot find a rule expressed as a tuple constant and a function. **An absence claim built on a name
+search is a claim about names, not about behaviour.** What is actually absent is a *configurable*
+mechanism, not the concept. That became **S-053**.
+
+**The edge-cascade consequence is established, and a client sees it.** Measured over HTTP by
+`backend/tests/integration/test_edge_cascade_on_person_soft_delete.py`, which this seed added:
+`GET /persons/{deleted}` answers `404`, while `GET /persons/{survivor}/marriages` **still returns the
+edge to that person**, `GET /persons/{survivor}/parent-child` likewise, and `POST /persons/batch`
+with `include=stats` answers `spouse_count: 2, child_count: 2` for a survivor with one live spouse
+and one live child.
+
+**Two reads over the same marriage row give a client two different answers**, verified at source:
+the batch reads filter only `Marriage.is_deleted` — the **edge's own** flag — while the timeline
+joins both persons and filters `p1_deleted`/`p2_deleted`, the **counterpart person**. **What leaks is
+the edge and the uuid, not the name**: `MarriageResponse` carries ids only. That became **S-054**,
+**S-055**, and **S-056**.
+
+**Its negative control is worth copying.** These are characterization tests, so there was no fix to
+delete. It planted the **wanted** state instead — the fixture seeded with both edges already
+soft-deleted, which is what ADR-006's cascade would produce — and five tests failed with **different
+values**, not repeats. `backend/app/**` was not touched.
+
+**Three more corrections, all dated 2026-08-22.** ADR-006's update of 2026-07-02 **already decided**
+the cascade and it was never built, so "no ADR owns it" would have been wrong.
+`docs/architecture/domain-rules.md:122` claims a soft-deleted person is "invisible everywhere" and
+that "It's not just reads"; three reads say otherwise, and it is the most dangerous of the four
+because it tells a reader the read side was closed first. And **this seed's own end state was already
+met when it was written**: commit `53f121d` deleted `roadmap.md`'s section 6 the same day, so the
+seed cited the file it was written in the act of rewriting.
+
+**Gate, on the combined tree, 2026-08-22.** 1347 passed; `All checks passed!`; 469 files already
+formatted; mypy clean on 430 source files; `Contracts: 6 kept, 0 broken`.
 
 **This seed exists because one of the four was already done and the plan still listed it.**
 `roadmap.md:125-129`, dated 2026-08-03, named four dormant items from a database review:
@@ -3921,7 +4387,59 @@ verification email itself. Any notification, because none exists for any queue e
 
 ## S-027. Delete the legacy auth transport and the `axios` dependency
 
-**Status:** open · **Blocked by:** S-025, done 2026-08-22; S-026, done 2026-08-22 · **Unblocks:** S-029
+**Status:** done, 2026-08-22, in part — see below · **Blocked by:** S-025, done; S-026, done · **Unblocks:** S-029
+
+**This seed's end state contradicts its own `Out of scope`, and enumerating importers first is what
+caught it.** The end state says nothing in `web/src` imports `axios` and the package leaves
+`package.json`. The `Out of scope` says the persons, tree, events, documents, and admin halves of the
+legacy trees each leave with their own slice. **Both cannot be true.** Verified by the coordinator:
+`web/src/lib/api/{documents,events,members,relationships,tree}.ts` all carry
+`import api from './axios'`, and `web/src/infrastructure/admin/http-admin-repositories.ts` imports it
+directly. `axios.ts` is the shared transport for **every** legacy slice, not an auth-only file.
+
+**What was deleted, all with zero real importers:** `web/src/lib/api/auth.ts`,
+`web/src/infrastructure/auth/clan-selection-storage.ts` (dead since S-025 moved both callers onto
+`writeClanCookie`), and `web/src/application/auth/use-cases/capabilities.ts` (dead once its sole
+consumer was rewired). One test block went with the last of those, and the seed names it rather than
+deleting a test to make a suite pass.
+
+**What stays, and why:** `axios.ts`, `infrastructure/http/request-context.ts`, and four live auth
+files that `useAuth()` calls for session sync, sign-in, onboarding, and clan selection. Replacing
+them needs an `apiFetch`-based `features/auth/` slice that does not exist. **That is a transport
+rewrite, not a deletion**, and doing it as a side effect of this seed would have been the thing the
+rule forbids.
+
+**The inherited `capability.ts` debt is closed for real, and the tool cannot see it.**
+`useCapabilities.ts` now calls `getCapabilities()` from `domain/capability`, proven by a negative
+control. `pnpm depcruise` still reports 4 warnings, and the agent **checked why rather than assuming
+the rewire failed**: `.dependency-cruiser.cjs:9` sets
+`LEGACY = '^src/(lib/(api|hooks)|application|infrastructure|types)/'` and line 93 uses it in
+`exclude.path`, so `src/lib/hooks/**` is not in the graph at all. **It did not widen that exclude** —
+that would newly subject the whole legacy hooks tree to orphan-checking, which is a change to gate
+coverage rather than a deletion.
+
+**A real behaviour difference surfaced while rewiring.** The legacy code hardcoded
+`canDeleteEvents: isAdmin`, denying `editor`; `rbac.md:78` grants `editor` event deletion — the exact
+asymmetry S-024 refused to smooth over with a role hierarchy. Nothing read that field, so nothing
+regressed.
+
+**`VerifyEmailScreen` is still unreachable**, stated plainly rather than left silent.
+`useAuth().signInWithEmail` calls `supabase.auth.signInWithPassword` directly and never reaches the
+backend endpoint that raises `403 email_not_verified`.
+
+**Two behaviours have no test, named plainly rather than assumed safe.** `axios.ts`'s interceptors
+(headers attached, 401 signs out) have no runtime test anywhere, before or after this seed:
+`tests/contracts/api-clients.test.mjs` only pattern-matches source text and executes no request. The
+same is true of `http-admin-repositories.ts`. **This is why a deletion seed needs a different
+control** — deleting code makes tests disappear rather than fail.
+
+**Gate, on the combined tree, 2026-08-22.** type-check and lint clean; `depcruise` 0 errors, 4
+warnings; `test:unit` 350; `test:component` **28**, up from 23; `test:e2e` 38; `build` exit 0;
+`test:behavior` 8; `test:contracts` 10.
+
+**S-029 is unblocked, but a successor seed still owns** building `features/auth/`'s transport,
+deleting `axios.ts` and `request-context.ts` together with the four remaining legacy auth files, and
+wiring `signInWithEmail` onto the backend so `VerifyEmailScreen` becomes reachable.
 
 **This seed inherits two things its own text does not mention, both handed over deliberately.**
 
@@ -4009,7 +4527,14 @@ ordering decisions beyond what the plugin does.
 
 ## S-029. Land `features/persons` model and api against the frozen contract
 
-**Status:** blocked · **Blocked by:** S-027 · **Unblocks:** S-030
+**Status:** open · **Blocked by:** S-027, done in part 2026-08-22 · **Unblocks:** S-030
+
+**S-027 closed in part, and what it could not do lands on whoever takes this seed.** The legacy auth
+transport is **not** gone: `web/src/lib/api/axios.ts` is the shared transport for every remaining
+legacy slice, so it stays until the last one leaves. `web/src/infrastructure/http/request-context.ts`
+and four live auth files stay with it. **`features/persons` is the first slice built on the spine
+alone**, so it sets the pattern the rest copy — do not reach for `axios` or the legacy context from
+it, and `pnpm depcruise` will say so if you do.
 
 **This is the first slice in `src/features/`, which does not exist yet.** So this seed sets the
 directory pattern every later slice copies, and `web/CLAUDE.md` already fixes what that pattern is:
@@ -4176,9 +4701,16 @@ a trigger that is **not met**. It carries no end state and no verification, beca
 actionable. When a trigger is met, the row becomes one or more seeds above and **the row is deleted
 in the same change**. A second place recording completion is a second place to be wrong.
 
-**Thirteen rows, counted 2026-08-13.** Four are owner actions that nobody working in this repository
-can perform. Four are milestones waiting on a named seed. Five are deferred work whose dependency
-does not exist. The thirteenth was added the same day by S-002.
+**Eleven rows, re-counted 2026-08-22** by
+`awk '/^## Owed/,/^## Not verified/' docs/SEEDS.md | grep '^| ' | grep -v '^| Item' | wc -l`.
+**Re-count it that way rather than adjusting the figure by memory**, which is the same rule the four
+seed counts in this file's header run under.
+
+It read "Thirteen rows, counted 2026-08-13" until 2026-08-22, and three rows left between those
+dates, each because its trigger was met and each deleted in the change that created its seed: the
+`pending_approval_page.dart` citation became **S-047**, field-level visibility became **S-053**, and
+edge cascade-delete became **S-054**, **S-055**, and **S-056**. That is the rule working — a row
+never lives in both places.
 
 | Item | Owner | Trigger |
 |---|---|---|
@@ -4189,8 +4721,6 @@ does not exist. The thirteenth was added the same day by S-002.
 | Mobile M1 through M4 become seeds: M1 persons, M2 tree, M3 events and documents, M4 push and clan administration. Named in `superpowers/specs/2026-08-02-mobile-architecture-design.md` § 6 with no task detail | flutter-engineer | Task 20 walked on a device. Planning M1 against an unproven spine is how you inherit its mistakes |
 | Web PR 3 through PR 7 become seeds: relationships, tree, events, documents, then admin plus platform plus backoffice. The order is fixed at `superpowers/specs/2026-08-02-web-architecture-observability-design.md:213-217`. PR 4, the tree, is the one most likely to slip: XYFlow plus the tree read-model plus performance on a clan of several thousand people | web-engineer | S-033 done, so the reference pattern exists |
 | **Decide whether Pulumi is implemented or retired, in an ADR.** Eight `TODO: implement in Prompt 2` markers remain: `infra/pulumi/__main__.py:9,17,23` and one each in `resources/vercel_project.py:3`, `supabase_project.py:3`, `github_settings.py:3`, `firebase_project.py:3`, plus `scripts/seed_dev_data.py` and `scripts/export_tree_pdf.py`. Stubs that describe resources they do not create are worse than no infrastructure code, because a reader believes an environment is reproducible | maintainer | Before an environment is rebuilt from scratch, or before a second environment is created |
-| Field-level visibility has no implementation and no ADR. Searched 2026-08-13, `grep -rni "field_visibility\|visible_fields"` over `backend/app` returned nothing | maintainer | S-020 done, which decides whether it becomes a seed or stays here |
-| Edge cascade-delete on person soft-delete. `backend/app/domain/person/entity.py:267-280` emits `PersonDeleted` and nothing outside the domain consumes it, so `parent_child` and `marriages` rows survive a soft-deleted person | backend-engineer | S-020 done, which establishes what a client can actually see |
 | Change requests beyond `person`-update. The table supports marriages, parent-child, events, and documents with no schema change | backend-engineer | The change-requests slice, which is part of PR 7 |
 | A notifications API. None exists, and the design spec refuses to draw a bell for one. No copy anywhere promises a notification, because none exists for any queue event | backend-engineer | Whenever a queue event needs to reach a user outside the app |
 | PDF export. Deferred by ADR-020 and depends on the export worker ADR-005 describes and the Redis events ADR-004 describes, neither of which is built. `scripts/export_tree_pdf.py` is a stub that raises `NotImplementedError` | backend-engineer | The worker exists |
@@ -4252,15 +4782,19 @@ been read or run, and the row that replaces it says where.
 - **Whether a `paths:` glob in `.claude/rules/` loads the file when a matching file is edited.**
   `nextjs.md` and `tailwind.md` both carry the field and both scope to `web/**`. The whole value of
   the scoping depends on this and it has not been tested here. Treat both files as best-effort.
-- **No restore drill has ever run against an RLS-carrying dump.** Both recorded results,
-  2026-07-14 and 2026-08-22, restored a dump reporting `016_document_soft_delete`, while the chain
-  head on 2026-08-22 is `034_rls_audit_notification`. Both scripts pass `--no-owner --no-privileges`,
-  so neither carries the `familyroots_app` role or its grants, and a role is cluster-wide — so a
-  drill restoring into the **same** cluster cannot see the gap, and the drill's own three checks
-  connect as a superuser that bypasses RLS. So "the backup restores" is established for the pre-RLS
-  schema only. **S-050** is the seed that settles it. **This row replaces a different one that said
-  "No dated restore-drill result exists", which was simply wrong**: `docs/ops/backup-restore.md` had
-  carried a dated `DRILL: PASS` since commit `a533d75` on 2026-07-14, verified 2026-08-22.
+- **No restore drill has ever run against a production dump.** All three recorded results —
+  2026-07-14 and both 2026-08-22 runs — restored local dev data. S-050's third run did reach chain
+  head **and** a role-free cluster, so the schema question is settled and the RLS-carrying-dump
+  question is no longer unverified: it is a **known defect with a seed**, S-057. What remains
+  unestablished is whether a real production dump restores. This row is the second replacement of an
+  original that claimed "No dated restore-drill result exists", which was simply wrong — a dated
+  `DRILL: PASS` had existed since commit `a533d75` on 2026-07-14.
+- **The connection cost of putting `get_current_clan_id` on the privileged session has not been
+  measured.** ADR-050 rejected that option reasoning from `DB_POOL_SIZE=10` and `DB_MAX_OVERFLOW=20`
+  (`backend/app/core/database.py:37-38`) that a second pooled connection per clan-scoped request would
+  halve effective concurrency. **No throughput or pool-exhaustion measurement was taken.** Recorded
+  2026-08-22 by S-052. It does not change the decision — the other objections stand on their own —
+  **but it may not be cited as a measured fact.** **Owner:** backend-engineer.
 - **`NotificationLog` is safe from the ADR-038 `RETURNING` collision.** Its mapper resolves
   `eager_defaults` to True with `created_at` as its one server default, measured 2026-08-22. It is
   safe today **only** because its sole writer is the scheduler's raw `text()` INSERT on a bypassing
@@ -4318,12 +4852,12 @@ been read or run, and the row that replaces it says where.
 - The four counts in the head of this file are a measurement. Re-take them by reading the board's own
   `Status` cell rather than by adding one to the previous figures, and say which of the four moved.
 - Every ADR number a seed allocates is written in that seed. 041 through 048 are taken by S-004,
-  S-011, S-013, S-016, S-006, S-039, S-040, and S-043, in that order, and **050 by S-052**.
-  **Written so far: 041 on 2026-08-14 by S-004, 045 on 2026-08-21 by S-006, and 042, 043, 047, and
-  048 on 2026-08-22 by S-011, S-013, S-040, and S-043.** 044, 046, and 050 are still allocations
-  rather than files. **049 was allocated to S-051 and released unused**, because S-051 decided the
-  rule belongs in `.claude/rules/seeds.md` rather than in an ADR — see its body for the reasoning.
-  The next free number is **049**, then 051.
+  S-011, S-013, S-016, S-006, S-039, S-040, and S-043, in that order. **050 by S-052, 049 by S-053,
+  051 by S-055, and 052 by S-057**, all on 2026-08-22. **Written so far: 041 on 2026-08-14 by S-004,
+  045 on 2026-08-21 by S-006, and 042, 043, 047, 048, and 050 on 2026-08-22.** 044, 046, 049, 051,
+  and 052 are still allocations rather than files. **049 was allocated to S-051 first and released
+  unused**, because S-051 decided the rule belongs in `.claude/rules/seeds.md` rather than in an ADR;
+  S-053 then took it. The next free number is **053**.
 - **`docs/decisions/README.md` is not the authority on which numbers are taken.** It said 046 was
   free on 2026-08-21 while this file had already given 046 to S-039. A seed allocates its number in
   its own text, so this file wins and the index is the bug. That index now carries a note saying so.
