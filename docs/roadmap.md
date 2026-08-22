@@ -10,6 +10,15 @@ stale: on 2026-08-13 this file still listed audit `ip_address`/`user_agent` as d
 `backend/app/models/audit_log.py:36-37` had already declared both columns.
 [`../.claude/rules/seeds.md`](../.claude/rules/seeds.md) is the rule that replaced that shape.
 
+**The list that started all of this is gone, and it went in that same rewrite.** Section 6,
+"Beyond the current streams", held four dormant items from the 2026-07-02 database review at
+lines 125 to 129. Commit `53f121d` deleted the whole section on 2026-08-13. Verified on 2026-08-22
+by S-020, which was written to remove it: `git show 53f121d^:docs/roadmap.md | sed -n '118,135p'`
+prints the section, and no line of this file names an item of that list any more. Every remaining
+mention here describes the list rather than being it. **So S-020's own end state was already met
+when the seed was written**, on the same day and by the same commit. The three items it
+re-measured are tracked in [`SEEDS.md`](SEEDS.md) and nowhere else.
+
 **This file decides nothing, and three of the boundaries below rest on no source.** Where that is
 true it says so. A boundary marked "not verified" is the maintainer's order and is real; what is
 missing is a written reason, and writing one is a decision that would get an ADR.
@@ -49,7 +58,7 @@ milestone holds which seeds, so a reader knows where to look.
 | Milestone | Seeds | What it is for |
 |---|---|---|
 | **M0** Make the surface verifiable | S-001 to S-007, plus S-034 | The colour tokens, the fonts, contrast, the primary-colour decision, dark mode, a gate so the class of defect cannot return, and the 200%-text-scale defect S-002 found |
-| **M1** Finish clan isolation and the data rules | S-008 to S-021 | Row-level security on the eight uncovered tables, the two privacy toggles, invitation expiry, a re-measurement of the dormant database-review items, and the first dated restore drill |
+| **M1** Finish clan isolation and the data rules | S-008 to S-021, plus S-053 to S-056 | Row-level security on the eight uncovered tables, the two privacy toggles, invitation expiry, and the first dated restore drill. S-020 re-measured the 2026-07-02 database review and turned the two items still open into four seeds: field-level visibility is S-053, and the edge cascade on person soft-delete splits into the client-visible read gap (S-054), the decision behind ADR-006's unimplemented cascade (S-055), and building whatever that decides (S-056) |
 | **M2** The web slices | S-022 to S-033 | Auth, then persons as the reference slice. Relationships, tree, events, documents, and admin become seeds when persons lands |
 | **M3** Deploy and operate | none yet | The Pulumi decision and the monitoring set are rows in [Owed](SEEDS.md#owed-with-an-owner-and-a-trigger), because each needs a decision or an environment first |
 | **M4** Mobile M1 to M4 | none yet | A row in [Owed](SEEDS.md#owed-with-an-owner-and-a-trigger), triggered by the M0 device walk |
