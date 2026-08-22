@@ -145,6 +145,8 @@ Docs (`/docs`, `/redoc`) are only mounted when `APP_DEBUG=true`.
 
 Single-schema Alembic, one linear chain (no branches). `migrations/env.py` imports the full `app.models` package so autogenerate sees every table. The script_location is `migrations` (not the default `alembic/`). Keep revision ids ≤32 characters (the `alembic_version` column limit) — the convention is `NNN_short_slug` matching the filename.
 
+**A new revision must be added to `../docs/ops/migrations.md` § "Current chain", and that file's `Head = ` line updated, in the same commit.** `tests/unit/test_migrations_doc_matches_alembic.py` (seed S-063) derives both sides at run time — the chain from `alembic.script.ScriptDirectory`, the claimed chain from the document — and fails on any difference: a revision on disk the document does not name, a revision the document names that is not on disk, a different order, or a stale head. It hardcodes no revision and no head, so it needs no edit when one lands; it simply starts requiring the document to name it. Added 2026-08-22, after `docs/ops/migrations.md:119` on `main` at `62a863d` read "Head = `035_rls_clan_settings`" while `036_rls_user_clan_roles.py` had already shipped a batch earlier, and nothing caught it. The document is the source an agent reads first and the migration files are the source of truth, so when the two disagree, fix the document.
+
 ### Testing
 
 `pytest-asyncio` in `auto` mode with function-scoped loops. Markers `unit`, `integration`, `slow` are registered in `pyproject.toml`. `tests/conftest.py` provides factories for mock DB rows (`make_person_row`, etc.) used by tree-builder unit tests. Layout mirrors the app: `tests/unit/{api,domain,infrastructure}/` plus top-level integration-style `test_*.py`.
