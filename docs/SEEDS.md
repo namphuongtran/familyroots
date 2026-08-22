@@ -2821,7 +2821,8 @@ reversible.
 test crossing clans. Plus a platform-admin audit read returning NULL-clan rows. Plus the planted
 inversion on each table that got a policy.
 
-**Sources.** `docs/decisions/043-*.md`, which does not exist yet;
+**Sources.** `docs/decisions/043-audit-notification-rls-posture.md`, written 2026-08-22 by S-013 —
+this seed said "which does not exist yet" and that is no longer true;
 `docs/architecture/notifications-scheduler.md` for the cron and the advisory lock;
 `backend/tests/test_notifications.py` for the existing scheduler tests to extend.
 
