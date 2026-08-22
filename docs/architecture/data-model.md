@@ -208,7 +208,6 @@ erDiagram
         jsonb approval_config
         varchar default_language "default vi"
         varchar tree_display_mode "vertical | horizontal"
-        boolean allow_public_tree
         jsonb notification_defaults
         varchar privacy_level "private | clan_members | public"
         smallint max_upload_size_mb "default 10"
@@ -800,6 +799,14 @@ Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
 > the `Clan.settings` relationship (`backend/app/models/clan.py:35`), whose result no caller
 > reads.
 
+> ❌ **`allow_public_tree` was dropped on 2026-08-22** by migration
+> `037_drop_allow_public_tree` (seed S-017, [ADR-044](../decisions/044-privacy-toggles-dropped-from-v1.md) § 1).
+> The **column** does not come back. The concept of a public tree may, and if it does it
+> returns as `privacy_level` alone: the two carried the same fact, and two authorities on one
+> question is the defect [ADR-027](../decisions/027-doi-single-authority.md) exists to prevent.
+> The drop lost no data, because the table has no rows (the note above), so the `downgrade`
+> restores the exact shape `001_initial.py:600` gave it — `NOT NULL`, `server_default false`.
+
 > ✅ **RLS (2026-08-22, migration `035_rls_clan_settings`, ADR-008 Phase 10, seed S-010).**
 > The table carries the migration-027 template unchanged —
 > `clan_settings_clan_isolation USING (clan_id = <app.clan_id GUC>) WITH CHECK (…)` — on both
@@ -821,8 +828,8 @@ Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
 > the runtime does **not** read most knobs. In particular `max_upload_size_mb`
 > (default 10) is **not** applied — the document domain hard-codes a **50 MB** limit,
 > so the two disagree and must be reconciled when this is built. `privacy_level`,
-> `allow_public_tree`, `tree_display_mode`, `approval_config`,
-> `notification_defaults` are also inert. Roadmap item D3.
+> `tree_display_mode`, `approval_config`, `notification_defaults` are also inert.
+> Roadmap item D3.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -831,7 +838,6 @@ Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
 | `approval_config` | JSONB | | Configurable approval workflow / Cấu hình duyệt dữ liệu (theo quyền hạn) |
 | `default_language` | VARCHAR(10) | DEFAULT 'vi' | Default UI language for clan members |
 | `tree_display_mode` | VARCHAR(20) | DEFAULT 'vertical' | `vertical` or `horizontal` tree rendering / Hiển thị cây dọc hay ngang |
-| `allow_public_tree` | BOOLEAN | DEFAULT false | Whether the family tree is publicly viewable / Có cho phép public cây gia phả không |
 | `notification_defaults` | JSONB | | Default notification settings for new members / Cấu hình thông báo mặc định cho member |
 | `privacy_level` | VARCHAR(20) | DEFAULT 'clan_members' | `private`, `clan_members`, or `public` |
 | `max_upload_size_mb` | SMALLINT | DEFAULT 10 | Max file upload size in MB / Dung lượng tối đa cho phép upload |

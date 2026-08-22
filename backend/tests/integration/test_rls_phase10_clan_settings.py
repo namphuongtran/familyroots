@@ -258,8 +258,15 @@ async def test_with_check_rejects_moving_a_settings_row_to_another_clan(
 
 
 async def test_update_of_the_other_clans_settings_touches_no_row(engine: AsyncEngine) -> None:
-    """Under clan A, flipping B's tree to public matches nothing, and B's row is unchanged
-    — checked privileged, because the policy that hid the row also hides the damage."""
+    """Under clan A, rewriting B's default language matches nothing, and B's row is
+    unchanged — checked privileged, because the policy that hid the row also hides the
+    damage.
+
+    The payload column is ``default_language`` because ``_seed_two`` writes it explicitly
+    (``'en'`` for B), so the closing assertion cannot pass on a server default. It was
+    ``allow_public_tree`` until seed S-017 dropped that column (ADR-044 § 1); the column
+    was only ever a payload here, and the policy under test never referred to it.
+    """
     clan_a, _clan_b, _sa, s_b = await _seed_two(engine)
     set_request_clan_id(clan_a)
     async with _rls(engine)() as s:
@@ -267,7 +274,7 @@ async def test_update_of_the_other_clans_settings_touches_no_row(engine: AsyncEn
             (
                 await s.execute(
                     sa.text(
-                        "UPDATE clan_settings SET allow_public_tree = true "
+                        "UPDATE clan_settings SET default_language = 'fr' "
                         "WHERE id = :id RETURNING id"
                     ),
                     {"id": s_b},
@@ -280,10 +287,10 @@ async def test_update_of_the_other_clans_settings_touches_no_row(engine: AsyncEn
         await s.commit()
 
     async with engine.connect() as conn:  # privileged: sees every clan
-        allow_public = await conn.scalar(
-            sa.text("SELECT allow_public_tree FROM clan_settings WHERE id = :id"), {"id": s_b}
+        language = await conn.scalar(
+            sa.text("SELECT default_language FROM clan_settings WHERE id = :id"), {"id": s_b}
         )
-    assert allow_public is False
+    assert language == "en"
 
 
 async def test_delete_of_the_other_clans_settings_touches_no_row(engine: AsyncEngine) -> None:
