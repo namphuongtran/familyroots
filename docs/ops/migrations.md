@@ -54,7 +54,7 @@ Single linear chain:
 `029_rls_persons` → `030_rls_change_requests` → `031_rls_clan_memberships` →
 `032_rls_clan_invitations` → `033_rls_identity_claims` →
 `034_rls_audit_notification` → `035_rls_clan_settings` →
-`036_rls_user_clan_roles` → `037_drop_allow_public_tree`.
+`036_rls_user_clan_roles` → `037_drop_allow_public_tree` → `038_drop_privacy_level`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -124,6 +124,18 @@ re-adds the column with the same `NOT NULL` and the same `server_default false` 
 `001_initial.py:600` gave it. No API shape changes: no contract ever documented the column.
 **The column does not come back**; the concept returns as `privacy_level` alone, if at all.
 
+`038_drop_privacy_level` drops `clan_settings.privacy_level` (S-018, ADR-044 § 2);
+reversible, and exactly so, for the same reason `037` is — the table has no rows, so there
+is no per-row value to reconstruct, and `downgrade()` re-adds the column with the same
+`NOT NULL` and the same `server_default 'clan_members'` that `001_initial.py:603` gave it.
+No API shape changes: no contract ever documented the column. **This is not a decision
+against per-clan privacy.** It refuses a control that restricts nothing, which is the most
+dangerous kind — a `riêng tư` switch that changes no read leaves the operator believing the
+tree is private when it is not. The concept may return, on the four terms ADR-044 § 2 names,
+in one change. `data-model.md` was corrected in the same commit: it held the column's value
+domain (`private`, `clan_members`, `public`) in two places, the ER diagram and the column
+table, and the domain was unenforced — no `CHECK`, no enum, no validator.
+
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
@@ -131,7 +143,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `037_drop_allow_public_tree`; verify with `cd backend && uv run alembic heads`.
+Head = `038_drop_privacy_level`; verify with `cd backend && uv run alembic heads`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

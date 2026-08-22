@@ -1,9 +1,10 @@
 """RLS layer-2 Phase 10 (S-010, ADR-008): clan_settings is clan-isolated at the DB.
 
 Migration 035 gives ``clan_settings`` the migration-027 template, both halves clan-keyed.
-The row is a clan's own configuration — its approval workflow, its privacy level, its
-default language — so a cross-clan read here is a read of how another family has chosen to
-run itself.
+The row is a clan's own configuration — its approval workflow, its default language, its
+tree display mode — so a cross-clan read here is a read of how another family has chosen to
+run itself. (It listed "its privacy level" until seed S-018 dropped ``privacy_level``,
+ADR-044 § 2. No test here ever read that column.)
 
 **This table is EMPTY and UNREAD in the running application on 2026-08-22**, which changes
 what these tests have to do. Measured by ``grep -rn 'clan_settings\\|ClanSettings'
