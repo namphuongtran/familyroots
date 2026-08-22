@@ -37,14 +37,18 @@ infra/
 ├── render/
 │   └── render.yaml           # Backend deployment config
 ├── supabase/
-│   ├── migrations/           # Database migrations
-│   ├── seed.sql              # Dev seed data
-│   └── rls_policies.sql      # Row-level security
+│   ├── seed.sql              # Dev seed data (unimplemented scaffold)
+│   └── rls_policies.sql      # NOT the deployed policies — see infra/README.md
 ├── firebase/
 │   └── google-services-template.json
 └── sentry/
     └── sentry.properties
 ```
+
+> **The database schema is not under `infra/`.** The Alembic chain in `backend/migrations/` is
+> the only source of truth; `docs/ops/migrations.md` owns it. `infra/supabase/migrations/` held
+> a hand-written mirror that nothing executed and no check read, and seed S-064 deleted it on
+> 2026-08-22. `infra/README.md` records what it had drifted into.
 
 ## Pulumi Setup
 
