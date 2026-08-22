@@ -67,6 +67,28 @@
     "deleted_banner": "Cette personne a été retirée de la généalogie.",
     "no_permission_edit": "Vous n'avez pas la permission de modifier les membres."
   },
+  "relationship": {
+    "biological": "Biologique",
+    "adoptive": "Adopté(e)",
+    "step": "Beau-fils / Belle-fille",
+    "foster": "Famille d'accueil",
+    "married": "Marié(e)",
+    "divorced": "Divorcé(e)",
+    "widowed": "Veuf / Veuve",
+    "partner": "Partenaire",
+    "parent": "Parent",
+    "child": "Enfant",
+    "spouse": "Conjoint(e)",
+    "add_parent": "Ajouter un parent",
+    "add_child": "Ajouter un enfant",
+    "add_spouse": "Ajouter un conjoint",
+    "select_type": "Sélectionner le type de relation",
+    "select_subtype": "Sélectionner le sous-type",
+    "start_date": "Date de début",
+    "end_date": "Date de fin",
+    "is_primary": "Relation principale",
+    "notes": "Notes"
+  },
   "auth": {
     "login": "Se connecter",
     "login_title": "Se connecter",
@@ -103,6 +125,8 @@
     "create_clan": "Créer un nouveau clan",
     "clan_slug": "Code du clan",
     "clan_name": "Nom du clan",
+    "join_subtitle": "Saisissez le code de votre clan pour le rejoindre",
+    "create_subtitle": "Créez un nouveau clan pour votre famille",
     "login_link": "Se connecter",
     "register_link": "Créer un compte",
     "loading": "Chargement...",
@@ -153,6 +177,23 @@
     "load_more_error": "Impossible de charger plus de membres.",
     "all_shown": "Affichage des {count} membres."
   },
+  "event": {
+    "death_anniversary": "Anniversaire de décès",
+    "birthday": "Anniversaire",
+    "wedding_anniversary": "Anniversaire de mariage",
+    "clan_ceremony": "Cérémonie du clan",
+    "custom": "Événement personnalisé",
+    "days_until": "{days} jours restants",
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain",
+    "lunar": "Calendrier lunaire",
+    "recurring": "Annuel",
+    "upcoming": "Événements à venir",
+    "no_events": "Aucun événement à venir",
+    "add_event": "Ajouter un événement",
+    "event_date": "Date de l'événement",
+    "notify_days": "Rappel (jours avant)"
+  },
   "events": {
     "page_title": "Événements",
     "upcoming": "Événements à venir",
@@ -164,6 +205,22 @@
       "clan_ceremony": "Cérémonie du clan",
       "custom": "Événement personnalisé"
     }
+  },
+  "document": {
+    "photo": "Photo",
+    "id_document": "Pièce d'identité",
+    "certificate": "Certificat",
+    "audio": "Audio",
+    "video": "Vidéo",
+    "other": "Autre",
+    "upload": "Téléverser",
+    "drop_here": "Déposez les fichiers ici",
+    "or_click": "ou cliquez pour parcourir",
+    "max_size": "Taille maximale : 50 Mo",
+    "title": "Titre",
+    "taken_date": "Date de prise",
+    "taken_place": "Lieu de prise",
+    "no_documents": "Aucun document pour le moment"
   },
   "documents": {
     "page_title": "Documents",
@@ -342,7 +399,17 @@
     "cancel": "Annuler",
     "delete": "Supprimer",
     "edit": "Modifier",
+    "add": "Ajouter",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non",
     "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "view_all": "Voir tout",
     "load_more": "Charger plus",
     "no_data": "Aucune donnée"
   }
