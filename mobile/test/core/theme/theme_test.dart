@@ -35,6 +35,16 @@ void main() {
     expect(t.error, const Color(0xFFA32218));
   });
 
+  test('S-048: the outline-variant role is spec 2.1 value', () {
+    final t = ArborTokens.light();
+    // Replaces #CFC7B4, sourced only by the M0 plan that wrote it. No widget in
+    // `lib/` reads this token, but `ColorScheme.outlineVariant` is real and the
+    // next test pins that the app paints this value there rather than a tone
+    // `fromSeed` derived. The no-line rule keeps the 15%-opacity condition on
+    // the widget that draws a line, not on the value itself.
+    expect(t.outlineVariant, const Color(0xFFB3A98F));
+  });
+
   test('the painted primary is the token, not a re-derived tone', () {
     // `ColorScheme.fromSeed` returns a tonal palette, not the seed. Without an
     // explicit override the app paints a green that is in no token file.
@@ -49,6 +59,11 @@ void main() {
     // from the leaf-green seed while the token said #F5F1E6.
     expect(scheme.error, t.error);
     expect(scheme.surfaceContainerLow, t.surfaceContainerLow);
+    // S-048: the same trap a third time. Unpinned, `fromSeed` derived #C2C8BC
+    // from the leaf-green seed while the token said #CFC7B4. Six Material
+    // `…DefaultsM3` classes read this field, so an unsourced value here is a
+    // colour the app would paint the day a `Divider` or a `Chip` lands.
+    expect(scheme.outlineVariant, t.outlineVariant);
   });
 
   test('the card ground is the token, and it steps off the page', () {
