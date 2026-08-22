@@ -1,5 +1,6 @@
 'use client'
 
+import { useSyncExternalStore } from 'react'
 import { createClientOrNull } from '@/lib/supabase/client'
 import {
   CLAN_COOKIE,
@@ -12,6 +13,25 @@ function readCookie(name: string): string | null {
   if (typeof document === 'undefined') return null
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
   return match ? decodeURIComponent(match[1]) : null
+}
+
+/**
+ * Notifies `useCurrentClanId` subscribers after `writeClanCookie` /
+ * `clearClanCookie` change the cookie. `document.cookie` writes fire no
+ * native change event, so this is the only way a switch re-renders anything
+ * without a page reload (S-025).
+ */
+const clanCookieListeners = new Set<() => void>()
+
+function notifyClanCookieChanged(): void {
+  for (const listener of clanCookieListeners) listener()
+}
+
+function subscribeToClanCookieChanges(listener: () => void): () => void {
+  clanCookieListeners.add(listener)
+  return () => {
+    clanCookieListeners.delete(listener)
+  }
 }
 
 const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365
@@ -49,20 +69,46 @@ function clanCookieAttributes(): string {
 }
 
 /**
- * Selecting a clan writes this cookie. Nothing calls this yet — the
- * `select-clan` flow still writes through the legacy
- * `persistCurrentClanId` (same cookie name, compatible attributes), and S-025
- * is what rewires it onto the spine. This is the canonical writer that S-025
- * adopts, kept here so the attributes above are decided in exactly one place.
+ * Selecting a clan writes this cookie. `useAuth`'s `selectClan` and
+ * `syncAuthContext` call this now (S-025) instead of the legacy
+ * `persistCurrentClanId` (`src/infrastructure/auth/clan-selection-storage.ts`,
+ * same cookie name, compatible attributes, but it also wrote
+ * `localStorage.current_clan_id` — deliberately not carried over here).
  */
 export function writeClanCookie(clanId: string): void {
   if (typeof document === 'undefined') return
   document.cookie = `${CLAN_COOKIE}=${encodeURIComponent(clanId)}; ${clanCookieAttributes()}`
+  notifyClanCookieChanged()
 }
 
 export function clearClanCookie(): void {
   if (typeof document === 'undefined') return
   document.cookie = `${CLAN_COOKIE}=; path=/; max-age=0; samesite=lax`
+  notifyClanCookieChanged()
+}
+
+/**
+ * A plain, non-reactive read of the active clan id, for callers that are not
+ * React components — `useAuth`'s `syncAuthContext` needs the value once per
+ * call, not a subscription, and the legacy
+ * `src/infrastructure/http/request-context.ts` needs it without importing a
+ * hook into a function that also runs when `window` is undefined.
+ */
+export function readCurrentClanId(): string | null {
+  return parseClanCookie(readCookie(CLAN_COOKIE))
+}
+
+/**
+ * Reactive read of the active clan for a client component (S-025). Wiring
+ * this into a TanStack Query key is what makes "switch clan" change what a
+ * query returns without a page reload: `writeClanCookie` notifies every
+ * subscriber, which re-renders with the new clan id, which changes the query
+ * key. A real page reload (or this hook's own first render) reads the cookie
+ * directly rather than any store — the same fact the server can also read —
+ * which is what makes the selection survive a reload.
+ */
+export function useCurrentClanId(): string | null {
+  return useSyncExternalStore(subscribeToClanCookieChanges, readCurrentClanId, () => null)
 }
 
 /**

@@ -2,16 +2,24 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { UserClanMembership, UserProfile } from '@/lib/types'
 
+/**
+ * Session state only (S-025). The active clan is not here: it used to be
+ * `currentClanId`/`setCurrentClan`, persisted to `localStorage` by this same
+ * middleware, while `current_clan_id` cookie (S-023) held the same fact for
+ * the server to read. Two persisted sources for one fact is exactly the
+ * defect this tracker exists to catch, so the clan id was removed rather
+ * than kept in sync. Read it with `useCurrentClanId()`
+ * (`@/shared/http/context.client`) instead, which reads the cookie — the one
+ * source both an RSC and a client component can see.
+ */
 interface AuthState {
   user: UserProfile | null
-  currentClanId?: string
   clanMemberships: UserClanMembership[]
   isLoading: boolean
   isPendingApproval: boolean
   needsOnboarding: boolean
   needsClanSelection: boolean
   setUser: (user: UserProfile | null) => void
-  setCurrentClan: (clanId?: string) => void
   setClanMemberships: (memberships: UserClanMembership[]) => void
   setLoading: (loading: boolean) => void
   setAccessState: (input: {
@@ -26,20 +34,12 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
-      currentClanId: undefined,
       clanMemberships: [],
       isLoading: true,
       isPendingApproval: false,
       needsOnboarding: false,
       needsClanSelection: false,
-      setUser: (user) =>
-        set((state) => ({
-          user,
-          isLoading: false,
-          currentClanId:
-            state.currentClanId ?? user?.clan_id ?? undefined,
-        })),
-      setCurrentClan: (currentClanId) => set({ currentClanId }),
+      setUser: (user) => set({ user, isLoading: false }),
       setClanMemberships: (clanMemberships) => set({ clanMemberships }),
       setLoading: (isLoading) => set({ isLoading }),
       setAccessState: ({ isPendingApproval, needsOnboarding, needsClanSelection }) =>
@@ -47,7 +47,6 @@ export const useAuthStore = create<AuthState>()(
       clear: () =>
         set({
           user: null,
-          currentClanId: undefined,
           clanMemberships: [],
           isLoading: false,
           isPendingApproval: false,
@@ -60,7 +59,6 @@ export const useAuthStore = create<AuthState>()(
       // Only persist non-sensitive fields
       partialize: (state) => ({
         user: state.user,
-        currentClanId: state.currentClanId,
         clanMemberships: state.clanMemberships,
         isPendingApproval: state.isPendingApproval,
         needsOnboarding: state.needsOnboarding,
