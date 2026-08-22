@@ -208,6 +208,25 @@ hood — carries the identical `X-Current-Clan-Id` from both. Read the file's ow
 assuming a later slice's repository test can copy this shape verbatim; it is a stand-in, not the
 real pattern.
 
+### Clan capabilities (`src/domain/capability`, S-024)
+
+`src/domain/capability/capability.ts` maps each clan role (`admin`, `editor`, `viewer`) to the
+`CapabilitySet` it holds, taken from `docs/architecture/rbac.md`'s permission matrix — one capability
+per matrix row where at least one role is denied, each cited to its row in a doc comment. It is pure:
+no React, no store, no `apiFetch`, enforced by `domain-is-pure` and `domain-imports-only-domain`.
+**The backend still enforces the real check on every request**; this module only decides what the
+client offers to render.
+
+**Do not replace the table with a role-hierarchy comparison, even though every row looks nested.**
+`docs/architecture/rbac.md:78` gives `editor` ✅ for deleting an event, while `:70` and `:57` give
+`editor` ❌ for deleting a relationship and a person. The nesting is empirical, not guaranteed, and a
+hierarchy shortcut would hide that.
+
+No screen consumes it yet — wiring is a later seed — so `pnpm depcruise` reports it as a
+`no-orphans` warning. That count went 3 to 4 on 2026-08-22 and the warnings are not gated. **Treat
+that fourth warning as a debt with an owner, not as background noise:** a module nothing imports is
+the same shape as the dead tokens S-001 fixed and the unread GUC ADR-047 refused.
+
 ### Backend contract — required headers and query semantics
 
 All clan-scoped requests must send:

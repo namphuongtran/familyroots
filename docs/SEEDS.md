@@ -150,6 +150,40 @@ migration up and down and up again on a throwaway database, and the planted inve
 independently, which reproduced the agent's own figures exactly (`9 failed, 3 passed`, then `12
 passed`). **A report is convenient, not evidence.**
 
+**Re-taken again 2026-08-22, after a fourth parallel batch of four: 49 seeds, 23 done, 16 open, and
+10 blocked.** All four moved:
+
+- **Seeds, 48 to 49.** S-048 opened **S-049**.
+- **Done, 19 to 23.** S-012, S-024, S-041, and S-048.
+- **Open, 18 to 16.** The four left for `done`, minus four. S-042 became open, because S-041 was its
+  only blocker, plus one. S-049 arrived open, plus one. Net minus two.
+- **Blocked, 11 to 10.** S-042 left it. Nothing became blocked.
+
+**This batch merged with no conflict, and the fence is finally the right shape.** Two agents worked
+inside `web/` at once, in different worktrees, split by file rather than by directory: one owned
+`playwright.config.ts`, `e2e/**`, and `web/CLAUDE.md`, the other owned `src/domain/capability/**` and
+was told the first one's files by name. Both `CLAUDE.md` files were fenced to a single owner or to
+nobody, and the two agents locked out of them **returned their prose in their reports**, which the
+coordinator applied on the integration tree. That is the fence keeping information rather than
+losing it, which is the thing the previous two batches got wrong.
+
+**S-041 closed a defect that had made three consecutive batches report a red gate that was not one.**
+`web/.env.local` is untracked, so every `git worktree` lacked it and four e2e cases measured the
+missing-Supabase banner instead of the code. The end state was then measured in **both** environments
+rather than argued: 38 passed in a worktree with no env file, and 38 passed in the primary checkout
+where one exists.
+
+**The batch's sharpest finding is that a green guard can be green over the opposite of what it
+guards.** S-012 flipped its deny-all policy to `USING (true) WITH CHECK (true)` — handing the request
+role every clan's claims — and the existing "RLS is on and there is a policy" assertion **still
+passed**. The coverage guard is now split in two, each half asked its own question. S-015 inherits
+that shape, and it is worth more than the table this seed covered.
+
+**Three of the four seeds in this batch were wrong about something in their own text**, all written
+within the previous two days: S-048 cited a line that had moved and offered an answer its own
+`Out of scope` forbade, S-012's governing ADR mispredicted an error path, and S-024's premise about
+role nesting held only by luck. The code was right in every case.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -358,10 +392,10 @@ graph LR
 | S-009 | Enable clan-isolation RLS on `clan_invitations` and `clan_memberships` | done | none |
 | S-010 | Enable clan-isolation RLS on `user_clan_roles` and `clan_settings` | open | none |
 | S-011 | Decide the policy shape for `identity_claims`, which has no `clan_id`, in ADR-042 | done | none |
-| S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | open | S-011, done |
+| S-012 | Enable RLS on `identity_claims` in the shape S-011 decides | done | S-011, done |
 | S-013 | Decide the RLS posture for `audit_logs` and `notification_log`, in ADR-043 | done | none |
 | S-014 | Enable RLS on the two tables S-013 decides for | open | S-013, done |
-| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-043 done, S-010, S-012, S-014 |
+| S-015 | Gate: fail when a clan-owned table carries no policy | blocked | S-008 done, S-009 done, S-012 done, S-043 done, S-010, S-014 |
 | S-016 | Decide whether v1 ships `allow_public_tree` and `privacy_level` at all, in ADR-044 | open | none |
 | S-017 | Enforce or hide `allow_public_tree` | blocked | S-016 |
 | S-018 | Enforce or hide `privacy_level` | blocked | S-016 |
@@ -370,7 +404,7 @@ graph LR
 | S-021 | Run the restore drill against a real dump, and date the result | open | none |
 | S-022 | Move `<html>` and `<body>` into the locale-aware layout | done | none |
 | S-023 | Land the `current_clan_id` cookie and the server request context on it | done | S-022, done |
-| S-024 | Derive capabilities per clan role, in `domain/capability` | open | S-023, done |
+| S-024 | Derive capabilities per clan role, in `domain/capability` | done | S-023, done |
 | S-025 | Rewrite the auth store around the clan context | open | S-023, done |
 | S-026 | Land the three blocked-state screens | blocked | S-024, S-025 |
 | S-027 | Delete the legacy auth transport and the `axios` dependency | blocked | S-025, S-026 |
@@ -387,14 +421,15 @@ graph LR
 | S-038 | Move the 393 hardcoded palette utilities onto the semantic tokens | open | S-006, done |
 | S-039 | Decide what the backoffice aside is made of, in ADR-046 | open | S-006, done |
 | S-040 | Make ADR-008 and `rls.py` agree about which GUCs the seam sets, in ADR-047 | done | none |
-| S-041 | Make the web e2e gate supply its own environment | open | none |
-| S-042 | Make the missing-Supabase banner survive 200% text scale at 320 px | blocked | S-041 |
+| S-041 | Make the web e2e gate supply its own environment | done | none |
+| S-042 | Make the missing-Supabase banner survive 200% text scale at 320 px | open | S-041, done |
 | S-043 | Decide which session the invitation-accept path runs on, then cover `clan_invitations`, in ADR-048 | done | none |
 | S-044 | Reconcile mobile's two remaining off-spec token values with spec § 2.1 | done | none |
 | S-045 | Pin the exact set of settings the RLS seam writes | done | none |
 | S-046 | Repair ADR-042's four stale line citations into ADR-008 | open | none |
 | S-047 | Repoint `pending_approval_page.dart`'s citation at the register that replaced it | open | none |
-| S-048 | Decide what mobile's `outlineVariant` is, and pin it | open | none |
+| S-048 | Decide what mobile's `outlineVariant` is, and pin it | done | none |
+| S-049 | Make `dividerTheme` do what its comment says, or say what it does | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -1597,7 +1632,50 @@ ADR-041 deliberately leaves open.
 
 ## S-048. Decide what mobile's `outlineVariant` is, and pin it
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
+
+**The value moved to spec § 2.1, `#CFC7B4` → `#B3A98F`, and it is now passed to
+`ColorScheme.fromSeed`.** `#CFC7B4` was sourced only by
+`superpowers/plans/2026-08-02-mobile-m0-spine.md:3151`, the record of what was built. ADR-041 says
+nothing about this role.
+
+**This seed's premise was two claims wearing one coat, and only one was true.** "Nothing reads it"
+holds: `grep -rn outlineVariant mobile/lib` still returns five hits, all inside `tokens.dart`. **"No
+`ColorScheme` field takes it" is false**, verified by the coordinator in the Flutter 3.44.8 source:
+`ColorScheme.outlineVariant` exists (`color_scheme.dart:1299`), `fromSeed` accepts it (`:343`), and
+`_DividerDefaultsM3` reads it (`divider.dart:369`), along with the outlined-card, both tabs, chip,
+and banner defaults classes. **Measured before the fix, `buildAppTheme().colorScheme.outlineVariant`
+was `#C2C8BC`**, a leaf-green-derived tone.
+
+**That is the `fromSeed` trap a third time, and it is now three for three.** `primary` (S-037),
+`surfaceContainerLow` (S-044), `outlineVariant` (S-048). **Every token checked so far had a
+`ColorScheme` counterpart that was wrong.** Whoever touches `tokens.dart` next should assume the
+remaining tokens are wrong until measured, rather than assume they are right.
+
+**Deleting the field lost on that same fact.** `mobile/CLAUDE.md` note 3 rejects tokens as values "no
+gate can check and no screen can show"; both halves fail here. Deleting would not have removed the
+colour from the app, only the record of what it should be. **The high-contrast answer was never
+available:** this seed's own `Out of scope` forbids building that mode, and the 15%-opacity condition
+governs a widget that draws a line, not the value such a mode would take 15% of. That contradiction
+is a defect in this seed's text.
+
+**Negative controls, two, both watched failing**, both undone with the inverse edit rather than
+`git checkout --`. **The goldens did not shift and were not re-baselined** — the seed predicted that
+and the prediction held, confirmed by the coordinator with `git diff --name-only`.
+
+**Gate, on the combined tree, 2026-08-22.** `dart format` 73 files, 0 changed; `build_runner` wrote 0
+outputs; `git diff --exit-code` clean; `flutter analyze` "No issues found!"; `flutter test` **134
+passed**.
+
+**No ADR.** It applies ADR-041's already-decided principle to a fourth token, exactly as S-037 and
+S-044 did without one, and reverses no recorded decision.
+
+**Two citation defects in this seed's own text.** It cites `tokens.dart:39` for the value; `:39`
+holds `surface`, and the value was at `:49`, because S-044 added a comment above it in the same
+commit that wrote this seed. **That is the third mobile seed in two days whose own citation or count
+was wrong.**
+
+**A no-line-rule gap was found and deliberately left alone; it became S-049.**
 
 **Opened 2026-08-22 by S-044**, which found a third off-spec value while re-reading the two it was
 given. The S-044 seed says "two values disagree with the spec". Three do, and that is the second time
@@ -1637,6 +1715,62 @@ this token; say so plainly rather than re-baselining out of habit.
 
 **Out of scope.** The dark palette, spec § 2.2. Building a high-contrast mode. The `heritage` family,
 which `mobile/CLAUDE.md` pairs with its first consumer.
+
+---
+
+## S-049. Make `dividerTheme` do what its comment says, or say what it does
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by S-048**, which found it while establishing that `outlineVariant` is reachable
+from a widget.
+
+**A theme setting claims to suppress something it does not suppress.**
+`mobile/lib/core/theme/app_theme.dart:50` reads
+`dividerTheme: const DividerThemeData(thickness: 0, space: 0)`, commented "The no-line rule:
+boundaries come from background shifts, not borders." `mobile/test/core/theme/theme_test.dart` pins
+`thickness == 0` under the name "the no-line rule: dividers have no thickness".
+
+**Thickness zero is not absence, and Flutter documents it plainly.** Verified by the coordinator at
+`/Users/southern/development/flutter/packages/flutter/lib/src/material/divider.dart:86-87`: "A
+divider with a [thickness] of 0.0 is always drawn as a line with a height of exactly one device
+pixel."
+
+**Measured 2026-08-22** by pumping a bare `Divider` under `buildAppTheme()`:
+`Divider.createBorderSide(context)` returned `color #B3A98F, width 0.0, style BorderStyle.solid` —
+the token, because the theme sets no divider colour — and the widget laid out at `Size(800.0, 0.0)`.
+**So the theme picks the colour of a line it believes it has suppressed.** Whether that hairline is
+actually visible at zero height was **not** measured pixel by pixel; establishing that is part of
+this seed rather than an assumption it may rest on.
+
+**Nothing renders it today**, checked 2026-08-22: no screen in `mobile/lib` uses `Divider`,
+`VerticalDivider`, `TabBar`, `Chip`, or `Card.outlined`. The first one that lands draws a line the
+no-line rule forbids, at full opacity, outside high-contrast mode.
+
+**This carries a decision, which is why S-048 did not fold it in.** Either the theme actively
+suppresses the line, and then this seed must say how a future high-contrast mode turns it back on; or
+the theme stops claiming to, and the rule is enforced by review at the widget layer. Both change what
+the pinned test asserts.
+
+**The test is the deeper problem.** It asserts a field value, not what gets painted. That is the same
+defect shape as the S-001 probe that could not tell a resolved token from an unresolved one, and as
+the coverage guard S-012 had to split.
+
+**End state.** A test renders a real `Divider` under `buildAppTheme()` and asserts what it paints,
+rather than asserting a field value. The comment at `app_theme.dart:50` and the test name agree with
+that measurement. Whichever branch is taken is written down in `mobile/CLAUDE.md`.
+
+**Verification.** The mobile full quality gate, `CLAUDE.md:80`. **Prepend the SDK to `PATH` first:**
+`export PATH="$HOME/development/flutter/bin:$PATH"`. Goldens shift only if a screen gains a divider,
+which is out of scope, so say so rather than re-baselining out of habit.
+
+**Sources**, all read 2026-08-22. `mobile/lib/core/theme/app_theme.dart:50`;
+`mobile/test/core/theme/theme_test.dart`, the test named "the no-line rule: dividers have no
+thickness"; Flutter 3.44.8 `material/divider.dart:86-87` and `:184-211`; `mobile/CLAUDE.md`, the
+no-line rule and note 5.
+
+**Out of scope.** Building a high-contrast mode. The `outlineVariant` value, which S-048 settled.
+Adding a divider to any screen.
 
 ---
 
@@ -1985,7 +2119,41 @@ first recorded.
 
 ## S-041. Make the web e2e gate supply its own environment
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-042
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** S-042
+
+**`web/playwright.config.ts`'s `webServer.env` now supplies the two Supabase variables as obvious
+placeholders**, `https://e2e-fake-project.example.supabase.co` and `e2e-fake-anon-key`, falling back
+to `process.env` only when the invoking shell has already set them. The `.example.` hostname does not
+resolve and the key spells out what it is, so neither can be mistaken for a credential. **No CI
+change was needed**: `.github/workflows/web-ci.yml`'s `e2e` job already exported placeholder-shaped
+values, so this makes local, worktree, and CI agree rather than coincide.
+
+**The end state was measured in both environments by the coordinator, not argued.**
+
+| Where | `web/.env.local` | Result |
+|---|---|---|
+| `git worktree`, before the fix | absent | 34 passed, **4 failed** |
+| `git worktree`, after the fix | absent | **38 passed** |
+| primary checkout, after the fix | **present** | **38 passed** |
+
+The third row is the one the agent could not run, because the seed fenced it out of the primary
+checkout. It reasoned that Next's env-file loader never overwrites a variable already in
+`process.env`, so the tracked placeholder wins. That reasoning is now a measurement.
+
+**Negative control.** Removing the `env` line reproduced the same four `text-scale.spec.ts` failures
+with the identical `scrollWidth` 569 against `clientWidth` 320; restoring it returned 38.
+
+**What the guarantee does not cover, and it is worth knowing.** `reuseExistingServer` means a
+manually started server on the e2e port is reused **with whatever environment it already has**. The
+gate supplies its own environment only when it boots the server itself.
+
+**S-042 stays buildable, which this seed was required not to break.** `E2E_SUPABASE_ENV` is a plain
+object in a config file rather than anything baked into a build, so S-042 can unset it for one spec
+and make the banner render on purpose. No spec file was touched.
+
+**This seed is why three consecutive batches reported a red e2e gate that was not a defect.** Every
+`web/` seed reports this gate, and four of its cases were answering a question about the runner's
+filesystem.
 
 **The web e2e result depends on a file git does not carry, so two people running the same gate on
 the same commit get different answers.** Found 2026-08-22 by the S-007 agent, reproduced by the
@@ -2034,7 +2202,14 @@ a live backend.
 
 ## S-042. Make the missing-Supabase banner survive 200% text scale at 320 px
 
-**Status:** blocked · **Blocked by:** S-041 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-041, done 2026-08-22 · **Unblocks:** nothing yet
+
+**S-041 landed on 2026-08-22, so the baseline this seed waited for now exists**, and the direction
+this seed calls "backwards" is now the situation: `pnpm test:e2e` supplies placeholder Supabase
+variables from `web/playwright.config.ts`, so the banner **no longer renders** in any e2e run and its
+defect is invisible to the gate. That is exactly what this seed predicted and it is why it comes
+second. `E2E_SUPABASE_ENV` is a plain object in that config, not baked into a build, so a spec can
+unset it to make the banner render on purpose.
 
 **A `T-04` failure exists on a real screen and no gate can currently see it.** The missing-Supabase
 banner renders only when the two `NEXT_PUBLIC_SUPABASE_*` variables are absent. CI always supplies
@@ -2460,7 +2635,59 @@ and `notification_log`, which are S-013.
 
 ## S-012. Enable RLS on `identity_claims` in the shape S-011 decides
 
-**Status:** open · **Blocked by:** S-011, done 2026-08-22 · **Unblocks:** S-015
+**Status:** done, 2026-08-22 · **Blocked by:** S-011, done 2026-08-22 · **Unblocks:** S-015
+
+**ADR-042 chose the application layer, so this seed's end state is a migration *and* a recorded
+absence.** Migration `033_rls_identity_claims` enables RLS with exactly one policy,
+`identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`, which is what
+ADR-042 § 2 specifies word for word. It is a **tripwire** for a claims query mis-wired to `get_db`,
+not clan isolation. This table has one layer of clan isolation where the nine covered tables have
+two, and the `Not verified` row below records what that costs.
+
+**"Two-sided" means something different on a deny-all table, and the tests say so.** On a clan-keyed
+table it means A sees its row and B does not. Here it means neither clan sees either row — which an
+**empty table** would also satisfy. Every denial test therefore ends with a privileged read proving
+the rows were really there.
+
+**The coverage guard was split, not extended, and the inversion is why.**
+`test_rls_activation.py` now carries `_CLAN_ISOLATED_TABLES` and `_REQUEST_ROLE_DENIED_TABLES`, with
+`test_each_half_of_the_rls_set_matches_what_its_policies_do` asserting each half with its own
+question. Measured 2026-08-22: a policy flipped to `USING (true) WITH CHECK (true)` — one that hands
+the request role every clan's claims — **still passes** the older "RLS is on and there is at least
+one policy" assertion. Only the split guard catches it. **S-015 inherits this shape**, and it is the
+main reason this seed matters beyond its own table.
+
+**Four routes read this table, and two of them resolve no clan at all.** `GET /m/claims`
+(`backend/app/api/v1/claims.py:35-43`) and `DELETE /m/claims/{claim_id}` (`:51-57`) take
+`require_active_user` only, because they are cross-clan queues. They are safe today **only** because
+both providers are privileged (`backend/app/infrastructure/dependencies.py:144,149`). The route that
+makes a clan predicate impossible rather than merely inert is
+`POST /m/persons/{person_id}/claim` (`backend/app/api/v1/persons.py:417-424`): it resolves the
+**claimant's** clan, not the claimed person's, so a clan-keyed policy would reject the very insert
+the feature exists to perform.
+
+**ADR-042 § 5 is wrong on one detail, and the code is the truth.** It predicts that a blinded
+`has_pending_claims` turns the documented 409 into an integrity error raised from the flush.
+Measured 2026-08-22 by planting exactly that: `backend/app/core/exceptions.py:290-307` maps SQLSTATE
+23505 to `409 conflict`, because `uq_identity_claim_user_pending` is not in its `unique_codes` map —
+verified by the coordinator at source. **The status survives; what is lost is the specific code**
+`user_already_has_pending_claim`, which exists in all four locales. ADR-042's conclusion is
+unchanged and if anything sharper. ADR-042 itself was not edited, because it is a dated record.
+
+**Negative control, four plants, each restored.** The migration emptied (7 failed); the policy
+flipped to permit (6 failed, and note **which test passed**); the application guard blinded; and the
+unique index itself dropped. Restoring all four returned `19 passed`.
+
+**Three stale documentation claims were corrected in the same commit**, because the code is the
+truth. `docs/architecture/data-model.md` still said `clan_invitations` was "deliberately NOT
+RLS-enabled" after migration 032 shipped the same day, still called DB-level RLS "a deferred
+layer-2" after nine migrations of policy, and still said one pilot policy ships. ADR-008's
+shipped-phase list stopped at Phase 5; Phase 8 was added and the Phase 6/7 gap **recorded rather
+than backfilled**, because that agent did not do that work.
+
+**Gate, on the combined tree, 2026-08-22.** 1293 passed; `All checks passed!`; 460 files already
+formatted; mypy `Success: no issues found in 424 source files`; `Contracts: 6 kept, 0 broken`.
+Migration 033 verified up, down, and up again, reading the policy back from `pg_policies` each time.
 
 **Read ADR-042 and implement what it chose.** If it chose the application layer, this seed's end
 state is a recorded absence rather than a migration, and it says so in one sentence plus a row in
@@ -3030,7 +3257,37 @@ context, which is S-027.
 
 ## S-024. Derive capabilities per clan role, in `domain/capability`
 
-**Status:** open · **Blocked by:** S-023, done 2026-08-22 · **Unblocks:** S-026
+**Status:** done, 2026-08-22 · **Blocked by:** S-023, done 2026-08-22 · **Unblocks:** S-026
+
+**`src/domain/capability/capability.ts` maps the three clan roles to 26 capabilities**, one per
+`docs/architecture/rbac.md` matrix row where at least one clan role is denied, each cited to its row.
+Universal-✅ rows and `super_admin`-only rows are deliberately not modelled: they gate nothing on a
+clan-scoped screen. Seven tests, one deep-equal per role with **independent literal expectations**
+rather than expectations built from the implementation's own table.
+
+**No disagreement was found between `rbac.md` and the code**, which is worth recording because this
+batch found stale documents everywhere else. `backend/app/core/permissions.py:18-21` declares
+`ADMIN`/`EDITOR`/`VIEWER` and `ROLE_HIERARCHY = [VIEWER, EDITOR, ADMIN]`, matching `rbac.md:37`
+exactly.
+
+**The capability table is written out per role rather than derived from the hierarchy, on purpose.**
+Every row *looks* nested, which invites a `minRole` comparison. It is not safe: verified by the
+coordinator at source, `rbac.md:78` gives `editor` ✅ for **deleting an event**, while `:70` gives
+`editor` ❌ for deleting a relationship and `:57` ❌ for deleting a person. The nesting is empirical,
+not guaranteed, and a hierarchy shortcut would have hidden the one exception.
+
+**Negative control.** Emptying `editor`'s capability list flipped ten capabilities from `true` to
+`false` in exactly one failing test; restoring it returned 346 passed.
+
+**Gate, on the combined tree, 2026-08-22.** `type-check` and `lint` clean; `depcruise` 0 errors;
+`test:unit` **346 passed**; `test:component` 7 passed; `test:e2e` **38 passed**; `build` exit 0.
+
+**One debt this seed knowingly leaves.** Nothing imports the module yet, so `pnpm depcruise` gained a
+fourth `no-orphans` warning, up from three. Warnings are not gated. **This is the same shape as the
+dead tokens S-001 fixed and the unread GUC ADR-047 refused**, so it is named here with an owner
+rather than left as background noise: **S-026** is the seed that consumes it. The legacy
+`web/src/application/auth/use-cases/capabilities.ts` still exists against the pre-envelope shape and
+is S-027's to delete.
 
 **A capability is derived, never sent.** The backend enforces permissions; the client decides what
 to render. Putting that derivation in `src/domain/capability` rather than in a component means it is
@@ -3452,6 +3709,15 @@ been read or run, and the row that replaces it says where.
   production path can answer 500 on a genuine concurrent first login. **This is a register row and
   not a seed because it contains a decision**: widening the conflict target is an auth change, and
   what the loser of the race should observe is not established here. **Owner:** backend-engineer.
+- **`identity_claims` has no database-layer clan isolation, and the completeness of its
+  application-layer filters is unverified.** ADR-042 accepted this and migration 033 does not change
+  it: the only policy is deny-all, so **the database will not stop a read path that forgets**
+  `Person.created_by_clan_id == clan_id` (`backend/app/infrastructure/persistence/claim_repository.py:204-205`).
+  If one does, a clan admin sees another clan's claims: claimant user id, person id, requester note,
+  and reviewer note. No test in this repository establishes that every present or future claim read
+  path carries that filter. Recorded 2026-08-22 by S-012. Removing this row needs either a
+  clan-scoped redesign of the claim flow, which ADR-042 excludes as "a redesign with its own ADR", or
+  a source-scanning gate over the claim query port. **Owner:** backend-engineer.
 - **The three "not verified" boundaries in [`roadmap.md`](roadmap.md).** That file marks which of its
   milestone boundaries rest on no source. Those marks are the claim, and they are not repeated here.
 
