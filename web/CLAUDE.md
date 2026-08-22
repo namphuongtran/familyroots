@@ -29,6 +29,39 @@ Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm de
 
 Env vars in `.env.local` (see `.env.example`): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
+**`pnpm test:e2e` does not need `.env.local`, and this is a gate guarantee, not an
+accident (S-041, 2026-08-22).** `.env.local` is untracked — `git ls-files web/.env.local`
+returns nothing — so it exists in a primary checkout and is absent in every `git worktree`.
+Before S-041, that made the gate answer a question about the runner's filesystem: with the
+file, `pnpm test:e2e` passed 38/38; without it, `e2e/text-scale.spec.ts` failed 4 of 38, on
+both `/vi/login` and `/vi/register` in both Playwright projects, because the two
+`NEXT_PUBLIC_SUPABASE_*` variables were missing, `SupabaseSetupNotice.tsx` rendered the
+missing-Supabase banner, and the banner itself overflowed the 320px/200%-text-scale viewport
+(`documentElement.scrollWidth` 569 against `clientWidth` 320) — a real defect, but not the one
+`text-scale.spec.ts` exists to police, and invisible to CI because CI already exported both
+variables on the `e2e` job (`.github/workflows/web-ci.yml`).
+
+`web/playwright.config.ts`'s `webServer.env` now supplies both variables as obvious
+placeholders (`https://e2e-fake-project.example.supabase.co`, `e2e-fake-anon-key`) whenever the
+shell running the tests has not already exported them, so **the e2e dev server on :3100 always
+sees the two variables, in a fresh clone, in a worktree, and in CI**, regardless of whether
+`.env.local` exists. Next.js's own env-file loader never overwrites a variable already present
+in `process.env` when the process starts, so this wins over `.env.local` even in a primary
+checkout that has one — deliberately: no e2e spec talks to a live Supabase backend, so the run
+must not depend on real credentials, and a result that only holds where a stray file happens to
+exist is the exact defect this closed. Real Supabase env in `.env.local` still governs `pnpm dev`
+on :3000 for manual local development; only the self-booted :3100 e2e server is affected. One
+caveat this does not cover: `reuseExistingServer: !process.env.CI` means a dev server already
+running on :3100 from an earlier manual `pnpm dev --port 3100` is reused as-is, with whatever env
+it already has — this only guarantees the placeholders when Playwright starts the server itself.
+
+**What this gate does not guarantee.** The missing-Supabase banner's own text-scale overflow is
+untouched — supplying the variables makes the banner stop rendering in this suite, it does not
+fix it. That defect is **S-042**, which adds a spec case that deliberately unsets the two
+variables for one test so the banner can be measured at all; it is not blocked by anything this
+change does, because the placeholders live in `webServer.env`, a plain object a later spec or a
+second `webServer` entry can override or bypass, not baked into a build artifact.
+
 ## Architecture
 
 Two trees coexist during the migration described in
