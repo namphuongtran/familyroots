@@ -26,7 +26,6 @@ class ClanSettings(TimestampMixin, Base):
     default_language: Mapped[str] = mapped_column(String(10), default="vi")
     tree_display_mode: Mapped[str] = mapped_column(String(20), default="vertical")
     notification_defaults: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
-    privacy_level: Mapped[str] = mapped_column(String(20), default="clan_members")
     # NOT wired yet — nothing reads this. The enforced upload limit is the platform
     # setting Settings.MAX_UPLOAD_SIZE_MB (default 50). This column is scaffold for a
     # future per-clan override (clan_settings feature); do NOT start reading it without

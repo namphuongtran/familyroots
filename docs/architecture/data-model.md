@@ -209,7 +209,6 @@ erDiagram
         varchar default_language "default vi"
         varchar tree_display_mode "vertical | horizontal"
         jsonb notification_defaults
-        varchar privacy_level "private | clan_members | public"
         smallint max_upload_size_mb "default 10"
         timestamptz created_at
         timestamptz updated_at
@@ -807,6 +806,24 @@ Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
 > The drop lost no data, because the table has no rows (the note above), so the `downgrade`
 > restores the exact shape `001_initial.py:600` gave it — `NOT NULL`, `server_default false`.
 
+> ❌ **`privacy_level` was dropped on 2026-08-22** by migration `038_drop_privacy_level`
+> (seed S-018, [ADR-044](../decisions/044-privacy-toggles-dropped-from-v1.md) § 2). **The
+> concept may come back; this column may not come back as it stood.** The note above says a
+> public tree "returns as `privacy_level` alone" — read that as the *concept*, because after
+> this migration no privacy column exists at all. **The value domain went with the column.**
+> Until today this file was the only place that wrote it down, in two spots: the ER diagram
+> above and this table both said `private`, `clan_members`, or `public`. Both rows are gone.
+> Nothing enforced that domain — no `CHECK`, no enum, no validator, and the ORM type was a
+> bare `String(20)` — so an unrecognized value was a value. `private` also had no defined
+> meaning: no source in this repository says private **from whom**, in a product whose
+> `viewer` role is "Read-only access to all clan data" ([rbac.md](rbac.md)). Leaving the
+> domain written down after the column went would let it outlive the thing that carried it.
+> ADR-044 § 2 names the four terms the concept returns on, in one change: a domain closed at
+> the database, `get_current_clan_id` + `RequireViewer` as the enforcement point, a failure
+> direction resolving to the most restrictive value, and a row creator built first. The drop
+> lost no data, because the table has no rows (the note above), so the `downgrade` restores
+> the exact shape `001_initial.py:603` gave it — `NOT NULL`, `server_default 'clan_members'`.
+
 > ✅ **RLS (2026-08-22, migration `035_rls_clan_settings`, ADR-008 Phase 10, seed S-010).**
 > The table carries the migration-027 template unchanged —
 > `clan_settings_clan_isolation USING (clan_id = <app.clan_id GUC>) WITH CHECK (…)` — on both
@@ -827,8 +844,10 @@ Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
 > ⚠️ **Status (2026-07-02) — mostly not enforced yet.** Only the row/columns exist;
 > the runtime does **not** read most knobs. In particular `max_upload_size_mb`
 > (default 10) is **not** applied — the document domain hard-codes a **50 MB** limit,
-> so the two disagree and must be reconciled when this is built. `privacy_level`,
+> so the two disagree and must be reconciled when this is built.
 > `tree_display_mode`, `approval_config`, `notification_defaults` are also inert.
+> (`privacy_level` was on this list until 2026-08-22; the column is gone — see the note
+> above. `allow_public_tree` was never on it.)
 > Roadmap item D3.
 
 | Column | Type | Constraints | Description |
@@ -839,7 +858,6 @@ Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
 | `default_language` | VARCHAR(10) | DEFAULT 'vi' | Default UI language for clan members |
 | `tree_display_mode` | VARCHAR(20) | DEFAULT 'vertical' | `vertical` or `horizontal` tree rendering / Hiển thị cây dọc hay ngang |
 | `notification_defaults` | JSONB | | Default notification settings for new members / Cấu hình thông báo mặc định cho member |
-| `privacy_level` | VARCHAR(20) | DEFAULT 'clan_members' | `private`, `clan_members`, or `public` |
 | `max_upload_size_mb` | SMALLINT | DEFAULT 10 | Max file upload size in MB / Dung lượng tối đa cho phép upload |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
