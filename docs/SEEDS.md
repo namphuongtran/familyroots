@@ -733,6 +733,52 @@ check printed `all containers healthy`, rc=0. Fixed to pin the roster first, the
 `127.0.0.1` form. `127.0.0.1` cannot mean both the host and the inside of a container, so
 `[auth] external_url` pins the issuer to a name that can.
 
+**Re-taken 2026-08-22, after a seventeenth batch of four: 79 seeds, 75 done, 3 open, 1 blocked.**
+
+- **Done, 71 to 75.** S-073, S-075, S-076, and S-077.
+- **Open, 4 to 3.** Four left for `done`; S-070 became open as its last blocker cleared, and the
+  coordinator opened S-078 and S-079.
+- **Blocked, 2 to 1.** Only S-074 remains, behind S-070.
+
+**The production backend image boots, and the guard it exists for was observed working for the first
+time.** S-075 shipped `migrations` as a real package and looked it up with `importlib.resources`,
+removing the path arithmetic entirely. From a built image: `{"status":"ok",...,"migrations":"current"}`.
+Against a database one revision behind, the same image reports `behind` and **refuses to boot**, which
+is the behaviour the guard was written for and which **had never once been seen from an artefact**.
+
+**S-075 said which half of its own fix does the work, and found out by running the control rather
+than reasoning.** Restoring the old `parents[2]` while keeping the packaging fails only the *second*
+of its two new tests: **the packaging change alone makes the image boot.** The `readiness.py` change
+removes a depth assumption that would break again, silently, the first time that module moves a
+directory. **That is a more useful report than "both changes were needed".**
+
+**It also found the fourth instance of "a test pins an outcome, not a setting" without looking for
+it.** `test_expected_head_reads_migration_scripts` carried the docstring "The scripts directory must
+be readable from the **installed layout**" and asserted the source tree. It was green for the entire
+life of a defect that stopped production from booting.
+
+**Two live defects were found by agents doing something else, and both were unreachable before.**
+S-073 became the first thing able to log in as a clan admin, and `PATCH /clans/me` answers **500 on
+every edit that changes something while the write lands anyway** — `clans.py:84` validates an ORM
+instance after the handler commits. **A no-op PATCH returns 200**, so any smoke test that re-sends the
+same value passes forever. That is **S-078**. And S-077 named a hole in its own guard: every guard
+here reads SQL *text*, so `createuser --superuser` escalates with **nothing for a scanner to read**.
+That is **S-079**.
+
+**Two agents caught falsely-green readings of their own.** S-073 had written
+`uv run mypy … | tail -3; echo rc=$?`, so `$?` read `tail`'s status while mypy reported three errors;
+it re-ran the gate chained with `&&`. And S-072's health check, recorded above, is the same family.
+**A pipeline's exit status is the last command's, and a gate that reads it is measuring the wrong
+thing.**
+
+**Three of the coordinator's citations were wrong this batch and each was caught by the agent working
+from it.** S-075's seed cited `docker-compose.yml:52` for the bind mount, which is `interval: 15s`;
+the mount is at `:63`. S-073's seed listed `clan_memberships` beside `user_clan_roles` as if both
+joined a user to a clan; `clan_membership.py:25` foreign-keys to **`persons.id`**. Both claims were
+right and both pointers were wrong. **The third was the coordinator's own commit**: `3db8f96` swept
+four Playwright MCP scratch files into the repository through `git add -A`. Removed in `f636381`,
+with `.playwright-mcp/` now ignored and a `git check-ignore` control proving it.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -939,6 +985,8 @@ graph LR
   S075[S-075 the backend image cannot boot in production mode]
   S071 --> S076[S-076 decide NEXT_PUBLIC_API_URL, ADR-056]
   S069 --> S077[S-077 scan inline DDL in shell scripts]
+  S077 --> S079[S-079 catch escalation with no SQL text]
+  S073 --> S078[S-078 PATCH /clans/me answers 500]
   S017 --> S064[S-064 retire infra/supabase/migrations]
   S018 --> S064
   S018 --> S065[S-065 decide what clan_settings is for]
@@ -1025,14 +1073,16 @@ graph LR
 | S-067 | Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model | done | S-064, done |
 | S-068 | Decide what the eight tokenless colour families mean, in ADR-055 | done | S-038, done |
 | S-069 | Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/` | done | S-067, done |
-| S-070 | Make an authenticated route reachable in the e2e harness | blocked | S-071 and S-072 done; S-073 |
+| S-070 | Make an authenticated route reachable in the e2e harness | open | S-071, S-072, S-073 — all done |
 | S-071 | Give `web/Dockerfile` the build arguments Next.js inlines at build time | done | none |
 | S-072 | Stand the Supabase CLI stack up beside `pgdb`, mirroring the production split | done | none |
-| S-073 | Seed a test clan, its users and their roles into both databases, reproducibly | open | S-072, done |
+| S-073 | Seed a test clan, its users and their roles into both databases, reproducibly | done | S-072, done |
 | S-074 | Gate: build both images and run the compose e2e suite in CI | blocked | S-070 |
-| S-075 | Make the backend image able to boot, which today it cannot in production mode | open | none |
-| S-076 | Decide what `NEXT_PUBLIC_API_URL` should be, given it is baked at build time | open | none |
-| S-077 | Scan the DDL that shell scripts run inline, which no guard sees | open | S-069, done |
+| S-075 | Make the backend image able to boot, which today it cannot in production mode | done | none |
+| S-076 | Decide what `NEXT_PUBLIC_API_URL` should be, given it is baked at build time | done | none |
+| S-077 | Scan the DDL that shell scripts run inline, which no guard sees | done | S-069, done |
+| S-078 | Make `PATCH /clans/me` stop answering 500 on every edit that changes something | open | none |
+| S-079 | Catch privilege escalation that runs through a CLI with no SQL text to read | open | S-077, done |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -3577,7 +3627,7 @@ S-067 left alone because three prose citations point at its filename.
 
 ## S-070. Make an authenticated route reachable in the e2e harness
 
-**Status:** blocked · **Blocked by:** S-071 and S-072 done 2026-08-22; S-073 · **Unblocks:** S-074
+**Status:** open · **Blocked by:** S-071, S-072, S-073 — all done 2026-08-22 · **Unblocks:** S-074
 
 **The decision this seed carried was made by the maintainer on 2026-08-22: the full Supabase
 CLI stack, run in Docker Compose.** The seed offered three options and this is the first. The
@@ -3759,7 +3809,7 @@ Deleting `pgdb`. Traefik.
 
 ## S-073. Seed a test clan, its users and their roles into both databases, reproducibly
 
-**Status:** open · **Blocked by:** S-072, done 2026-08-22 · **Unblocks:** S-070
+**Status:** done, 2026-08-22 · **Blocked by:** S-072, done 2026-08-22 · **Unblocks:** S-070
 
 **A test user exists in two places at once, and that is the whole difficulty.** The identity lives in
 the Supabase stack's `auth.users`. The membership, the role, and the clan live in the application
@@ -3783,8 +3833,14 @@ membership row for one user while leaving the Supabase identity, and confirm the
 names the missing half rather than presenting as a permissions error. That inversion is the defect
 this seed exists to prevent.
 
-**Sources.** `backend/app/models/` for `clans`, `clan_memberships`, `user_clan_roles`, and
-`user_profiles`; `backend/app/core/security.py:172-181` for `ensure_user_profile` and the race the
+**Sources.** `backend/app/models/` for `clans`, `user_clan_roles`, and `user_profiles`;
+
+> **This field named `clan_memberships` alongside `user_clan_roles` as though both joined a user to a
+> clan. They do not.** `backend/app/models/clan_membership.py:25` foreign-keys to **`persons.id`**,
+> so `clan_memberships` links a **person** to a clan and cannot be written without inventing person
+> fixtures — which this seed puts out of scope. Corrected 2026-08-22 by the agent that closed it and
+> re-checked by the coordinator. `user_clan_roles` is the user-to-clan table, and it is the one that
+> matters here. `backend/app/core/security.py:172-181` for `ensure_user_profile` and the race the
 `Not verified` register records against it; `scripts/seed_dev_data.py`;
 `docs/architecture/rbac.md` for what each role may reach.
 
@@ -3839,7 +3895,7 @@ only ever been green proves nothing.
 
 ## S-075. Make the backend image able to boot, which today it cannot in production mode
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Found 2026-08-22 by S-072, which was doing something else, and verified mattress-to-wall by the
 coordinator the same day. This is the highest-priority open seed on this board.**
@@ -3907,7 +3963,7 @@ and the `alembic.ini`/`migrations/` copies; `backend/app/core/readiness.py:22,50
 
 ## S-076. Decide what `NEXT_PUBLIC_API_URL` should be, given it is baked at build time
 
-**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by S-071, which found it while fixing the two Supabase variables and correctly
 did not fix it**, because unlike those two it has no single correct value.
@@ -3949,7 +4005,7 @@ uses. Quote it for both the server and the browser path.
 
 ## S-077. Scan the DDL that shell scripts run inline, which no guard sees
 
-**Status:** open · **Blocked by:** S-069, done 2026-08-22 · **Unblocks:** nothing yet
+**Status:** done, 2026-08-22 · **Blocked by:** S-069, done 2026-08-22 · **Unblocks:** nothing yet
 
 **Opened 2026-08-22 by S-069, which named this as the largest thing its own guard misses.** That is
 the right way to hand over a limitation, and this seed exists because the alternative was widening
@@ -3984,6 +4040,97 @@ naming it is worth more than a guard that pretends to cover it.
 `backend/tests/unit/test_no_parallel_table_ddl_under_infra.py`.
 
 **Out of scope.** `.sql` files, which S-069 covers. Changing what any script does.
+
+---
+
+## S-078. Make `PATCH /clans/me` stop answering 500 on every edit that changes something
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Found 2026-08-22 by S-073, which was seeding test users and became the first thing able to log in
+as a clan admin.** That is why a live 500 on an admin route survived this long: **nobody could reach
+it.**
+
+**The write lands and the response is a 500.** `backend/app/api/v1/clans.py:84` is
+`ClanResponse.model_validate(clan)`, and it runs **after** the handler has committed. The commit
+expires the instance, so touching `updated_at` re-loads it lazily outside the async context and
+raises `MissingGreenlet`. Verified by the coordinator at source: the validate sits after
+`handler.update_clan(...)` returns.
+
+**The failure is intermittent in exactly the way that hides it.** S-073 measured the sequence:
+change → **500**, no-op → 200, no-op → 200, change → **500**. A no-op update returns 200 because
+nothing was written and nothing expired. **So any smoke test that PATCHes the same value twice passes
+forever.**
+
+**And the row was updated.** After each 500 the column held the new value. **A client sees a server
+error and a successful write, which is the worst pair to hand anyone**: retrying is unsafe and not
+retrying loses the response.
+
+**End state.** `PATCH /clans/me` answers 200 with the updated clan for a real change, and the
+response body matches what the row now holds. **Read `docs/contracts/rest-clans-api.md` and make it
+agree**; the root `CLAUDE.md` requires the contract to move in the same pull request as the shape.
+
+**Look for the same shape elsewhere before closing.** This is a pattern, not one line: any route that
+validates an ORM instance after its handler commits has it. Say how many you found and what you did
+about them — **fixing one instance of a pattern and not naming the rest is how the next one ships.**
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**The gate is not evidence here and say so** — the whole suite is green today with this route
+broken, because nothing exercises a real change through it.
+
+**The test must send a request and read the response**, per § "A test pins an outcome, not a
+setting". **Negative control:** the test must fail against today's code. And it must **change a
+value**, not re-send the same one — a no-op PATCH returns 200 and pins nothing. Quote both readings,
+and assert the row afterwards so a 200 with a stale body cannot pass.
+
+**Sources.** `backend/app/api/v1/clans.py:74-84`; `backend/app/application/clan/handlers.py` for the
+commit; `docs/contracts/rest-clans-api.md`; S-073's measured sequence, in this file.
+
+**Out of scope.** Any other clan route's behaviour. The RBAC matrix. Seeding.
+
+---
+
+## S-079. Catch privilege escalation that runs through a CLI with no SQL text to read
+
+**Status:** open · **Blocked by:** S-077, done 2026-08-22 · **Unblocks:** nothing yet
+
+**Opened 2026-08-22 by the coordinator, from a hole S-077 named in its own guard rather than
+quietly leaving.**
+
+**Every guard in this tree reads SQL text.** S-069 reads `.sql` files; S-077 reads what a `psql`
+invocation executes. **A shell script that ran `createuser --superuser familyroots_app` escalates
+exactly as `ALTER ROLE … SUPERUSER` does, and there is no SQL text for any scanner to read.** The
+same is true of `dropdb`, and of `createdb`.
+
+**Nothing is wrong today** — `git grep` finds no such call, and say that first when you close this.
+**The gap is that the guards' shape has a blind spot that their own error messages do not admit to.**
+
+**This contains a decision.** A rule over client CLIs is a different kind of rule from a rule over
+SQL text: it matches **argv**, not statements. Decide whether that belongs in S-077's module, in
+S-069's, or in a third; whether it covers `createuser`, `dropdb`, `createdb`, `pg_restore --clean`,
+and `psql -f` targets; and **what it does about a CLI name reached through a variable**. S-077's
+scanner resolves one literal level of indirection and no more — decide whether that is enough here
+and say why.
+
+**Read S-077's "what it will miss" list before starting.** It is eight items long and this seed
+closes one of them. **Do not close the others silently**; if your rule happens to cover another,
+say which and prove it.
+
+**End state.** A check fails when a script under `scripts/` or `backend/scripts/` invokes a
+PostgreSQL client CLI in a way that escalates privilege or destroys a database, unless a named
+decision sanctions it. **`restore_drill.sh` must pass by being named**, as it does in both existing
+guards, not by the rule being loose enough to admit it.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**Two planted controls at minimum:** `createuser --superuser` in a script with no SQL text at all,
+and the same reached through a variable. **Quote both, and if the second is not caught, say so** —
+S-077's report is the model for naming a limitation instead of papering it.
+
+**Sources.** `backend/tests/unit/test_inline_sql_in_scripts_is_sanctioned.py` and its limitations
+list; `backend/tests/unit/test_scripts_sql_is_sanctioned.py`; `scripts/restore_drill.sh`.
+
+**Out of scope.** Python scripts, which S-077 also names and which is a separate hole.
+`.github/workflows/*.yml` `run:` steps, which is a third. Changing what any script does.
 
 ---
 
