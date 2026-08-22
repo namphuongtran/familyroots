@@ -74,7 +74,9 @@ from app.infrastructure.persistence.platform_admin_query_port import (
     SqlAlchemyPlatformAdminQueryPort,
 )
 from app.infrastructure.persistence.relationship_repository import (
+    SqlAlchemyMarriageReadPort,
     SqlAlchemyMarriageRepository,
+    SqlAlchemyParentChildReadPort,
     SqlAlchemyParentChildRepository,
     SqlAlchemyRelationshipQueryPort,
 )
@@ -238,14 +240,19 @@ def get_parent_child_command_handler(
     return ParentChildCommandHandler(repo, uow, _build_relationship_validator(db))
 
 
+# The two query handlers take a read port, not the repository the command
+# handlers take. A read hides an edge whose endpoint person is soft-deleted; the
+# repository must not, or update and delete could no longer reach that edge
+# (ADR-051 § 8, seed S-056). The read ports need no Unit of Work — they write
+# nothing.
 def get_marriage_query_handler(db: AsyncSession = Depends(get_db)) -> MarriageQueryHandler:
-    return MarriageQueryHandler(SqlAlchemyMarriageRepository(_repo_uow(db)))
+    return MarriageQueryHandler(SqlAlchemyMarriageReadPort(db))
 
 
 def get_parent_child_query_handler(
     db: AsyncSession = Depends(get_db),
 ) -> ParentChildQueryHandler:
-    return ParentChildQueryHandler(SqlAlchemyParentChildRepository(_repo_uow(db)))
+    return ParentChildQueryHandler(SqlAlchemyParentChildReadPort(db))
 
 
 # ── Clan handlers ────────────────────────────────────────────────

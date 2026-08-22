@@ -300,6 +300,16 @@ land a second live row for the same pair, and the archive then carries both.
 
 ## 8. What is left, and it is not a cascade — the brief for S-056
 
+**Closed 2026-08-22 by S-056, exactly as briefed below and with nothing added.** The two
+reads now go through `MarriageReadPort` / `ParentChildReadPort`
+(`backend/app/domain/relationship/query_port.py`), implemented by
+`SqlAlchemyMarriageReadPort` / `SqlAlchemyParentChildReadPort`
+(`backend/app/infrastructure/persistence/relationship_repository.py`), which reuse
+`_no_deleted_endpoint` rather than copying it. The command handlers still call the
+repositories' unfiltered `get_by_id`. The section is kept as written because it is the
+reasoning, not a to-do list. **No column, no `PersonDeleted` consumer, no trigger, no
+migration.**
+
 **Two by-id reads still carry half the predicate. Found 2026-08-22 while writing this ADR;
 the seed did not name them.**
 
