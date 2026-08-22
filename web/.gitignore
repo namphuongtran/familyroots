@@ -12,6 +12,9 @@
 # next.js
 /.next/
 /out/
+# S-042: e2e/supabase-banner.spec.ts's dedicated dev server builds here (web/next.config.ts,
+# web/playwright.config.ts) so it doesn't collide with the primary e2e server's /.next/ lock.
+/.next-banner-e2e/
 
 # production
 /build

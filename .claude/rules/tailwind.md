@@ -387,6 +387,46 @@ time:
    `page.addStyleTag` with a `:root` rule. `e2e/fonts.spec.ts` still uses the inline form and still
    emits that warning.
 
+**A fifth trap, found by seed S-042 (2026-08-22): the same defect shape hides behind an env-var
+guard, and a placeholder meant to fix the gate can make it invisible instead.**
+`SupabaseSetupNotice.tsx` renders a banner only when `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` are both missing, and its hint text names both literally, in
+every locale (`grep -n missing_supabase_config_hint web/messages/*.json`) — real env var names,
+not translatable copy. Both are one unbreakable word: no space, no hyphen, nothing but
+underscores. Measured 2026-08-22 at 320 px and 200% root font size, with the banner forced to
+render: page `scrollWidth` 569 against `clientWidth` 320, the hint paragraph itself 504 against
+190. Same shape as trap 1 above, one step removed: S-041 had just made the e2e run supply
+placeholder Supabase values so the *other* four cases stop measuring the runner's filesystem
+(`web/CLAUDE.md`'s account of that seed), which as a side effect made this banner **stop
+rendering** in every e2e run — the defect did not go away, it went where no gate could see it.
+
+1. **Fixed the same way as trap 2, generalised to a translated, multi-token string.** Splitting
+   the *whole* translated hint on `_` and re-joining with `_<wbr />` (`withBreakOpportunities` in
+   `SupabaseSetupNotice.tsx`) gives a break opportunity after every underscore in both tokens,
+   with no `t.rich` markup and no hardcoded copy of either variable name in any of the four
+   locale files — safe only because no locale's surrounding prose contains an underscore of its
+   own (checked 2026-08-22), so nothing outside the two tokens is touched.
+2. **Measuring the fix needs the banner to render on purpose, and one dev-server process cannot
+   answer both ways at once.** `NEXT_PUBLIC_*` values are inlined when a Next.js server process
+   starts, not re-read per request, so the placeholder server S-041 built and the banner's own
+   server need to be two different processes. `web/playwright.config.ts`'s `webServer` is an
+   array now: a second entry boots a dedicated `next dev` with both variables forced to `''`
+   (not merely omitted — an unset shell variable would leak through), for
+   `e2e/supabase-banner.spec.ts` alone.
+3. **A second `next dev` on the same `distDir` refuses to start, silently pointing at the wrong
+   fix otherwise.** Next.js 16's `experimental.lockDistDir` (on by default) takes a lock at
+   `<distDir>/lock` and a second process sharing it prints "Another next dev server is already
+   running" and exits 1 — verified 2026-08-22 by running two `next dev` processes on different
+   ports against the same checkout. `web/next.config.ts` reads `PLAYWRIGHT_SECOND_DIST_DIR` so
+   the banner's dedicated server gets its own build directory; every other invocation
+   (`pnpm dev`, `pnpm build`, the primary e2e server) leaves the env var unset and keeps using
+   `.next`.
+4. **Next.js patches `tsconfig.json`'s `include` array the first time a new `distDir` runs**,
+   appending `<distDir>/types/**/*.ts` and `<distDir>/dev/types/**/*.ts` unprompted. That is a
+   real, permanent addition once a second `distDir` exists in the project — not build noise to
+   discard — so it is committed alongside the config that introduces the second `distDir`,
+   rather than left to reappear as an uncommitted diff after the next person's gate run.
+
 **One on-screen wordmark is still one unbreakable word**, at
 `components/backoffice/BackofficeSidebar.tsx:35`. It sits behind a Supabase session, so nobody has
 measured it at 320 px and 200% scale. It carries `text-xs`, so it is far less likely to overflow than
