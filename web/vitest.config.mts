@@ -10,7 +10,10 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['src/**/*.test.ts'],
+          // messages/**: seed S-062's locale key-set parity test. It lives outside src/ on
+          // purpose (S-038 sweeps web/src the same batch), so the include glob was widened
+          // rather than moving the test under src/. See messages/message-key-parity.test.ts.
+          include: ['src/**/*.test.ts', 'messages/**/*.test.ts'],
         },
       },
       {
