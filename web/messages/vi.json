@@ -434,7 +434,8 @@
     "nav_dashboard": "Tổng quan",
     "nav_members": "Thành viên",
     "nav_clans": "Dòng họ",
-    "nav_tree": "Cây gia phả"
+    "nav_tree": "Cây gia phả",
+    "rail_label": "Quản trị"
   },
   "common": {
     "loading": "Đang tải...",

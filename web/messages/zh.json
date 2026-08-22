@@ -377,7 +377,8 @@
     "nav_dashboard": "仪表盘",
     "nav_members": "成员",
     "nav_clans": "家族",
-    "nav_tree": "家谱"
+    "nav_tree": "家谱",
+    "rail_label": "后台"
   },
   "common": {
     "loading": "加载中...",

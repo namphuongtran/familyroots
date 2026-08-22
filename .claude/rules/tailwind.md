@@ -264,13 +264,22 @@ the *light* primary lightened, and the label on it measures **2.57:1**. With the
 build resolves the mix outright to `#aac8a0` and the label measures 8.60:1. `contrast.test.ts`
 fails if the literal stops matching its token, so the duplication is gated rather than trusted.
 
-**The backoffice aside is still hand-built and is now the odd one out.**
-`components/backoffice/BackofficeSidebar.tsx:30` is `bg-gray-950` `#030712`, and in dark it sits
-against a `#15140f` page, so the boundary nearly vanishes. Expressing it properly needs an
-inverse-surface role that spec § 2.1 and § 2.2 do not publish, so it is a decision rather than an
-edit: **seed S-039**. The `primary-container` brand mark inside it is still right for the same
-reason as before, measured 2026-08-14 against `#030712`: `primary` `#3e5c38` gives 2.68:1 and
-`primary-container` `#d6e4ce` gives 15.19:1.
+**The backoffice aside stopped being hand-built, per ADR-046 and seed S-061 (2026-08-22).**
+`components/backoffice/BackofficeSidebar.tsx:30` used to be `bg-gray-950` `#030712`, a palette
+colour that cannot flip, with a `primary-container` brand mark on top of it because `primary`
+only cleared 2.68:1 on that ground. Both are gone. The aside now takes `bg-muted text-foreground`,
+the same `muted` ground `contrast.test.ts` already measures at `:168`, so every ink the rail
+composes is a pair the gate already runs, twice, once per scheme — no new row was needed. On
+`muted` the order swaps: measured 2026-08-22, `primary` is 6.83:1 in light and 8.20:1 in dark,
+`primary-container` is 1.20:1 and 1.50:1, so the mark moved back to `primary`. The two
+`border-gray-800` hairlines are deleted outright rather than re-coloured, per the no-line rule in
+§ 5 below; the sections separate with margin instead. `layout.tsx:30` and `:32` moved from
+`bg-gray-900`/`bg-gray-50` to `bg-background` in the same change, because the two files have to
+move together or the rail and the page go the same darkness in dark mode. `web/CLAUDE.md`'s own
+account of S-061, and `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`,
+carry the full measurement table and the one open question this did not close: the rail-to-content
+step in light mode is a thin 1.04:1, because light `muted` is a cool grey where spec § 2.1
+publishes a warm one, and this seed did not move `muted` to fix that.
 
 **Both themes are gated, in two places.** `web/src/app/contrast.test.ts` runs its whole pair table
 twice, once per scope, and it parses the stylesheet with comments stripped so that `globals.css`
@@ -427,10 +436,15 @@ rendering** in every e2e run — the defect did not go away, it went where no ga
    discard — so it is committed alongside the config that introduces the second `distDir`,
    rather than left to reappear as an uncommitted diff after the next person's gate run.
 
-**One on-screen wordmark is still one unbreakable word**, at
-`components/backoffice/BackofficeSidebar.tsx:35`. It sits behind a Supabase session, so nobody has
-measured it at 320 px and 200% scale. It carries `text-xs`, so it is far less likely to overflow than
-the `text-3xl` mark was, but "less likely" is not a measurement. Treat it as unverified, not as fixed.
+**One on-screen wordmark is still one unbreakable word**, the literal string `FamilyRoots` at
+`components/backoffice/BackofficeSidebar.tsx:49` (moved from `:44` by seed S-061's 2026-08-22
+conversion, which renumbered the whole file — re-grep before trusting this line too). It sits
+behind a Supabase session, so nobody has measured it at 320 px and 200% scale. It still carries
+`text-xs font-semibold`, unchanged by S-061 (ADR-046's per-line table names no change for this
+line); what moved is the line above it, the translated `rail_label`, from `text-[10px]
+text-gray-400` to `text-xs text-foreground` and first in reading order, per the ADR's own table.
+So it is still no more likely to overflow than it was, but "no more likely" is not a measurement.
+Treat it as unverified, not as fixed.
 
 **S-034 named a third wordmark that does not exist, and its line number for the second one was one
 place off.** The seed's `Out of scope` line cites `components/layout/Sidebar.tsx:65` as a

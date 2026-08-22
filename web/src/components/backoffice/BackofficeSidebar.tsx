@@ -27,22 +27,26 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
   const pathname = usePathname()
 
   return (
-    <aside className="w-60 h-screen flex flex-col bg-gray-950 text-gray-100 shrink-0 fixed left-0 top-0">
+    <aside className="w-60 h-screen flex flex-col bg-muted text-foreground shrink-0 fixed left-0 top-0">
       {/* Brand */}
-      <div className="h-16 flex items-center gap-2.5 px-5 border-b border-gray-800">
+      <div className="h-16 flex items-center gap-2.5 px-5 mb-2">
         {/*
-          This mark takes `primary-container`, not `primary`, and the reason is
-          the ground. This aside is `bg-gray-950`, the one dark surface in the
-          app, and it is hand-built rather than the dark palette (that is seed
-          S-006). Measured 2026-08-14 against #030712: the old `primary-400`
-          red gave 6.01:1, `primary` #3e5c38 gives 2.68:1, and
-          `primary-container` #d6e4ce gives 15.19:1. A straight rename to
-          `text-primary` would have dropped this below AA.
+          ADR-046 ("The backoffice aside stops being inverted and becomes a
+          surface step") converted this aside from a hand-built bg-gray-950
+          to the `muted` token, so every ink here is now a pair
+          contrast.test.ts already runs against `muted` in both schemes. The
+          mark used to take `primary-container` because `primary` measured
+          only 2.68:1 on the old #030712 ground; on `muted` the order swaps:
+          measured 2026-08-22, `primary` is 6.83:1 in light and 8.20:1 in
+          dark, while `primary-container` drops to 1.20:1 and 1.50:1. See the
+          ADR for the full table and the one-cause explanation (a token
+          placed on a ground outside the token system fails in one theme or
+          the other, because the ink moves and the ground cannot).
         */}
-        <span className="text-primary-container font-bold text-lg font-serif">FR</span>
+        <span className="text-primary font-bold text-lg font-serif">FR</span>
         <div className="leading-tight">
+          <p className="text-xs text-foreground">{t('rail_label')}</p>
           <p className="text-xs font-semibold">FamilyRoots</p>
-          <p className="text-[10px] text-gray-400">Backoffice</p>
         </div>
       </div>
 
@@ -59,7 +63,7 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                 active
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100',
+                  : 'text-muted-foreground hover:bg-card hover:text-foreground',
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -71,10 +75,10 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-4 border-t border-gray-800">
+      <div className="px-3 py-4 mt-2">
         <button
           onClick={() => signOut()}
-          className="flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-colors"
+          className="flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-card hover:text-foreground transition-colors"
         >
           <LogOut className="h-4 w-4" />
           Sign out
