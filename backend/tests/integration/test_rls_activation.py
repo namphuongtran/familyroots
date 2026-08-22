@@ -195,21 +195,17 @@ _CLAN_ISOLATED_TABLES = {
     # permanent exemption row in S-015's list, on the grounds that a second place to
     # record a fact is a second place to be wrong.
     "notification_log",
-    # Joined 2026-08-22 (S-010, ADR-008 Phase 10, migration 035). The migration-027
-    # template, unchanged: clan_id is NOT NULL and UNIQUE, one row per clan. This one is
-    # INERT for the same reason as notification_log and a stronger one — measured
-    # 2026-08-22, NOTHING in `backend/app` reads or writes the table except the
-    # `Clan.settings` relationship (`app/models/clan.py:35`), whose result no caller
-    # consumes, and no trigger creates a row, so the table is empty in production.
-    # It belongs in THIS set and not the third one: both halves of its single policy are
-    # clan-keyed, unlike `audit_logs`, whose INSERT admits any clan or none.
+    # `clan_settings` was in this set from 2026-08-22 (S-010, migration 035) until the same
+    # day, when ADR-054 dropped the whole table (S-065, migration 039). It was the clearest
+    # case of a policy guarding a reader that never arrived: nothing constructed a
+    # `ClanSettings`, nothing created a row, and the table had no endpoint. Its name is gone
+    # from here rather than moved to an exemption list, because the table is gone.
     #
     # S-010's OTHER table, `user_clan_roles`, joined the schema on 2026-08-22 (S-052,
     # ADR-050, migration 036) and it is NOT in this set. Its SELECT and INSERT policies are
     # `true` on purpose, so listing it here would pass this set's assertion (some policy's
     # USING reads the GUC — its UPDATE policy does) while telling a later reader its reads
     # are confined to one clan, which is false. It has a fourth set of its own below.
-    "clan_settings",
 }
 
 # REQUEST-ROLE-DENIED: the policy compares nothing. USING (false) WITH CHECK (false) locks
@@ -432,8 +428,9 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
     unchanged, while `audit_logs` gets clan-keyed reads, permissive inserts, and no
     UPDATE/DELETE policy at all. That third shape is `_PER_COMMAND_TABLES`.
 
-    `clan_settings` joined on 2026-08-22 (S-010, migration 035), into the clan-isolated
-    set, because both halves of its one policy are clan-keyed.
+    `clan_settings` joined the clan-isolated set on 2026-08-22 (S-010, migration 035) and
+    LEFT it the same day, when ADR-054 dropped the table (S-065, migration 039). A name
+    leaves this file when its table leaves the schema; it is not moved to an exemption list.
 
     `user_clan_roles` joined on 2026-08-22 too (S-052, ADR-050, migration 036), into a
     FOURTH set. It is the table the authorization gate reads, so a policy on it decides

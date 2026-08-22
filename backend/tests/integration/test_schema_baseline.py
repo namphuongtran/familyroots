@@ -106,7 +106,6 @@ def test_clan_fks_are_restrict(sync_engine: sa.Engine) -> None:
 
     restrict = {
         "change_requests",
-        "clan_settings",
         "marriages",
         "user_clan_roles",
         "clan_invitations",

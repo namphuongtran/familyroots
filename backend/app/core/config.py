@@ -123,8 +123,11 @@ class Settings(BaseSettings):
 
     # Document upload — the platform-wide max upload size (MB), env-tunable without a
     # code change. Defaults to the document domain's built-in policy so there is a
-    # single source for the number. (Per-clan overrides are a future clan_settings
-    # feature; the dead clan_settings.max_upload_size_mb column is NOT wired yet.)
+    # single source for the number. This is the ONLY upload limit: the per-clan override
+    # that used to sit in `clan_settings.max_upload_size_mb` is gone with that table
+    # (ADR-054, migration 039). A per-clan limit has to be designed, not re-enabled — and
+    # its default may not be 10, which is what the dropped column carried while the
+    # enforced limit was 50.
     MAX_UPLOAD_SIZE_MB: int = DEFAULT_MAX_FILE_SIZE_BYTES // (1024 * 1024)
 
     @property

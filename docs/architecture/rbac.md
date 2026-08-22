@@ -12,7 +12,7 @@ super_admin                             admin
   ├── Manage all clans                   ├── Manage clan persons
   ├── Provision / suspend clans          ├── Approve new user registrations
   ├── View platform-wide metrics         ├── Assign editor/viewer roles
-  ├── Promote/demote clan admins         └── Manage clan settings
+  ├── Promote/demote clan admins         └── Edit clan info (PATCH /clans/me)
   ├── Access all clan data (audit)
   └── Cannot be created via API          editor
       (bootstrap only)                     │
@@ -110,12 +110,32 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 | Create clan invitation         | ✅           | ✅     | ❌      | ❌      |
 | Revoke clan invitation         | ✅           | ✅     | ❌      | ❌      |
 | View pending invitations       | ✅           | ✅     | ❌      | ❌      |
-| **CLAN SETTINGS**              |             |       |        |        |
-| View clan settings             | ✅           | ✅     | ✅      | ✅      |
-| Edit clan settings             | ✅           | ✅     | ❌      | ❌      |
 | **NOTIFICATIONS**              |             |       |        |        |
 | Receive push notifications     | ✅           | ✅     | ✅      | ✅      |
 | Configure notification settings| ✅           | ✅     | ✅      | ✅      |
+
+> **A row in this matrix is not evidence that an endpoint exists.** That is the design
+> spec's own § 9-J22, learned by drawing a `Xuất PDF` button sourced from a row here that
+> no route backs (`../superpowers/specs/2026-08-02-design-system-and-screens.md:2404-2409`).
+> Read the matrix as *who may do this if it is built*, and check `backend/app/api/` before
+> building a screen on any row.
+>
+> **`View clan settings` and `Edit clan settings` were rows here until 2026-08-22.** They
+> were removed by seed S-065 / [ADR-054](../decisions/054-clan-settings-table-is-dropped.md),
+> which dropped the `clan_settings` table itself. No endpoint ever read or wrote it, nothing
+> ever created a row in it, and the design spec § 7.10d refuses to draw its knobs. The clan
+> screen that does exist edits clan **info** — the `clans` row, `PATCH /clans/me` — which is
+> the `Edit clan info` row above and a different thing.
+>
+> **Two rows above are still unbacked, measured 2026-08-22 by S-065 and left standing
+> because deciding their fate was not that seed's to make.** `Export tree as PDF`:
+> `grep -rni pdf backend/app/api/ backend/app/application/` returns nothing, and ADR-020 puts
+> PDF export out of scope pending ADR-005's unbuilt worker — this is J22's original instance,
+> still here. `Configure notification settings`: there is no notification-preference route
+> (`backend/app/api/v1/` has no notifications module; the only related routes are
+> `POST`/`DELETE /me/fcm-token` at `auth.py:175,190`, which register a device, not a
+> preference), and the column that would have stored clan defaults,
+> `clan_settings.notification_defaults`, went with the table.
 
 ### Why change-request review is editor-and-admin, not admin-only
 

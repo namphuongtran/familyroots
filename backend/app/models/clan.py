@@ -32,5 +32,4 @@ class Clan(TimestampMixin, Base):
     origin_persons = relationship("Person", back_populates="origin_clan", lazy="selectin")
     clan_memberships = relationship("ClanMembership", back_populates="clan", lazy="selectin")
     user_roles = relationship("UserClanRole", back_populates="clan", lazy="selectin")
-    settings = relationship("ClanSettings", back_populates="clan", uselist=False, lazy="selectin")
     branches = relationship("Branch", back_populates="clan", lazy="selectin")

@@ -54,7 +54,8 @@ Single linear chain:
 `029_rls_persons` → `030_rls_change_requests` → `031_rls_clan_memberships` →
 `032_rls_clan_invitations` → `033_rls_identity_claims` →
 `034_rls_audit_notification` → `035_rls_clan_settings` →
-`036_rls_user_clan_roles` → `037_drop_allow_public_tree` → `038_drop_privacy_level`.
+`036_rls_user_clan_roles` → `037_drop_allow_public_tree` → `038_drop_privacy_level` →
+`039_drop_clan_settings`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -136,6 +137,28 @@ in one change. `data-model.md` was corrected in the same commit: it held the col
 domain (`private`, `clan_members`, `public`) in two places, the ER diagram and the column
 table, and the domain was unenforced — no `CHECK`, no enum, no validator.
 
+`039_drop_clan_settings` drops the whole `clan_settings` table (S-065, ADR-054); reversible.
+It is the end of the sequence `037` and `038` started: those took two columns, this takes what
+was left, which was five unread columns, zero rows, and an RLS policy guarding a reader that
+never arrived. **`DROP TABLE` is not a column drop** — it silently takes the `035` policy, the
+`trg_clan_settings_updated_at` trigger, the `RESTRICT` foreign key that migration `010` gave
+it, the unique constraint, and the `familyroots_app` grants. `downgrade()` rebuilds all five
+explicitly and restores the table as `038` had it, not as `001` created it.
+
+**The round trip is exact except for `attnum`, and in the tidier direction.** At `038` the
+live columns are `1,2,3,4,5,7,9,10,11`: the gaps at 6 and 8 are the tombstones `037` and `038`
+left, and Postgres never reuses a dropped `attnum`. A `CREATE TABLE` cannot reproduce a gap,
+so `downgrade` returns `1..9` contiguous. Everything that carries meaning — names, types,
+`NOT NULL`, defaults, order, PK, unique, FK and its `RESTRICT`, the trigger, the RLS flags,
+both policy predicates, and the grants — comes back identical, proved by `cmp` against a
+database that never carried `039`. This is the mirror of what S-018 recorded for `038`, where
+`ADD COLUMN` could not restore ordinal position either.
+
+**`upgrade()` refuses to run if the table holds a row.** ADR-054 rests on the table being
+empty, which is measured rather than assumed, so the migration re-checks it at run time and
+raises instead of deleting data. No API shape changes: no endpoint ever read or wrote the
+table and no contract ever documented it.
+
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
@@ -143,7 +166,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `038_drop_privacy_level`; verify with `cd backend && uv run alembic heads`.
+Head = `039_drop_clan_settings`; verify with `cd backend && uv run alembic heads`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

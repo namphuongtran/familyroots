@@ -165,6 +165,13 @@ designate a founder, not a broken-tree error state. See
 [error-codes.md](error-codes.md#tree).
 
 ## Versioning & Compatibility Rules
-- Adding new clan settings fields is non-breaking.
+- Adding new **clan info** fields to the `GET`/`PATCH /clans/me` body is non-breaking.
+  "Clan info" is the `clans` row — name, slug, description, `origin_place`,
+  `founded_year`, `motto`, `ancestral_hall_location`, `clan_rules`. **This has never meant
+  a per-clan settings or preferences resource, and there is no such endpoint.** The
+  `clan_settings` table that a reader might take this sentence to cover was dropped on
+  2026-08-22 by [ADR-054](../decisions/054-clan-settings-table-is-dropped.md); no endpoint
+  ever read or wrote it and no contract ever documented its shape. This wording was
+  ambiguous until then, and the ambiguity is what ADR-054 removed.
 - Changing role semantics or approval flow is breaking.
 - Keep membership and admin action envelopes stable for client handling.
