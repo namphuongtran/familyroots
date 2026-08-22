@@ -81,6 +81,11 @@ export function EventCalendar() {
               onClick={() =>
                 setSelectedDate(isSameDay(day, selectedDate ?? new Date(0)) ? null : day)
               }
+              aria-label={
+                dayEvents.length > 0
+                  ? `${format(day, 'd MMMM yyyy', { locale: vi })}, ${t('day_events_count', { count: dayEvents.length })}`
+                  : undefined
+              }
               className={cn(
                 'relative flex h-8 flex-col items-center justify-center rounded text-xs',
                 !isSameMonth(day, currentMonth) && 'text-muted-foreground',
@@ -91,7 +96,20 @@ export function EventCalendar() {
             >
               {day.getDate()}
               {dayEvents.length > 0 && (
-                <span className="bg-gold-500 absolute bottom-0.5 h-1 w-1 rounded-full" />
+                // T-06 (spec § 5): colour is never the sole channel. A gold
+                // dot alone (`bg-gold-500` on `cream`, 2.03:1, S-036) is
+                // invisible in greyscale and to a screen reader. This badge
+                // carries the event count as text — `primary`/`primary-foreground`
+                // is already gated at ≥4.5:1 on every ground in
+                // `contrast.test.ts` — and the count reaches a screen reader
+                // through the button's own `aria-label` above, so the badge
+                // itself is `aria-hidden`.
+                <span
+                  aria-hidden="true"
+                  className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] leading-none font-semibold"
+                >
+                  {dayEvents.length > 9 ? '9+' : dayEvents.length}
+                </span>
               )}
             </button>
           )

@@ -157,6 +157,7 @@
     "page_title": "事件",
     "upcoming": "即将到来的事件",
     "no_events_on_day": "当天没有事件",
+    "day_events_count": "{count, plural, =1 {1 个事件} other {# 个事件}}",
     "type": {
       "death_anniversary": "忌日",
       "birthday": "生日",

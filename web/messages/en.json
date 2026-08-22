@@ -110,6 +110,7 @@
     "page_title": "Events",
     "upcoming": "Upcoming Events",
     "no_events_on_day": "No events on this day",
+    "day_events_count": "{count, plural, =1 {1 event} other {# events}}",
     "type": {
       "death_anniversary": "Death Anniversary",
       "birthday": "Birthday",
