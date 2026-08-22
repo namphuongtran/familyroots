@@ -74,11 +74,45 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      # S-071: Next.js inlines every `NEXT_PUBLIC_*` value into the browser bundle
+      # during `pnpm build`, which runs inside this build step — not at container
+      # start. The `environment:` block below is run time and cannot reach a value
+      # a Client Component already had baked into its JS at build time
+      # (`web/src/components/auth/SupabaseSetupNotice.tsx` is the proof: it is
+      # `'use client'` and reads both, so it renders the "Supabase not configured"
+      # banner no matter what `environment:` supplies, unless the same values were
+      # also given here). THIS MAKES THE IMAGE ENVIRONMENT-SPECIFIC: an image built
+      # with `.env`'s staging Supabase project has that project's URL and anon key
+      # burned into it and cannot be promoted to production unchanged. Rebuild
+      # (`docker compose build web`) with the target environment's `.env` before
+      # promoting.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     container_name: familyroots-web
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
+      # `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` here are inert for this container: S-071
+      # measured that every `NEXT_PUBLIC_*` name is inlined into the built JS wherever
+      # `pnpm build` sees it referenced — `middleware.ts` and the callback route
+      # included, not only Client Components — so the values that actually reach this
+      # image are the `build.args` above, and these two lines below do nothing once the
+      # image is built. Kept anyway for a non-Docker `pnpm dev`/`pnpm build` run against
+      # this same `.env`, and not removed, so this file still shows where the value
+      # comes from for that case.
+      #
+      # `NEXT_PUBLIC_API_URL` was not investigated by S-071 beyond confirming it is
+      # NOT given a `build.args` entry above, on purpose (out of that seed's scope) —
+      # but it reaches a Client Component transitively too (`src/lib/api/axios.ts`,
+      # imported by `'use client'` hooks such as `useMembers.ts`), and its build-time
+      # value differs by caller: `src/lib/server/auth-context.ts` needs the
+      # compose-network hostname `http://api:8000/api/v1` for server-to-server calls,
+      # while a browser needs a host-reachable origin instead. One literal cannot
+      # satisfy both once it is baked at build time, so this is a second, undecided
+      # instance of the same defect class S-071 fixed for Supabase's two variables,
+      # not merely S-071's Out of scope. Flagged to the coordinator; not fixed here.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000/api/v1}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
