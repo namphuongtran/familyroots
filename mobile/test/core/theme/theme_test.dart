@@ -24,6 +24,17 @@ void main() {
     expect(t.surface, const Color(0xFFFBF8F1));
   });
 
+  test('S-044: the card ground and the danger red are spec 2.1 values', () {
+    final t = ArborTokens.light();
+    // `surface-container-low`. Replaces #F5F1E6, which was sourced by no spec
+    // section and no ADR, only by the M0 plan that wrote it.
+    expect(t.surfaceContainerLow, const Color(0xFFF4EFE4));
+    // The spec calls this role `danger`; Flutter calls it `error`. The value is
+    // the spec's and it is web's `destructive` exactly. Replaces #8C1D18, a
+    // Material default that no document in this repository sourced.
+    expect(t.error, const Color(0xFFA32218));
+  });
+
   test('the painted primary is the token, not a re-derived tone', () {
     // `ColorScheme.fromSeed` returns a tonal palette, not the seed. Without an
     // explicit override the app paints a green that is in no token file.
@@ -33,6 +44,19 @@ void main() {
     expect(scheme.onPrimary, t.onPrimary);
     expect(scheme.surface, t.surface);
     expect(scheme.onSurface, t.onSurface);
+    // Both were unpinned before S-044. `error` was already overridden and
+    // survived; `surfaceContainerLow` was not, and `fromSeed` derived #F2F5EB
+    // from the leaf-green seed while the token said #F5F1E6.
+    expect(scheme.error, t.error);
+    expect(scheme.surfaceContainerLow, t.surfaceContainerLow);
+  });
+
+  test('the card ground is the token, and it steps off the page', () {
+    final t = ArborTokens.light();
+    expect(buildAppTheme().cardTheme.color, t.surfaceContainerLow);
+    // The no-line rule: a card is separated by a background step, not a
+    // border, so the two must not be the same colour.
+    expect(t.surfaceContainerLow, isNot(t.surface));
   });
 
   test('no colour literal lives outside tokens.dart', () {
