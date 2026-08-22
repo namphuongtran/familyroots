@@ -2,6 +2,7 @@ import createMiddleware from 'next-intl/middleware'
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 import { routing } from './i18n/routing'
+import { CLAN_COOKIE, parseClanCookie } from './shared/http/request-context'
 
 const intlMiddleware = createMiddleware(routing)
 
@@ -11,6 +12,16 @@ const PUBLIC_ROUTES = [
   '/auth/callback',
   '/pending-approval',
 ]
+
+/**
+ * First path segment (after the locale prefix) of every route under the
+ * `(dashboard)` group — `find web/src/app/[locale] -maxdepth 2`, 2026-08-22.
+ * `select-clan` itself, `platform/*` and `backoffice/*` are deliberately not
+ * here: the first is the picker this list redirects to, and the other two
+ * are cross-clan super-admin surfaces (`docs/architecture/multi-tenancy.md`),
+ * not clan-scoped.
+ */
+const CLAN_SCOPED_SEGMENTS = ['dashboard', 'documents', 'events', 'members', 'tree', 'admin']
 
 export async function middleware(request: NextRequest) {
   // Run intl middleware first so locale-prefixed routes resolve
@@ -63,6 +74,20 @@ export async function middleware(request: NextRequest) {
       const locale = pathname.split('/')[1] || 'vi'
       const loginUrl = new URL(`/${locale}/login`, request.url)
       return NextResponse.redirect(loginUrl)
+    }
+
+    // A clan-scoped route needs an active clan before it renders anything,
+    // so it never gets the chance to send a clan-scoped request with no
+    // `X-Current-Clan-Id` and find out from a backend 400. Missing and
+    // unparseable are the same case here: both mean "no clan selected"
+    // (`parseClanCookie`, `shared/http/request-context.ts`).
+    const firstSegment = strippedPath.split('/')[1]
+    if (
+      CLAN_SCOPED_SEGMENTS.includes(firstSegment) &&
+      parseClanCookie(request.cookies.get(CLAN_COOKIE)?.value) === null
+    ) {
+      const locale = pathname.split('/')[1] || 'vi'
+      return NextResponse.redirect(new URL(`/${locale}/select-clan`, request.url))
     }
   }
 

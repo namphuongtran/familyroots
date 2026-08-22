@@ -21,6 +21,26 @@ export interface RequestContext {
 export const CLAN_COOKIE = 'current_clan_id'
 export const LOCALE_COOKIE = 'preferred_locale'
 
+/**
+ * `clan_id` is a UUID everywhere in the backend (cast `::uuid` throughout
+ * `docs/architecture/data-model.md`), so a cookie value that is not one of
+ * these shapes did not come from a legitimate clan selection. Middleware and
+ * both context builders route a value that fails this the same way they route
+ * a missing cookie: as "no clan selected", rather than forwarding garbage as
+ * `X-Current-Clan-Id` and letting the backend reject it.
+ */
+const CLAN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * The single reader of the `current_clan_id` cookie value. Returns null for
+ * both "not set" and "set but not a UUID" — callers that need to tell those
+ * two apart (there are none today) must inspect the raw cookie themselves.
+ */
+export function parseClanCookie(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  return CLAN_ID_PATTERN.test(raw) ? raw : null
+}
+
 export function normalizeLocale(raw: string | null | undefined): LocaleCode {
   if (!raw) return DEFAULT_LOCALE
   const base = raw.trim().toLowerCase().split('-')[0]
