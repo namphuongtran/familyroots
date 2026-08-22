@@ -1,35 +1,41 @@
-"""Accepting an invitation runs with NO clan context — so ``clan_invitations`` must not
-carry a clan-isolation policy until someone decides where that path should run.
+"""Accepting an invitation runs with NO clan context, so it runs on the SYSTEM session.
 
-Seed S-009 asks for RLS on ``clan_invitations`` and ``clan_memberships``. Migration 031
-enables it on ``clan_memberships`` only. This test is the reason, and it is written as a
-guard rather than as prose so the next agent hits it instead of reading past it.
+This module used to argue the opposite: it pinned ``clan_invitations`` as un-RLS-able and
+told the next agent why. That question is now answered. **ADR-048** decided it, migration
+``032`` covers the table, and these tests changed sides with it. The chain that forced the
+decision is unchanged and is worth keeping, because it is what makes the current wiring
+load-bearing rather than arbitrary:
 
-The chain, at 2026-08-22:
-
-* ``POST /api/v1/invitations/{token}/accept`` (``app/api/v1/invitations.py:89-102``)
-  declares ``get_current_user`` and the command handler, and deliberately NOT
-  ``get_current_clan_id`` — the invitee is not a member of the clan yet, so there is no
-  clan for them to select and no membership check that could pass.
-* ``get_invitation_command_handler`` (``app/infrastructure/dependencies.py:336-340``) is
-  wired to ``get_db``, the RLS request session, which drops to ``familyroots_app`` on
-  every transaction (``app/core/rls.py:63``) whether or not a clan is known.
-* ``app.clan_id`` is therefore the empty string, so the migration-027 predicate
-  ``clan_id = nullif(current_setting('app.clan_id', true), '')::uuid`` is NULL.
+* ``POST /api/v1/invitations/{token}/accept`` (``app/api/v1/invitations.py:95-99``) declares
+  ``get_current_user`` and deliberately NOT ``get_current_clan_id`` — the invitee is not a
+  member of the clan yet, so there is no clan for them to select and no membership check that
+  could pass.
+* The RLS seam drops to ``familyroots_app`` and writes ``app.clan_id`` on EVERY transaction
+  of a request session (``app/core/rls.py:63-65``), whether or not a clan is known.
+* An unset clan makes the migration-027 predicate
+  ``clan_id = nullif(current_setting('app.clan_id', true), '')::uuid`` NULL.
 * The first thing ``accept`` does is ``get_by_token``
   (``app/infrastructure/persistence/invitation_repository.py:53-58``) — a lookup with no
-  ``clan_id`` predicate, because the token IS the authorization.
+  ``clan_id`` predicate, because the token IS the authorization. The write half,
+  ``transition_status`` (``invitation_repository.py:107-127``), matches by ``id`` and has no
+  ``clan_id`` either.
 
-Add the policy to that table and the lookup returns zero rows: every accept answers
-``invitation.not_found``. The write half fails the same way — ``transition_status``
-(``invitation_repository.py:107-127``) would match no row and raise
-``invitation.not_pending``. Fixing it means deciding whether the accept path moves to the
-privileged ``get_system_db`` session (which also removes RLS from invitation create,
-list and revoke, all of which ARE clan-scoped) or whether the table stays uncovered. That
-is a posture decision with its own ADR, not a line in a migration.
+So under the seam, with the policy live, every accept answers ``invitation.not_found``. ADR-048
+moved that one route to ``get_invitation_accept_handler``
+(``app/infrastructure/dependencies.py:358-362``), which runs on the privileged
+``get_system_db``. Create, list and revoke stay on ``get_db`` and are what the policy protects.
 
-Negative control (run 2026-08-22): adding ``clan_invitations`` to migration 031's table
-list makes this test fail with ``EntityNotFoundError: invitation.not_found``.
+The three tests below are the two halves of that plus the pin:
+
+1. accept succeeds on the system session, with the policy enabled — the shipped path;
+2. accept on a request session with no clan raises ``invitation.not_found`` — the failure the
+   wiring exists to avoid, watched rather than described;
+3. ``clan_invitations`` really is RLS-enabled, so test 1 is not passing because the policy is
+   absent.
+
+``tests/unit/api/test_invitation_accept_session_wiring.py`` is the cheap guard that the ROUTE
+still resolves the right session. This module is the expensive guard that the session choice
+still produces the right behaviour against a real policy.
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ from app.application.invitation.commands import AcceptInvitation
 from app.application.invitation.handlers import InvitationCommandHandler
 from app.core.database import RlsSession
 from app.core.rls import set_request_clan_id
+from app.domain.shared.exceptions import EntityNotFoundError
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.invitation_repository import SqlAlchemyInvitationRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
@@ -72,14 +79,16 @@ def _reset_clan_context() -> Generator[None]:
     set_request_clan_id(None)
 
 
-async def test_accept_by_token_succeeds_with_no_clan_selected(engine: AsyncEngine) -> None:
-    """The real accept use case, on the real request-session class, with the clan
-    ContextVar unset — exactly the state the route is in."""
+async def _seed_pending_invitation(engine: AsyncEngine) -> tuple[uuid.UUID, str, str]:
+    """One clan with one pending invitation. Returns ``(clan_id, token, email)``.
+
+    Seeded on the privileged connection, which bypasses RLS — otherwise the fixture would be
+    testing the policy instead of setting up for it.
+    """
     clan_id, inviter, invitee = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     token = f"tok-{uuid.uuid4().hex}"
     email = f"{invitee.hex[:12]}@example.com"
-
-    async with engine.begin() as conn:  # privileged seeding, bypasses RLS
+    async with engine.begin() as conn:
         await conn.execute(
             sa.text("INSERT INTO clans (id, name, slug) VALUES (:id, 'C', :s)"),
             {"id": clan_id, "s": f"c{clan_id.hex[:10]}"},
@@ -98,22 +107,30 @@ async def test_accept_by_token_succeeds_with_no_clan_selected(engine: AsyncEngin
                 "exp": datetime.now(UTC) + timedelta(days=7),
             },
         )
+    return clan_id, token, email
 
-    rls = async_sessionmaker(
-        engine, sync_session_class=RlsSession, expire_on_commit=False, class_=AsyncSession
+
+def _handler(session: AsyncSession) -> InvitationCommandHandler:
+    return InvitationCommandHandler(
+        SqlAlchemyInvitationRepository(session),
+        SqlAlchemyUnitOfWork(session, create_event_dispatcher(session)),
     )
-    set_request_clan_id(None)
-    async with rls() as session:
-        # Guard: this really is the non-privileged role with no clan, or the assertion
-        # below would prove nothing.
-        assert await session.scalar(sa.text("SELECT current_user")) == "familyroots_app"
-        assert await session.scalar(sa.text("SELECT current_setting('app.clan_id', true)")) == ""
 
-        handler = InvitationCommandHandler(
-            SqlAlchemyInvitationRepository(session),
-            SqlAlchemyUnitOfWork(session, create_event_dispatcher(session)),
-        )
-        out = await handler.accept(
+
+async def test_accept_by_token_succeeds_on_the_system_session(engine: AsyncEngine) -> None:
+    """The shipped path (ADR-048): the real accept use case on a session with NO RLS seam,
+    which is what ``get_system_db`` hands out (``app/core/database.py:86-93``, using
+    ``AsyncSessionLocal`` from ``:49-53``, to which the seam is never attached)."""
+    clan_id, token, email = await _seed_pending_invitation(engine)
+    invitee = uuid.uuid4()
+
+    system = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with system() as session:
+        # Guard: this really is the privileged role, or the assertions below prove nothing
+        # about which session accept needs.
+        assert await session.scalar(sa.text("SELECT current_user")) != "familyroots_app"
+
+        out = await _handler(session).accept(
             AcceptInvitation(
                 token=token, user_id=invitee, user_email=email, user_full_name="Người được mời"
             )
@@ -132,17 +149,56 @@ async def test_accept_by_token_succeeds_with_no_clan_selected(engine: AsyncEngin
     assert approved is True
 
 
-async def test_clan_invitations_is_not_rls_enabled(engine: AsyncEngine) -> None:
-    """The state above holds only while the table is uncovered. Pinned explicitly so that
-    enabling RLS on ``clan_invitations`` fails HERE, next to the reason, rather than only
-    in the coverage set in ``test_rls_activation``."""
+async def test_accept_under_the_rls_seam_with_no_clan_is_locked_out(engine: AsyncEngine) -> None:
+    """The failure ADR-048's wiring exists to avoid, watched rather than described.
+
+    Same use case, same data, on ``RlsSession`` with the clan ContextVar unset — exactly the
+    state the route would be in if anyone re-pointed the accept handler at ``get_db``.
+    """
+    _clan_id, token, email = await _seed_pending_invitation(engine)
+
+    rls = async_sessionmaker(
+        engine, sync_session_class=RlsSession, expire_on_commit=False, class_=AsyncSession
+    )
+    set_request_clan_id(None)
+    async with rls() as session:
+        assert await session.scalar(sa.text("SELECT current_user")) == "familyroots_app"
+        assert await session.scalar(sa.text("SELECT current_setting('app.clan_id', true)")) == ""
+
+        with pytest.raises(EntityNotFoundError) as ei:
+            await _handler(session).accept(
+                AcceptInvitation(
+                    token=token,
+                    user_id=uuid.uuid4(),
+                    user_email=email,
+                    user_full_name="Người được mời",
+                )
+            )
+    assert "invitation.not_found" in str(ei.value)
+
+    async with engine.connect() as conn:  # privileged: nothing was granted
+        status = await conn.scalar(
+            sa.text("SELECT status FROM clan_invitations WHERE token = :t"), {"t": token}
+        )
+    assert status == "pending"
+
+
+async def test_clan_invitations_is_rls_enabled(engine: AsyncEngine) -> None:
+    """Migration 032. Without this, the success case above would pass for the wrong reason —
+    an absent policy looks exactly like a working one from the privileged session."""
     async with engine.connect() as conn:
         enabled = await conn.scalar(
             sa.text("SELECT relrowsecurity FROM pg_class WHERE relname = 'clan_invitations'")
         )
-    assert enabled is False, (
-        "clan_invitations now has RLS enabled. Read this module's docstring: the "
-        "accept-by-token path runs with no clan context, so the policy locks every "
-        "invitee out. That change needs an ADR and a decision about which session the "
-        "accept path runs on."
-    )
+        policies = (
+            (
+                await conn.execute(
+                    sa.text("SELECT policyname FROM pg_policies WHERE tablename = :t"),
+                    {"t": "clan_invitations"},
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert enabled is True, "migration 032 did not enable RLS on clan_invitations"
+    assert list(policies) == ["clan_invitations_clan_isolation"], policies
