@@ -7,7 +7,6 @@ from app.models.change_request import ChangeRequest
 from app.models.clan import Clan
 from app.models.clan_invitation import ClanInvitation
 from app.models.clan_membership import ClanMembership
-from app.models.clan_settings import ClanSettings
 from app.models.document import Document
 from app.models.event import Event
 from app.models.identity_claim import IdentityClaim
@@ -28,7 +27,6 @@ __all__ = [
     "ClanInvitation",
     "ClanMembership",
     "ClanScopedMixin",
-    "ClanSettings",
     "Document",
     "Event",
     "IdentityClaim",

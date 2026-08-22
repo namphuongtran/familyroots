@@ -202,18 +202,6 @@ erDiagram
         timestamptz updated_at
     }
 
-    clan_settings {
-        uuid id PK
-        uuid clan_id FK UK "one per clan"
-        jsonb approval_config
-        varchar default_language "default vi"
-        varchar tree_display_mode "vertical | horizontal"
-        jsonb notification_defaults
-        smallint max_upload_size_mb "default 10"
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
     clan_invitations {
         uuid id PK
         uuid clan_id FK
@@ -323,7 +311,6 @@ erDiagram
     user_profiles ||--o| identity_claims : "submits"
     clans ||--o{ clan_memberships : "has members"
     clans ||--o{ user_clan_roles : "has roles"
-    clans ||--|| clan_settings : "has settings"
     clans ||--o{ clan_invitations : "has invitations"
     clans ||--o{ events : "has"
     clans ||--o{ documents : "has"
@@ -723,8 +710,10 @@ Propose-and-review corrections to clan data / Đề nghị sửa gia phả.
 > because they are the storage vocabulary — widening the *executed* set later needs
 > no migration and no contract change.
 >
-> `clan_settings.approval_config` is **not** consulted; the reviewer set is fixed at
-> editor-or-admin (see ADR-037 for why, and `rbac.md` for the matrix).
+> **The reviewer set is fixed at editor-or-admin and is not configurable** (see ADR-037
+> for why, and `rbac.md` for the matrix). It was never configurable: the
+> `clan_settings.approval_config` column that might have held such a configuration was
+> read by nothing and dropped with its table on 2026-08-22 (ADR-054).
 >
 > ✅ **RLS (2026-08-22, migration `030_rls_change_requests`, ADR-008 Phase 5, seed S-008).**
 > The explicit `clan_id` predicate in `change_request_repository` stays the primary
@@ -785,108 +774,31 @@ Chi/phái/nhánh within a clan. Supports nested hierarchy.
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-### `clan_settings`
-Per-clan configuration, one row per clan (`clan_id` is UNIQUE).
+### `clan_settings` — dropped 2026-08-22, and not replaced
 
-> ❌ **Correction (2026-08-22, seed S-010).** This section said "Auto-created with new
-> clans". That is **false**, and the code is the truth. Measured by
-> `grep -rn 'clan_settings\|ClanSettings' backend/app` and by reading
-> `backend/migrations/versions/001_initial.py`: nothing in the application constructs a
-> `ClanSettings`, no route, repository or query port touches the table, and the only triggers
-> the baseline migration installs are `trg_<table>_updated_at` (`001_initial.py:930-937`).
-> **The table is empty in the running system.** The only reference outside the ORM model is
-> the `Clan.settings` relationship (`backend/app/models/clan.py:35`), whose result no caller
-> reads.
+> ❌ **This table no longer exists.** Migration `039_drop_clan_settings` removed it whole
+> (seed S-065, [ADR-054](../decisions/054-clan-settings-table-is-dropped.md)), after
+> `037` and `038` had already taken `allow_public_tree` and `privacy_level` under ADR-044.
+> The section is kept as a tombstone rather than deleted, because this file described the
+> table in detail for months and a reader who remembers it needs to find out what happened.
 
-> ❌ **`allow_public_tree` was dropped on 2026-08-22** by migration
-> `037_drop_allow_public_tree` (seed S-017, [ADR-044](../decisions/044-privacy-toggles-dropped-from-v1.md) § 1).
-> The **column** does not come back. The concept of a public tree may, and if it does it
-> returns as `privacy_level` alone: the two carried the same fact, and two authorities on one
-> question is the defect [ADR-027](../decisions/027-doi-single-authority.md) exists to prevent.
-> The drop lost no data, because the table has no rows (the note above), so the `downgrade`
-> restores the exact shape `001_initial.py:600` gave it — `NOT NULL`, `server_default false`.
+It held per-clan configuration, one row per clan, and **not one row was ever created**. Its
+five surviving columns were `approval_config`, `default_language`, `tree_display_mode`,
+`notification_defaults`, and `max_upload_size_mb`. Nothing in `backend/app` read any of
+them, nothing constructed a `ClanSettings`, no trigger created a row, and no endpoint
+existed — so the RLS policy migration `035` gave it guarded a reader that never arrived.
 
-> ❌ **`privacy_level` was dropped on 2026-08-22** by migration `038_drop_privacy_level`
-> (seed S-018, [ADR-044](../decisions/044-privacy-toggles-dropped-from-v1.md) § 2). **The
-> concept may come back; this column may not come back as it stood.** The note above says a
-> public tree "returns as `privacy_level` alone" — read that as the *concept*, because after
-> this migration no privacy column exists at all. **The value domain went with the column.**
-> Until today this file was the only place that wrote it down, in two spots: the ER diagram
-> above and this table both said `private`, `clan_members`, or `public`. Both rows are gone.
-> Nothing enforced that domain — no `CHECK`, no enum, no validator, and the ORM type was a
-> bare `String(20)` — so an unrecognized value was a value. `private` also had no defined
-> meaning: no source in this repository says private **from whom**, in a product whose
-> `viewer` role is "Read-only access to all clan data" ([rbac.md](rbac.md)). Leaving the
-> domain written down after the column went would let it outlive the thing that carried it.
-> ADR-044 § 2 names the four terms the concept returns on, in one change: a domain closed at
-> the database, `get_current_clan_id` + `RequireViewer` as the enforcement point, a failure
-> direction resolving to the most restrictive value, and a row creator built first. The drop
-> lost no data, because the table has no rows (the note above), so the `downgrade` restores
-> the exact shape `001_initial.py:603` gave it — `NOT NULL`, `server_default 'clan_members'`.
+**Do not recreate this table to add a per-clan setting.** ADR-054 records why that would
+repeat the mistake, and what a real per-clan configuration feature has to solve first: a row
+creator that survives the RLS `WITH CHECK` (the obvious one, inserting during clan creation
+on the request session, is *rejected* — ADR-044 Measurement 5), and a failure direction for
+the universal "no row" case that resolves to the most restrictive value rather than the most
+permissive. ADR-049 § "Not per-clan" reached the same wall from the field-visibility side.
 
-> ✅ **RLS (2026-08-22, migration `035_rls_clan_settings`, ADR-008 Phase 10, seed S-010).**
-> The table carries the migration-027 template unchanged —
-> `clan_settings_clan_isolation USING (clan_id = <app.clan_id GUC>) WITH CHECK (…)` — on both
-> reads and writes. The application-layer filter stays the primary guarantee; this is the
-> layer-2 backstop. Because the table is empty and unread today the policy is **inert**: it
-> guards a reader that does not exist yet, which ADR-043 § 2 already chose over a permanent
-> exemption row in S-015's list. **One live read path does exist and was checked before
-> shipping:** `Clan.settings` is `lazy="selectin"`, so `get_clan_by_slug` and
-> `get_clan_by_id` (`backend/app/infrastructure/persistence/auth_repository.py:47-49`,
-> `:51-52`) emit a SELECT against this table on the request session with **no clan GUC**
-> during `POST /auth/register` and `POST /auth/onboard`. It returns nothing, `clan.settings`
-> is `None`, and both flows still answer `201` — measured 2026-08-22 and pinned by
-> `backend/tests/integration/test_rls_phase10_clan_settings.py`, which also proves two-sided
-> isolation at the DB layer. Every denial assertion there ends with a **privileged** read
-> proving the rows were present, because on an empty table "zero rows" is the answer a broken
-> policy and a working one both give.
-
-> ⚠️ **Status (2026-07-02) — mostly not enforced yet.** Only the row/columns exist;
-> the runtime does **not** read most knobs. In particular `max_upload_size_mb`
-> (default 10) is **not** applied — the document domain hard-codes a **50 MB** limit,
-> so the two disagree and must be reconciled when this is built.
-> `tree_display_mode`, `approval_config`, `notification_defaults` are also inert.
-> (`privacy_level` was on this list until 2026-08-22; the column is gone — see the note
-> above. `allow_public_tree` was never on it.)
-> Roadmap item D3.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `clan_id` | UUID | FK → clans.id (RESTRICT), UNIQUE, NOT NULL | One settings row per clan |
-| `approval_config` | JSONB | | Configurable approval workflow / Cấu hình duyệt dữ liệu (theo quyền hạn) |
-| `default_language` | VARCHAR(10) | DEFAULT 'vi' | Default UI language for clan members |
-| `tree_display_mode` | VARCHAR(20) | DEFAULT 'vertical' | `vertical` or `horizontal` tree rendering / Hiển thị cây dọc hay ngang |
-| `notification_defaults` | JSONB | | Default notification settings for new members / Cấu hình thông báo mặc định cho member |
-| `max_upload_size_mb` | SMALLINT | DEFAULT 10 | Max file upload size in MB / Dung lượng tối đa cho phép upload |
-| `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
-| `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
-
-**`approval_config` JSONB structure:**
-
-```json
-{
-  "require_approval": {
-    "person_create": true,
-    "person_update": false,
-    "person_delete": true,
-    "marriage_create": true,
-    "marriage_delete": true,
-    "parent_child_create": true,
-    "parent_child_delete": true
-  },
-  "auto_approve_roles": ["admin"]
-}
-```
-
-**`notification_defaults` JSONB structure:**
-
-```json
-{
-  "notify_days_before": 7,
-  "event_types": ["death_anniversary", "birthday", "clan_ceremony"]
-}
-```
+**Nothing about the running system changed when it went.** No endpoint, no response, and no
+stored value moved, because there were none. The upload limit is, and always was,
+`Settings.MAX_UPLOAD_SIZE_MB` (50) — the dropped column's default of 10 contradicted it and
+was never consulted.
 
 ### `clan_invitations`
 Tracks pending email invitations to join a clan.
