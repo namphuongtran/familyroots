@@ -24,6 +24,7 @@ import importlib.util
 import os
 import sys
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -79,7 +80,7 @@ class StubGoTrue:
 
 
 @pytest.fixture()
-def conn(migrated_db_url: str):
+def conn(migrated_db_url: str) -> Iterator[psycopg.Connection[Any]]:
     """A psycopg connection to the throwaway migrated database, as the script opens it.
 
     Routed through the script's own ``app_dsn()`` so the SQLAlchemy ``+psycopg`` suffix
@@ -104,7 +105,7 @@ def _fixture_tuples() -> set[tuple[str, str, str]]:
     return {(u.email, u.clan.slug, u.role) for u in seeder.USERS}
 
 
-def _rows_as_tuples(conn) -> set[tuple[str, str, str]]:
+def _rows_as_tuples(conn: psycopg.Connection[Any]) -> set[tuple[str, str, str]]:
     """(email, clan slug, role) read back from the database, for approved memberships."""
     with conn.cursor() as cur:
         cur.execute(
@@ -314,7 +315,7 @@ def test_an_email_registered_under_another_id_stops_apply_before_it_writes(conn,
 # ── The other loud failure: a database nobody migrated ────────────────────────
 
 
-def test_an_unmigrated_database_is_named_as_unmigrated(migrated_db_url: str):
+def test_an_unmigrated_database_is_named_as_unmigrated(migrated_db_url: str) -> None:
     """A database with no ``user_clan_roles`` must produce "run alembic", not a
     ``psycopg.errors.UndefinedTable`` traceback the reader has to interpret."""
     admin_dsn = migrated_db_url.replace("+psycopg", "").rsplit("/", 1)[0] + "/postgres"
