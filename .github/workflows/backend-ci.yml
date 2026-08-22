@@ -5,17 +5,20 @@ on:
     branches: [main, develop]
     paths:
       - "backend/**"
-      # The backend unit suite guards two things that live outside backend/:
-      # docs/ops/migrations.md (S-063) and infra/ table DDL (S-064). Without these
-      # filters a pull request that only touches those paths runs no gate at all.
+      # The backend unit suite guards three things that live outside backend/:
+      # docs/ops/migrations.md (S-063), infra/ table and policy DDL (S-064, S-067),
+      # and scripts/ SQL that a shell script actually feeds to psql (S-069). Without
+      # these filters a pull request that only touches those paths runs no gate at all.
       - "docs/ops/migrations.md"
       - "infra/**"
+      - "scripts/**"
   pull_request:
     branches: [main, develop]
     paths:
       - "backend/**"
       - "docs/ops/migrations.md"
       - "infra/**"
+      - "scripts/**"
 
 defaults:
   run:
