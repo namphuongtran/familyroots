@@ -20,6 +20,15 @@ ThemeData buildAppTheme() {
   // the token directly, so no shipped screen showed it, but every Material
   // widget that defaults to `colorScheme.surfaceContainerLow` (Drawer, and the
   // M3 menu and sheet surfaces) would have painted the derived tone.
+  //
+  // `outlineVariant` joined in S-048, and it is the same trap a third time.
+  // Measured 2026-08-22 before that fix: `scheme.outlineVariant` was #C2C8BC,
+  // another leaf-green tone, while the token said #CFC7B4. Six Flutter 3.44.8
+  // `…DefaultsM3` classes read `colorScheme.outlineVariant` — `_DividerDefaults`
+  // (`Divider`, `VerticalDivider`), `_OutlinedCardDefaults`, both `_TabsDefaults`,
+  // `_ChipDefaults` and `_BannerDefaults`. No screen in `lib/` uses one today,
+  // so nothing paints it today; that is a fact about the screens shipped, not
+  // about the role being dead.
   final scheme = ColorScheme.fromSeed(
     seedColor: t.primary,
     primary: t.primary,
@@ -28,6 +37,7 @@ ThemeData buildAppTheme() {
     onSurface: t.onSurface,
     surfaceContainerLow: t.surfaceContainerLow,
     error: t.error,
+    outlineVariant: t.outlineVariant,
   );
 
   return ThemeData(

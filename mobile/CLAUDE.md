@@ -357,10 +357,10 @@ hardcodes a colour or a radius. Reach them with `context.tokens`.
 - **Layout** — no rigid grids unless the data is tabular. Layouts must survive
   **200% text scale**; goldens run at scale 1.0 and 2.0.
 
-### The palette is the spec's and ADR-041's, and four things about it are load-bearing
+### The palette is the spec's and ADR-041's, and five things about it are load-bearing
 
-Landed by seed S-037 on 2026-08-22, extended by seed S-044 the same day. Each note exists
-because the obvious move is wrong.
+Landed by seed S-037 on 2026-08-22, extended by seeds S-044 and S-048 the same day. Each
+note exists because the obvious move is wrong.
 
 **1. `surface` is `#FBF8F1`, not the `#FDFCF7` mobile used to hold.** ADR-041 decision 3
 picked the spec's value over *both* incumbents on purpose, so that no client has to
@@ -437,11 +437,71 @@ prefix. The value is the spec's; only the spelling is this repository's.
 `#A32218` measures 7.50:1. The move costs contrast, from 7.95:1 on the same ground, and it
 buys one red under one value across both clients.
 
-**A third token is still off-spec and S-044 did not move it.** `outlineVariant` is
-`#CFC7B4`; spec § 2.1 names `outline-variant` `#B3A98F`. Read at source 2026-08-22. It has
-no reader anywhere in `lib/`, so no screen and no golden can show the difference, and
-changing an unpinned token with no consumer is how a wrong value gets in. S-044 reported it
-for its own seed instead of moving it.
+**5. "No token reads it" and "no `ColorScheme` field takes it" are two different claims,
+and `outlineVariant` is where they came apart.** Seed S-048 moved `outlineVariant` from
+`#CFC7B4` to spec § 2.1's `#B3A98F` on 2026-08-22, and passed it to `ColorScheme.fromSeed`.
+Read at source that day: `mobile/lib/core/theme/tokens.dart:49` for the old value, and
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:90` for the spec's. Like
+note 4's two, `#CFC7B4` was sourced only by
+`docs/superpowers/plans/2026-08-02-mobile-m0-spine.md:3151`, the record of what was built.
+
+**The first claim is true and the second was false.** `grep -rn outlineVariant lib` still
+returns five hits, all inside `tokens.dart`: the field, the factory, the declaration, the
+`copyWith`, and the `lerp`. No widget reads the token. But `ColorScheme` **does** have an
+`outlineVariant` field, `ColorScheme.fromSeed` **does** take it as a named argument, and
+six Flutter 3.44.8 defaults classes read it: `_DividerDefaultsM3`
+(`packages/flutter/lib/src/material/divider.dart:369`, backing both `Divider` and
+`VerticalDivider`), `_OutlinedCardDefaultsM3` (`card.dart:394`), `_TabsPrimaryDefaultsM3`
+and `_TabsSecondaryDefaultsM3` (`tabs.dart:2806` and `:2885`), `_ChipDefaultsM3`
+(`chip.dart:2534`) and `_BannerDefaultsM3` (`banner.dart:516`). Measured 2026-08-22 before
+the fix, `buildAppTheme().colorScheme.outlineVariant` was **`#C2C8BC`**, a green-tinted
+tone the leaf-green seed derived, while the token said `#CFC7B4`. That is note 2's
+`fromSeed` trap a **third** time, after `primary` in S-037 and `surfaceContainerLow` in
+S-044. **Check the `ColorScheme` counterpart of every token, one at a time. The score so
+far is three for three.**
+
+**Deleting the field was the other live option, and this is why it lost.** Note 3 rejected
+the `heritage` family as "values no gate can check and no screen can show". Both halves
+fail here. A gate *can* check this one, because `ColorScheme` holds it, and
+`test/core/theme/theme_test.dart` now pins both the token value and
+`scheme.outlineVariant == t.outlineVariant`. And deleting the field would not have removed
+the colour from the app: `ColorScheme.outlineVariant` would have stayed on the derived
+`#C2C8BC` with nothing in the repository naming it. Note 3's rule is about **adding** a
+token ahead of its consumer. This token already existed and already had a live framework
+counterpart, so the symmetric question resolved the other way.
+
+**The 15%-opacity condition is a rule about widgets, not about the value.** The no-line
+rule above allows `outline_variant` only in high-contrast mode, at 15% opacity, and mobile
+has no high-contrast mode. That is a reason no widget may draw a full-opacity line with it.
+It is not a reason for the token to hold the wrong colour: a mode that renders it at 15%
+needs a correct base value to take 15% of. Building that mode is explicitly out of S-048's
+scope, and out of this note's.
+
+**One gap this left open, which is not `outlineVariant`'s defect.** `app_theme.dart`'s
+`dividerTheme: DividerThemeData(thickness: 0, space: 0)` is commented as implementing the
+no-line rule, and `theme_test.dart` pins `thickness == 0` under the name "dividers have no
+thickness". Thickness zero is not absence. Flutter documents it at
+`packages/flutter/lib/src/material/divider.dart:86-87`: "A divider with a [thickness] of
+0.0 is always drawn as a line with a height of exactly one device pixel." Measured
+2026-08-22 by pumping a bare `Divider` under `buildAppTheme()`:
+`Divider.createBorderSide(context)` returns `color #B3A98F, width 0.0,
+style BorderStyle.solid` — the token, because the theme sets no divider colour — and the
+widget lays out at `Size(800.0, 0.0)` because `space` is 0. So the theme picks the colour
+of a line it believes it has suppressed. Whether that hairline is visible at zero height
+was **not** measured pixel by pixel. No screen in `lib/` uses `Divider`, `TabBar`, `Chip`
+or `Card.outlined` today, so nothing renders either way. Deciding what the theme should do
+instead changes rendering and is its own decision, so S-048 reported it rather than folding
+it in.
+
+**Contrast, computed 2026-08-22 with the WCAG 2.1 relative-luminance formula**, using an
+implementation checked against note 4's published figures (`onSurface` on `surface` 16.22:1
+and `error` on `surfaceContainerLow` 6.54:1 both reproduced exactly). `#B3A98F` measures
+**2.20:1** on `surface` `#FBF8F1`; the `#CFC7B4` it replaces measured 1.59:1 and the derived
+`#C2C8BC` measured 1.61:1. So the spec's value is the more visible of the three and none of
+them reaches the 3:1 non-text floor of WCAG 1.4.11. That floor governs the boundary of a
+control a user must find; a section separator is decorative and exempt, and the spec puts
+this role behind high-contrast mode at 15% anyway, which is fainter still. The figure is
+recorded so the next reader does not have to re-derive it, not as a compliance claim.
 
 The design system itself — tokens, components, accessibility rules and the 15
 screen groups — is specced in
