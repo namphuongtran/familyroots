@@ -184,6 +184,11 @@ const CASES: readonly Case[] = [
   ...everyGround('primary', AA_NORMAL_TEXT),
   ...everyGround('heritage', AA_NORMAL_TEXT),
 
+  // Positive/success state, added by ADR-055 (seed S-068) for the approve
+  // action, the active/suspended badge, and a positive trend reading — each
+  // paired against an already-tested `destructive` for its negative half.
+  ...everyGround('success', AA_NORMAL_TEXT),
+
   // A label on a filled surface: the pair is fixed, so no ground sweep.
   //
   // `primary-container` and `heritage-container` appear only on the `on` side,

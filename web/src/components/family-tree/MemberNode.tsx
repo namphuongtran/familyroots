@@ -20,20 +20,19 @@ export const MemberNode = memo(function MemberNode({
   const isDeceased = !!data.death_date
   const isFounder = data.generation === 1
 
-  const borderColor =
-    data.gender === 'male'
-      ? 'border-blue-400'
-      : data.gender === 'female'
-        ? 'border-pink-400'
-        : 'border-border'
-
   return (
     <div
       onClick={() => router.push(`/persons/${data.id}`)}
       className={cn(
         'relative flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 p-2',
-        'w-36 bg-white shadow-xs transition-all hover:shadow-md',
-        borderColor,
+        // ADR-055: the border used to carry `border-blue-400` / `border-pink-400`
+        // for male/female, with no other channel — gender had no text or icon
+        // anywhere on this node, so colour was T-06's forbidden *only* channel,
+        // and both hexes could not flip with the colour scheme besides. The
+        // decision is to stop encoding gender in border colour rather than add
+        // a token: every node now takes the same `border-border` a `data.gender`
+        // of `'unknown'` already used.
+        'border-border w-36 bg-white shadow-xs transition-all hover:shadow-md',
         selected && 'ring-ring ring-2 ring-offset-1',
         isDeceased && 'opacity-70',
       )}

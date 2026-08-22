@@ -61,14 +61,21 @@ function TreeFlowInner({ rootPersonId }: { rootPersonId?: string }) {
         attributionPosition="bottom-right"
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e5e7eb" />
+        {/*
+          ADR-055: `nodeColor` used to branch on `n.data?.gender` into three
+          hexes (`#93c5fd` male, `#f9a8d4` female, `#d1d5db` other) — the same
+          gender-as-only-channel defect `MemberNode` and `MemberAvatar` carried,
+          and a hex besides, which cannot flip with the colour scheme at all.
+          `@xyflow/react`'s `nodeColor` takes a plain string, not a CSS custom
+          property, so it cannot read a token; one constant dot colour is what
+          a genuinely gender-neutral minimap can be today. The minimap's own
+          chrome (this panel's background, `maskColor` below) does not follow
+          the app's colour scheme at all yet — a real, separate, un-decided gap
+          this change does not close, since `@xyflow/react`'s theming has no
+          token bridge in this codebase.
+        */}
         <MiniMap
-          nodeColor={(n) =>
-            n.data?.gender === 'male'
-              ? '#93c5fd'
-              : n.data?.gender === 'female'
-                ? '#f9a8d4'
-                : '#d1d5db'
-          }
+          nodeColor="#d1d5db"
           maskColor="rgba(0,0,0,.04)"
           className="border-border! rounded-lg! border!"
         />

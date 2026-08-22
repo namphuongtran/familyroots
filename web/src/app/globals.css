@@ -148,6 +148,20 @@
   --color-accent: #fef3c7;
   --color-accent-foreground: #92400e;
 
+  /*
+    `success` is spec § 2.1's status row of the same name: "`success` #2E6A4E".
+    ADR-055 added it for the one place a positive/negative pair had no token:
+    the approve action beside an already-tokened `destructive` reject, and the
+    twin active/suspended and up/down readings that are the same dichotomy.
+    Only the token itself is added, not `success-container` or
+    `success-foreground`: every current use is `text-success` or
+    `bg-success/10`, mirroring how `destructive` already appears in this file's
+    own `border-destructive/30 bg-destructive/10 text-destructive` pattern, so
+    no full four-token family was needed. Add the container pair the day a use
+    actually needs a solid fill, not before.
+  */
+  --color-success: #2e6a4e;
+
   --color-popover: #ffffff;
   --color-popover-foreground: #1a1a1a;
 
@@ -372,6 +386,12 @@
     --color-destructive-foreground: #4a1811;
     --color-accent: #3e2a06;
     --color-accent-foreground: #e8b563;
+
+    /*
+      `success` is quoted from spec § 2.2's status line: "success #8FCFAA".
+      ADR-055.
+    */
+    --color-success: #8fcfaa;
   }
 }
 

@@ -69,7 +69,12 @@ export function PendingUsersList({ users, isLoading, onApprove, onReject }: Pend
           <div className="flex shrink-0 gap-1.5">
             <button
               onClick={() => onApprove(user.id)}
-              className="flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2.5 py-1 text-xs text-green-700 transition-colors hover:bg-green-100"
+              // ADR-055: mirrors the reject button's own
+              // `border-destructive/30 bg-destructive/10 text-destructive`
+              // shape, with the new `success` token (spec § 2.1/2.2) standing
+              // in for the old untokened `border-green-200 bg-green-50
+              // text-green-700`.
+              className="border-success/30 bg-success/10 text-success hover:bg-success/15 flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs transition-colors"
             >
               <CheckCircle className="h-3 w-3" />
               {t('approve')}

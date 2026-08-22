@@ -11,10 +11,17 @@ interface EventCardProps {
   className?: string
 }
 
+// ADR-055: `birthday` and `wedding_anniversary` used to carry their own
+// untokened hues (`bg-blue-50 border-blue-200`, `bg-pink-50 border-pink-200`).
+// Every event card already names its kind in the title and (per spec § 7.8)
+// a type chip, so this colour is decoration, not the identifying channel —
+// the same "is this information or decoration" question the stat-card group
+// asks, answered the same way. Both fold into the same neutral `custom`
+// treatment rather than gaining two more one-off token families.
 const EVENT_COLORS: Record<string, string> = {
   death_anniversary: 'bg-heritage-container border-heritage',
-  birthday: 'bg-blue-50 border-blue-200',
-  wedding_anniversary: 'bg-pink-50 border-pink-200',
+  birthday: 'bg-muted border-border',
+  wedding_anniversary: 'bg-muted border-border',
   clan_ceremony: 'bg-accent border-accent-foreground/30',
   custom: 'bg-muted border-border',
 }
