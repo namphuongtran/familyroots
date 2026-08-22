@@ -9,10 +9,7 @@ import type {
   ParentChildUpdateInput,
 } from '@/lib/types'
 
-export function createMarriage(
-  repository: MarriageCommandRepository,
-  input: MarriageCreateInput,
-) {
+export function createMarriage(repository: MarriageCommandRepository, input: MarriageCreateInput) {
   return repository.create(input)
 }
 
@@ -24,10 +21,7 @@ export function updateMarriage(
   return repository.update(id, input)
 }
 
-export function deleteMarriage(
-  repository: MarriageCommandRepository,
-  id: string,
-) {
+export function deleteMarriage(repository: MarriageCommandRepository, id: string) {
   return repository.delete(id)
 }
 
@@ -46,9 +40,6 @@ export function updateParentChild(
   return repository.update(id, input)
 }
 
-export function deleteParentChild(
-  repository: ParentChildCommandRepository,
-  id: string,
-) {
+export function deleteParentChild(repository: ParentChildCommandRepository, id: string) {
   return repository.delete(id)
 }

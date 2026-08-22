@@ -41,7 +41,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="bg-background flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         {/* Logo / Brand */}
         <div className="text-center">
@@ -52,21 +52,24 @@ export default function LoginPage() {
             opportunity is used only when the line does not fit, so the mark stays
             on one line at every normal size, and the text content stays one word.
           */}
-          <h1 className="font-serif text-3xl text-primary">
+          <h1 className="text-primary font-serif text-3xl">
             Family
             <wbr />
             Roots
           </h1>
-          <p className="text-sm text-gray-500 mt-1">{t('login_subtitle')}</p>
+          <p className="mt-1 text-sm text-gray-500">{t('login_subtitle')}</p>
         </div>
 
         <SupabaseSetupNotice />
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs"
+        >
           <h2 className="text-lg font-semibold text-gray-800">{t('login_title')}</h2>
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
             </div>
           )}
@@ -80,40 +83,40 @@ export default function LoginPage() {
             {isGoogleLoading ? t('google_signing_in') : t('google')}
           </button>
 
-          <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-gray-400">
+          <div className="flex items-center gap-3 text-xs tracking-wide text-gray-400 uppercase">
             <span className="h-px flex-1 bg-gray-200" />
             <span>{t('or')}</span>
             <span className="h-px flex-1 bg-gray-200" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('email')}</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t('email')}</label>
             <input
               type="email"
               required
               autoComplete="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              onChange={(e) => setEmail(e.target.value)}
+              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('password')}</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t('password')}</label>
             <input
               type="password"
               required
               autoComplete="current-password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              onChange={(e) => setPassword(e.target.value)}
+              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="bg-primary text-primary-foreground hover:bg-primary-hover w-full rounded-lg py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isLoading ? t('signing_in') : t('sign_in')}
           </button>

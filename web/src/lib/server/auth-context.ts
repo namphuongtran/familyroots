@@ -65,7 +65,9 @@ export async function getServerAuthContext(): Promise<ServerAuthContext | null> 
   }
   const clanMemberships = membershipData.clans ?? []
   const currentClanId = resolveCurrentClanId(clanMemberships, preferredClanId)
-  const currentMembership = clanMemberships.find((membership) => membership.clan_id === currentClanId)
+  const currentMembership = clanMemberships.find(
+    (membership) => membership.clan_id === currentClanId,
+  )
 
   return {
     accessToken: session.access_token,
@@ -117,7 +119,9 @@ export async function requireServerRole(
 
   if (
     authContext.currentClanRole &&
-    requiredRoles.some((role) => role !== 'super_admin' && hasMinServerRole(authContext.currentClanRole!, role))
+    requiredRoles.some(
+      (role) => role !== 'super_admin' && hasMinServerRole(authContext.currentClanRole!, role),
+    )
   ) {
     return authContext
   }

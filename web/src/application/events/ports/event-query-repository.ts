@@ -1,8 +1,4 @@
-import type {
-  ClanEvent,
-  CursorPage,
-  UpcomingEvent,
-} from '@/lib/types'
+import type { ClanEvent, CursorPage, UpcomingEvent } from '@/lib/types'
 
 export interface EventQueryRepository {
   list(params?: { cursor?: string; limit?: number }): Promise<CursorPage<ClanEvent>>

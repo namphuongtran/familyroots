@@ -9,7 +9,13 @@ import type { TreeNode } from '@/lib/types'
 
 export type MemberNodeData = TreeNode & { isSelected?: boolean; [key: string]: unknown }
 
-export const MemberNode = memo(function MemberNode({ data, selected }: { data: MemberNodeData; selected?: boolean }) {
+export const MemberNode = memo(function MemberNode({
+  data,
+  selected,
+}: {
+  data: MemberNodeData
+  selected?: boolean
+}) {
   const router = useRouter()
   const isDeceased = !!data.death_date
   const isFounder = data.generation === 1
@@ -25,10 +31,10 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
     <div
       onClick={() => router.push(`/persons/${data.id}`)}
       className={cn(
-        'relative flex flex-col items-center gap-1 p-2 rounded-xl border-2 cursor-pointer',
-        'bg-white shadow-xs hover:shadow-md transition-all w-36',
+        'relative flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 p-2',
+        'w-36 bg-white shadow-xs transition-all hover:shadow-md',
         borderColor,
-        selected && 'ring-2 ring-ring ring-offset-1',
+        selected && 'ring-ring ring-2 ring-offset-1',
         isDeceased && 'opacity-70',
       )}
     >
@@ -41,7 +47,7 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
       */}
       {isFounder && <span className="absolute -top-2 text-xs">👑</span>}
 
-      <Handle type="target" position={Position.Top} className="bg-gray-400! w-2! h-2!" />
+      <Handle type="target" position={Position.Top} className="h-2! w-2! bg-gray-400!" />
 
       <MemberAvatar
         avatarUrl={data.avatar_url ?? undefined}
@@ -51,8 +57,8 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
         isDeceased={isDeceased}
       />
 
-      <div className="text-center min-w-0 w-full">
-        <p className="text-[11px] font-semibold text-gray-800 truncate leading-tight">
+      <div className="w-full min-w-0 text-center">
+        <p className="truncate text-[11px] leading-tight font-semibold text-gray-800">
           {data.full_name}
         </p>
         {data.birth_date && (
@@ -63,7 +69,7 @@ export const MemberNode = memo(function MemberNode({ data, selected }: { data: M
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="bg-gray-400! w-2! h-2!" />
+      <Handle type="source" position={Position.Bottom} className="h-2! w-2! bg-gray-400!" />
     </div>
   )
 })

@@ -6,10 +6,7 @@ import {
   deleteEvent,
   updateEvent,
 } from '@/application/events/use-cases/event-commands'
-import {
-  getUpcomingEvents,
-  listEvents,
-} from '@/application/events/use-cases/event-queries'
+import { getUpcomingEvents, listEvents } from '@/application/events/use-cases/event-queries'
 import { eventCommandRepository } from '@/infrastructure/events/event-command-repository'
 import { eventQueryRepository } from '@/infrastructure/events/event-query-repository'
 import { eventMutationInvalidationKeys } from '@/lib/hooks/query-invalidation'
@@ -32,11 +29,18 @@ export function useUpcomingEvents(days = 30) {
 }
 
 export function useEvents() {
-  return useInfiniteQuery<CursorPage<ClanEvent>, Error, { pages: CursorPage<ClanEvent>[]; pageParams: (string | undefined)[] }, readonly unknown[], string | undefined>({
+  return useInfiniteQuery<
+    CursorPage<ClanEvent>,
+    Error,
+    { pages: CursorPage<ClanEvent>[]; pageParams: (string | undefined)[] },
+    readonly unknown[],
+    string | undefined
+  >({
     queryKey: eventKeys.list(),
     queryFn: ({ pageParam }) => listEvents(eventQueryRepository, { cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.next_cursor ?? undefined : undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
     staleTime: 60_000,
   })
 }

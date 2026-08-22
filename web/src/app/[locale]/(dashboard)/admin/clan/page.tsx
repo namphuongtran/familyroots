@@ -10,7 +10,11 @@ export default function AdminClanPage() {
   const { data: clan, isLoading } = useClanSettings()
   const updateMutation = useClanSettingsMutation()
 
-  const { register, handleSubmit, formState: { isSubmitting } } = useForm<ClanSettings>({
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting },
+  } = useForm<ClanSettings>({
     values: clan,
   })
 
@@ -20,42 +24,44 @@ export default function AdminClanPage() {
 
       <form
         onSubmit={handleSubmit((data) => updateMutation.mutateAsync(data))}
-        className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6 space-y-4"
+        className="space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs"
       >
-        {isLoading && (
-          <p className="text-sm text-gray-400">Loading...</p>
-        )}
+        {isLoading && <p className="text-sm text-gray-400">Loading...</p>}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('clan_name')}</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">{t('clan_name')}</label>
           <input
             {...register('name', { required: true })}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('description')}</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">{t('description')}</label>
           <textarea
             rows={3}
             {...register('description')}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+            className="focus:ring-ring w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('founding_year')}</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              {t('founding_year')}
+            </label>
             <input
               type="number"
               {...register('founded_year', { valueAsNumber: true })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('origin_location')}</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              {t('origin_location')}
+            </label>
             <input
               {...register('origin_place')}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
         </div>
@@ -63,7 +69,7 @@ export default function AdminClanPage() {
         <button
           type="submit"
           disabled={isSubmitting || updateMutation.isPending}
-          className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 transition-colors"
+          className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg px-4 py-2 text-sm transition-colors disabled:opacity-50"
         >
           {isSubmitting || updateMutation.isPending ? t('saving') : t('save_changes')}
         </button>

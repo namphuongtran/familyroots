@@ -51,7 +51,9 @@ describe('PendingApprovalScreen (S-026, spec §7.2a)', () => {
     renderWithProviders(<PendingApprovalScreen />, { messages })
 
     expect(
-      screen.getByText('Bạn đã gửi yêu cầu tham gia dòng họ Nguyễn Hữu Thanh Oai. Quản trị dòng họ sẽ xem xét yêu cầu này.'),
+      screen.getByText(
+        'Bạn đã gửi yêu cầu tham gia dòng họ Nguyễn Hữu Thanh Oai. Quản trị dòng họ sẽ xem xét yêu cầu này.',
+      ),
     ).toBeInTheDocument()
     // Does not promise a notification (S-026's end state overrides the older
     // spec copy — see the component's own doc comment).
@@ -67,7 +69,9 @@ describe('PendingApprovalScreen (S-026, spec §7.2a)', () => {
     renderWithProviders(<PendingApprovalScreen />, { messages })
 
     expect(
-      screen.getByText('Bạn đã gửi yêu cầu tham gia một dòng họ. Quản trị dòng họ sẽ xem xét yêu cầu này.'),
+      screen.getByText(
+        'Bạn đã gửi yêu cầu tham gia một dòng họ. Quản trị dòng họ sẽ xem xét yêu cầu này.',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -88,9 +92,7 @@ describe('PendingApprovalScreen (S-026, spec §7.2a)', () => {
   it('recheck against the real GET /auth/me envelope: approved refreshes the session before leaving', async () => {
     const syncAuthContext = vi.fn(async () => {})
     mockUseAuth.mockReturnValue(pendingAuthState({ syncAuthContext }))
-    server.use(
-      http.get(`${API}/auth/me`, () => HttpResponse.json(envelope({ is_approved: true }))),
-    )
+    server.use(http.get(`${API}/auth/me`, () => HttpResponse.json(envelope({ is_approved: true }))))
 
     renderWithProviders(<PendingApprovalScreen />, { messages })
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra lại' }))

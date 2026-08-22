@@ -12,9 +12,7 @@ export function decodeCursor(encoded: string): string {
  * Flatten TanStack infinite query pages into a single array.
  * Works with the backend's CursorPage<T> shape.
  */
-export function flattenPages<T>(
-  pages: Array<{ data: T[] }> | undefined,
-): T[] {
+export function flattenPages<T>(pages: Array<{ data: T[] }> | undefined): T[] {
   if (!pages) return []
   return pages.flatMap((page) => page.data)
 }

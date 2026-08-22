@@ -87,5 +87,3 @@ export function formatRelationshipDescription(
   // Full sentence: "{fromName} là {description} của {toName}"
   return `${fromName} là ${description} của ${toName}`
 }
-
-

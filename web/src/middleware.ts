@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
   const strippedPath = pathname.replace(/^\/(?:vi|en|zh|fr)/, '') || '/'
 
   // Allow public auth routes through without a session check
-  if (PUBLIC_ROUTES.some(r => strippedPath.startsWith(r))) {
+  if (PUBLIC_ROUTES.some((r) => strippedPath.startsWith(r))) {
     return intlResponse
   }
 
@@ -63,26 +63,32 @@ export async function middleware(request: NextRequest) {
 
     const supabaseResponse = NextResponse.next({ request })
 
-    const supabase = createServerClient(
-      supabaseUrl,
-      supabaseKey,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              request.cookies.set(name, value)
-              supabaseResponse.cookies.set(name, value, options as Parameters<typeof supabaseResponse.cookies.set>[2])
-              intlResponse.cookies.set(name, value, options as Parameters<typeof intlResponse.cookies.set>[2])
-            })
-          },
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
+            supabaseResponse.cookies.set(
+              name,
+              value,
+              options as Parameters<typeof supabaseResponse.cookies.set>[2],
+            )
+            intlResponse.cookies.set(
+              name,
+              value,
+              options as Parameters<typeof intlResponse.cookies.set>[2],
+            )
+          })
         },
       },
-    )
+    })
 
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
     if (!session) {
       const locale = pathname.split('/')[1] || 'vi'

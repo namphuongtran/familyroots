@@ -13,7 +13,7 @@ export default async function PlatformLayout({
 
   return (
     <div className="space-y-4">
-      <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-2 text-xs text-purple-700 font-medium">
+      <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-2 text-xs font-medium text-purple-700">
         Platform Admin – Super-administrator access only
       </div>
       {children}

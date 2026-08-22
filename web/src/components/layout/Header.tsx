@@ -14,20 +14,19 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const t = useTranslations()
-  const { user, currentClanId, clanMemberships, needsClanSelection, signOut, selectClan } = useAuth()
+  const { user, currentClanId, clanMemberships, needsClanSelection, signOut, selectClan } =
+    useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [isSwitching, startTransition] = useTransition()
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 bg-white border-b border-cream-200 shrink-0">
-      <h1 className="text-lg font-serif font-semibold text-gray-800 truncate">
-        {title ?? ''}
-      </h1>
+    <header className="border-cream-200 flex h-16 shrink-0 items-center justify-between border-b bg-white px-6">
+      <h1 className="truncate font-serif text-lg font-semibold text-gray-800">{title ?? ''}</h1>
 
       <div className="flex items-center gap-3">
         {clanMemberships.length > 0 && (
-          <label className="hidden md:flex items-center gap-2 text-sm text-gray-600">
-            <span className="text-xs uppercase tracking-wide text-gray-400">Clan</span>
+          <label className="hidden items-center gap-2 text-sm text-gray-600 md:flex">
+            <span className="text-xs tracking-wide text-gray-400 uppercase">Clan</span>
             <select
               value={currentClanId ?? ''}
               disabled={isSwitching || clanMemberships.length === 1}
@@ -60,39 +59,30 @@ export function Header({ title }: HeaderProps) {
         <div className="relative">
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-cream-100 text-sm text-gray-700"
+            className="hover:bg-cream-100 flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-gray-700"
           >
             <User className="h-4 w-4" />
-            <span className="hidden sm:block max-w-[120px] truncate">
-              {user?.full_name}
-            </span>
+            <span className="hidden max-w-[120px] truncate sm:block">{user?.full_name}</span>
             <ChevronDown className="h-3 w-3 opacity-60" />
           </button>
 
           {menuOpen && (
             <>
               {/* Backdrop */}
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setMenuOpen(false)}
-              />
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div
                 className={cn(
-                  'absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-cream-200 z-20',
+                  'border-cream-200 absolute top-full right-0 z-20 mt-1 w-48 rounded-lg border bg-white shadow-lg',
                   'py-1',
                 )}
               >
-                <div className="px-3 py-2 border-b border-cream-100">
-                  <p className="text-xs font-medium text-gray-900 truncate">
-                    {user?.full_name}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <div className="border-cream-100 border-b px-3 py-2">
+                  <p className="truncate text-xs font-medium text-gray-900">{user?.full_name}</p>
+                  <p className="truncate text-xs text-gray-500">{user?.email}</p>
                 </div>
                 {clanMemberships.length > 1 && (
-                  <div className="px-3 py-2 border-b border-cream-100">
-                    <p className="mb-1 text-[11px] uppercase tracking-wide text-gray-400">
-                      Clan
-                    </p>
+                  <div className="border-cream-100 border-b px-3 py-2">
+                    <p className="mb-1 text-[11px] tracking-wide text-gray-400 uppercase">Clan</p>
                     <select
                       value={currentClanId ?? ''}
                       disabled={isSwitching}
@@ -119,7 +109,7 @@ export function Header({ title }: HeaderProps) {
                 )}
                 <button
                   onClick={signOut}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   {t('auth.logout')}

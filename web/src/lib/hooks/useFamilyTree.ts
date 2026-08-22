@@ -11,14 +11,12 @@ import { treeQueryRepository } from '@/infrastructure/tree/tree-query-repository
 
 export const treeKeys = {
   all: ['tree'] as const,
-  full: (rootId?: string, maxGen?: number) =>
-    [...treeKeys.all, 'full', rootId, maxGen] as const,
+  full: (rootId?: string, maxGen?: number) => [...treeKeys.all, 'full', rootId, maxGen] as const,
   subtree: (rootId: string, maxGen?: number) =>
     [...treeKeys.all, 'subtree', rootId, maxGen] as const,
   ancestors: (personId: string, maxGen?: number) =>
     [...treeKeys.all, 'ancestors', personId, maxGen] as const,
-  path: (fromId: string, toId: string) =>
-    [...treeKeys.all, 'path', fromId, toId] as const,
+  path: (fromId: string, toId: string) => [...treeKeys.all, 'path', fromId, toId] as const,
 }
 
 export function useFamilyTree(rootPersonId?: string, maxGenerations = 6) {
@@ -51,10 +49,7 @@ export function useAncestors(personId: string | undefined, maxGenerations = 10) 
   })
 }
 
-export function useRelationshipPath(
-  fromId: string | undefined,
-  toId: string | undefined,
-) {
+export function useRelationshipPath(fromId: string | undefined, toId: string | undefined) {
   return useQuery({
     queryKey: treeKeys.path(fromId!, toId!),
     queryFn: () => getRelationshipPath(treeQueryRepository, fromId!, toId!),

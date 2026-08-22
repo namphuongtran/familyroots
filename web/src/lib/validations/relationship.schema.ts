@@ -18,10 +18,10 @@ export const marriageSchema = z
     spouse_order: z.number().int().min(1).optional(),
     notes: z.string().max(1000).optional(),
   })
-  .refine(
-    (d) => d.person1_id !== d.person2_id,
-    { message: 'Không thể tạo hôn nhân với chính mình', path: ['person2_id'] },
-  )
+  .refine((d) => d.person1_id !== d.person2_id, {
+    message: 'Không thể tạo hôn nhân với chính mình',
+    path: ['person2_id'],
+  })
 
 export type MarriageFormInput = z.input<typeof marriageSchema>
 export type MarriageFormValues = z.output<typeof marriageSchema>
@@ -37,10 +37,10 @@ export const parentChildSchema = z
     relationship_type: z.enum(parentChildTypes).default('biological'),
     notes: z.string().max(1000).optional(),
   })
-  .refine(
-    (d) => d.parent_id !== d.child_id,
-    { message: 'Cha/mẹ và con không thể là cùng một người', path: ['child_id'] },
-  )
+  .refine((d) => d.parent_id !== d.child_id, {
+    message: 'Cha/mẹ và con không thể là cùng một người',
+    path: ['child_id'],
+  })
 
 export type ParentChildFormInput = z.input<typeof parentChildSchema>
 export type ParentChildFormValues = z.output<typeof parentChildSchema>

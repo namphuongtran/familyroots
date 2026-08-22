@@ -1,9 +1,5 @@
 import type { TreeQueryRepository } from '@/application/tree/ports/tree-query-repository'
-import type {
-  RelationshipPath,
-  TreeAncestorsResponse,
-  TreeApiResponse,
-} from '@/lib/types'
+import type { RelationshipPath, TreeAncestorsResponse, TreeApiResponse } from '@/lib/types'
 import { treeApi } from '@/lib/api/tree'
 
 export class HttpTreeQueryRepository implements TreeQueryRepository {

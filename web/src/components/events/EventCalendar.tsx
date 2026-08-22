@@ -3,7 +3,17 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths } from 'date-fns'
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameMonth,
+  isToday,
+  isSameDay,
+  addMonths,
+  subMonths,
+} from 'date-fns'
 import { vi } from 'date-fns/locale'
 import { EventCard } from './EventCard'
 import { useEvents } from '@/lib/hooks/useEvents'
@@ -15,7 +25,7 @@ export function EventCalendar() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const { data } = useEvents()
 
-  const events = data?.pages.flatMap(p => p.data) ?? []
+  const events = data?.pages.flatMap((p) => p.data) ?? []
 
   const daysInMonth = useMemo(() => {
     return eachDayOfInterval({
@@ -24,8 +34,7 @@ export function EventCalendar() {
     })
   }, [currentMonth])
 
-  const eventsOnDay = (day: Date) =>
-    events.filter(e => isSameDay(new Date(e.event_date), day))
+  const eventsOnDay = (day: Date) => events.filter((e) => isSameDay(new Date(e.event_date), day))
 
   const selectedDayEvents = selectedDate ? eventsOnDay(selectedDate) : []
 
@@ -33,20 +42,26 @@ export function EventCalendar() {
     <div className="space-y-4">
       {/* Month navigation */}
       <div className="flex items-center justify-between">
-        <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} className="p-1 rounded hover:bg-gray-100">
+        <button
+          onClick={() => setCurrentMonth((m) => subMonths(m, 1))}
+          className="rounded p-1 hover:bg-gray-100"
+        >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-semibold text-gray-700 capitalize">
           {format(currentMonth, 'MMMM yyyy', { locale: vi })}
         </span>
-        <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} className="p-1 rounded hover:bg-gray-100">
+        <button
+          onClick={() => setCurrentMonth((m) => addMonths(m, 1))}
+          className="rounded p-1 hover:bg-gray-100"
+        >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 text-center text-[10px] text-gray-400 font-medium">
-        {['CN', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7'].map(d => (
+      <div className="grid grid-cols-7 text-center text-[10px] font-medium text-gray-400">
+        {['CN', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7'].map((d) => (
           <div key={d}>{d}</div>
         ))}
       </div>
@@ -57,24 +72,26 @@ export function EventCalendar() {
         {Array.from({ length: daysInMonth[0].getDay() }).map((_, i) => (
           <div key={`empty-${i}`} className="h-8" />
         ))}
-        {daysInMonth.map(day => {
+        {daysInMonth.map((day) => {
           const dayEvents = eventsOnDay(day)
           const isSelected = selectedDate && isSameDay(day, selectedDate)
           return (
             <button
               key={day.toISOString()}
-              onClick={() => setSelectedDate(isSameDay(day, selectedDate ?? new Date(0)) ? null : day)}
+              onClick={() =>
+                setSelectedDate(isSameDay(day, selectedDate ?? new Date(0)) ? null : day)
+              }
               className={cn(
-                'h-8 flex flex-col items-center justify-center rounded text-xs relative',
+                'relative flex h-8 flex-col items-center justify-center rounded text-xs',
                 !isSameMonth(day, currentMonth) && 'text-gray-300',
                 isToday(day) && 'text-primary font-bold',
-                isSelected && 'bg-primary-container ring-1 ring-ring',
+                isSelected && 'bg-primary-container ring-ring ring-1',
                 !isSelected && 'hover:bg-gray-100',
               )}
             >
               {day.getDate()}
               {dayEvents.length > 0 && (
-                <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-gold-500" />
+                <span className="bg-gold-500 absolute bottom-0.5 h-1 w-1 rounded-full" />
               )}
             </button>
           )
@@ -83,14 +100,14 @@ export function EventCalendar() {
 
       {/* Selected day events */}
       {selectedDate && (
-        <div className="space-y-2 pt-2 border-t border-gray-100">
+        <div className="space-y-2 border-t border-gray-100 pt-2">
           <p className="text-xs font-medium text-gray-500">
             {format(selectedDate, 'd MMMM yyyy', { locale: vi })}
           </p>
           {selectedDayEvents.length === 0 ? (
             <p className="text-xs text-gray-400 italic">{t('no_events_on_day')}</p>
           ) : (
-            selectedDayEvents.map(e => <EventCard key={e.id} event={e} />)
+            selectedDayEvents.map((e) => <EventCard key={e.id} event={e} />)
           )}
         </div>
       )}

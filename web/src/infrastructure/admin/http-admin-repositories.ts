@@ -33,10 +33,9 @@ export class HttpClanAdminRepository
     cursor?: string
     limit?: number
   }): Promise<ClanUserMembership[]> {
-    const { data } = await api.get<CursorPage<ClanUserMembership>>(
-      '/clans/me/users/pending',
-      { params },
-    )
+    const { data } = await api.get<CursorPage<ClanUserMembership>>('/clans/me/users/pending', {
+      params,
+    })
     return data.data
   }
 
@@ -71,10 +70,7 @@ export class HttpClanAdminRepository
 }
 
 export class HttpPlatformAdminRepository implements PlatformAdminQueryRepository {
-  async listClans(params?: {
-    cursor?: string
-    limit?: number
-  }): Promise<PlatformClanSummary[]> {
+  async listClans(params?: { cursor?: string; limit?: number }): Promise<PlatformClanSummary[]> {
     const { data } = await api.get<{
       data: PlatformClanSummary[]
       meta?: { cursor?: string | null; has_more?: boolean }

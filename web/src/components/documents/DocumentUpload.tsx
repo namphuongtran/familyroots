@@ -59,13 +59,18 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
     <form onSubmit={handleSubmit} className="space-y-3">
       {/* Drop zone */}
       <div
-        onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDragging(true)
+        }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          'flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-8 cursor-pointer transition-colors',
-          isDragging ? 'border-primary bg-primary-container' : 'border-gray-200 hover:border-gray-300',
+          'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 transition-colors',
+          isDragging
+            ? 'border-primary bg-primary-container'
+            : 'border-gray-200 hover:border-gray-300',
         )}
       >
         <Upload className="h-8 w-8 text-gray-300" />
@@ -76,16 +81,19 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
           type="file"
           accept={ACCEPT}
           className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) handleFile(f)
+          }}
         />
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       {selectedFile && (
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-200">
-          <FileText className="h-4 w-4 text-gray-400 shrink-0" />
-          <span className="text-xs text-gray-600 truncate flex-1">{selectedFile.name}</span>
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+          <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+          <span className="flex-1 truncate text-xs text-gray-600">{selectedFile.name}</span>
           <button type="button" onClick={() => setSelectedFile(null)}>
             <X className="h-3.5 w-3.5 text-gray-400" />
           </button>
@@ -95,18 +103,18 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
       {selectedFile && (
         <>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">{t('title')}</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">{t('title')}</label>
             <input
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="focus:ring-ring w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
           <button
             type="submit"
             disabled={uploadDocument.isPending}
-            className="w-full py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 transition-colors"
+            className="bg-primary text-primary-foreground hover:bg-primary-hover w-full rounded-md py-2 text-sm transition-colors disabled:opacity-50"
           >
             {uploadDocument.isPending ? t('uploading') : t('upload')}
           </button>

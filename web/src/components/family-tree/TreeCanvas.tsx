@@ -39,14 +39,14 @@ function TreeFlowInner({ rootPersonId }: { rootPersonId?: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex h-full items-center justify-center">
         <Skeleton className="h-64 w-64 rounded-2xl" />
       </div>
     )
   }
 
   return (
-    <div className="w-full h-full relative">
+    <div className="relative h-full w-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -62,8 +62,12 @@ function TreeFlowInner({ rootPersonId }: { rootPersonId?: string }) {
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e5e7eb" />
         <MiniMap
-          nodeColor={n =>
-            n.data?.gender === 'male' ? '#93c5fd' : n.data?.gender === 'female' ? '#f9a8d4' : '#d1d5db'
+          nodeColor={(n) =>
+            n.data?.gender === 'male'
+              ? '#93c5fd'
+              : n.data?.gender === 'female'
+                ? '#f9a8d4'
+                : '#d1d5db'
           }
           maskColor="rgba(0,0,0,.04)"
           className="rounded-lg! border! border-gray-200!"

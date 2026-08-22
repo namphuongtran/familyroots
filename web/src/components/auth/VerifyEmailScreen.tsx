@@ -33,7 +33,11 @@ const RESEND_COOLDOWN_SECONDS = 60
 
 /** `POST /auth/resend-verification` is a message envelope (`rest-auth-api.md`): `{"data": {"message": "..."}}`. */
 function parseMessageEnvelope(raw: unknown): void {
-  if (typeof raw !== 'object' || raw === null || typeof (raw as { message?: unknown }).message !== 'string') {
+  if (
+    typeof raw !== 'object' ||
+    raw === null ||
+    typeof (raw as { message?: unknown }).message !== 'string'
+  ) {
     throw new Error('resend-verification response missing "message"')
   }
 }
@@ -82,31 +86,29 @@ export function VerifyEmailScreen() {
   const canResend = Boolean(email) && status !== 'sending' && cooldown === 0
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="bg-background flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6 text-center">
         <div
-          className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-heritage-container"
+          className="bg-heritage-container mx-auto flex h-16 w-16 items-center justify-center rounded-full"
           aria-hidden="true"
         >
-          <MailCheck className="h-8 w-8 text-heritage-container-foreground" />
+          <MailCheck className="text-heritage-container-foreground h-8 w-8" />
         </div>
 
         <div className="space-y-2">
-          <h1 className="font-serif text-2xl text-foreground">{t('verify_email_heading')}</h1>
-          <p className="text-sm text-muted-foreground">
-            {email
-              ? t('verify_email_body_with_email', { email })
-              : t('verify_email_body_no_email')}
+          <h1 className="text-foreground font-serif text-2xl">{t('verify_email_heading')}</h1>
+          <p className="text-muted-foreground text-sm">
+            {email ? t('verify_email_body_with_email', { email }) : t('verify_email_body_no_email')}
           </p>
         </div>
 
         {status === 'sent' && (
-          <p role="status" className="text-sm text-primary">
+          <p role="status" className="text-primary text-sm">
             {t('verify_email_resend_sent')}
           </p>
         )}
         {status === 'error' && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-destructive text-sm">
             {t('verify_email_resend_error')}
           </p>
         )}
@@ -115,7 +117,7 @@ export function VerifyEmailScreen() {
           type="button"
           onClick={handleResend}
           disabled={!canResend}
-          className="w-full rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring w-full rounded-full px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status === 'sending'
             ? t('verify_email_resend_sending')
@@ -128,9 +130,12 @@ export function VerifyEmailScreen() {
             such surface exists in this app yet — there is no self-service email-change flow
             and no support-ticket screen. Rendered as plain text rather than a link to nowhere,
             which T-17 (never a dead end) reads as a false affordance if it were a button. */}
-        <p className="text-xs text-muted-foreground">{t('verify_email_wrong_address_note')}</p>
+        <p className="text-muted-foreground text-xs">{t('verify_email_wrong_address_note')}</p>
 
-        <Link href={`/${locale}/login`} className="inline-flex text-sm text-primary hover:underline">
+        <Link
+          href={`/${locale}/login`}
+          className="text-primary inline-flex text-sm hover:underline"
+        >
           {t('verify_email_back_to_login')}
         </Link>
       </div>

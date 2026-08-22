@@ -1,10 +1,20 @@
 import api from './axios'
-import type { DocumentResponse, DocumentSummary, DocumentUploadMeta, ApiResponse, CursorPage } from '@/lib/types'
+import type {
+  DocumentResponse,
+  DocumentSummary,
+  DocumentUploadMeta,
+  ApiResponse,
+  CursorPage,
+} from '@/lib/types'
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 
 export const documentsApi = {
-  list: async (params?: { cursor?: string; limit?: number; person_id?: string }): Promise<CursorPage<DocumentSummary>> => {
+  list: async (params?: {
+    cursor?: string
+    limit?: number
+    person_id?: string
+  }): Promise<CursorPage<DocumentSummary>> => {
     const { data } = await api.get<{ data: DocumentSummary[] }>('/documents', { params })
     return {
       data: data.data,

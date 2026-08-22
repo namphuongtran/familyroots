@@ -11,9 +11,7 @@ import type {
   PlatformClanSummary,
 } from '@/lib/types'
 
-export async function listClanUsers(
-  repository: ClanAdminQueryRepository,
-): Promise<{
+export async function listClanUsers(repository: ClanAdminQueryRepository): Promise<{
   approved: ClanUserMembership[]
   pending: ClanUserMembership[]
 }> {

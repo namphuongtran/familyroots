@@ -1,8 +1,4 @@
-import type {
-  ClanSwitchResponse,
-  UserClansResponse,
-  UserProfile,
-} from '@/lib/types'
+import type { ClanSwitchResponse, UserClansResponse, UserProfile } from '@/lib/types'
 
 export interface RegisterInput {
   email: string

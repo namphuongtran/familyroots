@@ -16,9 +16,6 @@ export function updateEvent(
   return repository.update(id, input)
 }
 
-export function deleteEvent(
-  repository: EventCommandRepository,
-  id: string,
-): Promise<void> {
+export function deleteEvent(repository: EventCommandRepository, id: string): Promise<void> {
   return repository.delete(id)
 }

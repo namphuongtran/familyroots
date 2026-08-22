@@ -1,8 +1,4 @@
-import type {
-  RelationshipPath,
-  TreeAncestorsResponse,
-  TreeApiResponse,
-} from '@/lib/types'
+import type { RelationshipPath, TreeAncestorsResponse, TreeApiResponse } from '@/lib/types'
 
 export interface TreeQueryRepository {
   getFullTree(params?: {

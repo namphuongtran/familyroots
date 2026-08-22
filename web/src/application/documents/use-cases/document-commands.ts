@@ -9,9 +9,6 @@ export function uploadDocument(
   return repository.upload(file, meta)
 }
 
-export function deleteDocument(
-  repository: DocumentCommandRepository,
-  id: string,
-): Promise<void> {
+export function deleteDocument(repository: DocumentCommandRepository, id: string): Promise<void> {
   return repository.delete(id)
 }

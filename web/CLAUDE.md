@@ -13,8 +13,8 @@ pnpm build && pnpm start                       # production build + serve
 pnpm type-check                                # tsc --noEmit (strict)
 pnpm lint                                      # eslint .
 pnpm lint:fix
-pnpm format                                    # prettier --write . — DO NOT run: 112 pre-existing files have drift (§3.2 of the work register); it would bury any real diff
-pnpm format:check
+pnpm format                                    # prettier --write . — the 99-file pre-existing drift (seed S-028, 2026-08-22) is gone; safe to run, but keep it out of a behavioural PR's diff
+pnpm format:check                              # prettier --check . — CI-gated since S-028
 pnpm depcruise                                 # dependency-cruiser — enforces the layer rules below, CI-gated
 pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)
 pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/)
@@ -25,7 +25,18 @@ pnpm test:behavior                             # legacy: node --test on tests/be
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
-Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
+Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
+
+**`pnpm format:check` has been in CI since seed S-028 (2026-08-22).** Before S-028, `web/CLAUDE.md`
+and `.claude/rules/tailwind.md` § 9 both told contributors not to run `pnpm format`, because 112
+files had accumulated pre-existing Prettier drift and a format run would bury the real diff in any
+pull request. Re-counted at the start of S-028: `pnpm format:check` actually named **99** files,
+not 112 — the figure had gone stale across three batches that added and deleted files in `web/`
+since it was first measured, and nobody had re-run the count. S-028 ran `pnpm format --write .`
+once, as its own single-purpose commit, landing all 99 files at once and touching nothing else.
+`pnpm format` is safe to run now. The caution that follows is about diff hygiene, not about the
+tool: running it inside a pull request that also changes behaviour still buries the real diff, so
+keep a mechanical formatting pass in its own commit, the way S-028 did.
 
 Env vars in `.env.local` (see `.env.example`): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
@@ -107,20 +118,20 @@ Path alias `@/*` → `./src/*` (tsconfig).
 ### Dependency rules
 
 **What the machine actually checks.** `.dependency-cruiser.cjs` holds nine rules, run by
-`pnpm depcruise` and gated in CI. Every one of them *forbids* something — dependency-cruiser
+`pnpm depcruise` and gated in CI. Every one of them _forbids_ something — dependency-cruiser
 has no allow-list concept — so a rule name is the thing to grep for when a build fails:
 
-| Rule | Forbids | Severity |
-|---|---|---|
-| `domain-is-pure` | `src/domain/**` importing any npm package except `typescript` / `@types/*` — which covers react, next, zod, tanstack, zustand and supabase | error |
-| `domain-imports-only-domain` | `src/domain/**` importing anything under `src/` that is not `src/domain/` | error |
-| `api-layer-has-no-react` | `features/*/api/**` importing `react`, `react-dom` or `@tanstack/react-query` | error |
-| `ui-does-not-call-transport` | `features/X/ui/**` importing `features/X/api/**` | error |
-| `cross-feature-only-via-index` | reaching into another feature's internals; `features/B` is importable only through `features/B/index.ts` | error |
-| `app-does-not-call-transport` | `src/app/**` importing `features/*/api/**` | error |
-| `nothing-imports-app` | anything outside `src/app/` importing `src/app/**` | error |
-| `no-circular` | import cycles | error |
-| `no-orphans` | modules nothing imports — 3 known and accepted, measured 2026-08-22 by S-029: `shared/http/refresh.ts`, `lib/utils/pagination.ts`, `domain/capability/capability.ts` (the last is a known tool blind spot, see "Clan capabilities" below) | **warn** |
+| Rule                           | Forbids                                                                                                                                                                                                                                   | Severity |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `domain-is-pure`               | `src/domain/**` importing any npm package except `typescript` / `@types/*` — which covers react, next, zod, tanstack, zustand and supabase                                                                                                | error    |
+| `domain-imports-only-domain`   | `src/domain/**` importing anything under `src/` that is not `src/domain/`                                                                                                                                                                 | error    |
+| `api-layer-has-no-react`       | `features/*/api/**` importing `react`, `react-dom` or `@tanstack/react-query`                                                                                                                                                             | error    |
+| `ui-does-not-call-transport`   | `features/X/ui/**` importing `features/X/api/**`                                                                                                                                                                                          | error    |
+| `cross-feature-only-via-index` | reaching into another feature's internals; `features/B` is importable only through `features/B/index.ts`                                                                                                                                  | error    |
+| `app-does-not-call-transport`  | `src/app/**` importing `features/*/api/**`                                                                                                                                                                                                | error    |
+| `nothing-imports-app`          | anything outside `src/app/` importing `src/app/**`                                                                                                                                                                                        | error    |
+| `no-circular`                  | import cycles                                                                                                                                                                                                                             | error    |
+| `no-orphans`                   | modules nothing imports — 3 known and accepted, measured 2026-08-22 by S-029: `shared/http/refresh.ts`, `lib/utils/pagination.ts`, `domain/capability/capability.ts` (the last is a known tool blind spot, see "Clan capabilities" below) | **warn** |
 
 The exit code is the count of error-level violations, so one error returns 1. Warnings do
 not fail the build.
@@ -142,7 +153,7 @@ compliance.
 
 **`api-layer-has-no-react` was vacuous from the day it was written, on every package
 manager, and S-029 (2026-08-22) is what found it.** `to.path` in dependency-cruiser
-matches a dependency's *resolved file path*
+matches a dependency's _resolved file path_
 (`node_modules/dependency-cruiser/src/validate/matchers.mjs`, `matchesToPath` →
 `pDependency.resolved`), never the bare import specifier. The rule's original `to.path`
 was `'^(react|react-dom|@tanstack/react-query)$'` — an exact-match anchor against a
@@ -172,7 +183,7 @@ check; neither reached a commit.
 shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
 
 - **`model/` holds one zod schema per wire shape, matching the generated type's
-  optionality and nullability *exactly*** — not a defensively widened version of it.
+  optionality and nullability _exactly_** — not a defensively widened version of it.
   `person-dto.ts`'s own header comment explains why: each schema's inferred type is
   checked against `src/generated/api-types.ts` by a function whose body is nothing but
   `return dto`, for example `assertPersonResponseDtoMatchesGenerated`. That function only
@@ -193,7 +204,7 @@ shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
   unparsed.** `unwrapData`/`unwrapPage` plus the model schema and mapper are composed by
   the caller — `server/persons-repository.ts`, landed by S-030 below. This is
   deliberate, not a placeholder: it is what lets `api-layer-has-no-react` mean something,
-  and it is what `server/` is *for* — "fetch → parse → map to domain" in
+  and it is what `server/` is _for_ — "fetch → parse → map to domain" in
   `web/CLAUDE.md`'s own Architecture section names three separate steps, and this slice
   is proof they run in three separate places.
 - **`domain/person/person.ts` is plain TypeScript with no functions, only types** —
@@ -207,20 +218,20 @@ shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
   only `http/`, `telemetry/`, and `testing/` — adding a `shared/` subtree is a structural
   decision this seed did not make alone. **Copy the file rather than importing it
   cross-feature** (`cross-feature-only-via-index` would refuse the import anyway), and
-  whoever copies it a *second* time should turn the duplication into a real `shared/`
+  whoever copies it a _second_ time should turn the duplication into a real `shared/`
   module instead of shipping a third copy.
 - **Write DTOs skip zod on purpose.** `PersonCreateRequest`/`PersonUpdateRequest` are
   typed straight from `components['schemas'][...]` in `persons-api.ts` — no zod schema
   validates them, because the caller constructs them and TypeScript already checks the
-  shape at the call site. Zod DTOs in `model/` exist to validate *untrusted* data arriving
+  shape at the call site. Zod DTOs in `model/` exist to validate _untrusted_ data arriving
   over the wire; an outgoing request body is not that.
 - **Excluded on purpose:** the `/persons/{id}/{marriages,parent-child,documents,events,
-  timeline,claim}` sub-resources. Their payloads (`MarriageResponse`,
+timeline,claim}` sub-resources. Their payloads (`MarriageResponse`,
   `ParentChildResponse`, …) belong to the relationships, documents, events, and claims
   slices, not to this one, even though the route is nested under `/persons`.
 - **Tests:** `model/person-dto.test.ts` feeds each mapper a full fixture (the
   `HistoricalDate` half taken verbatim from `docs/contracts/README.md`'s own example) and
-  asserts on the *mapped output values*, not on schema shape. `api/persons-api.test.ts`
+  asserts on the _mapped output values_, not on schema shape. `api/persons-api.test.ts`
   exercises `listPersons`/`getPerson`/`searchPersons` against a mocked `fetchImpl`
   (`vi.fn<FetchLike>()`, same convention as `api-client.test.ts`) and covers the three
   things S-029 names: the `{"data": ...}` envelope, `Page<T>` via `unwrapPage`, and a
@@ -238,7 +249,7 @@ function takes the `PersonsApiCallOptions` S-029's `api/` layer already defined
 — never a DTO and never the raw `Promise<unknown>` `api/` hands back.
 
 - **The cursor rule lives here, not in a hook.** `listPersons` catches a `400
-  invalid_cursor` `ApiError` and retries once with `cursor: null` before it ever reaches a
+invalid_cursor` `ApiError` and retries once with `cursor: null` before it ever reaches a
   caller. Doing it in `server/` rather than `hooks/` means the retry is testable without
   React (`persons-repository.test.ts`, no MSW, no `renderHook`) and means a screen cannot
   forget to handle it — there is nothing left for a screen to handle. It only retries when
@@ -246,7 +257,7 @@ function takes the `PersonsApiCallOptions` S-029's `api/` layer already defined
   say) still surfaces as itself rather than looping.
 - **The 401/403 split is proven through the repository, not reimplemented in it.**
   `apiFetch` already refreshes once on 401 and never on 403; what was still unproven is
-  that two *concurrent* repository calls sharing one `refreshAuth` (built with
+  that two _concurrent_ repository calls sharing one `refreshAuth` (built with
   `createSingleFlight`, `shared/http/refresh.ts`) collapse onto one refresh rather than
   each calling it independently. `persons-repository.test.ts` proves it by calling
   `getPerson` twice concurrently with a shared, deliberately slow-to-resolve
@@ -266,7 +277,7 @@ function takes the `PersonsApiCallOptions` S-029's `api/` layer already defined
   (`domain/person/person.ts`) keeps that shape in the return type too.
 - **The `HistoricalDate` DTO stays duplicated — S-030 is not the second slice that needs
   it.** S-029 named `historical-date-dto.ts` as `persons`-local on purpose until a second
-  *feature* (marriages, events, tree nodes) needs the same wire shape. S-030 adds no new
+  _feature_ (marriages, events, tree nodes) needs the same wire shape. S-030 adds no new
   feature and no new wire shape; it is the same slice consuming what S-029 already parses.
   Nothing here changed about that file.
 - **Write bodies still carry no zod validation, and this seed agrees with that call.**
@@ -286,7 +297,7 @@ the shape `shared/http/clan-switch.test.tsx` already proved for a plain `useQuer
 built from the active clan refetches the moment `writeClanCookie` changes it, with no
 manual invalidation step for a clan switch. `list`/`search`/`detail` all drop the cursor
 from the key on purpose — the cursor is `useInfiniteQuery`'s own `pageParam`, identifying
-*which page*, not *which list*; keying on it would turn every page into its own cache
+_which page_, not _which list_; keying on it would turn every page into its own cache
 entry that never invalidates together.
 
 **Hooks (`hooks/use-persons-queries.ts`, `hooks/use-person-mutations.ts`) take a
@@ -390,10 +401,10 @@ side by side in a `flex items-baseline justify-between` row. Measured 2026-08-22
 with `:root { font-size: 32px }` (200%) against a throwaway preview route (`StaleWriteDialog`
 rendered directly with fixture rows, no backend, deleted before this commit): the dialog's own
 `clientWidth` was 250px against a `scrollWidth` of 288px — a real 38px overflow invisible at
-the *document* level (`documentElement.scrollWidth === clientWidth === 320` the whole time)
+the _document_ level (`documentElement.scrollWidth === clientWidth === 320` the whole time)
 because Radix's `overflow-y-auto` on `Dialog.Content` computes `overflow-x` to `auto` too, per
 the CSS spec's rule for a box with one axis scrolling and the other `visible` — so the overflow
-became an invisible *internal* horizontal scroll rather than a page-level one. The cause was the
+became an invisible _internal_ horizontal scroll rather than a page-level one. The cause was the
 classic flexbox `min-width: auto` trap: a flex item's implicit minimum width is its own longest
 unbroken content run, so the value span refused to wrap. Fixed by stacking label above value
 (a block layout has no such minimum) instead of the spec diagram's side-by-side line, and by
@@ -472,13 +483,13 @@ Component, which is the whole reason this moved to a cookie.
 **Attributes, decided once in `context.client.ts` so nine later seeds (S-024 through S-033)
 inherit them rather than re-deciding:**
 
-| Attribute | Value | Why |
-|---|---|---|
-| `httpOnly` | not set (false) | Forced, not chosen: `context.client.ts` reads the cookie through `document.cookie`, and a script that can read a cookie can set it, so declaring `httpOnly` would be theatre. The cookie is also not a credential — the backend re-validates it against the caller's actual memberships on every request (`get_current_clan_id`) — so nothing sensitive leaks by it being script-readable. |
-| `sameSite` | `lax` | Sent on a normal top-level navigation, withheld on a cross-site subrequest or form post — the standard mitigation for a script-writable cookie. Matches the legacy writer, `src/infrastructure/auth/clan-selection-storage.ts`. |
-| `secure` | only when `location.protocol === 'https:'` | `document.cookie` silently drops a hard-coded `Secure` attribute set from an insecure origin rather than erroring, which would break local `http://localhost` dev instead of protecting anything. |
-| `path` | `/` | Every locale-prefixed route reads it, and so does `src/middleware.ts`, which runs before any narrower path is known. |
-| `max-age` | one year | A UI preference the backend re-validates, not a session credential — no security reason to expire it sooner. |
+| Attribute  | Value                                      | Why                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `httpOnly` | not set (false)                            | Forced, not chosen: `context.client.ts` reads the cookie through `document.cookie`, and a script that can read a cookie can set it, so declaring `httpOnly` would be theatre. The cookie is also not a credential — the backend re-validates it against the caller's actual memberships on every request (`get_current_clan_id`) — so nothing sensitive leaks by it being script-readable. |
+| `sameSite` | `lax`                                      | Sent on a normal top-level navigation, withheld on a cross-site subrequest or form post — the standard mitigation for a script-writable cookie. Matches the legacy writer, `src/infrastructure/auth/clan-selection-storage.ts`.                                                                                                                                                            |
+| `secure`   | only when `location.protocol === 'https:'` | `document.cookie` silently drops a hard-coded `Secure` attribute set from an insecure origin rather than erroring, which would break local `http://localhost` dev instead of protecting anything.                                                                                                                                                                                          |
+| `path`     | `/`                                        | Every locale-prefixed route reads it, and so does `src/middleware.ts`, which runs before any narrower path is known.                                                                                                                                                                                                                                                                       |
+| `max-age`  | one year                                   | A UI preference the backend re-validates, not a session credential — no security reason to expire it sooner.                                                                                                                                                                                                                                                                               |
 
 `parseClanCookie` treats the value as unparseable unless it matches the UUID shape every
 `clan_id` takes in the backend (cast `::uuid` throughout `docs/architecture/data-model.md`),
@@ -526,7 +537,7 @@ callers as a drive-by rename. **`pnpm depcruise` on 2026-08-22 still reports 4 w
 and that is the tool's own blind spot rather than a failed rewire.** `.dependency-cruiser.cjs`'s
 `LEGACY` pattern (`^src/(lib/(api|hooks)|application|infrastructure|types)/`) is in the
 `options.exclude` list, so `src/lib/hooks/**` is not a node in the graph at all — an import
-*from* an excluded file draws no edge, so `capability.ts` reads as orphaned no matter how real
+_from_ an excluded file draws no edge, so `capability.ts` reads as orphaned no matter how real
 its consumer is, for as long as the consumer lives in `lib/hooks`. Confirmed by inspecting
 `depcruise --output-type json`'s own module list on 2026-08-22: it contains no `src/lib/hooks/*`
 entry at all. The real consumption is proven by `grep -rn "domain/capability/capability"
@@ -689,6 +700,7 @@ Four harnesses, one gate each:
 
   These four cover what only a browser can measure. Real user journeys arrive with the
   feature slices, once there is a backend to talk to.
+
 - `tests/behavior/` (legacy) — Node test runner with `--experimental-strip-types` for `.ts`.
   Focused on auth + query invalidation flows against the legacy trees; not part of the CI
   gate for new code.

@@ -1,9 +1,5 @@
 import type { DocumentQueryRepository } from '@/application/documents/ports/document-query-repository'
-import type {
-  CursorPage,
-  DocumentResponse,
-  DocumentSummary,
-} from '@/lib/types'
+import type { CursorPage, DocumentResponse, DocumentSummary } from '@/lib/types'
 import { documentsApi } from '@/lib/api/documents'
 
 export class HttpDocumentQueryRepository implements DocumentQueryRepository {

@@ -28,18 +28,18 @@ export function RoleSelector({ value, onChange, disabled }: RoleSelectorProps) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      {ROLES.map(role => (
+      {ROLES.map((role) => (
         <button
           key={role.value}
           type="button"
           disabled={disabled}
           onClick={() => onChange(role.value)}
           className={cn(
-            'flex items-start gap-2 px-3 py-2 rounded-lg border text-left transition-all',
+            'flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition-all',
             value === role.value
               ? ROLE_COLORS[role.value]
-              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300',
-            disabled && 'opacity-50 cursor-not-allowed',
+              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300',
+            disabled && 'cursor-not-allowed opacity-50',
           )}
         >
           <div className="flex-1">
@@ -47,7 +47,7 @@ export function RoleSelector({ value, onChange, disabled }: RoleSelectorProps) {
             <p className="text-[11px] opacity-70">{t(role.descKey)}</p>
           </div>
           {value === role.value && (
-            <span className="mt-0.5 h-4 w-4 rounded-full border-2 border-current flex items-center justify-center">
+            <span className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-current">
               <span className="h-2 w-2 rounded-full bg-current" />
             </span>
           )}

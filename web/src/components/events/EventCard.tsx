@@ -25,24 +25,24 @@ export function EventCard({ event, className }: EventCardProps) {
   return (
     <div
       className={cn(
-        'p-4 rounded-xl border',
+        'rounded-xl border p-4',
         EVENT_COLORS[event.event_type] ?? EVENT_COLORS.other,
         className,
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 truncate">{event.title}</h3>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-gray-800">{event.title}</h3>
           {event.description && (
-            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{event.description}</p>
+            <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{event.description}</p>
           )}
         </div>
-        <span className="text-[10px] bg-white/70 border border-current rounded px-1.5 py-0.5 text-gray-500 shrink-0">
+        <span className="shrink-0 rounded border border-current bg-white/70 px-1.5 py-0.5 text-[10px] text-gray-500">
           {t(`type.${event.event_type}`)}
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
         <span className="flex items-center gap-1">
           <Calendar className="h-3 w-3" />
           {formatDate(event.event_date)}
