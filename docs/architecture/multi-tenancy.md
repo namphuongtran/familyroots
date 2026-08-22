@@ -11,10 +11,11 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
 > `change_requests`, `clan_memberships`, `clan_invitations`, `notification_log`, and
 > `clan_settings` are RLS-enforced at the DB layer (other clan-scoped tables are added
-> table-by-table, and one of them cannot be — see point 7). Thirteen tables have RLS enabled
-> and **the number of covered tables is not thirteen**, because two of them carry policies
-> that are not clan isolation: `identity_claims` is a deny-all tripwire (point 8) and
-> `audit_logs` is clan-keyed on reads only (point 9). `persons` carries two extra rules — see point 6 below
+> table-by-table). Fourteen tables have RLS enabled and **the number of fully covered tables
+> is eleven**, because three of them carry policies that are not clan isolation, in three
+> different ways: `identity_claims` is a deny-all tripwire (point 8), `audit_logs` is
+> clan-keyed on reads only (point 9), and `user_clan_roles` is clan-keyed on `UPDATE` and
+> `DELETE` only (point 7). `persons` carries two extra rules — see point 6 below
 > and [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
 > describe the application-layer mechanism that remains the primary guarantee.
 
@@ -72,7 +73,8 @@ PostgreSQL instance
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
 6. **RLS layer-2 (ACTIVE for `documents`, `events`, `branches`, `parent_child`,
    `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`,
-   `notification_log`, `clan_settings`; and clan-keyed on reads only for `audit_logs`, see point 9).** The request path drops to the non-bypass `familyroots_app`
+   `notification_log`, `clan_settings`; clan-keyed on reads only for `audit_logs`, see point 9;
+   clan-keyed on `UPDATE` and `DELETE` only for `user_clan_roles`, see point 7).** The request path drops to the non-bypass `familyroots_app`
    role and sets the transaction-local `app.clan_id` GUC (an `after_begin` seam on the
    request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
    RLS-enforced at the DB layer behind the primary application filters. System paths
@@ -106,13 +108,15 @@ PostgreSQL instance
    measured in that state on 2026-08-22 while closing S-009. **One is still open and one is
    now resolved**, and the resolved one shows the shape of the fix.
 
-   - **`user_clan_roles`** is what `get_current_clan_id` reads to decide which clan is
-     active (`backend/app/core/security.py:246-253`; the GUC is set only at `:290`), and
-     what `get_login_profile` (`auth_repository.py:118-135`) and `GET /me/clans`
-     (`me_query_port.py:19-42`) read. With a policy applied, `POST /auth/login` still
-     answers `200` but with `clan_id: null`, and `/me/clans` returns `[]` — the user is
-     told they belong to no clan. Pinned by
-     `backend/tests/integration/test_rls_login_two_clans.py`.
+   - **`user_clan_roles` had this shape and is now RESOLVED a third way**, by
+     [ADR-050](../decisions/050-user-clan-roles-clan-keyed-mutations.md) and migration `036`.
+     It is what `get_current_clan_id` reads to decide which clan is active
+     (`backend/app/core/security.py:249-254`; the GUC is set only at `:290`), and what
+     `get_login_profile` (`auth_repository.py:120-137`) and `GET /me/clans`
+     (`me_query_port.py:19-42`) read. With the migration-027 template applied,
+     `POST /auth/login` still answers `200` but with `clan_id: null`, and `/me/clans` returns
+     `[]` — the user is told they belong to no clan. See the paragraph below for what shipped
+     instead.
    - **`clan_invitations` had the same shape and is now RESOLVED**, by
      [ADR-048](../decisions/048-invitation-accept-runs-on-the-system-session.md) and
      migration `032`. `POST /invitations/{token}/accept`
@@ -131,9 +135,13 @@ PostgreSQL instance
 
    Covering a table in this shape means first deciding which session its clan-less path runs
    on, and that decision needs its own ADR. Seed S-009 enabled RLS on `clan_memberships` only
-   for this reason; seed S-043 then made the decision for `clan_invitations`; and seed S-010
-   split the same way, shipping `clan_settings` (migration `035`) and leaving
-   `user_clan_roles` for the ADR named below.
+   for this reason; seed S-043 then made the decision for `clan_invitations`; seed S-010 split
+   the same way, shipping `clan_settings` (migration `035`); and seed S-052 closed the last of
+   them for `user_clan_roles` (migration `036`). **There are now three answers to this shape,
+   not one:** move the one clan-less route to the privileged session (ADR-048), lock the table
+   out of the request role entirely (ADR-042), or cover only the commands whose paths all have
+   a clan (ADR-050). Which one fits depends on how many clan-less paths there are and what they
+   do.
 
    **`user_clan_roles` is the sharpest instance of this shape, because it is the table the
    authorization gate reads.** A policy there does not merely hide data: it silently
@@ -147,8 +155,22 @@ PostgreSQL instance
    `GET /me/clans` returns `[]`, with no error anywhere. **Loudly on writes:**
    `add_membership` (`auth_repository.py:69-88`) INSERTs the row on that same session, so both
    `POST /auth/onboard` flows raise `InsufficientPrivilege` and answer 500. Both halves are
-   pinned by `backend/tests/integration/test_rls_login_two_clans.py`. The decision is
-   pre-allocated as **ADR-050**.
+   pinned by `backend/tests/integration/test_rls_login_two_clans.py`.
+
+   **[ADR-050](../decisions/050-user-clan-roles-clan-keyed-mutations.md) resolved it by covering
+   half the table, and the half it chose is the opposite of `audit_logs`'s.** Migration `036`
+   gives `user_clan_roles` four per-command policies: `SELECT USING (true)` and
+   `INSERT WITH CHECK (true)`, both permissive by decision, and clan-keyed `UPDATE` and
+   `DELETE`. The reason is that a **record** leaks by being read while a **capability** leaks by
+   being written. Measured 2026-08-22: the four statements that mutate this table on a request
+   session — `approve_if_pending`, `delete_role_by_id`, `delete_if_pending` and `change_role_if`
+   (`backend/app/infrastructure/persistence/clan_repository.py:136-155`, `:172-188`, `:190-205`,
+   `:207-224`) — are keyed on the **primary key alone**, with no `clan_id` predicate. Their clan
+   safety today is that `ucr_id` came from the clan-filtered `get_user_clan_role` (`:31-39`) a
+   few lines earlier, which is a read-then-write pair rather than a filter. So the reads on this
+   table have one layer of isolation and the authority-changing writes now have two. No handler
+   changed the session it runs on. Proven both ways at the database layer by
+   `backend/tests/integration/test_rls_phase11_user_clan_roles.py`.
 
 8. **`identity_claims` has RLS enabled and NO clan isolation, and the two facts are not in
    tension.** Migration `033_rls_identity_claims` (2026-08-22, seed S-012) creates exactly
@@ -230,6 +252,18 @@ PostgreSQL instance
    real `RlsSession`. `notification_log` took the ordinary template in the same migration and
    needs none of this; its only accessor is the anniversary scheduler, which bypasses, and
    `test_scheduler_cross_clan_notification_log.py` proves that run still crosses clans.
+
+   **A fourth set followed on the same day (2026-08-22, seed S-052,
+   [ADR-050](../decisions/050-user-clan-roles-clan-keyed-mutations.md)).** `user_clan_roles`
+   fits none of the three above: its `SELECT` and `INSERT` are `true` and its `UPDATE` and
+   `DELETE` are clan-keyed, which is the mirror of `audit_logs`. `_CLAN_KEYED_MUTATION_TABLES`
+   is asserted by its own test — exactly one policy per command, the mutating pair keyed on the
+   GUC on every half they have, the reading pair required to stay `true` so nobody tightens one
+   without moving the clan-less readers first. **Listing it as clan-isolated would have passed
+   that set's assertion**, because its `UPDATE` policy's `USING` does read the GUC. Three seeds
+   in a row have now found a guard passing over the wrong thing; the rule is
+   `.claude/rules/seeds.md` § "A test pins an outcome, not a setting", and its last line — a set
+   is a setting too — is why a fourth set exists instead of a fourth name in an old one.
 
 ## Multi-clan membership (clan switcher)
 

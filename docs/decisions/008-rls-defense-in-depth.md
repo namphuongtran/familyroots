@@ -193,6 +193,40 @@ the ContextVar so post-commit transactions re-apply it).
     `backend/tests/integration/test_rls_phase10_clan_settings.py` therefore ends with a
     privileged read proving the rows were there — S-012's rule, at its sharpest here.
 
+- **Phase 11 (2026-08-22, migration `036_rls_user_clan_roles`, seed S-052, decided by
+  [ADR-050](050-user-clan-roles-clan-keyed-mutations.md))** — RLS enabled on `user_clan_roles`
+  with **four per-command policies, two of which compare nothing**. `user_clan_roles_sel` is
+  `USING (true)` and `user_clan_roles_ins` is `WITH CHECK (true)`; `user_clan_roles_upd` and
+  `user_clan_roles_del` carry the Phase-2 predicate on every half they have. **This phase adds
+  clan isolation to the write half only and must not be counted as full coverage.** The reason
+  the read half is permissive is the census in ADR-050 § Context: four of the eleven modules that
+  touch this table run on the request session with **no clan selected**, starting with
+  `get_current_clan_id` itself (`app/core/security.py:249-254`, which sets the GUC only afterwards
+  at `:290`), and a clan-keyed SELECT turns login into a silent lockout. The reason the write half
+  is covered is sharper than for any table before it: `approve_if_pending`, `delete_role_by_id`,
+  `delete_if_pending` and `change_role_if`
+  (`app/infrastructure/persistence/clan_repository.py:136-155`, `:172-188`, `:190-205`,
+  `:207-224`) are keyed on the primary key **alone**, with no `clan_id` predicate, so these two
+  policies are the only thing at the database between a stray `ucr_id` and an admin grant in
+  another clan. Proven by `test_rls_phase11_user_clan_roles` (UPDATE and DELETE denied across the
+  boundary and admitted inside it, an UPDATE unable to move a row's `clan_id`, both commands
+  denied with no clan selected, each denial closed by a privileged read proving the row was there
+  and unchanged, and the permissive halves asserted so nobody closes one by accident) and by
+  `test_rls_login_two_clans`, which drives login, `/me/clans` and both onboard branches over the
+  real seam and adds the two-clan role check S-010 named. Because a fourth posture now exists, the
+  coverage guard in `test_rls_activation.py` gained a fourth set,
+  `_CLAN_KEYED_MUTATION_TABLES`, with its own question — listing this table as clan-isolated would
+  have **passed** that set's assertion, because its UPDATE policy's `USING` does read the GUC.
+
+> **Amendment (2026-08-22, Phase 11, seed S-052) — the `user_clan_roles` clause below, and the
+> Phase-10 amendment above it, are now resolved by [ADR-050](050-user-clan-roles-clan-keyed-mutations.md).**
+> The measurement stands: the migration-027 template does break the table in both directions, and
+> both halves were reproduced again on 2026-08-22. What changed is the conclusion. The table is
+> not excluded; it is **half covered**. `UPDATE` and `DELETE` are clan-keyed and `SELECT` and
+> `INSERT` are permissive, so every clan-less reader and the clan-less `add_membership` write keep
+> working on the session they were already on, and no handler moved. `clans` remains outside layer
+> 2, so the clause below is still correct about that table.
+
 > **Amendment (2026-08-22, Phase 10, seed S-010) — the `user_clan_roles` clause below is
 > right, and it is now measured rather than predicted, in both directions.** It says RLS
 > there "would default-deny and break every request". Re-measured on 2026-08-22 by adding

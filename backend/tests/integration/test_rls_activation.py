@@ -202,13 +202,11 @@ _CLAN_ISOLATED_TABLES = {
     # It belongs in THIS set and not the third one: both halves of its single policy are
     # clan-keyed, unlike `audit_logs`, whose INSERT admits any clan or none.
     #
-    # S-010's OTHER table, `user_clan_roles`, is deliberately absent from all three sets
-    # and from the schema. Re-measured 2026-08-22: a policy on it makes `POST /auth/login`
-    # answer 200 with `clan_id: null` and `GET /me/clans` return `[]` (silent), and makes
-    # `POST /auth/onboard` raise `InsufficientPrivilege` on the `user_clan_roles` INSERT
-    # (loud). See `migrations/versions/035_rls_clan_settings.py` and
-    # `test_rls_login_two_clans.py`. Do not add it here without the ADR that decides which
-    # session resolves a caller's roles.
+    # S-010's OTHER table, `user_clan_roles`, joined the schema on 2026-08-22 (S-052,
+    # ADR-050, migration 036) and it is NOT in this set. Its SELECT and INSERT policies are
+    # `true` on purpose, so listing it here would pass this set's assertion (some policy's
+    # USING reads the GUC — its UPDATE policy does) while telling a later reader its reads
+    # are confined to one clan, which is false. It has a fourth set of its own below.
     "clan_settings",
 }
 
@@ -247,6 +245,34 @@ _REQUEST_ROLE_DENIED_TABLES = {"identity_claims"}
 # the S-012 split exists to stop.
 _PER_COMMAND_TABLES = {"audit_logs"}
 
+# CLAN-KEYED-MUTATIONS-ONLY: SELECT and INSERT are `true`, UPDATE and DELETE are clan-keyed
+# on every half they have. `user_clan_roles` is the only member (S-052, ADR-050, migration
+# 036) and it fits NEITHER of the three sets above, so a fourth one exists rather than a
+# name being pushed into whichever half it half-matches — the S-014 rule, applied again:
+#
+#   * it is not clan-isolated — two of its four policies compare nothing. The clan-less
+#     readers are the authorization gate itself (`app/core/security.py:249-254`, which runs
+#     BEFORE it sets the GUC at `:290`), `get_login_profile`
+#     (`auth_repository.py:120-137`) and `list_clans` (`me_query_port.py:19-42`), and the
+#     clan-less writer is `add_membership` (`auth_repository.py:69-88`) on both
+#     `POST /auth/onboard` branches. Measured 2026-08-22: the 027 template makes login
+#     answer 200 with `clan_id: null` and `/me/clans` return `[]` (silent), and makes
+#     onboard raise `InsufficientPrivilege` (loud);
+#   * it is not request-role-denied — the UPDATE and DELETE policies are real clan
+#     predicates, and they are the guard the table was brought inside layer 2 for;
+#   * and it is the MIRROR of `audit_logs`, not a copy. `audit_logs` has clan-keyed reads
+#     and a permissive INSERT because a record leaks by being read. This table has
+#     permissive reads and clan-keyed mutations because a capability leaks by being
+#     written: `clan_repository.approve_if_pending`, `delete_role_by_id`,
+#     `delete_if_pending` and `change_role_if` are all keyed on the primary key ALONE, with
+#     no `clan_id` predicate, so the UPDATE/DELETE policies are the only thing at the
+#     database that stops a stray `ucr_id` granting admin in another clan.
+#
+# Listing `user_clan_roles` under _CLAN_ISOLATED_TABLES would have PASSED that set's
+# assertion, because its UPDATE policy's USING does read the GUC. That is the silent lie
+# these sets exist to stop.
+_CLAN_KEYED_MUTATION_TABLES = {"user_clan_roles"}
+
 # The migration-027 predicate template, present in every clan-isolated policy's `qual`.
 _GUC_MARKER = "app.clan_id"
 
@@ -275,10 +301,13 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
     UPDATE/DELETE policy at all. That third shape is `_PER_COMMAND_TABLES`.
 
     `clan_settings` joined on 2026-08-22 (S-010, migration 035), into the clan-isolated
-    set, because both halves of its one policy are clan-keyed. S-010's other table,
-    `user_clan_roles`, did NOT join: it is the table the authorization gate reads, and a
-    policy on it downgrades the caller's permissions rather than merely hiding data. That
-    half of S-010 is a decision seed, not an omission — see the comment on the set above.
+    set, because both halves of its one policy are clan-keyed.
+
+    `user_clan_roles` joined on 2026-08-22 too (S-052, ADR-050, migration 036), into a
+    FOURTH set. It is the table the authorization gate reads, so a policy on it decides
+    what a caller may DO rather than merely what it may see: its SELECT and INSERT are
+    permissive by decision and only its UPDATE and DELETE are clan-keyed. Four postures now
+    exist and each is asserted with its own question below.
     """
     async with engine.connect() as conn:
         rls_tables = set(
@@ -294,8 +323,11 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
             .scalars()
             .all()
         )
-        assert (
-            rls_tables == _CLAN_ISOLATED_TABLES | _REQUEST_ROLE_DENIED_TABLES | _PER_COMMAND_TABLES
+        assert rls_tables == (
+            _CLAN_ISOLATED_TABLES
+            | _REQUEST_ROLE_DENIED_TABLES
+            | _PER_COMMAND_TABLES
+            | _CLAN_KEYED_MUTATION_TABLES
         ), f"RLS scope drifted: {rls_tables}"
 
         for table in rls_tables:
@@ -435,3 +467,80 @@ async def test_audit_logs_reads_are_clan_keyed_and_it_cannot_be_edited_or_erased
         f"POST /auth/register is unauthenticated and writes an audit row with no clan GUC, "
         f"so a clan-keyed WITH CHECK here compares <real clan> = NULL and rejects it"
     )
+
+
+async def test_user_clan_roles_mutations_are_clan_keyed_and_its_reads_are_not(
+    engine: AsyncEngine,
+) -> None:
+    """The fourth set's own question, and none of the assertions above ask it.
+
+    ADR-050 gives ``user_clan_roles`` four promises, and each one fails differently:
+
+    * ``user_clan_roles_upd`` and ``user_clan_roles_del`` are real clan predicates. They
+      are the ONLY thing at the database standing between a stray ``ucr_id`` and an admin
+      grant in another clan, because all four statements that reach them
+      (``clan_repository.approve_if_pending``, ``delete_role_by_id``, ``delete_if_pending``,
+      ``change_role_if``) are keyed on the primary key alone. Widen either to ``USING
+      (true)`` and every other test in this file still passes.
+    * ``user_clan_roles_upd`` must keep its ``WITH CHECK`` too, or an UPDATE could rewrite a
+      row's ``clan_id`` and hand another clan a member it never approved.
+    * ``user_clan_roles_sel`` is ``USING (true)`` **on purpose**. Someone "tightening" it to
+      the 027 template makes ``POST /auth/login`` answer 200 with ``clan_id: null`` and
+      ``GET /me/clans`` return ``[]``, with nothing raised and nothing logged. The end-to-end
+      proof is ``test_rls_login_two_clans.py``; this line names the reason.
+    * ``user_clan_roles_ins`` is ``WITH CHECK (true)`` on purpose for the same shape of
+      reason on the write side: both ``POST /auth/onboard`` branches insert the caller's own
+      membership with no clan selected, and a clan-keyed check answers 500.
+
+    ``cmd`` is read from ``pg_policies`` rather than inferred from the policy name, because a
+    name is a comment and ``cmd`` is the thing Postgres enforces.
+    """
+    for table in _CLAN_KEYED_MUTATION_TABLES:
+        async with engine.connect() as conn:
+            rows = (
+                (
+                    await conn.execute(
+                        sa.text(
+                            "SELECT policyname, cmd, qual, with_check FROM pg_policies "
+                            "WHERE schemaname = 'public' AND tablename = :t"
+                        ),
+                        {"t": table},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+
+        by_cmd = {r["cmd"]: dict(r) for r in rows}
+        assert len(by_cmd) == len(rows), f"two policies share a command on {table}: {rows}"
+        assert set(by_cmd) == {"SELECT", "INSERT", "UPDATE", "DELETE"}, (
+            f"{table} must carry exactly one policy per command. A missing UPDATE or DELETE "
+            f"policy DENIES that command to familyroots_app, which would break clan member "
+            f"management outright; a missing SELECT or INSERT policy denies login and "
+            f"onboarding. Found: {rows}"
+        )
+
+        for cmd in ("UPDATE", "DELETE"):
+            policy = by_cmd[cmd]
+            assert _GUC_MARKER in (policy["qual"] or ""), (
+                f"{table} {cmd} must key on the {_GUC_MARKER!r} GUC; found {policy['qual']!r}. "
+                f"This is the guard ADR-050 exists for: every statement that reaches it is "
+                f"keyed on the primary key alone, with no clan_id predicate of its own"
+            )
+        assert _GUC_MARKER in (by_cmd["UPDATE"]["with_check"] or ""), (
+            f"{table} UPDATE lost its WITH CHECK ({by_cmd['UPDATE']['with_check']!r}). Without "
+            f"it an UPDATE can rewrite a row's clan_id and move a membership into a clan that "
+            f"never approved it"
+        )
+
+        assert (by_cmd["SELECT"]["qual"] or "").strip().lower() == "true", (
+            f"{table} SELECT is enumerated as permissive-by-decision but its USING clause is "
+            f"{by_cmd['SELECT']['qual']!r}. If the clan-less readers named in ADR-050 § 1 have "
+            f"moved off the request session, move this table to _CLAN_ISOLATED_TABLES and "
+            f"amend ADR-050 — do not widen this assertion"
+        )
+        assert (by_cmd["INSERT"]["with_check"] or "").strip().lower() == "true", (
+            f"{table} INSERT is enumerated as permissive-by-decision but its WITH CHECK is "
+            f"{by_cmd['INSERT']['with_check']!r}. POST /auth/onboard writes the caller's own "
+            f"membership with no clan GUC, so a clan-keyed check compares <real clan> = NULL"
+        )
