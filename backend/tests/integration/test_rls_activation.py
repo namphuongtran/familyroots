@@ -6,6 +6,12 @@ the app's runtime seam: the ``RlsSession`` ``after_begin`` event + the request
 transaction automatically (no manual SET), survive a commit, fail closed with no clan,
 let the privileged system session bypass, and honor the ``RLS_ENABLED`` rollback switch.
 Migration 026's EXECUTE grants are smoke-tested under the role.
+
+What this file does NOT pin: these assert that the two known settings hold the right
+VALUES, which stays true whether the seam writes two settings or twenty. The exact SET is
+pinned by ``test_rls_seam_settings_pinned.py`` and ``tests/unit/test_rls_seam_writer_inventory.py``
+(seed S-045). That gap is why ADR-008 § 2 could promise an ``app.user_id`` the seam never
+wrote, for roughly two months, with every gate green — see ADR-047.
 """
 
 from __future__ import annotations
