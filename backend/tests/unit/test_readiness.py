@@ -15,8 +15,13 @@ pytestmark = [pytest.mark.unit]
 
 
 def test_expected_head_reads_migration_scripts() -> None:
-    """The scripts directory must be readable from the installed layout — a None
-    head would silently disable the whole readiness check."""
+    """A ``None`` head silently disables the whole readiness check.
+
+    This asserts only the **source tree** layout, whatever its docstring used to
+    claim. It was green for the entire life of S-075, during which the deployed
+    wheel carried no migration scripts at all and the production image could not
+    boot. The deployed layout is pinned by
+    ``tests/unit/test_wheel_carries_migration_scripts.py`` instead."""
     assert expected_head() is not None
 
 

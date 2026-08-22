@@ -38,7 +38,12 @@ requires = ["hatchling>=1.29.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+# ``migrations`` ships alongside ``app`` because app/core/readiness.py reads the
+# expected head revision from it at runtime, and backend/Dockerfile installs the
+# project with ``uv sync --no-editable``. A wheel that carries only ``app`` puts
+# the scripts out of the running code's reach, which is the S-075 defect: the
+# production image could not boot against a fully migrated database.
+packages = ["app", "migrations"]
 
 [tool.ruff]
 target-version = "py314"
