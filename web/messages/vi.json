@@ -412,6 +412,8 @@
     "previous": "Trước",
     "view_all": "Xem tất cả",
     "load_more": "Tải thêm",
-    "no_data": "Không có dữ liệu"
+    "no_data": "Không có dữ liệu",
+    "collapse": "Thu gọn",
+    "expand": "Mở rộng"
   }
 }

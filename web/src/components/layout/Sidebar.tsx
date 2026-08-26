@@ -67,7 +67,7 @@ export function Sidebar() {
         <button
           onClick={toggleSidebar}
           className="hover:bg-cream-200 text-muted-foreground hover:text-foreground ml-auto rounded-md p-1.5"
-          aria-label={sidebarOpen ? 'Thu gọn' : 'Mở rộng'}
+          aria-label={sidebarOpen ? t('common.collapse') : t('common.expand')}
         >
           {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>

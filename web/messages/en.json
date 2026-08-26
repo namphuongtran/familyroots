@@ -412,6 +412,8 @@
     "previous": "Previous",
     "view_all": "View All",
     "load_more": "Load More",
-    "no_data": "No data available"
+    "no_data": "No data available",
+    "collapse": "Collapse",
+    "expand": "Expand"
   }
 }

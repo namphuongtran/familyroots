@@ -23,6 +23,10 @@ const NAV_ITEMS = [
 
 export function BackofficeSidebar({ locale }: { locale: string }) {
   const t = useTranslations('Backoffice')
+  // `auth.logout` rather than a new `Backoffice.*` key: the sentence already has one key,
+  // real translations in all four locale files, and three other callers (`Header.tsx`,
+  // `PendingApprovalScreen.tsx`, `ClanSuspendedScreen.tsx`). Seed S-092.
+  const tAuth = useTranslations('auth')
   const { signOut } = useAuth()
   const pathname = usePathname()
 
@@ -81,7 +85,7 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
           className="text-muted-foreground hover:bg-card hover:text-foreground flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors"
         >
           <LogOut className="h-4 w-4" />
-          Sign out
+          {tAuth('logout')}
         </button>
       </div>
     </aside>
