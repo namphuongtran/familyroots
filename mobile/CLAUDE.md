@@ -307,11 +307,28 @@ Four test-host traps, all of which have already cost time here:
   `sqfliteFfiInit(); databaseFactory = databaseFactoryFfi;` in `setUpAll`.
   `inMemoryDatabasePath` is *shared across opens in one process*, so delete it
   in `setUp` or tests leak state into each other.
-- **`testWidgets` bodies run in a fake-async zone**, where sqflite's FFI I/O
-  never completes — opening a real database inside a widget test **hangs** rather
-  than failing, which looks like an infinite loop in your own code. Use an
-  in-memory `CacheStore` fake there (see `test/app/wiring_test.dart`). Plain
-  `test()` bodies are unaffected.
+- **`testWidgets` bodies run in a fake-async zone**, and anything needing a real
+  event-loop turn never completes there. It **hangs** rather than failing, which
+  looks like an infinite loop in your own code. Plain `test()` bodies are
+  unaffected. Two instances have cost time here:
+  - **sqflite's FFI I/O.** Opening a real database inside a widget test hangs.
+    Use an in-memory `CacheStore` fake — `FakeCacheStore` in
+    `test/support/main_container.dart`.
+  - **A `dio` request, even through a canned adapter that does no I/O at all.**
+    Measured 2026-08-26 by seed S-093: `await`ing
+    `SessionController.signIn()` directly in a `testWidgets` body hung for **25
+    minutes** with no output, `flutter_tester` at 0% CPU, and the per-test
+    timeout never fired, because the fake clock only advances when the tester
+    pumps and an `await` never pumps. Wrap the call in
+    `await tester.runAsync(…)` and pump after it; the same test then finished
+    in **under a second** (2026-08-27). Two follow-on effects, both measured
+    2026-08-27 and both real: a provider that fires its own request back inside
+    the zone never reaches the adapter at all (`GET /me/clans` from
+    `clanPickRequiredProvider` is never recorded), and a route that shows a
+    `CircularProgressIndicator` while it waits makes `pumpAndSettle` **time
+    out** instead of failing on your assertion — resolve that provider inside
+    the same `runAsync` block. `test/app/membership_route_test.dart` is the
+    worked example.
 - **`flutter test` renders a weight-insensitive placeholder font** unless the real
   ones are registered. Any golden or layout assertion must call `loadAppFonts()`
   in `setUpAll`, or it passes vacuously against any font — including none.

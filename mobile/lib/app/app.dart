@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/l10n/generated/app_localizations.dart';
 import '../core/theme/app_theme.dart';
+import '../domain/auth/user_profile.dart';
 import '../features/auth/auth.dart';
 import '../features/clan/clan.dart';
 import 'router/app_router.dart';
@@ -34,7 +35,11 @@ class _FamilyRootsAppState extends ConsumerState<FamilyRootsApp> {
       final profile = next.value;
       _authRouteState.set(
         signedIn: profile != null,
-        hasApprovedMembership: profile?.isApproved ?? true,
+        // The whole three-way answer, not `isApproved` flattened to a bool: a
+        // clanless user and a pending user need different copy on the same
+        // route (spec § 7.2a, seed S-093). No profile means signed out, so the
+        // membership guard must not hold anyone anywhere.
+        membership: profile?.membershipStatus ?? MembershipStatus.approved,
       );
     });
 

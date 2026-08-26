@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../domain/auth/user_profile.dart';
 import '../../domain/clan/clan_membership.dart';
 import '../../features/auth/auth.dart';
 import '../../features/clan/clan.dart';
@@ -115,12 +116,26 @@ class VerifyEmailRoute extends ConsumerWidget {
 }
 
 /// `/pending` — a stable keyed wrapper so the router can assert this route.
-class PendingRoute extends StatelessWidget {
+///
+/// One route, two copy variants (spec § 7.2a). The variant is read from the
+/// live profile rather than passed in, exactly as [VerifyEmailRoute] reads the
+/// email, so the screen follows a refetch without the router re-plumbing it.
+class PendingRoute extends ConsumerWidget {
   const PendingRoute({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      const KeyedSubtree(key: RouteKeys.pending, child: PendingApprovalPage());
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(sessionControllerProvider).value;
+    return KeyedSubtree(
+      key: RouteKeys.pending,
+      // No profile means the session is being torn down and the router is
+      // about to leave for /login. `pending` is the pre-S-093 default and is
+      // the shorter-lived of the two wrong answers.
+      child: PendingApprovalPage(
+        status: profile?.membershipStatus ?? MembershipStatus.pending,
+      ),
+    );
+  }
 }
 
 /// `/login`.

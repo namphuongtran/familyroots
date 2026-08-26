@@ -252,6 +252,10 @@ class AppLocalizationsVi extends AppLocalizations {
   String get onboardingTitle => 'Tham gia dòng họ';
 
   @override
+  String get onboardingUnavailableBody =>
+      'Bạn chưa thuộc dòng họ nào và cũng chưa gửi yêu cầu tham gia nào. Ứng dụng này chưa có bước tham gia hoặc tạo dòng họ, nên bạn chưa thể đi tiếp từ đây.';
+
+  @override
   String get accountBlockedTitle => 'Tài khoản đã bị khoá';
 
   @override

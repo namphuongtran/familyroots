@@ -254,6 +254,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingTitle => 'Join a clan';
 
   @override
+  String get onboardingUnavailableBody =>
+      'You do not belong to any clan yet, and you have sent no join request. This app does not have the step to join or create a clan yet, so you cannot go further here.';
+
+  @override
   String get accountBlockedTitle => 'Account blocked';
 
   @override
