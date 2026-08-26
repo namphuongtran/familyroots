@@ -1127,6 +1127,7 @@ graph LR
 | S-092 | Move the two hardcoded sidebar strings into the message catalogue | open | none |
 | S-093 | Route a clanless mobile user to onboarding rather than a screen that says they applied | open | none |
 | S-094 | Make two web e2e runs in two worktrees unable to measure each other | open | none |
+| S-095 | Decide what the remaining hardcoded web strings are, then sweep the ones that are copy | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -7672,6 +7673,91 @@ backend precedent; ADR-016 for `TEST_PG_DB_NAME`.
 **Out of scope.** The backend harness, which already has its answer. CI, where `process.env.CI` makes
 `reuseExistingServer` false already, so the defect does not exist there — **say that when you close
 this, because it explains why CI never caught it.** Any test's content.
+
+---
+
+## S-095. Decide what the remaining hardcoded web strings are, then sweep the ones that are copy
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from the count seed S-092 was told to report and not fix.**
+S-092's fence was deliberate: a sweep and a two-line fix are different sizes.
+
+**Fifteen lines, found by two greps over `web/src/**/*.tsx` excluding tests, on 2026-08-26.**
+**Treat fifteen as a floor and say so.** Two greps are not a proof of completeness, and S-092 said
+that about its own measurement rather than presenting the number as final. **Re-run a wider search
+before you scope the work**, and report what your search found rather than starting from this list.
+
+**The list splits in two, and the split is the decision this seed carries.**
+
+**Seven are plain translatable prose:**
+
+| File | Line | String |
+|---|---|---|
+| `web/src/app/[locale]/select-clan/page.tsx` | 115 | `Choose your clan` |
+| `web/src/components/layout/Header.tsx` | 29 | `Clan` |
+| `web/src/components/layout/Header.tsx` | 46 | `Select clan` |
+| `web/src/components/layout/Header.tsx` | 86 | `Clan` |
+| `web/src/components/layout/LocaleSwitcher.tsx` | 39 | `aria-label="Select language"` |
+| `web/src/components/layout/Sidebar.tsx` | 65 | `Gia Phả` |
+| `web/src/components/layout/Sidebar.tsx` | 79 | `Dòng họ` |
+
+**Note the two directions again**, which is the same shape S-092 found: five are hardcoded English
+and two are hardcoded Vietnamese, in the file S-092 already edited. `LocaleSwitcher.tsx:39` is an
+`aria-label`, so no visual review catches it — **and it is on the control a person uses to change
+locale**, which is the worst place for a string that does not.
+
+**Eight may not want a key at all, and deciding that is the work:**
+
+| File | Line | String | Why it is a question |
+|---|---|---|---|
+| `web/src/app/[locale]/(auth)/login/page.tsx` | 56, 58 | `Family`, `Roots` | A brand wordmark. S-034 split it across two elements with a `<wbr>` to survive 200% text scale, so it is **markup**, not a sentence |
+| `web/src/app/[locale]/(auth)/register/page.tsx` | 128, 130 | `Family`, `Roots` | Same |
+| `web/src/components/backoffice/BackofficeSidebar.tsx` | 53 | `FamilyRoots` | Same wordmark, unsplit |
+| `web/src/features/persons/ui/HistoricalDateField.tsx` | 119, 140 | `placeholder="1750"`, `placeholder="3"` | Example values. A year and a `đời` number are not English |
+
+**A brand name is not a translation defect, and neither is a numeral.** Decide whether the wordmark
+stays literal, and **write the reason down**, because the next person running this grep will find the
+same eight lines and needs to know they were considered rather than missed. If the answer is that
+they stay, the honest end state is a comment or a lint exclusion, not silence.
+
+**One line from S-092's list is deliberately absent here.** `placeholder="UUID"` at
+`register/page.tsx:246` is being deleted by **S-082**, per
+[ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md) § 2. Do not re-add it as a
+message key.
+
+**Four locale files, not two.** `web/messages/` holds `vi`, `en`, `zh`, and `fr`. S-066 brought the
+last two to parity and every seed since has held it. **Real translations, not copies of the
+English** — a `zh` file carrying the English word is parity on paper and a defect on screen.
+
+**End state.** Every string this seed classes as copy resolves through next-intl in all four locale
+files. Every string it classes as not-copy is recorded as such, with the reason, where the next
+grep-runner will find it.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. **Read S-094 first**: two `pnpm test:e2e`
+runs in two worktrees can silently measure each other, so resolve the process listening on the e2e
+port to your own worktree before quoting a reading, or say plainly that you did not.
+
+**Render in a non-default locale and read the accessible name**, per § "A test pins an outcome, not
+a setting". S-092 is the model to copy, and two of its choices are worth repeating: it read every
+value through `toHaveAccessibleName` rather than through the `aria-label` attribute, and it wrapped
+the expected value in a helper that **throws on a missing key**, because `toHaveAccessibleName(undefined)`
+degrades to "has some name" — which the hardcoded Vietnamese string would have passed.
+**Negative control:** for each string you move, the failing reading is the old literal appearing
+under a locale that should not show it. Quote them.
+
+**Consider reusing a key before adding one.** S-092 chose `auth.logout`, which already had three
+callers, over a new `Backoffice.sign_out`, on the grounds that a fourth spelling of one sentence is a
+second place to drift. `Header.tsx:29` and `:86` are both the bare word `Clan`, which is the same
+situation.
+
+**Sources.** S-092's report of 2026-08-26 and its two greps; `web/CLAUDE.md` for the next-intl rule;
+S-066 in this file for locale parity; S-034 for why the wordmark is split markup; S-092's own commit
+`0d2cf15` for the pattern to follow.
+
+**Out of scope.** `login/page.tsx` and `register/page.tsx` while S-082 holds them — **check the
+tracker before editing either**. Anything under `web/messages/` beyond the keys you add. Mobile,
+which has its own catalogue and its own rule.
 
 ---
 
