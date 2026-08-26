@@ -1128,6 +1128,7 @@ graph LR
 | S-093 | Route a clanless mobile user to onboarding rather than a screen that says they applied | open | none |
 | S-094 | Make two web e2e runs in two worktrees unable to measure each other | open | none |
 | S-095 | Decide what the remaining hardcoded web strings are, then sweep the ones that are copy | open | none |
+| S-096 | Connect the register form's six label and input pairs | blocked | S-082 |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -7614,11 +7615,18 @@ which hit it against a concurrently running seed and correctly discarded two of 
 evidence.** This is the web analogue of the `TEST_PG_DB_NAME` trap that ADR-016 closed for the
 backend, and **nothing closes it for web.**
 
-**The mechanism, read at source 2026-08-26 in `web/playwright.config.ts`:**
+**The mechanism, read at source 2026-08-26 in `web/playwright.config.ts`. There are two servers,
+not one, and that is the half a first reading misses:**
 
 - `:3` `const PORT = 3100`, a literal.
-- `:37` `export const BANNER_PORT = 3101`, a literal.
-- `:80` `reuseExistingServer: !process.env.CI`, which is **true** locally.
+- `:37` `export const BANNER_PORT = 3101`, a literal. It exists because S-042 needed a server with
+  genuinely no Supabase environment, and the comment at `:83-84` says why it cannot be folded into
+  the first.
+- **Both** `:80` and `:89` set `reuseExistingServer: !process.env.CI`, which is **true** locally.
+
+**So a reading attributed on 3100 alone is still unattributed.** The coordinator's first warning to
+three agents named only 3100; the S-091 agent found the second server and corrected it. Attribution
+takes both ports, and `lsof -a -p <pid> -d cwd` per listener.
 
 **So when two agents run `pnpm test:e2e` in two worktrees, the second silently attaches to the
 first's dev server**, and its specs run against the other worktree's application.
@@ -7629,7 +7637,20 @@ other run's connections and 182 tests failed at once. Nobody could mistake it fo
 collision can come back green** while measuring code from another branch. A silent wrong pass is not
 a louder version of a failure; it is a different defect.
 
-**The measured instance.** The verifying agent's first two runs failed with
+**It was then measured a second time, deliberately, and one run is direct proof.** The S-091 agent
+took three e2e runs and could only stand behind one:
+
+| Run | Attribution | Result | Usable |
+|---|---|---|---|
+| first | not checked | 58 passed | **no**, discarded rather than explained |
+| second | 3100 resolved to PID 56091, cwd `.../worktrees/s-082-web/web` | 48 passed, 10 failed | **no**. It measured **another seed's code**, then hit `ERR_CONNECTION_REFUSED` on both `3100/vi/login` and `3101/vi/login` when that worktree's servers shut down |
+| third | 3100 **and** 3101 both resolved to its own worktree | 58 passed | **yes** |
+
+**That second run is the defect caught in the act**: one seed's specs, another seed's application, and
+a result that was 48 green before it broke. Had the other worktree not restarted, it would have
+reported a pass.
+
+**The first instance, found the same day.** The verifying agent's first two runs failed with
 `net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3100` across most specs, plus `fonts.spec.ts`
 reporting the heading face as `"status": "error"`. `ps` showed another agent running `pnpm test:e2e`
 in `.claude/worktrees/s-082-web` holding 3100 and 3101. It waited for both ports to clear, re-ran,
@@ -7758,6 +7779,68 @@ S-066 in this file for locale parity; S-034 for why the wordmark is split markup
 **Out of scope.** `login/page.tsx` and `register/page.tsx` while S-082 holds them — **check the
 tracker before editing either**. Anything under `web/messages/` beyond the keys you add. Mobile,
 which has its own catalogue and its own rule.
+
+---
+
+## S-096. Connect the register form's six label and input pairs
+
+**Status:** blocked · **Blocked by:** S-082, which holds the file · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. Seed S-091 was told to read this file and not edit it, and
+it did exactly that**, because S-082 and S-083 were changing those lines concurrently.
+
+**Six label and input pairs carry no association.** Read at source 2026-08-26 in
+`web/src/app/[locale]/(auth)/register/page.tsx`, and `grep -c "htmlFor\|id=" ` over that file
+returns **0**:
+
+| Lines | Field |
+|---|---|
+| 174-179 | `full_name` |
+| 186-189 | `email` |
+| 200-211 | `password` |
+| 239-248 | `clan_slug`, the join branch |
+| 253-261 | `clan_name` |
+| 263-272 | `clan_slug`, the create branch |
+
+**Two pairs on this screen are already correct, and S-091 corrected its own brief to say so.** The
+radio inputs at `:217-234` wrap the `<input>` **inside** the `<label>`, which labels them
+implicitly. So the count is six, not eight. **Do not "fix" the radios.** A brief that says a screen
+is "built the same way" as another is a claim to check, not a fact — this is the instance that proves
+it.
+
+**Line numbers here will be wrong by the time you read them.** S-083 already moved this file once,
+and S-082 is moving the join branch now. **Re-read the file. Do not trust this table's coordinates**,
+which is the same defect the merge repair at `e2ae368` had to fix across six citations.
+
+**End state.** Every input on the register screen has an accessible name that comes from its visible
+label, and clicking a visible label moves focus into its input. Ids are prefixed so they cannot
+collide with another screen's fields — S-091 used `login-`, so use `register-`.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. **Read S-094 before quoting any e2e
+reading**: two runs in two worktrees can silently measure each other, and attribution takes **both**
+ports, 3100 and 3101.
+
+**Read a name, never an attribute**, per § "A test pins an outcome, not a setting". S-091 is the
+model and its three cases are the shape to copy: `getByLabelText` resolves the label to the control
+it labels; `toHaveAccessibleName()` runs the accessible-name computation over every input in the
+form; and clicking the visible label then reading `document.activeElement` covers the other half of
+the defect. **Negative control:** each must fail against the code as you find it. S-091's failing
+reading was a thrown query error, `"Found a label with the text of: Email, however no form control
+was found associated to that label"`, and its passing reading was a resolved element — **two
+different kinds of reading, which is why it is a real control** and not S-001's same-value trap.
+
+**One limitation S-091 stated and you inherit.** These assertions run in jsdom via
+`dom-accessibility-api`, which is not a real accessibility tree and not a screen reader. It is strong
+evidence the `for`/`id` pairing is correct. It is **not** the same measurement as VoiceOver
+announcing the field, and **no harness in this repository can make that reading today.** Say so
+rather than implying the screen was tested with assistive technology.
+
+**Sources.** `web/src/app/[locale]/(auth)/register/page.tsx:174-179,186-189,200-211,217-234,239-248,253-261,263-272`,
+read on branch `seed/s-091-login-form-labels` at `1a387c0`; S-091's report and commit `a1f4689` for
+the pattern and the control; `docs/SEEDS.md` S-091 for the login instance.
+
+**Out of scope.** The login screen, which S-091 closed. Any other accessibility question on this
+screen. The fields' behaviour, copy, or validation, which are S-082 and S-083.
 
 ---
 
