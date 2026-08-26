@@ -90,8 +90,11 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">{t('email')}</label>
+            <label htmlFor="login-email" className="text-foreground mb-1 block text-sm font-medium">
+              {t('email')}
+            </label>
             <input
+              id="login-email"
               type="email"
               required
               autoComplete="email"
@@ -102,10 +105,14 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">
+            <label
+              htmlFor="login-password"
+              className="text-foreground mb-1 block text-sm font-medium"
+            >
               {t('password')}
             </label>
             <input
+              id="login-password"
               type="password"
               required
               autoComplete="current-password"
