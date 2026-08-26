@@ -14,6 +14,39 @@ line and not inferred from a file name or a nearby document.
 
 ## Context
 
+> **The `file:line` coordinates in this section were correct on 2026-08-26 and most of them are
+> now wrong. They are left as written on purpose, and this note is the repair.**
+>
+> Checked at source 2026-08-27, after seeds S-081, S-082, S-083 and S-085 all landed in
+> `integration/batch-2026-08-26`. Every claim below still holds; only the line numbers moved,
+> because S-081 inserted a comment block and S-085 inserted `_CLAN_FIELDS` plus a validator into
+> `backend/app/schemas/auth.py`, and S-082 and S-083 both rewrote the register page.
+>
+> | Written here | Where it is now |
+> |---|---|
+> | `auth.py:18`, `clan_action` on `RegisterRequest` | `auth.py:34` |
+> | `auth.py:25`, `clan_action` on `AuthenticatedOnboardingRequest` | `auth.py:78` |
+> | `auth.py:19`, `clan_id: uuid.UUID \| None` | `auth.py:41` |
+> | `register/page.tsx:246`, `placeholder="UUID"` | **deleted by S-082**, which is what this ADR asked for |
+> | `register/page.tsx:244`, binds `clanId` | **gone**; the field binds the code and submits `clan_code` |
+> | `register/page.tsx:81,91`, submits `clan_id` | **gone**; `:155` and `:165` submit `clan_code` |
+>
+> Three citations still resolve unchanged: `web/messages/en.json:184`, `web/messages/vi.json:184`,
+> and `auth.py:11` for `_SLUG_PATTERN`.
+>
+> **Why the numbers are not simply corrected in place.** This section records what was read when
+> the decision was made, and `docs/SEEDS.md` already holds the standing rule for that case: nine
+> dated pointers at a deleted file were left alone because "editing any of them to match today
+> would destroy the evidence it exists to hold". An ADR's Context is the same kind of record. What
+> a later reader needs is this table, not a rewritten history.
+>
+> **It is worth knowing this is the second instance in one batch.** Commit `e2ae368` repaired six
+> citations broken the same way, by composing S-081 with S-083 — but those were in code comments
+> and test files, which describe the tree as it is, so repointing them was correct. The rule that
+> separates the two cases: **repoint a citation that claims to describe the tree now; annotate one
+> that records what was read on a date.**
+
+
 ### What the form asks for today does not match what its label says
 
 In join mode the label is `t('clan_slug')`. That key renders "Clan Code" in English

@@ -685,8 +685,14 @@ Four harnesses, one gate each:
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
   response shape.
 - `pnpm test:e2e` — Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots `next dev` on
-  `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. Four specs, and
-  `pnpm test:e2e --list` counted 36 tests on 2026-08-21 (18 cases across the two projects):
+  `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. **Eight specs, counted on disk
+  2026-08-27**, and `CI=1 pnpm test:e2e` reported `106 passed` the same day. This said "Four
+  specs" until then and was already undercounting by one at the batch base — `git ls-tree
+  e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rather than trusting a
+  prose figure. The earlier "36 tests on 2026-08-21" reading is left as written, because it
+  carries its own date. The four described below are the original set; `supabase-banner.spec.ts`
+  (S-042), `register-clan-code.spec.ts` (S-083), `register-join-code.spec.ts` (S-082), and
+  `invitation-accept.spec.ts` (S-084) are the other four:
   - `smoke.spec.ts` — locale redirect, the login form renders, and (since seed S-022 fixed
     `R-lang`, see `docs/sad/11-risks-and-technical-debt.md`) `<html lang>` tracking the route
     locale on both `/vi/login` and `/en/login`.
@@ -698,8 +704,8 @@ Four harnesses, one gate each:
     scheme, and no class or attribute is involved (seed S-006, ADR-045). The stylesheet holds
     both palettes and cannot tell you which one won the cascade; only an engine can.
 
-  These four cover what only a browser can measure, and all four run against public routes.
-  Authenticated routes are the section below.
+  These cover what only a browser can measure, and every spec in this list runs against public
+  routes. Authenticated routes are the section below.
 
 - `pnpm test:e2e:auth` — the authenticated projects, off by default. See "The authenticated
   e2e harness" below. `pnpm test:e2e` does not run them and must never need Docker.
@@ -816,8 +822,19 @@ hidden and `requireServerRole` sent approved admins to `/pending-approval`**. Th
 the literal string `undefined` into the `current_clan_id` cookie. Both read sites are now
 unwrapped in `HttpAuthProfileRepository`, which is the one place the port's shape is built —
 see the doc comments there. **`register` and `onboard` in that same file have the identical
-defect and are deliberately untouched**: they are the register/join path, fenced to S-084 on
-2026-08-26. They need a seed.
+defect and are still untouched.** S-070 wrote that they were "fenced to S-084" and "need a seed";
+**both halves of that are now stale, corrected 2026-08-27.** S-084 has landed and its 27-file diff
+never touched this file, and the seed exists: **S-088** in `docs/SEEDS.md`, whose only blocker was
+S-070 itself.
+
+**The defect is live and user-facing, so do not read "still untouched" as "harmless".** Read at
+source 2026-08-27: `http-auth-profile-repository.ts:81` is
+`api.post<RegisterResult>('/auth/register', input)` and returns `data`, which is the whole body
+`{"data": {"message": ...}}` that `backend/app/api/v1/auth.py:61` sends. So `result.message` is
+`undefined`, `setSuccess(undefined)` leaves `success` falsy, and the `if (success)` branch never
+renders — **a successful registration shows the user nothing.** No test catches it, and
+`register/page.test.tsx` says so in its own comment: the reading there is "the inline error went
+away", not "the success screen replaced it".
 
 **2. The `(dashboard)` group runs away, so `/vi/members` is not the covered route.** S-070's
 first choice was `/vi/members`, the screen S-031, S-032 and S-036 each wanted. It cannot be
@@ -848,10 +865,21 @@ instead of leaving the case behind. `backoffice/layout.tsx:31-32` pairs a `fixed
 with `ml-60` and has no small-screen branch. This is a fourth instance of the pattern in
 `.claude/rules/seeds.md` § "A test pins an outcome, not a setting".
 
-**Two smaller findings, reported and not fixed:** the login form's `<label>`s carry no
-`htmlFor` and its inputs no `id`, so the email and password fields have no programmatic
-label (`(auth)/login/page.tsx`); and `BackofficeSidebar.tsx:82` renders a hardcoded English
-`Sign out` in a `vi`-default product, as `Sidebar.tsx:70` does with `aria-label="Thu gọn"`.
+**Two smaller findings S-070 reported and did not fix. Both are fixed now, in the same batch,
+and this paragraph is corrected rather than deleted so the finding keeps its author.**
+
+- The login form's labels carried no `htmlFor` and its inputs no `id`. **Fixed by S-091**:
+  `(auth)/login/page.tsx:93` is `<label htmlFor="login-email"` with `id="login-email"` at `:97`,
+  and `htmlFor="login-password"` at `:109` with `id="login-password"` at `:115`.
+- `BackofficeSidebar.tsx` hardcoded English `Sign out`, and `Sidebar.tsx:70` hardcoded Vietnamese
+  in an `aria-label`. **Fixed by S-092**: the first is now `{tAuth('logout')}`, reusing the key
+  that already had three callers rather than adding a fourth spelling, and the second is
+  `aria-label={sidebarOpen ? t('common.collapse') : t('common.expand')}`.
+
+**The register page still has the login page's defect, in the same file as the new fields.**
+Counted 2026-08-27: three labels there carry no `htmlFor` and their inputs no `id`, while the
+three fields S-082 and S-083 added below them are correct. So one file now has three labelled
+inputs and three unlabelled ones. That is **S-096**, unblocked by S-082 landing.
 
 ### The four workarounds this replaces
 
