@@ -3395,11 +3395,8 @@ export interface components {
             password: string;
             /** Full Name */
             full_name: string;
-            /**
-             * Clan Action
-             * @enum {string}
-             */
-            clan_action: "join" | "create";
+            /** Clan Action */
+            clan_action?: ("join" | "create") | null;
             /** Clan Code */
             clan_code?: string | null;
             /** Clan Id */
