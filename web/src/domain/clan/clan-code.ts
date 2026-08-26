@@ -27,6 +27,22 @@ export const CLAN_CODE_MAX_LENGTH = 100
 export const CLAN_CODE_TAKEN_ERROR_CODE = 'auth.clan_slug_taken'
 
 /**
+ * The error code a join code no clan carries arrives as, raised by
+ * `_resolve_join_target` at `backend/app/application/auth/handlers.py:147` and documented
+ * at `docs/contracts/error-codes.md:114` as a 404.
+ *
+ * It is **not** namespaced under `auth.`, unlike `CLAN_CODE_TAKEN_ERROR_CODE` above, and
+ * the difference is load-bearing rather than an oversight: the same code answers clan
+ * detail and the platform-admin routes, so its backend `message` is deliberately generic
+ * ("Không tìm thấy dòng họ", `backend/app/i18n/vi.json:4`). Spec § 7.1b asks the register
+ * field for its own wording, so the register page renders `auth.clan_slug_not_found` from
+ * `web/messages/*.json` and drops the backend message on this one branch. Seed S-081's
+ * commit `bc73f7c` says so in as many words: "the inline register-field wording spec
+ * s7.1b asks for belongs to S-082".
+ */
+export const CLAN_NOT_FOUND_ERROR_CODE = 'clan_not_found'
+
+/**
  * Letters that Unicode NFD leaves whole, so a "normalise then drop the combining marks"
  * slugifier hands them to the `[a-z0-9]` filter, which deletes them.
  *

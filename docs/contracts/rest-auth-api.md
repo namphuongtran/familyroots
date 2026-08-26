@@ -94,13 +94,22 @@ this path and will be deleted, along with the 422 below.
 | a code no clan carries | 404 `clan_not_found` |
 | a code failing the slug pattern | 422 `validation_error`, `detail.fields` contains `body.clan_code` |
 
-**Why a window and not a clean break.** The web register form sends `clan_id` on
-join, read 2026-08-26 at `web/src/app/[locale]/(auth)/register/page.tsx:130` for
-`completeOnboarding` and `:140` for `signUp`. That form is a **separate seed**
-(S-082) in a separate pull request. Removing `clan_id` here would make every join
-submission 422 from the moment this change merges until that one does. There is no
-compensating cost, because the field is optional either way: nothing that sends
-`clan_code` is affected by `clan_id` still being accepted.
+**Why a window and not a clean break.** When S-081 landed, the web register form
+still sent `clan_id` on join, and that form was a **separate seed** (S-082) in a
+separate pull request. Removing `clan_id` here would have made every join
+submission 422 from the moment S-081 merged until S-082 did. Keeping it cost
+nothing, because the field is optional either way: nothing that sends `clan_code`
+is affected by `clan_id` still being accepted.
+
+**Seed S-082 landed on 2026-08-26, and no client in this repository sends
+`clan_id` on either path any more.** The register form submits `clan_code` at
+`web/src/app/[locale]/(auth)/register/page.tsx:155` for `completeOnboarding` and
+`:165` for `signUp`, and the field was **removed** from `RegisterInput` and
+`AuthenticatedOnboardingInput` rather than kept beside the new one
+(`web/src/application/auth/ports/auth-repository.ts:17,25`), so nothing the web
+app can build is the both-together request the 422 below refuses. Together with
+"No other client sends it" beneath this, the window is now empty: closing it is a
+deletion nobody has owned yet, not a wait for a caller to catch up.
 
 **No other client sends it.** Counted 2026-08-26: `grep -rn
 "auth/register\|auth/onboard\|clan_id" mobile/lib` returns seven lines and none of
