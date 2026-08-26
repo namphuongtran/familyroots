@@ -25,7 +25,7 @@ pnpm test:behavior                             # legacy: node --test on tests/be
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
-Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
+Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. `pnpm test:e2e:auth` is **not** in that list and is not optional either — it needs Docker, the Supabase CLI stack and a seeded backend, so run it whenever you touch an authenticated route, and say plainly if you could not. See "The authenticated e2e harness" (seed S-070). Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
 
 **`pnpm format:check` has been in CI since seed S-028 (2026-08-22).** Before S-028, `web/CLAUDE.md`
 and `.claude/rules/tailwind.md` § 9 both told contributors not to run `pnpm format`, because 112
@@ -698,8 +698,11 @@ Four harnesses, one gate each:
     scheme, and no class or attribute is involved (seed S-006, ADR-045). The stylesheet holds
     both palettes and cannot tell you which one won the cascade; only an engine can.
 
-  These four cover what only a browser can measure. Real user journeys arrive with the
-  feature slices, once there is a backend to talk to.
+  These four cover what only a browser can measure, and all four run against public routes.
+  Authenticated routes are the section below.
+
+- `pnpm test:e2e:auth` — the authenticated projects, off by default. See "The authenticated
+  e2e harness" below. `pnpm test:e2e` does not run them and must never need Docker.
 
 - `tests/behavior/` (legacy) — Node test runner with `--experimental-strip-types` for `.ts`.
   Focused on auth + query invalidation flows against the legacy trees; not part of the CI
@@ -711,6 +714,161 @@ build, e2e, and `api-types-fresh` (regenerates `src/generated/api-types.ts` from
 backend's OpenAPI schema and fails the build if it drifts — the anti-R3 gate). The
 freshness job is triggered by changes under either `web/**` or `backend/app/**`, so a
 backend-only PR that changes response shapes cannot skip it.
+
+## The authenticated e2e harness (seed S-070, 2026-08-26)
+
+**One command, and it is not part of `pnpm test:e2e`:**
+
+```bash
+# preconditions, from the repository root — see docs/ops/local-supabase.md and
+# docs/ops/seed-test-users.md, which S-072 and S-073 own
+docker compose up -d pgdb
+scripts/supabase_local.sh up
+make seed                                  # both halves of four test users
+
+# a backend that trusts the LOCAL stack, and whose CORS admits the e2e origin.
+# `docker compose up api` also works when the shell has no cloud Supabase values
+# exported; the harness only needs some backend on E2E_AUTH_API_ORIGIN.
+cd backend && DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/family_roots \
+  SUPABASE_URL=http://supabase.localhost:54321 \
+  SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=...  \
+  CORS_ORIGINS='["http://127.0.0.1:3102"]' APP_SECRET_KEY=e2e-local-secret \
+  uv run uvicorn app.main:app --host 127.0.0.1 --port 8073
+
+# then, in web/
+export E2E_AUTH_STACK=1
+export E2E_AUTH_SUPABASE_URL=http://supabase.localhost:54321   # NOT the 127.0.0.1 form
+export E2E_AUTH_SUPABASE_ANON_KEY="$(scripts/supabase_local.sh env | ...)"
+export E2E_AUTH_API_ORIGIN=http://127.0.0.1:8073
+pnpm test:e2e:auth
+```
+
+**Nine tests, 2026-08-26**: two `auth-setup` logins and seven `auth-chromium` cases, one of
+which is a deliberate `test.fail()` over an open T-04 defect (below).
+
+### What holds the session, and why there is no stub
+
+`e2e/auth/session.setup.ts` types a seeded user's real password into `/vi/login`, presses the
+button, waits for the `sb-…-auth-token` cookie `@supabase/ssr` writes, and saves the context
+with `storageState()` into `e2e/.auth/` (git-ignored — those files are live credentials).
+`e2e/auth/backoffice.auth.spec.ts` then loads a state file per `test.describe`.
+
+**Nothing under `src/` participates.** That is the fence, and it is a mechanism rather than a
+promise:
+
+1. **There is no switch to flip.** `playwright.config.ts` and `e2e/` are not imported by
+   anything under `src/`, so `pnpm build` never compiles them. A production request has no
+   code path — no env var, no header, no flag — that yields a session it did not earn,
+   because no such path exists to reach.
+2. **`e2e/auth/no-session-bypass.guard.test.ts` keeps it that way.** It runs under
+   `pnpm test:unit` (`vitest.config.mts` includes `e2e/**/*.guard.test.ts`) and fails if any
+   file under `src/` mentions `E2E_*`, `PLAYWRIGHT`, `storageState`, or `e2e/.auth`, or
+   imports from `e2e/`. **Proved not vacuous on 2026-08-26**: planting
+   `if (process.env.E2E_AUTH_STACK === '1') return { … }` at the top of
+   `getServerAuthContext` produced
+   `AssertionError: expected [ 'src/lib/server/auth-context.ts' ] to deeply equal []`,
+   naming the file. Removed; the suite went back to 434 passing.
+3. **The credential is worthless elsewhere.** `backoffice.auth.spec.ts`'s last case replays
+   the captured admin state against the hermetic `:3100` server, which S-041 points at
+   `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. Cookies are
+   named for their project (`sb-<ref>-auth-token`) and the token is signed by the stack that
+   issued it. **This does not prove middleware checks a signature — it does not**;
+   `supabase.auth.getSession()` reads the cookie. Signature checking is the backend's JWKS
+   flow (`backend/app/core/security.py`), which is S-072's guarantee, not this one's.
+
+`E2E_AUTH_STACK=1` gates the projects _and_ the third `next dev` (`:3102`). Absent, neither
+exists, so `pnpm test:e2e` keeps S-041's guarantee: no Docker, no network, same answer in a
+fresh clone, in a worktree, and in CI. Present but under-configured, `authStackEnv()` throws
+naming the missing variables — deliberately not a skip, because a suite that quietly covers
+nothing when Docker is down is the "passed because it scanned nothing" failure
+`.claude/rules/seeds.md` warns about.
+
+### How to add the next authenticated route
+
+1. **Pick a route whose gate is server-side.** Add a case to
+   `e2e/auth/backoffice.auth.spec.ts`, or a new `e2e/auth/<name>.auth.spec.ts` — the
+   `auth-chromium` project's `testMatch` picks up `e2e/auth/*.auth.spec.ts` with no config
+   change. Reuse `SEEDED_USERS.admin.storageState` via `test.use({ storageState })`.
+2. **Assert a role-dependent outcome, not the presence of markup.** One URL read with two
+   sessions is the assertion that only a real session can produce. `page.request.get(path, {
+maxRedirects: 0 })` reads a server-side gate as a status and a `Location` without
+   mounting anything, which costs no renders and cannot be confused by a client effect.
+3. **Give both Locations.** A viewer refused by `requireServerRole` gets
+   `307 → /vi/dashboard`; a request with no session gets `307 → /vi/login`. If your two
+   readings are the same string, you have S-001's non-control.
+4. **Read colour schemes without reloading.** `page.emulateMedia({ colorScheme })`
+   re-evaluates the media query in place, and ADR-045 made the media query the only
+   mechanism. One page load per case matters: see the rate limit below.
+5. **Budget the requests.** `/api/v1/auth/*` allows 20 requests per 60 seconds per IP
+   (`backend/app/main.py:221-226`, hardcoded). One load of an authenticated screen spends
+   about three `GET /auth/me`, because `useAuth()` hydrates once per consumer. Keep a case to
+   one navigation.
+
+### Three things S-070 found by looking, all of them still open
+
+**1. `GET /me/clans` and `POST /me/clans/{id}/select` were read as unenveloped, and S-070
+fixed both.** The web client read `{"clans": […]}` and `{clan_id: …}` while the backend has
+always answered `{"data": …}` (`backend/app/api/v1/me.py:25,36`;
+`Envelope_list_UserClanMembership__` at `src/generated/api-types.ts:2192-2196`;
+`docs/contracts/frontend-integration-guide.md:77`). The first left `currentClanRole`
+permanently `undefined`, so **every role-gated element on every server-rendered screen was
+hidden and `requireServerRole` sent approved admins to `/pending-approval`**. The second wrote
+the literal string `undefined` into the `current_clan_id` cookie. Both read sites are now
+unwrapped in `HttpAuthProfileRepository`, which is the one place the port's shape is built —
+see the doc comments there. **`register` and `onboard` in that same file have the identical
+defect and are deliberately untouched**: they are the register/join path, fenced to S-084 on
+2026-08-26. They need a seed.
+
+**2. The `(dashboard)` group runs away, so `/vi/members` is not the covered route.** S-070's
+first choice was `/vi/members`, the screen S-031, S-032 and S-036 each wanted. It cannot be
+read: measured 2026-08-26, `/vi/dashboard` re-ran `useAuth`'s mount effect **2613 times in
+seven seconds** and issued **18174 `GET /auth/me`** until the backend's limiter answered 429.
+Two `useAuth()` consumers mount on every `(dashboard)` page (`(dashboard)/layout.tsx:12` and
+`Header.tsx:18`), each hydrates independently, each hydration writes three fresh objects into
+the zustand store, and `syncAuthContext`'s identity does not survive that. **The loop was
+invisible before**, because the envelope defect above made `hydrateAuthContext` throw on its
+first call and fall into its own `catch`; fixing the envelope is what let the loop start. It
+is legacy auth code and its own seed — do not fix it inside a feature PR.
+
+**3. "No horizontal page scroll" is not a usability reading, and this screen proves it.**
+`e2e/text-scale.spec.ts`'s T-04 assertion passes on `/vi/backoffice/dashboard` at 320×640
+with a 32px root, while every pixel of content is outside the viewport. Measured 2026-08-26:
+
+```
+aside     x=0    width=480      // `w-60` is 15rem = 480px at a 32px root
+main      x=480  width=0        // `ml-60` adds another 480px; flex-1 collapses to zero
+main h1   x=544  width=0
+documentElement scrollWidth 320 === clientWidth 320, overflow-x: visible on html and body
+```
+
+Zero-width content cannot be scrolled to, so the page reports no overflow. The spec keeps the
+scroll assertion (a reader will look for it) with a comment saying it proves almost nothing,
+and pins the real defect with `test.fail()` so a future responsive fix turns the suite red
+instead of leaving the case behind. `backoffice/layout.tsx:31-32` pairs a `fixed w-60` rail
+with `ml-60` and has no small-screen branch. This is a fourth instance of the pattern in
+`.claude/rules/seeds.md` § "A test pins an outcome, not a setting".
+
+**Two smaller findings, reported and not fixed:** the login form's `<label>`s carry no
+`htmlFor` and its inputs no `id`, so the email and password fields have no programmatic
+label (`(auth)/login/page.tsx`); and `BackofficeSidebar.tsx:82` renders a hardcoded English
+`Sign out` in a `vi`-default product, as `Sidebar.tsx:70` does with `aria-label="Thu gọn"`.
+
+### The four workarounds this replaces
+
+Four seeds each built a throwaway route, screenshotted it, and deleted it before committing,
+because no test could hold a session. **Use this harness instead of rebuilding one.**
+
+| Seed  | What it could not reach                        | What it did instead                            |
+| ----- | ---------------------------------------------- | ---------------------------------------------- |
+| S-031 | `/vi/members` with data                        | a throwaway route                              |
+| S-032 | the conflict dialog (`StaleWriteDialog`)       | a throwaway preview route                      |
+| S-036 | the calendar with data                         | a throwaway preview route                      |
+| S-068 | ten converted files, none on a reachable route | its own verification was impossible as written |
+
+S-039 / ADR-046 is the fifth case and the one now covered directly: it could not read the
+backoffice rail in a browser and said so. `backoffice.auth.spec.ts` reads that rail's `muted`
+ground and its `primary` mark in both schemes, which is ADR-046's own claim measured in an
+engine rather than computed from the stylesheet.
 
 ## Migration notes
 

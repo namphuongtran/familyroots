@@ -85,7 +85,6 @@ test('hydrateAuthContext merges backend profile and memberships and resolves pre
     },
     async listMyClans() {
       return {
-        count: 2,
         clans: [
           {
             clan_id: 'clan-1',
@@ -157,7 +156,7 @@ test('hydrateAuthContext marks pending approval when backend returns no clan mem
       }
     },
     async listMyClans() {
-      return { count: 0, clans: [] }
+      return { clans: [] }
     },
   }
 
@@ -192,7 +191,7 @@ test('hydrateAuthContext marks onboarding required when user has no clan members
       }
     },
     async listMyClans() {
-      return { count: 0, clans: [] }
+      return { clans: [] }
     },
   }
 

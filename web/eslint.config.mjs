@@ -30,7 +30,16 @@ const config = [
    * The directory name is the same literal as `PLAYWRIGHT_SECOND_DIST_DIR` in
    * `playwright.config.ts:51` and `/.next-banner-e2e/` in `.gitignore:17`.
    */
-  { ignores: ['.next-banner-e2e/**'] },
+  /*
+   * Seed S-070 hit the identical problem with a *third* dist dir and the comment above
+   * predicted it: `.next-auth-e2e/` is the authenticated e2e server's build directory
+   * (`playwright.config.ts`, `authStackEnv()`), and `pnpm lint` swept it for **78 errors**
+   * from generated bundles on 2026-08-26, after one `pnpm test:e2e:auth` run. Same defect,
+   * same shape: the lint result depended on whether the e2e suite had run first. Every extra
+   * `PLAYWRIGHT_SECOND_DIST_DIR` value needs a line here, in `.gitignore`, and in
+   * `tsconfig.json`'s `include`.
+   */
+  { ignores: ['.next-banner-e2e/**', '.next-auth-e2e/**'] },
   ...nextConfig,
   {
     files: ['src/**/*.{ts,tsx}'],
