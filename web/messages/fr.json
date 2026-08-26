@@ -418,7 +418,9 @@
     "previous": "Précédent",
     "view_all": "Voir tout",
     "load_more": "Charger plus",
-    "no_data": "Aucune donnée"
+    "no_data": "Aucune donnée",
+    "collapse": "Replier",
+    "expand": "Déplier"
   },
   "invitation": {
     "heading": "Invitation à rejoindre un clan",

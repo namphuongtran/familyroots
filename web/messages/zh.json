@@ -418,7 +418,9 @@
     "previous": "上一步",
     "view_all": "查看全部",
     "load_more": "加载更多",
-    "no_data": "暂无数据"
+    "no_data": "暂无数据",
+    "collapse": "收起",
+    "expand": "展开"
   },
   "invitation": {
     "heading": "家族邀请",
