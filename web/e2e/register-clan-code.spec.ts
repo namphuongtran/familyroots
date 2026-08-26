@@ -17,7 +17,7 @@ import { expect, test, type Page } from '@playwright/test'
  * in this suite talks to a live service (S-041), and a route handler gives the exact
  * envelope `backend/app/core/exceptions.py` produces —
  * `{"error": {"code": "auth.clan_slug_taken", "message": ..., "detail": {}}}`, with the
- * `message` already localised, copied from `backend/app/i18n/vi.json:95`.
+ * `message` already localised, copied from `backend/app/i18n/vi.json:96`.
  */
 
 /** 320dp is the width `T-04` names, and 32px is 200% of the 16px default root size. */
@@ -33,7 +33,7 @@ const VI = {
   register: 'Đăng ký',
 }
 
-/** `backend/app/i18n/vi.json:95`, keyed `error.auth.clan_slug_taken`. */
+/** `backend/app/i18n/vi.json:96`, keyed `error.auth.clan_slug_taken`. */
 const BACKEND_VI_TAKEN_MESSAGE = 'Đường dẫn dòng họ đã được sử dụng'
 
 /**

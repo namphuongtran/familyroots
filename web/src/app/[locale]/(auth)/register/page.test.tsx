@@ -19,10 +19,10 @@ import messages from '../../../../../messages/vi.json'
  * The `clan_slug_taken` rejection is shaped like the real one, not invented:
  * `authProfileRepository.register` goes through the legacy axios client
  * (`src/lib/api/axios.ts:49` re-rejects the raw axios error), the backend raises
- * `ConflictError("auth.clan_slug_taken")` (`backend/app/application/auth/handlers.py:139`)
+ * `ConflictError("auth.clan_slug_taken")` (`backend/app/application/auth/handlers.py:171`)
  * and `app_exception_handler` turns that into `{"error": {code, message, detail}}` with
  * `message` already localised (`backend/app/core/exceptions.py`). The vi wording below is
- * copied from `backend/app/i18n/vi.json:95`.
+ * copied from `backend/app/i18n/vi.json:96`.
  */
 
 vi.mock('@/lib/hooks/useAuth', () => ({ useAuth: vi.fn(), useAuthActions: vi.fn() }))

@@ -93,8 +93,8 @@ this path and will be deleted, along with the 422 below.
 | a code failing the slug pattern | 422 `validation_error`, `detail.fields` contains `body.clan_code` |
 
 **Why a window and not a clean break.** The web register form sends `clan_id` on
-join, read 2026-08-26 at `web/src/app/[locale]/(auth)/register/page.tsx:81` for
-`completeOnboarding` and `:91` for `signUp`. That form is a **separate seed**
+join, read 2026-08-26 at `web/src/app/[locale]/(auth)/register/page.tsx:130` for
+`completeOnboarding` and `:140` for `signUp`. That form is a **separate seed**
 (S-082) in a separate pull request. Removing `clan_id` here would make every join
 submission 422 from the moment this change merges until that one does. There is no
 compensating cost, because the field is optional either way: nothing that sends

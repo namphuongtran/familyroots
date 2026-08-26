@@ -20,10 +20,10 @@
  */
 export const CLAN_CODE_PATTERN_SOURCE = '^[a-z0-9]+(?:-[a-z0-9]+)*$'
 
-/** `clan_slug` is `Field(None, max_length=100, ...)` — `backend/app/schemas/auth.py:21`. */
+/** `clan_slug` is `Field(None, max_length=100, ...)` — `backend/app/schemas/auth.py:33,42`. */
 export const CLAN_CODE_MAX_LENGTH = 100
 
-/** The error code a taken code arrives as. `backend/app/application/auth/handlers.py:139`. */
+/** The error code a taken code arrives as. `backend/app/application/auth/handlers.py:171,270`. */
 export const CLAN_CODE_TAKEN_ERROR_CODE = 'auth.clan_slug_taken'
 
 /**
