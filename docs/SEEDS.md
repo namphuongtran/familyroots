@@ -1120,6 +1120,11 @@ graph LR
 | S-085 | Let a person register with no clan, so an invitee can create an account | open | none |
 | S-086 | Make `accept_path` hand the admin the URL ADR-057 says it hands them | blocked | S-084 |
 | S-087 | Make the slug the API accepts and the slug the database accepts be one shape | open | none |
+| S-088 | Unwrap the envelope on the last two `/auth` calls the web client reads raw | open | S-070 |
+| S-089 | Stop the dashboard re-running its auth effect thousands of times per load | open | S-070 |
+| S-090 | Make the backoffice shell survive 200% text scale at 320 px | open | S-070 |
+| S-091 | Connect the login form's labels to its inputs | open | none |
+| S-092 | Move the two hardcoded sidebar strings into the message catalogue | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -7287,6 +7292,226 @@ S-081's report of 2026-08-26, which measured the 500.
 
 **Out of scope.** The join path, which answers correctly. The web form, which is S-083 and may want
 a line about the minimum length once this is decided. Renaming a clan's code after creation.
+
+---
+
+## S-088. Unwrap the envelope on the last two `/auth` calls the web client reads raw
+
+**Status:** open · **Blocked by:** S-070, which rewrites the same file · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a defect seed S-070 found, fixed three instances of, and
+named the remaining two rather than quietly fixing them too.** S-070 was fenced away from the
+register path, so it stopped at the fence and said where.
+
+**Every public 2xx body is `{"data": ...}`.** That is the root [`CLAUDE.md`](../CLAUDE.md) rule, and
+`docs/contracts/README.md` is the spec. Read at source 2026-08-26,
+`backend/app/api/v1/auth.py:61` returns `{"data": {"message": t("auth.registration_received")}}` and
+`:80` returns `{"data": result.model_dump()}`.
+
+**Three of the five call sites in one file now unwrap it and two do not.** Counted 2026-08-26 in
+`web/src/infrastructure/auth/http-auth-profile-repository.ts` **on S-070's branch**, which is why
+this seed is blocked by it:
+
+| Line | Call | Unwraps |
+|---|---|---|
+| 23 | `api.get<ApiResponse<UserProfile>>('/auth/me')` | yes |
+| 53 | `api.get<ApiResponse<UserClanMembership[]>>('/me/clans')` | yes, fixed by S-070 |
+| 76 | `api.post<ApiResponse<ClanSwitchResponse>>('/me/clans/{id}/select')` | yes, fixed by S-070 |
+| **81** | `api.post<RegisterResult>('/auth/register', input)` | **no** |
+| **86** | `api.post<RegisterResult>('/auth/onboard', input)` | **no** |
+
+So `RegisterResult.message` reads `undefined`, because the object returned is the envelope and not
+its contents.
+
+**What that costs is not obvious and is worth stating.** The register screen renders
+`result.message` as its success copy (`web/src/app/[locale]/(auth)/register/page.tsx`, the
+`setSuccess(result.message)` call). **Registration is non-enumerating**, per spec § 7.1b at
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:871-873`, and that property rests on
+every `201` routing to the same "check your email" screen. A blank success message is a worse
+screen, not a leak, so this is a correctness defect rather than a security one. **Say which it is
+when you close it; do not inflate it.**
+
+**End state.** Both call sites read the envelope through `ApiResponse<T>`, the way the three above
+them do. No sixth shape is invented for the same job.
+
+**Verification.** The full web gate in `web/CLAUDE.md`.
+
+**Drive the screen and read what it renders**, per § "A test pins an outcome, not a setting". A test
+that asserts the repository returns an object pins the object. **Two readings:** a successful
+register renders the backend's own message text, and an onboard does the same. **Negative control:**
+both must fail against the code as you find it, and the failing reading is a blank or `undefined`
+message — quote it.
+
+**Sources.** `web/src/infrastructure/auth/http-auth-profile-repository.ts:23,53,76,81,86` on branch
+`seed/s-070-authenticated-e2e-route`; `backend/app/api/v1/auth.py:61,80`; root `CLAUDE.md` envelope
+rule; `docs/contracts/README.md`; S-070's report of 2026-08-26, which names these two and says it
+left them alone.
+
+**Out of scope.** The three S-070 fixed. Any other repository file. The register form's fields, which
+are S-082 and S-083.
+
+---
+
+## S-089. Stop the dashboard re-running its auth effect thousands of times per load
+
+**Status:** open · **Blocked by:** S-070, which built the harness that can reach the screen ·
+**Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. Found by seed S-070 while choosing which authenticated route
+to cover, and it is the reason S-070 covered the backoffice dashboard instead of `/vi/members`.**
+
+**The measurement, taken 2026-08-26 by S-070 against the real Supabase CLI stack and a real
+backend:** loading `/vi/dashboard` re-ran `useAuth`'s mount effect **2613 times in 7 seconds** and
+issued **18174 `GET /auth/me`** requests, until the backend's own rate limiter answered **429**. The
+screen never became readable.
+
+**This is the first time anything in this repository has loaded that screen with a real session**, so
+the loop has been reachable for as long as the screen has existed and nothing could see it. **That is
+the finding, and it is worth more than the fix**: the defect was invisible because the harness could
+not hold a session, which is the gap S-070 closed.
+
+**Read S-070's own limitation before treating the numbers as settled.** S-070 says plainly that it
+did not establish whether the loop reproduces on another machine — it is a single-host measurement.
+**Reproduce it yourself and record your own numbers with the date.** If it does not reproduce,
+that is the finding and this seed closes as withdrawn with your reading quoted.
+
+**End state.** Loading the dashboard with a real session issues a bounded number of `GET /auth/me`
+requests, and the screen renders. The bound is a number you name, and a test holds it.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, plus S-070's authenticated project
+(`pnpm test:e2e:auth`).
+
+**Count the requests, do not inspect the dependency array**, per § "A test pins an outcome, not a
+setting". A `useEffect` whose dependencies look right is a setting; the request count is the
+outcome. **Negative control:** the counting test must fail against today's code, and the failing
+reading is a request count in the thousands — quote it and quote the passing count.
+
+**Do not fix this by adding a request cache.** A cache in front of a render loop hides the loop and
+leaves the re-render cost. Find why the effect re-runs.
+
+**Sources.** S-070's report of 2026-08-26 in this file's history and on branch
+`seed/s-070-authenticated-e2e-route`; `web/src/lib/hooks/useAuth` and the `(dashboard)` route group;
+`web/e2e/auth/` for the harness that can reach the screen.
+
+**Out of scope.** The backoffice dashboard, which S-070 covered and which does not loop. The rate
+limiter, which behaved correctly. `/vi/members`' own content.
+
+---
+
+## S-090. Make the backoffice shell survive 200% text scale at 320 px
+
+**Status:** open · **Blocked by:** S-070, which pinned the defect · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. S-070 measured this, could not fix it inside its own fence,
+and pinned it with `test.fail()` so a fix turns the suite red rather than leaving it unrecorded.**
+
+**Measured 2026-08-26 at 320 px with `:root { font-size: 32px }`:** `aside` is `x=0 w=480`, `main`
+is `x=480 w=0`, and the `main h1` is `x=544 w=0`. **The rail is wider than the viewport and the
+content column has no width at all.**
+
+**The trap here is the one this repository has now hit four times, and this is its worst form.**
+`documentElement.scrollWidth === clientWidth === 320` and `overflow-x: visible`, so **the usual "no
+horizontal scroll" assertion passes while every content pixel is off-screen.** Zero-width content
+cannot be scrolled to. S-070 kept that assertion, labelled it as proving almost nothing, and added
+the real one beside it. **Do not delete the weak assertion; it is evidence about the assertion, not
+about the layout.** S-034 and S-042 fixed this shape on `/vi/login` and `/vi/register`, and S-083 hit
+it a third time on the generated clan code.
+
+**End state.** At 320 px and 200% text scale the backoffice content column has a non-zero width and
+its heading is on screen. S-070's `test.fail()` is removed in the same change, because a pinned
+defect that outlives its fix is a false record.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, plus `pnpm test:e2e:auth`.
+
+**Assert the geometry, not the class list**, per § "A test pins an outcome, not a setting".
+`.claude/rules/tailwind.md` § 7 holds the shape and its trap 4 is the `addStyleTag` mechanism.
+**Negative control:** removing your fix must turn the un-pinned assertion red with a `w=0` reading —
+quote it. **A passing `scrollWidth === clientWidth` is not the control here**, for the reason above.
+
+**Sources.** S-070's measurement of 2026-08-26 and its `test.fail()` case, on branch
+`seed/s-070-authenticated-e2e-route`; `web/src/components/backoffice/BackofficeSidebar.tsx`;
+`.claude/rules/tailwind.md` § 7; S-034, S-042, and S-083 in this file for the three prior instances.
+
+**Out of scope.** The rail's colours, which [ADR-046](decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md) decided and S-070 read back correctly under both schemes. Any other screen.
+
+---
+
+## S-091. Connect the login form's labels to its inputs
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a smaller finding seed S-070 reported and did not fix.**
+
+**Read at source 2026-08-26** in `web/src/app/[locale]/(auth)/login/page.tsx`: the `<label>` at `:93`
+and the one at `:105-107` carry **no `htmlFor`**, and the `<input>` at `:94` and the one at `:108`
+carry **no `id`**. So both fields are programmatically unlabelled. A screen reader reaches an
+unnamed edit field, and clicking the label does not focus the input.
+
+**This is the sign-in screen**, which is one of the two routes anything in this repository could
+reach before S-070, so it has been measurable the whole time and was never measured.
+
+**Check the register screen in the same change before deciding scope.** It is built the same way. If
+it has the same defect, say so and fix both, or say plainly why you fixed one. **Do not leave the
+second instance unnamed** — that is the rule S-078 followed for its own pattern.
+
+**End state.** Every input on the sign-in screen has an accessible name that comes from its visible
+label.
+
+**Verification.** The full web gate in `web/CLAUDE.md`.
+
+**Query by accessible name and read what comes back**, per § "A test pins an outcome, not a setting".
+`getByLabelText` is the reading; asserting that an `htmlFor` attribute equals a string pins the
+attribute. **Negative control:** the query must fail against today's code, and quote the failure.
+
+**Sources.** `web/src/app/[locale]/(auth)/login/page.tsx:93,94,105-108`; S-070's report of
+2026-08-26.
+
+**Out of scope.** The register form's fields, which S-082 and S-083 are changing concurrently — **if
+your check finds the same defect there, say so and coordinate rather than editing the same lines.**
+Any other accessibility question on these screens.
+
+---
+
+## S-092. Move the two hardcoded sidebar strings into the message catalogue
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a finding seed S-070 reported and did not fix.**
+
+**Two strings bypass next-intl, and they fail in opposite directions**, both read at source
+2026-08-26:
+
+| File | Line | The string | Why it is wrong |
+|---|---|---|---|
+| `web/src/components/backoffice/BackofficeSidebar.tsx` | 84 | `Sign out`, as a literal child of the button | Hardcoded **English**, so a Vietnamese admin reads English in the rail |
+| `web/src/components/layout/Sidebar.tsx` | 70 | `aria-label={sidebarOpen ? 'Thu gọn' : 'Mở rộng'}` | Hardcoded **Vietnamese**, so an English, Chinese, or French reader gets a Vietnamese accessible name |
+
+**The second is the more interesting one.** It is inside an `aria-label`, which no visual review
+catches, and it is the direction nobody looks for: a hardcoded string in the default locale reads as
+correct on the screen a developer is looking at.
+
+**Four locale files, not two.** `web/messages/` holds `vi`, `en`, `zh`, and `fr`. S-066 brought the
+last two to parity, and both S-083 and S-084 added keys to all four on 2026-08-26. **A key added to
+two of them re-opens the gap S-066 closed.**
+
+**End state.** Neither string is a literal. Both resolve through next-intl, and all four locale
+files carry the keys with real translations rather than copies of the English.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, which includes the message-key parity test.
+
+**Render the component in a non-default locale and read what comes out**, per § "A test pins an
+outcome, not a setting". Asserting that a key exists in a JSON file pins the file. **Read the
+`aria-label` back through the accessible name**, not through the attribute. **Negative control:**
+both readings must fail against today's code, and for the `aria-label` the failing reading is the
+Vietnamese string appearing under an English locale — quote it.
+
+**Sources.** `web/src/components/backoffice/BackofficeSidebar.tsx:84`;
+`web/src/components/layout/Sidebar.tsx:70`; S-070's report of 2026-08-26; S-066 in this file for
+locale parity.
+
+**Out of scope.** Any other hardcoded string. **If you grep and find more, do not fix them here —
+report the count and let it be its own seed**, because a sweep and a two-line fix are different
+sizes.
 
 ---
 
