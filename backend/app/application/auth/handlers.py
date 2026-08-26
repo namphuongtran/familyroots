@@ -114,6 +114,73 @@ class AuthCommandHandler:
         self._identity = identity
         self._query_port = query_port
 
+    async def _resolve_join_target(
+        self, *, clan_code: str | None, clan_id: uuid.UUID | None
+    ) -> Any:
+        """Resolve the clan a join request names, by code or by the deprecated id.
+
+        ADR-057 section 2 made the typed join identifier the clan **code**, which is
+        the clan's ``slug``, resolved through the ``get_clan_by_slug`` lookup that
+        already existed at every layer. ``clan_id`` is still accepted for one
+        release; ``docs/contracts/rest-auth-api.md`` owns that window and the reason
+        for it.
+
+        Two identifiers that can disagree are never reconciled here. A request
+        carrying both is refused, because picking one silently would let a caller
+        name clan A and join clan B -- and which clan a membership lands on is the
+        one boundary this product cannot get wrong.
+
+        ``auth.clan_id_required_for_join`` keeps its historical name for the
+        neither-was-supplied case: spec section 7.1b names that code and
+        ``docs/contracts/error-codes.md`` documents it, so renaming it would be a
+        second breaking change for no gain.
+        """
+        if clan_code and clan_id:
+            raise ValidationError("auth.clan_code_and_id_both_given")
+        if clan_code:
+            clan = await self._repo.get_clan_by_slug(clan_code)
+        elif clan_id:
+            clan = await self._repo.get_clan_by_id(clan_id)
+        else:
+            raise ValidationError("auth.clan_id_required_for_join")
+        if not clan:
+            raise EntityNotFoundError("clan_not_found")
+        return clan
+
+    async def _provision_clanless_account(
+        self, *, user_id: uuid.UUID, email: str, full_name: str
+    ) -> None:
+        """Provision the local profile for an account that joins no clan (ADR-058).
+
+        The whole write is one ``user_profiles`` row. The name matters: it is the
+        only place the name typed at registration is kept. ``create_user`` on the
+        identity port takes ``email`` and ``password`` only
+        (``app/domain/auth/identity_provider.py``), so nothing carries
+        ``full_name`` to the provider, and ``ensure_profile_row`` is
+        ``ON CONFLICT DO NOTHING`` on the primary key -- so the row written here
+        survives the later ``ensure_profile`` call inside invitation accept
+        (``app/application/invitation/handlers.py:93``), which only has the JWT's
+        (empty) ``user_metadata.full_name`` to offer.
+
+        **No domain event is emitted, and that is deliberate.** Two reasons, both
+        read at source on 2026-08-26. First, ``ensure_profile`` is audited nowhere
+        else either: the create path of ``_assign_clan_membership`` audits
+        ``clan.create`` and its join path audits ``clan.join_request`` -- both are
+        about the clan, and this account has none. Second, ``audit_logs.clan_id`` is
+        nullable (``app/models/audit_log.py:37-39``) but every reader of that
+        table is clan-keyed -- the policy ``audit_logs_sel USING (clan_id = <GUC>)``
+        (ADR-043) and the application-layer filter -- so a NULL-clan row would be
+        written and never read by anything except the super-admin log. Adding a
+        row nobody can read is the ``clan_settings`` mistake in miniature
+        (ADR-054): a write guarded for a reader that cannot arrive.
+
+        The commit still goes through the Unit of Work, which is the rule that is
+        not relaxed. ``FCMTokenHandler.register_token`` below is the standing
+        precedent for a UoW commit with no event.
+        """
+        await self._repo.ensure_profile(user_id, email, full_name)
+        await self._uow.commit()
+
     async def _assign_clan_membership(
         self,
         *,
@@ -121,12 +188,11 @@ class AuthCommandHandler:
         email: str,
         full_name: str,
         clan_action: str,
+        clan_code: str | None = None,
         clan_id: uuid.UUID | None = None,
         clan_name: str | None = None,
         clan_slug: str | None = None,
     ) -> RegisterResponse:
-        if clan_action == "join" and not clan_id:
-            raise ValidationError("auth.clan_id_required_for_join")
         if clan_action == "create" and (not clan_name or not clan_slug):
             raise ValidationError("auth.clan_name_required_for_create")
 
@@ -170,10 +236,7 @@ class AuthCommandHandler:
                 message=t("auth.clan_created"),
             )
 
-        clan_or_none = await self._repo.get_clan_by_id(clan_id)
-        if not clan_or_none:
-            raise EntityNotFoundError("clan_not_found")
-        clan = clan_or_none
+        clan = await self._resolve_join_target(clan_code=clan_code, clan_id=clan_id)
 
         existing_role = await self._repo.get_user_role(user_id, clan.id)
         if existing_role:
@@ -211,24 +274,42 @@ class AuthCommandHandler:
         email: str,
         password: str,
         full_name: str,
-        clan_action: str,
+        clan_action: str | None = None,
+        clan_code: str | None = None,
         clan_id: uuid.UUID | None = None,
         clan_name: str | None = None,
         clan_slug: str | None = None,
     ) -> None:
-        """Register a new user — create or join a clan.
+        """Register a new user — create a clan, join a clan, or neither.
+
+        ``clan_action=None`` is the third case, added by ADR-058: the account is
+        created with **no clan membership at all**. It exists for the invitee in
+        ADR-057's primary join path. That person holds an invitation token, has no
+        clan code to type and no clan to found, and
+        ``POST /invitations/{token}/accept`` requires them to be signed in first
+        (``app/api/v1/invitations.py:95-99``) — so without this case the
+        invitation flow has no reachable first step. The membership arrives from
+        accept, on the session ADR-048 put it on.
 
         Clan-INPUT validation runs unconditionally, before ``create_user``, so a
-        bad clan_id/clan_slug fails identically whether or not the email already
+        bad clan_code/clan_slug fails identically whether or not the email already
         has an account (ADR-021 non-enumeration). Without this, an existing email
         short-circuits before ever reaching ``_assign_clan_membership``'s checks
         while a fresh email hits them — a status-code oracle for account
-        enumeration. The checks below mirror ``_assign_clan_membership`` exactly
-        (same exceptions/codes); its copies stay in place as defense in depth for
-        callers that reach it directly (e.g. ``onboard_authenticated_user``).
+        enumeration. The join half of that validation is ``_resolve_join_target``,
+        the same method ``_assign_clan_membership`` uses, so the two cannot drift
+        apart the way two hand-copied checks could; the resolution is deliberately
+        run twice rather than carried, because the row must be re-read on the
+        session that will write the membership.
+
+        The ``clan_action=None`` case does not weaken that property, because it
+        adds **no** error code and no branch that can answer differently for a
+        registered and an unregistered email: it validates nothing, so both emails
+        reach ``create_user`` and both get the same 201. The one body that could
+        have leaked — a clan named with no ``clan_action`` — is refused by
+        ``RegisterRequest``'s own validator, before this method runs and before the
+        identity provider is touched at all.
         """
-        if clan_action == "join" and not clan_id:
-            raise ValidationError("auth.clan_id_required_for_join")
         if clan_action == "create" and (not clan_name or not clan_slug):
             raise ValidationError("auth.clan_name_required_for_create")
 
@@ -238,12 +319,10 @@ class AuthCommandHandler:
             existing_clan = await self._repo.get_clan_by_slug(clan_slug)
             if existing_clan:
                 raise ConflictError("auth.clan_slug_taken")
-        else:
-            # clan_action == "join": clan_id is guaranteed non-None above.
-            assert clan_id is not None
-            clan_or_none = await self._repo.get_clan_by_id(clan_id)
-            if not clan_or_none:
-                raise EntityNotFoundError("clan_not_found")
+        elif clan_action == "join":
+            await self._resolve_join_target(clan_code=clan_code, clan_id=clan_id)
+        # clan_action is None: nothing to validate. RegisterRequest has already
+        # refused any body that names a clan without naming an action.
 
         try:
             user_id_str = await self._identity.create_user(email=email, password=password)
@@ -268,15 +347,21 @@ class AuthCommandHandler:
 
         user_id = uuid.UUID(user_id_str)
         try:
-            await self._assign_clan_membership(
-                user_id=user_id,
-                email=email,
-                full_name=full_name,
-                clan_action=clan_action,
-                clan_id=clan_id,
-                clan_name=clan_name,
-                clan_slug=clan_slug,
-            )
+            if clan_action is None:
+                await self._provision_clanless_account(
+                    user_id=user_id, email=email, full_name=full_name
+                )
+            else:
+                await self._assign_clan_membership(
+                    user_id=user_id,
+                    email=email,
+                    full_name=full_name,
+                    clan_action=clan_action,
+                    clan_code=clan_code,
+                    clan_id=clan_id,
+                    clan_name=clan_name,
+                    clan_slug=clan_slug,
+                )
         except Exception:
             # Compensate: the auth user exists but DB membership failed — delete the
             # orphan so the email can be reused. No verification email was sent.
@@ -297,6 +382,7 @@ class AuthCommandHandler:
         email: str,
         full_name: str,
         clan_action: str,
+        clan_code: str | None = None,
         clan_id: uuid.UUID | None = None,
         clan_name: str | None = None,
         clan_slug: str | None = None,
@@ -307,6 +393,7 @@ class AuthCommandHandler:
             email=email,
             full_name=full_name,
             clan_action=clan_action,
+            clan_code=clan_code,
             clan_id=clan_id,
             clan_name=clan_name,
             clan_slug=clan_slug,

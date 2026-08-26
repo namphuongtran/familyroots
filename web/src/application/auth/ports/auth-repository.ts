@@ -1,11 +1,20 @@
 import type { ClanSwitchResponse, UserClansResponse, UserProfile } from '@/lib/types'
 
+/**
+ * `clan_code` is the join identifier, not `clan_id`. ADR-057 § 2 made the typed identifier
+ * the clan **code** (the slug) and `docs/contracts/rest-auth-api.md`'s "The join
+ * identifier" table records the release window: the backend accepts either for one
+ * release, refuses **both together** with a 422 `auth.clan_code_and_id_both_given`, and
+ * then deletes `clan_id`. `clan_id` is dropped from these two shapes rather than kept
+ * beside the new field, so nothing in this app can send the pair that is refused, and so
+ * the backend's eventual deletion is not a change here. Seed S-082.
+ */
 export interface RegisterInput {
   email: string
   password: string
   full_name: string
   clan_action: 'join' | 'create'
-  clan_id?: string
+  clan_code?: string
   clan_name?: string
   clan_slug?: string
 }
@@ -13,7 +22,7 @@ export interface RegisterInput {
 export interface AuthenticatedOnboardingInput {
   full_name?: string
   clan_action: 'join' | 'create'
-  clan_id?: string
+  clan_code?: string
   clan_name?: string
   clan_slug?: string
 }

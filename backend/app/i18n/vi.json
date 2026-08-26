@@ -91,6 +91,7 @@
   "error.user_not_found": "Không tìm thấy người dùng",
   "error.relationship.duplicate_edge": "Mối quan hệ này đã tồn tại",
   "error.auth.clan_id_required_for_join": "Cần cung cấp mã dòng họ để tham gia",
+  "error.auth.clan_code_and_id_both_given": "Chỉ gửi một mã dòng họ, không gửi kèm clan_id",
   "error.auth.clan_name_required_for_create": "Cần cung cấp tên và slug dòng họ để tạo mới",
   "error.auth.clan_slug_taken": "Đường dẫn dòng họ đã được sử dụng",
   "error.clan.last_admin_cannot_demote": "Không thể hạ quyền quản trị viên cuối cùng",

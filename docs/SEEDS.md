@@ -1102,7 +1102,7 @@ graph LR
 | S-067 | Delete or rewrite `infra/supabase/rls_policies.sql`, which contradicts the clan model | done | S-064, done |
 | S-068 | Decide what the eight tokenless colour families mean, in ADR-055 | done | S-038, done |
 | S-069 | Guard the one directory where SQL actually runs, which is `scripts/` and not `infra/` | done | S-067, done |
-| S-070 | Make an authenticated route reachable in the e2e harness | open | S-071, S-072, S-073 — all done |
+| S-070 | Make an authenticated route reachable in the e2e harness | done | S-071, S-072, S-073 — all done |
 | S-071 | Give `web/Dockerfile` the build arguments Next.js inlines at build time | done | none |
 | S-072 | Stand the Supabase CLI stack up beside `pgdb`, mirroring the production split | done | none |
 | S-073 | Seed a test clan, its users and their roles into both databases, reproducibly | done | S-072, done |
@@ -1110,25 +1110,26 @@ graph LR
 | S-075 | Make the backend image able to boot, which today it cannot in production mode | done | none |
 | S-076 | Decide what `NEXT_PUBLIC_API_URL` should be, given it is baked at build time | done | none |
 | S-077 | Scan the DDL that shell scripts run inline, which no guard sees | done | S-069, done |
-| S-078 | Make `PATCH /clans/me` stop answering 500 on every edit that changes something | open | none |
-| S-079 | Catch privilege escalation that runs through a CLI with no SQL text to read | open | S-077, done |
+| S-078 | Make `PATCH /clans/me` stop answering 500 on every edit that changes something | done | none |
+| S-079 | Catch privilege escalation that runs through a CLI with no SQL text to read | done | S-077, done |
 | S-080 | Decide what a person types to join a clan, and what an admin shares, in ADR-057 | done | none |
-| S-081 | Let the join path resolve a clan by its code rather than by its UUID | open | S-080, done |
-| S-082 | Make the register join field ask for the code its label promises | blocked | S-081 |
-| S-083 | Derive the clan code from the clan name, live and editable | open | S-080, done |
-| S-084 | Give an invitation link a page it can land on | in progress | none |
-| S-085 | Let a person register with no clan, so an invitee can create an account | open | none |
-| S-086 | Make `accept_path` hand the admin the URL ADR-057 says it hands them | blocked | S-084 |
+| S-081 | Let the join path resolve a clan by its code rather than by its UUID | done | S-080, done |
+| S-082 | Make the register join field ask for the code its label promises | done | S-081, done |
+| S-083 | Derive the clan code from the clan name, live and editable | done | S-080, done |
+| S-084 | Give an invitation link a page it can land on | done | none |
+| S-085 | Let a person register with no clan, so an invitee can create an account | done | none |
+| S-086 | Make `accept_path` hand the admin the URL ADR-057 says it hands them | open | S-084, done |
 | S-087 | Make the slug the API accepts and the slug the database accepts be one shape | open | none |
-| S-088 | Unwrap the envelope on the last two `/auth` calls the web client reads raw | open | S-070 |
-| S-089 | Stop the dashboard re-running its auth effect thousands of times per load | open | S-070 |
-| S-090 | Make the backoffice shell survive 200% text scale at 320 px | open | S-070 |
-| S-091 | Connect the login form's labels to its inputs | open | none |
-| S-092 | Move the two hardcoded sidebar strings into the message catalogue | open | none |
-| S-093 | Route a clanless mobile user to onboarding rather than a screen that says they applied | open | none |
+| S-088 | Unwrap the envelope on the last two `/auth` calls the web client reads raw | open | S-070, done |
+| S-089 | Stop the dashboard re-running its auth effect thousands of times per load | open | S-070, done |
+| S-090 | Make the backoffice shell survive 200% text scale at 320 px | open | S-070, done |
+| S-091 | Connect the login form's labels to its inputs | done | none |
+| S-092 | Move the two hardcoded sidebar strings into the message catalogue | done | none |
+| S-093 | Route a clanless mobile user to onboarding rather than a screen that says they applied | done | none |
 | S-094 | Make two web e2e runs in two worktrees unable to measure each other | open | none |
 | S-095 | Decide what the remaining hardcoded web strings are, then sweep the ones that are copy | open | none |
-| S-096 | Connect the register form's six label and input pairs | blocked | S-082 |
+| S-096 | Connect the register form's six label and input pairs | open | S-082, done |
+| S-097 | Let a person with no account accept an invitation from the browser | open | S-085, done |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -7868,6 +7869,84 @@ the pattern and the control; `docs/SEEDS.md` S-091 for the login instance.
 
 **Out of scope.** The login screen, which S-091 closed. Any other accessibility question on this
 screen. The fields' behaviour, copy, or validation, which are S-082 and S-083.
+
+---
+
+## S-097. Let a person with no account accept an invitation from the browser
+
+**Status:** open · **Blocked by:** S-085, done 2026-08-27 · **Unblocks:** nothing yet
+
+**Opened 2026-08-27 by the coordinator, from the gap the agent gating
+`integration/batch-2026-08-26` named as the one finding it would act on first.** It reached that by
+grepping every board row for invitation, register, and clanless, and finding that **no seed covered
+this.** That is the finding: not a defect in any seed, but a hole between three of them.
+
+**The batch built both halves of a bridge and they do not meet.** ADR-057's finding 2 and S-085
+exist to make an invited stranger able to sign up. Read at source 2026-08-27 on the composed tree:
+
+- **The backend half landed.** `backend/app/schemas/auth.py:34` is
+  `clan_action: Literal["join", "create"] | None = None`, and
+  `backend/tests/integration/test_invitee_registers_with_no_clan.py` walks the flow.
+- **The web half cannot express the request.** `web/src/application/auth/ports/auth-repository.ts:16`
+  types `clan_action: 'join' | 'create'` — **required, no `undefined`** — and
+  `web/src/app/[locale]/(auth)/register/page.tsx:64` is `useState<'join' | 'create'>('join')` with
+  exactly two radios. **So S-085's capability is unreachable from a browser.**
+- **And the invitation page offers no way to reach it.** `InvitationAcceptScreen.tsx:246` gives a
+  signed-out visitor exactly one action, a `Link` to `/{locale}/login`. There is no register route
+  and no way to carry the token across.
+
+**Why S-084 could not have done this, stated so nobody reads it as an S-084 defect.** S-084 merged
+**before** S-085. `docs/SEEDS.md` records S-085 as unblocking "S-084's signed-out path", and the
+merge order made that impossible: the capability did not exist when the page was written. S-084 said
+plainly in its own report which part of the flow could not complete and why. **This seed is that
+part.**
+
+**This contains a decision, and it is the token handoff.** S-084 deliberately carried the token
+**nowhere** — no query string, no cookie, no `sessionStorage` — on the grounds that each is a second
+place for a bearer credential to live, and that the round trip could not be completed anyway because
+the login screen reads no redirect parameter. **Read that reasoning before overriding it.** Whatever
+you choose must survive the constraint the contract sets at
+`docs/contracts/rest-invitations-api.md:74`: the token "is the only thing that decides". A token in
+a URL that lands in browser history, a server log, or a `Referer` is the defect S-084 spent real
+effort closing — it found and fixed a **live leak** where 30 to 31 `/_next/*` requests carried the
+token in `Referer`, and `web/next.config.ts` now sets `Referrer-Policy: no-referrer` on that route.
+
+**End state.** A person holding an invitation link and no account can complete the flow in a
+browser: reach a register form from the invitation page, create an account with no clan, verify,
+sign in, and land back on the invitation so it can be accepted. `clan_action` is optional in the web
+port and the form can express its absence.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, **plus `pnpm test:e2e:auth`** — that file
+says it "is not in that list and is not optional either", and this seed touches the authenticated
+boundary. If you cannot run it, say so and say which step you could not run.
+
+**Read S-094 before quoting any e2e reading**: two runs in two worktrees can silently measure each
+other, attribution takes **both** ports 3100 and 3101, and `CI=1` makes attaching impossible.
+
+**Drive the whole path in a browser and read each screen**, per § "A test pins an outcome, not a
+setting". Asserting that `clan_action` became optional in a TypeScript type pins the type — and that
+is precisely the half that is already true on the backend while the flow stays broken. **Negative
+control:** the walk must fail against the tree as you find it, at the point where a signed-out
+visitor with no account has nowhere to go. Quote that reading.
+
+**One thing you will hit that is not yours.** A successful registration currently renders **nothing**
+— `http-auth-profile-repository.ts:81` returns the whole envelope, so `result.message` is
+`undefined` and the success branch never renders. That is **S-088**, now unblocked. Decide whether
+you need it landed first and say so rather than working around it.
+
+**Sources.** `backend/app/schemas/auth.py:34`;
+`backend/tests/integration/test_invitee_registers_with_no_clan.py`;
+`web/src/application/auth/ports/auth-repository.ts:16`;
+`web/src/app/[locale]/(auth)/register/page.tsx:64`;
+`web/src/features/invitations/ui/InvitationAcceptScreen.tsx:246`;
+`docs/contracts/rest-invitations-api.md:74`; `web/next.config.ts` for the `Referrer-Policy` header;
+[ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md) finding 2;
+[ADR-058](decisions/058-registration-may-name-no-clan.md); S-084's and S-085's reports of
+2026-08-26, and the composed-tree gate report of 2026-08-27.
+
+**Out of scope.** The backend, which is done. The invitation page's four refusal outcomes, which
+S-084 built and tested. Mobile, which has no register screen — that is named in S-093's own
+`Out of scope` and stays a milestone question. The envelope defect, which is S-088.
 
 ---
 

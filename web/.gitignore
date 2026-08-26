@@ -42,3 +42,8 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /blob-report/
+# S-070: e2e/auth/session.setup.ts writes real Supabase sessions here. They are
+# short-lived credentials for a local fixture user, and they must never be committed.
+/e2e/.auth/
+# S-070's authenticated dev server needs its own distDir, like S-042's banner server.
+/.next-auth-e2e/

@@ -30,6 +30,71 @@ Behavior:
 - Paginated lists return the standard `{"data", "meta": {cursor, has_more, limit}}` envelope.
 - Response shapes should remain consistent with user-facing admin workflows.
 
+### Clan info (`GET /me` and `PATCH /me`)
+
+Both routes answer with the same object, the `clans` row (`ClanResponse`):
+
+```jsonc
+{
+  "data": {
+    "id": "uuid",
+    "name": "string",
+    "slug": "string",                     // identity, never editable through this API
+    "description": "string|null",
+    "origin_place": "string|null",
+    "founded_year": 1750,                 // plain integer year or null, NOT a HistoricalDate
+    "avatar_url": "string|null",
+    "motto": "string|null",
+    "ancestral_hall_location": "string|null",  // nhà thờ tổ
+    "clan_rules": "string|null",               // gia huấn
+    "is_active": true,                    // false = platform-suspended; every clan-scoped
+                                          //   request then 403s with clan_suspended
+    "created_at": "ISO-8601",
+    "updated_at": "ISO-8601"
+  }
+}
+```
+
+`created_at` and `updated_at` are plain timestamps. The HistoricalDate rule in
+[README.md](README.md) covers genealogy dates (birth, death, marriage, event); it does not
+cover row audit timestamps, and `founded_year` is a year integer rather than a date.
+
+`GET /me?include=stats` adds one nested object, and nothing else changes:
+
+```jsonc
+{ "data": { "...": "...", "stats": { "total_users": 0, "approved_users": 0,
+                                     "pending_users": 0, "total_members": 0 } } }
+```
+
+**`PATCH /me` — admin.** The request body is a partial update. Exactly eight fields are
+accepted, and every one is optional; an omitted field is left alone rather than blanked:
+
+```jsonc
+{
+  "name": "string", "description": "string", "origin_place": "string",
+  "founded_year": 1802, "avatar_url": "string", "motto": "string",
+  "ancestral_hall_location": "string", "clan_rules": "string"
+}
+```
+
+**The 200 body is the stored row after the write, not an echo of the request.** It carries
+every field above plus `slug`, `is_active`, `created_at`, and a `updated_at` that has moved
+to the time of this write. A client may use the response instead of re-fetching `GET /me`.
+
+- `slug`, `is_active`, `id` and the timestamps are **not** editable here. A body naming any
+  other field is rejected with **422 `field_not_updatable`**, `detail.field` naming the
+  first offender, and **nothing is written** — the whole batch is validated before any
+  field is applied.
+- A PATCH that sets a field to the value it already holds is a valid **no-op**: 200, the
+  same body, and `updated_at` unchanged.
+- **403** — caller is not an approved clan admin.
+
+Pinned by
+`backend/tests/integration/test_clan_patch_returns_updated_row.py`, which reads the
+response body against the stored row. Until 2026-08-26 this route answered **500** on every
+PATCH that changed something, while writing the row anyway (seed S-078); a no-op PATCH
+answered 200, so the failure only appeared on real edits.
+
 ### User list rows
 
 The two user lists return **different row shapes**, because they have different guards.

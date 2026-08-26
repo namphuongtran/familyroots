@@ -75,18 +75,19 @@ exists — the single raise site, the error-code row, and its 4 i18n entries
 were all removed. There is no error row for the register success message
 (`auth.registration_received`) either — it's a 201 message key, not an error
 code. The clan-input codes below (`auth.clan_id_required_for_join`,
-`auth.clan_name_required_for_create`, `auth.clan_slug_taken`, plus
-`clan_not_found`) still fire on register and are unchanged: they run
-unconditionally before the identity is created, so they return identically
-regardless of whether the email exists, and they aren't account-existence
-oracles (clan slug/id existence is public data, not a signal about a user's
-account).
+`auth.clan_code_and_id_both_given`, `auth.clan_name_required_for_create`,
+`auth.clan_slug_taken`, plus `clan_not_found`) still fire on register and are
+unchanged in this respect: they run unconditionally before the identity is
+created, so they return identically regardless of whether the email exists, and
+they aren't account-existence oracles (clan slug/id existence is public data,
+not a signal about a user's account).
 
 | code | HTTP | raised when | detail keys | client handling |
 |---|---|---|---|---|
 | `auth.password_too_weak` | 422 | Identity provider rejected the password strength | `detail` (provider text) | Inline field error |
 | `auth.registration_failed` | 422 | Identity provider rejected registration for another validation reason | `detail` (provider text) | Inline form error |
-| `auth.clan_id_required_for_join` | 422 | Register or onboard with `clan_action=join` but no `clan_id` | — | Form validation |
+| `auth.clan_id_required_for_join` | 422 | Register or onboard with `clan_action=join` and **no clan identifier at all** — neither `clan_code` nor the deprecated `clan_id`. The code keeps its historical name; see [rest-auth-api.md](rest-auth-api.md) "The join identifier" | — | Form validation |
+| `auth.clan_code_and_id_both_given` | 422 | Register or onboard with `clan_action=join` carrying **both** `clan_code` and the deprecated `clan_id`. They can name different clans, so the request is refused rather than reconciled. Disappears when `clan_id` does | — | Send the code only |
 | `auth.clan_name_required_for_create` | 422 | Register or onboard with `clan_action=create` but missing `clan_name`/`clan_slug` | — | Form validation |
 | `auth.clan_slug_taken` | 409 | Creating a clan (register or onboard) whose slug already exists — from the `get_clan_by_slug` pre-check, and (on a concurrent create that both pass the pre-check) from the `uq_clans_slug` `23505` race, mapped by index name to this same code rather than the generic `conflict` | — | Ask for another slug |
 | `auth.already_joined_clan` | 409 | Join request for a clan the user is already an approved member of | — | Route into the clan |
@@ -110,7 +111,7 @@ account).
 
 | code | HTTP | raised when | detail keys | client handling |
 |---|---|---|---|---|
-| `clan_not_found` | 404 | Clan id does not exist (clan detail, join, platform admin ops) | — | Not-found state |
+| `clan_not_found` | 404 | No clan carries this identifier: a `clan_code` on the register/onboard join path (ADR-057 § 2), a clan id on clan detail or the platform-admin routes. The message is shared across all of them, so it stays generic; spec § 7.1b's inline register-field wording belongs to the web form | — | Not-found state |
 | `user_not_found` | 404 | Target member/user does not exist in this clan (approve, change role, remove, claims) | — | Refresh member list |
 | `user.already_approved` | 409 | Approving a membership that is already approved | — | Refresh list |
 | `clan.role_changed_concurrently` | 409 | `PATCH /clans/me/users/{user_id}/role` lost a compare-and-set: the member's role was changed by another admin between this request's read and its write (the row still exists — a concurrent removal instead yields `user_not_found`) | — | Re-fetch the member and retry |

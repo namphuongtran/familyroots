@@ -25,6 +25,20 @@ const PUBLIC_ROUTES = [
   '/pending-approval',
   '/verify-email',
   '/clan-suspended',
+  // `/invitations/{token}` joined the list with seed S-084, and it is the one entry
+  // here that is public for a different reason from all the others. Every route
+  // above is public because a session check can race a sign-in that just happened.
+  // This one is public because the visitor is a stranger: an invited relative who
+  // has never signed in to FamilyRoots at all. Gating it would redirect them to
+  // `/{locale}/login` and drop the token from the URL on the way, which loses the
+  // invitation outright — the page could not be reached even once.
+  //
+  // Public here does NOT mean the accept is unauthenticated. `POST
+  // /invitations/{token}/accept` depends on `get_current_user`
+  // (`backend/app/api/v1/invitations.py:96`) and the contract marks the row
+  // `Auth | Yes` (`docs/contracts/rest-invitations-api.md:62-64`), so a signed-out
+  // visitor reaches the page and is shown the sign-in state rather than the button.
+  '/invitations',
 ]
 
 /**

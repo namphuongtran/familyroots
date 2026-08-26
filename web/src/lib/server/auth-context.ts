@@ -79,10 +79,19 @@ export async function getServerAuthContext(): Promise<ServerAuthContext | null> 
     }
   }
 
+  // `data`, not `clans`: the canonical envelope. This read said `clans` until seed S-070
+  // ran the first authenticated e2e case on 2026-08-26 and found `currentClanRole`
+  // permanently `undefined`, which silently hid every role-gated element on every
+  // server-rendered screen and sent `requireServerRole` to `/pending-approval` for a
+  // fully approved admin. Sources: `backend/app/api/v1/me.py:25` returns `{"data":
+  // result}`; `src/generated/api-types.ts:2192-2196` types it as
+  // `Envelope_list_UserClanMembership__`; `docs/contracts/frontend-integration-guide.md:77`
+  // spells it out. The sibling read in `src/infrastructure/auth/http-auth-profile-repository.ts`
+  // had the same defect and carries the longer account.
   const membershipData = (await membershipResponse.json()) as {
-    clans: UserClanMembership[]
+    data: UserClanMembership[]
   }
-  const clanMemberships = membershipData.clans ?? []
+  const clanMemberships = membershipData.data ?? []
   const currentClanId = resolveCurrentClanId(clanMemberships, preferredClanId)
   const currentMembership = clanMemberships.find(
     (membership) => membership.clan_id === currentClanId,

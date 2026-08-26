@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
+import { AUTH_STACK_ENABLED, authStackEnv } from './e2e/auth/fixtures'
 
 const PORT = 3100
-const BASE_URL = `http://127.0.0.1:${PORT}`
+// Exported for `e2e/auth/members.auth.spec.ts`, which replays a real captured session
+// against this hermetic server on purpose — see that file's "does not travel" case.
+export const BASE_URL = `http://127.0.0.1:${PORT}`
 
 // S-041: the e2e gate must give the same result on a fresh clone, in a git
 // worktree, and in CI, without a `web/.env.local` — which git does not carry
@@ -51,6 +54,33 @@ const NO_SUPABASE_ENV = {
   PLAYWRIGHT_SECOND_DIST_DIR: '.next-banner-e2e',
 }
 
+/**
+ * Seed S-070: the third `next dev`, the only one with a session.
+ *
+ * **Why a third server and not the primary one.** The primary server on :3100 is
+ * deliberately hermetic (S-041): fake Supabase placeholders, no network dependency, same
+ * result in a fresh clone, in a worktree and in CI. Pointing it at the local Supabase
+ * stack would make every existing spec depend on Docker, which is a regression for every
+ * other seed. A `next dev` process bakes its `NEXT_PUBLIC_*` values in at start, so one
+ * server cannot answer both questions — the same reason S-042 needed its own.
+ *
+ * **Why an explicit opt-in and not auto-detection.** `E2E_AUTH_STACK=1` is the switch, and
+ * `pnpm test:e2e:auth` is the only thing that sets it. Auto-detecting a reachable stack
+ * and skipping when it is absent was rejected: a suite that quietly covers nothing when
+ * Docker is down is the "passed because it scanned nothing" failure `.claude/rules/seeds.md`
+ * names, and it is invisible in a green run. With the switch, the projects either run or do
+ * not exist, and `authStackEnv()` throws by name when the switch is on and an input is not.
+ */
+const AUTH_PORT = 3102
+export const AUTH_BASE_URL = `http://127.0.0.1:${AUTH_PORT}`
+
+/**
+ * Everything under `e2e/auth/`, for the hermetic projects to ignore. `*.guard.test.ts`
+ * matches this too, which is intentional: it is a Vitest file (`vitest.config.mts`'s unit
+ * include names it) and must never be run by Playwright.
+ */
+const AUTH_SPECS = /[\\/]e2e[\\/]auth[\\/]/
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -64,10 +94,29 @@ export default defineConfig({
     locale: 'vi-VN',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // S-070: `testIgnore` keeps the hermetic pair off `e2e/auth/`, whose specs need a
+    // session and a running stack. Without it these two would pick those files up and fail
+    // on a machine with no Docker, which is the S-041 guarantee this must not break.
+    { name: 'chromium', testIgnore: AUTH_SPECS, use: { ...devices['Desktop Chrome'] } },
     // Most members will arrive on a phone — keep a mobile viewport in the loop
     // from the start rather than discovering layout breakage in sub-project B.
-    { name: 'mobile', use: { ...devices['Pixel 5'] } },
+    { name: 'mobile', testIgnore: AUTH_SPECS, use: { ...devices['Pixel 5'] } },
+    ...(AUTH_STACK_ENABLED
+      ? [
+          {
+            // Logs in through the real form and writes the cookies to `e2e/.auth/`.
+            name: 'auth-setup',
+            testMatch: /e2e\/auth\/session\.setup\.ts$/,
+            use: { ...devices['Desktop Chrome'], baseURL: AUTH_BASE_URL },
+          },
+          {
+            name: 'auth-chromium',
+            testMatch: /e2e\/auth\/.*\.auth\.spec\.ts$/,
+            dependencies: ['auth-setup'],
+            use: { ...devices['Desktop Chrome'], baseURL: AUTH_BASE_URL },
+          },
+        ]
+      : []),
   ],
   webServer: [
     {
@@ -90,5 +139,20 @@ export default defineConfig({
       timeout: 120_000,
       env: NO_SUPABASE_ENV,
     },
+    // S-070's server, registered only when `E2E_AUTH_STACK=1`. `authStackEnv()` reads the
+    // local stack's URL, its anon key and the backend origin from the shell and throws
+    // naming whatever is missing, so a half-configured run fails before a browser opens
+    // rather than reporting a redirect to /vi/login as a product defect.
+    ...(AUTH_STACK_ENABLED
+      ? [
+          {
+            command: `pnpm dev --port ${AUTH_PORT} --hostname 127.0.0.1`,
+            url: AUTH_BASE_URL,
+            reuseExistingServer: !process.env.CI,
+            timeout: 120_000,
+            env: authStackEnv(),
+          },
+        ]
+      : []),
   ],
 })
