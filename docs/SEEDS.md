@@ -1125,6 +1125,7 @@ graph LR
 | S-090 | Make the backoffice shell survive 200% text scale at 320 px | open | S-070 |
 | S-091 | Connect the login form's labels to its inputs | open | none |
 | S-092 | Move the two hardcoded sidebar strings into the message catalogue | open | none |
+| S-093 | Route a clanless mobile user to onboarding rather than a screen that says they applied | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -7512,6 +7513,93 @@ locale parity.
 **Out of scope.** Any other hardcoded string. **If you grep and find more, do not fix them here —
 report the count and let it be its own seed**, because a sweep and a two-line fix are different
 sizes.
+
+---
+
+## S-093. Route a clanless mobile user to onboarding rather than a screen that says they applied
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a finding seed S-085 made at source and did not fix,
+because `mobile/` was outside its fence.** This is the **first mobile seed** in this tracker. It is
+actionable today because it is a defect in code that exists, not a milestone plan: the
+[Owed](#owed-with-an-owner-and-a-trigger) row about mobile M1 to M4 still stands and is untouched by
+this seed.
+
+**Two domain predicates are written correctly and wired to nothing.** Read at source 2026-08-26 in
+`mobile/lib/domain/auth/user_profile.dart`:
+
+- `:26` `needsPendingScreen => !isApproved && hasPendingMembership`
+- `:29-30` `needsOnboarding => !isApproved && !hasPendingMembership && clanId == null`
+
+**`grep -rn "needsOnboarding\|needsPendingScreen" mobile/lib` returns those two declarations and
+nothing else.** Counted 2026-08-26. Neither is called.
+
+**What the router does instead is flatten both into one boolean.** `mobile/lib/app/app.dart:37`
+sets `hasApprovedMembership: profile?.isApproved ?? true`, and
+`mobile/lib/app/router/app_router.dart:74` gates on `if (!auth.hasApprovedMembership)` and sends the
+user to `Routes.pending`. **So the two states the domain layer distinguishes reach the same screen.**
+
+**And that screen tells the user something untrue.** `mobile/lib/core/l10n/app_en.arb:207` is
+`"pendingApprovalBody": "Your join request is waiting for a clan admin to approve it."` A person who
+made no join request is told their request is waiting.
+
+**Why this is worth a seed now, when it was not before.** The state was unreachable through
+registration until 2026-08-26: `clan_action` was required, so every account had a clan from the
+moment it existed. [ADR-058](decisions/058-registration-may-name-no-clan.md) made a clanless account
+possible, which makes this path reachable. **The defect is older than the ADR; the reachability is
+new.** Say it that way when you close it rather than calling it a regression.
+
+**The web client already resolves this and is the reference, not a thing to copy blindly.**
+`web/src/application/auth/use-cases/auth-context.ts:95` computes `needsOnboarding` separately from
+`isPendingApproval` one line above it, and
+`web/src/components/auth/PendingApprovalScreen.tsx:11-15` records a deliberate divergence from the
+spec. **Read that comment before deciding mobile's shape**, because the divergence may or may not
+apply here.
+
+**Spec § 7.2a already decided what the screen is**, at
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:925-927`: no membership at all is
+*"onboarding variant of this screen with the join/create segmented control from 7.1b"* — a variant of
+the pending screen, **not a fourth screen**. So this is one predicate and one copy branch, not a new
+route.
+
+**One thing this seed does not get to assume.** Mobile has **no register screen**:
+`mobile/lib/features/auth/presentation/` holds `login_page`, `verify_email_page`,
+`pending_approval_page`, `blocked_page`, and `message_page` only, listed 2026-08-26. So the join and
+create controls spec § 7.2a names do not exist to route to. **Decide what the onboarding variant says
+when it cannot yet offer the action**, and say plainly that it is a partial state rather than
+drawing a control that does nothing.
+
+**End state.** A clanless mobile user reaches a screen whose copy is true for them, chosen by
+`needsOnboarding` rather than by the flattened boolean. `needsPendingScreen` is either used or
+deleted — **a predicate that survives unused is the next reader's trap**, and this seed found two.
+
+**Verification.** The mobile full quality gate, `CLAUDE.md:80`.
+
+**Drive the router and read which route comes back**, per § "A test pins an outcome, not a setting".
+Asserting that `needsOnboarding` returns `true` for a constructed profile pins the getter — which is
+exactly the half that already worked for 23 days while the router ignored it. **Three readings, each
+the router's output:** a clanless profile, a pending profile, and an approved profile must reach
+three distinguishable destinations. **Negative control:** the clanless case must fail against today's
+code by landing on `Routes.pending`, and quote that reading.
+
+**Read the mobile paint rule before writing the widget test.** `.claude/rules/seeds.md` § "A test
+pins an outcome, not a setting" records that `mobile/test/core/theme/theme_test.dart` asserted
+`dividerTheme.thickness == 0` under the name "dividers have no thickness" and stayed green for 19
+days while being wrong. Do not repeat the shape.
+
+**Sources.** `mobile/lib/domain/auth/user_profile.dart:26,29-30`; `mobile/lib/app/app.dart:37`;
+`mobile/lib/app/router/app_router.dart:74`; `mobile/lib/core/l10n/app_en.arb:207`;
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:925-927`;
+`web/src/application/auth/use-cases/auth-context.ts:95`;
+`web/src/components/auth/PendingApprovalScreen.tsx:11-15`;
+[ADR-058](decisions/058-registration-may-name-no-clan.md) § 2 for the reachability change; seed
+S-085's report of 2026-08-26.
+
+**Out of scope.** Building mobile's register screen, which does not exist and is a milestone
+question, not this defect. Mobile M1 to M4, which stay an `Owed` row. Anything on a device — this is
+verifiable in the widget tester, and the Task 20 row still owns the device walk. The web client,
+which already distinguishes the two states.
 
 ---
 
