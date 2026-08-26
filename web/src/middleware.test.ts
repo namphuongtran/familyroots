@@ -90,3 +90,63 @@ describe('middleware clan gate (S-023)', () => {
     expect(response.headers.get('location')).toBeNull()
   })
 })
+
+/**
+ * Seed S-084. `/{locale}/invitations/{token}` has to reach the browser with the
+ * token still on it. Without a `PUBLIC_ROUTES` entry, a signed-out visitor — which
+ * is the normal case for an invited relative — is redirected to
+ * `/{locale}/login`, and the token is gone from the URL, so the invitation cannot
+ * be opened even once.
+ *
+ * The token used below is a real-shaped `secrets.token_urlsafe(32)` value
+ * (`docs/contracts/rest-invitations-api.md:41`): 43 URL-safe base64 characters,
+ * including `-` and `_`.
+ */
+describe('the invitation route is public, so the token survives the first request (S-084)', () => {
+  const TOKEN = 'Zx-9Qa_bC3dEfGhIjKlMnOpQrStUvWxYz0123456789'
+
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key')
+  })
+
+  it('lets a signed-out visitor through, rather than redirecting to login', async () => {
+    currentSession = null
+
+    const response = await middleware(requestFor(`/vi/invitations/${TOKEN}`))
+
+    expect(response.status).not.toBe(307)
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('does the same on every locale, since every route is locale-prefixed', async () => {
+    currentSession = null
+
+    for (const locale of ['vi', 'en', 'zh', 'fr']) {
+      const response = await middleware(requestFor(`/${locale}/invitations/${TOKEN}`))
+      expect(response.headers.get('location'), locale).toBeNull()
+    }
+  })
+
+  it('does not apply the clan gate either — the invitee has no clan to select', async () => {
+    currentSession = { access_token: 'tok-1' }
+
+    const response = await middleware(requestFor(`/vi/invitations/${TOKEN}`))
+
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  /**
+   * The control that keeps the case above honest. `/vi/tree` differs from
+   * `/vi/invitations/...` only in being absent from `PUBLIC_ROUTES`, so if this
+   * redirect ever stopped happening the tests above would pass for the wrong
+   * reason — a broken session check rather than a public route.
+   */
+  it('and a non-public route in the same run still redirects, so the check is real', async () => {
+    currentSession = null
+
+    const response = await middleware(requestFor('/vi/tree'))
+
+    expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
+  })
+})
