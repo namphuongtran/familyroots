@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../domain/auth/user_profile.dart';
 import '../../features/auth/auth.dart';
 import '../../features/clan/clan.dart';
 import 'routes.dart';
@@ -39,19 +40,22 @@ final authRouteStateProvider = Provider<AuthRouteState>(
 class AuthRouteState extends ChangeNotifier {
   bool signedIn = false;
   bool emailVerified = true;
-  bool hasApprovedMembership = true;
+
+  /// Three states, not a boolean. Flattening `pending` and `onboarding` into
+  /// one flag is what sent a clanless user to a screen saying their join
+  /// request was waiting (seed S-093).
+  MembershipStatus membership = MembershipStatus.approved;
   bool needsClanPick = false;
 
   void set({
     bool? signedIn,
     bool? emailVerified,
-    bool? hasApprovedMembership,
+    MembershipStatus? membership,
     bool? needsClanPick,
   }) {
     this.signedIn = signedIn ?? this.signedIn;
     this.emailVerified = emailVerified ?? this.emailVerified;
-    this.hasApprovedMembership =
-        hasApprovedMembership ?? this.hasApprovedMembership;
+    this.membership = membership ?? this.membership;
     this.needsClanPick = needsClanPick ?? this.needsClanPick;
     notifyListeners();
   }
@@ -71,7 +75,10 @@ GoRouter buildRouter(AuthRouteState auth) {
       if (!auth.emailVerified) {
         return loc == Routes.verifyEmail ? null : Routes.verifyEmail;
       }
-      if (!auth.hasApprovedMembership) {
+      // One route for both non-approved states, per spec § 7.2a: the
+      // no-membership case is the "onboarding variant of this screen", so what
+      // changes is the copy [PendingApprovalPage] renders, not the path.
+      if (auth.membership != MembershipStatus.approved) {
         return loc == Routes.pending ? null : Routes.pending;
       }
       if (auth.needsClanPick) {

@@ -10,6 +10,7 @@ import 'package:family_roots_mobile/core/l10n/generated/app_localizations.dart';
 import 'package:family_roots_mobile/core/network/api_client.dart';
 import 'package:family_roots_mobile/core/storage/prefs_store.dart';
 import 'package:family_roots_mobile/core/theme/app_theme.dart';
+import 'package:family_roots_mobile/domain/auth/user_profile.dart';
 import 'package:family_roots_mobile/features/clan/clan.dart';
 
 import '../support/load_app_fonts.dart';
@@ -102,14 +103,22 @@ void main() {
     expect(find.byKey(RouteKeys.verifyEmail), findsOneWidget);
   });
 
-  testWidgets('no approved membership goes to /pending', (tester) async {
-    final auth = AuthRouteState()
-      ..signedIn = true
-      ..hasApprovedMembership = false;
-    await tester.pumpWidget(await _app(buildRouter(auth)));
-    await tester.pumpAndSettle();
-    expect(find.byKey(RouteKeys.pending), findsOneWidget);
-  });
+  // Both non-approved states share this route by design (spec § 7.2a). Which
+  // copy each one gets is asserted in membership_route_test.dart, from a real
+  // profile, because that is the half this router flag cannot express.
+  for (final status in <MembershipStatus>[
+    MembershipStatus.pending,
+    MembershipStatus.onboarding,
+  ]) {
+    testWidgets('membership $status goes to /pending', (tester) async {
+      final auth = AuthRouteState()
+        ..signedIn = true
+        ..membership = status;
+      await tester.pumpWidget(await _app(buildRouter(auth)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(RouteKeys.pending), findsOneWidget);
+    });
+  }
 
   testWidgets('a multi-clan user is sent to the picker and must navigate '
       'explicitly afterwards', (tester) async {

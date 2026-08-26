@@ -518,6 +518,12 @@ abstract class AppLocalizations {
   /// **'Tham gia dòng họ'**
   String get onboardingTitle;
 
+  /// No description provided for @onboardingUnavailableBody.
+  ///
+  /// In vi, this message translates to:
+  /// **'Bạn chưa thuộc dòng họ nào và cũng chưa gửi yêu cầu tham gia nào. Ứng dụng này chưa có bước tham gia hoặc tạo dòng họ, nên bạn chưa thể đi tiếp từ đây.'**
+  String get onboardingUnavailableBody;
+
   /// No description provided for @accountBlockedTitle.
   ///
   /// In vi, this message translates to:

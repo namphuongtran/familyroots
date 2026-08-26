@@ -125,6 +125,7 @@
   "verifyEmailBody": "Vui lòng mở email và bấm liên kết xác thực.",
   "resendVerificationAction": "Gửi lại email xác thực",
   "onboardingTitle": "Tham gia dòng họ",
+  "onboardingUnavailableBody": "Bạn chưa thuộc dòng họ nào và cũng chưa gửi yêu cầu tham gia nào. Ứng dụng này chưa có bước tham gia hoặc tạo dòng họ, nên bạn chưa thể đi tiếp từ đây.",
   "accountBlockedTitle": "Tài khoản đã bị khoá",
   "clanSuspendedTitle": "Dòng họ đã bị tạm ngưng"
 }
