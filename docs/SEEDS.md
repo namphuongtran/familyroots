@@ -1120,6 +1120,15 @@ graph LR
 | S-085 | Let a person register with no clan, so an invitee can create an account | open | none |
 | S-086 | Make `accept_path` hand the admin the URL ADR-057 says it hands them | blocked | S-084 |
 | S-087 | Make the slug the API accepts and the slug the database accepts be one shape | open | none |
+| S-088 | Unwrap the envelope on the last two `/auth` calls the web client reads raw | open | S-070 |
+| S-089 | Stop the dashboard re-running its auth effect thousands of times per load | open | S-070 |
+| S-090 | Make the backoffice shell survive 200% text scale at 320 px | open | S-070 |
+| S-091 | Connect the login form's labels to its inputs | open | none |
+| S-092 | Move the two hardcoded sidebar strings into the message catalogue | open | none |
+| S-093 | Route a clanless mobile user to onboarding rather than a screen that says they applied | open | none |
+| S-094 | Make two web e2e runs in two worktrees unable to measure each other | open | none |
+| S-095 | Decide what the remaining hardcoded web strings are, then sweep the ones that are copy | open | none |
+| S-096 | Connect the register form's six label and input pairs | blocked | S-082 |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -6499,6 +6508,8 @@ leaves with its own slice.
 
 ## S-028. Clear the 112-file prettier drift in one sweep
 
+**The title says 112 and the commit that closed it says 99.** Read 2026-08-26: `278fe69` is "chore(web): run pnpm format over the 99-file pre-existing Prettier drift (S-028)", and `web/CLAUDE.md` also says 99. Two agents working on 2026-08-26 each stopped to reconcile the two figures. **The commit and `web/CLAUDE.md` agree, so 99 is the measured number and this title's 112 is the stale one.** The title is left as written because it is what the seed was opened as; this note is the correction.
+
 **Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Closed 2026-08-22. The count in this seed's title is wrong and is kept, because a seed title is
@@ -6977,10 +6988,23 @@ with the field, and drive a `clan_not_found` response and assert the message ren
 field**. A test that asserts a message key exists in a JSON file pins the file, not the screen.
 **Negative control:** both must fail against today's code.
 
-**Check it at 200% text scale and 320 px before claiming done.** The helper text contains a hyphen
-and no other break opportunity, and this is the third field on this exact page to hit that defect:
-S-034 on the wordmark and S-042 on the setup banner. `.claude/rules/tailwind.md` § 7 holds the
-shape. **Say what you measured, or say plainly that you did not.**
+**Check it at 200% text scale and 320 px before claiming done.** `.claude/rules/tailwind.md` § 7
+holds the shape. **Say what you measured, or say plainly that you did not.**
+
+**This seed's own premise here was wrong, and the agent that closed it withdrew the claim rather
+than dressing a class as a fix.** The seed said the helper text "contains a hyphen and no other
+break opportunity", and called this the third instance of the overflow shape after S-034's wordmark
+and S-042's banner. Measured 2026-08-26 at 320 px with `:root { font-size: 32px }`: page
+`scrollWidth` 320 against `clientWidth` 320, helper paragraph 158/158, error paragraph 158/158. The
+agent built the field with `wrap-anywhere`, then **removed the class and re-measured: every number
+identical**, with only `overflowWrap` moving `anywhere` → `normal`. **A control that reads the same
+either way is not a control** (§ "A test pins an outcome, not a setting", question 2), so it deleted
+the class instead of keeping a claim nothing supported. Two reasons it does not overflow: **a hyphen
+is itself a break opportunity** under `overflow-wrap: normal`, so `nguyen-huu-thanh-oai` wraps
+without help; and a 100-character code stays inside the `<input>`, which scrolls internally, 1604 px
+in a 156 px box, without widening the page. **S-083's case is different and its `wrap-anywhere` is
+earned**, because its suggestion button echoes the code back as text. The three T-04 cases stay,
+because T-04 is the requirement.
 
 **Sources.** `web/src/app/[locale]/(auth)/register/page.tsx:81,91,237-249`;
 `web/messages/en.json:184-185`; `web/messages/vi.json:184-185`;
@@ -7290,6 +7314,563 @@ a line about the minimum length once this is decided. Renaming a clan's code aft
 
 ---
 
+## S-088. Unwrap the envelope on the last two `/auth` calls the web client reads raw
+
+**Status:** open · **Blocked by:** S-070, which rewrites the same file · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a defect seed S-070 found, fixed three instances of, and
+named the remaining two rather than quietly fixing them too.** S-070 was fenced away from the
+register path, so it stopped at the fence and said where.
+
+**Every public 2xx body is `{"data": ...}`.** That is the root [`CLAUDE.md`](../CLAUDE.md) rule, and
+`docs/contracts/README.md` is the spec. Read at source 2026-08-26,
+`backend/app/api/v1/auth.py:61` returns `{"data": {"message": t("auth.registration_received")}}` and
+`:80` returns `{"data": result.model_dump()}`.
+
+**Three of the five call sites in one file now unwrap it and two do not.** Counted 2026-08-26 in
+`web/src/infrastructure/auth/http-auth-profile-repository.ts` **on S-070's branch**, which is why
+this seed is blocked by it:
+
+| Line | Call | Unwraps |
+|---|---|---|
+| 23 | `api.get<ApiResponse<UserProfile>>('/auth/me')` | yes |
+| 53 | `api.get<ApiResponse<UserClanMembership[]>>('/me/clans')` | yes, fixed by S-070 |
+| 76 | `api.post<ApiResponse<ClanSwitchResponse>>('/me/clans/{id}/select')` | yes, fixed by S-070 |
+| **81** | `api.post<RegisterResult>('/auth/register', input)` | **no** |
+| **86** | `api.post<RegisterResult>('/auth/onboard', input)` | **no** |
+
+So `RegisterResult.message` reads `undefined`, because the object returned is the envelope and not
+its contents.
+
+**What that costs is not obvious and is worth stating.** The register screen renders
+`result.message` as its success copy (`web/src/app/[locale]/(auth)/register/page.tsx`, the
+`setSuccess(result.message)` call). **Registration is non-enumerating**, per spec § 7.1b at
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:871-873`, and that property rests on
+every `201` routing to the same "check your email" screen. A blank success message is a worse
+screen, not a leak, so this is a correctness defect rather than a security one. **Say which it is
+when you close it; do not inflate it.**
+
+**End state.** Both call sites read the envelope through `ApiResponse<T>`, the way the three above
+them do. No sixth shape is invented for the same job.
+
+**Verification.** The full web gate in `web/CLAUDE.md`.
+
+**Drive the screen and read what it renders**, per § "A test pins an outcome, not a setting". A test
+that asserts the repository returns an object pins the object. **Two readings:** a successful
+register renders the backend's own message text, and an onboard does the same. **Negative control:**
+both must fail against the code as you find it, and the failing reading is a blank or `undefined`
+message — quote it.
+
+**Sources.** `web/src/infrastructure/auth/http-auth-profile-repository.ts:23,53,76,81,86` on branch
+`seed/s-070-authenticated-e2e-route`; `backend/app/api/v1/auth.py:61,80`; root `CLAUDE.md` envelope
+rule; `docs/contracts/README.md`; S-070's report of 2026-08-26, which names these two and says it
+left them alone.
+
+**Out of scope.** The three S-070 fixed. Any other repository file. The register form's fields, which
+are S-082 and S-083.
+
+---
+
+## S-089. Stop the dashboard re-running its auth effect thousands of times per load
+
+**Status:** open · **Blocked by:** S-070, which built the harness that can reach the screen ·
+**Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. Found by seed S-070 while choosing which authenticated route
+to cover, and it is the reason S-070 covered the backoffice dashboard instead of `/vi/members`.**
+
+**The measurement, taken 2026-08-26 by S-070 against the real Supabase CLI stack and a real
+backend:** loading `/vi/dashboard` re-ran `useAuth`'s mount effect **2613 times in 7 seconds** and
+issued **18174 `GET /auth/me`** requests, until the backend's own rate limiter answered **429**. The
+screen never became readable.
+
+**This is the first time anything in this repository has loaded that screen with a real session**, so
+the loop has been reachable for as long as the screen has existed and nothing could see it. **That is
+the finding, and it is worth more than the fix**: the defect was invisible because the harness could
+not hold a session, which is the gap S-070 closed.
+
+**Read S-070's own limitation before treating the numbers as settled.** S-070 says plainly that it
+did not establish whether the loop reproduces on another machine — it is a single-host measurement.
+**Reproduce it yourself and record your own numbers with the date.** If it does not reproduce,
+that is the finding and this seed closes as withdrawn with your reading quoted.
+
+**End state.** Loading the dashboard with a real session issues a bounded number of `GET /auth/me`
+requests, and the screen renders. The bound is a number you name, and a test holds it.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, plus S-070's authenticated project
+(`pnpm test:e2e:auth`).
+
+**Count the requests, do not inspect the dependency array**, per § "A test pins an outcome, not a
+setting". A `useEffect` whose dependencies look right is a setting; the request count is the
+outcome. **Negative control:** the counting test must fail against today's code, and the failing
+reading is a request count in the thousands — quote it and quote the passing count.
+
+**Do not fix this by adding a request cache.** A cache in front of a render loop hides the loop and
+leaves the re-render cost. Find why the effect re-runs.
+
+**Sources.** S-070's report of 2026-08-26 in this file's history and on branch
+`seed/s-070-authenticated-e2e-route`; `web/src/lib/hooks/useAuth` and the `(dashboard)` route group;
+`web/e2e/auth/` for the harness that can reach the screen.
+
+**Out of scope.** The backoffice dashboard, which S-070 covered and which does not loop. The rate
+limiter, which behaved correctly. `/vi/members`' own content.
+
+---
+
+## S-090. Make the backoffice shell survive 200% text scale at 320 px
+
+**Status:** open · **Blocked by:** S-070, which pinned the defect · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. S-070 measured this, could not fix it inside its own fence,
+and pinned it with `test.fail()` so a fix turns the suite red rather than leaving it unrecorded.**
+
+**Measured 2026-08-26 at 320 px with `:root { font-size: 32px }`:** `aside` is `x=0 w=480`, `main`
+is `x=480 w=0`, and the `main h1` is `x=544 w=0`. **The rail is wider than the viewport and the
+content column has no width at all.**
+
+**The trap here is the one this repository has now hit four times, and this is its worst form.**
+`documentElement.scrollWidth === clientWidth === 320` and `overflow-x: visible`, so **the usual "no
+horizontal scroll" assertion passes while every content pixel is off-screen.** Zero-width content
+cannot be scrolled to. S-070 kept that assertion, labelled it as proving almost nothing, and added
+the real one beside it. **Do not delete the weak assertion; it is evidence about the assertion, not
+about the layout.** S-034 and S-042 fixed this shape on `/vi/login` and `/vi/register`, and S-083 hit
+it a third time on the generated clan code.
+
+**End state.** At 320 px and 200% text scale the backoffice content column has a non-zero width and
+its heading is on screen. S-070's `test.fail()` is removed in the same change, because a pinned
+defect that outlives its fix is a false record.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, plus `pnpm test:e2e:auth`.
+
+**Assert the geometry, not the class list**, per § "A test pins an outcome, not a setting".
+`.claude/rules/tailwind.md` § 7 holds the shape and its trap 4 is the `addStyleTag` mechanism.
+**Negative control:** removing your fix must turn the un-pinned assertion red with a `w=0` reading —
+quote it. **A passing `scrollWidth === clientWidth` is not the control here**, for the reason above.
+
+**Sources.** S-070's measurement of 2026-08-26 and its `test.fail()` case, on branch
+`seed/s-070-authenticated-e2e-route`; `web/src/components/backoffice/BackofficeSidebar.tsx`;
+`.claude/rules/tailwind.md` § 7; S-034, S-042, and S-083 in this file for the three prior instances.
+
+**Out of scope.** The rail's colours, which [ADR-046](decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md) decided and S-070 read back correctly under both schemes. Any other screen.
+
+---
+
+## S-091. Connect the login form's labels to its inputs
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a smaller finding seed S-070 reported and did not fix.**
+
+**Read at source 2026-08-26** in `web/src/app/[locale]/(auth)/login/page.tsx`: the `<label>` at `:93`
+and the one at `:105-107` carry **no `htmlFor`**, and the `<input>` at `:94` and the one at `:108`
+carry **no `id`**. So both fields are programmatically unlabelled. A screen reader reaches an
+unnamed edit field, and clicking the label does not focus the input.
+
+**This is the sign-in screen**, which is one of the two routes anything in this repository could
+reach before S-070, so it has been measurable the whole time and was never measured.
+
+**Check the register screen in the same change before deciding scope.** It is built the same way. If
+it has the same defect, say so and fix both, or say plainly why you fixed one. **Do not leave the
+second instance unnamed** — that is the rule S-078 followed for its own pattern.
+
+**End state.** Every input on the sign-in screen has an accessible name that comes from its visible
+label.
+
+**Verification.** The full web gate in `web/CLAUDE.md`.
+
+**Query by accessible name and read what comes back**, per § "A test pins an outcome, not a setting".
+`getByLabelText` is the reading; asserting that an `htmlFor` attribute equals a string pins the
+attribute. **Negative control:** the query must fail against today's code, and quote the failure.
+
+**Sources.** `web/src/app/[locale]/(auth)/login/page.tsx:93,94,105-108`; S-070's report of
+2026-08-26.
+
+**Out of scope.** The register form's fields, which S-082 and S-083 are changing concurrently — **if
+your check finds the same defect there, say so and coordinate rather than editing the same lines.**
+Any other accessibility question on these screens.
+
+---
+
+## S-092. Move the two hardcoded sidebar strings into the message catalogue
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a finding seed S-070 reported and did not fix.**
+
+**Two strings bypass next-intl, and they fail in opposite directions**, both read at source
+2026-08-26:
+
+| File | Line | The string | Why it is wrong |
+|---|---|---|---|
+| `web/src/components/backoffice/BackofficeSidebar.tsx` | 84 | `Sign out`, as a literal child of the button | Hardcoded **English**, so a Vietnamese admin reads English in the rail |
+| `web/src/components/layout/Sidebar.tsx` | 70 | `aria-label={sidebarOpen ? 'Thu gọn' : 'Mở rộng'}` | Hardcoded **Vietnamese**, so an English, Chinese, or French reader gets a Vietnamese accessible name |
+
+**The second is the more interesting one.** It is inside an `aria-label`, which no visual review
+catches, and it is the direction nobody looks for: a hardcoded string in the default locale reads as
+correct on the screen a developer is looking at.
+
+**Four locale files, not two.** `web/messages/` holds `vi`, `en`, `zh`, and `fr`. S-066 brought the
+last two to parity, and both S-083 and S-084 added keys to all four on 2026-08-26. **A key added to
+two of them re-opens the gap S-066 closed.**
+
+**End state.** Neither string is a literal. Both resolve through next-intl, and all four locale
+files carry the keys with real translations rather than copies of the English.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, which includes the message-key parity test.
+
+**Render the component in a non-default locale and read what comes out**, per § "A test pins an
+outcome, not a setting". Asserting that a key exists in a JSON file pins the file. **Read the
+`aria-label` back through the accessible name**, not through the attribute. **Negative control:**
+both readings must fail against today's code, and for the `aria-label` the failing reading is the
+Vietnamese string appearing under an English locale — quote it.
+
+**Sources.** `web/src/components/backoffice/BackofficeSidebar.tsx:84`;
+`web/src/components/layout/Sidebar.tsx:70`; S-070's report of 2026-08-26; S-066 in this file for
+locale parity.
+
+**Out of scope.** Any other hardcoded string. **If you grep and find more, do not fix them here —
+report the count and let it be its own seed**, because a sweep and a two-line fix are different
+sizes.
+
+---
+
+## S-093. Route a clanless mobile user to onboarding rather than a screen that says they applied
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a finding seed S-085 made at source and did not fix,
+because `mobile/` was outside its fence.** This is the **first mobile seed** in this tracker. It is
+actionable today because it is a defect in code that exists, not a milestone plan: the
+[Owed](#owed-with-an-owner-and-a-trigger) row about mobile M1 to M4 still stands and is untouched by
+this seed.
+
+**Two domain predicates are written correctly and wired to nothing.** Read at source 2026-08-26 in
+`mobile/lib/domain/auth/user_profile.dart`:
+
+- `:26` `needsPendingScreen => !isApproved && hasPendingMembership`
+- `:29-30` `needsOnboarding => !isApproved && !hasPendingMembership && clanId == null`
+
+**`grep -rn "needsOnboarding\|needsPendingScreen" mobile/lib` returns those two declarations and
+nothing else.** Counted 2026-08-26. Neither is called.
+
+**What the router does instead is flatten both into one boolean.** `mobile/lib/app/app.dart:37`
+sets `hasApprovedMembership: profile?.isApproved ?? true`, and
+`mobile/lib/app/router/app_router.dart:74` gates on `if (!auth.hasApprovedMembership)` and sends the
+user to `Routes.pending`. **So the two states the domain layer distinguishes reach the same screen.**
+
+**And that screen tells the user something untrue.** `mobile/lib/core/l10n/app_en.arb:207` is
+`"pendingApprovalBody": "Your join request is waiting for a clan admin to approve it."` A person who
+made no join request is told their request is waiting.
+
+**Why this is worth a seed now, when it was not before.** The state was unreachable through
+registration until 2026-08-26: `clan_action` was required, so every account had a clan from the
+moment it existed. [ADR-058](decisions/058-registration-may-name-no-clan.md) made a clanless account
+possible, which makes this path reachable. **The defect is older than the ADR; the reachability is
+new.** Say it that way when you close it rather than calling it a regression.
+
+**The web client already resolves this and is the reference, not a thing to copy blindly.**
+`web/src/application/auth/use-cases/auth-context.ts:95` computes `needsOnboarding` separately from
+`isPendingApproval` one line above it, and
+`web/src/components/auth/PendingApprovalScreen.tsx:11-15` records a deliberate divergence from the
+spec. **Read that comment before deciding mobile's shape**, because the divergence may or may not
+apply here.
+
+**Spec § 7.2a already decided what the screen is**, at
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:925-927`: no membership at all is
+*"onboarding variant of this screen with the join/create segmented control from 7.1b"* — a variant of
+the pending screen, **not a fourth screen**. So this is one predicate and one copy branch, not a new
+route.
+
+**One thing this seed does not get to assume.** Mobile has **no register screen**:
+`mobile/lib/features/auth/presentation/` holds `login_page`, `verify_email_page`,
+`pending_approval_page`, `blocked_page`, and `message_page` only, listed 2026-08-26. So the join and
+create controls spec § 7.2a names do not exist to route to. **Decide what the onboarding variant says
+when it cannot yet offer the action**, and say plainly that it is a partial state rather than
+drawing a control that does nothing.
+
+**End state.** A clanless mobile user reaches a screen whose copy is true for them, chosen by
+`needsOnboarding` rather than by the flattened boolean. `needsPendingScreen` is either used or
+deleted — **a predicate that survives unused is the next reader's trap**, and this seed found two.
+
+**Verification.** The mobile full quality gate, `CLAUDE.md:80`.
+
+**Drive the router and read which route comes back**, per § "A test pins an outcome, not a setting".
+Asserting that `needsOnboarding` returns `true` for a constructed profile pins the getter — which is
+exactly the half that already worked for 23 days while the router ignored it. **Three readings, each
+the router's output:** a clanless profile, a pending profile, and an approved profile must reach
+three distinguishable destinations. **Negative control:** the clanless case must fail against today's
+code by landing on `Routes.pending`, and quote that reading.
+
+**Read the mobile paint rule before writing the widget test.** `.claude/rules/seeds.md` § "A test
+pins an outcome, not a setting" records that `mobile/test/core/theme/theme_test.dart` asserted
+`dividerTheme.thickness == 0` under the name "dividers have no thickness" and stayed green for 19
+days while being wrong. Do not repeat the shape.
+
+**Sources.** `mobile/lib/domain/auth/user_profile.dart:26,29-30`; `mobile/lib/app/app.dart:37`;
+`mobile/lib/app/router/app_router.dart:74`; `mobile/lib/core/l10n/app_en.arb:207`;
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:925-927`;
+`web/src/application/auth/use-cases/auth-context.ts:95`;
+`web/src/components/auth/PendingApprovalScreen.tsx:11-15`;
+[ADR-058](decisions/058-registration-may-name-no-clan.md) § 2 for the reachability change; seed
+S-085's report of 2026-08-26.
+
+**Out of scope.** Building mobile's register screen, which does not exist and is a milestone
+question, not this defect. Mobile M1 to M4, which stay an `Owed` row. Anything on a device — this is
+verifiable in the widget tester, and the Task 20 row still owns the device walk. The web client,
+which already distinguishes the two states.
+
+---
+
+## S-094. Make two web e2e runs in two worktrees unable to measure each other
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. Found by the agent verifying the composed integration tree,
+which hit it against a concurrently running seed and correctly discarded two of its own runs as
+evidence.** This is the web analogue of the `TEST_PG_DB_NAME` trap that ADR-016 closed for the
+backend, and **nothing closes it for web.**
+
+**The mechanism, read at source 2026-08-26 in `web/playwright.config.ts`. There are two servers,
+not one, and that is the half a first reading misses:**
+
+- `:3` `const PORT = 3100`, a literal.
+- `:37` `export const BANNER_PORT = 3101`, a literal. It exists because S-042 needed a server with
+  genuinely no Supabase environment, and the comment at `:83-84` says why it cannot be folded into
+  the first.
+- **Both** `:80` and `:89` set `reuseExistingServer: !process.env.CI`, which is **true** locally.
+
+**So a reading attributed on 3100 alone is still unattributed.** The coordinator's first warning to
+three agents named only 3100; the S-091 agent found the second server and corrected it. Attribution
+takes both ports, and `lsof -a -p <pid> -d cwd` per listener.
+
+**So when two agents run `pnpm test:e2e` in two worktrees, the second silently attaches to the
+first's dev server**, and its specs run against the other worktree's application.
+
+**This is worse than the Postgres case, and that is the whole reason it is a seed.** The
+`TEST_PG_DB_NAME` collision produced obvious carnage: `DROP DATABASE … WITH (FORCE)` terminated the
+other run's connections and 182 tests failed at once. Nobody could mistake it for a pass. **A port
+collision can come back green** while measuring code from another branch. A silent wrong pass is not
+a louder version of a failure; it is a different defect.
+
+**It was then measured a second time, deliberately, and one run is direct proof.** The S-091 agent
+took three e2e runs and could only stand behind one:
+
+| Run | Attribution | Result | Usable |
+|---|---|---|---|
+| first | not checked | 58 passed | **no**, discarded rather than explained |
+| second | 3100 resolved to PID 56091, cwd `.../worktrees/s-082-web/web` | 48 passed, 10 failed | **no**. It measured **another seed's code**, then hit `ERR_CONNECTION_REFUSED` on both `3100/vi/login` and `3101/vi/login` when that worktree's servers shut down |
+| third | 3100 **and** 3101 both resolved to its own worktree | 58 passed | **yes** |
+
+**That second run is the defect caught in the act**: one seed's specs, another seed's application, and
+a result that was 48 green before it broke. Had the other worktree not restarted, it would have
+reported a pass.
+
+**The first instance, found the same day.** The verifying agent's first two runs failed with
+`net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3100` across most specs, plus `fonts.spec.ts`
+reporting the heading face as `"status": "error"`. `ps` showed another agent running `pnpm test:e2e`
+in `.claude/worktrees/s-082-web` holding 3100 and 3101. It waited for both ports to clear, re-ran,
+and **verified mid-run that the process listening on 3100 resolved to its own worktree** before
+quoting a reading. That last step is the workaround this seed exists to remove.
+
+**This contains a decision.** The options are not equal:
+
+- **Derive the port from the worktree.** A hash of the directory name, or an env var the harness
+  sets. Removes the collision. Costs: `BANNER_BASE_URL` is exported and used by specs, and
+  `web/e2e/` may hold other absolute references — find them all before choosing.
+- **Make a busy port an error instead of a reuse**, by setting `reuseExistingServer: false`. Loud
+  rather than silent, which is the correct direction, but it makes two concurrent runs impossible
+  rather than safe. **Read why `reuseExistingServer` is true before removing it**: a developer
+  re-running one spec against an already-running dev server is a real workflow and this would end
+  it.
+- **Both**, which is probably right, and is why the decision is worth writing down rather than
+  guessing.
+
+**Whatever you choose, a collision must be impossible to mistake for a pass.** That is the end
+state's real requirement.
+
+**There is an interim mitigation, and it should be in `web/CLAUDE.md` whoever closes this.** Running
+`CI=1 pnpm test:e2e` makes `reuseExistingServer` false on **both** webServer entries, so attaching
+becomes impossible rather than merely unlikely. The S-082 agent used it to produce the one attributed
+reading it quoted. **That is a workaround, not this seed's end state**, because it depends on every
+agent remembering it.
+
+**One coordination hazard, reported by the agent that caused it.** On hitting `EADDRINUSE` the S-082
+agent ran `pkill -f "next dev"` and later `pkill -f playwright`, which **kills every worktree's
+servers, not its own**. It named that as the likely cause of the `ERR_CONNECTION_REFUSED` the S-091
+agent saw mid-run. Whoever closes this seed should make the failure mode not require a `pkill` at
+all; until then, **do not broad-`pkill` a dev server you did not start.**
+
+**End state.** Two `pnpm test:e2e` runs in two different worktrees either both succeed against their
+own code, or the second fails with a message naming the collision. Neither may report green while
+serving the other's application. `web/CLAUDE.md` records how it works, the way
+`backend/CLAUDE.md` records `TEST_PG_DB_NAME`.
+
+**Verification.** The full web gate in `web/CLAUDE.md`.
+
+**The control is the point, and it is a two-worktree control.** A single-worktree run proves nothing
+here. **Start a run in one worktree, start a second in another, and read what the second does.**
+Then plant the failure that matters: make the two worktrees' applications **differ** in a way one
+spec asserts, and confirm the second run cannot pass against the first's server. **Quote both
+readings.** Per § "A test pins an outcome, not a setting": asserting that the port variable is no
+longer a literal pins the variable.
+
+**Sources.** `web/playwright.config.ts:3,37,80`; the verifying agent's measurement of 2026-08-26,
+recorded in this seed; `.claude/rules/seeds.md` § "Running more than one agent at a time" for the
+backend precedent; ADR-016 for `TEST_PG_DB_NAME`.
+
+**Out of scope.** The backend harness, which already has its answer. CI, where `process.env.CI` makes
+`reuseExistingServer` false already, so the defect does not exist there — **say that when you close
+this, because it explains why CI never caught it.** Any test's content.
+
+---
+
+## S-095. Decide what the remaining hardcoded web strings are, then sweep the ones that are copy
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from the count seed S-092 was told to report and not fix.**
+S-092's fence was deliberate: a sweep and a two-line fix are different sizes.
+
+**Fifteen lines, found by two greps over `web/src/**/*.tsx` excluding tests, on 2026-08-26.**
+**Treat fifteen as a floor and say so.** Two greps are not a proof of completeness, and S-092 said
+that about its own measurement rather than presenting the number as final. **Re-run a wider search
+before you scope the work**, and report what your search found rather than starting from this list.
+
+**The list splits in two, and the split is the decision this seed carries.**
+
+**Seven are plain translatable prose:**
+
+| File | Line | String |
+|---|---|---|
+| `web/src/app/[locale]/select-clan/page.tsx` | 115 | `Choose your clan` |
+| `web/src/components/layout/Header.tsx` | 29 | `Clan` |
+| `web/src/components/layout/Header.tsx` | 46 | `Select clan` |
+| `web/src/components/layout/Header.tsx` | 86 | `Clan` |
+| `web/src/components/layout/LocaleSwitcher.tsx` | 39 | `aria-label="Select language"` |
+| `web/src/components/layout/Sidebar.tsx` | 65 | `Gia Phả` |
+| `web/src/components/layout/Sidebar.tsx` | 79 | `Dòng họ` |
+
+**Note the two directions again**, which is the same shape S-092 found: five are hardcoded English
+and two are hardcoded Vietnamese, in the file S-092 already edited. `LocaleSwitcher.tsx:39` is an
+`aria-label`, so no visual review catches it — **and it is on the control a person uses to change
+locale**, which is the worst place for a string that does not.
+
+**Eight may not want a key at all, and deciding that is the work:**
+
+| File | Line | String | Why it is a question |
+|---|---|---|---|
+| `web/src/app/[locale]/(auth)/login/page.tsx` | 56, 58 | `Family`, `Roots` | A brand wordmark. S-034 split it across two elements with a `<wbr>` to survive 200% text scale, so it is **markup**, not a sentence |
+| `web/src/app/[locale]/(auth)/register/page.tsx` | 128, 130 | `Family`, `Roots` | Same |
+| `web/src/components/backoffice/BackofficeSidebar.tsx` | 53 | `FamilyRoots` | Same wordmark, unsplit |
+| `web/src/features/persons/ui/HistoricalDateField.tsx` | 119, 140 | `placeholder="1750"`, `placeholder="3"` | Example values. A year and a `đời` number are not English |
+
+**A brand name is not a translation defect, and neither is a numeral.** Decide whether the wordmark
+stays literal, and **write the reason down**, because the next person running this grep will find the
+same eight lines and needs to know they were considered rather than missed. If the answer is that
+they stay, the honest end state is a comment or a lint exclusion, not silence.
+
+**One line from S-092's list is deliberately absent here.** `placeholder="UUID"` at
+`register/page.tsx:246` is being deleted by **S-082**, per
+[ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md) § 2. Do not re-add it as a
+message key.
+
+**Four locale files, not two.** `web/messages/` holds `vi`, `en`, `zh`, and `fr`. S-066 brought the
+last two to parity and every seed since has held it. **Real translations, not copies of the
+English** — a `zh` file carrying the English word is parity on paper and a defect on screen.
+
+**End state.** Every string this seed classes as copy resolves through next-intl in all four locale
+files. Every string it classes as not-copy is recorded as such, with the reason, where the next
+grep-runner will find it.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. **Read S-094 first**: two `pnpm test:e2e`
+runs in two worktrees can silently measure each other, so resolve the process listening on the e2e
+port to your own worktree before quoting a reading, or say plainly that you did not.
+
+**Render in a non-default locale and read the accessible name**, per § "A test pins an outcome, not
+a setting". S-092 is the model to copy, and two of its choices are worth repeating: it read every
+value through `toHaveAccessibleName` rather than through the `aria-label` attribute, and it wrapped
+the expected value in a helper that **throws on a missing key**, because `toHaveAccessibleName(undefined)`
+degrades to "has some name" — which the hardcoded Vietnamese string would have passed.
+**Negative control:** for each string you move, the failing reading is the old literal appearing
+under a locale that should not show it. Quote them.
+
+**Consider reusing a key before adding one.** S-092 chose `auth.logout`, which already had three
+callers, over a new `Backoffice.sign_out`, on the grounds that a fourth spelling of one sentence is a
+second place to drift. `Header.tsx:29` and `:86` are both the bare word `Clan`, which is the same
+situation.
+
+**Sources.** S-092's report of 2026-08-26 and its two greps; `web/CLAUDE.md` for the next-intl rule;
+S-066 in this file for locale parity; S-034 for why the wordmark is split markup; S-092's own commit
+`0d2cf15` for the pattern to follow.
+
+**Out of scope.** `login/page.tsx` and `register/page.tsx` while S-082 holds them — **check the
+tracker before editing either**. Anything under `web/messages/` beyond the keys you add. Mobile,
+which has its own catalogue and its own rule.
+
+---
+
+## S-096. Connect the register form's six label and input pairs
+
+**Status:** blocked · **Blocked by:** S-082, which holds the file · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. Seed S-091 was told to read this file and not edit it, and
+it did exactly that**, because S-082 and S-083 were changing those lines concurrently.
+
+**Six label and input pairs carry no association.** Read at source 2026-08-26 in
+`web/src/app/[locale]/(auth)/register/page.tsx`, and `grep -c "htmlFor\|id=" ` over that file
+returns **0**:
+
+| Lines | Field |
+|---|---|
+| 174-179 | `full_name` |
+| 186-189 | `email` |
+| 200-211 | `password` |
+| 239-248 | `clan_slug`, the join branch |
+| 253-261 | `clan_name` |
+| 263-272 | `clan_slug`, the create branch |
+
+**Two pairs on this screen are already correct, and S-091 corrected its own brief to say so.** The
+radio inputs at `:217-234` wrap the `<input>` **inside** the `<label>`, which labels them
+implicitly. So the count is six, not eight. **Do not "fix" the radios.** A brief that says a screen
+is "built the same way" as another is a claim to check, not a fact — this is the instance that proves
+it.
+
+**Line numbers here will be wrong by the time you read them.** S-083 already moved this file once,
+and S-082 is moving the join branch now. **Re-read the file. Do not trust this table's coordinates**,
+which is the same defect the merge repair at `e2ae368` had to fix across six citations.
+
+**End state.** Every input on the register screen has an accessible name that comes from its visible
+label, and clicking a visible label moves focus into its input. Ids are prefixed so they cannot
+collide with another screen's fields — S-091 used `login-`, so use `register-`.
+
+**Verification.** The full web gate in `web/CLAUDE.md`. **Read S-094 before quoting any e2e
+reading**: two runs in two worktrees can silently measure each other, and attribution takes **both**
+ports, 3100 and 3101.
+
+**Read a name, never an attribute**, per § "A test pins an outcome, not a setting". S-091 is the
+model and its three cases are the shape to copy: `getByLabelText` resolves the label to the control
+it labels; `toHaveAccessibleName()` runs the accessible-name computation over every input in the
+form; and clicking the visible label then reading `document.activeElement` covers the other half of
+the defect. **Negative control:** each must fail against the code as you find it. S-091's failing
+reading was a thrown query error, `"Found a label with the text of: Email, however no form control
+was found associated to that label"`, and its passing reading was a resolved element — **two
+different kinds of reading, which is why it is a real control** and not S-001's same-value trap.
+
+**One limitation S-091 stated and you inherit.** These assertions run in jsdom via
+`dom-accessibility-api`, which is not a real accessibility tree and not a screen reader. It is strong
+evidence the `for`/`id` pairing is correct. It is **not** the same measurement as VoiceOver
+announcing the field, and **no harness in this repository can make that reading today.** Say so
+rather than implying the screen was tested with assistive technology.
+
+**Sources.** `web/src/app/[locale]/(auth)/register/page.tsx:174-179,186-189,200-211,217-234,239-248,253-261,263-272`,
+read on branch `seed/s-091-login-form-labels` at `1a387c0`; S-091's report and commit `a1f4689` for
+the pattern and the control; `docs/SEEDS.md` S-091 for the login instance.
+
+**Out of scope.** The login screen, which S-091 closed. Any other accessibility question on this
+screen. The fields' behaviour, copy, or validation, which are S-082 and S-083.
+
+---
+
 ## Owed, with an owner and a trigger
 
 **This is a register and not a seed list.** A row here is an item that is owed, has an owner, and has
@@ -7355,6 +7936,31 @@ been read or run, and the row that replaces it says where.
   nonzero.** Do not cite this as a defect. Measure it first, then open a seed if the reading is real.
   **This is the opposite failure mode from S-078's**, which was a hard 500 rather than a quiet
   divergence, so a reader who finds this row while reading that fix should not merge the two.
+- **~~`api-types-fresh` cannot pass in CI.~~ Established and then closed the same day, and recorded
+  because the cause is a trap that will recur.** Found 2026-08-26 by seed S-082: the committed
+  `web/src/generated/api-types.ts` had been **prettier-formatted**, while `pnpm gen:api` emits
+  four-space indent and double quotes. `278fe69` ("run pnpm format over the 99-file pre-existing
+  Prettier drift", S-028) rewrote all 10080 lines of it, and `38f0b25` added `src/generated/` to
+  `web/.prettierignore` **afterwards** — confirmed by `git merge-base --is-ancestor 278fe69 38f0b25`,
+  which returns true. So `.github/workflows/web-ci.yml`'s `git diff --exit-code src/generated` could
+  not pass between those two commits **regardless of `clan_code`**, and the `clan_code` staleness
+  everyone was looking at was the second of two problems. S-082's regeneration restored the
+  generator's own formatting, so the diff is empty now. `format:check` was never affected, because
+  the path is ignored. **The trap to remember: a formatter sweep that runs before its ignore file
+  lands leaves a generated artifact permanently at odds with its generator, and no local gate can
+  see it.**
+- **Which of 2026-08-26's web e2e readings measured their own worktree.** Seeds S-070, S-083, S-084,
+  S-091, and S-092 all ran `pnpm test:e2e` while other agents were running it too, and S-094 above
+  establishes that a second run **silently attaches to the first's dev server** rather than failing.
+  Only two readings from that day are attributed: the integration tree's `92 passed`, where the
+  agent resolved the listening process to its own worktree mid-run, and that same agent's two
+  discarded runs. **Every other e2e count from 2026-08-26 is unattributed.** The specs were each
+  worktree's own, and the per-seed counts differ from one another, which is consistent with each
+  running its own suite — but **which application answered those requests is not established**, and
+  a collision can pass as easily as fail. Do not cite any of those counts as evidence that a change
+  works. The component and unit readings in the same reports are unaffected, because they run no
+  server. This row leaves the register when S-094 lands and the affected seeds' gates are re-run
+  under it.
 - **Mobile M0 does not work on a device, and nothing here says it does.** The app compiles and CI
   builds `app-debug.apk`, so it assembles. Whether a user can sign in to real Supabase from a real
   phone is unknown, for the reasons in the Task 20 row above. Everything mobile is verified against
