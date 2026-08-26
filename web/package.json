@@ -21,6 +21,7 @@
     "test:component": "vitest run --project component",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:auth": "E2E_AUTH_STACK=1 playwright test --project=auth-chromium",
     "test:watch": "vitest --project unit",
     "gen:api": "node scripts/generate-api-types.mjs",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
