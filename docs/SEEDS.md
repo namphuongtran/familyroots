@@ -7229,13 +7229,15 @@ a trigger that is **not met**. It carries no end state and no verification, beca
 actionable. When a trigger is met, the row becomes one or more seeds above and **the row is deleted
 in the same change**. A second place recording completion is a second place to be wrong.
 
-**Twelve rows, re-counted 2026-08-22** by
+**Fourteen rows, re-counted 2026-08-26** by
 `awk '/^## Owed/,/^## Not verified/' docs/SEEDS.md | grep '^| ' | grep -v '^| Item' | wc -l`.
 **Re-count it that way rather than adjusting the figure by memory**, which is the same rule the four
 seed counts in this file's header run under.
 
-It read "Thirteen rows, counted 2026-08-13" until 2026-08-22, and three rows left between those
-dates, each because its trigger was met and each deleted in the change that created its seed: the
+It read "Twelve rows, re-counted 2026-08-22" until 2026-08-26, when **two rows arrived** rather
+than left: both were found by seed S-079 while it built the argv guard, and both are recorded with
+the date they were read at source. It read "Thirteen rows, counted 2026-08-13" until 2026-08-22, and
+three rows left between those dates, each because its trigger was met and each deleted in the change that created its seed: the
 `pending_approval_page.dart` citation became **S-047**, field-level visibility became **S-053**, and
 edge cascade-delete became **S-054**, **S-055**, and **S-056**. That is the rule working — a row
 never lives in both places.
@@ -7254,6 +7256,8 @@ never lives in both places.
 | A notifications API. None exists, and the design spec refuses to draw a bell for one. No copy anywhere promises a notification, because none exists for any queue event | backend-engineer | Whenever a queue event needs to reach a user outside the app |
 | PDF export. Deferred by ADR-020 and depends on the export worker ADR-005 describes and the Redis events ADR-004 describes, neither of which is built. `scripts/export_tree_pdf.py` is a stub that raises `NotImplementedError` | backend-engineer | The worker exists |
 | **Subset the two typefaces to woff2 and cut the font payload.** The production build emits both `.ttf` files whole, 176 KB plus 165 KB, measured in `.next/static/media/` on 2026-08-13. `next/font/local` neither subsets nor converts. Vietnamese needs a wide Latin range, so this is a subset rather than a Latin-only cut. **It is a register row and not a seed because it contains a decision**: a converted file cannot be hash-compared to `mobile/assets/fonts/`, so `web/src/app/fonts/fonts-in-sync-with-mobile.test.ts` needs a different anti-drift mechanism first, and choosing one is the work. Do not convert the files and delete the test | web-engineer | A Web Vitals or bundle measurement that names the font payload, or the first performance pass before launch. Nothing has measured it on a real connection yet |
+| **Scope a guard over destructive tooling that is not a PostgreSQL client.** `scripts/supabase_local.sh:100` runs `supa stop --no-backup`, and the script's own comment at `:98-99` says it "DELETES the Supabase database. Every auth.users row goes with it". Read at source 2026-08-26. `supa` is a shell function defined at `:30` wrapping `npx supabase`, so **no guard in this tree sees it**: S-069 reads `.sql` files, S-077 reads what a `psql` invocation executes, and S-079 matches PostgreSQL client argv. It is local-only, it sits behind an explicit `destroy` subcommand, and it is deliberate, but it is the largest destructive database call nothing reads. **It is a register row and not a seed because it contains a decision**: a rule over arbitrary third-party tooling has no closed binary list to check against, unlike the twelve-binary Postgres client image S-079 measured, and choosing that scope is the work | backend-engineer | The next seed that opens the script-guard surface, or the first time a destructive non-Postgres call appears outside a named subcommand |
+| **Repair one stale citation in S-077's own guard docstring.** `backend/tests/unit/test_inline_sql_in_scripts_is_sanctioned.py:306` area: the docstring says `scripts/seed_dev_data.py` "is a `NotImplementedError` stub". Measured 2026-08-26: the file is 834 lines and `grep -c NotImplementedError` returns **0**. **The conclusion S-077 drew from it still holds**, verified separately the same day — `grep -nE "subprocess|os\.system|createuser|dropdb|createdb|pg_restore|psql" scripts/*.py` returns nothing, so no Python script calls a Postgres CLI. Only the reason given is wrong. S-079 found it and correctly declined to edit a file outside its fence | backend-engineer | Any seed that edits that guard module. It is one line and there is no reason to open a pull request for it alone |
 
 **One citation defect is left alone on purpose. The other became S-047 on 2026-08-22, when its
 trigger was met**, and its row was deleted in the same change, as the Maintenance rule requires.
@@ -7271,6 +7275,18 @@ trigger was met**, and its row was deleted in the same change, as the Maintenanc
 **None may be cited as fact until read at source.** A claim leaves this register when something has
 been read or run, and the row that replaces it says where.
 
+- **Whether the four other PATCH routes report an `updated_at` that differs from the stored row.**
+  Found 2026-08-26 by seed S-078 while fixing `PATCH /clans/me`, **read at source and not measured**,
+  which is why it is here rather than a seed. The shape: `person`, `branch`, `event`, and
+  `relationship` all serialize the **domain entity**, which sets its own `updated_at` in Python
+  (`backend/app/domain/person/entity.py:191` and the equivalents), while the ORM column carries
+  `onupdate=func.now()` (`backend/app/models/base.py:34-39`) and writes a database-side value to the
+  row. `backend/app/infrastructure/persistence/event_repository.py:222` is the one place that writes
+  the entity's own value across explicitly. **So a response's `updated_at` may differ from the
+  stored one by the flush latency, and nobody has measured the difference or established that it is
+  nonzero.** Do not cite this as a defect. Measure it first, then open a seed if the reading is real.
+  **This is the opposite failure mode from S-078's**, which was a hard 500 rather than a quiet
+  divergence, so a reader who finds this row while reading that fix should not merge the two.
 - **Mobile M0 does not work on a device, and nothing here says it does.** The app compiles and CI
   builds `app-debug.apk`, so it assembles. Whether a user can sign in to real Supabase from a real
   phone is unknown, for the reasons in the Task 20 row above. Everything mobile is verified against
