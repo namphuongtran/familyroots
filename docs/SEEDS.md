@@ -6508,6 +6508,8 @@ leaves with its own slice.
 
 ## S-028. Clear the 112-file prettier drift in one sweep
 
+**The title says 112 and the commit that closed it says 99.** Read 2026-08-26: `278fe69` is "chore(web): run pnpm format over the 99-file pre-existing Prettier drift (S-028)", and `web/CLAUDE.md` also says 99. Two agents working on 2026-08-26 each stopped to reconcile the two figures. **The commit and `web/CLAUDE.md` agree, so 99 is the measured number and this title's 112 is the stale one.** The title is left as written because it is what the seed was opened as; this note is the correction.
+
 **Status:** done, 2026-08-22 · **Blocked by:** none · **Unblocks:** nothing yet
 
 **Closed 2026-08-22. The count in this seed's title is wrong and is kept, because a seed title is
@@ -6986,10 +6988,23 @@ with the field, and drive a `clan_not_found` response and assert the message ren
 field**. A test that asserts a message key exists in a JSON file pins the file, not the screen.
 **Negative control:** both must fail against today's code.
 
-**Check it at 200% text scale and 320 px before claiming done.** The helper text contains a hyphen
-and no other break opportunity, and this is the third field on this exact page to hit that defect:
-S-034 on the wordmark and S-042 on the setup banner. `.claude/rules/tailwind.md` § 7 holds the
-shape. **Say what you measured, or say plainly that you did not.**
+**Check it at 200% text scale and 320 px before claiming done.** `.claude/rules/tailwind.md` § 7
+holds the shape. **Say what you measured, or say plainly that you did not.**
+
+**This seed's own premise here was wrong, and the agent that closed it withdrew the claim rather
+than dressing a class as a fix.** The seed said the helper text "contains a hyphen and no other
+break opportunity", and called this the third instance of the overflow shape after S-034's wordmark
+and S-042's banner. Measured 2026-08-26 at 320 px with `:root { font-size: 32px }`: page
+`scrollWidth` 320 against `clientWidth` 320, helper paragraph 158/158, error paragraph 158/158. The
+agent built the field with `wrap-anywhere`, then **removed the class and re-measured: every number
+identical**, with only `overflowWrap` moving `anywhere` → `normal`. **A control that reads the same
+either way is not a control** (§ "A test pins an outcome, not a setting", question 2), so it deleted
+the class instead of keeping a claim nothing supported. Two reasons it does not overflow: **a hyphen
+is itself a break opportunity** under `overflow-wrap: normal`, so `nguyen-huu-thanh-oai` wraps
+without help; and a 100-character code stays inside the `<input>`, which scrolls internally, 1604 px
+in a 156 px box, without widening the page. **S-083's case is different and its `wrap-anywhere` is
+earned**, because its suggestion button echoes the code back as text. The three T-04 cases stay,
+because T-04 is the requirement.
 
 **Sources.** `web/src/app/[locale]/(auth)/register/page.tsx:81,91,237-249`;
 `web/messages/en.json:184-185`; `web/messages/vi.json:184-185`;
@@ -7673,6 +7688,18 @@ quoting a reading. That last step is the workaround this seed exists to remove.
 **Whatever you choose, a collision must be impossible to mistake for a pass.** That is the end
 state's real requirement.
 
+**There is an interim mitigation, and it should be in `web/CLAUDE.md` whoever closes this.** Running
+`CI=1 pnpm test:e2e` makes `reuseExistingServer` false on **both** webServer entries, so attaching
+becomes impossible rather than merely unlikely. The S-082 agent used it to produce the one attributed
+reading it quoted. **That is a workaround, not this seed's end state**, because it depends on every
+agent remembering it.
+
+**One coordination hazard, reported by the agent that caused it.** On hitting `EADDRINUSE` the S-082
+agent ran `pkill -f "next dev"` and later `pkill -f playwright`, which **kills every worktree's
+servers, not its own**. It named that as the likely cause of the `ERR_CONNECTION_REFUSED` the S-091
+agent saw mid-run. Whoever closes this seed should make the failure mode not require a `pkill` at
+all; until then, **do not broad-`pkill` a dev server you did not start.**
+
 **End state.** Two `pnpm test:e2e` runs in two different worktrees either both succeed against their
 own code, or the second fails with a message naming the collision. Neither may report green while
 serving the other's application. `web/CLAUDE.md` records how it works, the way
@@ -7909,6 +7936,19 @@ been read or run, and the row that replaces it says where.
   nonzero.** Do not cite this as a defect. Measure it first, then open a seed if the reading is real.
   **This is the opposite failure mode from S-078's**, which was a hard 500 rather than a quiet
   divergence, so a reader who finds this row while reading that fix should not merge the two.
+- **~~`api-types-fresh` cannot pass in CI.~~ Established and then closed the same day, and recorded
+  because the cause is a trap that will recur.** Found 2026-08-26 by seed S-082: the committed
+  `web/src/generated/api-types.ts` had been **prettier-formatted**, while `pnpm gen:api` emits
+  four-space indent and double quotes. `278fe69` ("run pnpm format over the 99-file pre-existing
+  Prettier drift", S-028) rewrote all 10080 lines of it, and `38f0b25` added `src/generated/` to
+  `web/.prettierignore` **afterwards** — confirmed by `git merge-base --is-ancestor 278fe69 38f0b25`,
+  which returns true. So `.github/workflows/web-ci.yml`'s `git diff --exit-code src/generated` could
+  not pass between those two commits **regardless of `clan_code`**, and the `clan_code` staleness
+  everyone was looking at was the second of two problems. S-082's regeneration restored the
+  generator's own formatting, so the diff is empty now. `format:check` was never affected, because
+  the path is ignored. **The trap to remember: a formatter sweep that runs before its ignore file
+  lands leaves a generated artifact permanently at odds with its generator, and no local gate can
+  see it.**
 - **Which of 2026-08-26's web e2e readings measured their own worktree.** Seeds S-070, S-083, S-084,
   S-091, and S-092 all ran `pnpm test:e2e` while other agents were running it too, and S-094 above
   establishes that a second run **silently attaches to the first's dev server** rather than failing.
