@@ -28,7 +28,9 @@ Core operations:
 
 Request/response expectations:
 - Bearer JWT is required after login.
-- Register can either join an existing clan or create a new clan.
+- Register can join an existing clan, create a new clan, or **name no clan at
+  all**. `clan_action` is **optional** on `POST /register` and **required** on
+  `POST /onboard`. See "Registering with no clan" below.
 - `clan_code` (register + onboard, `clan_action=join`) names the clan to join.
   It is the clan's **slug**, not its UUID, and it must match the same
   `^[a-z0-9]+(-[a-z0-9]+)*$` pattern, max 100 chars; anything else is a 422
@@ -143,6 +145,62 @@ above that mention `clan_id`, and the two tests named for it in
 itself is **not** changed here: that message is shared with clan detail and the
 platform-admin routes, and the inline register-field wording spec § 7.1b asks for
 belongs to the web form (seed S-082).
+
+### Registering with no clan
+
+**Decided by seed S-085 on 2026-08-26**, and recorded in
+[ADR-058](../decisions/058-registration-may-name-no-clan.md). This section extends "The
+join identifier" above rather than replacing any of it: everything that section says
+about `clan_code`, `clan_id`, and the deprecation window still holds whenever
+`clan_action` is present.
+
+**`clan_action` is optional on `POST /register` and required on `POST /onboard`.**
+
+| Request to `POST /register` | Result |
+|---|---|
+| `clan_action` absent, no clan field either | **201.** An account is created with **no clan membership**. This is the supported invitee form |
+| `clan_action` absent, but `clan_code`, `clan_id`, `clan_name` or `clan_slug` present | 422 `validation_error`. `detail.fields` contains `body`. Never silently treated as clanless |
+| `clan_action=join` or `clan_action=create` | Exactly as "The join identifier" above. Nothing changed |
+
+The 201 body is the same non-enumerating `{"data": {"message": ...}}` as every other
+register outcome, and the verification email is still sent. **No error code was added to
+this route**, which is deliberate: the register surface is non-enumerating (ADR-021) and a
+new code is the easiest way to leak whether an email is registered. The "clan named
+without an action" rule therefore lives in `RegisterRequest` itself, where it runs before
+the route body and cannot consult the identity provider at all.
+
+**Why the route needs this at all.** `POST /invitations/{token}/accept` requires an
+authenticated caller — `Auth | Yes` at
+[rest-invitations-api.md](rest-invitations-api.md):62, and the route declares
+`Depends(get_current_user)` at `backend/app/api/v1/invitations.py:95-99`. An invited
+person holds a token, has no clan code to type and no clan to found, and so had no way to
+create the account that accept then requires them to hold. ADR-057 recorded that finding;
+this closes it. The order a client should implement is: **register (no clan) → verify
+email → login → accept**.
+
+**What a clanless account looks like at login.** `POST /login` returns the ordinary
+envelope with the membership fields empty:
+
+```json
+{ "data": { "access_token": "...", "refresh_token": "...", "expires_in": 3600,
+  "user": { "clan_id": null, "role": null, "is_approved": false,
+            "has_pending_membership": false, "...": "..." } } }
+```
+
+That triple — `clan_id` null, `is_approved` false, `has_pending_membership` false — is the
+exact condition spec § 7.1b's sibling section § 7.2a uses to select its **onboarding
+variant** (`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:925-927`). It
+is **not** the pending-approval state, which requires `has_pending_membership: true`. A
+client must not tell a clanless user that a join request is being reviewed.
+
+**`POST /onboard` is unchanged and still requires `clan_action`.** Its response
+`RegisterResponse` types `clan_id` as non-optional, so it has no way to answer for an
+account with no clan, and the route exists only to attach an already-authenticated user to
+one. ADR-058 § 3 holds the reasoning. An invitee never calls it.
+
+**The invitation token is not accepted by `POST /register`.** ADR-058 § 4 and § 5 record
+why, including the four objections to granting the membership during sign-up and the reason
+accept cannot create an account. Nothing about the invitation contract changes here.
 
 Response shapes (all 2xx bodies are `{"data": ...}` — see
 [Response envelope](README.md#response-envelope)):
