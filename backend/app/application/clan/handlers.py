@@ -52,6 +52,21 @@ class ClanCommandHandler:
         self._uow.track(clan)  # UoW harvests the ClanUpdated event on commit
         result = await self._repo.save_clan(clan)
         await self._uow.commit()
+        if result is not None:
+            # The UPDATE bumps the server-side `updated_at` (onupdate=func.now(),
+            # app/models/base.py:34-39), a SQL expression SQLAlchemy cannot evaluate
+            # client-side. `eager_defaults="auto"` (the 2.0 default) uses RETURNING for
+            # INSERT only, never for UPDATE, so that attribute is left unloaded and the
+            # caller's `ClanResponse.model_validate(...)` starts a lazy load with no
+            # greenlet to run the IO in -> MissingGreenlet -> 500, with the row already
+            # written. Re-fetch the timestamps inside the async context; the targeted
+            # attribute list keeps Clan's four `lazy="selectin"` relationships loaded
+            # instead of re-running four SELECTs. Same remedy, same reason, as
+            # app/application/person/claim_handlers.py:186,227.
+            # A no-op PATCH expires nothing and never had the bug; the extra read is
+            # harmless there. Pinned by
+            # tests/integration/test_clan_patch_returns_updated_row.py.
+            await self._uow.session.refresh(result, attribute_names=["updated_at", "created_at"])
         return result
 
     async def approve_user(self, cmd: ApproveUser) -> None:
