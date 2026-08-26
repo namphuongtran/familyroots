@@ -63,7 +63,7 @@ returned — see [rest-auth-api.md](../contracts/rest-auth-api.md).
   "email": "user@example.com",
   "password": "secure-password",
   "full_name": "Nguyễn Văn A",
-  "clan_action": "join",        // "join" or "create"
+  "clan_action": "join",        // OPTIONAL: "join", "create", or omitted
   "clan_code": "nguyen-huu-thanh-oai",  // required when clan_action=join
   "clan_name": "Nguyễn Đức",    // required when clan_action=create
   "clan_slug": "nguyen-duc"     // required when clan_action=create
@@ -74,6 +74,13 @@ returned — see [rest-auth-api.md](../contracts/rest-auth-api.md).
 (ADR-057 § 2, seed S-081). `clan_id` is still accepted on join for one release and
 sending both is a 422 — see the deprecation window in
 [rest-auth-api.md](../contracts/rest-auth-api.md).
+
+**Omitting `clan_action` entirely registers an account with no clan membership**
+(ADR-058, seed S-085) — the form an invited person uses, because accept requires them
+to be signed in already. Omitting it while still naming a clan (`clan_code`,
+`clan_id`, `clan_name` or `clan_slug`) is a 422 `validation_error`, never a silent
+clanless account. `POST /onboard` still requires `clan_action`. The full shape is in
+[rest-auth-api.md](../contracts/rest-auth-api.md), "Registering with no clan".
 
 ```json
 201 { "data": { "message": "..." } }
