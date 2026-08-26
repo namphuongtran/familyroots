@@ -1126,6 +1126,7 @@ graph LR
 | S-091 | Connect the login form's labels to its inputs | open | none |
 | S-092 | Move the two hardcoded sidebar strings into the message catalogue | open | none |
 | S-093 | Route a clanless mobile user to onboarding rather than a screen that says they applied | open | none |
+| S-094 | Make two web e2e runs in two worktrees unable to measure each other | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -7603,6 +7604,77 @@ which already distinguishes the two states.
 
 ---
 
+## S-094. Make two web e2e runs in two worktrees unable to measure each other
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator. Found by the agent verifying the composed integration tree,
+which hit it against a concurrently running seed and correctly discarded two of its own runs as
+evidence.** This is the web analogue of the `TEST_PG_DB_NAME` trap that ADR-016 closed for the
+backend, and **nothing closes it for web.**
+
+**The mechanism, read at source 2026-08-26 in `web/playwright.config.ts`:**
+
+- `:3` `const PORT = 3100`, a literal.
+- `:37` `export const BANNER_PORT = 3101`, a literal.
+- `:80` `reuseExistingServer: !process.env.CI`, which is **true** locally.
+
+**So when two agents run `pnpm test:e2e` in two worktrees, the second silently attaches to the
+first's dev server**, and its specs run against the other worktree's application.
+
+**This is worse than the Postgres case, and that is the whole reason it is a seed.** The
+`TEST_PG_DB_NAME` collision produced obvious carnage: `DROP DATABASE … WITH (FORCE)` terminated the
+other run's connections and 182 tests failed at once. Nobody could mistake it for a pass. **A port
+collision can come back green** while measuring code from another branch. A silent wrong pass is not
+a louder version of a failure; it is a different defect.
+
+**The measured instance.** The verifying agent's first two runs failed with
+`net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3100` across most specs, plus `fonts.spec.ts`
+reporting the heading face as `"status": "error"`. `ps` showed another agent running `pnpm test:e2e`
+in `.claude/worktrees/s-082-web` holding 3100 and 3101. It waited for both ports to clear, re-ran,
+and **verified mid-run that the process listening on 3100 resolved to its own worktree** before
+quoting a reading. That last step is the workaround this seed exists to remove.
+
+**This contains a decision.** The options are not equal:
+
+- **Derive the port from the worktree.** A hash of the directory name, or an env var the harness
+  sets. Removes the collision. Costs: `BANNER_BASE_URL` is exported and used by specs, and
+  `web/e2e/` may hold other absolute references — find them all before choosing.
+- **Make a busy port an error instead of a reuse**, by setting `reuseExistingServer: false`. Loud
+  rather than silent, which is the correct direction, but it makes two concurrent runs impossible
+  rather than safe. **Read why `reuseExistingServer` is true before removing it**: a developer
+  re-running one spec against an already-running dev server is a real workflow and this would end
+  it.
+- **Both**, which is probably right, and is why the decision is worth writing down rather than
+  guessing.
+
+**Whatever you choose, a collision must be impossible to mistake for a pass.** That is the end
+state's real requirement.
+
+**End state.** Two `pnpm test:e2e` runs in two different worktrees either both succeed against their
+own code, or the second fails with a message naming the collision. Neither may report green while
+serving the other's application. `web/CLAUDE.md` records how it works, the way
+`backend/CLAUDE.md` records `TEST_PG_DB_NAME`.
+
+**Verification.** The full web gate in `web/CLAUDE.md`.
+
+**The control is the point, and it is a two-worktree control.** A single-worktree run proves nothing
+here. **Start a run in one worktree, start a second in another, and read what the second does.**
+Then plant the failure that matters: make the two worktrees' applications **differ** in a way one
+spec asserts, and confirm the second run cannot pass against the first's server. **Quote both
+readings.** Per § "A test pins an outcome, not a setting": asserting that the port variable is no
+longer a literal pins the variable.
+
+**Sources.** `web/playwright.config.ts:3,37,80`; the verifying agent's measurement of 2026-08-26,
+recorded in this seed; `.claude/rules/seeds.md` § "Running more than one agent at a time" for the
+backend precedent; ADR-016 for `TEST_PG_DB_NAME`.
+
+**Out of scope.** The backend harness, which already has its answer. CI, where `process.env.CI` makes
+`reuseExistingServer` false already, so the defect does not exist there — **say that when you close
+this, because it explains why CI never caught it.** Any test's content.
+
+---
+
 ## Owed, with an owner and a trigger
 
 **This is a register and not a seed list.** A row here is an item that is owed, has an owner, and has
@@ -7668,6 +7740,18 @@ been read or run, and the row that replaces it says where.
   nonzero.** Do not cite this as a defect. Measure it first, then open a seed if the reading is real.
   **This is the opposite failure mode from S-078's**, which was a hard 500 rather than a quiet
   divergence, so a reader who finds this row while reading that fix should not merge the two.
+- **Which of 2026-08-26's web e2e readings measured their own worktree.** Seeds S-070, S-083, S-084,
+  S-091, and S-092 all ran `pnpm test:e2e` while other agents were running it too, and S-094 above
+  establishes that a second run **silently attaches to the first's dev server** rather than failing.
+  Only two readings from that day are attributed: the integration tree's `92 passed`, where the
+  agent resolved the listening process to its own worktree mid-run, and that same agent's two
+  discarded runs. **Every other e2e count from 2026-08-26 is unattributed.** The specs were each
+  worktree's own, and the per-seed counts differ from one another, which is consistent with each
+  running its own suite — but **which application answered those requests is not established**, and
+  a collision can pass as easily as fail. Do not cite any of those counts as evidence that a change
+  works. The component and unit readings in the same reports are unaffected, because they run no
+  server. This row leaves the register when S-094 lands and the affected seeds' gates are re-run
+  under it.
 - **Mobile M0 does not work on a device, and nothing here says it does.** The app compiles and CI
   builds `app-debug.apk`, so it assembles. Whether a user can sign in to real Supabase from a real
   phone is unknown, for the reasons in the Task 20 row above. Everything mobile is verified against
