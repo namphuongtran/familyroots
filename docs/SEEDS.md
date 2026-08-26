@@ -1119,6 +1119,7 @@ graph LR
 | S-084 | Give an invitation link a page it can land on | in progress | none |
 | S-085 | Let a person register with no clan, so an invitee can create an account | open | none |
 | S-086 | Make `accept_path` hand the admin the URL ADR-057 says it hands them | blocked | S-084 |
+| S-087 | Make the slug the API accepts and the slug the database accepts be one shape | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -6995,7 +6996,11 @@ invitation page, which is S-084.
 
 **Status:** open · **Blocked by:** S-080, done 2026-08-26 · **Unblocks:** nothing yet
 
-**ADR-057 kept the typed code as the secondary join path, so the spec's helper text stays true and this seed builds as written.** One correction to this seed's own `Out of scope` line, read at source 2026-08-26: it says spec line 1771 "warns that existing invite links break". The spec says the opposite at `docs/superpowers/specs/2026-08-02-design-system-and-screens.md:1771-1772` — invite links and join codes **keep working**, and what changes is "the code people quote". Renaming is still out of scope; the reason is narrower than this seed claimed.
+**ADR-057 kept the typed code as the secondary join path, so the spec's helper text stays true and this seed builds as written.** Two corrections to this seed's own text, both read at source on 2026-08-26.
+
+**First, the `Out of scope` line.** It says spec line 1771 "warns that existing invite links break". The spec says the opposite at `docs/superpowers/specs/2026-08-02-design-system-and-screens.md:1771-1772` — invite links and join codes **keep working**, and what changes is "the code people quote". Renaming is still out of scope; the reason is narrower than this seed claimed.
+
+**Second, this seed grouped the wrong letters together, and the agent that closed it was right not to follow.** The seed says "`Đ`, `đ`, and the `ư`/`ơ` family are where a naive `NFD` strip is wrong". Only the first half holds. Measured 2026-08-26 in Node 22: `'Đ'.normalize('NFD')` is still the single code point U+0110, so a mark strip leaves it whole and the `[a-z0-9]` filter then deletes it — `Đặng Đình` becomes `ang-inh`, losing two letters from a URL identifier. But `'ư'.normalize('NFD')` is `U+0075 U+031B` and `'ơ'` is `U+006F U+031B`: the horn is an ordinary combining mark, so NFD decomposes them and the strip correctly leaves `u` and `o`. **Adding a table entry for them would double-map.** The letters that actually fail the way `Đ` does are `Đ đ Ð ð Ø ø Æ æ Œ œ ß Ł ł Þ þ`, and `fr` being shipped is why the non-Vietnamese ones are reachable.
 
 **Create mode asks a person to invent a URL identifier**, read 2026-08-26. It renders two unlinked
 free-text inputs: `clan_name` and `clan_slug`
@@ -7219,6 +7224,69 @@ lands on the invitation page** — a test that asserts the string starts with `h
 
 **Out of scope.** The accept handler's rules, including the email match. The page itself, which is
 S-084. Email delivery of invitations, which nothing in this repository does today.
+
+---
+
+## S-087. Make the slug the API accepts and the slug the database accepts be one shape
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a defect seed S-081 measured while doing something
+else and correctly declined to fix.** It is pre-existing. S-081 neither introduced it nor made it
+worse, and said so.
+
+**Two patterns describe the same column and they disagree.** Read at source 2026-08-26:
+
+| Layer | The rule | File |
+|---|---|---|
+| API | `^[a-z0-9]+(?:-[a-z0-9]+)*$` | `backend/app/schemas/auth.py:11` |
+| database | `slug ~ '^[a-z0-9][a-z0-9\-]*[a-z0-9]$'` | `backend/migrations/versions/001_initial.py:56`, constraint `clans_slug_format` |
+
+**They differ in both directions, which is why this is one seed and not two.**
+
+- **The API is looser on length.** `_SLUG_PATTERN` accepts a single character. The CHECK requires at
+  least two, because it demands a first character, a last character, and they are different
+  positions. So `clan_slug="a"` passes the door and the insert raises.
+- **The database is looser on hyphens.** `[a-z0-9\-]*` in the middle permits a doubled hyphen, so
+  `a--b` satisfies the CHECK. `_SLUG_PATTERN` rejects it. Nothing can reach the database with that
+  value today through the API, so this half is latent rather than live.
+
+**The live symptom is a 500.** S-081 measured it over HTTP on 2026-08-26: `clan_action=create` with
+`clan_slug="a"` returns `500 {"error":{"code":"internal_error",...}}`. The same string on the
+**join** path returns `404 clan_not_found`, which is correct, so only the create path is exposed.
+
+**This contains a decision, and it is which pattern is wrong.** They are not interchangeable:
+
+- **Tighten the database to match the API** by a reversible migration. Then `a--b` becomes
+  unreachable at both layers. Read `backend/app/core/exceptions.py:299-301` first: it maps
+  `uq_clans_slug` and carries a TOCTOU note, so the mapping layer already knows about this
+  constraint family.
+- **Loosen the API to match the database.** Cheaper, and wrong in the direction that matters: a
+  one-character clan code is a code nobody can tell apart from another, and the comment above
+  `_SLUG_PATTERN` says slugs land in URLs and in a latin-1 `Content-Disposition` header.
+- **Add a minimum length to the API only**, leaving the doubled-hyphen divergence latent and
+  **saying so in the seed's own closing note** rather than leaving a later reader to find it again.
+
+**Whichever you choose, the 500 must become a 4xx**, because a validation failure that reaches the
+client as `internal_error` is the defect a caller actually experiences.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+**If you write a migration, also run `uv run alembic upgrade head` and the matching `downgrade`**,
+per `.claude/rules/seeds.md`.
+
+**Send the request and read the status code and the error body**, per § "A test pins an outcome, not
+a setting". Asserting that two regular expressions are equal pins the two strings, not the
+behaviour. **Three readings:** the one-character create, the doubled-hyphen value at whichever layer
+still accepts it after your change, and a valid slug that must keep working. **Negative control:**
+the one-character case must fail today with the 500 quoted above, and quote your own run of it
+rather than citing S-081's.
+
+**Sources.** `backend/app/schemas/auth.py:11` and the comment above it;
+`backend/migrations/versions/001_initial.py:56`; `backend/app/core/exceptions.py:299-301`; seed
+S-081's report of 2026-08-26, which measured the 500.
+
+**Out of scope.** The join path, which answers correctly. The web form, which is S-083 and may want
+a line about the minimum length once this is decided. Renaming a clan's code after creation.
 
 ---
 
