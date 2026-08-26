@@ -1112,11 +1112,13 @@ graph LR
 | S-077 | Scan the DDL that shell scripts run inline, which no guard sees | done | S-069, done |
 | S-078 | Make `PATCH /clans/me` stop answering 500 on every edit that changes something | open | none |
 | S-079 | Catch privilege escalation that runs through a CLI with no SQL text to read | open | S-077, done |
-| S-080 | Decide what a person types to join a clan, and what an admin shares, in ADR-057 | open | none |
-| S-081 | Let the join path resolve a clan by its code rather than by its UUID | blocked | S-080 |
+| S-080 | Decide what a person types to join a clan, and what an admin shares, in ADR-057 | done | none |
+| S-081 | Let the join path resolve a clan by its code rather than by its UUID | open | S-080, done |
 | S-082 | Make the register join field ask for the code its label promises | blocked | S-081 |
-| S-083 | Derive the clan code from the clan name, live and editable | blocked | S-080 |
-| S-084 | Give an invitation link a page it can land on | open | none |
+| S-083 | Derive the clan code from the clan name, live and editable | open | S-080, done |
+| S-084 | Give an invitation link a page it can land on | in progress | none |
+| S-085 | Let a person register with no clan, so an invitee can create an account | open | none |
+| S-086 | Make `accept_path` hand the admin the URL ADR-057 says it hands them | blocked | S-084 |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -6820,7 +6822,9 @@ for where domain types move; `web-architecture-observability-design.md:219` for 
 
 ## S-080. Decide what a person types to join a clan, and what an admin shares, in ADR-057
 
-**Status:** open · **Blocked by:** none · **Unblocks:** S-081, S-082, S-083, S-084
+**Status:** done 2026-08-26 · **Blocked by:** none · **Unblocks:** S-081, S-082, S-083, S-084
+
+**Closed 2026-08-26 as [ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md).** The maintainer chose: the invitation link is primary, the typed identifier survives as the **slug**, and the admin shares a **browser** URL whose origin is its own variable and not `NEXT_PUBLIC_API_URL`. **Writing the ADR found two things this seed did not know, both read at source on 2026-08-26, and together they mean the invitation flow is unreachable end to end for a new user today:** accept requires an authenticated caller (`backend/app/api/v1/invitations.py:95-99`, and `docs/contracts/rest-invitations-api.md:62` says `Auth | Yes`), and `clan_action` is required on registration (`backend/app/schemas/auth.py:18,25`, rejected at `backend/app/application/auth/handlers.py:128-131`), so an invited stranger holds a token and has neither a clan UUID nor a clan to create. That is **S-085**. The ADR also found that `accept_path` and its comment are now wrong for their stated purpose, which is **S-086**.
 
 **Opened 2026-08-26 by the maintainer, from using the register screen.** The report was that a
 "Clan Code" is hard to remember and that a clan name such as `Trần` or `Nguyễn` might be better,
@@ -6902,7 +6906,9 @@ only, listed 2026-08-26.
 
 ## S-081. Let the join path resolve a clan by its code rather than by its UUID
 
-**Status:** blocked · **Blocked by:** S-080 · **Unblocks:** S-082
+**Status:** open · **Blocked by:** S-080, done 2026-08-26 · **Unblocks:** S-082
+
+**ADR-057 § 2 kept the typed identifier and made it the slug, so this seed is live and is not withdrawn.** Read [ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md) before starting; it also leaves you one decision on purpose, which is whether `clan_id` is removed at once or accepted alongside the code for one release. `docs/contracts/rest-auth-api.md` owns that answer.
 
 **This seed exists only if ADR-057 keeps a typed identifier and makes it the slug.** Read the ADR
 first. If ADR-057 drops the typed path, close this seed as withdrawn and say which section of the
@@ -6987,7 +6993,9 @@ invitation page, which is S-084.
 
 ## S-083. Derive the clan code from the clan name, live and editable
 
-**Status:** blocked · **Blocked by:** S-080 · **Unblocks:** nothing yet
+**Status:** open · **Blocked by:** S-080, done 2026-08-26 · **Unblocks:** nothing yet
+
+**ADR-057 kept the typed code as the secondary join path, so the spec's helper text stays true and this seed builds as written.** One correction to this seed's own `Out of scope` line, read at source 2026-08-26: it says spec line 1771 "warns that existing invite links break". The spec says the opposite at `docs/superpowers/specs/2026-08-02-design-system-and-screens.md:1771-1772` — invite links and join codes **keep working**, and what changes is "the code people quote". Renaming is still out of scope; the reason is narrower than this seed claimed.
 
 **Create mode asks a person to invent a URL identifier**, read 2026-08-26. It renders two unlinked
 free-text inputs: `clan_name` and `clan_slug`
@@ -7088,6 +7096,129 @@ email-match rule, and `:74` for the token being the authorization; the absent ro
 Anything the register screen does, which is S-082 and S-083. **Which session the accept path runs
 on is already decided** by [ADR-048](decisions/048-invitation-accept-runs-on-the-system-session.md) through S-043, so
 do not re-open it.
+
+---
+
+## S-085. Let a person register with no clan, so an invitee can create an account
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-084's signed-out path
+
+**Opened 2026-08-26 by the coordinator while writing ADR-057, from two readings taken at source
+that S-080 did not have.** Neither is a new defect. Both are old, and together they mean **the
+invitation flow has never been usable end to end by a new person**, which nobody had said.
+
+**1. Accept requires an authenticated caller.** `backend/app/api/v1/invitations.py:95-99` declares
+`POST /invitations/{token}/accept` with `current_user: dict[str, Any] = Depends(get_current_user)`,
+and the handler call at `:104-105` reads `current_user["sub"]` and
+`current_user.get("email", "")`. The contract's invitee table agrees: `Auth | Yes` at
+`docs/contracts/rest-invitations-api.md:62`. **So the token does not authorize by itself in a
+browser.** The invitee must already be signed in, with the matching email.
+
+**2. A person with no clan cannot register.** `clan_action: Literal["join", "create"]` carries no
+default on `RegisterRequest` (`backend/app/schemas/auth.py:18`) or on
+`AuthenticatedOnboardingRequest` (`:25`), so it is required on both.
+`backend/app/application/auth/handlers.py:128-131` then rejects `join` without a `clan_id` and
+`create` without both a `clan_name` and a `clan_slug`. **An invited stranger holds a token and has
+neither.** They cannot create the account that accept then requires them to hold.
+
+**This contains a decision, and it is the reason this is one seed rather than a patch.** There are
+at least three shapes and they are not equal:
+
+- **A third `clan_action`**, or making the field optional, so a person can hold an account with no
+  clan membership at all. Then read what already exists for that state before inventing it: the web
+  app already ships blocked-state screens from S-026, and `mobile/lib/features/auth/presentation/`
+  already holds `pending_approval_page.dart`. **A user with no clan is a state this product already
+  draws.** Say whether it is the same state or a fourth one.
+- **A token-carrying register call**, where the invitation token is passed at sign-up and the
+  membership is granted in the same transaction. Smaller surface, and it keeps "every account has a
+  clan" true. But it couples `POST /auth/register` to the invitation aggregate, and ADR-048 already
+  decided accept runs on the **system session** — read
+  [ADR-048](decisions/048-invitation-accept-runs-on-the-system-session.md) before assuming the two
+  can share one transaction.
+- **Accept before an account exists**, creating the user from the invitation. Rejected on its face
+  here rather than left to be re-proposed: it would make a leaked token sufficient to create an
+  account, and `docs/contracts/rest-invitations-api.md:74` says the token "is the only thing that
+  decides". **Say why you rejected it, do not leave it unmentioned.**
+
+**Registration is non-enumerating and that constraint does not bend.** Spec § 7.1b at
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:871-873`: a `201` always routes to
+the same "check your email" screen, and the UI must never claim an account was created. **Whatever
+shape you choose must not let a caller learn whether an email is registered**, and a new error code
+on this route is exactly how that leaks.
+
+**End state.** A person holding an invitation token and no account can complete the flow: create an
+account, verify, sign in, and accept. `docs/contracts/rest-auth-api.md` records the shape, in the
+same pull request as the code, per root `CLAUDE.md`. If an ADR is needed, **do not pick a number
+yourself** — 058 is the next free one per `docs/decisions/README.md`, and say in your report that
+you took it.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+
+**The test must walk the whole path through requests and read each response**, per § "A test pins an
+outcome, not a setting". Asserting that `clan_action` is now optional pins the schema, not the flow.
+**Negative control:** the walk must fail against today's code at the register step, and quote the
+error it returns — `auth.clan_id_required_for_join` is the reading to expect, so if you get a
+different one, that is a finding and not a nuisance. **Also assert the non-enumeration property**:
+two runs, one email registered and one not, and the two responses must be indistinguishable.
+
+**Sources.** `backend/app/api/v1/invitations.py:95-99,104-105`;
+`docs/contracts/rest-invitations-api.md:62,74`; `backend/app/schemas/auth.py:18,25`;
+`backend/app/application/auth/handlers.py:128-131`;
+`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:871-873`;
+[ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md), which found both readings
+and names this seed as owed; [ADR-048](decisions/048-invitation-accept-runs-on-the-system-session.md).
+
+**Out of scope.** The invitation landing page, which is S-084. The clan code path, which is S-081
+to S-083. Email verification itself, which is unchanged. Clan discovery.
+
+---
+
+## S-086. Make `accept_path` hand the admin the URL ADR-057 says it hands them
+
+**Status:** blocked · **Blocked by:** S-084 · **Unblocks:** nothing yet
+
+**Opened 2026-08-26 by the coordinator, from a consequence [ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md)
+named rather than fixed in the same change.**
+
+**The field and its own comment disagree with the decision.** `accept_path` is built as
+`f"/api/v1/invitations/{token}/accept"` at
+`backend/app/application/invitation/handlers.py:65`, and `backend/app/schemas/invitation.py:41`
+comments that the admin shares it. That path answers `POST` only
+(`docs/contracts/rest-invitations-api.md:64`), so pasting it into a browser is a `GET` and the
+admin is handing a relative something that cannot work. ADR-057 § 3 decided the admin shares a
+**browser** URL instead.
+
+**Blocked by S-084 for a reason, not by habit.** The browser URL's shape and the name of the
+variable holding its origin are settled by the page that answers it. ADR-057 fixed only what the
+origin is **not**: not `NEXT_PUBLIC_API_URL`, because
+[ADR-056](decisions/056-next-public-api-url-splits-into-a-browser-and-a-server-variable.md) holds
+that name for the browser-facing API origin. Building this first would invent a second answer.
+
+**Decide whether the backend composes the URL at all.** It is not obvious and this is the seed's
+real content. A backend that returns a full URL needs to know the web app's public origin, which is
+a new piece of configuration in a service that has no other reason to hold one. A backend that
+returns only the token, and lets the admin UI compose the link, keeps that knowledge in the app that
+already has it. **Name which you chose and why.** If the field's shape changes,
+`docs/contracts/rest-invitations-api.md` moves in the same pull request.
+
+**End state.** What an admin is handed is what an admin can share, and
+`backend/app/schemas/invitation.py:41`'s comment is true of the field beside it. The contract agrees.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+If the web app composes the link, the full web gate in `web/CLAUDE.md` as well.
+
+**Send the create request and read the field out of the response body**, per § "A test pins an
+outcome, not a setting". Then **open what it returns in the harness S-070 built and confirm a person
+lands on the invitation page** — a test that asserts the string starts with `http` pins the string.
+**Negative control:** it must fail against today's `/api/v1/...` value, and quote that reading.
+
+**Sources.** `backend/app/application/invitation/handlers.py:65`;
+`backend/app/schemas/invitation.py:41`; `docs/contracts/rest-invitations-api.md:64`;
+[ADR-057](decisions/057-the-invitation-link-is-the-primary-join-path.md) § 3 and its "Owed" item 2;
+[ADR-056](decisions/056-next-public-api-url-splits-into-a-browser-and-a-server-variable.md).
+
+**Out of scope.** The accept handler's rules, including the email match. The page itself, which is
+S-084. Email delivery of invitations, which nothing in this repository does today.
 
 ---
 
