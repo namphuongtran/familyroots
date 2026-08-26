@@ -64,11 +64,16 @@ returned — see [rest-auth-api.md](../contracts/rest-auth-api.md).
   "password": "secure-password",
   "full_name": "Nguyễn Văn A",
   "clan_action": "join",        // "join" or "create"
-  "clan_id": "uuid",            // required when clan_action=join
+  "clan_code": "nguyen-huu-thanh-oai",  // required when clan_action=join
   "clan_name": "Nguyễn Đức",    // required when clan_action=create
   "clan_slug": "nguyen-duc"     // required when clan_action=create
 }
 ```
+
+`clan_code` is the clan's slug, and it replaced a `clan_id` UUID on the join path
+(ADR-057 § 2, seed S-081). `clan_id` is still accepted on join for one release and
+sending both is a 422 — see the deprecation window in
+[rest-auth-api.md](../contracts/rest-auth-api.md).
 
 ```json
 201 { "data": { "message": "..." } }
