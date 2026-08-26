@@ -779,6 +779,31 @@ right and both pointers were wrong. **The third was the coordinator's own commit
 four Playwright MCP scratch files into the repository through `git add -A`. Removed in `f636381`,
 with `.playwright-mcp/` now ignored and a `git check-ignore` control proving it.
 
+**Re-taken 2026-08-26, after the maintainer read the register screen: 84 seeds, 75 done, 5 open, and
+4 blocked.** Three of the four moved, and **none moved because work landed.** This is the first entry
+here whose whole cause is one person using the product:
+
+- **Seeds, 79 to 84.** S-080 through S-084 arrived. The report was that the register screen's "Clan
+  Code" is hard to remember. Reading the tree found three defects behind it and one gap beside it:
+  the join field's label says "Clan Code" while its placeholder says `UUID` and it submits `clan_id`
+  (`web/src/app/[locale]/(auth)/register/page.tsx:240,246,81`); the create half makes a person invent
+  a URL slug the spec says should be derived from the name
+  (`superpowers/specs/2026-08-02-design-system-and-screens.md:862-864`); and the invitation flow,
+  which is built, hands the admin an API path that answers `POST` only
+  (`backend/app/application/invitation/handlers.py:65`), with no page in `web/src/app` to land on.
+- **Open, 3 to 5.** S-080 and S-084 arrived open, both carrying `Blocked by: none`.
+- **Blocked, 1 to 4.** S-081, S-082, and S-083 arrived blocked. **Done** stayed 75.
+
+**The spec had already decided this and nobody had read it against the code.** Spec § 7.1b, at
+`superpowers/specs/2026-08-02-design-system-and-screens.md:854-865`, describes the readable-slug
+field and the live slugification. Neither was built, and the gate is green either way, because no
+test on this page asks what the field wants. **That is the same shape as § "A test pins an outcome,
+not a setting", reached from the other end: here there was no assertion at all.**
+
+**One correction landed with this batch.** The Maintenance section said the next free ADR number was
+053 while 053 to 056 all existed on disk. `docs/decisions/README.md:69` was right and this file was
+wrong, which is the reverse of the 046 case that section records. S-080 allocates **057**.
+
 The figures were taken by reading the board's own `Status` cell, with:
 
 ```bash
@@ -998,6 +1023,10 @@ graph LR
   S029 --> S030[S-030 persons repository + hooks]
   S030 --> S031[S-031 persons list + detail]
   S031 --> S032[S-032 persons create + edit]
+  S080[S-080 decide the join path, ADR-057] --> S081[S-081 join by clan code]
+  S080 --> S083[S-083 derive the code from the name]
+  S081 --> S082[S-082 the register join field]
+  S084[S-084 a page for the invitation link]
 ```
 
 ## Status board
@@ -1083,6 +1112,11 @@ graph LR
 | S-077 | Scan the DDL that shell scripts run inline, which no guard sees | done | S-069, done |
 | S-078 | Make `PATCH /clans/me` stop answering 500 on every edit that changes something | open | none |
 | S-079 | Catch privilege escalation that runs through a CLI with no SQL text to read | open | S-077, done |
+| S-080 | Decide what a person types to join a clan, and what an admin shares, in ADR-057 | open | none |
+| S-081 | Let the join path resolve a clan by its code rather than by its UUID | blocked | S-080 |
+| S-082 | Make the register join field ask for the code its label promises | blocked | S-081 |
+| S-083 | Derive the clan code from the clan name, live and editable | blocked | S-080 |
+| S-084 | Give an invitation link a page it can land on | open | none |
 
 **Fourteen seeds carry `Blocked by: none`, and that is a claim about today.** They are S-001, S-008,
 S-009, S-010, S-011, S-013, S-016, S-019, S-020, S-021, S-022, S-028, S-034, and S-036. Each was read
@@ -6784,6 +6818,279 @@ for where domain types move; `web-architecture-observability-design.md:219` for 
 
 ---
 
+## S-080. Decide what a person types to join a clan, and what an admin shares, in ADR-057
+
+**Status:** open · **Blocked by:** none · **Unblocks:** S-081, S-082, S-083, S-084
+
+**Opened 2026-08-26 by the maintainer, from using the register screen.** The report was that a
+"Clan Code" is hard to remember and that a clan name such as `Trần` or `Nguyễn` might be better,
+followed by doubt that a name is right either. Both halves of that are correct, and reading the
+tree turned one complaint into four seeds.
+
+**What the form asks for today does not match what its label says.** In join mode the label is
+`t('clan_slug')`, which renders "Clan Code" in English and "Mã dòng họ" in Vietnamese
+(`web/messages/en.json:184`, `web/messages/vi.json:184`). The input beside it carries
+`placeholder="UUID"` (`web/src/app/[locale]/(auth)/register/page.tsx:246`), binds `clanId`
+(`:244`), and is submitted as `clan_id` (`:81` and `:91`). The backend types that field
+`clan_id: uuid.UUID | None` (`backend/app/schemas/auth.py:19`) and rejects a join without it
+(`backend/app/application/auth/handlers.py:128-129`). **So a person is asked to type a
+36-character UUID under a label promising a code.**
+
+**The design spec already decided against this, and it was never built.** Spec § 7.1b, at
+`superpowers/specs/2026-08-02-design-system-and-screens.md:854-865`, gives the join field the
+helper text *"Mã do quản trị dòng họ cung cấp, ví dụ: nguyen-huu-thanh-oai."* That is a readable
+slug supplied by the clan admin, not a UUID. **Where the code and this spec disagree, the code is
+the bug**, because the spec is a design that was never carried out rather than a record of what
+shipped.
+
+**A bare surname cannot be the answer, and this is the part that needs deciding rather than
+building.** `nguyen-huu-thanh-oai` is họ plus chi plus quán: surname, branch, and origin place. A
+surname on its own is shared by a very large share of the population, so two unrelated families
+collide on the first attempt. The `clans` table already carries the columns that disambiguate one
+from another, read 2026-08-26: `origin_place`, `ancestral_hall_location`, and `founded_year`.
+
+**And a searchable list of clan names is not free.** The root `CLAUDE.md:40` forbids bypassing clan
+isolation, and [ADR-044](decisions/044-privacy-toggles-dropped-from-v1.md) dropped
+`allow_public_tree` rather than enforce it. There is no clan discovery endpoint today: every route
+in `backend/app/api/v1/clans.py` is under `/me`, verified 2026-08-26. **A field that lets a stranger
+type "Nguyễn" and browse the matching families is a new public surface**, so proposing one is a
+decision with a privacy consequence and not a UI tweak.
+
+**There is a third path already built, and nothing in the product reaches it.** Invitations exist:
+`POST /invitations/{token}/accept`, a `secrets.token_urlsafe(32)` token, and an email-match rule,
+all at `docs/contracts/rest-invitations-api.md:41,60-84`. An invited person types nothing at all.
+**But what the admin is handed is not shareable with a human.** `accept_path` is built as
+`f"/api/v1/invitations/{token}/accept"` (`backend/app/application/invitation/handlers.py:65`), an
+API path that answers only `POST`, and `backend/app/schemas/invitation.py:41` comments that the
+admin shares it. `find web/src/app -ipath "*invit*"` returns nothing, checked 2026-08-26, so there
+is no page for such a link to land on. That gap is S-084.
+
+**End state.** `docs/decisions/057-*.md` exists and decides three things in writing:
+
+1. **Which join path is primary**, the invitation link or a typed identifier, and what the register
+   screen shows for the other one, if it shows it at all.
+2. **What the typed identifier is, if one survives.** The slug per spec § 7.1b, the UUID as built,
+   or nothing. If it is the slug, say what happens on `clan_not_found`, because the spec already
+   writes that message and the code does not use it.
+3. **What an admin shares.** A browser URL that a relative can open, or the API path built today.
+   If it becomes a browser URL, ADR-057 owns whether the origin is configuration or derived, and
+   `NEXT_PUBLIC_API_URL` is **not** it: [ADR-056](decisions/056-next-public-api-url-splits-into-a-browser-and-a-server-variable.md) already
+   decided that name holds the browser-facing API origin only.
+
+**ADR-057 must also say what it does not decide**, so a later reader does not read a clan directory
+into it. Public clan discovery is out of scope here and would need its own ADR against ADR-044.
+
+**Verification.** Documentation only, so no gate. Say that plainly. Add the row to
+[`docs/decisions/README.md`](decisions/README.md) in the same change.
+
+**Sources.** `web/src/app/[locale]/(auth)/register/page.tsx:81,91,240,244,246,265,269`;
+`web/messages/en.json:184-185`; `web/messages/vi.json:184-185`;
+`backend/app/schemas/auth.py:11,19,21`; `backend/app/application/auth/handlers.py:128-131`;
+`superpowers/specs/2026-08-02-design-system-and-screens.md:854-871`;
+`docs/contracts/rest-invitations-api.md:41,60-84`;
+`backend/app/application/invitation/handlers.py:65`; `backend/app/schemas/invitation.py:41`;
+`backend/app/api/v1/clans.py:46-221` for the absence of a discovery route; `CLAUDE.md:40`;
+[ADR-044](decisions/044-privacy-toggles-dropped-from-v1.md);
+`docs/decisions/README.md:69` for 057 being the next free number.
+
+**Out of scope.** Writing any code. Public clan discovery or search. The RBAC matrix. The mobile
+register screen, which **does not exist**: `mobile/lib/features/auth/presentation/` holds
+`login_page`, `verify_email_page`, `pending_approval_page`, `blocked_page`, and `message_page`
+only, listed 2026-08-26.
+
+---
+
+## S-081. Let the join path resolve a clan by its code rather than by its UUID
+
+**Status:** blocked · **Blocked by:** S-080 · **Unblocks:** S-082
+
+**This seed exists only if ADR-057 keeps a typed identifier and makes it the slug.** Read the ADR
+first. If ADR-057 drops the typed path, close this seed as withdrawn and say which section of the
+ADR withdrew it. Do not build it anyway.
+
+**The lookup already exists at every layer**, read 2026-08-26, which is why this seed is small:
+`get_clan_by_slug` is declared on the port at `backend/app/domain/auth/repository.py:31` and
+implemented at `backend/app/infrastructure/persistence/auth_repository.py:47`. The create path
+already calls it, at `backend/app/application/auth/handlers.py:137` and `:238`, to detect a taken
+slug. **Nothing new has to reach the database.**
+
+**End state.** `POST /auth/register` and `POST /auth/onboard` accept a clan **code** on the join
+path and resolve it through `get_clan_by_slug`. An unknown code answers the existing
+`clan_not_found`, which spec § 7.1b already writes copy for. `docs/contracts/rest-auth-api.md` is
+updated in the same pull request, as the root `CLAUDE.md` requires.
+
+**This is a breaking change to two public routes, and the contract file owns how it lands.** Decide
+and write down whether `clan_id` is removed at once or accepted alongside the code for one release.
+`_SLUG_PATTERN` at `backend/app/schemas/auth.py:11` already constrains the shape and its comment
+gives the reason, so reuse it rather than writing a second pattern.
+
+**Verification.** The backend full quality gate, `CLAUDE.md:76`. Set your own `TEST_PG_DB_NAME`.
+
+**The test must send a request and read the response body**, per § "A test pins an outcome, not a
+setting". Asserting that the schema field exists pins nothing. **Three cases, each read from the
+response:** a real code joins and the membership row appears; an unknown code answers
+`clan_not_found`; a code failing `_SLUG_PATTERN` is rejected at the door. **Negative control:** each
+must fail against today's code, and quote both readings.
+
+**Sources.** `backend/app/schemas/auth.py:11,19,21,24-28`;
+`backend/app/application/auth/handlers.py:128-131,137,238`;
+`backend/app/domain/auth/repository.py:31`;
+`backend/app/infrastructure/persistence/auth_repository.py:47`;
+`backend/app/api/v1/auth.py:59,78`; `docs/contracts/rest-auth-api.md`;
+`superpowers/specs/2026-08-02-design-system-and-screens.md:866-869` for the `clan_not_found` copy.
+
+**Out of scope.** The web form, which is S-082. The create path, which already takes a slug. The
+invitation flow. Clan discovery.
+
+---
+
+## S-082. Make the register join field ask for the code its label promises
+
+**Status:** blocked · **Blocked by:** S-081 · **Unblocks:** nothing yet
+
+**The label and the field disagree today**, read 2026-08-26. The label renders "Clan Code" and "Mã
+dòng họ" (`web/messages/en.json:184`, `web/messages/vi.json:184`). The input carries
+`placeholder="UUID"` (`web/src/app/[locale]/(auth)/register/page.tsx:246`) and submits `clan_id`
+(`:81`, `:91`).
+
+**End state.** The join field submits what ADR-057 decided and S-081 built. `placeholder="UUID"` is
+gone. The field carries the helper text spec § 7.1b names, *"Mã do quản trị dòng họ cung cấp, ví
+dụ: nguyen-huu-thanh-oai."*, in every locale the repository ships. `clan_not_found` renders inline
+on the field with the spec's own wording, not as a page-level error.
+
+**Four locale files, not two.** `web/messages/` holds `vi`, `en`, `zh`, and `fr`, and S-066 brought
+the last two to parity. A new key added to two of them re-opens the gap S-066 closed.
+
+**Verification.** The full web gate in `web/CLAUDE.md`, which is longer than the two commands at
+`CLAUDE.md:78`.
+
+**Assert what the browser shows, not what a constant holds**, per § "A test pins an outcome, not a
+setting". **Two readings at minimum:** render the join mode and assert the helper text is present
+with the field, and drive a `clan_not_found` response and assert the message renders **on the
+field**. A test that asserts a message key exists in a JSON file pins the file, not the screen.
+**Negative control:** both must fail against today's code.
+
+**Check it at 200% text scale and 320 px before claiming done.** The helper text contains a hyphen
+and no other break opportunity, and this is the third field on this exact page to hit that defect:
+S-034 on the wordmark and S-042 on the setup banner. `.claude/rules/tailwind.md` § 7 holds the
+shape. **Say what you measured, or say plainly that you did not.**
+
+**Sources.** `web/src/app/[locale]/(auth)/register/page.tsx:81,91,237-249`;
+`web/messages/en.json:184-185`; `web/messages/vi.json:184-185`;
+`superpowers/specs/2026-08-02-design-system-and-screens.md:858-871`; S-066 for locale parity;
+S-034 and S-042 for the text-scale defect on this page.
+
+**Out of scope.** The create half of the form, which is S-083. The backend, which is S-081. The
+invitation page, which is S-084.
+
+---
+
+## S-083. Derive the clan code from the clan name, live and editable
+
+**Status:** blocked · **Blocked by:** S-080 · **Unblocks:** nothing yet
+
+**Create mode asks a person to invent a URL identifier**, read 2026-08-26. It renders two unlinked
+free-text inputs: `clan_name` and `clan_slug`
+(`web/src/app/[locale]/(auth)/register/page.tsx:251-274`), and the backend rejects the request
+unless **both** are present (`backend/app/application/auth/handlers.py:130-131`). The slug must
+also satisfy `^[a-z0-9]+(?:-[a-z0-9]+)*$` (`backend/app/schemas/auth.py:11`), which nothing on the
+screen tells the person.
+
+**The spec asks for something the form does not do.** Spec § 7.1b at
+`superpowers/specs/2026-08-02-design-system-and-screens.md:862-864` requires the code to be
+"auto-suggested, slugified live from the name, editable", with helper text naming what the code is
+for. **This is a defect against the spec, not a new feature.**
+
+**Blocked by S-080 for the helper text only.** The spec's wording, *"Người khác dùng mã này để xin
+tham gia dòng họ của bạn."*, states that other people use the code to request to join. If ADR-057
+makes the invitation link the only join path, that sentence becomes false and the field needs
+different copy. The slugification itself is correct either way, because the slug remains the clan's
+URL identifier.
+
+**End state.** Typing a clan name fills the code field live with a slug that satisfies
+`_SLUG_PATTERN`, and the person can still edit it. Vietnamese diacritics are transliterated, so
+`Trần Gia` suggests `tran-gia`. `auth.clan_slug_taken` renders inline on the code field with a
+suggested alternative, which spec § 7.1b requires and the form does not do today.
+
+**Name the transliteration rule you chose and why.** `Đ`, `đ`, and the `ư`/`ơ` family are where a
+naive `NFD` strip is wrong, and a clan whose code silently drops a letter is a clan whose invite
+links break later. Put the reason in `web/CLAUDE.md` or the commit message, not only in a chat
+reply.
+
+**Verification.** The full web gate in `web/CLAUDE.md`.
+
+**Assert the value in the field after typing, not the function in isolation**, per § "A test pins an
+outcome, not a setting". **Three readings:** a Vietnamese name with diacritics produces the expected
+slug in the field; editing the code stops it being overwritten by further typing in the name; a
+`clan_slug_taken` response renders on the code field. A unit test over the slugify helper alone
+does not establish that the field shows it. **Negative control:** all three must fail today.
+
+**Sources.** `web/src/app/[locale]/(auth)/register/page.tsx:28-30,83,93,250-274`;
+`backend/app/schemas/auth.py:11,21`; `backend/app/application/auth/handlers.py:130-131,137-139`;
+`backend/app/core/exceptions.py:299-301` for the `uq_clans_slug` mapping and its TOCTOU note;
+`superpowers/specs/2026-08-02-design-system-and-screens.md:862-869`.
+
+**Out of scope.** The join half, which is S-082. Renaming a clan's code after creation, which spec
+line 1771 covers under clan settings and which warns that existing invite links break. The backend,
+which already accepts the slug.
+
+---
+
+## S-084. Give an invitation link a page it can land on
+
+**Status:** open · **Blocked by:** none · **Unblocks:** nothing yet
+
+**The invitation flow is built and no human can use it**, read 2026-08-26. The admin route returns
+`accept_path`, built as `f"/api/v1/invitations/{token}/accept"`
+(`backend/app/application/invitation/handlers.py:65`), and
+`backend/app/schemas/invitation.py:41` comments that the admin shares this. **That path answers
+`POST` only**, per `docs/contracts/rest-invitations-api.md:64`. Pasting it into a browser is a
+`GET`, so a relative who opens it sees an error rather than an invitation.
+
+**There is no page.** `find web/src/app -ipath "*invit*"` returns nothing, and the only file under
+`web/src` naming the accept route is the generated client `web/src/generated/api-types.ts`. Checked
+2026-08-26.
+
+**This is not blocked on ADR-057**, and that is a deliberate claim. The page is needed whichever
+path ADR-057 makes primary, because the invitation flow already exists and already hands out a link.
+What ADR-057 owns is the **URL an admin copies** and how much the register screen points at it, so
+build the page against the token and leave the shareable-origin question to the ADR. If ADR-057 has
+landed by the time this is worked, follow it.
+
+**End state.** A browser route exists that takes an invitation token and answers all four outcomes
+the contract already defines, each with its own copy: accepted, `invitation.email_mismatch`,
+expired, and already accepted or revoked. The email-match rule is the contract's, at
+`docs/contracts/rest-invitations-api.md:67`, and it is not relaxed for convenience.
+
+**The token is the authorization, so treat it as a credential.** The contract says so at
+`docs/contracts/rest-invitations-api.md:74`: the token is "the only thing that decides". It must
+not reach a log, an analytics call, a Sentry breadcrumb, or the `Referer` of a later request. **Say
+which of those you checked.**
+
+**Verification.** The full web gate in `web/CLAUDE.md`. If `accept_path` changes shape, the backend
+full quality gate at `CLAUDE.md:76` as well, plus `docs/contracts/rest-invitations-api.md` updated
+in the same pull request.
+
+**Drive the page and read what it renders**, per § "A test pins an outcome, not a setting".
+Asserting that a route file exists pins the file. **Four readings, one per outcome**, each quoted.
+**Negative control:** every one of them must fail today, because no route exists at all, and that
+control is therefore weak on its own. **So also plant a wrong-email token and confirm the page
+refuses it**, which is the failure that matters and the one a "page renders" test would miss.
+
+**Sources.** `backend/app/application/invitation/handlers.py:65`;
+`backend/app/schemas/invitation.py:41`; `backend/app/api/v1/invitations.py:96`;
+`docs/contracts/rest-invitations-api.md:41,60-84`, with `:64` for the method, `:67` for the
+email-match rule, and `:74` for the token being the authorization; the absent route, established by
+`find web/src/app -ipath "*invit*"` returning nothing on 2026-08-26.
+
+**Out of scope.** The admin-side interface for sending an invitation, which is part of PR 7 in the
+[Owed](#owed-with-an-owner-and-a-trigger) register. Changing the token scheme or the expiry.
+Anything the register screen does, which is S-082 and S-083. **Which session the accept path runs
+on is already decided** by [ADR-048](decisions/048-invitation-accept-runs-on-the-system-session.md) through S-043, so
+do not re-open it.
+
+---
+
 ## Owed, with an owner and a trigger
 
 **This is a register and not a seed list.** A row here is an item that is owed, has an owner, and has
@@ -6964,7 +7271,11 @@ been read or run, and the row that replaces it says where.
   045 on 2026-08-21 by S-006, and 042, 043, 047, 048, and 050 on 2026-08-22.** 044, 046, 049, 051,
   and 052 are still allocations rather than files. **049 was allocated to S-051 first and released
   unused**, because S-051 decided the rule belongs in `.claude/rules/seeds.md` rather than in an ADR;
-  S-053 then took it. The next free number is **053**.
+  S-053 then took it. **053 through 056 were all written on 2026-08-22**, so the next free number
+  is **057**, allocated by S-080 on 2026-08-26. Corrected here on 2026-08-26: this line read
+  "the next free number is 053" while 053, 054, 055, and 056 all existed on disk, which
+  `docs/decisions/README.md:69` already said. **The index was right and this file was the bug**,
+  which is the reverse of the 046 case recorded below, so neither file may be trusted by default.
 - **`docs/decisions/README.md` is not the authority on which numbers are taken.** It said 046 was
   free on 2026-08-21 while this file had already given 046 to S-039. A seed allocates its number in
   its own text, so this file wins and the index is the bug. That index now carries a note saying so.

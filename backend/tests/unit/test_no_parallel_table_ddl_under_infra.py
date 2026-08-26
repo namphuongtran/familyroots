@@ -1,10 +1,19 @@
 """Fail when a second, unexecuted set of schema or security DDL appears under `infra/`.
 
 **The module name is narrower than what this file asserts, and the name is kept on purpose.**
-Seed S-064 named it, and three prose citations point at it that seed S-067 was fenced out of
-editing: `docs/ops/migrations.md:187`, `docs/SEEDS.md:3322`, and
-`test_migrations_doc_matches_alembic.py:40`. Renaming the module would strand two of them. A
+Seed S-064 named it, and prose in three files names the module: `docs/ops/migrations.md:222,240`,
+`docs/SEEDS.md` in the `Sources` of seeds **S-067**, **S-069**, and **S-077**, and
+`test_migrations_doc_matches_alembic.py:40`. Renaming the module would strand all of them. A
 rename is worth doing when whoever owns those files is next in them.
+
+**Two of those three pointers were wrong, and they are corrected here on 2026-08-26.** This
+docstring said `docs/ops/migrations.md:187` and `docs/SEEDS.md:3322`. Read at source: line 187 of
+`migrations.md` is prose about a package being neither importable nor installed, and line 3322 of
+`SEEDS.md` was the `---` rule above S-064's heading. **Neither line named this module.** They were
+already wrong before the 2026-08-26 change that shifted `SEEDS.md` line numbers, so that change is
+not the cause. The `SEEDS.md` citation is now by seed ID rather than by line, because a line number
+into a file that grows at the top is the wrong anchor for a section, and this is the second time
+that has bitten a pointer into that file.
 
 ## Part 1 — table DDL (seed S-064, 2026-08-22)
 

@@ -66,7 +66,7 @@ kept. **044, 050, 051, 052 and 053 were all written on 2026-08-22** by seeds S-0
 S-057 and S-019. **048 was taken by seed S-043 on 2026-08-22**, the same day 047 went to seed S-040.
 Pre-allocating in the seed is deliberate, so that four agents picking work at once cannot pick the
 same number. **054 was written on 2026-08-22 by seed S-065**, which dropped the table rather than
-deciding what it was for. **055 was written on 2026-08-22 by seed S-068.** **056 was written on 2026-08-22 by seed S-076.** The next free number is **057**. This index is not the authority: read [`../SEEDS.md`](../SEEDS.md),
+deciding what it was for. **055 was written on 2026-08-22 by seed S-068.** **056 was written on 2026-08-22 by seed S-076.** **057 was allocated on 2026-08-26 by seed S-080**, for what a person types to join a clan and what an admin shares; it is an allocation rather than a file. The next free number is **058**. This index is not the authority: read [`../SEEDS.md`](../SEEDS.md),
 which wins when the two disagree. This index is not the
 authority: read [`../SEEDS.md`](../SEEDS.md), which wins when the two disagree.
 
