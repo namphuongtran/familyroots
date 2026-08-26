@@ -217,7 +217,7 @@ export function useAuthActions() {
       password: string
       full_name: string
       clan_action: 'join' | 'create'
-      clan_id?: string
+      clan_code?: string
       clan_name?: string
       clan_slug?: string
     }): Promise<RegisterResult> => {
