@@ -688,7 +688,7 @@ Four harnesses, one gate each:
   `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. **Eight specs, counted on disk
   2026-08-27**, and `CI=1 pnpm test:e2e` reported `106 passed` the same day. This said "Four
   specs" until then and was already undercounting by one at the batch base — `git ls-tree
-  e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rather than trusting a
+e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rather than trusting a
   prose figure. The earlier "36 tests on 2026-08-21" reading is left as written, because it
   carries its own date. The four described below are the original set; `supabase-banner.spec.ts`
   (S-042), `register-clan-code.spec.ts` (S-083), `register-join-code.spec.ts` (S-082), and
