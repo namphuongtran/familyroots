@@ -206,12 +206,18 @@ response. **Always route to a "check your email" screen** after a successful
   looks the same ("check your email"), which is the point: the endpoint no
   longer confirms which case applies.
 
-Clan-input errors (bad/missing `clan_id`, `clan_name`/`clan_slug`, an
+Clan-input errors (a bad or missing `clan_code`, `clan_name`/`clan_slug`, an
 already-taken slug, a nonexistent clan) still surface as normal 422/409/404
 errors with their existing codes (`auth.clan_id_required_for_join`,
-`auth.clan_name_required_for_create`, `auth.clan_slug_taken`,
-`clan_not_found`) and should be handled as ordinary form-validation errors —
-these are not account-existence signals.
+`auth.clan_code_and_id_both_given`, `auth.clan_name_required_for_create`,
+`auth.clan_slug_taken`, `clan_not_found`) and should be handled as ordinary
+form-validation errors — these are not account-existence signals.
+
+**The join field submits `clan_code`, a clan code (the slug), not a UUID**
+(ADR-057 § 2, seed S-081, 2026-08-26). `clan_id` is accepted on that path for one
+more release and sending both is a 422; see "The join identifier" in
+[rest-auth-api.md](rest-auth-api.md) for the window and what gets deleted when it
+closes.
 
 `POST /auth/onboard` (already-authenticated users attaching to a clan) is
 **unchanged** and still returns the full profile-shaped response
