@@ -5,7 +5,42 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { SupabaseSetupNotice } from '@/components/auth/SupabaseSetupNotice'
+import {
+  CLAN_CODE_MAX_LENGTH,
+  CLAN_CODE_TAKEN_ERROR_CODE,
+  suggestAlternativeClanCode,
+  suggestClanCode,
+} from '@/domain/clan/clan-code'
 import { useAuth, useAuthActions } from '@/lib/hooks/useAuth'
+import { cn } from '@/lib/utils/cn'
+
+/**
+ * The clan-create half of this screen reads a field-level error code, so it needs the
+ * `code` out of the error envelope rather than the `message` — the standing rule from
+ * `docs/contracts/error-codes.md`, restated in `src/shared/http/errors.ts`.
+ *
+ * `authProfileRepository.register`/`.onboard` still go through the legacy axios client
+ * (`src/lib/api/axios.ts`), which rejects with the raw axios error, so the envelope sits
+ * at `.response.data.error` rather than on an `ApiError`. `select-clan/page.tsx` reads the
+ * same shape with a `backendErrorCode` twin of this function; the two collapse into one
+ * helper when the legacy axios tree is deleted, which is not this seed's change.
+ *
+ * The `message` is returned alongside the code because the backend has already localised
+ * it from `Accept-Language` (`backend/app/core/exceptions.py`'s `t(f"error.{code}")`).
+ * It is displayed, never branched on.
+ */
+function backendError(cause: unknown): { code: string; message: string | null } | null {
+  if (typeof cause !== 'object' || cause === null || !('response' in cause)) return null
+  const response = (cause as { response?: unknown }).response
+  if (typeof response !== 'object' || response === null || !('data' in response)) return null
+  const data = (response as { data?: unknown }).data
+  if (typeof data !== 'object' || data === null || !('error' in data)) return null
+  const error = (data as { error?: unknown }).error
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  if (typeof code !== 'string') return null
+  return { code, message: typeof message === 'string' && message ? message : null }
+}
 
 export default function RegisterPage() {
   const t = useTranslations('auth')
@@ -27,7 +62,13 @@ export default function RegisterPage() {
   const [clanAction, setClanAction] = useState<'join' | 'create'>('join')
   const [clanId, setClanId] = useState('')
   const [clanName, setClanName] = useState('')
-  const [clanSlug, setClanSlug] = useState('')
+  // null = untouched, so the clan name can keep supplying the suggestion. Same shape,
+  // and the same reason, as `fullNameInput`/`emailInput` above.
+  const [clanSlugInput, setClanSlug] = useState<string | null>(null)
+  const [clanSlugTaken, setClanSlugTaken] = useState<{
+    message: string
+    suggestion: string
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -42,6 +83,13 @@ export default function RegisterPage() {
   const oauthProfile = isOAuthMode ? user : null
   const fullName = fullNameInput ?? oauthProfile?.full_name ?? ''
   const email = emailInput ?? oauthProfile?.email ?? ''
+  // Spec § 7.1b: the clan code is "auto-suggested, slugified live from the name,
+  // editable". Deriving it during render is what makes all three of those true at once
+  // and needs no effect: while `clanSlugInput` is null every keystroke in the name field
+  // re-renders a fresh suggestion, and the first keystroke in the code field makes it a
+  // string, after which the name no longer reaches it. Clearing the code field leaves
+  // `''`, not null, so an emptied code stays empty instead of being refilled.
+  const clanSlug = clanSlugInput ?? suggestClanCode(clanName)
 
   useEffect(() => {
     if (isAuthLoading) {
@@ -72,6 +120,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setClanSlugTaken(null)
     setIsLoading(true)
     try {
       if (isOAuthMode) {
@@ -95,6 +144,16 @@ export default function RegisterPage() {
         setSuccess(result.message)
       }
     } catch (err: unknown) {
+      const envelope = backendError(err)
+      if (envelope?.code === CLAN_CODE_TAKEN_ERROR_CODE) {
+        // Spec § 7.1b asks for this one inline on the code field, with a suggested
+        // alternative — not as the page-level banner every other failure gets.
+        setClanSlugTaken({
+          message: envelope.message ?? t('clan_slug_taken'),
+          suggestion: suggestAlternativeClanCode(clanSlug),
+        })
+        return
+      }
       setError(err instanceof Error ? err.message : t('register_error'))
     } finally {
       setIsLoading(false)
@@ -250,10 +309,14 @@ export default function RegisterPage() {
           ) : (
             <>
               <div>
-                <label className="text-foreground mb-1 block text-sm font-medium">
+                <label
+                  htmlFor="clan-name"
+                  className="text-foreground mb-1 block text-sm font-medium"
+                >
                   {t('clan_name')}
                 </label>
                 <input
+                  id="clan-name"
                   required
                   value={clanName}
                   onChange={(e) => setClanName(e.target.value)}
@@ -261,15 +324,66 @@ export default function RegisterPage() {
                 />
               </div>
               <div>
-                <label className="text-foreground mb-1 block text-sm font-medium">
+                <label
+                  htmlFor="clan-slug"
+                  className="text-foreground mb-1 block text-sm font-medium"
+                >
                   {t('clan_slug')}
                 </label>
                 <input
+                  id="clan-slug"
                   required
                   value={clanSlug}
                   onChange={(e) => setClanSlug(e.target.value)}
-                  className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+                  maxLength={CLAN_CODE_MAX_LENGTH}
+                  // A code is an identifier, not prose: a phone keyboard must not
+                  // capitalise it and a spell-checker must not underline it.
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-invalid={clanSlugTaken ? true : undefined}
+                  aria-describedby={
+                    clanSlugTaken ? 'clan-slug-helper clan-slug-error' : 'clan-slug-helper'
+                  }
+                  className={cn(
+                    'focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden',
+                    // T-06: the border colour is a second channel, never the only one —
+                    // the message and the `role="alert"` below carry the state in text.
+                    // Tailwind 4.3.3 ships no `aria-invalid:` variant (0 hits in
+                    // `node_modules/tailwindcss/dist/lib.js`, checked 2026-08-26), so the
+                    // branch is here rather than in a class.
+                    clanSlugTaken ? 'border-destructive' : 'border-input',
+                  )}
                 />
+                <p id="clan-slug-helper" className="text-muted-foreground mt-1 text-xs">
+                  {t('clan_slug_helper')}
+                </p>
+                {clanSlugTaken && (
+                  <div id="clan-slug-error" role="alert" className="mt-1 space-y-1">
+                    {/* `wrap-anywhere` rather than the default: a clan code can be up to
+                        100 characters with no hyphen in it, which is one unbreakable word
+                        and so a horizontal page scroll at 320px and 200% text scale
+                        (T-04, the trap `.claude/rules/tailwind.md` § 7 records twice).
+                        `overflow-wrap: anywhere` breaks inside the word only when the word
+                        does not fit, so the prose around it still wraps normally. */}
+                    <p className="text-destructive text-xs wrap-anywhere">
+                      {clanSlugTaken.message}
+                    </p>
+                    {clanSlugTaken.suggestion && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClanSlug(clanSlugTaken.suggestion)
+                          setClanSlugTaken(null)
+                        }}
+                        // min-h-11 is T-03's 44px touch target; the label wraps inside it.
+                        className="border-input text-foreground hover:bg-muted inline-flex min-h-11 w-full items-center justify-center rounded-md border px-3 py-2 text-xs font-medium wrap-anywhere transition-colors"
+                      >
+                        {t('clan_slug_use_suggestion', { suggestion: clanSlugTaken.suggestion })}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
