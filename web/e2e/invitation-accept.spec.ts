@@ -58,8 +58,7 @@ const CLAN_ID = '6f1c4f7e-0000-4000-8000-000000000001'
  * matches on `startsWith('sb-')` and `endsWith('-auth-token')` rather than a literal.
  */
 function sessionCookieName(): string {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://e2e-fake-project.example.supabase.co'
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://e2e-fake-project.example.supabase.co'
   return `sb-${new URL(url).hostname.split('.')[0]}-auth-token`
 }
 
