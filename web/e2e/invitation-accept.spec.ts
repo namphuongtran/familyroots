@@ -33,19 +33,36 @@ const CLAN_ID = '6f1c4f7e-0000-4000-8000-000000000001'
  * `createBrowserClient` (`src/lib/supabase/client.ts:11`) stores the session in
  * `document.cookie`, not `localStorage` — that is the point of the SSR package.
  * The name is `sb-${hostname.split('.')[0]}-auth-token`
- * (`node_modules/@supabase/supabase-js/dist/index.mjs:680`), and
- * `playwright.config.ts` gives the e2e server
- * `NEXT_PUBLIC_SUPABASE_URL=https://e2e-fake-project.example.supabase.co`, so the
- * first label is `e2e-fake-project`. The value is `base64-` followed by the
- * base64url of the session JSON (`@supabase/ssr/dist/main/cookies.js:9,45`).
+ * (`node_modules/@supabase/supabase-js/dist/index.mjs:680`). The value is `base64-`
+ * followed by the base64url of the session JSON
+ * (`@supabase/ssr/dist/main/cookies.js:9,45`).
  *
  * Seeding it is the only way to reach the signed-in states in a browser: accept
  * requires a session (`docs/contracts/rest-invitations-api.md:62-64`), and no e2e
  * spec here has a real Supabase to sign in against. Nothing is asserted about
  * Supabase itself — the session is a fixture, and the page's own behaviour is what
  * is measured.
+ *
+ * **This name is DERIVED, and it used to be the literal
+ * `'sb-e2e-fake-project-auth-token'`.** That literal was true locally and false in
+ * CI, which is where it was caught: `.github/workflows/web-ci.yml` runs the e2e job
+ * with `NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co`, while
+ * `playwright.config.ts` falls back to `https://e2e-fake-project.example.supabase.co`
+ * only when that variable is unset. So in CI the app read
+ * `sb-placeholder-auth-token`, the seeded cookie was ignored, the page rendered its
+ * signed-out state, and four cases failed on a missing Accept button rather than on
+ * anything they were written to measure.
+ *
+ * Derive it from the same expression `playwright.config.ts` uses, so the two cannot
+ * drift again. `e2e/auth/session.setup.ts:61` already had the robust shape — it
+ * matches on `startsWith('sb-')` and `endsWith('-auth-token')` rather than a literal.
  */
-const SESSION_COOKIE_NAME = 'sb-e2e-fake-project-auth-token'
+function sessionCookieName(): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://e2e-fake-project.example.supabase.co'
+  return `sb-${new URL(url).hostname.split('.')[0]}-auth-token`
+}
+
+const SESSION_COOKIE_NAME = sessionCookieName()
 
 function sessionCookieValue(): string {
   const session = {
@@ -81,6 +98,25 @@ async function signIn(page: Page): Promise<void> {
   ])
 }
 
+/**
+ * Fail on the seeded session, naming the cookie, rather than letting every
+ * signed-in case fail later on a missing button.
+ *
+ * The CI failure this guards against read `expect(locator).toBeEnabled() failed /
+ * element(s) not found` for `getByRole('button', { name: 'Tham gia dòng họ' })`,
+ * which says nothing about the real cause. A cookie-name mismatch is a harness
+ * defect and must not be reported as a page defect.
+ */
+async function expectSessionWasAccepted(page: Page): Promise<void> {
+  await expect(
+    page.getByRole('heading', { name: 'Hãy đăng nhập trước' }),
+    `the page rendered its signed-out state, so it did not read the seeded session. ` +
+      `The cookie was "${SESSION_COOKIE_NAME}", derived from ` +
+      `NEXT_PUBLIC_SUPABASE_URL=${process.env.NEXT_PUBLIC_SUPABASE_URL ?? '(unset, using the e2e fallback)'}. ` +
+      `If those disagree with the server's value, that is the bug, not this page.`,
+  ).toHaveCount(0)
+}
+
 function accepted() {
   return {
     status: 200,
@@ -105,6 +141,7 @@ async function stubAccept(page: Page, response: Parameters<Route['fulfill']>[0])
 
 /** Presses Accept once the one-shot session resolve has enabled it. */
 async function pressAccept(page: Page): Promise<void> {
+  await expectSessionWasAccepted(page)
   const button = page.getByRole('button', { name: 'Tham gia dòng họ' })
   await expect(button).toBeEnabled()
   await button.click()
