@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * The page an invitation link lands on (seed S-084).
+ * The page an invitation link lands on.
  *
  * **Why this screen exists.** The admin's invitation carries a token, and until
  * now the only thing that took one was `POST /api/v1/invitations/{token}/accept`
@@ -167,7 +167,7 @@ export function InvitationAcceptScreen({ token, locale }: InvitationAcceptScreen
         scale) are both release gates, per `.claude/rules/tailwind.md` § 7. Nothing
         on this screen is an unbreakable word — the product wordmark is deliberately
         not rendered here, which is what made `/vi/login` and `/vi/register` scroll
-        sideways until seed S-034 added a `<wbr />` to each.
+        sideways until the text-scale spec added a `<wbr />` to each.
       */}
       <div className="w-full max-w-md space-y-6 text-center">
         {/*

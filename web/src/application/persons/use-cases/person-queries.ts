@@ -1,7 +1,7 @@
 import type { Person } from '@/lib/types'
 import type { PersonQueryRepository } from '@/application/persons/ports/person-query-repository'
 
-// S-033 deleted `listPersons`, `searchPersons`, `getPersonMarriages`,
+// the legacy-component deletion deleted `listPersons`, `searchPersons`, `getPersonMarriages`,
 // `getPersonParentChild`, `getPersonTimeline`, `getPersonDocuments`, and
 // `batchGetPersons` here: their sole caller, `src/lib/hooks/useMembers.ts`'s
 // legacy hooks, was deleted with them. `getPerson` stays because

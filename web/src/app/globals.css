@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /*
-  There was a `@custom-variant dark (&:is(.dark *))` here. Seed S-006 deleted it,
+  There was a `@custom-variant dark (&:is(.dark *))` here. The dark-palette change deleted it,
   and ADR-045 is why. Three mechanisms were declared for one behaviour: that
   class-based variant, plus the colour-scheme media query and
   `:root[data-theme="dark"]` that spec § 2.8 asks for. Two of the three need
@@ -19,7 +19,7 @@
 @theme {
   /*
     `primary` is the leaf green, decided by ADR-041 on 2026-08-14 and landed by
-    seed S-005. The nine-entry red ramp that stood here was deleted rather than
+    the leaf-green rename. The nine-entry red ramp that stood here was deleted rather than
     recoloured: spec § 2.1 publishes no nine-step green, so a recolour would
     have meant inventing eight values. These four tokens carry every job the
     thirteen ramp classes were doing. Values are spec § 2.1's, written lower
@@ -219,7 +219,7 @@
 }
 
 /*
-  The dark palette, from spec § 2.2, landed by seed S-006 and decided by ADR-045.
+  The dark palette, from spec § 2.2, landed by the dark-palette change and decided by ADR-045.
 
   It is not layered on purpose. `@theme` emits its variables into `@layer theme`,
   and unlayered CSS beats every layer, so this block wins the cascade wherever it
@@ -237,7 +237,7 @@
   The 393 hardcoded palette utilities in `web/src` do not: `text-gray-*` 187,
   `border-gray-*` 82, `bg-gray-*` 33, `divide-gray-*` 2, plus 89 in the red,
   amber, blue, green, purple, rose, pink, and orange families, across 41 files.
-  A palette colour is not a token and has no dark value. Seed S-038 owns moving
+  A palette colour is not a token and has no dark value. The palette sweep owns moving
   them. Until it lands, this palette is correct and most screens are not, and
   that is a known open state rather than an oversight.
 
@@ -267,7 +267,7 @@
     /*
       Hover mixes **white** here, not black, and the direction is the whole
       point. Spec § 4.1 line 582 gives both halves: the fill is "darkened 6%
-      (light) / lightened 8% (dark)". S-005 wrote the light half only, because
+      (light) / lightened 8% (dark)". The leaf-green rename wrote the light half only, because
       light was all it needed. Darkening #a3c398 would move it toward the ground
       and read as the button receding under the pointer. 92% keeps the 8%.
 
@@ -410,7 +410,7 @@
   ::backdrop,
   ::file-selector-button {
     /*
-      Was `var(--color-gray-200, currentcolor)`. Seed S-006 pointed it at the
+      Was `var(--color-gray-200, currentcolor)`. The dark-palette change pointed it at the
       token. The `*` rule further down applies `border-border` and so covers
       elements, but not these four pseudo-element selectors, which were left
       painting a palette grey with no dark value: a light hairline on a dark
@@ -430,7 +430,7 @@
   :root {
     /*
       `--primary`, `--primary-foreground`, and `--cream` were removed here by
-      seed S-005. They were a third label on values `@theme` already held, and
+      the leaf-green rename. They were a third label on values `@theme` already held, and
       nothing read them: `--color-primary` is a literal, not an
       `hsl(var(--primary))` indirection, so the pair had no consumer. `--gold`
       is the same shape and is left alone only because ADR-041 does not decide
@@ -449,7 +449,7 @@
   }
   body {
     /*
-      `text-foreground`, not `text-gray-900`. Seed S-006 changed it, and this is
+      `text-foreground`, not `text-gray-900`. The dark-palette change changed it, and this is
       the line that decided whether dark mode worked at all: `body` painted the
       page with the `background` token and its text with a Tailwind palette
       grey, so the ground flipped and the ink did not. Measured 2026-08-21 in

@@ -2,7 +2,7 @@
 
 **What it is for.** One command that produces a clan, an admin, an editor, a viewer, and a
 user outside that clan, so that a test can log in through the real flow and reach a real
-authenticated screen. Added by seed S-073 on 2026-08-22.
+authenticated screen. Added on 2026-08-22.
 
 **Read [`local-supabase.md`](local-supabase.md) first.** This document assumes the local
 Supabase stack is up and that you know why `SUPABASE_URL` must be `supabase.localhost`.
@@ -91,7 +91,7 @@ to work around. Add such a user when a test needs the clan switcher, and give it
 email rather than changing one of these four.
 
 **Nothing else is seeded.** No persons, marriages, parent-child links, documents or events:
-a role check needs none of them, and S-073 put them out of scope. `clan_memberships` is
+a role check needs none of them, and they are out of scope here. `clan_memberships` is
 untouched too, and that is not an oversight — it links a **Person** to a clan, not a user,
 so it cannot be written without inventing person fixtures.
 
@@ -156,7 +156,7 @@ the clan they do not belong to, is refused by `get_current_clan_id` before any h
 with seeding.** It is recorded here because this fixture is what made it visible: nobody
 could log in as a clan admin before. See the next section.
 
-### `PATCH /clans/me` 500s on every real edit — found by S-073, not caused by it
+### `PATCH /clans/me` 500s on every real edit — found by this work, not caused by it
 
 Measured 2026-08-22, reproduced on demand:
 
@@ -184,7 +184,7 @@ updated_at
 The commit expires the `Clan` instance, and reading `updated_at` back out of it in the
 route triggers a lazy refresh outside the async greenlet. A no-op update changes nothing,
 so nothing is expired, so it returns 200 — which is why this never showed up as "the route
-is broken". **This is not S-073's to fix**; it needs its own seed and a contract check on
+is broken". **This is not this document's to fix**; it needs its own change and a contract check on
 what `PATCH /clans/me` returns.
 
 ---
@@ -313,7 +313,7 @@ reach", above, dated 2026-08-22.
 - **`supabase status` prints nothing at all while any container reports unhealthy**, even
   one that is answering queries normally. Measured 2026-08-22:
   `supabase_db_familyroots` went unhealthy on "Health check exceeded timeout (2s)" on a
-  loaded machine while `psql` against it answered in milliseconds. Before S-073,
+  loaded machine while `psql` against it answered in milliseconds. Before this work,
   `scripts/supabase_local.sh env` printed its hardcoded `SUPABASE_URL` line, no keys, and
   **exit 0** — a successful-looking command with two of three variables missing. It now
   emits all three or exits 1. If you hit it, `scripts/supabase_local.sh wait` is the
@@ -327,5 +327,5 @@ reach", above, dated 2026-08-22.
   `ModuleNotFoundError: No module named 'pydantic'`, raised from
   `migrations/env.py:14`, because `uvx` runs alembic outside the project virtualenv and
   `env.py` imports `app.core.config`. `backend/CLAUDE.md` already says only ruff may run
-  through `uvx`. S-073 changed the target to `uv run`. **`make backend-lint` still calls
-  `uvx mypy app/` and has the same defect**; it is not S-073's to fix and is reported.
+  through `uvx`. The target was changed to `uv run`. **`make backend-lint` still calls
+  `uvx mypy app/` and has the same defect**; it is not fixed here and is reported.

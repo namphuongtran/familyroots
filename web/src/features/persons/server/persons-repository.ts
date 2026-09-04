@@ -4,7 +4,7 @@
  * `web/CLAUDE.md`'s Architecture section names these as three separate
  * steps; this file is where they run in one place, and the only place —
  * every function here returns a domain type, never a DTO and never the raw
- * enveloped body S-029's `api/` layer hands back.
+ * enveloped body the first persons slice's `api/` layer hands back.
  *
  * Every function takes a `RequestContext` inside its `PersonsApiCallOptions`,
  * passed in by the caller rather than read from a global. That is what lets

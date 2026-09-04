@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 /**
- * Seed S-006, the half of it no other suite can reach: whether the dark palette
+ * the dark-palette change, the half of it no other suite can reach: whether the dark palette
  * actually **reaches a screen**.
  *
  * `src/app/contrast.test.ts` reads the stylesheet, and that is the right place
@@ -16,8 +16,8 @@ import { expect, test } from '@playwright/test'
  * `body` is the subject because it is the one element that paints a token on
  * every route today: `globals.css` gives it `bg-background` and `text-foreground`.
  * The 393 hardcoded palette utilities in `web/src` (`text-gray-*` and friends,
- * counted 2026-08-21) do **not** flip, and seed S-038 owns them. So this spec is
- * the honest statement of what S-006 delivered: the palette flips, and the
+ * counted 2026-08-21) do **not** flip, and the palette sweep owns them. So this spec is
+ * the honest statement of what the dark-palette change delivered: the palette flips, and the
  * screens built on palette colours do not yet.
  *
  * ADR-045 is why there is no class and no attribute to set here. The mechanism is
@@ -81,7 +81,7 @@ for (const path of PUBLIC_PAGES) {
 }
 
 /**
- * Seed S-038 (folding in S-035): the sweep that moves the 393 hardcoded
+ * the palette sweep (folding in the form-border move): the sweep that moves the 393 hardcoded
  * `-gray-*` utilities counted above onto the semantic tokens they already had.
  * `body` alone (the three cases above) cannot see whether a form field or a
  * card boundary followed along, because those elements were never `body`.
@@ -120,7 +120,7 @@ for (const path of PUBLIC_PAGES) {
 
     test("the email field's boundary is the input token in both schemes", async ({ page }) => {
       // Both pages' email field carries `border-input`, replacing
-      // `border-gray-300` — the exact class S-035 named as its whole point.
+      // `border-gray-300` — the exact class the form-border move named as its whole point.
       const emailField = page.locator('input[type="email"]')
 
       await page.emulateMedia({ colorScheme: 'light' })

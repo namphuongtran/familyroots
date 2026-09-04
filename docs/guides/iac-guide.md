@@ -47,8 +47,8 @@ infra/
 > **Neither the database schema nor the RLS policy set is under `infra/`.** The Alembic chain in
 > `backend/migrations/` is the only source of truth; `docs/ops/migrations.md` owns it.
 > `infra/supabase/migrations/` held a hand-written mirror of the schema that nothing executed
-> and no check read, and seed S-064 deleted it on 2026-08-22. `infra/supabase/rls_policies.sql`
-> held a hand-written mirror of the **policies**, and seed S-067 deleted it the same day: it
+> and no check read, and it was deleted on 2026-08-22. `infra/supabase/rls_policies.sql`
+> held a hand-written mirror of the **policies**, and it was deleted the same day: it
 > keyed every policy on `auth.uid()`, which ADR-008 § 2 rejects, and because policies compose
 > rather than replace, applying it to a Supabase-hosted database would have *widened* clan
 > isolation instead of enforcing it. `infra/README.md` records both measurements.

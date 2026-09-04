@@ -27,7 +27,7 @@ never an accidental side effect.
   `user_clan_roles`, `clan_invitations`, `branches`, `clan_memberships`,
   `notification_log`, `parent_child`, `documents`, `events`.
 
-  > **Amended 2026-08-22 by seed S-065, [ADR-054](054-clan-settings-table-is-dropped.md).** The
+  > **Amended 2026-08-22 by [ADR-054](054-clan-settings-table-is-dropped.md).** The
   > RESTRICT list is now **ten** foreign keys, not eleven: `clan_settings` was dropped with its
   > table by migration `039_drop_clan_settings`. **The decision is unchanged and so is every other
   > row** — a clan-owned table still makes a conscious RESTRICT-versus-SET-NULL choice, and

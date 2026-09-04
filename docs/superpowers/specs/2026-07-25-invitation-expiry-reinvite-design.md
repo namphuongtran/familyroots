@@ -4,7 +4,7 @@
 **Source finding:** M11 in `docs/architecture/backend-review-2026-07-18.md`.
 **Owner decision:** create-path lazy expire-on-read (not a background job; not a list-display change).
 
-> **Amendment (2026-08-22, seed S-019 and [ADR-053](../../decisions/053-invitation-status-is-derived-not-stored.md)):
+> **Amendment (2026-08-22, [ADR-053](../../decisions/053-invitation-status-is-derived-not-stored.md)):
 > the "not a list-display change" half of the owner decision is superseded. The maintainer was
 > asked on 2026-08-22 and chose the reversal.** The list read now derives the reported status from
 > `expires_at` rather than returning the stored column. The other three clauses of this design stand
@@ -102,7 +102,7 @@ state, the way the scheduler/purge system writers operate without an actor.)
   expired row simply stays `pending` in storage; it blocks nothing.
 - ~~**List endpoint unchanged** — `list_by_clan` still returns the stored `status`; it
   already returns `expires_at`, so a client can render "expired". Not reshaped here.~~
-  **Superseded 2026-08-22 by seed S-019 and ADR-053: `list_by_clan` derives the status from
+  **Superseded 2026-08-22 by ADR-053: `list_by_clan` derives the status from
   `expires_at`.** Struck rather than deleted, because this document is a dated record of what was
   decided on 2026-07-25 and a silent rewrite would erase the evidence that it changed.
 - Accept path unchanged — the aggregate already refuses an expired token

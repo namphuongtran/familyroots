@@ -1,10 +1,10 @@
 """The join path resolves a clan by its **code** (the slug), not by its UUID.
 
-Seed S-081, ADR-057 § 2. Every assertion here sends an HTTP request and reads the
+ADR-057 § 2. Every assertion here sends an HTTP request and reads the
 response body, or reads the row back from Postgres. None of them asserts that a
 schema field exists: a field's presence is a fact the code already guarantees, so
 an assertion on it cannot fail for the reason this seed exists (see
-``.claude/rules/seeds.md`` § "A test pins an outcome, not a setting").
+``.claude/rules/testing.md`` § "A test pins an outcome, not a setting").
 
 **This module is not evidence about RLS.** ``get_db`` is pointed at the plain
 privileged session maker, exactly as ``test_register_non_enumeration.py`` and
@@ -277,7 +277,7 @@ def test_onboard_rejects_a_badly_shaped_code_at_the_door(client: TestClient) -> 
 @pytest.mark.asyncio
 async def test_clan_id_still_joins_for_one_release(client: TestClient, db: AsyncSession) -> None:
     """The contract accepts ``clan_id`` alongside ``clan_code`` for one release, so
-    the web form keeps working until S-082 lands. Delete this test with the field."""
+    the web form keeps working until it is rewritten. Delete this test with the field."""
     clan_a, _code_a = await _seed_clan(db, "legacy")
     body = _register_body(clan_id=str(clan_a))
     resp = client.post("/api/v1/auth/register", json=body)

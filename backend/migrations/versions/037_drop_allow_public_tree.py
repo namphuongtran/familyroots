@@ -1,4 +1,4 @@
-"""Drop ``clan_settings.allow_public_tree`` (S-017, ADR-044 § 1).
+"""Drop ``clan_settings.allow_public_tree`` (ADR-044 § 1).
 
 **This column may not come back.** The *concept* of a public tree may, one day, but it
 returns as ``privacy_level`` and not as a boolean beside it. ADR-044 § 1: ``privacy_level
@@ -9,7 +9,7 @@ boolean completely; the reverse is false, so the boolean is the redundant one.
 **The drop loses nothing, which is why this is a migration and not a deprecation.**
 ``clan_settings`` has no rows: nothing constructs a ``ClanSettings``, ``001_initial.py``
 installs no trigger that would create one (its only triggers are ``trg_<table>_updated_at``,
-``001_initial.py:930-937``), and no code reads the column. Measured by S-010, by S-016
+``001_initial.py:930-937``), and no code reads the column. Measured three times over,
 (ADR-044 Measurement 3), and re-measured on 2026-08-22 by this seed:
 ``grep -rn "allow_public_tree" backend/app web/src mobile/lib`` returned exactly one line,
 the ORM declaration this change removes.

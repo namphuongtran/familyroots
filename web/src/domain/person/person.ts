@@ -90,7 +90,7 @@ export interface PersonActionResult {
 }
 
 /**
- * The result of `POST /persons` or `PATCH /persons/{id}` (S-032). Spec
+ * The result of `POST /persons` or `PATCH /persons/{id}`. Spec
  * §7.7a: "`meta.warning` on a successful write ... the save succeeds, and a
  * `warning` toast appears afterwards." The envelope's `meta` is discarded by
  * `unwrapData` on every other read (nothing else has ever needed it), so the

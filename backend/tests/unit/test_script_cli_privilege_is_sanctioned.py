@@ -1,15 +1,15 @@
 """Fail when a shell script under `scripts/` invokes a Postgres client CLI no decision allows.
 
-## The blind spot this closes (seed S-079, 2026-08-26)
+## The blind spot this closes (2026-08-26)
 
-**Every other guard in this tree reads SQL text.** `test_scripts_sql_is_sanctioned.py` (S-069)
-reads `.sql` files. `test_inline_sql_in_scripts_is_sanctioned.py` (S-077) reads what a `psql`
+**Every other guard in this tree reads SQL text.** `test_scripts_sql_is_sanctioned.py`
+reads `.sql` files. `test_inline_sql_in_scripts_is_sanctioned.py` reads what a `psql`
 invocation executes. A script that ran
 
     createuser --superuser familyroots_app
 
 escalates exactly as `ALTER ROLE familyroots_app SUPERUSER` does, and **there is no SQL text for
-either scanner to read.** S-077 named this itself, in its own "What this misses" list: "Client
+either scanner to read.** That guard named this itself, in its "What this misses" list: "Client
 CLIs that are not `psql` are invisible. `createdb`, `dropdb`, and above all `createuser
 --superuser` do the damage without any SQL text for this scanner to read."
 
@@ -33,8 +33,8 @@ nothing at all, which reads exactly like "no CLI is used". Use `-w`.)*
 A rule over client CLIs matches **argv**. A rule over SQL matches **statements**. They are not
 the same kind of rule and they cannot share a verdict:
 
-- **Not S-069's module.** It reads `.sql` files. A shell script is not its subject at all.
-- **Not S-077's module.** Every one of its three checks is phrased over `_Region.sql` and the
+- **Not the `.sql` guard.** It reads `.sql` files. A shell script is not its subject at all.
+- **Not the inline-SQL guard.** Every one of its three checks is phrased over `_Region.sql` and
   imported `_classify`, and its `_SANCTIONED` vocabulary is SQL classes. Reporting a
   `createuser --superuser` through "runs role DDL — 'CREATE ROLE …'" would be a lie about where
   the text came from, and `psql -c "DROP DATABASE x"` and `dropdb x` need different sanction
@@ -43,21 +43,21 @@ the same kind of rule and they cannot share a verdict:
   that are genuinely its own.
 
 **What is shared, and why exactly these.** `_shell_files`, `_is_shell`, `_SCRIPT_ROOTS` and
-`_key` are imported from S-077's module, so the two guards sweep the **identical** file set by
+`_key` are imported from the inline-SQL guard, so the two sweep the **identical** file set by
 construction rather than by a test that hopes they agree. A script one guard reads and the other
-does not would be a hole neither guard could report. `_ESCALATIONS` is imported from S-069's
+does not would be a hole neither guard could report. `_ESCALATIONS` is imported from the `.sql`
 module, not to match against text, but so that the argv flags this module forbids are checked
 against the SQL attributes that module forbids — see
 `test_the_argv_escalation_set_and_the_sql_escalation_set_account_for_each_other`.
 
-**What is not shared.** The logical-line join below duplicates six lines of S-077's `_regions`.
+**What is not shared.** The join below duplicates six lines of the inline guard's `_regions`.
 Extracting it there would have to preserve `_regions`' heredoc cursor, which advances the outer
 loop past a heredoc body; a pre-computed list of logical lines loses that. Six duplicated lines
 with no shared verdict is the cheaper of the two risks.
 
 ## Two rules, because there are two questions (and a set is a setting too)
 
-S-014's finding, recorded in `.claude/rules/seeds.md` § "A set is a setting too", is that one
+The `audit_logs` finding, in `.claude/rules/testing.md` § "A set is a setting too", is that one
 guard asking one question of a mixed set pins the set rather than the coverage. This module asks
 two questions with two different reaches, on purpose:
 
@@ -65,7 +65,7 @@ two questions with two different reaches, on purpose:
    of a segment: the first token that is not a `VAR=value` prefix and not a transparent wrapper
    (`if`, `!`, `env`, `sudo`, `xargs`, …). This is deliberately narrow. `scripts/restore_drill
    .sh:131` and `:133` both `echo` the words "pg_restore", and a rule that read any token would
-   report two invocations that do not exist. S-060's rule is that a noisy guard gets suppressed,
+   report two invocations that do not exist. The rule is that a noisy guard gets suppressed,
    and these two checks are the noise-sensitive half.
 2. **Check 3 reads every token in the segment.** The escalation check is the one this seed exists
    for and the one that must not be dodged by a wrapper, so it fires when a segment holds a
@@ -91,11 +91,11 @@ two questions with two different reaches, on purpose:
     sql_file       psql -f / psql --file
     unknown        every other recognised binary — never in any sanctioned set
 
-`role` and `database` are the words S-069 and S-077 already use, so `dropdb x` and
+`role` and `database` are the words the other two guards already use, so `dropdb x` and
 `psql -c "DROP DATABASE x"` land in the same vocabulary in two different guards.
 
 **A name nobody has decided about is `unknown`, and `unknown` is never sanctioned.** That is
-S-069's default-deny moved up one level: from "a statement no class claims" to "a binary no
+The `.sql` guard's default-deny moved up one level: from "a statement no class claims" to "a
 decision claims". `initdb`, `pg_ctl`, `pg_resetwal`, `pg_upgrade`, `reindexdb`, `vacuumdb` and
 the rest are `unknown` not because they are known to be dangerous but because nobody has said
 what a script may do with them. `test_every_binary_in_the_client_image_has_a_decision` pins the
@@ -133,12 +133,12 @@ from `--help` at source on 2026-08-26. A single flag table shared across CLIs wo
 `gunzip -c "$DUMP" | pg_restore …` as a `--clean` restore, on the shipped tree, today.
 
 `createuser -g/--member-of`, `-m/--with-member` and `-a/--with-admin` grant role **membership**,
-not a role attribute. They are class `role` and therefore sanctionable, matching S-069, whose
+not a role attribute. They are class `role` and therefore sanctionable, matching the `.sql`
 check 3 does not forbid `GRANT some_role TO x` either.
 
 ## Indirection: one literal level, and where the boundary really is
 
-S-077 resolves one literal level of variable indirection for a SQL payload. **This module
+The inline guard resolves one literal level of variable indirection for a SQL payload. **This
 resolves one literal level for a command name, so the two depths are the same by decision.** Two
 shapes are followed, and the first matters more than the second:
 
@@ -149,7 +149,7 @@ shapes are followed, and the first matters more than the second:
    expansion: `CU=createuser` (or `CU="createuser"`, or `CU='createuser -h db'`) followed by
    `$CU --superuser app`.
 
-**Where this module deliberately differs from S-077, with the reason.** S-077's
+**Where this module deliberately differs from the inline guard, with the reason.** Its
 `_literal_assignments` requires the value to be quoted. A SQL statement always contains
 whitespace, so requiring quotes costs it nothing. A command name is always a single bare word, so
 requiring quotes would lose `CU=createuser`, which is how shell is actually written. `_assigned`
@@ -184,28 +184,27 @@ property; neither of them says so.
   `supabase` is not a Postgres client CLI and `supa` is a function. Scoping a rule over
   non-Postgres database tooling is a separate decision.
 - **`psql -f` targets are not followed, only reported.** The invocation raises `sql_file`, so the
-  `cat <<EOF > /tmp/x.sql` then `psql -f /tmp/x.sql` pair S-077 names now needs a decision — but
-  nothing reads `/tmp/x.sql`. That **narrows** two of S-077's items; it does not close them.
-- **`psql < file` is a redirection, not a flag**, and raises nothing here or in S-077.
+  `cat <<EOF > /tmp/x.sql` then `psql -f /tmp/x.sql` pair it names now needs a decision — but
+  nothing reads `/tmp/x.sql`. That **narrows** two of its items; it does not close them.
+- **`psql < file` is a redirection, not a flag**, and raises nothing here or there.
 - **Only whole-`#` comments after a word boundary are stripped**, quote-aware. A CLI name inside
   a `'…'` string on a live line is still tokenised.
 - **A binary that is not in `_CLI_RULES` is invisible**, including `alembic`, `supabase`, and any
   wrapper script. `test_every_binary_in_the_client_image_has_a_decision` only pins the image.
 - **Python scripts are not swept.** `scripts/bootstrap_super_admin.py` could call `createuser`
-  through `subprocess` and nothing would read it. That is S-077's first named hole and it is
+  through `subprocess` and nothing would read it. That is its first named hole and it is
   still open, for the same reason: doing it properly means an `ast` pass, which is its own seed.
 - **`.github/workflows/*.yml` is not swept.** A `run:` step is a shell script by another name.
-  Still open, as S-077 left it.
+  Still open, as that guard left it.
 - **Scope is `scripts/` and `backend/scripts/`**, the same two roots as both other guards.
   `docs/ops/backup-restore.md` holds real commands inside a runbook and documentation is not
   swept.
 
 ## Why this is not an ADR
 
-`.claude/rules/seeds.md` § "Why this is a rule here and not ADR-049" establishes the boundary:
-"Every ADR in this repository decides something about the system it builds", and how this
-repository verifies is `.claude/rules/` and the folder `CLAUDE.md` files. This module decides how
-a check reads argv. `backend/CLAUDE.md` § Testing carries the pointer.
+Every ADR in this repository decides something about the system it builds. How this
+repository verifies belongs in `.claude/rules/` and the folder `CLAUDE.md` files instead.
+This module decides how a check reads argv. `backend/CLAUDE.md` § Testing carries the pointer.
 """
 
 from __future__ import annotations
@@ -331,7 +330,7 @@ _ESCALATING_FLAGS: dict[str, tuple[_Flag, ...]] = {
 }
 
 # The two entries in the imported `_ESCALATIONS` that no `createuser` flag can spell. Named as
-# their own set rather than left out, because S-014's finding is that a guard which asks "is
+# their own set rather than left out, because the `audit_logs` finding is that a guard asking "is
 # this name in the covered list" pins the list. A new entry in `_ESCALATIONS` fails
 # `test_the_argv_escalation_set_and_the_sql_escalation_set_account_for_each_other` until
 # somebody puts it on one side or the other.
@@ -411,8 +410,8 @@ _SANCTIONED: dict[str, _Sanction] = {
             "docs/ops/backup-restore.md:91-92 names the one scratch database it targets. It "
             "carries neither --clean nor --create, so it is class restore and not database: "
             "the drop and the create are done at :116 and :122 through psql -c, which is "
-            "S-077's guard's subject, not this one's. sql_file: :149 runs "
-            "scripts/restore_bootstrap_role.sql, whose nine statements are S-069's guard's "
+            "the inline guard's subject, not this one's. sql_file: :149 runs "
+            "scripts/restore_bootstrap_role.sql, whose nine statements are the `.sql` guard's "
             "subject; ADR-052 section 1 is the decision that the role and its grants have to "
             "be replayed outside the Alembic chain after a restore. It is sanctioned for "
             "nothing else. A createuser, a dropdb, or a pg_restore --clean added here fails "
@@ -542,7 +541,7 @@ def _bare(token: str) -> str:
 def _assigned(text: str, name: str) -> list[str]:
     """Every literal value assigned to `name` in `text`: quoted, or a bare single word.
 
-    The bare form is where this module differs from S-077's `_literal_assignments`, and the
+    The bare form is where this differs from the inline `_literal_assignments`, and the
     reason is in the module docstring: a SQL payload always has whitespace, so requiring
     quotes costs that scanner nothing, while a command name never does, so requiring quotes
     here would lose `CU=createuser`.
@@ -682,7 +681,7 @@ def test_no_sanctioned_script_invokes_a_class_its_decisions_did_not_cover() -> N
 def test_no_script_invokes_a_cli_that_confers_an_escalating_role_attribute() -> None:
     """Check 3: never overridable by `_SANCTIONED`, in any script, ever.
 
-    This is the check S-079's planted controls fail. `createuser --superuser familyroots_app`
+    This is the check this guard's planted controls fail. `createuser --superuser familyroots_app`
     hands the application role every clan's rows and switches off row-level security for every
     request the application makes, on any database it is run against, with no SQL text anywhere
     for the other two guards to read.
@@ -799,12 +798,12 @@ def test_every_binary_in_the_client_image_has_a_decision() -> None:
 def test_the_argv_escalation_set_and_the_sql_escalation_set_account_for_each_other() -> None:
     """The symmetry this seed exists for, made machine-checked rather than claimed.
 
-    S-069's `_ESCALATIONS` forbids seven things in SQL text. Five of them are role attributes
+    The `.sql` guard's `_ESCALATIONS` forbids seven things in SQL text. Five are role attributes
     `createuser` can set with a flag, and this module forbids those five flags. Two —
     a grantee of `PUBLIC` and `WITH GRANT OPTION` — have no `createuser` spelling at all and
     are named in `_NO_ARGV_SPELLING`.
 
-    The assertion is an equality over the union, not a subset check. That is S-014's finding
+    The assertion is an equality over the union, not a subset check. That is the finding
     applied here: a subset check would pass silently when a new entry is added to
     `_ESCALATIONS`, pinning the list this module happens to cover instead of the coverage.
     """
@@ -917,7 +916,7 @@ def test_the_scanner_finds_the_invocation_shapes_it_is_given(
         'pg_dump --format=custom --no-owner "$URL" | gzip > out.gz',
         "pg_dumpall --roles-only",
         'pg_isready -h "$PGHOST"',
-        # A psql with no `-f` is S-077's subject, not this module's.
+        # A psql with no `-f` is the inline guard's subject, not this module's.
         'psql "$DSN" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS x WITH (FORCE)"',
         'psql "$DSN" -tAc "SELECT 1"',
         # `-F` is not `-f`: psql's field separator, on the real line at :193.
@@ -981,7 +980,7 @@ def test_check_three_fires_on_every_spelling_of_an_escalating_flag(label: str, s
         "createuser --no-superuser --no-createdb --no-createrole familyroots_app",
         "createuser --no-bypassrls --no-replication familyroots_app",
         "createuser -SDR familyroots_app",
-        # Role membership is class `role` and sanctionable, not an attribute. S-069's check 3
+        # Role membership is class `role` and sanctionable, not an attribute. The `.sql` check 3
         # does not forbid `GRANT some_role TO x` either.
         "createuser --member-of app_readers reporter",
         "createuser -g app_readers -m reporter -a admin newrole",
@@ -1035,9 +1034,9 @@ def test_the_indirection_boundary_is_where_this_module_says_it_is() -> None:
 
 
 def test_the_bare_unquoted_assignment_is_followed_here_and_not_by_the_sql_guard() -> None:
-    """The one deliberate divergence from S-077's resolver, pinned so it stays deliberate.
+    """The one deliberate divergence from the inline resolver, pinned so it stays deliberate.
 
-    S-077 requires an assignment value to be quoted, which costs a SQL scanner nothing because
+    That guard requires an assignment value to be quoted, which costs it nothing because
     a statement always contains whitespace. A command name never does, so this module accepts
     a bare token too. If someone unifies the two resolvers, this test says which behaviour was
     chosen on purpose and why.

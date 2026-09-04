@@ -37,7 +37,7 @@ Environment:
     SUPABASE_SERVICE_ROLE_KEY   from ``scripts/supabase_local.sh env``.
 
 What this script does NOT seed: persons, marriages, parent-child links, documents and
-events. A role check needs none of them, and seed S-073 put them out of scope on purpose —
+events. A role check needs none of them, and they are out of scope on purpose —
 fixtures for a tree belong to the test that asserts something about a tree, not here.
 ``clan_memberships`` is likewise untouched: it links a **Person** to a clan, not a user,
 so it cannot be written without inventing person fixtures.
@@ -97,13 +97,13 @@ CLAN_A = ClanSpec(
     id=uuid.UUID("aaaaaaaa-0000-4000-8000-000000000001"),
     slug="nguyen-phuc",
     name="Nguyễn Phúc",
-    description="Dòng họ thử nghiệm chính (seed S-073). The clan under test.",
+    description="Dòng họ thử nghiệm chính. The clan under test.",
 )
 CLAN_B = ClanSpec(
     id=uuid.UUID("bbbbbbbb-0000-4000-8000-000000000002"),
     slug="tran-gia",
     name="Trần Gia",
-    description="Dòng họ thứ hai (seed S-073). Exists so isolation has a second side.",
+    description="Dòng họ thứ hai. Exists so isolation has a second side.",
 )
 
 CLANS: tuple[ClanSpec, ...] = (CLAN_A, CLAN_B)

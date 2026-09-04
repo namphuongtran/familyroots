@@ -1,23 +1,20 @@
 # Roadmap
 
 **What to build first, and why.** This file holds the **milestone order** and the reason for each
-boundary. It holds no work. What is scheduled today, what is owed, and what is not verified are all
-in [`SEEDS.md`](SEEDS.md), which is the only tracker.
+boundary. It holds no work. What is scheduled today lives in GitHub Issues on
+`namphuongtran/familyroots`, which is the only tracker.
 
 **Rewritten 2026-08-13.** It held a status board until then, alongside a second state file,
 `work-register.md`. Two places recording the same state is two places to be wrong, and both went
 stale: on 2026-08-13 this file still listed audit `ip_address`/`user_agent` as dormant work when
 `backend/app/models/audit_log.py:36-37` had already declared both columns.
-[`../.claude/rules/seeds.md`](../.claude/rules/seeds.md) is the rule that replaced that shape.
 
 **The list that started all of this is gone, and it went in that same rewrite.** Section 6,
 "Beyond the current streams", held four dormant items from the 2026-07-02 database review at
-lines 125 to 129. Commit `53f121d` deleted the whole section on 2026-08-13. Verified on 2026-08-22
-by S-020, which was written to remove it: `git show 53f121d^:docs/roadmap.md | sed -n '118,135p'`
-prints the section, and no line of this file names an item of that list any more. Every remaining
-mention here describes the list rather than being it. **So S-020's own end state was already met
-when the seed was written**, on the same day and by the same commit. The three items it
-re-measured are tracked in [`SEEDS.md`](SEEDS.md) and nowhere else.
+lines 125 to 129. Commit `53f121d` deleted the whole section on 2026-08-13. Verified on 2026-08-22:
+`git show 53f121d^:docs/roadmap.md | sed -n '118,135p'` prints the section, and no line of this file
+names an item of that list any more. Every remaining mention here describes the list rather than
+being it.
 
 **This file decides nothing, and three of the boundaries below rest on no source.** Where that is
 true it says so. A boundary marked "not verified" is the maintainer's order and is real; what is
@@ -44,7 +41,7 @@ dogfood-only target would drop the polish and keep the isolation and backup work
 | Inside **M2**, the tree slice is last among the read slices | It is the heaviest: XYFlow plus the tree read-model plus performance on a clan of several thousand people. Scheduled once the pattern is stable | [web architecture spec, line 258](superpowers/specs/2026-08-02-web-architecture-observability-design.md) |
 | **M3**, deploy and operate, before real data arrives | **Not verified.** No source read on 2026-08-13 orders the restore drill against the first real clan. The reasoning is the maintainer's: a backup nobody has restored is not a backup | |
 | **M4**, mobile M1 through M4, after the web slices | The maintainer's decision of 2026-08-13, from the target above. **Not verified** as a technical constraint: nothing makes mobile depend on the web app | |
-| Inside **M4**, no mobile milestone is planned before the M0 device walk | M0's own definition of done is "proven on a device". Planning M1 against an unproven spine inherits its mistakes | [`SEEDS.md`](SEEDS.md#owed-with-an-owner-and-a-trigger), the Task 20 row |
+| Inside **M4**, no mobile milestone is planned before the M0 device walk | M0's own definition of done is "proven on a device". Planning M1 against an unproven spine inherits its mistakes | The mobile M0 device walk, which nobody can run from a terminal in this repository |
 
 **Three of the nine rows say "not verified", and that is the finding rather than a gap in the work.**
 The order is the maintainer's and is real. The reasons behind three of its boundaries are written
@@ -52,33 +49,32 @@ down nowhere.
 
 ## Where each milestone stands
 
-No status lives here. [`SEEDS.md`](SEEDS.md) owns it, in one board. This table says only which
-milestone holds which seeds, so a reader knows where to look.
+No status lives here. GitHub Issues owns it. This table says only what each milestone is for, so a
+reader knows where to look.
 
-| Milestone | Seeds | What it is for |
-|---|---|---|
-| **M0** Make the surface verifiable | S-001 to S-007, plus S-034 | The colour tokens, the fonts, contrast, the primary-colour decision, dark mode, a gate so the class of defect cannot return, and the 200%-text-scale defect S-002 found |
-| **M1** Finish clan isolation and the data rules | S-008 to S-021, plus S-053 to S-056 | Row-level security on the eight uncovered tables, the two privacy toggles, invitation expiry, and the first dated restore drill. S-020 re-measured the 2026-07-02 database review and turned the two items still open into four seeds: field-level visibility is S-053, and the edge cascade on person soft-delete splits into the client-visible read gap (S-054), the decision behind ADR-006's unimplemented cascade (S-055), and building whatever that decides (S-056) |
-| **M2** The web slices | S-022 to S-033 | Auth, then persons as the reference slice. Relationships, tree, events, documents, and admin become seeds when persons lands |
-| **M3** Deploy and operate | none yet | The Pulumi decision and the monitoring set are rows in [Owed](SEEDS.md#owed-with-an-owner-and-a-trigger), because each needs a decision or an environment first |
-| **M4** Mobile M1 to M4 | none yet | A row in [Owed](SEEDS.md#owed-with-an-owner-and-a-trigger), triggered by the M0 device walk |
+| Milestone | What it is for |
+|---|---|
+| **M0** Make the surface verifiable | The colour tokens, the fonts, contrast, the primary-colour decision, dark mode, a gate so the class of defect cannot return, and the 200%-text-scale defect |
+| **M1** Finish clan isolation and the data rules | Row-level security on the eight uncovered tables, the two privacy toggles, invitation expiry, field-level visibility, the edge cascade on person soft-delete, and the first dated restore drill |
+| **M2** The web slices | Auth, then persons as the reference slice. Relationships, tree, events, documents, and admin follow once persons lands |
+| **M3** Deploy and operate | The Pulumi decision and the monitoring set. Each needs a decision or an environment first |
+| **M4** Mobile M1 to M4 | Triggered by the M0 device walk |
 
-**Later milestones deliberately carry no seeds.** A seed with no `Blocked by` entry claims to be
-actionable today, and that claim has to be true. Work whose trigger is not met is a register row
-instead.
+**Later milestones deliberately carry no open issues.** An issue claims to be actionable today, and
+that claim has to be true. Work whose trigger is not met stays off the board.
 
 ## The three shapes of blocker, and why they are tracked differently
 
 | Shape | Where it lives | Example |
 |---|---|---|
-| Work one agent can finish | a seed in [`SEEDS.md`](SEEDS.md) | S-008, a policy on `change_requests` |
-| Work that needs a decision first | a decision seed that blocks the rest | S-004, which repaints the product |
-| Work nobody in this repository can do | an [`Owed`](SEEDS.md#owed-with-an-owner-and-a-trigger) row | Creating the Supabase avatars bucket |
+| Work one agent can finish | a GitHub issue labelled `ready-for-agent` | A policy on `change_requests` |
+| Work that needs a decision first | a GitHub issue labelled `ready-for-human`, blocking the rest | The decision that repaints the product |
+| Work nobody in this repository can do | a GitHub issue held open with its owner and trigger named in the body | Creating the Supabase avatars bucket |
 
-**Four owner actions block shipped code right now**, and all four are `Owed` rows with the full
-detail: the missing avatars bucket, which makes `set-avatar` return `503` in every environment; the
-unknown Supabase email-template format; `delete-branch-on-merge` being off; and the mobile M0 device
-walk. None can be done from a terminal in this repository, so none is a seed.
+**Four owner actions block shipped code right now**: the missing avatars bucket, which makes
+`set-avatar` return `503` in every environment; the unknown Supabase email-template format;
+`delete-branch-on-merge` being off; and the mobile M0 device walk. None can be done from a terminal
+in this repository.
 
 ## Restarting the agent team
 
@@ -86,18 +82,26 @@ Four agent definitions live in [`../.claude/agents/`](../.claude/agents/): `back
 `web-engineer`, `flutter-engineer`, and `product-designer`. Each carries this project's gates, so a
 dispatch only needs to say *what*, not *how*.
 
-The rules for running more than one at a time are in
-[`../.claude/rules/seeds.md`](../.claude/rules/seeds.md), under "Running more than one agent at a
-time", and they are not repeated here. The shortest version: every parallel backend dispatch sets its
-own `TEST_PG_DB_NAME`, agents never push, and the gate is re-run on the combined tree.
+Four rules apply when more than one runs at a time. Each cost real time to learn.
 
-**Give each dispatch one seed.** That is the whole point of the shape: a seed carries its own
-evidence, its own end state, and its own verification, so a dispatch is one line plus a seed ID.
+- **Every parallel backend dispatch sets its own `TEST_PG_DB_NAME`.** The integration harness drops
+  its throwaway database `WITH (FORCE)`, so two runs sharing the name drop each other's. It cost 182
+  spurious failures in one session. ADR-016 made the name an env var, which makes concurrent runs
+  safe **only if each dispatch sets it**.
+- **Agents never push and never open pull requests.** They commit to a worktree branch and stop.
+  This caught a defect no single agent could see: two backend branches, each green alone, red
+  together.
+- **Re-run the gate on the combined tree.** Per-branch green proves nothing about the composition.
+- **Fence file territory** when two agents touch adjacent surfaces, and rebase the moment `main`
+  moves underneath.
+
+**Give each dispatch one issue.** An issue carries its own evidence, its own end state, and its own
+verification, so a dispatch is one line plus an issue number.
 
 ## What this file is not
 
-- **Not a status board.** [`SEEDS.md`](SEEDS.md) is, in one place.
-- **Not a plan.** A seed holds the end state and the verification for one unit of work.
+- **Not a status board.** GitHub Issues is, in one place.
+- **Not a plan.** An issue holds the end state and the verification for one unit of work.
   `superpowers/specs/` holds the designs. `superpowers/plans/` receives nothing new.
 - **Not binding.** The order above is reported, with its author named per row. Where a row disagrees
   with the ADR or spec it cites, this file is the bug.

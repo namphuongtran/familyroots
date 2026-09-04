@@ -7,7 +7,7 @@ import type { ClanSwitchResponse, UserClansResponse, UserProfile } from '@/lib/t
  * release, refuses **both together** with a 422 `auth.clan_code_and_id_both_given`, and
  * then deletes `clan_id`. `clan_id` is dropped from these two shapes rather than kept
  * beside the new field, so nothing in this app can send the pair that is refused, and so
- * the backend's eventual deletion is not a change here. Seed S-082.
+ * the backend's eventual deletion is not a change here. The web register form.
  */
 export interface RegisterInput {
   email: string

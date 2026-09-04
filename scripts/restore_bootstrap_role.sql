@@ -13,7 +13,7 @@
 -- `SET LOCAL ROLE familyroots_app` on every transaction
 -- (backend/app/core/rls.py:63, settings.RLS_ENABLED defaults True at
 -- backend/app/core/config.py:71). The restored database is armed but unusable.
--- Measured 2026-08-22 by seed S-050; see docs/ops/backup-restore.md.
+-- Measured 2026-08-22 by the restore drill; see docs/ops/backup-restore.md.
 --
 -- These statements are the ones the migration chain already runs. They are copied
 -- from, and must stay equal to:

@@ -19,7 +19,7 @@ function readCookie(name: string): string | null {
  * Notifies `useCurrentClanId` subscribers after `writeClanCookie` /
  * `clearClanCookie` change the cookie. `document.cookie` writes fire no
  * native change event, so this is the only way a switch re-renders anything
- * without a page reload (S-025).
+ * without a page reload.
  */
 const clanCookieListeners = new Set<() => void>()
 
@@ -39,7 +39,7 @@ const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365
 /**
  * The cookie's attributes, decided here because this is the one place the
  * write and the read (`readCookie` above, `context.server.ts`) have to agree.
- * S-024 through S-033 inherit this shape rather than re-deciding it:
+ * The capability module through the legacy-component deletion inherit this shape rather than re-deciding it:
  *
  * - `httpOnly` is not set, i.e. false. This is forced, not chosen:
  *   `getClientRequestContext` above reads the cookie through `document.cookie`,
@@ -53,8 +53,8 @@ const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365
  *   redirect, a typed URL) but not on a cross-site subrequest or form post,
  *   which is the standard mitigation for a script-writable cookie. Matches
  *   what the legacy writer used to ship, back when one existed
- *   (`src/infrastructure/auth/clan-selection-storage.ts`, deleted by S-027 once nothing
- *   imported it — S-025 had already moved both real callers off it).
+ *   (`src/infrastructure/auth/clan-selection-storage.ts`, deleted by the legacy-transport deletion once nothing
+ *   imported it — the auth-store split had already moved both real callers off it).
  * - `secure` is added only when the page itself is served over `https:`.
  *   `document.cookie` silently drops a `Secure` attribute set from an
  *   insecure origin rather than erroring, so hard-coding it would break local
@@ -71,11 +71,11 @@ function clanCookieAttributes(): string {
 
 /**
  * Selecting a clan writes this cookie. `useAuth`'s `selectClan` and
- * `syncAuthContext` call this now (S-025) instead of the legacy
+ * `syncAuthContext` call this now instead of the legacy
  * `persistCurrentClanId` (`src/infrastructure/auth/clan-selection-storage.ts`, same
  * cookie name, compatible attributes, but it also wrote `localStorage.current_clan_id` —
- * deliberately not carried over here). That file had zero importers left after S-025 and
- * is deleted by S-027.
+ * deliberately not carried over here). That file had zero importers left after the auth-store split and
+ * is deleted by the legacy-transport deletion.
  */
 export function writeClanCookie(clanId: string): void {
   if (typeof document === 'undefined') return
@@ -101,7 +101,7 @@ export function readCurrentClanId(): string | null {
 }
 
 /**
- * Reactive read of the active clan for a client component (S-025). Wiring
+ * Reactive read of the active clan for a client component. Wiring
  * this into a TanStack Query key is what makes "switch clan" change what a
  * query returns without a page reload: `writeClanCookie` notifies every
  * subscriber, which re-renders with the new clan id, which changes the query

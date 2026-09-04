@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed **S-053**. **No code changes.** The whole diff is this file, one
+Accepted (2026-08-22). **No code changes.** The whole diff is this file, one
 new section in [`../contracts/rest-persons-api.md`](../contracts/rest-persons-api.md), and one
 index row handed to the coordinator. The seed's `Verification` field says a "keep it fixed" answer
 runs no gate, so **no gate was run for the decision**. Two measurements below did run the backend
@@ -21,8 +21,8 @@ per-clan configurable, or simply larger?
 
 ### The correction this ADR is built on
 
-Seed S-020 recorded on 2026-08-13 that field-level visibility "returned no implementation". That
-is false, and the reason it is false is worth keeping. S-020 searched for
+A record from 2026-08-13 said field-level visibility "returned no implementation". That is false,
+and the reason it is false is worth keeping. It searched for
 `field_visibility|visible_fields`, which are column names nobody ever chose. The rule ships as a
 tuple constant and a function, so a name search could not see it. **An absence claim built on a
 name search is a claim about names, not about behaviour.** ADR-044 Measurement 2 records the same
@@ -182,7 +182,7 @@ command handler. The two route-level suites replace the call with a no-op fake:
 
 So the three call sites at `persons.py:126, 267, 337` are the load-bearing part of the rule and
 nothing tests them. That is a prediction, so it was tested by planting the failure, per
-`.claude/rules/seeds.md` § "Two questions that catch it":
+`.claude/rules/testing.md` § "Two questions that catch it":
 
 ```
 ### BASELINE, unmodified tree
@@ -212,7 +212,7 @@ Sat Aug 22 13:57:56 +07 2026
 defect was then reverted with `git checkout --`, and the section of `persons.py` was re-read to
 confirm the call is back.
 
-This is the exact shape `.claude/rules/seeds.md` § "A test pins an outcome, not a setting" was
+This is the exact shape `.claude/rules/testing.md` § "A test pins an outcome, not a setting" was
 adopted for, and it is a fourth instance of it. The suite asserts that a function redacts, which is
 a fact the function's own body guarantees. It does not assert the outcome anyone cares about, which
 is that **the response body a route sends contains no stranger's phone number.**
@@ -249,7 +249,7 @@ session and is rejected by migration `035`'s `WITH CHECK` with "new row violates
 policy".
 
 ADR-044 also named this decision as explicitly not its own, at
-`044-privacy-toggles-dropped-from-v1.md:396`: "**Field-level visibility**, which is seed S-053 and
+`044-privacy-toggles-dropped-from-v1.md:396`: "**Field-level visibility**, which is
 ADR-049. It is a different question — which *fields* of a person a member sees, not who may read
 the clan at all."
 
@@ -296,7 +296,7 @@ docs/decisions/037-change-requests-workflow.md
 entered with commit `8dbf159` on 2026-07-05, where it is a label from a review list that was never
 committed.
 
-> **Amended 2026-08-22 by seed S-059. The sentence above is wrong on one point, and the way it went
+> **Amended 2026-08-22. The sentence above is wrong on one point, and the way it went
 > wrong is the same defect this ADR was written to correct.** `L11` **was** committed. Re-running
 > `git log -S"L11"` over the **whole tree** rather than over `backend/` returns `bae1ee4`
 > (2026-07-04), one commit earlier, which added `docs/architecture/backend-review-2026-07-04.md`.
@@ -382,7 +382,7 @@ another. That is Measurement 8(a), closed here rather than deferred.
 
 Measurement 5 found that no test proves any route calls the redaction, and proved it by planting
 the defect and watching 1351 tests stay green. **This ADR does not fix that**, because fixing it is
-a build with its own gate and its own negative control, and `.claude/rules/seeds.md` forbids closing
+a build with its own gate and its own negative control, and `.claude/rules/testing.md` forbids closing
 two seeds in one pull request. The finding is handed to the coordinator as a proposed seed, with
 the measurement above as its evidence.
 
@@ -457,8 +457,6 @@ routes.
 
 ## Related
 
-- Seed **S-053** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes, and seed **S-020**, whose
-  false absence claim is the reason this is a decision rather than a build.
 - [ADR-044](044-privacy-toggles-dropped-from-v1.md) — the dead `clan_settings` table, the reason a
   per-clan set has nowhere to live, and the ADR that named this question and handed it here (`:396`).
 - [ADR-037](037-change-requests-workflow.md) § 7 — the same two fields excluded from
@@ -474,5 +472,5 @@ routes.
 - [`../contracts/rest-exports-api.md`](../contracts/rest-exports-api.md) § "PII note" and
   [`../contracts/rest-change-requests-api.md`](../contracts/rest-change-requests-api.md) `:93-94` —
   the two other contracts that already name these fields.
-- [`../../.claude/rules/seeds.md`](../../.claude/rules/seeds.md) § "A test pins an outcome, not a
+- [`../../.claude/rules/testing.md`](../../.claude/rules/testing.md) § "A test pins an outcome, not a
   setting" — the rule Measurement 5 is a fourth instance of.

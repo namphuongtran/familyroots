@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 5 (S-008, ADR-008): change_requests is clan-isolated at the DB.
+"""RLS layer-2 Phase 5 (ADR-008): change_requests is clan-isolated at the DB.
 
 Migration 030 enables the migration-027 clan-isolation policy on ``change_requests``. A
 change request holds a *proposed* value for clan data before anyone approves it

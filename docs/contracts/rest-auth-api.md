@@ -75,7 +75,7 @@ Request/response expectations:
 
 ### The join identifier: `clan_code` now, `clan_id` for one more release
 
-**Decided by seed S-081 on 2026-08-26.** [ADR-057](../decisions/057-the-invitation-link-is-the-primary-join-path.md)
+**Decided on 2026-08-26.** [ADR-057](../decisions/057-the-invitation-link-is-the-primary-join-path.md)
 § 2 made the typed join identifier the clan **code** (the slug) and left this one
 question to this file, under "What this ADR deliberately does not decide": whether
 `clan_id` is removed at once or accepted alongside the code for one release.
@@ -94,14 +94,14 @@ this path and will be deleted, along with the 422 below.
 | a code no clan carries | 404 `clan_not_found` |
 | a code failing the slug pattern | 422 `validation_error`, `detail.fields` contains `body.clan_code` |
 
-**Why a window and not a clean break.** When S-081 landed, the web register form
-still sent `clan_id` on join, and that form was a **separate seed** (S-082) in a
+**Why a window and not a clean break.** When the backend half landed, the web register form
+still sent `clan_id` on join, and that form was a **separate seed** in a
 separate pull request. Removing `clan_id` here would have made every join
-submission 422 from the moment S-081 merged until S-082 did. Keeping it cost
+submission 422 from the moment the backend half merged until the web half did. Keeping it cost
 nothing, because the field is optional either way: nothing that sends `clan_code`
 is affected by `clan_id` still being accepted.
 
-**Seed S-082 landed on 2026-08-26, and no client in this repository sends
+**The web half landed on 2026-08-26, and no client in this repository sends
 `clan_id` on either path any more.** The register form submits `clan_code` at
 `web/src/app/[locale]/(auth)/register/page.tsx:155` for `completeOnboarding` and
 `:165` for `signUp`, and the field was **removed** from `RegisterInput` and
@@ -153,11 +153,11 @@ above that mention `clan_id`, and the two tests named for it in
 `backend/tests/integration/test_join_by_clan_code.py`. The `clan_not_found` copy
 itself is **not** changed here: that message is shared with clan detail and the
 platform-admin routes, and the inline register-field wording spec § 7.1b asks for
-belongs to the web form (seed S-082).
+belongs to the web form.
 
 ### Registering with no clan
 
-**Decided by seed S-085 on 2026-08-26**, and recorded in
+**Decided on 2026-08-26**, and recorded in
 [ADR-058](../decisions/058-registration-may-name-no-clan.md). This section extends "The
 join identifier" above rather than replacing any of it: everything that section says
 about `clan_code`, `clan_id`, and the deprecation window still holds whenever
@@ -305,7 +305,7 @@ client's, sent per request as `X-Current-Clan-Id` (see
   breaking change deliberately accepted pre-frontend (no client consumed the
   old shape yet).
 - `POST /register` and `POST /onboard` changed their **join** identifier
-  (ADR-057 § 2, seed S-081, 2026-08-26) from a `clan_id` UUID to a `clan_code`
+ (ADR-057 § 2, 2026-08-26) from a `clan_id` UUID to a `clan_code`
   slug. This is a breaking change to two public routes, landed with a
   one-release deprecation window rather than a clean break — see "The join
   identifier" above for the window, its reason, and the exact list of what to

@@ -1,6 +1,6 @@
-"""RLS layer-2 Phase 10: clan_settings takes the 027 template. user_clan_roles does NOT (S-010).
+"""RLS layer-2 Phase 10: clan_settings takes the 027 template. user_clan_roles does NOT.
 
-Seed S-010 named two tables. Only one of them ships here, and the other half became a
+Phase 10 named two tables. Only one of them ships here, and the other half became a
 decision seed. This docstring is the durable record of why, because the seed tracker is
 not what the next agent reads when it opens a migration.
 
@@ -23,7 +23,7 @@ is false; it is corrected in the same commit as this migration.
 
 This is the ``notification_log`` situation from ADR-043 § 2 repeating: a cheap correct policy
 that guards a reader which does not exist yet, taken over a permanent exemption row in
-S-015's clan-owned table list, on the grounds that a second place to record a fact is a
+the clan-owned table list, on the grounds that a second place to record a fact is a
 second place to be wrong.
 
 **One live read path does exist, and it is the one that had to be checked before shipping.**

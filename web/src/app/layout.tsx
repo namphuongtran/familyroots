@@ -45,7 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     reads the locale next-intl's middleware already negotiated for this
     request (from the URL prefix, via a request header — see
     `.claude/rules/tailwind.md` § 7), so it resolves correctly here even though
-    this layout sits above the `[locale]` route param. See seed S-022.
+    this layout sits above the `[locale]` route param. See the `<html lang>` fix.
   */
   const locale = await getLocale()
 

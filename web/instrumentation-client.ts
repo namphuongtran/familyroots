@@ -4,7 +4,7 @@ import { redactInvitationTokensDeep } from '@/shared/telemetry/redact'
 /**
  * Drops an invitation token out of everything this SDK is about to send.
  *
- * Added by seed S-084. The browser SDK records a breadcrumb for every `fetch` and
+ * Added 2026-08-27. The browser SDK records a breadcrumb for every `fetch` and
  * every router navigation, each carrying the URL, and puts the page URL on the
  * event itself. Two URLs in this app carry a bearer credential: the browser route
  * `/{locale}/invitations/{token}` and the accept call

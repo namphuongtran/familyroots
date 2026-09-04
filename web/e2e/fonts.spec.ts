@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 /**
  * The assertion no other suite can make: that the mandated typefaces reach the
- * screen. Before S-002, `globals.css` named `'Inter'` and `'Playfair Display'`
+ * screen. Before the font fix, `globals.css` named `'Inter'` and `'Playfair Display'`
  * literally while `next/font` served a generated family name, so the browser
  * silently fell back to a system face. Nothing in type-check, lint or the unit
  * suite can see that. Only a computed style in a real browser can.
@@ -68,7 +68,7 @@ test.describe('the mandated typefaces load and are applied', () => {
   })
 
   test('both faces are loaded, not merely named', async ({ page }) => {
-    // A literal family name, which is the defect S-002 fixed, leaves the computed
+    // A literal family name, which is the defect the font fix fixed, leaves the computed
     // value looking plausible while no matching face exists. This is the part
     // that catches it: the browser reports a real, loaded face for each name.
     //

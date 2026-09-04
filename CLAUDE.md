@@ -7,14 +7,25 @@ FamilyRoots is a Vietnamese genealogy platform that lets clans maintain accurate
 Growing, with strong architectural foundations and active scaffold-to-build work in selected areas (mobile modules, infra automation, and auxiliary scripts).
 
 ## How Work Is Planned Here
-Work is tracked as **seeds**: one issue, sized for one agent in one sitting, carrying its own
-evidence and naming what blocks it and what it unblocks.
+Work is tracked as **GitHub issues** on `namphuongtran/familyroots`, through the `gh` CLI.
 
-- **Picking up work:** open docs/SEEDS.md and take any seed whose `Blocked by` is `none`.
-- **The rule itself** (what a seed is, its nine fields, where prose goes): .claude/rules/seeds.md.
+- **Picking up work:** take an open issue labelled `ready-for-agent`.
 - **Milestone order and the reason for each boundary:** docs/roadmap.md. It holds no work.
-- **One pull request per seed.** Do not close two seeds in one PR unless they are the same change.
-- Work that nobody in this repo can do is an `Owed` row in docs/SEEDS.md, not a seed.
+- **One pull request per issue.** Do not close two issues in one PR unless they are the same change.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `namphuongtran/familyroots`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. ADRs live in `docs/decisions/`. See `docs/agents/domain.md`.
 
 ## How to Use This Second Brain
 - Before planning any feature: run /project:before-plan
@@ -91,7 +102,7 @@ When code and docs disagree, the code is the truth — fix the doc in the same P
 
 ## Known Pain Points
 - Prompt 2 TODO scaffolds remain in infra and helper scripts (mobile's were deleted by the ADR-034 rebuild).
-- Mobile M0 has never run on a device: it compiles and CI builds an APK, but Supabase/Sentry init needs platform channels, so login against real Supabase is unverified (the Task 20 row in docs/SEEDS.md).
+- Mobile M0 has never run on a device: it compiles and CI builds an APK, but Supabase/Sentry init needs platform channels, so login against real Supabase is unverified.
 - Pulumi resources are currently stubs, which can create deployment drift.
 - In-process event dispatcher lacks durable delivery guarantees.
 - Web testing harness appears less complete than backend/mobile test posture.

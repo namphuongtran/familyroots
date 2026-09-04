@@ -145,7 +145,7 @@ describe('listPersons — Page<T>', () => {
     expect((error as ApiError).code).toBe('invalid_cursor')
     expect((error as ApiError).status).toBe(400)
     // The rule this proves: never repair the cursor from this error. The
-    // repository (S-030) drops it and refetches page one; this layer's job
+    // repository drops it and refetches page one; this layer's job
     // is only to make sure the code survives the round trip un-mangled.
   })
 })

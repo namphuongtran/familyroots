@@ -12,8 +12,8 @@ function asClanRole(role: string | undefined): ClanRole | undefined {
 }
 
 /**
- * Rewired onto `domain/capability/capability.ts` (S-024) by S-027, which closes the
- * `no-orphans` warning that module carried since S-024 landed it with no consumer — see
+ * Rewired onto `domain/capability/capability.ts` by the legacy-transport deletion, which closes the
+ * `no-orphans` warning that module carried since the capability module landed it with no consumer — see
  * `web/CLAUDE.md`, "Clan capabilities". This hook used to call the legacy
  * `deriveCapabilities` in the now-deleted `src/application/auth/use-cases/capabilities.ts`.
  * Only the four capability names any component still destructures survive here

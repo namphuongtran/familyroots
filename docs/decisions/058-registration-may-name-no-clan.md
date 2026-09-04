@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-08-26), by seed **S-085**, which [ADR-057](057-the-invitation-link-is-the-primary-join-path.md)
+Accepted (2026-08-26). [ADR-057](057-the-invitation-link-is-the-primary-join-path.md)
 opened from its own finding 2.
 
 **This ADR ships code**: `clan_action` becomes optional on `RegisterRequest` only, a new
@@ -32,7 +32,7 @@ The contract agrees with the first: `Auth | Yes` at `docs/contracts/rest-invitat
 
 ### What the pre-fix failure actually is, and it is not the code the seed named
 
-Seed S-085 and ADR-057 finding 2 both point at the handler check and expected
+This change and ADR-057 finding 2 both point at the handler check and expected
 `auth.clan_id_required_for_join`. **Measured 2026-08-26, that is not the error an honest invitee
 request gets.** Posting the invitee's body — email, password, full name, and no clan field at all —
 to `POST /auth/register` against the code before this ADR returned:
@@ -116,7 +116,7 @@ called.
 body indistinguishable from an invitee's, and gets a clanless account where it previously got a 422.
 No shipped client can do this: `web/src/app/[locale]/(auth)/register/page.tsx:80` and `:90` put
 `clan_action` in the request object unconditionally, and `mobile/lib` has no register caller at all
-(counted by S-081 and recorded at `docs/contracts/rest-auth-api.md`). A blank code field is also
+(counted and recorded at `docs/contracts/rest-auth-api.md`). A blank code field is also
 still a 422, because `""` fails `_SLUG_PATTERN`.
 
 ### 3. `POST /auth/onboard` keeps `clan_action` required
@@ -244,7 +244,7 @@ walk and requires the typed name.
 ### Owed, named rather than left to be found
 
 1. **Regenerate `web/src/generated/api-types.ts`** so `clan_action` is optional on the register
-   request. Belongs with seed S-082, which owns the web register form.
+   request. Belongs with the change that owns the web register form.
 2. **`mobile` needs the onboarding branch.** `mobile/lib/app/router/app_router.dart:74` routes a
    zero-membership user to `/pending` and tells them their join request is being reviewed.
    `UserProfile.needsOnboarding` (`mobile/lib/domain/auth/user_profile.dart:29-30`) is the predicate,
@@ -255,17 +255,16 @@ walk and requires the typed name.
 - **Email verification.** Unchanged. A clanless account is created unconfirmed and sends the same
   verification email; login still answers `403 email_not_verified` until it is confirmed. The
   integration walk models a confirmed account at the stubbed identity seam and says so.
-- **`accept_path`**, which is seed S-086 and ADR-057's second owed item.
-- **The invitation landing page** (S-084) or the web register form (S-082, S-083).
+- **`accept_path`**, which is ADR-057's second owed item.
+- **The invitation landing page** or the web register form.
 - **Clan discovery.** ADR-057 refused it against ADR-044, and nothing here reopens it. No route added
   or changed answers "which clans exist".
-- **Whether `clan_id` stays on the join path.** S-081 decided that in
+- **Whether `clan_id` stays on the join path.** The contract change decided that in
   `docs/contracts/rest-auth-api.md` and this ADR does not touch the window.
 - **Any change to the invitation request or response contract.** There is none.
 
 ## Related
 
-- Seed **S-085** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes.
 - [ADR-057](057-the-invitation-link-is-the-primary-join-path.md) — found the gap, named this seed as
   owed, and made the invitation link the primary join path.
 - [ADR-048](048-invitation-accept-runs-on-the-system-session.md) — why accept runs on the privileged
@@ -277,5 +276,5 @@ walk and requires the typed name.
 - Spec § 7.1b (`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:854-873`) and § 7.2a
   (`:904-930`) — the register screen's non-enumeration rule, and the onboarding variant this makes
   reachable.
-- `docs/contracts/rest-auth-api.md` — "Registering with no clan", which extends S-081's "The join
+- `docs/contracts/rest-auth-api.md` — "Registering with no clan", which extends "The join
   identifier".

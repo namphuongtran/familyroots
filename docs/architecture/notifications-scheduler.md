@@ -114,7 +114,7 @@ of precision.
 
 ### The table carries an RLS policy, and this job is not subject to it
 
-Since 2026-08-22 (migration `034_rls_audit_notification`, seed S-014,
+Since 2026-08-22 (migration `034_rls_audit_notification`,
 [ADR-043](../decisions/043-audit-notification-rls-posture.md) § 2) `notification_log` has RLS
 enabled with the ordinary clan-isolation policy,
 `USING (clan_id = <app.clan_id GUC>) WITH CHECK (same)`.

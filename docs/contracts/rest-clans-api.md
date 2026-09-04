@@ -92,7 +92,7 @@ to the time of this write. A client may use the response instead of re-fetching 
 Pinned by
 `backend/tests/integration/test_clan_patch_returns_updated_row.py`, which reads the
 response body against the stored row. Until 2026-08-26 this route answered **500** on every
-PATCH that changed something, while writing the row anyway (seed S-078); a no-op PATCH
+PATCH that changed something, while writing the row anyway; a no-op PATCH
 answered 200, so the failure only appeared on real edits.
 
 ### User list rows

@@ -1,4 +1,4 @@
-"""``scripts/seed_dev_data.py`` against a real, migrated Postgres (seed S-073).
+"""``scripts/seed_dev_data.py`` against a real, migrated Postgres.
 
 **What these tests cover and what they do not, stated first because it matters.**
 
@@ -135,7 +135,7 @@ def test_apply_writes_the_whole_fixture_and_nothing_else(conn, seeded):
 
 
 def test_the_fixture_covers_admin_editor_viewer_and_a_second_clan(conn, seeded):
-    """S-073's end state, asserted against the database rather than the source."""
+    """`make seed`'s end state, asserted against the database rather than the source."""
     rows = _rows_as_tuples(conn)
     roles_in_main_clan = {role for _, slug, role in rows if slug == seeder.CLAN_A.slug}
     assert {"admin", "editor", "viewer"} <= roles_in_main_clan
@@ -208,7 +208,7 @@ def test_verify_is_silent_when_both_halves_agree(conn, seeded):
 
 
 def test_a_missing_membership_row_is_named_as_a_missing_half(conn, seeded):
-    """**This is the defect S-073 exists to prevent, planted on purpose.**
+    """**This is the defect `make seed` exists to prevent, planted on purpose.**
 
     Delete one user's ``user_clan_roles`` row and leave the Supabase identity. The user
     still logs in. Every clan-scoped request then answers

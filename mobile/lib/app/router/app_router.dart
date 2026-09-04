@@ -43,7 +43,7 @@ class AuthRouteState extends ChangeNotifier {
 
   /// Three states, not a boolean. Flattening `pending` and `onboarding` into
   /// one flag is what sent a clanless user to a screen saying their join
-  /// request was waiting (seed S-093).
+  /// request was waiting.
   MembershipStatus membership = MembershipStatus.approved;
   bool needsClanPick = false;
 

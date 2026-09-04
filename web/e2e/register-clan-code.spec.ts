@@ -1,20 +1,20 @@
 import { expect, test, type Page } from '@playwright/test'
 
 /**
- * Seed S-083, spec § 7.1b: on `/vi/register` in create mode the clan code is
+ * the clan-code spec, spec § 7.1b: on `/vi/register` in create mode the clan code is
  * "auto-suggested, slugified live from the name, editable", and `auth.clan_slug_taken`
  * renders inline on the code field with a suggested alternative.
  *
  * Why this exists beside the jsdom test
  * (`src/app/[locale]/(auth)/register/page.test.tsx`): two of the four claims below are
  * about **layout**, and jsdom has no layout engine, so only a real browser can measure
- * them. `.claude/rules/tailwind.md` § 7 records the same lesson twice — trap 1 (S-034,
- * the wordmark) and the fifth trap (S-042, the Supabase banner). A clan code is the third
+ * them. `.claude/rules/tailwind.md` § 7 records the same lesson twice — trap 1 (the text-scale spec,
+ * the wordmark) and the fifth trap (the Supabase banner). A clan code is the third
  * field on this page that can be one long unbreakable word, and this time it is generated
  * from user input rather than hardcoded, so its worst case is longer than either.
  *
  * The `409` is served by `page.route`, not by a backend. That is deliberate: no e2e spec
- * in this suite talks to a live service (S-041), and a route handler gives the exact
+ * in this suite talks to a live service, and a route handler gives the exact
  * envelope `backend/app/core/exceptions.py` produces —
  * `{"error": {"code": "auth.clan_slug_taken", "message": ..., "detail": {}}}`, with the
  * `message` already localised, copied from `backend/app/i18n/vi.json:96`.
@@ -51,7 +51,7 @@ async function openCreateMode(page: Page): Promise<void> {
   await expect(page.getByLabel(VI.clanCode)).toBeVisible()
 }
 
-/** Fills the three fields S-083 does not own, so the form can be submitted. */
+/** Fills the three fields the clan-code spec does not own, so the form can be submitted. */
 async function fillTheRest(page: Page): Promise<void> {
   await page.locator('form input').first().fill('Trần Văn A')
   await page.locator('form input[type="email"]').fill('a@example.com')

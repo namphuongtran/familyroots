@@ -37,7 +37,7 @@ module.exports = {
         '`matchesToPath`), so an anchored `^react$` never matches a real resolved ' +
         'path — not "node_modules/react/index.js" under plain npm, and even less ' +
         'so "node_modules/.pnpm/react@19.x/node_modules/react/index.js" under ' +
-        "pnpm's isolated store. That was this rule's shape before seed S-029 " +
+        "pnpm's isolated store. That was this rule's shape before it was fixed " +
         'measured it: `pnpm depcruise` reported zero violations for a throwaway ' +
         "`import { useState } from 'react'` planted in `features/persons/api/`, " +
         "confirmed by dependency-cruiser's own JSON output marking that edge " +

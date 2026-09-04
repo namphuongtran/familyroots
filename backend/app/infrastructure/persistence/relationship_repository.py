@@ -234,7 +234,7 @@ class SqlAlchemyParentChildRepository:
 # ``_no_deleted_endpoint`` is imported from ``person_query_port`` rather than
 # copied. It stays private there because nothing outside
 # ``app.infrastructure.persistence`` may use it, and it stays one definition
-# because two copies of a visibility rule drift (seed S-056).
+# because two copies of a visibility rule drift.
 
 
 class SqlAlchemyMarriageReadPort:

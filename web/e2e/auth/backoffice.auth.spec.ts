@@ -3,15 +3,15 @@ import { BASE_URL } from '../../playwright.config'
 import { SEEDED_USERS } from './fixtures'
 
 /**
- * Seed S-070. The first authenticated screen this repository has ever read in a browser.
+ * the authenticated e2e harness. The first authenticated screen this repository has ever read in a browser.
  *
  * **Why `/vi/backoffice/dashboard`.** Its layout is one line of gate —
  * `await requireRole(['admin', 'super_admin'], locale)`
  * (`src/app/[locale]/backoffice/layout.tsx:27`) — which is `requireServerRole`, the function
- * S-070 names in its Sources as the reason nothing was reachable. The screen is also the one
+ * the authenticated e2e harness names in its Sources as the reason nothing was reachable. The screen is also the one
  * **ADR-046 is about**: `BackofficeSidebar`'s aside moved off a hand-built `bg-gray-950` onto
  * the `muted` token, and the `FR` mark kept `primary` on it. ADR-046 recorded contrast ratios
- * computed from the stylesheet and says in its own text that S-039 could not read the rail in
+ * computed from the stylesheet and says in its own text that ADR-046 could not read the rail in
  * a browser. These cases read it.
  *
  * **Why not `/vi/members`, which four seeds actually wanted.** It was the first choice and it
@@ -19,7 +19,7 @@ import { SEEDED_USERS } from './fixtures'
  * away: 2613 mount-effect re-runs and 18174 `GET /auth/me` calls in seven seconds, measured
  * 2026-08-26. A suite cannot take a stable reading on a screen that is re-rendering
  * thousands of times a second, and the loop is in `useAuth` and its store — legacy auth code
- * S-070 must not redesign. `web/CLAUDE.md` carries the measurement and the "how to add the
+ * the authenticated e2e harness must not redesign. `web/CLAUDE.md` carries the measurement and the "how to add the
  * next one" recipe; the loop needs its own seed.
  *
  * **Every case reads an outcome the markup alone cannot produce.** The role pair is the
@@ -54,7 +54,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
     await expect(page).toHaveURL(new RegExp(`${BACKOFFICE_PATH}$`))
     await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE)
 
-    // The rail S-039 could not read. Located by accessible name, so this also fails if an
+    // The rail ADR-046 could not read. Located by accessible name, so this also fails if an
     // icon-only regression leaves a link with no name for a screen reader to announce.
     for (const label of RAIL_LABELS) {
       await expect(page.locator('aside').getByRole('link', { name: label })).toBeVisible()
@@ -83,8 +83,8 @@ test.describe('the backoffice dashboard, as an admin', () => {
     // 60 seconds (`backend/app/main.py:221-226`) and one load of this screen spends several.
     await page.emulateMedia({ colorScheme: 'dark' })
 
-    // All three, on purpose. A ground that flips while an ink does not is the defect S-006
-    // and S-038 were opened for, and asserting only the background would pass over it.
+    // All three, on purpose. A ground that flips while an ink does not is the defect the dark-palette change
+    // and the palette sweep were opened for, and asserting only the background would pass over it.
     await expect(heading).toHaveCSS('color', TOKEN.foreground.dark)
     await expect(rail).toHaveCSS('background-color', TOKEN.muted.dark)
     await expect(mark).toHaveCSS('color', TOKEN.primary.dark)
@@ -120,7 +120,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
       // Kept, because `e2e/text-scale.spec.ts` asks exactly this of the two public pages and
       // a reader will look for it here. **Do not read it as "the screen is usable."** It
       // passes on this screen while every pixel of content sits outside the viewport — see
-      // the case below for the measurement. `.claude/rules/seeds.md`'s S-001 instance is the
+      // the case below for the measurement. `.claude/rules/testing.md`'s the token fix instance is the
       // same shape: a reading whose passing and failing values are indistinguishable.
       expect(scrollWidth).toBe(clientWidth)
     })
@@ -147,7 +147,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
      * lock the bug in. This turns **red** the moment someone gives the rail a responsive
      * branch, which is the reminder to delete this comment and the `.fail`.
      *
-     * Fixing it is out of S-070's scope — the seed says "any new screen" and "changing what
+     * Fixing it is out of the authenticated e2e harness's scope — the seed says "any new screen" and "changing what
      * any route requires" are excluded, and a responsive backoffice rail is a design decision
      * ADR-046 did not make. It needs its own seed.
      */
@@ -193,8 +193,8 @@ test.describe('the role gate answers two different refusals', () => {
 
       // A different status and a different Location from the viewer's refusal above. If both
       // readings were `307 → /vi/login`, the viewer case would be proving only that the
-      // request had no session, which is the failure mode `.claude/rules/seeds.md` records
-      // for S-001: a control whose passing and failing readings are the same value.
+      // request had no session, which is the failure mode `.claude/rules/testing.md` records
+      // for the token fix: a control whose passing and failing readings are the same value.
       expect(response.status()).toBe(307)
       expect(response.headers()['location']).toMatch(/\/vi\/login$/)
     })
@@ -207,7 +207,7 @@ test.describe('the role gate answers two different refusals', () => {
  * The harness's claim is that what it holds is worthless anywhere else. Cookies written by
  * `@supabase/ssr` are named for the project they came from — `sb-<ref>-auth-token` — and the
  * token inside is signed by that stack's key. So the captured state is replayed against the
- * *hermetic* dev server on :3100, which S-041 points at
+ * *hermetic* dev server on :3100, which the hermetic e2e config points at
  * `https://e2e-fake-project.example.supabase.co`: a different project, a different cookie
  * name, a different key.
  *
@@ -215,7 +215,7 @@ test.describe('the role gate answers two different refusals', () => {
  * project does not carry into a build pointed at another. It does not prove that middleware
  * verifies a signature — it does not: `supabase.auth.getSession()` reads the cookie. A
  * token's signature is checked by the backend's JWKS flow when the token is used
- * (`backend/app/core/security.py`), which is a separate guarantee and belongs to S-072.
+ * (`backend/app/core/security.py`), which is a separate guarantee and belongs to the local Supabase stack.
  */
 test.describe('the captured session does not travel', () => {
   test.use({ storageState: SEEDED_USERS.admin.storageState })

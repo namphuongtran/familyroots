@@ -13,8 +13,8 @@ pnpm build && pnpm start                       # production build + serve
 pnpm type-check                                # tsc --noEmit (strict)
 pnpm lint                                      # eslint .
 pnpm lint:fix
-pnpm format                                    # prettier --write . — the 99-file pre-existing drift (seed S-028, 2026-08-22) is gone; safe to run, but keep it out of a behavioural PR's diff
-pnpm format:check                              # prettier --check . — CI-gated since S-028
+pnpm format                                    # prettier --write . — the 99-file pre-existing drift (cleared 2026-08-22) is gone; safe to run, but keep it out of a behavioural PR's diff
+pnpm format:check                              # prettier --check . — CI-gated since 2026-08-22
 pnpm depcruise                                 # dependency-cruiser — enforces the layer rules below, CI-gated
 pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)
 pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/)
@@ -25,25 +25,25 @@ pnpm test:behavior                             # legacy: node --test on tests/be
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
-Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. `pnpm test:e2e:auth` is **not** in that list and is not optional either — it needs Docker, the Supabase CLI stack and a seeded backend, so run it whenever you touch an authenticated route, and say plainly if you could not. See "The authenticated e2e harness" (seed S-070). Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
+Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. `pnpm test:e2e:auth` is **not** in that list and is not optional either — it needs Docker, the Supabase CLI stack and a seeded backend, so run it whenever you touch an authenticated route, and say plainly if you could not. See "The authenticated e2e harness". Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
 
-**`pnpm format:check` has been in CI since seed S-028 (2026-08-22).** Before S-028, `web/CLAUDE.md`
+**`pnpm format:check` has been in CI since 2026-08-22.** Before that, `web/CLAUDE.md`
 and `.claude/rules/tailwind.md` § 9 both told contributors not to run `pnpm format`, because 112
 files had accumulated pre-existing Prettier drift and a format run would bury the real diff in any
-pull request. Re-counted at the start of S-028: `pnpm format:check` actually named **99** files,
+pull request. Re-counted on 2026-08-22: `pnpm format:check` actually named **99** files,
 not 112 — the figure had gone stale across three batches that added and deleted files in `web/`
-since it was first measured, and nobody had re-run the count. S-028 ran `pnpm format --write .`
+since it was first measured, and nobody had re-run the count. The fix ran `pnpm format --write .`
 once, as its own single-purpose commit, landing all 99 files at once and touching nothing else.
 `pnpm format` is safe to run now. The caution that follows is about diff hygiene, not about the
 tool: running it inside a pull request that also changes behaviour still buries the real diff, so
-keep a mechanical formatting pass in its own commit, the way S-028 did.
+keep a mechanical formatting pass in its own commit, the way that one did.
 
 Env vars in `.env.local` (see `.env.example`): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 **`pnpm test:e2e` does not need `.env.local`, and this is a gate guarantee, not an
-accident (S-041, 2026-08-22).** `.env.local` is untracked — `git ls-files web/.env.local`
+accident (2026-08-22).** `.env.local` is untracked — `git ls-files web/.env.local`
 returns nothing — so it exists in a primary checkout and is absent in every `git worktree`.
-Before S-041, that made the gate answer a question about the runner's filesystem: with the
+Before that fix, the gate answered a question about the runner's filesystem: with the
 file, `pnpm test:e2e` passed 38/38; without it, `e2e/text-scale.spec.ts` failed 4 of 38, on
 both `/vi/login` and `/vi/register` in both Playwright projects, because the two
 `NEXT_PUBLIC_SUPABASE_*` variables were missing, `SupabaseSetupNotice.tsx` rendered the
@@ -68,7 +68,7 @@ it already has — this only guarantees the placeholders when Playwright starts 
 
 **What this gate does not guarantee.** The missing-Supabase banner's own text-scale overflow is
 untouched — supplying the variables makes the banner stop rendering in this suite, it does not
-fix it. That defect is **S-042**, which adds a spec case that deliberately unsets the two
+fix it. The fix is a spec case that deliberately unsets the two
 variables for one test so the banner can be measured at all; it is not blocked by anything this
 change does, because the placeholders live in `webServer.env`, a plain object a later spec or a
 second `webServer` entry can override or bypass, not baked into a build artifact.
@@ -107,10 +107,9 @@ Two trees coexist during the migration described in
   └── generated/api-types.ts  # generated from /openapi.json, committed, CI-verified
   ```
 
-  `src/features/persons/{model,api}` landed 2026-08-22 by seed S-029, the first feature
-  slice; `server/` and `hooks/` landed the same day by S-030; `ui/` landed the same day too,
-  in two seeds — the list/detail screens (S-031) and the create/edit form (S-032) — see "The
-  `persons` slice" and the two sections below it. New code that isn't a feature slice belongs
+  `src/features/persons/{model,api}` landed 2026-08-22, the first feature slice; `server/` and
+  `hooks/` landed the same day, and so did `ui/`, in two parts — the list/detail screens and the
+  create/edit form — see "The `persons` slice" and the two sections below it. New code that isn't a feature slice belongs
   in `src/domain/` or `src/shared/http/`, never in the legacy trees above.
 
 Path alias `@/*` → `./src/*` (tsconfig).
@@ -121,17 +120,17 @@ Path alias `@/*` → `./src/*` (tsconfig).
 `pnpm depcruise` and gated in CI. Every one of them _forbids_ something — dependency-cruiser
 has no allow-list concept — so a rule name is the thing to grep for when a build fails:
 
-| Rule                           | Forbids                                                                                                                                                                                                                                   | Severity |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `domain-is-pure`               | `src/domain/**` importing any npm package except `typescript` / `@types/*` — which covers react, next, zod, tanstack, zustand and supabase                                                                                                | error    |
-| `domain-imports-only-domain`   | `src/domain/**` importing anything under `src/` that is not `src/domain/`                                                                                                                                                                 | error    |
-| `api-layer-has-no-react`       | `features/*/api/**` importing `react`, `react-dom` or `@tanstack/react-query`                                                                                                                                                             | error    |
-| `ui-does-not-call-transport`   | `features/X/ui/**` importing `features/X/api/**`                                                                                                                                                                                          | error    |
-| `cross-feature-only-via-index` | reaching into another feature's internals; `features/B` is importable only through `features/B/index.ts`                                                                                                                                  | error    |
-| `app-does-not-call-transport`  | `src/app/**` importing `features/*/api/**`                                                                                                                                                                                                | error    |
-| `nothing-imports-app`          | anything outside `src/app/` importing `src/app/**`                                                                                                                                                                                        | error    |
-| `no-circular`                  | import cycles                                                                                                                                                                                                                             | error    |
-| `no-orphans`                   | modules nothing imports — 3 known and accepted, measured 2026-08-22 by S-029: `shared/http/refresh.ts`, `lib/utils/pagination.ts`, `domain/capability/capability.ts` (the last is a known tool blind spot, see "Clan capabilities" below) | **warn** |
+| Rule                           | Forbids                                                                                                                                                                                                                          | Severity |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `domain-is-pure`               | `src/domain/**` importing any npm package except `typescript` / `@types/*` — which covers react, next, zod, tanstack, zustand and supabase                                                                                       | error    |
+| `domain-imports-only-domain`   | `src/domain/**` importing anything under `src/` that is not `src/domain/`                                                                                                                                                        | error    |
+| `api-layer-has-no-react`       | `features/*/api/**` importing `react`, `react-dom` or `@tanstack/react-query`                                                                                                                                                    | error    |
+| `ui-does-not-call-transport`   | `features/X/ui/**` importing `features/X/api/**`                                                                                                                                                                                 | error    |
+| `cross-feature-only-via-index` | reaching into another feature's internals; `features/B` is importable only through `features/B/index.ts`                                                                                                                         | error    |
+| `app-does-not-call-transport`  | `src/app/**` importing `features/*/api/**`                                                                                                                                                                                       | error    |
+| `nothing-imports-app`          | anything outside `src/app/` importing `src/app/**`                                                                                                                                                                               | error    |
+| `no-circular`                  | import cycles                                                                                                                                                                                                                    | error    |
+| `no-orphans`                   | modules nothing imports — 3 known and accepted, measured 2026-08-22: `shared/http/refresh.ts`, `lib/utils/pagination.ts`, `domain/capability/capability.ts` (the last is a known tool blind spot, see "Clan capabilities" below) | **warn** |
 
 The exit code is the count of error-level violations, so one error returns 1. Warnings do
 not fail the build.
@@ -152,7 +151,7 @@ The legacy trees (`src/lib/api`, `src/lib/hooks`, `src/application`, `src/infras
 compliance.
 
 **`api-layer-has-no-react` was vacuous from the day it was written, on every package
-manager, and S-029 (2026-08-22) is what found it.** `to.path` in dependency-cruiser
+manager, and the first persons slice (2026-08-22) is what found it.** `to.path` in dependency-cruiser
 matches a dependency's _resolved file path_
 (`node_modules/dependency-cruiser/src/validate/matchers.mjs`, `matchesToPath` →
 `pDependency.resolved`), never the bare import specifier. The rule's original `to.path`
@@ -177,7 +176,7 @@ cross-feature-only-via-index: src/features/relationships/probe.ts →
 src/features/persons/model/person-dto.ts`. Both throwaway files were removed after the
 check; neither reached a commit.
 
-### The `persons` slice — the pattern S-029 set (`src/features/persons/{model,api}`)
+### The `persons` slice — the pattern the first slice set (`src/features/persons/{model,api}`)
 
 **This is the first slice built on the spine alone, so read this before copying its
 shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
@@ -190,7 +189,7 @@ shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
   compiles while the DTO type stays assignable to the generated one, so **a backend
   contract change that adds a required field, removes one, or changes a type fails
   `pnpm type-check` at that function** — not at runtime, and not in a test that could be
-  skipped. Verified during S-029 by changing `gender: z.enum(GENDERS)` to `z.number()`:
+  skipped. Verified 2026-08-22 by changing `gender: z.enum(GENDERS)` to `z.number()`:
   `tsc` failed at the assert function's `return dto` line and separately at the mapper's
   assignment into the domain `Gender` type, naming both. Widening a field (e.g. adding
   `.nullable()` where the contract does not) breaks the same check in the same way — it
@@ -202,7 +201,7 @@ shape into `relationships`, `tree`, `events`, `documents`, or `admin`.**
   should only ever think about one absent value.
 - **`api/` returns `Promise<unknown>` from every function — the raw enveloped body,
   unparsed.** `unwrapData`/`unwrapPage` plus the model schema and mapper are composed by
-  the caller — `server/persons-repository.ts`, landed by S-030 below. This is
+  the caller — `server/persons-repository.ts`, covered below. This is
   deliberate, not a placeholder: it is what lets `api-layer-has-no-react` mean something,
   and it is what `server/` is _for_ — "fetch → parse → map to domain" in
   `web/CLAUDE.md`'s own Architecture section names three separate steps, and this slice
@@ -234,16 +233,16 @@ timeline,claim}` sub-resources. Their payloads (`MarriageResponse`,
   asserts on the _mapped output values_, not on schema shape. `api/persons-api.test.ts`
   exercises `listPersons`/`getPerson`/`searchPersons` against a mocked `fetchImpl`
   (`vi.fn<FetchLike>()`, same convention as `api-client.test.ts`) and covers the three
-  things S-029 names: the `{"data": ...}` envelope, `Page<T>` via `unwrapPage`, and a
+  things the slice names: the `{"data": ...}` envelope, `Page<T>` via `unwrapPage`, and a
   `400 invalid_cursor` surfacing as `ApiError` with that `code`. All three have a proven
   negative control: breaking the mapper's `fullName` field, dropping the list query
   params, and swallowing the transport error each failed the named test for that reason,
   then were reverted.
 
-### The `persons` repository, query keys, and hooks (S-030, `server/`, `hooks/`)
+### The `persons` repository, query keys, and hooks (`server/`, `hooks/`)
 
-**`server/persons-repository.ts` is the fetch → parse → map step S-029 left open.** Every
-function takes the `PersonsApiCallOptions` S-029's `api/` layer already defined
+**`server/persons-repository.ts` is the fetch → parse → map step the `api/` layer left open.** Every
+function takes the `PersonsApiCallOptions` that layer already defined
 (`context`, `signal`, `refreshAuth`, `fetchImpl`, `timeoutMs`) and returns a domain type —
 `Person`, `Page<Person>`, `PersonSearchHit[]`, `PersonBatchResult`, or `PersonActionResult`
 — never a DTO and never the raw `Promise<unknown>` `api/` hands back.
@@ -264,9 +263,9 @@ invalid_cursor` `ApiError` and retries once with `cursor: null` before it ever r
   `refreshAuth`, and asserting the underlying refresh operation ran once. **Building an
   actual browser `refreshAuth` — wiring `createSingleFlight` to a real Supabase
   `refreshSession()` call — is explicitly not done here.** No screen exists yet to need
-  one (S-031/S-032), and no auth slice exists yet to own where a browser-wide singleton
-  like that should live; inventing one now, untested against a real caller, would be the
-  kind of decision a seed is supposed to isolate rather than smuggle into an unrelated one.
+  one, and no auth slice exists yet to own where a browser-wide singleton like that should live;
+  inventing one now, untested against a real caller, would be the kind of decision that belongs on
+  its own rather than smuggled into an unrelated change.
   A hook here only ever forwards whatever `refreshAuth` its caller passes in.
 - **`batchGetPersons` gets its own small envelope reader rather than reusing
   `unwrapPage`.** `POST /persons/batch`'s `meta` is `{errors: BatchError[]}`, not the
@@ -275,12 +274,12 @@ invalid_cursor` `ApiError` and retries once with `cursor: null` before it ever r
   read and mapped separately and never merged — `docs/contracts/rest-persons-api.md` is
   explicit that an unresolved id is never mixed into `data`, and `PersonBatchResult`
   (`domain/person/person.ts`) keeps that shape in the return type too.
-- **The `HistoricalDate` DTO stays duplicated — S-030 is not the second slice that needs
-  it.** S-029 named `historical-date-dto.ts` as `persons`-local on purpose until a second
-  _feature_ (marriages, events, tree nodes) needs the same wire shape. S-030 adds no new
-  feature and no new wire shape; it is the same slice consuming what S-029 already parses.
+- **The `HistoricalDate` DTO stays duplicated — the repository is not the second slice that needs
+  it.** `historical-date-dto.ts` is `persons`-local on purpose until a second _feature_ (marriages,
+  events, tree nodes) needs the same wire shape. The repository adds no new feature and no new wire
+  shape; it is the same slice consuming what `model/` already parses.
   Nothing here changed about that file.
-- **Write bodies still carry no zod validation, and this seed agrees with that call.**
+- **Write bodies still carry no zod validation, and that call still holds.**
   `createPerson`/`updatePerson` take `PersonCreateRequest`/`PersonUpdateRequest` typed
   straight from `components['schemas'][...]`, the same as `api/persons-api.ts` already
   did. The reasoning holds up under one direct test:
@@ -302,21 +301,21 @@ entry that never invalidates together.
 
 **Hooks (`hooks/use-persons-queries.ts`, `hooks/use-person-mutations.ts`) take a
 `RequestContext` the caller passes in — they do not call `getClientRequestContext()`
-themselves.** No screen exists yet (S-031/S-032) to decide how a context gets built and
-kept reactive (almost certainly `useCurrentClanId()` plus the rest of the session), and
-deciding that inside a hook nobody calls yet would be exactly the kind of premature
-decision `.claude/rules/seeds.md` warns a seed against making for a later one. This keeps
+themselves.** No screen exists yet to decide how a context gets built and kept reactive (almost
+certainly `useCurrentClanId()` plus the rest of the session), and deciding that inside a hook nobody
+calls yet would be exactly the kind of premature decision one change should not make for a later
+one. This keeps
 every hook testable with a plain `RequestContext` object and MSW, which is what
 `hooks/*.test.tsx` do.
 
-- **Mutation invalidation is same-feature only, per this seed's own "Out of scope."**
+- **Mutation invalidation is same-feature only, and deliberately so.**
   `useCreatePerson` invalidates `personsKeys.lists(clanId)`; `useUpdatePerson`,
   `useDeletePerson`, and `useRestorePerson` invalidate the one `personsKeys.detail(...)`
   plus every list. None of them touch `['tree']` the way the legacy
   `src/lib/hooks/query-invalidation.ts` does for the same mutations — cross-feature
   invalidation arrives with the second feature slice that needs to invalidate `persons`
-  from outside it, per this seed's text.
-- **The public surface changed shape.** Through S-029, `index.ts` re-exported the raw
+  from outside it.
+- **The public surface changed shape.** Before the repository landed, `index.ts` re-exported the raw
   `api/persons-api.ts` functions (`Promise<unknown>`) because nothing else existed to be
   the entry point. Now that `server/` parses, those raw functions are **no longer
   re-exported** — `index.ts` hands out the parsed repository functions and the hooks
@@ -351,10 +350,10 @@ then `../persons/hooks/use-persons-queries` directly: both produced
 `error cross-feature-only-via-index: src/features/relationships/probe.ts → ...` by name,
 `pnpm depcruise` went from 0 errors to 1, and both throwaway files were removed afterward,
 neither reaching a commit. `depcruise` stayed at **0 errors, 3 warnings** before and after
-this seed's real changes — the same three orphans S-029 already recorded, unaffected,
+that batch's real changes — the same three orphans already recorded above, unaffected,
 since `refresh.ts` is still imported only from `.test.ts` files, which the graph excludes.
 
-### The persons create/edit form and its `409 stale_write` dialog (S-032, `ui/PersonForm.tsx`)
+### The persons create/edit form and its `409 stale_write` dialog (`ui/PersonForm.tsx`)
 
 **The repository's return shape changed.** `createPerson`/`updatePerson` (`server/persons-repository.ts`)
 now resolve `PersonWriteResult` (`{ person, warning }`, `@/domain/person/person`), not a bare
@@ -411,10 +410,10 @@ unbroken content run, so the value span refused to wrap. Fixed by stacking label
 adding `flex-wrap` to the segmented mine/latest button row, which had the identical defect at
 106px available width against two buttons wanting ~215px combined. Re-measured after the fix:
 `dialog.clientWidth === dialog.scrollWidth` (250 === 250) at 320px/200%, and again with no
-overflow at 1280px/200%. Screenshots were taken and reviewed, then discarded — see this seed's
-closing note in `docs/SEEDS.md` for what was and was not verified this way.
+overflow at 1280px/200%. Screenshots were taken and reviewed, then discarded; the two width
+readings above are what was verified this way.
 
-**Scope this seed deliberately did not cover, named rather than left silent:**
+**Scope this change deliberately did not cover, named rather than left silent:**
 
 - Fields shown are exactly spec §7.7's own list. `religion`, `nationality`, `occupation`,
   `educationLevel`, `titleRank`, `phone`, and `email` exist on `Person` but are not in that
@@ -469,9 +468,9 @@ closing note in `docs/SEEDS.md` for what was and was not verified this way.
 - next-intl with locales `vi | en | zh | fr`, **default `vi`**, `localePrefix: 'always'` — every route is prefixed (`/vi/...`, `/en/...`). See `src/i18n/routing.ts` and `messages/*.json`.
 - Route groups under `src/app/[locale]/`: `(auth)` (login/register/callback/pending-approval — public), `(dashboard)` (protected), plus `backoffice/`, `platform/`, `select-clan/`.
 - `src/middleware.ts` runs the intl middleware first, strips the locale prefix, lets `PUBLIC_ROUTES` through, and for everything else creates a Supabase SSR client (`@supabase/ssr`) and redirects to `/<locale>/login` when there is no session. If Supabase env vars are missing the auth check is skipped — be aware in local dev.
-- **After the session check, `src/middleware.ts` gates `CLAN_SCOPED_SEGMENTS` (`dashboard`, `documents`, `events`, `members`, `tree`, `admin` — everything under the `(dashboard)` route group) on the `current_clan_id` cookie.** Missing and unparseable (not a UUID) are the same case, both read as "no clan selected" through `parseClanCookie` (`src/shared/http/request-context.ts`), and both redirect to `/<locale>/select-clan` rather than letting the route render and fire a clan-scoped `apiFetch` call with no `X-Current-Clan-Id`. `platform/*`, `backoffice/*`, and `select-clan` itself are deliberately not gated: the first two are cross-clan super-admin surfaces (`docs/architecture/multi-tenancy.md`), and gating the picker page would loop. Landed by seed S-023; see `web/src/middleware.test.ts`.
+- **After the session check, `src/middleware.ts` gates `CLAN_SCOPED_SEGMENTS` (`dashboard`, `documents`, `events`, `members`, `tree`, `admin` — everything under the `(dashboard)` route group) on the `current_clan_id` cookie.** Missing and unparseable (not a UUID) are the same case, both read as "no clan selected" through `parseClanCookie` (`src/shared/http/request-context.ts`), and both redirect to `/<locale>/select-clan` rather than letting the route render and fire a clan-scoped `apiFetch` call with no `X-Current-Clan-Id`. `platform/*`, `backoffice/*`, and `select-clan` itself are deliberately not gated: the first two are cross-clan super-admin surfaces (`docs/architecture/multi-tenancy.md`), and gating the picker page would loop. See `web/src/middleware.test.ts`.
 
-### The `current_clan_id` cookie (S-023)
+### The `current_clan_id` cookie
 
 The cookie is the single source for the active clan: `context.server.ts` reads it through
 `cookies()`, `context.client.ts` reads the identical value through `document.cookie`, and
@@ -480,8 +479,8 @@ Server Component and a browser session never disagree about which clan is active
 `localStorage`-only value (the legacy path's third fallback) is invisible to a Server
 Component, which is the whole reason this moved to a cookie.
 
-**Attributes, decided once in `context.client.ts` so nine later seeds (S-024 through S-033)
-inherit them rather than re-deciding:**
+**Attributes, decided once in `context.client.ts` so every later slice inherits them rather than
+re-deciding:**
 
 | Attribute  | Value                                      | Why                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -495,24 +494,24 @@ inherit them rather than re-deciding:**
 `clan_id` takes in the backend (cast `::uuid` throughout `docs/architecture/data-model.md`),
 and returns `null` rather than forwarding garbage as `X-Current-Clan-Id`.
 
-**The cookie is now the only writer too (S-025).** `useAuth`'s `selectClan` and
+**The cookie is now the only writer too.** `useAuth`'s `selectClan` and
 `syncAuthContext` (`src/lib/hooks/useAuth.ts`) call `writeClanCookie` / `clearClanCookie`
 directly. The legacy `persistCurrentClanId` / `clearCurrentClanId`
 (`src/infrastructure/auth/clan-selection-storage.ts`) are unused now — nothing imports
-them — because they also wrote `localStorage.current_clan_id`, which S-025's end state
-forbids. The file is left in place rather than deleted: deleting the legacy auth transport
-is S-027's job, and `pnpm depcruise`'s `no-orphans` check is a warning, not a gate, so an
-unused legacy file costs nothing until S-027 removes it.
+them — because they also wrote `localStorage.current_clan_id`, which the cookie rule forbids. The
+file was left in place rather than deleted at the time: deleting the legacy auth transport was its
+own change, and `pnpm depcruise`'s `no-orphans` check is a warning, not a gate, so an unused legacy
+file cost nothing until that deletion ran.
 
 **No `features/` repository exists yet to write a cross-runtime test against** (`src/features/`
-lands with S-024 onward). `src/shared/http/context.test.tsx` proves the closest thing that
+lands with the first feature slices). `src/shared/http/context.test.tsx` proves the closest thing that
 exists today: `getServerRequestContext` and `getClientRequestContext` resolve the same
 `clanId` for one cookie, and a bare `apiFetch` call — what a repository function does under the
 hood — carries the identical `X-Current-Clan-Id` from both. Read the file's own comment before
 assuming a later slice's repository test can copy this shape verbatim; it is a stand-in, not the
 real pattern.
 
-### Clan capabilities (`src/domain/capability`, S-024)
+### Clan capabilities (`src/domain/capability`)
 
 `src/domain/capability/capability.ts` maps each clan role (`admin`, `editor`, `viewer`) to the
 `CapabilitySet` it holds, taken from `docs/architecture/rbac.md`'s permission matrix — one capability
@@ -526,7 +525,7 @@ client offers to render.
 `editor` ❌ for deleting a relationship and a person. The nesting is empirical, not guaranteed, and a
 hierarchy shortcut would hide that.
 
-**Consumed since S-027 (2026-08-22) — and the `no-orphans` warning above still fires anyway,
+**Consumed since the legacy-transport deletion (2026-08-22) — and the `no-orphans` warning above still fires anyway,
 which is itself worth recording.** `src/lib/hooks/useCapabilities.ts` now calls
 `getCapabilities(role)` here instead of the deleted `deriveCapabilities` in
 `src/application/auth/use-cases/capabilities.ts`. The hook keeps its old external shape — the
@@ -546,26 +545,25 @@ src/lib/hooks/useCapabilities.ts`, by `pnpm type-check`, and by
 warnings" as this having regressed, and do not read today's "4" as the rewire having failed.
 Widening `LEGACY` to stop excluding `lib/hooks` would fix the tool's blind spot but was not
 attempted here: it would newly subject every file in that tree to orphan-checking in one step,
-which is a change to what the gate covers, not a deletion, and is not this seed's to make.
+which is a change to what the gate covers, not a deletion, and was not that change's to make.
 
 **One behaviour changed on purpose while rewiring.** The deleted legacy module hardcoded
 `canDeleteEvents: isAdmin`. This module's own `deleteEvent` entry, cited to
 `docs/architecture/rbac.md:78` two paragraphs up, grants `editor` too. `useCapabilities.ts` does
-not expose `canDeleteEvents` at all — nothing read it (`grep -rn "canDeleteEvents" src` before
-S-027 found only the legacy definition) — so nothing regressed, but the discrepancy is real and
+not expose `canDeleteEvents` at all — nothing read it (`grep -rn "canDeleteEvents" src` before that
+deletion found only the legacy definition) — so nothing regressed, but the discrepancy is real and
 recorded in that hook's own doc comment so a future reader who wires the field back in reaches
 for the wider, correct grant rather than reintroducing the narrower one.
 
-### The auth store holds session state only (S-025)
+### The auth store holds session state only
 
 **`src/store/auth.store.ts` no longer has a `currentClanId` field or a `setCurrentClan`
-action.** Before S-025 the store held both the session (`user`, `clanMemberships`, the
-access-state flags) and the active clan, while the `current_clan_id` cookie (S-023) held
+action.** It used to hold both the session (`user`, `clanMemberships`, the access-state flags) and
+the active clan, while the `current_clan_id` cookie held
 the same clan fact for the server to read — two persisted sources for one fact, since the
 store's `zustand/middleware` `persist` wrote `currentClanId` to
-`localStorage['auth-store']` alongside the cookie. That is the exact defect this tracker
-exists to catch, so the clan id was removed from the store rather than kept in sync with
-the cookie.
+`localStorage['auth-store']` alongside the cookie. Two places recording one fact is two places to
+be wrong, so the clan id was removed from the store rather than kept in sync with the cookie.
 
 **The one reactive read is `useCurrentClanId()` (`src/shared/http/context.client.ts`).** It
 wraps `useSyncExternalStore` around the `current_clan_id` cookie: `writeClanCookie` and
@@ -586,21 +584,20 @@ in the whole of `useAuth()`.
 
 **`selectClan` and `syncAuthContext` write the cookie through `writeClanCookie` /
 `clearClanCookie` now, not the legacy `persistCurrentClanId` / `clearCurrentClanId`.** See
-"What still writes the cookie" under S-023 above for what that leaves behind.
+"What still writes the cookie" in the cookie section above for what that leaves behind.
 
 **The legacy `src/infrastructure/http/request-context.ts` lost its `localStorage` fallback.**
-Before S-025 it read, in order, `useAuthStore.currentClanId`, then `user.clan_id`, then
-`localStorage.getItem('current_clan_id')` — the exact three-way read S-025's seed names as
-what it replaces. It now reads `readCurrentClanId()` (the cookie) then `user.clan_id`, with
+It used to read, in order, `useAuthStore.currentClanId`, then `user.clan_id`, then
+`localStorage.getItem('current_clan_id')` — the three-way read the cookie rule replaced. It now reads `readCurrentClanId()` (the cookie) then `user.clan_id`, with
 no `localStorage` step. This file backs the legacy `axios.ts` interceptor, which is
-untouched: fixing the read it depends on was in scope, deleting the file it lives in is
-S-027's.
+untouched: fixing the read it depends on was in scope, deleting the file it lives in was a separate
+change.
 
-**`grep -rn "localStorage.current_clan_id\|current_clan_id" web/src` after S-025** finds
+**`grep -rn "localStorage.current_clan_id\|current_clan_id" web/src` after that change** finds
 only the cookie name itself (`request-context.ts`'s `CLAN_COOKIE` constant and its
-callers, `middleware.test.ts`'s literal cookie header) and prose referencing S-023/S-025 in
+callers, `middleware.test.ts`'s literal cookie header) and prose about the cookie in
 comments — no `localStorage.getItem` or `.setItem` call against that key anywhere in `src`.
-`clan-selection-storage.ts`, the file that constant used to live in, is deleted (S-027, below).
+`clan-selection-storage.ts`, the file that constant used to live in, is deleted (see below).
 
 ### Backend contract — required headers and query semantics
 
@@ -617,26 +614,26 @@ headers plus `traceparent` from a `RequestContext` (`src/shared/http/request-con
 **Legacy code only:** the shared Axios client `src/lib/api/axios.ts` attaches all three via
 interceptors. On `401` it signs out and redirects to `/<locale>/login`. The clan id comes
 from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which reads in
-order (S-025): `readCurrentClanId()` — the `current_clan_id` cookie — → `user.clan_id`. No
+order: `readCurrentClanId()` — the `current_clan_id` cookie — → `user.clan_id`. No
 `localStorage` step remains. SSR returns a minimal context (`{ locale: 'vi' }`). Do not
 extend this path — it is being deleted by the slice PRs.
 
-**S-027 tried to delete `axios.ts`, `src/lib/api/auth.ts`, and
-`src/infrastructure/http/request-context.ts` outright, and could only close two of the
-three.** Its seed text named all three, plus the auth halves of `application/auth` and
-`infrastructure/auth`, as this repository's "no PR only adds" rule applied to PR 1. Enumerating
+**The legacy-transport deletion (2026-08-22) tried to remove `axios.ts`, `src/lib/api/auth.ts`, and
+`src/infrastructure/http/request-context.ts` outright, and could only close two of the three.** It
+named all three, plus the auth halves of `application/auth` and `infrastructure/auth`, as this
+repository's "no PR only adds" rule applied to PR 1. Enumerating
 every importer first (`grep -rln "lib/api/axios\|from 'axios'" src`, 2026-08-22) found `axios.ts`
 imported not just by the auth infrastructure but by `src/infrastructure/admin/http-admin-repositories.ts`
 (four live pages: `platform/clans`, `platform/metrics`, `admin/users`, `admin/clan`) and, through
 `src/lib/api/{documents,events,members,relationships,tree}.ts`, by every other legacy slice's
 repositories too. `request-context.ts` backs `axios.ts` the same way for all of them. Deleting
-either would have broken the persons, tree, events, documents, and admin halves this same seed's
-own "Out of scope" line says stay until their own slice PR — `axios.ts` is the legacy app's one
+either would have broken the persons, tree, events, documents, and admin halves that were meant to
+stay until their own slice PR — `axios.ts` is the legacy app's one
 shared transport, not an auth-only file, and this file's own "Migration notes" section already
-said so before S-027 ran; the seed text did not cross-reference it. **What actually left:**
+said so before that deletion ran; its own plan did not cross-reference it. **What actually left:**
 `src/lib/api/auth.ts` (`authApi`, dead — its sole in-code match on `grep -rn "lib/api/auth" src`
 was a comment quoting a grep command, not an import) and
-`src/infrastructure/auth/clan-selection-storage.ts` (dead per S-025, above). **What stays, and
+`src/infrastructure/auth/clan-selection-storage.ts` (dead per the auth-store section above). **What stays, and
 why it is not a smaller version of "done":** `application/auth/ports/auth-repository.ts`,
 `application/auth/use-cases/auth-context.ts`, `infrastructure/auth/http-auth-profile-repository.ts`,
 and `infrastructure/auth/supabase-auth-session-port.ts` are the live implementation
@@ -644,8 +641,8 @@ and `infrastructure/auth/supabase-auth-session-port.ts` are the live implementat
 them needs a spine replacement (`apiFetch` calls where `http-auth-profile-repository.ts` calls
 `axios.ts`) that does not exist yet, since `src/features/auth/` has not landed. Building that
 replacement as a side effect of a deletion seed would be a materially larger, differently-tested
-change than "delete legacy code with a live-behind replacement", so S-027 left it as future work
-rather than rewriting it under this seed's name. `axios.ts` and `request-context.ts` leave only
+change than "delete legacy code with a live-behind replacement", so it was left as future work
+rather than rewritten under a deletion's name. `axios.ts` and `request-context.ts` leave only
 when the last legacy slice PR (persons, tree, events, documents, admin, and then auth's own
 transport) replaces its own repository, per this section's existing rule that they are "being
 deleted by the slice PRs" — plural, and not yet all landed.
@@ -664,7 +661,7 @@ Query semantics that must be preserved when touching list/detail endpoints:
 ### State management split
 
 - **Server state**: TanStack Query (`src/lib/hooks/use*.ts`). Cross-feature invalidation helpers live in `src/lib/hooks/query-invalidation.ts`.
-- **Client state**: Zustand — `src/store/auth.store.ts` (session only, since S-025 — see
+- **Client state**: Zustand — `src/store/auth.store.ts` (session only — see
   "The auth store holds session state only" above; the active clan is
   `useCurrentClanId()` over the `current_clan_id` cookie, not the store),
   `src/store/ui.store.ts`.
@@ -691,17 +688,17 @@ Four harnesses, one gate each:
 e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rather than trusting a
   prose figure. The earlier "36 tests on 2026-08-21" reading is left as written, because it
   carries its own date. The four described below are the original set; `supabase-banner.spec.ts`
-  (S-042), `register-clan-code.spec.ts` (S-083), `register-join-code.spec.ts` (S-082), and
-  `invitation-accept.spec.ts` (S-084) are the other four:
-  - `smoke.spec.ts` — locale redirect, the login form renders, and (since seed S-022 fixed
-    `R-lang`, see `docs/sad/11-risks-and-technical-debt.md`) `<html lang>` tracking the route
+  `register-clan-code.spec.ts`, `register-join-code.spec.ts`, and `invitation-accept.spec.ts` are
+  the other four:
+  - `smoke.spec.ts` — locale redirect, the login form renders, and (since the fix to
+    `R-lang`, see `docs/sad/11-risks-and-technical-debt.md`) `<html lang>` tracks the route
     locale on both `/vi/login` and `/en/login`.
-  - `fonts.spec.ts` — the two mandated typefaces reach the screen (seed S-002). A computed
+  - `fonts.spec.ts` — the two mandated typefaces reach the screen. A computed
     style in a real browser is the only thing that can see a dead `font-family`.
   - `text-scale.spec.ts` — `T-04`: no horizontal page scroll at 320 px width and 200% root
-    font size (seed S-034). jsdom has no layout engine, so no other harness can measure a box.
+    font size. jsdom has no layout engine, so no other harness can measure a box.
   - `dark-theme.spec.ts` — the dark palette reaches `body` under an emulated dark colour
-    scheme, and no class or attribute is involved (seed S-006, ADR-045). The stylesheet holds
+    scheme, and no class or attribute is involved (ADR-045). The stylesheet holds
     both palettes and cannot tell you which one won the cascade; only an engine can.
 
   These cover what only a browser can measure, and every spec in this list runs against public
@@ -721,13 +718,13 @@ backend's OpenAPI schema and fails the build if it drifts — the anti-R3 gate).
 freshness job is triggered by changes under either `web/**` or `backend/app/**`, so a
 backend-only PR that changes response shapes cannot skip it.
 
-## The authenticated e2e harness (seed S-070, 2026-08-26)
+## The authenticated e2e harness (2026-08-26)
 
 **One command, and it is not part of `pnpm test:e2e`:**
 
 ```bash
 # preconditions, from the repository root — see docs/ops/local-supabase.md and
-# docs/ops/seed-test-users.md, which S-072 and S-073 own
+# docs/ops/seed-test-users.md
 docker compose up -d pgdb
 scripts/supabase_local.sh up
 make seed                                  # both halves of four test users
@@ -775,19 +772,19 @@ promise:
    `AssertionError: expected [ 'src/lib/server/auth-context.ts' ] to deeply equal []`,
    naming the file. Removed; the suite went back to 434 passing.
 3. **The credential is worthless elsewhere.** `backoffice.auth.spec.ts`'s last case replays
-   the captured admin state against the hermetic `:3100` server, which S-041 points at
+   the captured admin state against the hermetic `:3100` server, which points at
    `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. Cookies are
    named for their project (`sb-<ref>-auth-token`) and the token is signed by the stack that
    issued it. **This does not prove middleware checks a signature — it does not**;
    `supabase.auth.getSession()` reads the cookie. Signature checking is the backend's JWKS
-   flow (`backend/app/core/security.py`), which is S-072's guarantee, not this one's.
+   flow (`backend/app/core/security.py`), which is that layer's guarantee, not this one's.
 
 `E2E_AUTH_STACK=1` gates the projects _and_ the third `next dev` (`:3102`). Absent, neither
-exists, so `pnpm test:e2e` keeps S-041's guarantee: no Docker, no network, same answer in a
+exists, so `pnpm test:e2e` keeps its guarantee: no Docker, no network, same answer in a
 fresh clone, in a worktree, and in CI. Present but under-configured, `authStackEnv()` throws
 naming the missing variables — deliberately not a skip, because a suite that quietly covers
 nothing when Docker is down is the "passed because it scanned nothing" failure
-`.claude/rules/seeds.md` warns about.
+`.claude/rules/testing.md` warns about.
 
 ### How to add the next authenticated route
 
@@ -801,7 +798,8 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
    mounting anything, which costs no renders and cannot be confused by a client effect.
 3. **Give both Locations.** A viewer refused by `requireServerRole` gets
    `307 → /vi/dashboard`; a request with no session gets `307 → /vi/login`. If your two
-   readings are the same string, you have S-001's non-control.
+   readings are the same string, you have a control that reads the same either way, which is no
+   control at all.
 4. **Read colour schemes without reloading.** `page.emulateMedia({ colorScheme })`
    re-evaluates the media query in place, and ADR-045 made the media query the only
    mechanism. One page load per case matters: see the rate limit below.
@@ -810,10 +808,10 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
    about three `GET /auth/me`, because `useAuth()` hydrates once per consumer. Keep a case to
    one navigation.
 
-### Three things S-070 found by looking, all of them still open
+### Three things found by looking at the harness, all of them still open
 
-**1. `GET /me/clans` and `POST /me/clans/{id}/select` were read as unenveloped, and S-070
-fixed both.** The web client read `{"clans": […]}` and `{clan_id: …}` while the backend has
+**1. `GET /me/clans` and `POST /me/clans/{id}/select` were read as unenveloped, and both are now
+fixed.** The web client read `{"clans": […]}` and `{clan_id: …}` while the backend has
 always answered `{"data": …}` (`backend/app/api/v1/me.py:25,36`;
 `Envelope_list_UserClanMembership__` at `src/generated/api-types.ts:2192-2196`;
 `docs/contracts/frontend-integration-guide.md:77`). The first left `currentClanRole`
@@ -822,10 +820,9 @@ hidden and `requireServerRole` sent approved admins to `/pending-approval`**. Th
 the literal string `undefined` into the `current_clan_id` cookie. Both read sites are now
 unwrapped in `HttpAuthProfileRepository`, which is the one place the port's shape is built —
 see the doc comments there. **`register` and `onboard` in that same file have the identical
-defect and are still untouched.** S-070 wrote that they were "fenced to S-084" and "need a seed";
-**both halves of that are now stale, corrected 2026-08-27.** S-084 has landed and its 27-file diff
-never touched this file, and the seed exists: **S-088** in `docs/SEEDS.md`, whose only blocker was
-S-070 itself.
+defect and are still untouched.** They were once said to be covered by the invitation-accept work;
+**that is stale, corrected 2026-08-27.** That work landed and its 27-file diff never touched this
+file, so the two remaining read sites are still open.
 
 **The defect is live and user-facing, so do not read "still untouched" as "harmless".** Read at
 source 2026-08-27: `http-auth-profile-repository.ts:81` is
@@ -836,8 +833,8 @@ renders — **a successful registration shows the user nothing.** No test catche
 `register/page.test.tsx` says so in its own comment: the reading there is "the inline error went
 away", not "the success screen replaced it".
 
-**2. The `(dashboard)` group runs away, so `/vi/members` is not the covered route.** S-070's
-first choice was `/vi/members`, the screen S-031, S-032 and S-036 each wanted. It cannot be
+**2. The `(dashboard)` group runs away, so `/vi/members` is not the covered route.** The harness's
+first choice was `/vi/members`, the screen the persons and calendar work each wanted. It cannot be
 read: measured 2026-08-26, `/vi/dashboard` re-ran `useAuth`'s mount effect **2613 times in
 seven seconds** and issued **18174 `GET /auth/me`** until the backend's limiter answered 429.
 Two `useAuth()` consumers mount on every `(dashboard)` page (`(dashboard)/layout.tsx:12` and
@@ -845,7 +842,7 @@ Two `useAuth()` consumers mount on every `(dashboard)` page (`(dashboard)/layout
 the zustand store, and `syncAuthContext`'s identity does not survive that. **The loop was
 invisible before**, because the envelope defect above made `hydrateAuthContext` throw on its
 first call and fall into its own `catch`; fixing the envelope is what let the loop start. It
-is legacy auth code and its own seed — do not fix it inside a feature PR.
+is legacy auth code and its own piece of work — do not fix it inside a feature PR.
 
 **3. "No horizontal page scroll" is not a usability reading, and this screen proves it.**
 `e2e/text-scale.spec.ts`'s T-04 assertion passes on `/vi/backoffice/dashboard` at 320×640
@@ -863,37 +860,37 @@ scroll assertion (a reader will look for it) with a comment saying it proves alm
 and pins the real defect with `test.fail()` so a future responsive fix turns the suite red
 instead of leaving the case behind. `backoffice/layout.tsx:31-32` pairs a `fixed w-60` rail
 with `ml-60` and has no small-screen branch. This is a fourth instance of the pattern in
-`.claude/rules/seeds.md` § "A test pins an outcome, not a setting".
+`.claude/rules/testing.md` § "A test pins an outcome, not a setting".
 
-**Two smaller findings S-070 reported and did not fix. Both are fixed now, in the same batch,
-and this paragraph is corrected rather than deleted so the finding keeps its author.**
+**Two smaller findings the harness reported and did not fix. Both are fixed now, and this
+paragraph is corrected rather than deleted so the finding keeps its history.**
 
-- The login form's labels carried no `htmlFor` and its inputs no `id`. **Fixed by S-091**:
+- The login form's labels carried no `htmlFor` and its inputs no `id`. **Fixed**:
   `(auth)/login/page.tsx:93` is `<label htmlFor="login-email"` with `id="login-email"` at `:97`,
   and `htmlFor="login-password"` at `:109` with `id="login-password"` at `:115`.
 - `BackofficeSidebar.tsx` hardcoded English `Sign out`, and `Sidebar.tsx:70` hardcoded Vietnamese
-  in an `aria-label`. **Fixed by S-092**: the first is now `{tAuth('logout')}`, reusing the key
+  in an `aria-label`. **Fixed**: the first is now `{tAuth('logout')}`, reusing the key
   that already had three callers rather than adding a fourth spelling, and the second is
   `aria-label={sidebarOpen ? t('common.collapse') : t('common.expand')}`.
 
 **The register page still has the login page's defect, in the same file as the new fields.**
 Counted 2026-08-27: three labels there carry no `htmlFor` and their inputs no `id`, while the
-three fields S-082 and S-083 added below them are correct. So one file now has three labelled
-inputs and three unlabelled ones. That is **S-096**, unblocked by S-082 landing.
+three fields added below them by the join-code work are correct. So one file now has three labelled
+inputs and three unlabelled ones. That is still open.
 
 ### The four workarounds this replaces
 
-Four seeds each built a throwaway route, screenshotted it, and deleted it before committing,
+Four changes each built a throwaway route, screenshotted it, and deleted it before committing,
 because no test could hold a session. **Use this harness instead of rebuilding one.**
 
-| Seed  | What it could not reach                        | What it did instead                            |
-| ----- | ---------------------------------------------- | ---------------------------------------------- |
-| S-031 | `/vi/members` with data                        | a throwaway route                              |
-| S-032 | the conflict dialog (`StaleWriteDialog`)       | a throwaway preview route                      |
-| S-036 | the calendar with data                         | a throwaway preview route                      |
-| S-068 | ten converted files, none on a reachable route | its own verification was impossible as written |
+| The change              | What it could not reach                  | What it did instead                            |
+| ----------------------- | ---------------------------------------- | ---------------------------------------------- |
+| the persons list/detail | `/vi/members` with data                  | a throwaway route                              |
+| the persons form        | the conflict dialog (`StaleWriteDialog`) | a throwaway preview route                      |
+| the calendar            | the calendar with data                   | a throwaway preview route                      |
+| the ten-file conversion | none of the files on a reachable route   | its own verification was impossible as written |
 
-S-039 / ADR-046 is the fifth case and the one now covered directly: it could not read the
+ADR-046 is the fifth case and the one now covered directly: it could not read the
 backoffice rail in a browser and said so. `backoffice.auth.spec.ts` reads that rail's `muted`
 ground and its `primary` mark in both schemes, which is ADR-046's own claim measured in an
 engine rather than computed from the stylesheet.
@@ -905,35 +902,35 @@ engine rather than computed from the stylesheet.
   They are frozen, not extended: no new feature should add to them, and each is deleted
   outright when the matching feature slice PR lands (§3.2 of the architecture spec).
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
-  S-027 (2026-08-22) went looking for it while deleting the legacy auth transport and found
+  The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of
   `src/lib/api/{documents,events,members,relationships,tree}.ts` importing it too
   (`grep -rln "lib/api/axios\|from 'axios'" src`). So it, and the
   `src/infrastructure/http/request-context.ts` it depends on, cannot leave until the **last**
   slice PR lands, not the first — "each is deleted outright when the matching feature slice PR
   lands" above is true per-slice-repository-file, not true of this shared pair. See
-  "Backend contract" above for the full account and what S-027 could and could not delete.
+  "Backend contract" above for the full account and what that deletion could and could not remove.
 - `src/domain/` is currently `shared/` plus `date/` (the `HistoricalDate` model added by the
   spine PR). As features land, domain types move out of `src/types/` and `src/lib/types/`
   into `src/domain/<feature>/`.
 - New transport code goes in `src/shared/http/` (or, once a feature slice PR lands,
   `src/features/<slice>/api/`) — never in `src/lib/api/` or `src/infrastructure/`.
 - **The auth slice's legacy tree is now split between dead and live, not simply "frozen".**
-  S-027 deleted `src/lib/api/auth.ts` and `src/infrastructure/auth/clan-selection-storage.ts`
-  outright (both had zero real importers). It left
+  The 2026-08-22 deletion removed `src/lib/api/auth.ts` and
+  `src/infrastructure/auth/clan-selection-storage.ts` outright (both had zero real importers). It left
   `src/application/auth/{ports/auth-repository.ts,use-cases/auth-context.ts}` and
   `src/infrastructure/auth/{http-auth-profile-repository.ts,supabase-auth-session-port.ts}` in
   place: `useAuth()` (`src/lib/hooks/useAuth.ts`) still calls all four for session sync,
   sign-in, onboarding, and clan selection, and no `features/auth/` slice exists yet to replace
-  them. Whichever seed builds that slice deletes these four along with `axios.ts` and
+  them. Whichever change builds that slice deletes these four along with `axios.ts` and
   `request-context.ts`, together, once every remaining legacy repository has a replacement —
   not auth's four files alone.
 - **`VerifyEmailScreen` (`src/components/auth/VerifyEmailScreen.tsx`) is still unreachable
-  from a real sign-in after S-027.** It handles `403 email_not_verified`, which only
+  from a real sign-in.** It handles `403 email_not_verified`, which only
   `POST /auth/login` can raise, and the live sign-in path
   (`useAuth().signInWithEmail` → `authSessionPort.signInWithEmail`) calls
-  `supabase.auth.signInWithPassword` directly, bypassing the backend endpoint entirely. S-027
-  left this path untouched for the same reason it left `http-auth-profile-repository.ts` in
-  place: swapping `useAuth()`'s Supabase-direct sign-in for a backend-calling one is the
+  `supabase.auth.signInWithPassword` directly, bypassing the backend endpoint entirely. The
+  2026-08-22 deletion left this path untouched for the same reason it left
+  `http-auth-profile-repository.ts` in place: swapping `useAuth()`'s Supabase-direct sign-in for a backend-calling one is the
   auth slice's transport rewrite, not a deletion. The screen stays reachable only by direct
   navigation to `/{locale}/verify-email?email=...` and by its own component test.

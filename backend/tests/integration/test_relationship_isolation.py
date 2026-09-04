@@ -1,6 +1,6 @@
 """A clan must not reach relationship edges created by another clan (strict isolation).
 
-**Four tests, because S-056 (2026-08-22) split the loader in two.** The query
+**Four tests, because the by-id read fix (2026-08-22) split the loader in two.** The query
 handlers took a repository until then; they now take a read port, which carries
 the clan predicate plus the soft-deleted-endpoint one. The repositories keep the
 unfiltered ``get_by_id``, which the command handlers use for update and delete —

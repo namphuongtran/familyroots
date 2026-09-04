@@ -48,7 +48,7 @@ export default function LoginPage() {
           {/*
             `<wbr />` is load-bearing, not a typo: `FamilyRoots` is one unbreakable
             word, so at 320dp and 200% text scale it overflowed the `max-w-sm`
-            column and scrolled the whole page sideways (T-04, seed S-034). A break
+            column and scrolled the whole page sideways (T-04). A break
             opportunity is used only when the line does not fit, so the mark stays
             on one line at every normal size, and the text content stays one word.
           */}

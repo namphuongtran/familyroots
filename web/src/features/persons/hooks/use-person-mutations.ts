@@ -6,7 +6,7 @@
  * mutation can have changed. Cross-feature invalidation (e.g. the legacy
  * `personCreateInvalidationKeys`'s `['tree']` row,
  * `src/lib/hooks/query-invalidation.ts`) is explicitly out of scope for this
- * seed (S-030) — it arrives with the second feature slice that needs to
+ * seed — it arrives with the second feature slice that needs to
  * invalidate `persons` from outside this feature, per `web/CLAUDE.md`.
  */
 
@@ -31,7 +31,7 @@ export interface PersonMutationOptions {
 
 /**
  * `POST /persons`. A new person can only ever affect a list, never a detail that pre-exists it.
- * `mutate`/`mutateAsync` resolve to `PersonWriteResult` (S-032) — `.person` plus a `.warning`
+ * `mutate`/`mutateAsync` resolve to `PersonWriteResult` — `.person` plus a `.warning`
  * string when the write carried `meta.warning` (spec §7.7a) — not a bare `Person`.
  */
 export function useCreatePerson(options: PersonMutationOptions) {

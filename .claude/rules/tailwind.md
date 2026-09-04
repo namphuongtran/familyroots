@@ -42,7 +42,7 @@ Facts about the repo in this file were checked on 2026-08-13. Re-check one befor
 Read this before you pick a colour class. Three different things were wrong here, and all
 three are now fixed. The history is kept because each fix left a trap behind.
 
-**Fixed on 2026-08-13 by seed S-001.** `globals.css` used to define seventeen semantic colours
+**Fixed on 2026-08-13.** `globals.css` used to define seventeen semantic colours
 in `@theme` as `hsl(var(--x))` while defining those variables in `:root` as **hex strings**, for
 example `--border: #e5e7eb`. `hsl()` takes hue, saturation, and lightness, so `hsl(#e5e7eb)` is
 not valid CSS and the browser dropped the whole declaration. All seventeen inherited the body
@@ -50,8 +50,8 @@ colour instead. `--secondary` and `--secondary-foreground` were never defined at
 
 The seventeen now hold literal values in `@theme`, and the duplicate `:root` block is gone.
 
-**A browser probe cannot check this, and S-001's record says it can. Read this before you trust
-either.** Tailwind v4 emits an `@theme` variable only when some generated rule references it. A
+**A browser probe cannot check this, and the original 2026-08-13 record said it could. Read this
+before you trust either.** Tailwind v4 emits an `@theme` variable only when some generated rule references it. A
 token that no class in `web/src` uses is therefore **absent** from the built CSS, and
 `color: var(--color-destructive)` then falls back to the inherited colour. Measured 2026-08-13 on
 `/vi/login`, both `next dev` on `:3210` and a production build: only `border` and `foreground`
@@ -59,15 +59,15 @@ return their declared hex, and the other fifteen return `lab(8.11897 0.811279 -1
 the body colour. `border` survives because the `*` rule applies `border-border`, and `foreground`
 because an emitted rule sets `accent-color` from it.
 
-That value is the **same** value S-001 recorded as its negative control, so the probe does not
-discriminate: "no class asks for it yet" and "the declaration was dropped" look identical. The
-table of seventeen computed values in the S-001 record at `docs/SEEDS.md` could not be reproduced
-on this tree on 2026-08-13. Treat it as not reproducible rather than as a measurement.
+That value is the **same** value that record kept as its negative control, so the probe does not
+discriminate: "no class asks for it yet" and "the declaration was dropped" look identical. Its
+table of seventeen computed values could not be reproduced on this tree on 2026-08-13. Treat it as
+not reproducible rather than as a measurement.
 
 **This is one of three instances of a rule that is written once, elsewhere.** The probe read back a
 value the token did not control, so its passing reading and its failing reading were the same. The
 rule, with this instance, the `backend` RLS coverage guard, and the mobile `dividerTheme` field
-beside it, is `.claude/rules/seeds.md`, section "A test pins an outcome, not a setting". Add
+beside it, is `.claude/rules/testing.md`, section "A test pins an outcome, not a setting". Add
 Tailwind-specific evidence here; do not restate the rule here.
 
 Two rules follow, and the second one is the one that costs time:
@@ -78,8 +78,8 @@ Two rules follow, and the second one is the one that costs time:
   2026-08-13: with a throwaway file carrying `text-muted-foreground bg-destructive border-input`,
   the production build emitted `--color-muted-foreground:#6e6653`, `--color-destructive:#a32218`,
   and `--color-input:#8a8072`, each with the matching `.class{…var(--color-x)}` rule. So the values
-  are correct and on demand, not dead. **Seed S-007 gated this on 2026-08-22**, and the next
-  paragraph is what it built.
+  are correct and on demand, not dead. **A gate landed on 2026-08-22**, and the next paragraph is
+  what it built.
 
 **The gate is `web/src/app/theme-tokens.test.ts`, and it compiles rather than reads.** It is in the
 unit gate, so `pnpm test:unit` fails when a token cannot resolve, and the failing case is named for
@@ -92,7 +92,7 @@ the token. Three things about it are worth knowing before you touch it:
   2026-08-22 by dropping one candidate from the list, at which point `--color-input` vanished from
   the build, exactly as the fifteen dead-looking tokens did in a browser.
 - **It judges the value, not the shape of the text.** Every `var()` is substituted against the scope
-  and the result must parse as a colour, so both halves of the S-001 defect fail: `hsl(var(--input))`
+  and the result must parse as a colour, so both halves of the original defect fail: `hsl(var(--input))`
   with `--input` gone fails on the missing variable, and `hsl(#8a8072)` with `--input` restored fails
   on `hsl()` not taking a hex. A literal that is not a colour, `#ff` or `bananas`, fails too.
 - **A new `@theme` namespace stops it rather than slipping past it.** `UTILITY_PREFIX` knows four
@@ -116,7 +116,7 @@ their `hover:` twins `bg-primary-hover` and `bg-primary-container-hover`; the he
 `animate-*` values. Note that § 5 forbids `rounded-sm` on design grounds even though it resolves.
 
 **Three class names that used to work are gone, and a grep will still find them in old
-branches.** Seed S-005 deleted them on 2026-08-14, per ADR-041:
+branches.** They were deleted on 2026-08-14, per ADR-041:
 
 | Gone | Use instead |
 |---|---|
@@ -124,7 +124,7 @@ branches.** Seed S-005 deleted them on 2026-08-14, per ADR-041:
 | `bg-cream`, the bare token | `bg-background`. The `cream-50` to `cream-400` **ramp stays** |
 | `ring-primary-*` | `ring-ring`, and see the offset rule below |
 
-**Contrast was fixed on 2026-08-13 by seed S-003, and it is now gated.** Three token values moved,
+**Contrast was fixed on 2026-08-13, and it is now gated.** Three token values moved,
 each to the value spec § 2.1 already names for that role:
 
 | Token | Was | Is | Worst ratio, over the four grounds | Spec role |
@@ -133,9 +133,9 @@ each to the value spec § 2.1 already names for that role:
 | `destructive` | `#ef4444` | `#a32218` | 7.50, both directions | `danger` |
 | `input` | `#e5e7eb` | `#8a8072` | 3.53 | none: derived, see below |
 
-The grounds were four when S-003 measured them. **They are three since 2026-08-14**: `card`
-`#ffffff`, `background` `#fbf8f1`, and `muted` `#f3f4f6`. `cream` left the set because seed
-S-005 deleted the bare token, so `body` and the semantic token now name the same value. The
+The grounds were four when contrast was measured. **They are three since 2026-08-14**: `card`
+`#ffffff`, `background` `#fbf8f1`, and `muted` `#f3f4f6`. `cream` left the set because the
+2026-08-14 change deleted the bare token, so `body` and the semantic token now name the same value. The
 worst ratios above were measured against the old four and did not move: `background` got
 lighter, and a lighter ground raises the ratio for dark text.
 
@@ -149,16 +149,15 @@ Four things to know before you touch these:
   is the one held to 3:1. Spec § 2.8.1 F reasons the same way. Do not collapse the two values.
 - **`input` `#8a8072` is derived, not quoted.** Spec § 2.1 offers no bordered-input value because it
   specifies a filled field instead, `surface-container-low` `#F4EFE4`. Spec § 2.8.1 F allows either
-  branch, and S-003 took the darker-border branch as the smaller change. **S-005 did not adopt the
-  fill**, so the token stays: ADR-041 decides `primary`, `heritage`, `background`, and `ring`, and
-  says nothing about the field. Whether the field becomes filled is still open, and S-035 is the
-  seed that would take it.
+  branch, and the darker-border branch was taken as the smaller change. **The 2026-08-14 repaint did
+  not adopt the fill**, so the token stays: ADR-041 decides `primary`, `heritage`, `background`, and `ring`, and
+  says nothing about the field. Whether the field becomes filled is still open.
 - **`text-gold-*` is a lint error.** Gold is ornament: `gold-500` measures 2.10:1 on a white card,
   and the ramp does not clear 4.5 for text until `gold-800`. Tailwind v4 generates the text, fill,
   and border utilities from one variable, so the text scale cannot be trimmed on its own. The ban
   lives in `web/eslint.config.mjs` as `no-restricted-syntax`, matching any string literal, so
   `cn('text-gold-500')` is caught too. `bg-gold-*` and `border-gold-*` stay legal. For genuine gold
-  text, spec § 2.1 names `gilt` `#8a6a16`. **It did not arrive with S-005**, and the sentence here
+  text, spec § 2.1 names `gilt` `#8a6a16`. **It did not arrive with the 2026-08-14 repaint**, and the sentence here
   that said it would was wrong: ADR-041 decides four things and the gold family is not one of them.
   No token holds `#8a6a16` today, so there is still no legal way to draw gold text.
 
@@ -168,7 +167,7 @@ token, never the threshold. It throws rather than skipping when a token is renam
 table that silently resolves to nothing passes every assertion.
 
 **Primary is the leaf green, since 2026-08-14.** This is the third fix, and it is the one that
-changed what is on screen. ADR-041 decided it and seed S-005 landed it in one change:
+changed what is on screen. ADR-041 decided it and one change on 2026-08-14 landed it:
 
 - **`primary` is `#3e5c38`.** The red `#c41e3a` is gone from `web/src`. Red did not disappear
   from the palette: it moved to `heritage` `#a3182f`, its own four-token family for the thủy tổ
@@ -185,7 +184,7 @@ changed what is on screen. ADR-041 decided it and seed S-005 landed it in one ch
   holds the measurement that forced it. Do not make the two scopes match.
 - **The page ground is one value under one name**, `background` `#fbf8f1`, spec § 2.1's
   `surface`. Two values used to claim the name.
-- **`--secondary` and `--secondary-foreground`** had no value at all, so S-001 gave them
+- **`--secondary` and `--secondary-foreground`** had no value at all, so the 2026-08-13 fix gave them
   `#7a6248` and `#ffffff` from spec § 2.1's `secondary` row.
 
 **The focus ring is the on-surface colour, and its offset is load-bearing.** `--color-ring` is
@@ -197,10 +196,10 @@ without one; it deliberately ignores a bare `ring-ring`, because a selection ind
 focus ring and needs no offset.
 - **The screens are half onto the tokens, and the half that is left is the accessible half.**
   Re-counted 2026-08-14 across `web/src`, excluding `globals.css` and the tests: `bg-background`
-  in **6** files and `ring-ring` in **10**, both arriving with S-005. Still **zero** for
+  in **6** files and `ring-ring` in **10**, both arriving with the 2026-08-14 repaint. Still **zero** for
   `muted-foreground`, `bg-muted`, `border-input`, and every `*-destructive` class. Forms draw
   their own boundary with `border-gray-300` in **10** files, which measures 1.47:1 on white and
-  fails WCAG 1.4.11. So S-003 still changed no pixel, and S-035 is still the seed that moves the
+  fails WCAG 1.4.11. So the contrast fix still changed no pixel, and nothing yet moves the
   forms.
 
 Rules that follow from this:
@@ -220,13 +219,13 @@ Rules that follow from this:
 - **Do not read a colour off a mid-transition element.** A button carrying `transition-colors`
   returns an interpolated value from `getComputedStyle` for the length of the transition, and
   Chrome serializes an interpolation as `oklab(...)` rather than `rgb(...)`. Measured while
-  closing S-005: read immediately after `.hover()`, the hovered fill came back as the *original*
+  closing the 2026-08-14 repaint: read immediately after `.hover()`, the hovered fill came back as the *original*
   colour spelled in oklab, which reads exactly like "the hover class did nothing". Wait for the
   transition, then read.
 
 ## 3. Dark mode is built, on one mechanism, and most screens do not follow it yet
 
-**Rewritten 2026-08-21 by seed S-006.** This section used to say dark mode was declared and not
+**Rewritten 2026-08-21.** This section used to say dark mode was declared and not
 built. It is built. What is *not* done is the screens, and that distinction is the whole of this
 section.
 
@@ -253,7 +252,7 @@ query. Palette and variant now switch on one signal.
 **The palette is correct and the screens are not. Counted 2026-08-21 across `web/src`: 393
 hardcoded palette utilities in 41 files** — `text-gray-*` 187, `border-gray-*` 82, `bg-gray-*` 33,
 `divide-gray-*` 2, plus 89 in the red, amber, blue, green, purple, rose, pink, and orange
-families. A palette colour has no dark value, so none of them flips. **Seed S-038 owns moving
+families. A palette colour has no dark value, so none of them flips. **Moving
 them.** Do not report a dark screenshot full of light grey boxes as a new defect; it is this.
 
 **The dark hover fill names a literal hex where the light one names the token, and that asymmetry
@@ -264,7 +263,7 @@ the *light* primary lightened, and the label on it measures **2.57:1**. With the
 build resolves the mix outright to `#aac8a0` and the label measures 8.60:1. `contrast.test.ts`
 fails if the literal stops matching its token, so the duplication is gated rather than trusted.
 
-**The backoffice aside stopped being hand-built, per ADR-046 and seed S-061 (2026-08-22).**
+**The backoffice aside stopped being hand-built, per ADR-046 (2026-08-22).**
 `components/backoffice/BackofficeSidebar.tsx:30` used to be `bg-gray-950` `#030712`, a palette
 colour that cannot flip, with a `primary-container` brand mark on top of it because `primary`
 only cleared 2.68:1 on that ground. Both are gone. The aside now takes `bg-muted text-foreground`,
@@ -276,10 +275,10 @@ composes is a pair the gate already runs, twice, once per scheme — no new row 
 § 5 below; the sections separate with margin instead. `layout.tsx:30` and `:32` moved from
 `bg-gray-900`/`bg-gray-50` to `bg-background` in the same change, because the two files have to
 move together or the rail and the page go the same darkness in dark mode. `web/CLAUDE.md`'s own
-account of S-061, and `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`,
-carry the full measurement table and the one open question this did not close: the rail-to-content
+account of that rebuild, and `docs/decisions/046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md`,
+carry the full measurement table and the one open question it did not close: the rail-to-content
 step in light mode is a thin 1.04:1, because light `muted` is a cool grey where spec § 2.1
-publishes a warm one, and this seed did not move `muted` to fix that.
+publishes a warm one, and the rebuild did not move `muted` to fix that.
 
 **Both themes are gated, in two places.** `web/src/app/contrast.test.ts` runs its whole pair table
 twice, once per scope, and it parses the stylesheet with comments stripped so that `globals.css`
@@ -290,7 +289,7 @@ on 2026-08-21: 6.07:1 against the 4.5 floor and 6.07:1 against the 3 floor, zero
 
 **One trap from writing those gates, worth more than the rest of this section.** A file-wide
 `--color-x: #hex` match over `globals.css` now reads the dark values, because they come later in
-the file. S-006 planted exactly that and **all 156 cases still passed**: each palette is
+the file. That failure was planted on 2026-08-21 and **all 156 cases still passed**: each palette is
 internally consistent, so grading dark against dark clears AA just as light against light does.
 A parser that reads the wrong theme does not fail, it agrees with you. Scope any read of that file
 to a block, and keep the `two different palettes` case that catches it.
@@ -362,7 +361,7 @@ screen. The ones that most often get missed:
 **Three of the eighteen have a test. `T-01`, `T-02`, and `T-04`.**
 
 `T-01` text contrast and `T-02` non-text contrast are held by `web/src/app/contrast.test.ts`, added
-2026-08-13 by seed S-003, in the unit gate. `T-01`'s own pass criteria asks for exactly that shape:
+2026-08-13, in the unit gate. `T-01`'s own pass criteria asks for exactly that shape:
 "a token-pair audit script over the approved pairs list, not spot-checking screenshots". The pairs
 list is the `CASES` table in that file. **Add a row when you add a token**, because the gate can only
 check the pairs somebody wrote down. Two limits worth knowing: it checks token **pairs**, so a screen
@@ -370,7 +369,7 @@ that puts `text-gray-500` on `bg-cream` is invisible to it, and it reads the sty
 rendered page, for the reason § 2 gives.
 
 **`T-04` was the first of the eighteen to get a test, and the test found a real defect.**
-`web/e2e/text-scale.spec.ts`, added 2026-08-13 by seed S-034, sets the viewport to 320 px, injects
+`web/e2e/text-scale.spec.ts`, added 2026-08-13, sets the viewport to 320 px, injects
 `:root { font-size: 32px }`, and asserts that `document.documentElement.scrollWidth` equals
 `clientWidth` on `/vi/login` and `/vi/register`. Four traps came out of writing it, and all four cost
 time:
@@ -396,7 +395,7 @@ time:
    `page.addStyleTag` with a `:root` rule. `e2e/fonts.spec.ts` still uses the inline form and still
    emits that warning.
 
-**A fifth trap, found by seed S-042 (2026-08-22): the same defect shape hides behind an env-var
+**A fifth trap, found on 2026-08-22: the same defect shape hides behind an env-var
 guard, and a placeholder meant to fix the gate can make it invisible instead.**
 `SupabaseSetupNotice.tsx` renders a banner only when `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` are both missing, and its hint text names both literally, in
@@ -404,7 +403,7 @@ every locale (`grep -n missing_supabase_config_hint web/messages/*.json`) — re
 not translatable copy. Both are one unbreakable word: no space, no hyphen, nothing but
 underscores. Measured 2026-08-22 at 320 px and 200% root font size, with the banner forced to
 render: page `scrollWidth` 569 against `clientWidth` 320, the hint paragraph itself 504 against
-190. Same shape as trap 1 above, one step removed: S-041 had just made the e2e run supply
+190. Same shape as trap 1 above, one step removed: the e2e run had just been made to supply
 placeholder Supabase values so the *other* four cases stop measuring the runner's filesystem
 (`web/CLAUDE.md`'s account of that seed), which as a side effect made this banner **stop
 rendering** in every e2e run — the defect did not go away, it went where no gate could see it.
@@ -417,7 +416,7 @@ rendering** in every e2e run — the defect did not go away, it went where no ga
    own (checked 2026-08-22), so nothing outside the two tokens is touched.
 2. **Measuring the fix needs the banner to render on purpose, and one dev-server process cannot
    answer both ways at once.** `NEXT_PUBLIC_*` values are inlined when a Next.js server process
-   starts, not re-read per request, so the placeholder server S-041 built and the banner's own
+   starts, not re-read per request, so the placeholder server that run builds and the banner's own
    server need to be two different processes. `web/playwright.config.ts`'s `webServer` is an
    array now: a second entry boots a dedicated `next dev` with both variables forced to `''`
    (not merely omitted — an unset shell variable would leak through), for
@@ -437,24 +436,24 @@ rendering** in every e2e run — the defect did not go away, it went where no ga
    rather than left to reappear as an uncommitted diff after the next person's gate run.
 
 **One on-screen wordmark is still one unbreakable word**, the literal string `FamilyRoots` at
-`components/backoffice/BackofficeSidebar.tsx:49` (moved from `:44` by seed S-061's 2026-08-22
+`components/backoffice/BackofficeSidebar.tsx:49` (moved from `:44` by the 2026-08-22
 conversion, which renumbered the whole file — re-grep before trusting this line too). It sits
 behind a Supabase session, so nobody has measured it at 320 px and 200% scale. It still carries
-`text-xs font-semibold`, unchanged by S-061 (ADR-046's per-line table names no change for this
+`text-xs font-semibold`, unchanged by that rebuild (ADR-046's per-line table names no change for this
 line); what moved is the line above it, the translated `rail_label`, from `text-[10px]
 text-gray-400` to `text-xs text-foreground` and first in reading order, per the ADR's own table.
 So it is still no more likely to overflow than it was, but "no more likely" is not a measurement.
 Treat it as unverified, not as fixed.
 
-**S-034 named a third wordmark that does not exist, and its line number for the second one was one
-place off.** The seed's `Out of scope` line cites `components/layout/Sidebar.tsx:65` as a
-`FamilyRoots` wordmark and `BackofficeSidebar.tsx:33` as the other. Read on 2026-08-13:
+**The 2026-08-13 text-scale record named a third wordmark that does not exist, and its line number
+for the second one was one place off.** Its out-of-scope note cites `components/layout/Sidebar.tsx:65`
+as a `FamilyRoots` wordmark and `BackofficeSidebar.tsx:33` as the other. Read on 2026-08-13:
 `Sidebar.tsx:65` holds `Gia Phả`, not `FamilyRoots`, and `grep -rn FamilyRoots src/` finds no match
 in that file at all; the backoffice mark is on line 35. Nothing in the fix rested on either number,
 which is precisely why nobody would have caught them. Grep for the string before you trust a cited
 line here.
 
-**Fixed by seed S-022, and the trap for next time it is touched.** `web/src/app/layout.tsx`
+**Fixed, and the trap for next time it is touched.** `web/src/app/layout.tsx`
 used to hardcode `<html lang="en">`, and `web/src/app/[locale]/layout.tsx` rendered a `<div>`
 instead of the document element — that broke `T-12`. The obvious-looking fix is to move
 `<html>`/`<body>` down into `app/[locale]/layout.tsx` so it can read the route's own locale
@@ -488,7 +487,7 @@ document element, so the div was a second, dead copy) and returns a `<>` fragmen
 - `T-16` says every screen must stay usable with all images blocked. An avatar falls back to
   initials. Reserve the space so nothing moves.
 
-**Fonts.** Fixed on 2026-08-13 by seed S-002. The two mandated families now load and reach
+**Fonts.** Fixed on 2026-08-13. The two mandated families now load and reach
 the screen. Read the five traps below before you touch any of it, because four of them cost
 this app both of its fonts once already.
 
@@ -535,8 +534,8 @@ Two more facts worth knowing before you change the files:
   ships beside them because the licence requires it.
 - **The build emits both files whole: 176 KB plus 165 KB, measured 2026-08-13** in
   `.next/static/media/`. `next/font/local` does not subset or convert, so a Vietnamese page
-  carries 341 KB of font. Subsetting to woff2 would cut most of it and is an `Owed` row in
-  `docs/SEEDS.md`, not a drive-by change: a derived file cannot be hash-compared to the mobile
+  carries 341 KB of font. Subsetting to woff2 would cut most of it and is owed
+  work, not a drive-by change: a derived file cannot be hash-compared to the mobile
   original, so the drift test above needs a different mechanism first.
 - `web/src/app/fonts/` also holds `GeistVF.woff` and `GeistMonoVF.woff`. No file references
   them. They are leftovers from the project template. Do not wire them up.
@@ -547,8 +546,8 @@ Two more facts worth knowing before you change the files:
 ## 9. How to write the classes
 
 - Order classes as `prettier-plugin-tailwindcss` would. It is configured in `web/.prettierrc`.
-  Seed S-028 (2026-08-22) cleared the pre-existing Prettier drift `web/CLAUDE.md` used to warn
-  about here — it was 99 files at the time S-028 measured it, not the 112 this section used to
+  A pass on 2026-08-22 cleared the pre-existing Prettier drift `web/CLAUDE.md` used to warn
+  about here — it was 99 files when that pass measured it, not the 112 this section used to
   say — and added `pnpm format:check` to CI so it cannot come back. Running `pnpm format` is safe
   now. Still keep a formatting pass in its own commit rather than folding it into one that also
   changes behaviour, for the same reason as before: a mixed diff buries the real change.

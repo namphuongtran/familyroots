@@ -4,7 +4,7 @@ import { REDACTED } from './redact'
 import { WebVitalsReporter } from './web-vitals'
 
 /**
- * Seed S-084. `WebVitalsReporter` is mounted on every locale route
+ * the invitation page. `WebVitalsReporter` is mounted on every locale route
  * (`app/[locale]/layout.tsx:40`) and is the app's own log as well as its only
  * analytics call. It reported `window.location.pathname` verbatim, and on
  * `/{locale}/invitations/{token}` that pathname is a bearer credential

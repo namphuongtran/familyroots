@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // `createServerClient` normally talks to Supabase over HTTP. Mocked to a
 // double whose session is controlled per test, since this file is testing
-// the clan-cookie gate added by S-023, not Supabase auth itself.
+// the clan-cookie gate added by the cookie change, not Supabase auth itself.
 let currentSession: { access_token: string } | null = { access_token: 'tok-1' }
 
 vi.mock('@supabase/ssr', () => ({
@@ -36,7 +36,7 @@ function requestFor(path: string, cookie?: string): NextRequest {
   return new NextRequest(`http://localhost:3000${path}`, { headers })
 }
 
-describe('middleware clan gate (S-023)', () => {
+describe('middleware clan gate', () => {
   beforeEach(() => {
     currentSession = { access_token: 'tok-1' }
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
@@ -92,7 +92,7 @@ describe('middleware clan gate (S-023)', () => {
 })
 
 /**
- * Seed S-084. `/{locale}/invitations/{token}` has to reach the browser with the
+ * the invitation page. `/{locale}/invitations/{token}` has to reach the browser with the
  * token still on it. Without a `PUBLIC_ROUTES` entry, a signed-out visitor — which
  * is the normal case for an invited relative — is redirected to
  * `/{locale}/login`, and the token is gone from the URL, so the invitation cannot
@@ -102,7 +102,7 @@ describe('middleware clan gate (S-023)', () => {
  * (`docs/contracts/rest-invitations-api.md:41`): 43 URL-safe base64 characters,
  * including `-` and `_`.
  */
-describe('the invitation route is public, so the token survives the first request (S-084)', () => {
+describe('the invitation route is public, so the token survives the first request', () => {
   const TOKEN = 'Zx-9Qa_bC3dEfGhIjKlMnOpQrStUvWxYz0123456789'
 
   beforeEach(() => {

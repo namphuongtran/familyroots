@@ -137,7 +137,7 @@ export default function RegisterPage() {
     // shaped code a 422 `validation_error` naming `body.clan_code`
     // (`docs/contracts/rest-auth-api.md`'s "The join identifier" table), which has no copy
     // a person can read and would otherwise land in the page-level banner. `isValidClanCode`
-    // is S-083's, compiled from the backend's own `_SLUG_PATTERN`, so this is not a second
+    // is the clan-code spec's, compiled from the backend's own `_SLUG_PATTERN`, so this is not a second
     // validator for the same shape. No `pattern` attribute, because the browser's own
     // validation bubble is not localised and every string on this screen goes through
     // next-intl.
@@ -213,7 +213,7 @@ export default function RegisterPage() {
     <div className="bg-background flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          {/* `<wbr />` is load-bearing — see the note on the login page (T-04, seed S-034). */}
+          {/* `<wbr />` is load-bearing — see the note on the login page (T-04). */}
           <h1 className="text-primary font-serif text-3xl">
             Family
             <wbr />
@@ -352,7 +352,7 @@ export default function RegisterPage() {
               />
               {/* **No `wrap-anywhere` here, and that is a measurement rather than an
                   oversight.** `.claude/rules/tailwind.md` § 7 records the unbreakable-word
-                  overflow three times (S-034's wordmark, S-042's Supabase banner, S-083's
+                  overflow three times (the text-scale spec's wordmark, the banner spec's Supabase banner, the clan-code spec's
                   suggestion button), so this field was built expecting to be the fourth
                   and then measured at 320px and 200% root font size on 2026-08-26. It is
                   not. A hyphen is itself a break opportunity under `overflow-wrap: normal`,
@@ -360,7 +360,7 @@ export default function RegisterPage() {
                   message below interpolates the typed code. With the class and without it
                   the readings are identical: page 320/320, this paragraph 158/158, the
                   error paragraph 158/158, with only `overflowWrap` moving from `normal` to
-                  `anywhere`. S-083's case is different because its button echoed a
+                  `anywhere`. The clan-code spec's case is different because its button echoed a
                   100-character code back as text; the 100 characters here stay inside the
                   input, whose own 1604px scrollWidth does not widen the page.
                   `e2e/register-join-code.spec.ts` keeps the T-04 reading regardless. If a

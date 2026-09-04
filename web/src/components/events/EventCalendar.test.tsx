@@ -7,7 +7,7 @@ import type { ClanEvent } from '@/lib/types'
 import messages from '../../../messages/vi.json'
 
 /**
- * Seed S-036. The month grid used to mark a day that carries an event with a
+ * the calendar screen. The month grid used to mark a day that carries an event with a
  * 4px `bg-gold-500` dot and nothing else (`2.03:1` on `background`, measured
  * 2026-08-13, recheck below). That is a single colour channel, so WCAG 1.4.11
  * and spec § 5 `T-06` both fail it, and a screen reader had no way to learn a
@@ -19,7 +19,7 @@ import messages from '../../../messages/vi.json'
  * plus `everyGround('primary', AA_NORMAL_TEXT)` against every ground the badge
  * can sit on), so adding a second contrast assertion here would just repeat a
  * pair the gate already runs. What this file proves instead is the outcome
- * `.claude/rules/seeds.md` "A test pins an outcome, not a setting" asks for:
+ * `.claude/rules/testing.md` "A test pins an outcome, not a setting" asks for:
  * the *accessible name* a screen reader actually computes, not a class string.
  */
 vi.mock('@/lib/hooks/useEvents', () => ({ useEvents: vi.fn() }))
@@ -52,7 +52,7 @@ function mockEvents(events: ClanEvent[]) {
   } as unknown as ReturnType<typeof useEvents>)
 }
 
-describe('EventCalendar day marker (S-036, spec § 5 T-06/T-13)', () => {
+describe('EventCalendar day marker (spec § 5 T-06/T-13)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-22T00:00:00'))

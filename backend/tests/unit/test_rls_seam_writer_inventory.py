@@ -1,13 +1,13 @@
 """Pin every place in `app/` that writes a Postgres session setting.
 
-Seed S-045, the third guard beside `tests/integration/test_rls_seam_settings_pinned.py`.
+The seam-writer guards, the third guard beside `tests/integration/test_rls_seam_settings_pinned.py`.
 
 The runtime pin asserts the exact set of settings a request transaction carries. It can
 only see writers on the paths it drives. This one reads the source instead, so a **third**
 writer added on a path no test exercises still fails the suite — which matters here,
 because the seam already turned out to have two writers when
 [ADR-047](../../../docs/decisions/047-rls-seam-sets-clan-id-only.md) Measurement 3 looked,
-and seed S-040's own text had named only one.
+and ADR-047's own text had named only one.
 
 Confirmed at source on 2026-08-22, in this worktree:
 
@@ -126,7 +126,7 @@ def test_the_guard_would_notice_a_new_writer(tmp_path: Path) -> None:
     """The scanner itself, proven on a synthetic module rather than trusted.
 
     Without this, a scanner that silently matched nothing would keep the test above green
-    forever — the same 'a green gate is not evidence' failure that S-045 exists to close.
+    forever — the same 'a green gate is not evidence' failure that the seam guards exists to close.
     """
     module = (
         '"""Docstring mentioning SET LOCAL app.decoy = 1 and set_config(\'app.decoy\').\n'

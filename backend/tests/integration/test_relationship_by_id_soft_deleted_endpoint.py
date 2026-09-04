@@ -1,6 +1,7 @@
 """The two by-id relationship reads hide an edge whose endpoint person is deleted.
 
-**Seed S-056, and it is the half seed S-054 did not reach.** S-054 gave the three
+**The by-id read fix, and it is the half the read filter did not reach.** the read filter gave the
+*three
 batch reads a second soft-delete predicate: the edge row's own ``is_deleted`` says
 whether someone deleted *the edge*, and says nothing about the persons it points
 at. ``GET /relationships/marriages/{id}`` and
@@ -21,7 +22,7 @@ the unfiltered ``get_by_id``.
 
 **Every test below takes both readings in one run**, because that is the outcome
 the change has to produce and a ``404``-only test would pass over a change that
-broke the admin's repair path. ``.claude/rules/seeds.md``, "A test pins an outcome,
+broke the admin's repair path. ``.claude/rules/testing.md``, "A test pins an outcome,
 not a setting": the negative control for this file deletes the predicate and
 watches the ``404`` assertions fail while the ``DELETE`` and ``PATCH`` assertions
 keep passing both ways, which is what proves the two halves are separate.
@@ -364,7 +365,7 @@ async def test_the_two_readings_flip_back_when_the_person_is_restored(
 
     Clearing ``persons.is_deleted`` — and nothing else, the edge rows are never
     touched — turns both ``404``s into ``200``s. Question 2 of
-    ``.claude/rules/seeds.md``: a control that reads the same either way is not a
+    ``.claude/rules/testing.md``: a control that reads the same either way is not a
     control.
     """
     marriage_url = f"/api/v1/relationships/marriages/{seeded['deleted_spouse_marriage_id']}"

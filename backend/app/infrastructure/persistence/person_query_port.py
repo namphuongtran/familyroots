@@ -5,12 +5,12 @@ single-person methods delegate to it with a one-element list — one SQL
 implementation per concern, so /persons/batch stays O(1) queries per include
 token instead of O(N) per person.
 
-**An edge read carries two soft-delete predicates, not one** (seed S-054,
+**An edge read carries two soft-delete predicates, not one** (ADR-051,
 2026-08-22). ``Marriage.is_deleted`` / ``ParentChild.is_deleted`` says whether
 someone deleted *the edge*. It says nothing about the persons the edge points
 at, and nothing cascades a person's delete onto its edges — ``PersonDeleted``
 has no consumer (``app/domain/person/entity.py:267-280``; whether a cascade
-should exist at all is seed S-055's decision, and this filter stays correct
+should exist at all is ADR-051's decision, and this filter stays correct
 either way). So every edge read here also hides an edge with a soft-deleted
 person on either end, which is what ``get_timelines_batch`` below and the tree
 builder already did. Before this, ``GET /persons/{id}/marriages`` handed a
@@ -24,7 +24,7 @@ PostgreSQL 18.4, against 20,000 persons / 10,000 marriages / 5,000 parent-child
 rows loaded into the migrated test database. ``EXPLAIN (ANALYZE)`` of the
 marriages batch read for 100 person ids, one run, all four in the same session:
 
-* edge filter only, the behaviour before S-054 — ``0.115 ms``
+* edge filter only, the behaviour before the fix — ``0.115 ms``
 * **the statement this module now emits**, one ``NOT EXISTS`` over both
   endpoints — ``0.246 ms``: a Nested Loop Anti Join feeding
   ``Index Scan using pk_persons``, 50 loops at ~0.004 ms each
@@ -88,7 +88,7 @@ def _no_deleted_endpoint(*endpoint_ids: ColumnElement[uuid.UUID]) -> ColumnEleme
     docstring for why it is an anti-join rather than a join.
 
     Also imported by ``relationship_repository.py``, where the two by-id read
-    ports carry the same predicate (seed S-056, 2026-08-22). It stays private
+    ports carry the same predicate (2026-08-22). It stays private
     because nothing outside ``app.infrastructure.persistence`` may use it, and
     it stays one definition because two copies of a visibility rule drift.
     """

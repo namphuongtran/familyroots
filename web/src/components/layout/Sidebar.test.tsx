@@ -9,7 +9,7 @@ import zhMessages from '../../../messages/zh.json'
 import viMessages from '../../../messages/vi.json'
 
 /**
- * Seed S-092. `Sidebar.tsx:70` carried `aria-label={sidebarOpen ? 'Thu gọn' : 'Mở rộng'}`, a
+ * the logout-label fix. `Sidebar.tsx:70` carried `aria-label={sidebarOpen ? 'Thu gọn' : 'Mở rộng'}`, a
  * hardcoded Vietnamese pair. It failed in the direction nobody looks for: correct on the default
  * locale a developer is looking at, and Vietnamese in the accessible name for every English,
  * Chinese, and French reader. No visual review catches it, because an `aria-label` is not painted.
@@ -53,7 +53,7 @@ function renderSidebar(locale: string, messages: AbstractIntlMessages, open: boo
   return screen.getByRole('button')
 }
 
-describe('Sidebar collapse toggle (S-092)', () => {
+describe('Sidebar collapse toggle', () => {
   it('names the toggle in English under the en locale', () => {
     expect(renderSidebar('en', enMessages, true)).toHaveAccessibleName(
       expected(enMessages.common.collapse),

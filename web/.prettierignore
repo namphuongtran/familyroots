@@ -1,4 +1,4 @@
-# pnpm owns this file. Seed S-028 added `pnpm format:check` to the web CI job on
+# pnpm owns this file. `pnpm format:check` was added to the web CI job on
 # 2026-08-22, and there was no .prettierignore, so the sweep reformatted
 # pnpm-lock.yaml as well: 4244 insertions, 1493 deletions, YAML flow mappings
 # rewritten as block mappings.

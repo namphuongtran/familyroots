@@ -22,7 +22,7 @@ function errorMessage(error: unknown): string | null {
  * Pagination is the explicit "Tải thêm" button only, on purpose: spec §7.5
  * reserves auto-load-on-scroll for the mobile client and says infinite
  * scroll on desktop "breaks keyboard users and hides the page footer"
- * (`T-07`). `usePersonsList`'s own cursor rule (S-030) means this component
+ * (`T-07`). `usePersonsList`'s own cursor rule means this component
  * never sees a cursor at all — it only ever calls `fetchNextPage()`.
  */
 export function PersonsList() {

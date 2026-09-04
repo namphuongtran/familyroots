@@ -33,7 +33,7 @@ export default async function LocaleLayout({
     because `app/page.tsx` and `app/api/*` share the same root layout outside
     this segment). `antialiased` is already applied to `body` by
     `globals.css`'s `@layer base` rule, so a second copy on a `<div>` here was
-    dead weight, not a fallback. See seed S-022.
+    dead weight, not a fallback. See the `<html lang>` fix.
   */
   return (
     <>

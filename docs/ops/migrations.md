@@ -68,7 +68,7 @@ ADR-008); grants only, no table/RLS change, reversible.
 > object, nor the grants, which `--no-privileges` drops. Nothing enforces the two staying equal.
 > `scripts/restore_drill.sh` check 4 catches a missing table, function, or sequence grant, because
 > it runs a real query as the role; it would not catch a privilege class no query exercises. Added
-> 2026-08-22 by seed S-057, [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).
+> 2026-08-22, [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).
 
 `027_rls_events_branches` enables the clan-isolation RLS policy on `events` + `branches` (SP-3 Phase 2); reversible (drop policy + disable).
 
@@ -76,27 +76,27 @@ ADR-008); grants only, no table/RLS change, reversible.
 
 `029_rls_persons` enables per-command clan-membership RLS on `persons` (M:N; SP-3 Phase 4); reversible.
 
-`030_rls_change_requests` enables the clan-isolation RLS policy on `change_requests` (SP-3 Phase 5, S-008); reversible (drop policy + disable).
+`030_rls_change_requests` enables the clan-isolation RLS policy on `change_requests` (SP-3 Phase 5); reversible (drop policy + disable).
 
 `031_rls_clan_memberships` enables the clan-isolation RLS policy on `clan_memberships`
-(SP-3 Phase 6, S-009); reversible (drop policy + disable). `clan_invitations`, the other
-table S-009 named, was left uncovered here — the accept-by-token path has no clan
+(SP-3 Phase 6); reversible (drop policy + disable). `clan_invitations`, the other
+table Phase 6 named, was left uncovered here — the accept-by-token path has no clan
 context, so a policy there locked every invitee out; see `data-model.md` and
 `backend/tests/integration/test_invitation_accept_no_clan_context.py`. **Migration `032`
 below then covered it**, once ADR-048 moved that one route to the privileged session.
 
 `032_rls_clan_invitations` enables the clan-isolation RLS policy on `clan_invitations`
-(SP-3 Phase 7, S-043, ADR-048); reversible. Its hard precondition is in the application,
+(SP-3 Phase 7, ADR-048); reversible. Its hard precondition is in the application,
 not the migration: `POST /invitations/{token}/accept` runs on its own privileged provider
 `get_invitation_accept_handler`, while create, list and revoke keep the RLS request
 session.
 
 `033_rls_identity_claims` enables RLS on `identity_claims` with **one deny-all policy**,
-`FOR ALL USING (false) WITH CHECK (false)` (SP-3 Phase 8, S-012, ADR-042); reversible. That
+`FOR ALL USING (false) WITH CHECK (false)` (SP-3 Phase 8, ADR-042); reversible. That
 is a tripwire for a claims query mis-wired to the request session, **not** clan isolation —
 the table has no `clan_id`, and its application layer is its only isolation.
 
-`034_rls_audit_notification` covers two tables with two shapes (SP-3 Phase 9, S-014,
+`034_rls_audit_notification` covers two tables with two shapes (SP-3 Phase 9,
 ADR-043); reversible. `notification_log` takes the standard template. `audit_logs` gets
 `audit_logs_sel` keyed on the GUC, `audit_logs_ins WITH CHECK (true)`, and **no UPDATE and
 no DELETE policy**, which makes the trail append-only for the request role. Ships with
@@ -104,28 +104,28 @@ no DELETE policy**, which makes the trail append-only for the request role. Ship
 line makes `POST /auth/register` answer 500 (ADR-038).
 
 `035_rls_clan_settings` enables the clan-isolation RLS policy on `clan_settings` (SP-3
-Phase 10, S-010); reversible (drop policy + disable). `user_clan_roles`, the other table
-S-010 named, is deliberately left uncovered and **needs a decision, pre-allocated as
+Phase 10); reversible (drop policy + disable). `user_clan_roles`, the other table
+Phase 10 named, is deliberately left uncovered and **needs a decision, pre-allocated as
 ADR-050**: it is the table the authorization gate reads, and a policy there makes
 `POST /auth/login` answer `200` with `clan_id: null` while making `POST /auth/onboard`
 raise `InsufficientPrivilege`. See `data-model.md` and
 `backend/tests/integration/test_rls_login_two_clans.py`.
 
 `036_rls_user_clan_roles` gives `user_clan_roles` **four per-command policies** (SP-3
-Phase 11, S-052, ADR-050); reversible. It is not the 027 template: `SELECT USING (true)`
+Phase 11, ADR-050); reversible. It is not the 027 template: `SELECT USING (true)`
 and `INSERT WITH CHECK (true)` are permissive **by decision**, because four request-session
 readers run before any clan is selected, starting with `get_current_clan_id` itself; the
 `UPDATE` and `DELETE` halves are clan-keyed, and they are what the migration is for. See
 the migration docstring and `backend/tests/integration/test_rls_login_two_clans.py`.
 
-`037_drop_allow_public_tree` drops `clan_settings.allow_public_tree` (S-017, ADR-044 § 1);
+`037_drop_allow_public_tree` drops `clan_settings.allow_public_tree` (ADR-044 § 1);
 reversible, and exactly so. The table has no rows — nothing constructs a `ClanSettings` and
 no trigger creates one — so there is no per-row value to reconstruct, and `downgrade()`
 re-adds the column with the same `NOT NULL` and the same `server_default false` that
 `001_initial.py:600` gave it. No API shape changes: no contract ever documented the column.
 **The column does not come back**; the concept returns as `privacy_level` alone, if at all.
 
-`038_drop_privacy_level` drops `clan_settings.privacy_level` (S-018, ADR-044 § 2);
+`038_drop_privacy_level` drops `clan_settings.privacy_level` (ADR-044 § 2);
 reversible, and exactly so, for the same reason `037` is — the table has no rows, so there
 is no per-row value to reconstruct, and `downgrade()` re-adds the column with the same
 `NOT NULL` and the same `server_default 'clan_members'` that `001_initial.py:603` gave it.
@@ -137,7 +137,7 @@ in one change. `data-model.md` was corrected in the same commit: it held the col
 domain (`private`, `clan_members`, `public`) in two places, the ER diagram and the column
 table, and the domain was unenforced — no `CHECK`, no enum, no validator.
 
-`039_drop_clan_settings` drops the whole `clan_settings` table (S-065, ADR-054); reversible.
+`039_drop_clan_settings` drops the whole `clan_settings` table (ADR-054); reversible.
 It is the end of the sequence `037` and `038` started: those took two columns, this takes what
 was left, which was five unread columns, zero rows, and an RLS policy guarding a reader that
 never arrived. **`DROP TABLE` is not a column drop** — it silently takes the `035` policy, the
@@ -151,7 +151,7 @@ left, and Postgres never reuses a dropped `attnum`. A `CREATE TABLE` cannot repr
 so `downgrade` returns `1..9` contiguous. Everything that carries meaning — names, types,
 `NOT NULL`, defaults, order, PK, unique, FK and its `RESTRICT`, the trigger, the RLS flags,
 both policy predicates, and the grants — comes back identical, proved by `cmp` against a
-database that never carried `039`. This is the mirror of what S-018 recorded for `038`, where
+database that never carried `039`. This is the mirror of what was recorded for `038`, where
 `ADD COLUMN` could not restore ordinal position either.
 
 **`upgrade()` refuses to run if the table holds a row.** ADR-054 rests on the table being
@@ -190,7 +190,7 @@ it. Two consequences, and both are load-bearing:
 - A revision file that is not committed is not in the wheel. There is no second
   place the running app can find one.
 
-**Why it is written this way (S-075, measured 2026-08-22).** `readiness.py`
+**Why it is written this way (measured 2026-08-22).** `readiness.py`
 previously located the scripts with `Path(__file__).resolve().parents[2]`, under
 a comment reading "resolved from the file location, not the CWD, so it works
 however the process is launched". That is true of *launching* and false of
@@ -215,7 +215,7 @@ makes the old arithmetic correct again.
 ## Known risks
 - The Alembic chain is the **only** source of truth for the deployed schema. There is no second
   copy. `infra/supabase/migrations/`, a hand-written mirror that nothing executed and no check
-  read, was **deleted by seed S-064 on 2026-08-22** after measurement showed it 27 columns short of
+  read, was **deleted on 2026-08-22** after measurement showed it 27 columns short of
   head, 8 columns ahead of it, one table over, and carrying tree functions with **no clan predicate
   at all** — a database bootstrapped from it walked the tree across clans. It also would not apply
   to a plain Postgres (`auth.uid()`). `infra/README.md` records the measurement.
@@ -223,7 +223,7 @@ makes the old arithmetic correct again.
   `infra/` declares `CREATE TABLE` again; it asserts the property, not the path, so a differently
   named file is caught too.
 - `infra/supabase/rls_policies.sql` held a hand-written set of **20** RLS policies of the same kind.
-  Seed **S-067 deleted it on 2026-08-22** after review. The deployed policies come from migrations
+  **It was deleted on 2026-08-22** after review. The deployed policies come from migrations
   `002` and `027`-`036` (ADR-008, ADR-043): 20 policies over 13 RLS-enabled tables at head, counted
   2026-08-22. The file keyed every policy on `auth.uid()`, which **ADR-008 § 2 rejects by name** in
   favour of `current_setting('app.clan_id')`.

@@ -129,7 +129,7 @@ class PendingRoute extends ConsumerWidget {
     return KeyedSubtree(
       key: RouteKeys.pending,
       // No profile means the session is being torn down and the router is
-      // about to leave for /login. `pending` is the pre-S-093 default and is
+      // about to leave for /login. `pending` is the older default and is
       // the shorter-lived of the two wrong answers.
       child: PendingApprovalPage(
         status: profile?.membershipStatus ?? MembershipStatus.pending,

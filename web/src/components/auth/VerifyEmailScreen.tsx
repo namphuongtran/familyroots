@@ -4,7 +4,7 @@
  * Spec §7.1c, surface 1 (`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:882-898`):
  * the "blocked-at-login" screen for `403 email_not_verified` (`docs/contracts/error-codes.md`,
  * "Auth & session"). Surface 2 of §7.1c — the screen that lands from the email link itself — is
- * out of scope for S-026 (`docs/SEEDS.md`, "Out of scope": "Deep links from an email").
+ * out of scope here: deep links from an email are not built.
  *
  * **Why this screen has no real caller yet.** The only live sign-in path in this codebase,
  * `useAuth().signInWithEmail` (`src/lib/hooks/useAuth.ts`), calls

@@ -2,13 +2,13 @@
 
 ## Status
 
-Accepted (2026-08-14). **Not shipped.** `web/` still paints the red on every screen. Seed S-005
-does the rename, and this ADR is the authority it reads.
+Accepted (2026-08-14). **Not shipped.** `web/` still paints the red on every screen. A separate
+change does the rename, and this ADR is the authority it reads.
 
 ## Context
 
 Two documents disagree about what the primary colour of this product is, and the disagreement has
-been open since the design spec was written. Seed S-004 exists to close it. Nothing here is a new
+been open since the design spec was written. This ADR exists to close it. Nothing here is a new
 idea: the spec already argued its side, and this ADR records that the argument won, plus four
 things the spec does not say and one thing the spec gets wrong.
 
@@ -77,8 +77,9 @@ reds doing three different jobs at nearly the same value.
 
 ## Decision
 
-Five parts. The first four are the four questions seed S-004 asks. The fifth is forced by the
-first, and is recorded here rather than left to S-005 for the reason given under it.
+Five parts. The first four are the four questions this decision was opened to answer. The fifth is
+forced by the first, and is recorded here rather than left to the rename for the reason given under
+it.
 
 ### 1. `primary` is leaf green `#3E5C38`
 
@@ -117,7 +118,7 @@ The spec's `surface`. Both existing values die. `--color-cream` is removed and `
 `bg-background`. The dead `:root --cream` at `globals.css:177` is removed with the rest of that
 block.
 
-This is the answer S-004 did not offer, and it is worth saying why a third value beats either
+This is the answer neither incumbent offered, and it is worth saying why a third value beats either
 incumbent. `#fdfbf7` is what is on screen but nothing sources it. `#f8f4ec` is what the token says
 but nothing paints it. Picking either means the app and the spec still disagree about the page
 ground, and the next agent has to re-open this. Picking the spec's value settles it in the same
@@ -128,7 +129,7 @@ as `border-cream-200`, and this ADR does not touch them. Only the bare `--color-
 
 ### 4. The rename lands in one change
 
-Seed S-005 as written, one pull request, all 78 ramp occurrences plus the 8 screen uses of
+One pull request, all 78 ramp occurrences plus the 8 screen uses of
 `bg-cream`. Not per feature slice.
 
 A per-slice rollout was considered seriously, because these files are the frozen legacy tree that
@@ -140,7 +141,7 @@ current value depends on which slice you are looking at is not a design system.
 ### 5. The nine-step ramp is deleted, and the focus ring stops being an accent
 
 This is not a fifth question. It is what decision 1 means in the file, and leaving it out would
-hand S-005 a decision it cannot make from its own sources: nine red values with no green
+hand the rename a decision it cannot make from its own sources: nine red values with no green
 replacement written anywhere. Spec § 2.1 publishes no nine-step green ramp, so an agent asked to
 "rename primary to green" would have to invent eight values. It should not.
 
@@ -221,7 +222,7 @@ The sentence is false as written. The decision still holds, because the spec's *
 it: the ring ships "with a 2px `surface`-coloured offset", so the colour adjacent to the ring is
 the offset, not the fill, and against `background` the ring measures 16.22. **The offset is
 therefore load-bearing, not decoration.** A focus ring drawn directly on a filled button, with no
-offset, is non-compliant at 2.29:1 whatever this ADR says. S-005 must ship the offset with the
+offset, is non-compliant at 2.29:1 whatever this ADR says. The rename must ship the offset with the
 ring.
 
 An accent ring is worse in every direction and is not the fix: today's `#c41e3a` on the new green
@@ -229,7 +230,7 @@ fill measures 1.29:1.
 
 ## Consequences
 
-### What seed S-005 must do
+### What the rename must do
 
 1. Replace the nine `--color-primary-*` entries at `globals.css:6-15` and the bare
    `--color-primary` at `:16` with `primary`, `primary-foreground`, `primary-container`, and
@@ -249,7 +250,7 @@ fill measures 1.29:1.
 
 `web/src/app/contrast.test.ts` will fail the moment `--color-cream` is removed. Its `GROUNDS`
 constant lists `cream`, and its `token()` helper throws rather than returning `undefined` when a
-name is missing. That is the behaviour S-003 built on purpose. S-005 updates `GROUNDS` to the three
+name is missing. That is the behaviour the contrast gate was built with on purpose. The rename updates `GROUNDS` to the three
 grounds above and adds rows for every token this ADR creates.
 
 **Two rows must not be added.** `primary-container` and `heritage-container` are grounds, not
@@ -262,32 +263,30 @@ as a swept foreground.
 
 `mobile/lib/core/theme/tokens.dart:32` holds `#7A5C2E`. This ADR binds both clients, because the
 Arbor Heritage mandates bind both and a design system that is true on one client is not a design
-system. But S-005 is web-only by its own text, and aligning `ArborTokens` is a Flutter change under
-a different quality gate. It is **seed S-037**, allocated here, and it is not blocked by S-005:
-both read this ADR, and neither reads the other.
+system. But the rename is web-only, and aligning `ArborTokens` is a Flutter change under a different
+quality gate. It is **its own change**, and it is not blocked by the rename: both read this ADR, and
+neither reads the other.
 
-Until S-037 lands, mobile and web paint different primaries, and that is a known open state rather
+Until the mobile change lands, mobile and web paint different primaries, and that is a known open state rather
 than an oversight.
 
 ### What this ADR deliberately does not decide
 
-- **The dark palette.** Spec § 2.2 holds it. Seed S-006 owns it, and § 2.8's
+- **The dark palette.** Spec § 2.2 holds it. ADR-045 owns it, and § 2.8's
   `prefers-color-scheme` versus `data-theme` contradiction with `globals.css:3` goes with it.
 - **The cream ramp**, `cream-50` to `cream-400`, 22 uses. Untouched.
 - **`foreground #1a1a1a` versus the mandate's `#1d1b16`.** Two near-identical near-blacks, and the
   mandate in `mobile/CLAUDE.md` names the second. Real, small, and not this ADR's question.
 - **`muted #f3f4f6`**, a cool grey among warm grounds. Same reason.
-- **Which screens compose which token.** Seed S-035 owns moving forms off `border-gray-300`.
+- **Which screens compose which token.** Moving forms off `border-gray-300` is its own change.
 - **Whether `--font-serif` should be renamed**, which `globals.css:104` already flags.
 
 ## Related
 
-- Seed S-004 in [`../SEEDS.md`](../SEEDS.md), which this ADR closes; seed S-005, which implements
-  it; seed S-037, which this ADR creates.
 - [`../superpowers/specs/2026-08-02-design-system-and-screens.md`](../superpowers/specs/2026-08-02-design-system-and-screens.md)
   § 2.1 for every value taken here, § 2.8.1 D and E for the conflict, § 4 line 582 for the hover
   and pressed derivation, § 9-J1 for the three-primaries argument and for the stale mobile paths.
 - [ADR-034](034-mobile-riverpod-rebuild.md), which deleted the two mobile theme files § 9-J1 names.
 - [`../../.claude/rules/tailwind.md`](../../.claude/rules/tailwind.md) § 2, which requires this ADR
-  before a token moves, and which S-005 updates.
+  before a token moves, and which the rename updates.
 - `web/src/app/contrast.test.ts`, the gate that holds these values.

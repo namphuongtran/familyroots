@@ -11,7 +11,7 @@ FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 > `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
 > `change_requests`, `clan_memberships`, `clan_invitations`, `notification_log`, and
 > `clan_settings` are RLS-enforced at the DB layer. **The table-by-table rollout is
-> finished.** Measured 2026-08-22 while closing seed S-015: all **14** clan-owned tables now
+> finished.** Measured 2026-08-22: all **14** clan-owned tables now
 > have row-level security enabled and a policy, and no clan-owned table is left outside
 > layer 2. See the schema table above for the classification and point 10 for the gate that
 > keeps it true. Fourteen tables have RLS enabled and **the number of fully covered tables
@@ -40,7 +40,7 @@ every clan-owned table.
 
 **This block used to be an eight-line sketch and it had gone stale in three ways**: it
 named `audit_log` for a table called `audit_logs`, it omitted seven tables that exist, and
-it gave no way to tell a clan-owned table from a platform-global one. Seed S-015 replaced
+it gave no way to tell a clan-owned table from a platform-global one. The 2026-08-22 pass replaced
 it with the full list, because the coverage gate in
 `backend/tests/integration/test_rls_activation.py` now rests on exactly that distinction.
 Measured 2026-08-22 against migration `036_rls_user_clan_roles`: `public` holds **18**
@@ -100,7 +100,7 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
    (scheduler/purge/migrations, plus the two cross-clan readers — identity claims and
    platform-admin metrics) use the privileged session and bypass. **No clan-owned table is
    left to add**: Phase 11 (migration `036`) covered the last one, measured 2026-08-22 by
-   seed S-015. Gated by `RLS_ENABLED` (code-free rollback). See ADR-008, whose own "Not yet"
+   the 2026-08-22 pass. Gated by `RLS_ENABLED` (code-free rollback). See ADR-008, whose own "Not yet"
    paragraph still reads as though tables remain — that paragraph is a dated record and this
    file is the current count.
 
@@ -126,7 +126,7 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
    such a path, so `app.clan_id` is empty, the predicate is NULL, and the table reads as
    empty. Nothing raises. The failure looks like a successful request with missing data —
    which is why this is written down rather than left to be rediscovered. Two tables were
-   measured in that state on 2026-08-22 while closing S-009. **One is still open and one is
+   measured in that state on 2026-08-22. **One is still open and one is
    now resolved**, and the resolved one shows the shape of the fix.
 
    - **`user_clan_roles` had this shape and is now RESOLVED a third way**, by
@@ -155,9 +155,9 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
      choice still produces the right behaviour against the real policy).
 
    Covering a table in this shape means first deciding which session its clan-less path runs
-   on, and that decision needs its own ADR. Seed S-009 enabled RLS on `clan_memberships` only
-   for this reason; seed S-043 then made the decision for `clan_invitations`; seed S-010 split
-   the same way, shipping `clan_settings` (migration `035`); and seed S-052 closed the last of
+   on, and that decision needs its own ADR. Phase 6 enabled RLS on `clan_memberships` only
+   for this reason; ADR-048 then made the decision for `clan_invitations`; Phase 10 split
+   the same way, shipping `clan_settings` (migration `035`); and ADR-050 closed the last of
    them for `user_clan_roles` (migration `036`). **There are now three answers to this shape,
    not one:** move the one clan-less route to the privileged session (ADR-048), lock the table
    out of the request role entirely (ADR-042), or cover only the commands whose paths all have
@@ -166,7 +166,7 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
 
    **`user_clan_roles` is the sharpest instance of this shape, because it is the table the
    authorization gate reads.** A policy there does not merely hide data: it silently
-   downgrades what the caller may do. Re-measured 2026-08-22 by S-010, and it breaks in two
+   downgrades what the caller may do. Re-measured 2026-08-22, and it breaks in two
    unlike ways. **Silently on reads:** `get_current_clan_id` queries the table on the request
    session (`backend/app/core/security.py:249-254`) and sets `app.clan_id` only afterwards at
    `:290`; `get_login_profile`
@@ -194,7 +194,7 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
    `backend/tests/integration/test_rls_phase11_user_clan_roles.py`.
 
 8. **`identity_claims` has RLS enabled and NO clan isolation, and the two facts are not in
-   tension.** Migration `033_rls_identity_claims` (2026-08-22, seed S-012) creates exactly
+ tension.** Migration `033_rls_identity_claims` (2026-08-22) creates exactly
    one policy, `identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`.
    It compares nothing to `app.clan_id`. The request role is locked out of the table whatever
    clan is selected, and the application layer is this table's **only** clan isolation.
@@ -230,7 +230,7 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
 
 9. **`audit_logs` is clan-keyed on reads, wide open on writes, and closed to edits — three
    different answers on one table.** Migration `034_rls_audit_notification` (2026-08-22, seed
-   S-014) implements
+   ADR-043) implements
    [ADR-043](../decisions/043-audit-notification-rls-posture.md) and creates two policies and
    deliberately no third:
 
@@ -274,7 +274,7 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
    needs none of this; its only accessor is the anniversary scheduler, which bypasses, and
    `test_scheduler_cross_clan_notification_log.py` proves that run still crosses clans.
 
-   **A fourth set followed on the same day (2026-08-22, seed S-052,
+ **A fourth set followed on the same day (2026-08-22,
    [ADR-050](../decisions/050-user-clan-roles-clan-keyed-mutations.md)).** `user_clan_roles`
    fits none of the three above: its `SELECT` and `INSERT` are `true` and its `UPDATE` and
    `DELETE` are clan-keyed, which is the mirror of `audit_logs`. `_CLAN_KEYED_MUTATION_TABLES`
@@ -283,11 +283,11 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
    without moving the clan-less readers first. **Listing it as clan-isolated would have passed
    that set's assertion**, because its `UPDATE` policy's `USING` does read the GUC. Three seeds
    in a row have now found a guard passing over the wrong thing; the rule is
-   `.claude/rules/seeds.md` § "A test pins an outcome, not a setting", and its last line — a set
+ `.claude/rules/testing.md` § "A test pins an outcome, not a setting", and its last line — a set
    is a setting too — is why a fourth set exists instead of a fourth name in an old one.
 
 10. **The four sets say what each listed table's policies do. Nothing said which tables they
-    are obliged to cover, and that silence is what seed S-015 closed (2026-08-22).** Each of
+    are obliged to cover, and that silence was closed on 2026-08-22.** Each of
     the four assertions iterates its own members, so a clan-owned table in **none** of them
     was a table no question was ever asked about. A new table could ship with no policy at
     all and the whole suite stayed green. This is not a hypothetical: eight tables went
@@ -317,7 +317,7 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
     Alembic. `user_profiles` and `user_fcm_tokens` are per-user identity: a profile exists
     before any clan and may belong to several, so no single clan owns the row.
     **No ADR decides that last pair.** ADR-048 and ADR-050 each state as a fact that
-    `user_profiles` carries no policy; neither decides that it should not. S-015 recorded
+    `user_profiles` carries no policy; neither decides that it should not. The 2026-08-22 pass recorded
     that as owed rather than citing an ADR that does not say it.
 
     The gate is `test_every_clan_owned_table_is_covered_by_exactly_one_of_the_four_postures`,

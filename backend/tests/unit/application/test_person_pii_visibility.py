@@ -12,7 +12,7 @@ redact_pii mutates the PersonResponse list in place before it is serialized to t
 itself and none issues an HTTP request. ADR-049 § "Measurement 5" deleted a route's
 redaction call and watched the whole suite stay at ``1351 passed``. The four routes that
 redact are proved by request and response body in
-``tests/integration/test_person_pii_over_http.py`` (seed S-058).
+``tests/integration/test_person_pii_over_http.py``.
 """
 
 import uuid

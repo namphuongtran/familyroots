@@ -30,7 +30,7 @@ export class HttpAuthProfileRepository implements AuthProfileRepository {
 
   /**
    * **`GET /me/clans` answers `{"data": [...]}`, and this used to read the body as if it
-   * answered `{"clans": [...]}`.** Found 2026-08-26 by seed S-070, the first time anything
+   * answered `{"clans": [...]}`.** Found 2026-08-26 by the authenticated e2e harness, the first time anything
    * logged in and asked for a real authenticated screen. Read at source: the route returns
    * `{"data": result}` (`backend/app/api/v1/me.py:25`), the committed OpenAPI types call
    * that shape `Envelope_list_UserClanMembership__` with a single `data` member
@@ -56,7 +56,7 @@ export class HttpAuthProfileRepository implements AuthProfileRepository {
 
   /**
    * The same envelope defect as `listMyClans` above, and this one had teeth. Found
-   * 2026-08-26 by S-070, from a browser, as an **infinite redirect loop**.
+   * 2026-08-26 by the authenticated e2e harness, from a browser, as an **infinite redirect loop**.
    *
    * `POST /me/clans/{clan_id}/select` answers `{"data": {...}}`
    * (`backend/app/api/v1/me.py:36`). Reading the body as the payload made

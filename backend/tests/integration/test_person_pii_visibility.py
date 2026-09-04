@@ -9,15 +9,15 @@ person (resolved via user_profiles.person_id) keeps them.
 function and proves nothing about whether any route calls it. ADR-049 § "Measurement 5"
 deleted a route's redaction call and watched the whole suite stay at ``1351 passed``. Two
 other files cited this one as covering that wiring, and both citations were wrong. That
-finding is seed S-058, whose amendment block this paragraph now carries in one piece. Seed
-S-059 then dropped the words "end-to-end" from the first line above, because S-058 had had
+finding is the over-HTTP test, whose amendment block this paragraph now carries in one piece.
+A later repair dropped the words "end-to-end" from the first line above, because that test had had
 to spend a paragraph explaining that they did not mean what they say.
 
 The four routes that redact are proved separately, by request and response body, in
 ``tests/integration/test_person_pii_over_http.py``. Keep the two files apart: this one
 owns the rule, that one owns the wiring.
 
-Seed S-059 repointed this docstring's citation at the ADR above. It used to cite a
+That repair also repointed this docstring's citation at the ADR above. It used to cite a
 review-finding label whose defining document was deleted on 2026-07-12, so nothing in this
 repository defines it. ADR-049 § "Measurement 8b" is the finding, and ADR-037 § 7 carries
 the same correction as a dated amendment, plus the deleted document's own wording.

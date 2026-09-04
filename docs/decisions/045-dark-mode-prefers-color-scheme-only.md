@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-08-21). **Shipped in the same change**, by seed S-006. `web/src/app/globals.css`
+Accepted (2026-08-21). **Shipped in the same change.** `web/src/app/globals.css`
 carries the palette, `web/src/app/contrast.test.ts` gates its ratios in the unit suite, and
 `web/e2e/dark-theme.spec.ts` measures the flip in a real browser.
 
@@ -22,7 +22,7 @@ Three mechanisms were declared for one behaviour, and each of the three had a do
 Spec § 2.8 asks for the second **and** the third. `globals.css:3` shipped the first. ADR-041 read
 the conflict and declined to settle it, in its own words: the dark palette and "§ 2.8's
 `prefers-color-scheme` versus `data-theme` contradiction with `globals.css:3` goes with it",
-handed to seed S-006. `.claude/rules/tailwind.md` § 3 says the same, and adds the rule that a
+handed to the implementing change. `.claude/rules/tailwind.md` § 3 says the same, and adds the rule that a
 component must never settle it.
 
 Two measurements decide the question, and both were taken on 2026-08-21 in `web/`:
@@ -34,11 +34,11 @@ Two measurements decide the question, and both were taken on 2026-08-21 in `web/
 
 That second one is what makes the choice one-sided rather than a matter of taste. A class
 mechanism and an attribute mechanism are both *inert until something sets the marker*, and the
-thing that sets it is a theme switch. Seed S-006 excludes a switch by its own text. So either of
+thing that sets it is a theme switch, and this decision excludes a switch. So either of
 those two would have shipped a full palette that never activates on any device — thirty
 declarations of dead CSS, in a repository whose last five seeds were spent removing exactly that
-class of defect. Seventeen dead tokens (S-001), two dead font families (S-002), a dead `--primary`
-pair (S-005).
+class of defect. Seventeen dead tokens, two dead font families, a dead `--primary`
+pair.
 
 ## Decision
 
@@ -102,7 +102,7 @@ spec owns its own table and may overrule this; if it does, the value moves here 
 ### 5. The dark hover fill names a literal hex, and the gate is why that is allowed
 
 Spec § 4.1 line 582 gives both halves of the hover treatment: the fill is "darkened 6% (light) /
-**lightened 8% (dark)**". S-005 implemented the light half only, because light was all it needed.
+**lightened 8% (dark)**". The repaint implemented the light half only, because light was all it needed.
 So dark mixes white where light mixes black.
 
 The awkward part is the base. Light writes `color-mix(in oklab, var(--color-primary) 94%, black)`,
@@ -147,17 +147,17 @@ one is a seed with an ADR of its own.
 utilities across 41 files** — `text-gray-*` 187, `border-gray-*` 82, `bg-gray-*` 33,
 `divide-gray-*` 2, and 89 more in the red, amber, blue, green, purple, rose, pink, and orange
 families. A palette colour is not a token and has no dark value, so none of them flips. Seed
-S-038 owns moving them. Until it lands, the palette is correct and the screens built on Tailwind's
+Moving them is its own change. Until it lands, the palette is correct and the screens built on Tailwind's
 own greys are not, and a screenshot in dark mode will show that.
 
 **The backoffice aside is still hand-built.** `web/src/components/backoffice/BackofficeSidebar.tsx:30`
 is `bg-gray-950` `#030712`, and after this change it sits at `#030712` against a `#15140f` page,
 so the boundary between the aside and the content nearly vanishes in dark. Expressing it properly
 needs an inverse-surface role that neither § 2.1 nor § 2.2 publishes, which is a decision rather
-than an edit. Seed S-039 owns it.
+than an edit. ADR-046 owns it.
 
 **Two raw hexes remain in `globals.css`**, the scrollbar thumb `#d1d5db` and its hover `#9ca3af`.
-Both stay visible on a dark ground, so this is untidiness rather than a defect. S-038 takes them.
+Both stay visible on a dark ground, so this is untidiness rather than a defect. The palette sweep takes them.
 
 ### What changed outside the palette
 
@@ -178,8 +178,8 @@ Two lines in `globals.css` had to move for the palette to mean anything, and bot
 
 - **A user-facing theme switch**, and therefore whether a `data-theme` attribute returns later as
   an override *on top of* the media query. That is a change to this decision, made deliberately.
-- **Moving the 393 palette utilities onto tokens.** Seed S-038.
-- **The backoffice aside, and whether an inverse-surface role exists.** Seed S-039.
+- **Moving the 393 palette utilities onto tokens.** Its own change.
+- **The backoffice aside, and whether an inverse-surface role exists.** ADR-046.
 - **A high-contrast mode.** Spec § 2.1 reserves `outline-variant` for one, and nothing else about
   it is settled.
 - **The gold family**, still open from ADR-041, and therefore `gilt` `#8a6a16` still has no token
@@ -189,8 +189,6 @@ Two lines in `globals.css` had to move for the palette to mean anything, and bot
 
 ## Related
 
-- Seed S-006 in [`../SEEDS.md`](../SEEDS.md), which this ADR closes; seeds S-038 and S-039, which
-  it creates.
 - [ADR-041](041-primary-green-heritage-family-single-background.md), which decided the light
   palette and handed this question here. Its § 5 is the one-value rule that § 5 above bends, under
   a gate.

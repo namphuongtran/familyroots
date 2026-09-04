@@ -1,8 +1,8 @@
 """Fail when `docs/ops/migrations.md` and the Alembic chain on disk disagree.
 
-Seed S-063. On `main` at `62a863d`, `docs/ops/migrations.md:119` read
+On `main` at `62a863d`, `docs/ops/migrations.md:119` read
 "Head = `035_rls_clan_settings`" while `backend/migrations/versions/036_rls_user_clan_roles.py`
-had already landed a batch earlier. Seed S-052 shipped that migration and did not update the
+had already landed a batch earlier. That migration shipped without updating the
 document, and nothing caught it — including the coordinator, who merged it. The shape is the one
 this repository keeps meeting: two places record the same fact, only one of them is executable,
 and the other is what an agent reads first.
@@ -36,7 +36,7 @@ synthetic documents, so its ability to both match and refuse is pinned independe
 real document currently says.
 
 Out of scope: any migration's content. `infra/supabase/migrations/`, the hand-written parallel
-set this docstring used to exclude, no longer exists — seed S-064 deleted it on 2026-08-22, and
+set this docstring used to exclude, no longer exists — it was deleted on 2026-08-22, and
 `test_no_parallel_table_ddl_under_infra.py` keeps it from coming back.
 """
 
@@ -162,7 +162,7 @@ def test_the_alembic_chain_has_exactly_one_head() -> None:
 
 
 def test_documented_chain_matches_the_alembic_chain(migrations_markdown: str) -> None:
-    """The exact defect S-063 exists to catch: a revision on disk the document does not name."""
+    """The exact defect this guard catches: a revision on disk the document does not name."""
     doc_chain = documented_chain(migrations_markdown)
     disk_chain = alembic_chain()
     assert doc_chain == disk_chain, (

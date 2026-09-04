@@ -2,15 +2,15 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed S-011. **Decision only. Nothing is shipped by this ADR.** Seed
-S-012 builds the migration and the tests, and the "What S-012 must build" section below is the
-part it has to satisfy.
+Accepted (2026-08-22). **Decision only. Nothing is shipped by this ADR.** A follow-up change builds
+the migration and the tests, and the "What the migration must build" section below is the part it
+has to satisfy.
 
 `identity_claims` is the first clan-owned table this repository covers **without** giving it
 clan isolation at the database layer. Read "What this decision does not buy you" before
 reporting that as a defect.
 
-> **Amendment (2026-08-22, seed S-046) — every citation from this ADR into ADR-008 now names a
+> **Amendment (2026-08-22) — every citation from this ADR into ADR-008 now names a
 > section and quotes the sentence, instead of naming a line number.** No claim in this ADR
 > changed. Only the way each claim addresses its source changed, and this note is here because a
 > silent rewrite of a citation would erase the evidence that it ever moved.
@@ -29,7 +29,7 @@ reporting that as a defect.
 > | § What this ADR deliberately does not decide, `app.user_id` | line 135 | 305 | § Decision, clause 2 |
 > | § What this ADR deliberately does not decide, `FORCE` | lines 89-90 | 259-260 | § Status, the "Not yet" paragraph |
 >
-> Seed S-046 named these six places by their line numbers in **this** file: `:36`, `:42`, `:127`,
+> An earlier amendment named these six places by their line numbers in **this** file: `:36`, `:42`, `:127`,
 > `:267`, `:272`, and `:286`. Inserting this amendment moved every one of them down, which is the
 > same defect one level up, so the column above names sections instead.
 >
@@ -51,7 +51,7 @@ only through `person_id` at `:32-36`. So the template predicate from
 `backend/migrations/versions/027_rls_events_branches.py:26`,
 `clan_id = nullif(current_setting('app.clan_id', true), '')::uuid`, has nothing to compare.
 
-That is where seed S-011 starts, and it is not where the decision is made. Three facts read at
+That is where this decision starts, and it is not where the decision is made. Three facts read at
 source on 2026-08-22 decide it, and each one is bigger than the missing column.
 
 ### Fact 1: every path that touches this table already bypasses RLS, on purpose
@@ -127,7 +127,7 @@ raise `clan_context_mismatch` (`claims.py:76-77`, `:100-101`, `:123-124`), and
 `ClaimCommandHandler._verify_admin_access` authorizes review by the origin clan, taking
 `claim.person.created_by_clan_id` (`backend/app/application/person/claim_handlers.py:117`, `:198`).
 
-This is the third option in seed S-011, and it is chosen without softening: **this table has one
+This is the third option that was open, and it is chosen without softening: **this table has one
 layer of clan isolation where the six covered tables have two.** The precedent is ADR-031, which
 accepted an application-layer guarantee for cross-clan edges and wrote down the residual risk
 rather than hiding it. The difference is worth stating: ADR-031 expected RLS to subsume its gap
@@ -136,7 +136,7 @@ cross-clan.
 
 ### 2. RLS is still enabled, with one explicit policy that denies the request role
 
-The migration S-012 writes enables row-level security on `identity_claims` and creates exactly
+The migration enables row-level security on `identity_claims` and creates exactly
 one policy:
 
 ```sql
@@ -245,19 +245,20 @@ does not catch a missing **filter** on the correct session.
 
 **The deny-all policy will make a coverage gate lie unless the gate is told.** A check that asks
 "does this table have RLS enabled and at least one policy" answers yes for `identity_claims` and
-means nothing by it. Seed S-015 owns that gate, and section "What S-012 must build" item 5 is the
-obligation that keeps it honest.
+means nothing by it. The coverage gate owns that, and section "What the migration must build" item 5
+is the obligation that keeps it honest.
 
 **Nothing here is verified against a running database.** This ADR is documentation only, produced
-under a seed whose verification field says "No gate". Every claim above is read from source at
-the line cited, on 2026-08-22. The empirical checks belong to S-012.
+with no gate to run. Every claim above is read from source at the line cited, on 2026-08-22. The
+empirical checks belong to the migration.
 
-## What S-012 must build
+## What the migration must build
 
-S-012 is blocked on this ADR and its author reads this section as the specification.
+The implementing change is blocked on this ADR, and its author reads this section as the
+specification.
 
-1. **A new migration** (the next free number after `029_rls_persons`, which S-008 to S-010 may
-   also be claiming; take the number that is free when you write it). It runs
+1. **A new migration** (the next free number after `029_rls_persons`, which the other Phase 6 to 10
+   migrations may also be claiming; take the number that is free when you write it). It runs
    `ALTER TABLE identity_claims ENABLE ROW LEVEL SECURITY` and creates
    `identity_claims_system_session_only` as `FOR ALL USING (false) WITH CHECK (false)`. The
    downgrade drops the policy and disables row-level security. Both directions run.
@@ -268,27 +269,27 @@ S-012 is blocked on this ADR and its author reads this section as the specificat
 3. **A test that the system session still works**: the same seeded claim is readable and writable
    through `AsyncSessionLocal`, so the workflow is untouched. Driving one claims route end to end
    is worth more than a raw query here.
-4. **The cross-clan uniqueness test seed S-012 already names**: a pending claim for user U exists,
+4. **The cross-clan uniqueness test**: a pending claim for user U exists,
    and a second pending claim for U reached through a different clan is still rejected. This
    should behave identically before and after the migration, which is the point.
 5. **The coverage guard, updated so it cannot be read as clan isolation.**
    `backend/tests/integration/test_rls_activation.py:180-187` pins the RLS-enabled set to six
    tables and this migration makes it seven. Do not simply add the name. Split the assertion into
    clan-isolated tables and deny-all tables, so `identity_claims` is enumerated as
-   request-role-denied and a future reader cannot mistake it for covered. S-015 builds on
-   whatever shape you leave.
+   request-role-denied and a future reader cannot mistake it for covered. The coverage gate builds
+   on whatever shape you leave.
 6. **One empirical check of a claim this ADR makes from the manual, not from a run.** Postgres
    documents that referential integrity actions bypass row security, so the `ON DELETE CASCADE`
    from `persons` and `user_profiles` into `identity_claims`
    (`backend/app/models/identity_claim.py:29`, `:34`) should still cascade under the deny-all
    policy. Delete a person under the request role and prove the claim row goes with it. If it
-   does not, this ADR is wrong on that point and S-012 should say so rather than working around
-   it.
-7. **The planted inversion**, as every isolation seed in M1 requires: drop
+   does not, this ADR is wrong on that point and the implementing change should say so rather than
+   working around it.
+7. **The planted inversion**, as every isolation change in M1 requires: drop
    `identity_claims_system_session_only`, watch the named denial test fail, restore it, and quote
    the output.
 
-If S-012 finds that any of the three facts above no longer holds, in particular if a claim handler
+If the implementing change finds that any of the three facts above no longer holds, in particular if a claim handler
 has moved off `get_system_db`, it must stop and reopen this decision rather than adapt the
 migration to a tree this ADR did not read.
 
@@ -297,7 +298,7 @@ migration to a tree this ADR did not read.
 - **Whether the identity-claim flow should be clan-scoped at all.** Making it clan-scoped is the
   only route to real RLS coverage here, and it changes ADR-007's workflow, the two clan-free
   routes, and the session model together. That is a redesign with its own ADR, not an amendment.
-- **`audit_logs` and `notification_log`.** They are seed S-013 and ADR-043. `audit_logs` shares
+- **`audit_logs` and `notification_log`.** They are ADR-043. `audit_logs` shares
   the shape of the problem, a privileged cross-clan reader plus a nullable clan, and it should be
   free to reach a different answer. Nothing here binds it.
 - **Whether an `app.user_id` GUC should exist.** ADR-008 § Decision clause 2, "App-specific GUC
@@ -306,8 +307,8 @@ migration to a tree this ADR did not read.
   `backend/app/core/rls.py:63-65` sets the role and `app.clan_id` only. A user-keyed policy would
   have been the one shape that fits `GET /m/claims`, and it does not exist today. Recorded here
   as a finding; adding it is a seed of its own, and it would still leave the admin queue
-  unsolved. **Read at source on 2026-08-22 while repairing this citation (seed S-046):**
-  [ADR-047](047-rls-seam-sets-clan-id-only.md), seed S-040, has since amended that clause of
+ unsolved. **Read at source on 2026-08-22 while repairing this citation :**
+ [ADR-047](047-rls-seam-sets-clan-id-only.md), has since amended that clause of
   ADR-008 so that it reads as `SET LOCAL app.clan_id` alone, and it lists the five things a later
   seed must show before `app.user_id` is added. The finding above is unchanged. What changed is
   that ADR-008 now says the same thing.
@@ -321,8 +322,6 @@ migration to a tree this ADR did not read.
 
 ## Related
 
-- Seed S-011 in [`../SEEDS.md`](../SEEDS.md), which this ADR closes, and seed S-012, which it
-  specifies.
 - [ADR-007: Identity Claims Workflow](007-identity-claims-workflow.md), whose 2026-07-05 update
   makes review a provenance decision and whose spam guard is the invariant in section 5.
 - [ADR-008: Row-Level Security as Defense-in-Depth Layer-2](008-rls-defense-in-depth.md), for the

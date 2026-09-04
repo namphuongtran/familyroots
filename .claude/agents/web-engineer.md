@@ -39,9 +39,10 @@ Plus `pnpm test:component` and `pnpm depcruise` once those exist. All clean.
 Verify lint with plain `pnpm lint` — its success output is **empty**, which is easy to
 misread as a failure to run.
 
-**Never run `pnpm format`.** 112 files carry pre-existing prettier drift (seed S-028 in
-`docs/SEEDS.md`) and reformatting them buries your diff. Run `pnpm exec prettier --write` on
-only the files you created. This stops being true when S-028 lands.
+**Keep `pnpm format` out of a behavioural pull request.** The pre-existing prettier drift was
+cleared on 2026-08-22 and `pnpm format:check` is CI-gated, so the command is safe to run, but a
+repo-wide reformat still buries your diff. Run `pnpm exec prettier --write` on only the files you
+created. See `web/CLAUDE.md` for the measured history.
 
 ## When a plan is wrong
 

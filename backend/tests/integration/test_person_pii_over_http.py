@@ -1,6 +1,6 @@
 """The four redacting person routes, proved by reading the response body.
 
-**Seed S-058.** ADR-049 § "Measurement 5" measured the gap this file closes: the
+**The PII-over-HTTP test.** ADR-049 § "Measurement 5" measured the gap this file closes: the
 redaction rule had eight tests and **none of them issued an HTTP request**. Every
 existing case calls ``handler.redact_pii(...)`` itself
 (``tests/integration/test_person_pii_visibility.py:74,79,84``;
@@ -11,7 +11,7 @@ So the four call sites were the load-bearing part of the rule and nothing watche
 Measured twice on 2026-08-22, deleting ``app/api/v1/persons.py:337-339`` left the whole
 suite at ``1351 passed`` and ``ruff check .`` at "All checks passed!".
 
-**This file asserts the outcome, not the setting**, per ``.claude/rules/seeds.md``
+**This file asserts the outcome, not the setting**, per ``.claude/rules/testing.md``
 § "A test pins an outcome, not a setting". It never asks whether the redaction ran, and
 never counts a call. It sends a request over the real ASGI app and reads
 ``response.json()["data"]``, because "the response body a route sends contains no

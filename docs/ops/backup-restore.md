@@ -8,9 +8,9 @@
 > actually ships. **A dump at chain head restored into a cluster that never held
 > the `familyroots_app` role now yields a database the application can use**, and
 > the drill checks that itself before it prints `DRILL: PASS`. That was repaired
-> on 2026-08-22 by seed S-057 under
+> on 2026-08-22 under
 > [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md); read
-> [the S-057 repair](#the-2026-08-22-repair-s-057-adr-052-the-restore-bootstraps-the-request-role)
+> [the repair](#the-2026-08-22-repair-adr-052-the-restore-bootstraps-the-request-role)
 > for what the drill now proves, and
 > [the fresh-cluster run](#the-2026-08-22-fresh-cluster-run-a-dump-at-head-into-a-cluster-with-no-familyroots_app-role)
 > for the failure it closes. **Every drill result dated before 2026-08-22 was
@@ -165,7 +165,7 @@ before as well is harmless and does not remove the need to run it after.
 |------|------|--------|-------|
 | 2026-07-14 | `familyroots-manual-seeded.dump.gz` (local dev, migrated to head + seeded with a 3-person/2-generation tree) | **DRILL: PASS** | All 3 checks OK on their success path: alembic head matched (`016_document_soft_delete`), non-zero row counts for the seeded tables, tree query returned 3 rows. An earlier run against the same dev DB pre-migration/pre-seed exercised the WARN branches (behind-head, no-persons-skip) — both PASS. Failure paths (corrupt dump, unreachable Postgres, missing table, missing function, missing `uv`) were exercised in review, not on this dump — the review fix guarded all capture sites, and a rider repro confirmed a dump missing `persons` yields `DRILL: FAIL` with a full report and no crash. |
 | 2026-08-22 | `familyroots-2026-08-22.dump.gz` (14,669 bytes), produced the same day by `scripts/db_backup.sh --dry-run` against the local docker database `family_roots`. **Local dev data, not a production dump.** | **DRILL: PASS** (exit 0) | The alembic check returned a **WARN**, not an OK: `WARN — dump at 016_document_soft_delete, repo head is 033_rls_identity_claims (dump predates head; not a failure)`. The local dev database has not been migrated since the 2026-07-14 drill, so the dump sits 17 revisions behind the chain (`017_notification_sent_on` through `033_rls_identity_claims`). Row counts non-zero for `clans` 1, `persons` 3, `clan_memberships` 3, `parent_child` 2; zero for `marriages`, `events`, `documents`. Tree query OK, 3 rows. Restored into the scratch database `familyroots_restore_drill`; `family_roots` was never touched, and its seven row counts were identical before and after the run. |
-| 2026-08-22 (second run that day, into a **fresh cluster**) | `familyroots-2026-08-22.dump.gz` (18,257 bytes), produced the same day by `scripts/db_backup.sh --dry-run` against `familyroots_head_stage` — a database built by running the whole Alembic chain from base to `035_rls_clan_settings` on an empty database, then loading the dev tree data. **Local dev data, not a production dump.** | **DRILL: PASS** (exit 0) — **and the restored database could not serve a request-role session.** | Restored into a **second Postgres container** (port 5433) whose cluster held no `familyroots_app` role. Alembic check `OK — dump at 035_rls_clan_settings, matches repo head` — the first drill here to run at head. Row counts `clans` 1, `persons` 3, `clan_memberships` 3, `parent_child` 2; zero for `marriages`, `events`, `documents`. Tree query OK, 3 rows. Then `SET LOCAL ROLE familyroots_app` on the restored database returned `ERROR:  role "familyroots_app" does not exist`. S-050 predicted exactly this and it is the recorded result, not a setup mistake. Full detail, and three follow-up probes, in the section below. |
+| 2026-08-22 (second run that day, into a **fresh cluster**) | `familyroots-2026-08-22.dump.gz` (18,257 bytes), produced the same day by `scripts/db_backup.sh --dry-run` against `familyroots_head_stage` — a database built by running the whole Alembic chain from base to `035_rls_clan_settings` on an empty database, then loading the dev tree data. **Local dev data, not a production dump.** | **DRILL: PASS** (exit 0) — **and the restored database could not serve a request-role session.** | Restored into a **second Postgres container** (port 5433) whose cluster held no `familyroots_app` role. Alembic check `OK — dump at 035_rls_clan_settings, matches repo head` — the first drill here to run at head. Row counts `clans` 1, `persons` 3, `clan_memberships` 3, `parent_child` 2; zero for `marriages`, `events`, `documents`. Tree query OK, 3 rows. Then `SET LOCAL ROLE familyroots_app` on the restored database returned `ERROR:  role "familyroots_app" does not exist`. The drill predicted exactly this and it is the recorded result, not a setup mistake. Full detail, and three follow-up probes, in the section below. |
 | 2026-08-22 (third run that day, into a **fresh cluster**, **with the ADR-052 role bootstrap**) | `familyroots-2026-08-22.dump.gz` (18,409 bytes), produced the same day by `scripts/db_backup.sh --dry-run` against `familyroots_s057_head_stage` — a database built by running the whole Alembic chain from base to `036_rls_user_clan_roles` on an empty database, then loading the dev tree data. **Local dev data, not a production dump.** | **DRILL: PASS** (exit 0) — **and the restored database can serve a request-role session.** | The first drill here whose `PASS` is evidence about the application. Restored into a **second Postgres container** (port 5433, `system_identifier` `7676709582699040807` against the dev cluster's `7656068655264079917`) whose cluster held one non-builtin role, `postgres`, and `familyroots_app` absent, both confirmed **before** the restore. Alembic `OK — dump at 036_rls_user_clan_roles, matches repo head`. Row counts `clans` 1, `persons` 3, `clan_memberships` 3, `parent_child` 2; zero for `marriages`, `events`, `documents`. Tree query OK, 3 rows. New check 4: `OK — familyroots_app sees 3 person(s) under clan 11111111-1111-1111-1111-111111111111, 0 under a clan that owns nothing`. Afterwards the restored database held **72 grant rows on 18 tables**, matching the source. Two negative controls and the same-cluster run are in [the repair section](#the-2026-08-22-repair-s-057-adr-052-the-restore-bootstraps-the-request-role). |
 
 Verbatim output of the 2026-07-14 run ("run 2", the success-path run its row refers to):
@@ -300,7 +300,7 @@ credential was needed and nothing was uploaded.
   chain head has also moved since the paragraph above was written: it read `033_rls_identity_claims`
   and is `035_rls_clan_settings` today, so the RLS block is migrations `026` to `035`.
 
-  **Amended later the same day (S-057).** The head moved again, to `036_rls_user_clan_roles`, so the
+ **Amended later the same day.** The head moved again, to `036_rls_user_clan_roles`, so the
   RLS block is `026` to `036`. The last bullet's "See 'Still deferred' below" now resolves to a
   repaired item: the drill's checks no longer all pass on a database the application cannot open,
   because [check 4](#restore-procedure--scriptsrestore_drillsh) drops to the request role.
@@ -308,14 +308,14 @@ credential was needed and nothing was uploaded.
 
 ### The 2026-08-22 fresh-cluster run: a dump at head, into a cluster with no `familyroots_app` role
 
-> **Repaired 2026-08-22 by seed S-057, under [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).** This section records the failure as it was measured and is left unchanged. What the drill does now is in [the repair below](#the-2026-08-22-repair-s-057-adr-052-the-restore-bootstraps-the-request-role).
+> **Repaired 2026-08-22 under [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).** This section records the failure as it was measured and is left unchanged. What the drill does now is in [the repair below](#the-2026-08-22-repair-adr-052-the-restore-bootstraps-the-request-role).
 
 **Answer first. The restored database cannot serve a request-role session.** The drill printed
 `DRILL: PASS` and exited 0. The one check the drill does not make, `SET LOCAL ROLE
 familyroots_app`, returned `ERROR:  role "familyroots_app" does not exist`. Nothing was adjusted to
 produce either line. This is what a real recovery into a new cluster would meet today.
 
-Recorded by seed S-050, which was opened for exactly this question by S-021. No script was changed.
+Recorded by the drill that was run for exactly this question. No script was changed.
 The repair is its own seed.
 
 #### 1. How the dump at chain head was produced, and from which database
@@ -511,7 +511,7 @@ reported `1`. The `pg_restore` error text was identical in both.
 **What the three probes establish together.** The target cluster needs the role to exist **before**
 the restore, and it needs the grants **as well**. `pg_dump` of one database can supply neither on
 its own: a role is cluster-wide, so it belongs to `pg_dumpall --roles-only` or to a documented
-bootstrap step. Whether this repository dumps roles at all is a decision, and S-050 put it out of
+bootstrap step. Whether this repository dumps roles at all is a decision, and the drill put it out of
 scope on purpose.
 
 #### 7. What was not done
@@ -522,7 +522,7 @@ above. Nothing was restored over `family_roots`. The two throwaway containers
 (`familyroots-s050-fresh`, `familyroots-s050-fresh2`) and the staging database
 `familyroots_head_stage` were removed after the measurements.
 
-### The 2026-08-22 repair (S-057, ADR-052): the restore bootstraps the request role
+### The 2026-08-22 repair (ADR-052): the restore bootstraps the request role
 
 **Answer first. A restore into a cluster that never held `familyroots_app` now yields a database the
 application can use, and `scripts/restore_drill.sh` proves it before it prints `DRILL: PASS`.**
@@ -545,9 +545,9 @@ three shapes that were rejected and why.
 #### 2. The dump, and why it was rebuilt from base
 
 The local dev database `family_roots` is still at `016_document_soft_delete` and must not be migrated
-or written to, so the dump came from a staging database built the same way S-050 built its own: the
+or written to, so the dump came from a staging database built the same way the drill built its own: the
 whole Alembic chain from **base** to `036_rls_user_clan_roles` on an empty database, then the dev tree
-data loaded `--data-only` with `alembic_version` filtered out of the TOC. The order matters and S-050
+data loaded `--data-only` with `alembic_version` filtered out of the TOC. The order matters and the drill
 paid for the lesson: restoring the `016` dump and migrating on top leaves **0** table grants, because
 `pg_restore --no-privileges` had already dropped what migration `002` granted, and dumping that would
 overstate the gap. Built from base, `familyroots_s057_head_stage` holds **18 tables and 72 grant
@@ -712,7 +712,7 @@ or restored. The container `familyroots-s057-fresh` and the staging database
 
 ### Two corrections to earlier records
 
-- **The claim that no dated drill result existed was wrong when it was written.** `docs/SEEDS.md`
+- **The claim that no dated drill result existed was wrong when it was written.** The tracker
   carries a `Not verified` row reading "No dated restore-drill result exists. Searched 2026-08-13,
   nothing under `docs/ops/` records a run of `scripts/restore_drill.sh` with a date and a `DRILL:`
   line." The drill-log table above, with a `DRILL: PASS` row and its verbatim output, was added by
@@ -798,7 +798,7 @@ docker compose down -v && docker compose up -d pgdb && \
   dies or leaves — unrelated to backups mechanically, but the same "family
   data must outlive individuals" principle; still TBD.
 - **~~A restore into a new cluster produces a database the application cannot use.~~ Repaired
-  2026-08-22 by seed S-057, [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).**
+  2026-08-22, [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).**
   The failure was real and is kept here rather than deleted: measured 2026-08-22, third row of the
   drill log, a dump at `035_rls_clan_settings` restored into a cluster holding no `familyroots_app`
   role, the drill printed `DRILL: PASS`, and `SET LOCAL ROLE familyroots_app` returned

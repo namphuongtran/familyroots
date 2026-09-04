@@ -10,7 +10,7 @@
  * Deliberately not `src/domain/`: choosing a date style is a presentation
  * decision, and `domain-is-pure` forbids this layer from reaching for
  * anything that is not plain data anyway. Kept persons-local for now, same
- * "copy on first use, factor out on second" call S-029/S-030 made for
+ * "copy on first use, factor out on second" call the first persons slice/the persons repository made for
  * `historical-date-dto.ts` (`web/CLAUDE.md`, "The `persons` slice") — the
  * next date-bearing slice (marriages, events, tree nodes) that needs this
  * exact formatting should factor it out rather than ship a third copy.

@@ -243,7 +243,7 @@ def get_parent_child_command_handler(
 # The two query handlers take a read port, not the repository the command
 # handlers take. A read hides an edge whose endpoint person is soft-deleted; the
 # repository must not, or update and delete could no longer reach that edge
-# (ADR-051 § 8, seed S-056). The read ports need no Unit of Work — they write
+# (ADR-051 § 8). The read ports need no Unit of Work — they write
 # nothing.
 def get_marriage_query_handler(db: AsyncSession = Depends(get_db)) -> MarriageQueryHandler:
     return MarriageQueryHandler(SqlAlchemyMarriageReadPort(db))

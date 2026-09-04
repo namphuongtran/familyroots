@@ -1,4 +1,4 @@
-"""The invitation flow, walked end to end by a person who has no account (S-085).
+"""The invitation flow, walked end to end by a person who has no account.
 
 ADR-057 findings 1 and 2 together said this flow had never been usable by a new
 person: `POST /invitations/{token}/accept` requires an authenticated caller
@@ -10,7 +10,7 @@ found. ADR-058 makes `clan_action` optional on `POST /auth/register` only.
 sends real HTTP requests and reads real response bodies or real database rows.
 None of them asks whether `clan_action` has a default, because that is the
 setting the code sets, not the outcome it exists to produce -- see
-`.claude/rules/seeds.md`, "A test pins an outcome, not a setting". The walk is
+`.claude/rules/testing.md`, "A test pins an outcome, not a setting". The walk is
 the point: register with no clan, sign in with the token that register made
 possible, accept with that token, and read the membership row that lands.
 
@@ -285,7 +285,7 @@ async def test_an_invitee_with_no_account_completes_the_whole_flow(
 ) -> None:
     """Register with no clan, sign in, accept -- and read the membership row.
 
-    This is the end state seed S-085 names. Every stage reads a response body or
+    This is the end state ADR-058 names. Every stage reads a response body or
     a database row. Against the code before ADR-058, Stage 3 is where it stops.
     """
     suffix = uuid.uuid4().hex[:10]
@@ -311,7 +311,7 @@ async def test_an_invitee_with_no_account_completes_the_whole_flow(
     assert stub_identity.verification_emails.count(invitee_email) == 1
 
     # Stage 4 -- verify, then sign in. Verification itself is out of scope
-    # (seed S-085); the stub models an account whose email is confirmed. What is
+    # ; the stub models an account whose email is confirmed. What is
     # asserted here is the profile a clanless account presents: no clan, not
     # approved, and nothing pending.
     login = client.post("/api/v1/auth/login", json={"email": invitee_email, "password": _PW})

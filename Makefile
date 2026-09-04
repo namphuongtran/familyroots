@@ -91,7 +91,7 @@ SEED_ENV = set -e; \
 	  fi; \
 	  [ -n "$${SUPABASE_SERVICE_ROLE_KEY:-}" ] || { echo "make: no SUPABASE_SERVICE_ROLE_KEY. Start the stack with 'make supabase-up', or export the key yourself." >&2; exit 2; }
 
-seed: ## Seed BOTH databases from empty: a test clan, four users, their roles (S-073)
+seed: ## Seed BOTH databases from empty: a test clan, four users, their roles
 # One command, and it covers both halves of a test user. Needs `make docker-up` and
 # `make supabase-up` first. A user's identity lives in the Supabase stack's auth.users and
 # the membership lives in the application database, so seeding one without the other

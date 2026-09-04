@@ -6,15 +6,15 @@ import RegisterPage from './page'
 import messages from '../../../../../messages/vi.json'
 
 /**
- * Seed S-083, spec § 7.1b: the clan code is "auto-suggested, slugified live from the
+ * the clan-code spec, spec § 7.1b: the clan code is "auto-suggested, slugified live from the
  * name, editable", and `auth.clan_slug_taken` renders inline on the code field with a
  * suggested alternative.
  *
- * **Seed S-082 added the last three describe blocks**, for the join half of the same
+ * **The web register form added the last three describe blocks**, for the join half of the same
  * screen: the field submits `clan_code`, its helper text is spec § 7.1b's, and
  * `clan_not_found` renders inline on it rather than in the page-level banner.
  *
- * These assertions read the **value in the field**, per `.claude/rules/seeds.md` §
+ * These assertions read the **value in the field**, per `.claude/rules/testing.md` §
  * "A test pins an outcome, not a setting". `src/domain/clan/clan-code.test.ts` already
  * pins the transliteration; a green suite there says nothing about whether the screen
  * shows it, which is what this file is for. What it cannot reach is layout: jsdom has no
@@ -42,7 +42,7 @@ const BACKEND_VI_TAKEN_MESSAGE = 'Đường dẫn dòng họ đã được sử 
 
 /**
  * The envelope shape the legacy axios client rejects with, for any backend error code.
- * S-082 generalised this out of `clanSlugTakenRejection` so the join half's 404 is built
+ * The web register form generalised this out of `clanSlugTakenRejection` so the join half's 404 is built
  * the same way rather than by a second hand-written literal.
  */
 function backendRejection(status: number, code: string, message: string) {
@@ -98,12 +98,12 @@ function renderCreateMode(signUp = vi.fn()) {
 /**
  * The full-name, email, and password inputs carry no `id`/`htmlFor` pair, so
  * `getByLabelText` cannot see them. They are shared by this screen's join half (seed
- * S-082) and its OAuth-onboarding mode, so S-083 left them alone rather than reach
+ * the web register form) and its OAuth-onboarding mode, so the clan-code spec left them alone rather than reach
  * outside the create branch it owns. This walks label → containing block → input, the
  * same way `select-clan/page.test.tsx` walks around the radio labels there.
  *
  * The two clan fields deliberately do **not** go through this: they use
- * `getByLabelText`, so the label association S-083 added is itself asserted.
+ * `getByLabelText`, so the label association the clan-code spec added is itself asserted.
  */
 function unlabelledField(labelText: string) {
   const label = screen.getByText(labelText)
@@ -270,7 +270,7 @@ describe('register, create mode: auth.clan_slug_taken', () => {
   })
 })
 
-/* ── Seed S-082: the join half ─────────────────────────────────────────────── */
+/* ── the web register form: the join half ─────────────────────────────────────────────── */
 
 function submitJoin() {
   fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))

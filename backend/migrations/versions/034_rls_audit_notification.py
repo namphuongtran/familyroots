@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 9: audit_logs (per-command) + notification_log (template) — S-014, ADR-043.
+"""RLS layer-2 Phase 9: audit_logs (per-command) + notification_log (template) — ADR-043.
 
 **Two tables, two different policy shapes, and the difference is the point.** ADR-043 § 1
 settled the membership question the same way for both — "the reader decides membership of
@@ -19,7 +19,7 @@ query port, no repository, and no route: ``docs/contracts/push-notifications.md:
 
 **So this policy is inert on 2026-08-22, and that is accepted deliberately.** It guards a
 reader that does not exist yet. The alternative ADR-043 rejected was a permanent exemption
-row in S-015's clan-owned table list, which is a second place to record the same fact and
+row in the clan-owned table list, which is a second place to record the same fact and
 therefore a second place to be wrong.
 
 ``audit_logs`` — per command, because the writer is the REQUEST role (ADR-043 § 3)

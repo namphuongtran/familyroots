@@ -1,9 +1,9 @@
-"""The status a client is told about an invitation must agree with its ``expires_at`` (S-019).
+"""The status a client is told about an invitation must agree with its ``expires_at``.
 
 **The security half was already right before this module existed** and these tests keep it
 that way: ``Invitation.accept`` (``app/domain/invitation/entity.py``) refuses a timed-out
 invitation with ``invitation.expired``, so an expired invitation cannot be used. The defect
-S-019 closed is narrower and is entirely about the answer a reader gets. Nothing sweeps
+ADR-053 closed is narrower and is entirely about the answer a reader gets. Nothing sweeps
 ``clan_invitations`` — a timed-out row keeps ``status = 'pending'`` in storage until the next
 create for that (clan, email) lazily retires it (``expire_stale_pending``) — so
 ``GET /clans/{clan_id}/invitations`` used to report ``pending`` for a link ``accept`` already
@@ -13,10 +13,10 @@ refused. An admin would sit waiting on a dead invitation.
 one re-reads the stored column with privileged SQL afterwards. That second read is the point:
 it proves the reported ``expired`` came from the READ deriving it, and not from something
 having quietly rewritten the row. A test that only read the body would pass identically under
-a background sweep, which is the other shape S-019 rejected.
+a background sweep, which is the other shape ADR-053 rejected.
 
 **The failing reading differs from the passing one**, which is the second question
-``.claude/rules/seeds.md`` § "A test pins an outcome, not a setting" asks: a live pending
+``.claude/rules/testing.md`` § "A test pins an outcome, not a setting" asks: a live pending
 still reports ``pending`` (``test_a_live_pending_is_still_reported_pending``), so ``expired``
 is not simply what this endpoint now says about everything.
 
@@ -246,7 +246,7 @@ async def test_a_timed_out_invitation_is_reported_expired_not_pending(
 ) -> None:
     """The defect, watched in the response body.
 
-    RED before S-019: the body says ``pending``, because the route reported the stored
+    RED before ADR-053: the body says ``pending``, because the route reported the stored
     column verbatim.
     """
     by_email = await _list(client, seeded, "a")

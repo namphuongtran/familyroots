@@ -1,7 +1,7 @@
 /**
  * "The same repository function runs, and is tested, in an RSC and in the
  * browser" (`web/CLAUDE.md`, "The spine"). `src/shared/http/context.test.tsx`
- * proved this at the `apiFetch` layer for S-023, before any repository
+ * proved this at the `apiFetch` layer for the cookie change, before any repository
  * existed to write the real test against — this file is that real test,
  * for `getPerson`.
  *
@@ -11,7 +11,7 @@
  * `.test.ts` would make `context.client.ts`'s `typeof document === 'undefined'`
  * guard resolve every browser-side read to null, which would make "both
  * runtimes agree" trivially true for the wrong reason — exactly the "a test
- * pins an outcome, not a setting" trap `.claude/rules/seeds.md` names.
+ * pins an outcome, not a setting" trap `.claude/rules/testing.md` names.
  */
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -84,7 +84,7 @@ function personFixture(): Record<string, unknown> {
   }
 }
 
-describe('the persons repository in both runtimes (S-030)', () => {
+describe('the persons repository in both runtimes', () => {
   const seenHeaders: Array<string | null> = []
 
   beforeEach(() => {

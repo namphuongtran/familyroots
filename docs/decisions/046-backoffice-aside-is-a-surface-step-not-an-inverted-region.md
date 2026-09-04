@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed S-039. **Decision only. No file under `web/` changes in this
+Accepted (2026-08-22). **Decision only. No file under `web/` changes in this
 commit**, so no gate was run beyond the measurements recorded below. The edit this decision
-requires is seed S-061, specified in "What has to change" and sized so that one agent can land it.
+requires is a follow-up change, specified in "What has to change" and sized so that one agent can land it.
 
 **A live accessibility failure is recorded here and is not fixed here.** The backoffice brand mark
 measures **1.90:1** under a dark colour scheme, measured in Chromium on 2026-08-22. Read "The
@@ -39,7 +39,7 @@ active nav item at `:61`.
 
 ### The seed's central measurement does not reproduce, and the reason matters
 
-Seed S-039 and ADR-045 both say the same thing. ADR-045, "What this decision does not buy you":
+This decision and ADR-045 both say the same thing. ADR-045, "What this decision does not buy you":
 
 > `web/src/components/backoffice/BackofficeSidebar.tsx:30` is `bg-gray-950` `#030712`, and after
 > this change it sits at `#030712` against a `#15140f` page, so the boundary between the aside and
@@ -61,15 +61,15 @@ a token. Measured in Chromium on 2026-08-22, by reading pixels back from a scree
 compiled stylesheet: the aside is `#030712` and the content is `#f9fafb`, in **both** colour
 schemes, and the step between them is **19.27:1** in both. The boundary is as strong as it ever was.
 
-**Seed S-006 did not make the backoffice worse.** It did not change it at all, because nothing in
+**The dark-palette change did not make the backoffice worse.** It did not change it at all, because nothing in
 the backoffice reads a ground token. The one thing it did change is the next section.
 
-**The seed's prediction is right, one seed early.** Seed S-038's end state is that no `-gray-`
+**The prediction is right, one change early.** The palette sweep's end state is that no `-gray-`
 utility remains in `web/src` outside `BackofficeSidebar.tsx`. `layout.tsx:30` and `:32` are inside
-that sweep. The moment S-038 points `<main>` at `bg-background`, the aside `#030712` does sit
+that sweep. The moment the sweep points `<main>` at `bg-background`, the aside `#030712` does sit
 against the page `#15140f`, and that pair measures **1.09:1**. So the vanishing boundary is a real
 future state with a named cause, rather than a present defect. **Whatever lands from this ADR must
-land with or before S-038's edit to `layout.tsx`**, or the backoffice gets a window in which the
+land with or before the sweep's edit to `layout.tsx`**, or the backoffice gets a window in which the
 rail and the page are the same darkness.
 
 ### The defect this uncovered
@@ -86,7 +86,7 @@ from 2026-08-14 and that reasoning has silently expired:
 
 15.19:1 reproduces the figure in the comment exactly. 1.90:1 is new, and it is well under the 4.5:1
 floor and under the 3:1 non-text floor as well. The mark is close to invisible on a dark-preferring
-device. It has been that way since seed S-006 landed the dark palette on 2026-08-21.
+device. It has been that way since the dark palette landed on 2026-08-21.
 
 A second, smaller instance of the same shape: the active nav item at `:61` is `bg-primary`, and in
 light `primary` `#3e5c38` against the ground `#030712` measures **2.68:1**. As a filled indicator
@@ -141,7 +141,7 @@ ramp rather than recolouring it, in its own words at `globals.css:20-27`: a reco
 meant inventing eight values".
 
 **A3. `contrast.test.ts` structurally rejects a token that does not flip, and that rejection is
-correct.** Two cases stand in the way, and both were written by seed S-006 to catch real defects:
+correct.** Two cases stand in the way, and both were written with the dark palette to catch real defects:
 
 - `contrast.test.ts:246-250`, "overrides every token this table measures", fails if a token named in
   `CASES` is absent from the dark scope.
@@ -150,7 +150,7 @@ correct.** Two cases stand in the way, and both were written by seed S-006 to ca
 
 A token whose whole purpose is to hold one value in both themes fails the first if it is not
 overridden and the second if it is. Weakening either one to admit it would blunt the tripwire that
-catches a parser reading the wrong palette, which S-006 recorded as a defect that stayed **green**
+catches a parser reading the wrong palette, which was recorded as a defect that stayed **green**
 under 156 passing cases. That price is too high for one region.
 
 **A4. It would not fix the mark.** The 1.90:1 failure is `primary-container`, a token that flips.
@@ -242,12 +242,12 @@ own decision with its own blast radius, and taking it here would hide a palette 
 backoffice change. It is recorded as an open question below, and the rail is the screen that will
 show the difference first.
 
-## What has to change (seed S-061, not landed here)
+## What has to change (not landed here)
 
 One file each, and **the aside must be converted whole in one edit**. A partial conversion is worse
 than either end state: measured 2026-08-22, `text-gray-100` on `muted` is **1.00:1** in light and
 `text-gray-400` on `muted` is **2.36:1** in light, so any ink left behind becomes unreadable the
-moment the ground moves. Seed S-038 must not take this file one utility at a time.
+moment the ground moves. The palette sweep must not take this file one utility at a time.
 
 `web/src/components/backoffice/BackofficeSidebar.tsx`
 
@@ -291,7 +291,7 @@ Both were read at source on 2026-08-22 and neither is a colour question, so neit
   "Cây gia phả". The brand row at `:44-45` renders the literal strings `FamilyRoots` and
   `Backoffice`, and the footer button at `:80` renders the literal string `Sign out`. `vi` is the
   default locale for this product. Promoting "Backoffice" to the rail's primary label, which is what
-  "what carries the signal" asks for, puts an English word at the top of a Vietnamese rail. **S-061
+  "what carries the signal" asks for, puts an English word at the top of a Vietnamese rail. **The rebuild
   must add a `Backoffice.rail_label` message and use it**, or the design change it lands is worse
   than what it replaces. The `Sign out` string is the same defect one row down and is not this
   ADR's to fix.
@@ -316,7 +316,7 @@ relative-luminance formula, the same one `contrast.test.ts:126-140` uses. All fi
 **What the build actually emits.** Tailwind 4.3.3 declares `--color-gray-950` as
 `oklch(13% 0.028 261.692)` (`node_modules/tailwindcss/theme.css:236`), and the build emits both an
 sRGB fallback `#030712` and a wide-gamut `lab(1.90334% .278696 -5.48866)`. Chromium painted
-`#030712`. So the `#030712` that seed S-039 and ADR-045 both quote is correct as rendered, even
+`#030712`. So the `#030712` that this ADR and ADR-045 both quote is correct as rendered, even
 though the source value is no longer a hex.
 
 ### The aside as it stands
@@ -341,7 +341,7 @@ one that did not exist when they were taken.
 | `#030712` against the light page `background` `#fbf8f1` | 18.98:1 |
 | `#030712` against the dark page `background` `#15140f` | **1.09:1** |
 
-The second row is the state seed S-038 creates if it tokenises `layout.tsx` before this decision
+The second row is the state the palette sweep creates if it tokenises `layout.tsx` before this decision
 lands. It is why the two must be ordered.
 
 ### The chosen ground
@@ -372,8 +372,8 @@ lands. It is why the two must be ordered.
 - **The value of `muted`.** ADR-041 left it open on purpose and this does not take it. It is the
   open question below.
 - **A theme switch.** ADR-045 owns that, and nothing here revisits it.
-- **The other 393 palette utilities.** Seed S-038, whose out-of-scope line names this aside. That
-  line stays correct: S-038 must still leave `BackofficeSidebar.tsx` alone, and it must now also
+- **The other 393 palette utilities.** The palette sweep, whose out-of-scope line names this aside.
+  That line stays correct: the sweep must still leave `BackofficeSidebar.tsx` alone, and it must now also
   leave `layout.tsx:30` and `:32` to the seed that converts the rail, because the two files have to
   move together.
 - **Whether an `inverse-surface` role should exist for some other purpose.** This says it is the
@@ -400,7 +400,6 @@ shared. That reading is the work, and it is not a backoffice question.
   It shows the rail as it stands and as decided, in both colour schemes, with every ratio on this
   page attached to the frame it came from. The 1.90:1 mark is visible there rather than described.
   It is a picture of the measurements, not a second source for them: this ADR is the source.
-- Seed S-039 in [`../SEEDS.md`](../SEEDS.md), which this ADR closes; seed S-061, which it creates.
 - [ADR-045](045-dark-mode-prefers-color-scheme-only.md), whose "What this decision does not buy you"
   handed this question here, and whose account of the vanishing boundary is corrected above.
 - [ADR-041](041-primary-green-heritage-family-single-background.md) for the light palette, for the
@@ -409,6 +408,6 @@ shared. That reading is the work, and it is not a backoffice question.
   § 2 line 70 for the M3 naming rule, § 2.1 and § 2.2 for the role lists that publish no inverse
   surface, § 2.6 for glass and its cap, § 5 `T-06` for the one-channel rule.
 - [`../../.claude/rules/tailwind.md`](../../.claude/rules/tailwind.md) § 3 for the paragraph that
-  S-061 must rewrite, § 5 for the no-line rule, § 7 for what `contrast.test.ts` cannot see.
+  the rebuild must rewrite, § 5 for the no-line rule, § 7 for what `contrast.test.ts` cannot see.
 - `web/src/app/contrast.test.ts`, whose `CASES` table already holds every pair the converted rail
   composes.

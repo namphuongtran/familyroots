@@ -2,13 +2,13 @@
   "enabledPlugins": {
     "code-review@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
-    "playwright@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "supabase@claude-plugins-official": true,
     "vercel@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
     "sentry@claude-plugins-official": true,
     "pydantic-ai@claude-plugins-official": true,
-    "firebase@claude-plugins-official": true
+    "firebase@claude-plugins-official": true,
+    "mattpocock-skills@claude-plugins-official": true
   }
 }

@@ -100,9 +100,9 @@ class _FakePersonQueryHandler:
         # phone/email out of the response body.
         #
         # A test author citing another suite is making a claim about that suite, and it has
-        # to be read at source like any other citation (.claude/rules/seeds.md, "A test pins
-        # an outcome, not a setting"). Corrected 2026-08-22 by seed S-058; folded into one
-        # comment by seed S-059, which also repointed this comment's citation at the ADR
+        # to be read at source like any other citation (.claude/rules/testing.md, "A test pins
+        # an outcome, not a setting"). Corrected 2026-08-22 by the PII test; folded into one
+        # comment by the citation repair, which also repointed this comment's citation at the ADR
         # above. It used to cite a review-finding label whose defining document was
         # deleted on 2026-07-12, so nothing in this repository defines it — see ADR-049
         # § "Measurement 8b" and the dated amendment in ADR-037 § 7.

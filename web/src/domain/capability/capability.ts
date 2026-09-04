@@ -1,13 +1,13 @@
 /**
  * Clan-scoped capabilities, derived from a role — never sent by the backend and never
- * invented here (S-024). The backend enforces the real permission check on every request
+ * invented here. The backend enforces the real permission check on every request
  * (`backend/app/core/permissions.py`, `require_role()`); this module only decides what the
  * client *offers* to render, from the same rule the backend uses.
  *
  * Every capability below is one row of the "Full Permission Matrix" in
  * `docs/architecture/rbac.md` (lines 43-101), restricted to the three clan-scoped roles.
  * `super_admin` is platform-level, not clan-scoped (rbac.md lines 29-36), and is out of
- * scope for this seed — see its "Out of scope" line in `docs/SEEDS.md`. A row where
+ * scope for this module. A row where
  * `super_admin` is the only ✅ (delete clan, view all clans, suspend/reactivate clan,
  * hard-delete person, view platform audit log — rbac.md lines 50-52, 59, 91) is therefore
  * not modelled here at all: it is always false for every clan role, so it gates nothing a

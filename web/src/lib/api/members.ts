@@ -1,7 +1,7 @@
 import api from './axios'
 import type { Person, ApiResponse } from '@/lib/types'
 
-// S-033 trimmed this transport to the one call still live: `personsApi.get`,
+// the legacy-component deletion trimmed this transport to the one call still live: `personsApi.get`,
 // reached through `usePerson` in `src/lib/hooks/useMembers.ts`. `list`,
 // `search`, `getMarriages`, `getParentChild`, `getTimeline`, `getDocuments`,
 // `batchGet`, `create`, `update`, and `delete` are gone — each one's only

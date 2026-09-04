@@ -1,17 +1,17 @@
 """An edge pointing at a soft-deleted person does not surface, on any read.
 
-**This file replaces the characterization tests seed S-020 wrote here on
+**This file replaces the characterization tests the earlier characterization tests wrote here on
 2026-08-22.** Those asserted the opposite, because that was what the code did:
 ``GET /persons/{survivor}/marriages`` returned the edge to a soft-deleted
 spouse, ``GET /persons/{survivor}/parent-child`` returned the edge to a
 soft-deleted child, and ``POST /persons/batch`` with ``include=stats`` answered
 ``spouse_count: 2, child_count: 2`` for a survivor with one live spouse and one
 live child. The same API answered ``404`` for the deleted person in the same
-run. Seed S-054 closed that, and the old assertions are its negative control —
-all four flipped, each on a different value (recorded in the S-054 commit
+run. The edge read filter closed that, and the old assertions are its negative control —
+all four flipped, each on a different value (recorded in the edge read filter commit
 message). The file was **replaced**, not repaired assertion by assertion.
 
-**What changed, and what deliberately did not.** S-054 is a read filter only.
+**What changed, and what deliberately did not.** the edge read filter is a read filter only.
 ``get_marriages_batch`` and ``get_parent_child_links_batch``
 (``app/infrastructure/persistence/person_query_port.py``) now drop an edge with a
 soft-deleted person on either end, reaching the same answer
@@ -26,7 +26,7 @@ flags, ``PersonDeleted`` still has no consumer outside ``app/domain/person``,
 and the edge rows still read ``is_deleted = false`` — which
 ``test_the_edge_rows_are_untouched...`` below proves with raw SQL, so this
 file's claim rests on the read and not on a data change. Whether the cascade
-should exist at all is seed S-055's decision and seed S-056's build. **This
+should exist at all is ADR-051's decision and the by-id read fix's build. **This
 filter stays correct either way**, because rows written before any cascade
 ships would not carry its flag.
 
@@ -37,14 +37,14 @@ ships would not carry its flag.
 A client learned that a person existed and was related, plus their uuid, and
 nothing else. Say that much and no more.
 
-**The two-sided shape is the point and it is inherited from S-020.** Every
+**The two-sided shape is the point and it is inherited from the earlier tests.** Every
 fixture carries a live spouse and a live child beside the deleted ones. Without
 them, a read that returned nothing at all would pass every "the deleted one is
 absent" assertion. And ``test_the_same_readings_flip_back_when_the_person_is
 _restored`` clears the person's ``is_deleted`` flag and takes the same four
 readings again, so the failing reading and the passing reading are different
 values rather than one reading either way — question 2 of
-``.claude/rules/seeds.md``, "A test pins an outcome, not a setting".
+``.claude/rules/testing.md``, "A test pins an outcome, not a setting".
 
 Real Postgres (``migrated_db_url``), JWT verification stubbed the same way as
 ``tests/integration/test_person_documents_soft_delete.py``. Every read is taken
@@ -267,10 +267,10 @@ async def test_the_edge_rows_are_untouched_so_the_read_filter_is_what_hides_them
 ) -> None:
     """Read the rows back with raw SQL, so this claim does not rest on a join.
 
-    S-054 added no cascade: nothing consumes ``PersonDeleted``, so both edge rows
+    The edge read filter added no cascade: nothing consumes ``PersonDeleted``, so both edge rows
     keep ``is_deleted = false`` while the person they point at does not. This is
     the fact that makes the rest of the file about the **read**. It is also the
-    boundary S-055 and S-056 own — when a cascade ships, this test is the one
+    boundary ADR-051 and the by-id read fix own — when a cascade ships, this test is the one
     that changes, and the reads below must keep passing unchanged.
     """
     async with session_factory() as s:
@@ -401,7 +401,7 @@ async def test_the_marriages_read_and_the_timeline_agree_on_the_same_edge(
 async def test_the_subtree_read_agrees_with_the_edge_reads_about_the_same_child(
     client: AsyncClient, seeded: dict[str, Any], viewer_headers: dict[str, str]
 ) -> None:
-    """The tree was already right; check S-054 did not push the reads past it.
+    """The tree was already right; check the edge read filter did not push the reads past it.
 
     The tree functions filter soft-deleted persons — the Alembic chain installs
     them, from ``backend/migrations/versions/003_tree_functions.py`` onward — so
@@ -441,8 +441,8 @@ async def test_the_same_readings_flip_back_when_the_person_is_restored(
     else, the edge rows are never touched — makes every reading take its other
     value: both edges come back and both counts go to two. So the failing
     reading and the passing reading are different values, not one reading either
-    way (question 2 of ``.claude/rules/seeds.md``, "A test pins an outcome, not
-    a setting"). It also pins the behaviour S-055 has to preserve: a restored
+    way (question 2 of ``.claude/rules/testing.md``, "A test pins an outcome, not
+    a setting"). It also pins the behaviour ADR-051 has to preserve: a restored
     person's edges must reappear.
     """
     before_marriages = await _marriage_edge_ids(client, seeded, viewer_headers)

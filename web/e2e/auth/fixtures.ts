@@ -1,8 +1,8 @@
 /**
- * Seed S-070: the inputs the authenticated e2e harness needs, in one file.
+ * the authenticated e2e harness: the inputs the authenticated e2e harness needs, in one file.
  *
  * **There is no session stub anywhere in this harness, and that is the whole design.**
- * S-070's own text says a session stub reachable in production is worse than no e2e
+ * The authenticated e2e harness's own text says a session stub reachable in production is worse than no e2e
  * coverage at all. So nothing under `web/src/` knows this harness exists: the session is
  * obtained by typing a real password into the real `/vi/login` form and letting Supabase
  * issue a real ES256-signed token. `e2e/auth/no-session-bypass.guard.test.ts` is the standing
@@ -10,7 +10,7 @@
  * carries the reasoning.
  *
  * The three inputs below are **required, not defaulted**, and `authStackEnv()` throws
- * naming the missing ones. A default would be the S-041 defect in a new costume: a run
+ * naming the missing ones. A default would be the hermetic e2e config defect in a new costume: a run
  * that silently points at something other than the local stack, and reports a result about
  * a machine rather than about the code.
  */
@@ -19,7 +19,7 @@
 export const AUTH_STACK_ENABLED = process.env.E2E_AUTH_STACK === '1'
 
 /**
- * The four users `make seed` creates (`docs/ops/seed-test-users.md`, seed S-073). The
+ * The four users `make seed` creates (`docs/ops/seed-test-users.md`). The
  * password is written down in that public document on purpose: the seeder refuses to run
  * against anything but a local stack.
  */
@@ -35,7 +35,7 @@ export interface SeededUser {
 }
 
 /**
- * Two of S-073's four users, not all four. `admin` and `viewer` are the pair that differ
+ * Two of `make seed`'s four users, not all four. `admin` and `viewer` are the pair that differ
  * on every role-gated element on the members screen, so a case that reads one and not the
  * other is measuring the session's role rather than the markup. `editor` adds nothing the
  * admin reading does not already cover, and `outsider` belongs to the second clan, which
@@ -67,7 +67,7 @@ export const SEEDED_USERS = {
  * `127.0.0.1` form `supabase status` prints. GoTrue stamps that string into every token as
  * `iss` and the backend rebuilds the expected issuer from its own `SUPABASE_URL`
  * (`backend/app/core/security.py:101`), so a mismatch yields `401 invalid_token` against a
- * healthy stack, with nothing in the 401 mentioning the issuer. Measured for S-072 and
+ * healthy stack, with nothing in the 401 mentioning the issuer. Measured for the local Supabase stack and
  * recorded in `docs/ops/local-supabase.md`, "The two settings that are load bearing".
  */
 export function authStackEnv(): Record<string, string> {
@@ -112,7 +112,7 @@ export function authStackEnv(): Record<string, string> {
     NEXT_PUBLIC_API_ORIGIN: origin,
     NEXT_PUBLIC_API_URL: `${origin}/api/v1`,
     API_URL: `${origin}/api/v1`,
-    // The same variable `next.config.ts` reads for S-042's banner server. Its name says
+    // The same variable `next.config.ts` reads for the banner spec's banner server. Its name says
     // SECOND; what it means is "not the primary", and each extra `next dev` must pass its
     // own value or Next.js refuses to start on the shared `.next` lock.
     PLAYWRIGHT_SECOND_DIST_DIR: '.next-auth-e2e',

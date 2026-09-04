@@ -97,7 +97,7 @@ export function EventCalendar() {
               {day.getDate()}
               {dayEvents.length > 0 && (
                 // T-06 (spec § 5): colour is never the sole channel. A gold
-                // dot alone (`bg-gold-500` on `cream`, 2.03:1, S-036) is
+                // dot alone (`bg-gold-500` on `cream`, 2.03:1) is
                 // invisible in greyscale and to a screen reader. This badge
                 // carries the event count as text — `primary`/`primary-foreground`
                 // is already gated at ≥4.5:1 on every ground in

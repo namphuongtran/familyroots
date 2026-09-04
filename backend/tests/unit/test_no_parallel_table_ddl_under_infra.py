@@ -1,21 +1,17 @@
 """Fail when a second, unexecuted set of schema or security DDL appears under `infra/`.
 
 **The module name is narrower than what this file asserts, and the name is kept on purpose.**
-Seed S-064 named it, and prose in three files names the module: `docs/ops/migrations.md:222,240`,
-`docs/SEEDS.md` in the `Sources` of seeds **S-067**, **S-069**, and **S-077**, and
-`test_migrations_doc_matches_alembic.py:40`. Renaming the module would strand all of them. A
+Prose in two files names the module: `docs/ops/migrations.md:222,240` and
+`test_migrations_doc_matches_alembic.py:40`. Renaming the module would strand both. A
 rename is worth doing when whoever owns those files is next in them.
 
-**Two of those three pointers were wrong, and they are corrected here on 2026-08-26.** This
-docstring said `docs/ops/migrations.md:187` and `docs/SEEDS.md:3322`. Read at source: line 187 of
-`migrations.md` is prose about a package being neither importable nor installed, and line 3322 of
-`SEEDS.md` was the `---` rule above S-064's heading. **Neither line named this module.** They were
-already wrong before the 2026-08-26 change that shifted `SEEDS.md` line numbers, so that change is
-not the cause. The `SEEDS.md` citation is now by seed ID rather than by line, because a line number
-into a file that grows at the top is the wrong anchor for a section, and this is the second time
-that has bitten a pointer into that file.
+**One of those pointers was wrong, and it is corrected here on 2026-08-26.** This
+docstring said `docs/ops/migrations.md:187`. Read at source, line 187 of
+`migrations.md` is prose about a package being neither importable nor installed, and it
+did not name this module. A line number into a file that grows at the top is the wrong
+anchor for a section.
 
-## Part 1 — table DDL (seed S-064, 2026-08-22)
+## Part 1 — table DDL (2026-08-22)
 
 `infra/supabase/migrations/` held a hand-written mirror of the baseline schema: four SQL files,
 1045 lines, maintained by hand beside the Alembic chain. Nothing ran it and no check read it.
@@ -34,13 +30,13 @@ from it produced the schema that file was written to forbid. The set was deleted
 regenerated: a parallel copy that nothing executes earns its keep only if something checks it,
 and Alembic is already the source of truth by written decision (`docs/ops/migrations.md`).
 
-## Part 2 — policy DDL (seed S-067, 2026-08-22)
+## Part 2 — policy DDL (2026-08-22)
 
-**S-064's guard was not wide enough, and the file it let through was the more dangerous one.**
-`infra/supabase/rls_policies.sql` survived S-064 because it declared no table. It declared 20
+**Part 1's guard was not wide enough, and the file it let through was the more dangerous one.**
+`infra/supabase/rls_policies.sql` survived it because it declared no table. It declared 20
 policies — 19 on 9 `public` tables and one on `storage.objects` — plus 3 helper functions in
-the `auth` schema. S-064's own docstring recorded it as "a separate, unreviewed liability".
-S-067 reviewed it, deleted it, and widened this guard so the next one cannot land.
+the `auth` schema. Part 1's own docstring recorded it as "a separate, unreviewed liability".
+A later review deleted it and widened this guard so the next one cannot land.
 
 **Why a policy file is worse than a table file, measured 2026-08-22 on a fresh `alembic upgrade
 head` (Postgres 18, 20 policies over 13 RLS-enabled tables).** A table file fails loudly: you
@@ -77,14 +73,14 @@ the Alembic chain, so both sweeps read every `.sql` file under `infra/` and matc
 statement. A new `infra/supabase/schema.sql` or `infra/anything/hardening.sql` is caught the
 same way the deleted files would be.
 
-## The asymmetry these two guards leave behind (seed S-069, 2026-08-22)
+## The asymmetry these two guards leave behind (2026-08-22)
 
 **Both sweeps above watch a directory where SQL never ran.** Everything under `infra/` is
-inert: nothing in the tree reads it and no workflow applies it, which is exactly why S-064 and
-S-067 could delete two files from it without changing any behaviour. The one place SQL
+inert: nothing in the tree reads it and no workflow applies it, which is exactly why the two
+deletions could remove two files from it without changing any behaviour. The one place SQL
 genuinely executes is `scripts/` — `scripts/restore_drill.sh:149` feeds
 `scripts/restore_bootstrap_role.sql` to `psql` against a live database — and no check here
-reads it. S-067 wrote that finding down rather than widening these sweeps, because widening
+reads it. That finding was written down rather than widening these sweeps, because widening
 them would have closed two seeds in one change.
 
 `test_scripts_sql_is_sanctioned.py` closes it, and it could not be this file's rule applied to
@@ -164,7 +160,7 @@ def test_no_sql_file_under_infra_creates_a_table() -> None:
         + ", ".join(str(p.relative_to(_REPO_ROOT)) for p in offenders)
         + ". The Alembic chain in backend/migrations/ is the only source of truth for the "
         "schema (docs/ops/migrations.md). A second copy that nothing executes drifts silently; "
-        "infra/supabase/migrations/ was deleted by seed S-064 for exactly that reason. Put the "
+        "infra/supabase/migrations/ was deleted for exactly that reason. Put the "
         "DDL in a new Alembic revision instead."
     )
 
@@ -178,7 +174,7 @@ def test_no_sql_file_under_infra_declares_rls_or_policy_ddl() -> None:
         "policy set (ADR-008, ADR-043). A policy file is worse than a table file, because "
         "policies COMPOSE: permissive policies for the same command and role are OR'd, so a "
         "second set does not replace the shipped one, it widens it. infra/supabase/"
-        "rls_policies.sql was deleted by seed S-067 after a clan-A editor used one of its "
+        "rls_policies.sql was deleted after a clan-A editor used one of its "
         "clan-blind WITH CHECK clauses to insert a clan-B row. Put the policy in a new Alembic "
         "revision, key it on current_setting('app.clan_id') per ADR-008 section 2, and prove "
         "it two-sided at the database layer in tests/integration/test_rls_activation.py."

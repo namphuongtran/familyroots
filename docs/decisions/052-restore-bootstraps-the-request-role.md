@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, shipped (2026-08-22), by seed S-057, which S-050 opened after measuring the failure and
+Accepted, shipped (2026-08-22). The failure was measured first and
 declining to repair it, because the repair contained this decision.
 
 **This ADR ships operations code, not application code**: `scripts/restore_bootstrap_role.sql` (new)
@@ -40,7 +40,7 @@ psql exit: 1
 ```
 
 Re-measured for this ADR on 2026-08-22 against the current head `036_rls_user_clan_roles`, with
-`scripts/` byte-identical to `main` (`git diff --exit-code -- scripts/` clean). S-050 first measured
+`scripts/` byte-identical to `main` (`git diff --exit-code -- scripts/` clean). The drill first measured
 it the same day at head `035_rls_clan_settings`. The full record is in
 [`../ops/backup-restore.md`](../ops/backup-restore.md).
 
@@ -170,11 +170,11 @@ all. **Rejected on four counts.**
 - **It needs the repository, `uv`, and a working Python toolchain at recovery time.** A restore
   should need `psql` and the archive.
 - **It needs `--data-only --disable-triggers` and a hand-edited TOC to skip `alembic_version`**
-  (the exact commands are in `../ops/backup-restore.md`, the S-050 staging build). That is more
+  (the exact commands are in `../ops/backup-restore.md`, the staging build). That is more
   moving parts in the one procedure that must have fewest.
 
 **What it is still good for**, and this is recorded rather than discarded: it is exactly how a
-head-at-chain staging database gets built for a drill. Both S-050 and S-057 used it for that.
+head-at-chain staging database gets built for a drill. Both the drill and the repair used it for that.
 
 ### E. Stop passing `--no-privileges`, so the dump carries its own grants
 

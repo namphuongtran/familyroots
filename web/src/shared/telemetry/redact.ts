@@ -4,13 +4,13 @@
  * `docs/contracts/rest-invitations-api.md:74` says the invitation token "is the
  * only thing that decides which clan the caller is granted a role in". That makes
  * it a bearer credential, and it travels inside a URL path twice: in the browser
- * route `/{locale}/invitations/{token}` that seed S-084 added, and in the accept
+ * route `/{locale}/invitations/{token}` that the invitation page added, and in the accept
  * call `POST /api/v1/invitations/{token}/accept` — the shape
  * `backend/app/application/invitation/handlers.py:65` hands to the admin who
  * shares the link.
  *
  * Telemetry copies URLs by default, so three real capture points existed in this
- * app before S-084, each read at source on 2026-08-26:
+ * app before the invitation page, each read at source on 2026-08-26:
  *
  * 1. `web-vitals.tsx:19` logged `window.location.pathname` verbatim on every Web
  *    Vitals metric, through `logger` and on to `console`. That is the app's own
@@ -69,7 +69,7 @@ const MAX_DEPTH = 8
  * between `event.request.url`, breadcrumb `data.url`, breadcrumb `data.from`/`to`,
  * `event.transaction`, and span attributes across versions. A scrubber that names
  * fields silently stops covering the one that moved, which is the failure mode
- * `.claude/rules/seeds.md` calls a check that passes because it scanned nothing.
+ * `.claude/rules/testing.md` calls a check that passes because it scanned nothing.
  *
  * A write happens only when the string actually changes, so a payload with no
  * token is left untouched.

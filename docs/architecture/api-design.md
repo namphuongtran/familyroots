@@ -71,12 +71,12 @@ returned — see [rest-auth-api.md](../contracts/rest-auth-api.md).
 ```
 
 `clan_code` is the clan's slug, and it replaced a `clan_id` UUID on the join path
-(ADR-057 § 2, seed S-081). `clan_id` is still accepted on join for one release and
+(ADR-057 § 2). `clan_id` is still accepted on join for one release and
 sending both is a 422 — see the deprecation window in
 [rest-auth-api.md](../contracts/rest-auth-api.md).
 
 **Omitting `clan_action` entirely registers an account with no clan membership**
-(ADR-058, seed S-085) — the form an invited person uses, because accept requires them
+(ADR-058) — the form an invited person uses, because accept requires them
 to be signed in already. Omitting it while still naming a clan (`clan_code`,
 `clan_id`, `clan_name` or `clan_slug`) is a 422 `validation_error`, never a silent
 clanless account. `POST /onboard` still requires `clan_action`. The full shape is in

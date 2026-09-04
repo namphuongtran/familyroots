@@ -1,4 +1,4 @@
-"""Audit rows written by request routes that have NO clan GUC — S-014, ADR-043 §§ 2, 6.
+"""Audit rows written by request routes that have NO clan GUC — migration 034, ADR-043 §§ 2, 6.
 
 This is the file that catches migration ``034`` being wrong, and no unit test can stand in
 for it. ADR-038 recorded that its own instance of this bug stayed invisible "until a test

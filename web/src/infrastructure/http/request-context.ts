@@ -15,9 +15,9 @@ function normalizeLocale(raw: string | null | undefined): RequestContext['locale
  * Centralized request context retrieval so adapters/interceptors stay consistent.
  *
  * The three-way read this used to do — `useAuthStore.currentClanId`, then
- * `user.clan_id`, then `localStorage.current_clan_id` — is gone (S-025): the
+ * `user.clan_id`, then `localStorage.current_clan_id` — is gone : the
  * store no longer holds a clan id at all, and nothing here reads
- * `localStorage.current_clan_id`. The `current_clan_id` cookie (S-023) is the
+ * `localStorage.current_clan_id`. The `current_clan_id` cookie is the
  * one source now, read through `readCurrentClanId`; `user.clan_id` stays as a
  * fallback for the moment before the cookie is written on first sync.
  */

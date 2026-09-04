@@ -94,12 +94,12 @@ test('auth context session fallback remains identity-only', async () => {
   )
 })
 
-// S-033 deleted both person contract tests that used to sit here.
+// the legacy-component deletion deleted both person contract tests that used to sit here.
 //
 // 'person API uses backend person routes and preserves normalization hooks' asserted on
 // `src/lib/api/members.ts`'s `list`/`search`/`batch`/`getMarriages`/`getParentChild`/
 // `getTimeline`/`getDocuments` methods and the `query-policy.ts` normalizers they called.
-// S-033 deleted all seven methods — each one's only caller was a
+// The legacy-component deletion deleted all seven methods — each one's only caller was a
 // `src/components/members/*.tsx` component this same seed deleted — leaving `members.ts`
 // with just `personsApi.get`, which this test never asserted on.
 //

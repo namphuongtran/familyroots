@@ -214,7 +214,7 @@ errors with their existing codes (`auth.clan_id_required_for_join`,
 form-validation errors — these are not account-existence signals.
 
 **The join field submits `clan_code`, a clan code (the slug), not a UUID**
-(ADR-057 § 2, seed S-081, 2026-08-26). `clan_id` is accepted on that path for one
+(ADR-057 § 2, 2026-08-26). `clan_id` is accepted on that path for one
 more release and sending both is a 422; see "The join identifier" in
 [rest-auth-api.md](rest-auth-api.md) for the window and what gets deleted when it
 closes.

@@ -5,19 +5,19 @@
  * through this file, never by reaching into `model/`, `api/`, `server/`, or
  * `hooks/` directly.
  *
- * S-029 built `model/` and `api/`; S-030 adds `server/` (the repository and
+ * The first persons slice built `model/` and `api/`; the persons repository adds `server/` (the repository and
  * query keys) and `hooks/` (TanStack Query). `ui/` lands later still, and
  * should be added here as it lands, not reached around.
  *
  * **The `../api/persons-api` functions are deliberately not re-exported here
- * any more.** Through S-029 this file re-exported them directly, because
+ * any more.** Through the first persons slice this file re-exported them directly, because
  * `server/` did not exist yet and something had to be the entry point. Now
  * that the repository does the parsing, a caller reaching for the raw
  * `Promise<unknown>` transport instead of the parsed repository function
  * would be reaching *around* the one thing this seed built — so the public
  * surface below only ever hands out a parsed domain value, from the
  * repository or a hook. `api/persons-api.ts` still exists and is still
- * `Promise<unknown>` transport, same as S-029 left it; it is just no longer
+ * `Promise<unknown>` transport, same as the first persons slice left it; it is just no longer
  * part of what a caller outside this feature can see.
  */
 
@@ -79,7 +79,7 @@ export {
 export type { PersonsQueryOptions } from './hooks/use-persons-queries'
 export { usePerson, usePersonSearch, usePersonsList } from './hooks/use-persons-queries'
 
-// `ui/` lands with S-031 — the persons list and detail screens. Exported
+// `ui/` lands with the persons list screens — the persons list and detail screens. Exported
 // here per this file's own header comment ("should be added here as it
 // lands, not reached around").
 export { PersonAvatar } from './ui/PersonAvatar'
@@ -92,7 +92,7 @@ export { formatHistoricalDate, isKnownDate } from './ui/format-person-date'
 export { usePersonsRequestContext } from './ui/use-persons-request-context'
 export type { PersonsRequestContext } from './ui/use-persons-request-context'
 
-// Landed by S-032 — the create/edit form and its §7.7c conflict dialog.
+// Landed by the persons form — the create/edit form and its §7.7c conflict dialog.
 // `HistoricalDateField`, `StaleWriteDialog`, `ForbiddenWriteDialog`, and the
 // pure helpers in `person-form-schema.ts`/`stale-write-diff.ts` are
 // deliberately not exported here: nothing outside this feature composes a

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 /**
- * Seed S-082, spec § 7.1b and ADR-057 § 2: on `/vi/register` the **join** field asks for
+ * the web register form, spec § 7.1b and ADR-057 § 2: on `/vi/register` the **join** field asks for
  * the clan code, carries the spec's helper text, and renders `clan_not_found` inline on
  * itself rather than in the page-level banner.
  *
@@ -19,12 +19,12 @@ import { expect, test, type Page } from '@playwright/test'
  * reasons it does not overflow: a hyphen is already a break opportunity under
  * `overflow-wrap: normal`, so `nguyen-huu-thanh-oai` in the helper wraps by itself; and
  * the 100-character code stays inside the input, which scrolls internally (1604px against
- * a 156px box) without widening the page. S-083's instance differs because its suggestion
+ * a 156px box) without widening the page. The clan-code spec's instance differs because its suggestion
  * button echoed the code back as **text**. The three tests below stay because T-04 is the
  * requirement, not `wrap-anywhere`.
  *
  * The 404 is served by `page.route`, not by a backend: no e2e spec in this suite talks to
- * a live service (S-041). The envelope is the one `backend/app/core/exceptions.py` builds
+ * a live service. The envelope is the one `backend/app/core/exceptions.py` builds
  * for `EntityNotFoundError("clan_not_found")`
  * (`backend/app/application/auth/handlers.py:147`), with the generic message from
  * `backend/app/i18n/vi.json:4` — deliberately the *wrong* string for this screen, so a

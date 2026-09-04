@@ -11,7 +11,7 @@ import { redactInvitationToken } from './redact'
  * older phone over a weak connection are the numbers that decide whether the
  * design is actually usable, rather than whether it looks fast on a laptop.
  *
- * `route` is redacted, added by seed S-084. This is the app's own log and its only
+ * `route` is redacted, added by the invitation page. This is the app's own log and its only
  * analytics call, it is mounted on every locale route
  * (`app/[locale]/layout.tsx:40`), and it used to pass `window.location.pathname`
  * through verbatim. On `/{locale}/invitations/{token}` that pathname is a bearer

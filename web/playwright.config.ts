@@ -6,12 +6,12 @@ const PORT = 3100
 // against this hermetic server on purpose — see that file's "does not travel" case.
 export const BASE_URL = `http://127.0.0.1:${PORT}`
 
-// S-041: the e2e gate must give the same result on a fresh clone, in a git
+// The e2e gate must give the same result on a fresh clone, in a git
 // worktree, and in CI, without a `web/.env.local` — which git does not carry
 // and which every `git worktree` lacks. Without these two variables the app
 // renders the missing-Supabase banner (`SupabaseSetupNotice.tsx`), and
 // `text-scale.spec.ts` then measures a real overflow caused by that banner,
-// not by the code under test. See docs/SEEDS.md S-041 for the measurements.
+// not by the code under test.
 //
 // These are obviously-fake values: an unresolvable `.example.` hostname and a
 // key that spells out what it is, not a token shape anyone could copy into a
@@ -23,7 +23,7 @@ export const BASE_URL = `http://127.0.0.1:${PORT}`
 // loader never overwrites a variable already present in `process.env` when
 // the process starts — so this wins over `.env.local` even when one is
 // present in the primary checkout. That is intentional and not a conflict:
-// no e2e spec talks to a live Supabase backend (out of scope, S-041), so the
+// no e2e spec talks to a live Supabase backend (out of scope), so the
 // e2e run does not need — and must not depend on — real credentials.
 const E2E_SUPABASE_ENV = {
   NEXT_PUBLIC_SUPABASE_URL:
@@ -31,10 +31,10 @@ const E2E_SUPABASE_ENV = {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'e2e-fake-anon-key',
 }
 
-// S-042: `e2e/supabase-banner.spec.ts` measures the missing-Supabase banner
+// `e2e/supabase-banner.spec.ts` measures the missing-Supabase banner
 // (`SupabaseSetupNotice.tsx`) at 320px/200% text scale, which needs the opposite of
 // `E2E_SUPABASE_ENV` above — both variables genuinely unset, on purpose, for that one spec. No
-// other spec must lose the placeholders S-041 gives them, and a single dev-server process bakes
+// other spec must lose the placeholders above, and a single dev-server process bakes
 // in whichever `NEXT_PUBLIC_*` values it started with (Next.js inlines them once, at server
 // start), so the only way to give one spec a different answer is a second, separate server.
 export const BANNER_PORT = 3101
@@ -42,7 +42,7 @@ export const BANNER_BASE_URL = `http://127.0.0.1:${BANNER_PORT}`
 const NO_SUPABASE_ENV = {
   // Explicit empty strings, not simply omitted: omitting a key lets the invoking shell's own
   // export (a developer's real `.env.local`-sourced shell, or a future CI job) leak through and
-  // render the banner absent again, which is exactly the non-determinism S-041 closed for every
+  // render the banner absent again, which is exactly the non-determinism the placeholders closed for every
   // other spec. `getSupabaseEnv()` (`src/lib/supabase/config.ts:8`) treats `''` the same as
   // missing, via `!url || !anonKey`.
   NEXT_PUBLIC_SUPABASE_URL: '',
@@ -55,19 +55,19 @@ const NO_SUPABASE_ENV = {
 }
 
 /**
- * Seed S-070: the third `next dev`, the only one with a session.
+ * The third `next dev`, the only one with a session.
  *
  * **Why a third server and not the primary one.** The primary server on :3100 is
- * deliberately hermetic (S-041): fake Supabase placeholders, no network dependency, same
+ * deliberately hermetic : fake Supabase placeholders, no network dependency, same
  * result in a fresh clone, in a worktree and in CI. Pointing it at the local Supabase
  * stack would make every existing spec depend on Docker, which is a regression for every
  * other seed. A `next dev` process bakes its `NEXT_PUBLIC_*` values in at start, so one
- * server cannot answer both questions — the same reason S-042 needed its own.
+ * server cannot answer both questions — the same reason the banner spec needed its own.
  *
  * **Why an explicit opt-in and not auto-detection.** `E2E_AUTH_STACK=1` is the switch, and
  * `pnpm test:e2e:auth` is the only thing that sets it. Auto-detecting a reachable stack
  * and skipping when it is absent was rejected: a suite that quietly covers nothing when
- * Docker is down is the "passed because it scanned nothing" failure `.claude/rules/seeds.md`
+ * Docker is down is the "passed because it scanned nothing" failure `.claude/rules/testing.md`
  * names, and it is invisible in a green run. With the switch, the projects either run or do
  * not exist, and `authStackEnv()` throws by name when the switch is on and an input is not.
  */
@@ -94,9 +94,9 @@ export default defineConfig({
     locale: 'vi-VN',
   },
   projects: [
-    // S-070: `testIgnore` keeps the hermetic pair off `e2e/auth/`, whose specs need a
+    // `testIgnore` keeps the hermetic pair off `e2e/auth/`, whose specs need a
     // session and a running stack. Without it these two would pick those files up and fail
-    // on a machine with no Docker, which is the S-041 guarantee this must not break.
+    // on a machine with no Docker, which is the guarantee this must not break.
     { name: 'chromium', testIgnore: AUTH_SPECS, use: { ...devices['Desktop Chrome'] } },
     // Most members will arrive on a phone — keep a mobile viewport in the loop
     // from the start rather than discovering layout breakage in sub-project B.
@@ -131,7 +131,7 @@ export default defineConfig({
       env: E2E_SUPABASE_ENV,
     },
     {
-      // S-042's dedicated server: same app, same host, genuinely no Supabase env. See
+      // The banner spec's dedicated server: same app, same host, genuinely no Supabase env. See
       // `NO_SUPABASE_ENV` above for why this can't be folded into the server above.
       command: `pnpm dev --port ${BANNER_PORT} --hostname 127.0.0.1`,
       url: BANNER_BASE_URL,
@@ -139,7 +139,7 @@ export default defineConfig({
       timeout: 120_000,
       env: NO_SUPABASE_ENV,
     },
-    // S-070's server, registered only when `E2E_AUTH_STACK=1`. `authStackEnv()` reads the
+    // the authenticated e2e harness's server, registered only when `E2E_AUTH_STACK=1`. `authStackEnv()` reads the
     // local stack's URL, its anon key and the backend origin from the shell and throws
     // naming whatever is missing, so a half-configured run fails before a browser opens
     // rather than reporting a redirect to /vi/login as a product defect.

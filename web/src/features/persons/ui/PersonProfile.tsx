@@ -36,7 +36,7 @@ function Fields({ fields }: { fields: Field[] }) {
 }
 
 /**
- * Spec §7.6, "Hồ sơ một người" (S-031). A Server Component — `getPerson` runs
+ * Spec §7.6, "Hồ sơ một người". A Server Component — `getPerson` runs
  * in `page.tsx` and this only ever formats what it returns; nothing here is
  * interactive except the native `<details>` for a long biography, so this
  * needs no client boundary of its own.

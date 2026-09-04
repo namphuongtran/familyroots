@@ -1,6 +1,7 @@
 """``PATCH /clans/me`` answers 200 with the row it just wrote.
 
-**Seed S-078.** The route answered **500 on every edit that changed something**, and the
+**The PATCH /clans/me fix.** The route answered **500 on every edit that changed something**, and
+*the
 row was written anyway — a server error and a successful write, which is the worst pair
 to hand a client: retrying is unsafe and not retrying loses the response.
 
@@ -15,12 +16,12 @@ starts a lazy load with no greenlet to run the IO in — ``sqlalchemy.exc.Missin
 an unhandled exception, a 500.
 
 **That is why it hid for so long, and why the no-op case below exists.** A PATCH that
-changes nothing emits no UPDATE, expires nothing, and answers 200. S-073 measured the
+changes nothing emits no UPDATE, expires nothing, and answers 200. `make seed` measured the
 sequence on 2026-08-22: change -> 500, no-op -> 200, no-op -> 200, change -> 500. **Any
 smoke test that PATCHes the same value twice passes forever**, and the whole backend suite
 was green with this route broken.
 
-**Every test here sends a request and reads the response**, per ``.claude/rules/seeds.md``
+**Every test here sends a request and reads the response**, per ``.claude/rules/testing.md``
 § "A test pins an outcome, not a setting". None of them asks whether a refresh ran, and
 none asserts that a schema field exists. Two readings are taken of the same edit:
 
@@ -200,7 +201,7 @@ async def test_a_real_edit_answers_200_and_the_body_is_the_row_it_wrote(
     session_factory: async_sessionmaker[AsyncSession],
     seeded: dict[str, Any],
 ) -> None:
-    """The end state of S-078, in one reading.
+    """The end state of the PATCH /clans/me fix, in one reading.
 
     Against the unfixed route this raises ``sqlalchemy.exc.MissingGreenlet`` out of
     ``ClanResponse.model_validate`` — the negative control for this file.
@@ -242,7 +243,7 @@ async def test_the_client_reads_a_status_code_and_the_write_is_not_orphaned(
     session_factory: async_sessionmaker[AsyncSession],
     seeded: dict[str, Any],
 ) -> None:
-    """The pair S-078 calls the worst one to hand anyone: status code beside the row.
+    """The pair the PATCH fix calls the worst one to hand anyone: status code beside the row.
 
     Against the unfixed route this reads ``(500, 'Ăn quả nhớ kẻ trồng cây')`` — the
     error and the successful write together. It must read ``(200, ...)``.
@@ -285,7 +286,7 @@ async def test_a_no_op_patch_answers_200_and_does_not_move_updated_at(
     session_factory: async_sessionmaker[AsyncSession],
     seeded: dict[str, Any],
 ) -> None:
-    """Documents the half of S-073's sequence that always passed. **Not the control.**
+    """Documents the half of `make seed`'s sequence that always passed. **Not the control.**
 
     The 200 half is green against the broken route as well, because a PATCH that writes
     the value already stored emits no UPDATE and expires nothing. It is here so the next

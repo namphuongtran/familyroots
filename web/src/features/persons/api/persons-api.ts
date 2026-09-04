@@ -5,7 +5,7 @@
  * this file's own discipline, because the rule cannot see it: every function
  * here returns the raw enveloped JSON (`Promise<unknown>`), same as
  * `apiFetch` itself. Validating it against `../model/person-dto.ts` and
- * mapping it into `@/domain/person` is the repository's job (S-030), not
+ * mapping it into `@/domain/person` is the repository's job, not
  * this layer's.
  *
  * Deliberately covers only the core `persons` surface —

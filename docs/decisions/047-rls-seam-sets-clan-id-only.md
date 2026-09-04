@@ -2,10 +2,10 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed S-040. **Nothing is shipped by this ADR.** It is a decision. The
+Accepted (2026-08-22). **Nothing is shipped by this ADR.** It is a decision. The
 whole diff is this file, a dated amendment inside
 [ADR-008](008-rls-defense-in-depth.md), and one index row. **No gate was run, and that is
-correct**: no code changed, so there is nothing a gate could measure. Seed S-040's `Verification`
+correct**: no code changed, so there is nothing a gate could measure. The verification
 field permits this in the same words.
 
 Every measurement below was taken on **2026-08-22** in the worktree
@@ -45,7 +45,7 @@ $ echo $?
 ```
 
 Run 2026-08-22. No output, exit 1. The only occurrences of the string in the repository are in
-prose that is *about* this disagreement: `docs/SEEDS.md` (the S-040 body),
+prose that is *about* this disagreement:
 `docs/decisions/042-identity-claims-app-layer-isolation-system-session-lockout.md:267-268`, and
 `docs/decisions/008-rls-defense-in-depth.md:150` itself.
 
@@ -63,7 +63,7 @@ in any policy expression in the tree. They sit in five migrations:
 
 ### Measurement 3 — the seam has two writers, not one, and the seed names only one
 
-Seed S-040 cites `backend/app/core/rls.py:63-65`. That is the `after_begin` writer. There is a
+The opening citation is `backend/app/core/rls.py:63-65`. That is the `after_begin` writer. There is a
 second one:
 
 | Writer | Site | When it runs | What it writes |
@@ -89,7 +89,7 @@ above.
 
 ### Measurement 5 — the line numbers other ADRs use to cite ADR-008 have already gone stale
 
-Seed S-040 warned that the numbers in its own body would move, and they did. The same is true of
+The numbers in the opening citation were warned to move, and they did. The same is true of
 the numbers in the ADRs. Checked on 2026-08-22 against ADR-008 **before** this ADR's amendment was
 inserted:
 
@@ -109,7 +109,7 @@ so it does not move any of them further.
 
 **None of this was carelessness, and that is the point.** `ADR-008 line 135` was *correct* when
 ADR-042 was written. Commit `634a0c5`, "feat(backend): enable clan-isolation RLS on change_requests
-(S-008)", dated 2026-08-22, added 16 lines to ADR-008 and removed 1 — a net shift of 15, which is
+", dated 2026-08-22, added 16 lines to ADR-008 and removed 1 — a net shift of 15, which is
 exactly `135 → 150`. `git show 634a0c5^:docs/decisions/008-rls-defense-in-depth.md | sed -n '135p'`
 still prints the `app.user_id` clause, run 2026-08-22. Two seeds landing the same day were enough.
 
@@ -120,7 +120,7 @@ line number as a hint.** ADR-008 § 2 does not move. `008:135` survived one work
 
 ### 1. The shipped seam is correct as it stands. `app.user_id` is not added.
 
-Option (b) from seed S-040 is rejected. Five reasons, in increasing order of seriousness.
+Option (b) is rejected. Five reasons, in increasing order of seriousness.
 
 1. **Nothing would read it.** Measurement 2: no policy in the tree names a second GUC. A setting
    written on every request transaction and read by nothing is the dead-token defect the seed
@@ -129,8 +129,8 @@ Option (b) from seed S-040 is rejected. Five reasons, in increasing order of ser
 
 2. **The one candidate table is out of scope, by this seed's own text and by an accepted ADR.**
    The table a user-keyed policy would key on is `identity_claims`, whose `user_id` column exists
-   at `backend/app/models/identity_claim.py:27-31`. Seed S-040 puts `identity_claims` out of
-   scope and assigns it to S-012, and
+   at `backend/app/models/identity_claim.py:27-31`. `identity_claims` is out of scope here and
+   belongs to ADR-042, and
    [ADR-042](042-identity-claims-app-layer-isolation-system-session-lockout.md) lines 102-109
    already decided what policy that table gets: a deny-all tripwire,
    `identity_claims_system_session_only … USING (false) WITH CHECK (false)`. Choosing (b) would
@@ -185,11 +185,11 @@ disagreement rather than editing an accepted ADR". That is not overturned here, 
 choices are consistent:
 
 - ADR-043 declined a **rewrite**. This ADR performs an **append**. Nothing in ADR-008 is deleted
-  or reworded by S-040, so the record ADR-043 was protecting is still intact after this change.
-- Seed S-040 asked for the amendment in those exact terms: "a dated amendment, not a silent
-  rewrite". Seed S-013, which produced ADR-043, asked for no such thing.
+  or reworded here, so the record ADR-043 was protecting is still intact after this change.
+- The amendment was asked for in those exact terms: "a dated amendment, not a silent rewrite".
+  ADR-043 asked for no such thing.
 
-The `SYSTEM_DATABASE_URL` sentence is deliberately left alone. Seed S-040 puts it out of scope,
+The `SYSTEM_DATABASE_URL` sentence is deliberately left alone. It is out of scope here,
 ADR-043 owns it, and it is a different disagreement.
 
 ## What a later seed must establish before adding `app.user_id`
@@ -236,28 +236,27 @@ Harder:
 
 | Alternative | Why not |
 |---|---|
-| Delete `/ SET LOCAL app.user_id = …` from ADR-008 § 2 | It is a silent rewrite. The file would then claim it always described the shipped seam, and the evidence that design and build diverged is gone. Seed S-040 forbids it in those words |
-| Add the GUC now and let S-012 or a later seed find a reader | The dead-token defect, and it pre-empts a decision ADR-042 says needs its own redesign ADR |
-| Add the GUC and key a policy on `identity_claims.user_id` | Contradicts ADR-042 lines 102-109, which S-012 is already committed to build, and touches a table seed S-040 puts out of scope |
-| Record the disagreement only in this ADR, leaving ADR-008 untouched, as ADR-043 did for `SYSTEM_DATABASE_URL` | It leaves the wrong sentence unmarked in the file an agent reads first, which is precisely how this reached ADR-042. Seed S-040 asked for the amendment; seed S-013 did not |
-| Put the rule in `.claude/rules/` so every session loads it | Seed S-040 rules it out: this is a decision about one seam, and decisions live in ADRs. A rules file loaded in every session is the wrong home for a fact about one module |
+| Delete `/ SET LOCAL app.user_id = …` from ADR-008 § 2 | It is a silent rewrite. The file would then claim it always described the shipped seam, and the evidence that design and build diverged is gone |
+| Add the GUC now and let a later change find a reader | The dead-token defect, and it pre-empts a decision ADR-042 says needs its own redesign ADR |
+| Add the GUC and key a policy on `identity_claims.user_id` | Contradicts ADR-042 lines 102-109, which ADR-042 is already committed to, and touches a table out of scope here |
+| Record the disagreement only in this ADR, leaving ADR-008 untouched, as ADR-043 did for `SYSTEM_DATABASE_URL` | It leaves the wrong sentence unmarked in the file an agent reads first, which is precisely how this reached ADR-042. This ADR asks for the amendment; ADR-043 did not |
+| Put the rule in `.claude/rules/` so every session loads it | Ruled out: this is a decision about one seam, and decisions live in ADRs. A rules file loaded in every session is the wrong home for a fact about one module |
 
 ## What this ADR deliberately does not decide
 
-- **Any new policy**, on any table. Out of scope by seed S-040.
-- **`identity_claims`.** ADR-042 decided it and seed S-012 builds it.
+- **Any new policy**, on any table. Out of scope here.
+- **`identity_claims`.** ADR-042 decided it and its migration builds it.
 - **Whether the identity-claim flow should be clan-scoped**, which ADR-042 lines 261-263 already
   reserve for a redesign ADR of its own.
 - **ADR-008 § 1's `SYSTEM_DATABASE_URL` sentence.** A different disagreement, recorded by ADR-043
-  lines 25-29 and left open by ADR-043 lines 315-317. Out of scope by seed S-040.
+  lines 25-29 and left open by ADR-043 lines 315-317. Out of scope here.
 - **`FORCE ROW LEVEL SECURITY`**, which ADR-008 lines 104-105 leaves until every table is covered.
 - **Whether a guard test should assert the exact set of settings the seam applies.** It is worth
   building and it is not built here, because it is `backend/**` work and this seed is documentation
-  only. Proposed as a follow-up seed in the S-040 report.
+  only. Proposed as follow-up work.
 
 ## Related
 
-- Seed **S-040** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes.
 - [ADR-008: Row-Level Security as Defense-in-Depth Layer-2](008-rls-defense-in-depth.md) — the ADR
   this one amends. § 2 at lines 149-150 is the corrected clause; § 3 is the fail-closed rule that
   precondition 5 above preserves.

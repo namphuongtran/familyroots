@@ -29,12 +29,12 @@
  * `user?.clan_name` is empty rather than showing a stale or invented name.
  *
  * **This screen does not promise a notification on approval, unlike the spec's literal copy**
- * ("Chúng tôi sẽ gửi thông báo ngay khi bạn được duyệt", design spec line 915-916). S-026's own
- * seed text overrides that: "the pending screen ... does not promise a notification" and lists
- * "Any notification, because none exists for any queue event" as out of scope. No notification
+ * ("Chúng tôi sẽ gửi thông báo ngay khi bạn được duyệt", design spec line 915-916). That is
+ * deliberately overridden here: the pending screen does not promise a notification, and any
+ * notification is out of scope because none exists for any queue event. No notification
  * pipeline fires on membership approval today, so promising one would be a false statement to
- * the user. Read the seed at `docs/SEEDS.md`, "## S-026", over the older spec prose where the
- * two disagree.
+ * the user. Where this comment and the older spec prose disagree, this comment is the current
+ * decision.
  */
 import { useEffect, useState } from 'react'
 import Link from 'next/link'

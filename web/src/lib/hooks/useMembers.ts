@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * S-033 trimmed this file to the two exports that still have a real,
+ * the legacy-component deletion trimmed this file to the two exports that still have a real,
  * out-of-scope importer, and deleted everything else: `usePersons`,
  * `usePersonSearch`, `usePersonMarriages`, `usePersonParentChild`,
  * `usePersonTimeline`, `usePersonsBatch`, and `usePersonMutations` had zero
@@ -18,7 +18,7 @@
  *   function from this file, only builds the same cache key `usePerson`
  *   would use.
  *
- * This is the same shape S-027 left `src/lib/api/axios.ts` in: a shared
+ * This is the same shape the legacy-transport deletion left `src/lib/api/axios.ts` in: a shared
  * legacy file survives, trimmed to what a *different* slice still needs,
  * until that slice's own deletion seed lands. See `web/CLAUDE.md`,
  * "Migration notes", for the axios precedent this one repeats.

@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted and shipped (2026-08-22, seed S-068). Blocked by S-038, done the same day.
+Accepted and shipped (2026-08-22), after the palette sweep the same day.
 
 ## Context
 
-S-038 moved 393 hardcoded palette utilities onto the semantic tokens `.claude/rules/tailwind.md`
+The palette sweep moved 393 hardcoded palette utilities onto the semantic tokens `.claude/rules/tailwind.md`
 already gated, and stopped at 41 occurrences across 10 files (plus three raw hex literals in a
 non-Tailwind use) that it refused to invent values for. Its own out-of-scope line named "any new
 token: if a use has no token, that is a finding for a new seed, not a value to invent here." This
@@ -46,7 +46,7 @@ need it); it now reaches the DOM only as a `data-gender` attribute, so the prop 
 
 **`TreeCanvas.tsx`'s `MiniMap` `nodeColor`** carried the identical branch as three raw hexes
 (`#93c5fd` / `#f9a8d4` / `#d1d5db`), which the seed correctly flagged as the same defect in a form
-S-038's class-grep scope could not see: `@xyflow/react`'s `nodeColor` takes a plain string, not a
+The sweep's class-grep scope could not see: `@xyflow/react`'s `nodeColor` takes a plain string, not a
 CSS custom property, so it cannot read a token and cannot flip with the colour scheme regardless.
 Consistent with dropping gender-as-colour above, `nodeColor` is now the single constant
 `'#d1d5db'` for every node. **This does not make the minimap dark-mode-correct** — its own
@@ -82,7 +82,7 @@ mirroring the reject button's own class shape exactly.
 `birthday` (`bg-blue-50 border-blue-200`) and `wedding_anniversary` (`bg-pink-50
 border-pink-200`) are the two remaining untokened entries beside `death_anniversary`
 (already `heritage-container`/`heritage`) and `clan_ceremony` (already `accent`/`accent-foreground`
-via S-038's precedent). Spec § 7.8's own card layout example shows every event kind carrying an
+via the sweep's precedent). Spec § 7.8's own card layout example shows every event kind carrying an
 explicit type chip and title text (`Giỗ cụ Nguyễn Hữu Đàm [Hằng năm] [Giỗ]`), so the card's
 background colour is decoration on top of an already-legible kind, not the identifying channel —
 the same question the stat-card group below asks, and the same answer. Both fold into the
@@ -155,7 +155,7 @@ Two entries in this group are **not** decorative rotation and are decided separa
 - `pnpm lint` — clean (empty output).
 - `pnpm format:check` — clean, after one `pnpm exec prettier --write` on the single file its own
   edit misformatted (`backoffice/dashboard/page.tsx`).
-- `pnpm depcruise` — 0 errors, 3 warnings (the same three pre-existing orphans S-029/S-038
+- `pnpm depcruise` — 0 errors, 3 warnings (the same three pre-existing orphans the persons slice and the sweep
   recorded; unaffected by this change).
 - `pnpm test:unit` — 430 passed, including `contrast.test.ts`'s new `success` rows and
   `theme-tokens.test.ts`'s automatic coverage of the new token, both added by this change.
@@ -183,13 +183,13 @@ on a route `web/e2e/dark-theme.spec.ts` (or any existing e2e spec) can reach: `R
 `MemberAvatar` under `tree/*` and `members/*`, and the four dashboard/platform files under
 `(dashboard)`, `platform/*`, and `backoffice/*` — every one of them gated by
 `requireServerRole`/`requireRole` behind a real Supabase session that this repository's e2e
-harness does not fake. **This is the exact finding S-039 recorded for `BackofficeSidebar.tsx`**,
+harness does not fake. **This is the exact finding ADR-046 recorded for `BackofficeSidebar.tsx`**,
 re-confirmed here for a second, larger set of files: "say how you measured it rather than
 reasoning from the hex values," because the seed's own verification text ("an
 `e2e/dark-theme.spec.ts` case per converted surface") assumes a reachability this tree does not
 have.
 
-Measured instead with the same throwaway-preview-route technique `docs/superpowers/plans`' S-032
+Measured instead with the same throwaway-preview-route technique the persons form
 used for `StaleWriteDialog` ("rendered directly with fixture rows, no backend, deleted before this
 commit"): a temporary route rendering `RoleSelector`, `PendingUsersList`, and `MemberAvatar` with
 fixture props, with `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` unset so `src/middleware.ts` skips its
@@ -216,7 +216,7 @@ preview route reloaded under both emulated schemes, and reverted back immediatel
 The planted-defect reading is identical across both emulated colour schemes, which is exactly the
 failure this whole seed exists to catch — a palette colour that cannot flip — and it is a
 different value from the passing reading in both directions, so this is a real control per
-`.claude/rules/seeds.md`'s "check that the failing reading differs from the passing reading."
+`.claude/rules/testing.md`'s "check that the failing reading differs from the passing reading."
 
 **What this does not prove.** The other seven converted files (`MemberNode`, `EventCard`,
 `platform/layout.tsx`, both stat-tile files, `platform/clans/page.tsx`,
@@ -229,11 +229,10 @@ three rows above are the second kind.
 
 ## Related
 
-- Seed S-068 in [`../SEEDS.md`](../SEEDS.md), which this ADR closes.
-- Seed S-038, which found the 41-plus-3 and refused to invent values for them.
+- The palette sweep, which found the 41-plus-3 and refused to invent values for them.
 - [ADR-045](045-dark-mode-prefers-color-scheme-only.md), for the one mechanism and the "never
   branch on theme in TypeScript" rule this ADR does not relax for `TreeCanvas.tsx`'s minimap.
-- [ADR-046](046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md) and S-039, for the
+- [ADR-046](046-backoffice-aside-is-a-surface-step-not-an-inverted-region.md), for the
   "say how you measured it" precedent this ADR follows for every gated surface.
 - `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` § 2.1 (light tokens, including
   `success`/`danger`/`info`), § 2.2 (dark tokens), § 5 `T-06` (colour is never the only channel),

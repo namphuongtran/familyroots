@@ -11,7 +11,7 @@ FamilyRoots uses **PostgreSQL 16+** with a single `public` schema. The core data
 Data isolation between clans is enforced **in the application/repository layer** (the
 primary, tested mechanism). DB-level RLS is an **active** layer-2 behind it, not a deferred
 one: this line read "deferred" until 2026-08-22, nine migrations after the first policy
-shipped, and seed S-012 corrected it. See `multi-tenancy.md` for the covered set and for the
+shipped, and a later change corrected it. See `multi-tenancy.md` for the covered set and for the
 one table whose policy is a deny-all tripwire rather than clan isolation.
 - `ClanMembership` join scopes person visibility per clan (read)
 - `created_by_clan_id` on edges scopes both reads and writes of relationships
@@ -409,7 +409,7 @@ Workflow queue for users claiming an identity in the family tree.
 > documented `409 user_already_has_pending_claim`, and the index itself. Pinned by
 > `backend/tests/integration/test_claim_cross_clan_pending_uniqueness.py`.
 
-> ⚠️ **RLS (2026-08-22, migration `033_rls_identity_claims`, ADR-008 Phase 8, seed S-012) —
+> ⚠️ **RLS (2026-08-22, migration `033_rls_identity_claims`, ADR-008 Phase 8) —
 > ENABLED, and NOT clan isolation.** The single policy is
 > `identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`. It compares
 > nothing to `app.clan_id`; it locks the request role out of the table entirely. This table
@@ -508,7 +508,7 @@ M:N link between persons and clans. Determines which persons appear in which cla
 > is deprecated as a display source, ADR-012); it is not kept in sync with the
 > computed value.
 
-> ✅ **RLS (2026-08-22, migration `031_rls_clan_memberships`, ADR-008 Phase 6, seed S-009).**
+> ✅ **RLS (2026-08-22, migration `031_rls_clan_memberships`, ADR-008 Phase 6).**
 > The explicit `clan_id` predicate in every repository that joins this table stays the
 > primary guarantee, and `clan_memberships_clan_isolation` is now the layer-2 backstop
 > behind it: `clan_id = <app.clan_id GUC>` on both USING and WITH CHECK. A shared person
@@ -519,9 +519,9 @@ M:N link between persons and clans. Determines which persons appear in which cla
 > `backend/tests/integration/test_rls_phase6_clan_memberships.py`.
 
 > ✅ **`clan_invitations` IS RLS-enabled** (2026-08-22, migration `032_rls_clan_invitations`,
-> [ADR-048](../decisions/048-invitation-accept-runs-on-the-system-session.md), seed S-043).
-> This block said the opposite until 2026-08-22 and was corrected in place by seed S-012,
-> which found it after the migration had landed. Seed S-009 deferred the table because
+> [ADR-048](../decisions/048-invitation-accept-runs-on-the-system-session.md)).
+> This block said the opposite until 2026-08-22 and was corrected in place, by the change
+> that found it after the migration had landed. The table was deferred earlier because
 > `POST /invitations/{token}/accept` has no clan context — the invitee is not a member yet —
 > and ran on the RLS request session, so the policy would have made `get_by_token` return
 > zero rows and every accept answer `invitation.not_found`. ADR-048 moved **that one route**
@@ -659,7 +659,7 @@ Maps users to clans with RBAC roles.
 | `updated_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
 > ❌ **NOT RLS-enabled, and it cannot be until ADR-050 decides how (2026-08-22, seed
-> S-010).** Seed S-010 named this table alongside `clan_settings`; only `clan_settings`
+> the Phase 10 work).** That work named this table alongside `clan_settings`; only `clan_settings`
 > shipped. This is the table the authorization gate reads, so a policy that hides a role row
 > does not merely hide data — it silently downgrades what the caller may do.
 >
@@ -715,7 +715,7 @@ Propose-and-review corrections to clan data / Đề nghị sửa gia phả.
 > `clan_settings.approval_config` column that might have held such a configuration was
 > read by nothing and dropped with its table on 2026-08-22 (ADR-054).
 >
-> ✅ **RLS (2026-08-22, migration `030_rls_change_requests`, ADR-008 Phase 5, seed S-008).**
+> ✅ **RLS (2026-08-22, migration `030_rls_change_requests`, ADR-008 Phase 5).**
 > The explicit `clan_id` predicate in `change_request_repository` stays the primary
 > guarantee, and `change_requests_clan_isolation` is now the layer-2 backstop behind it:
 > `clan_id = <app.clan_id GUC>` on both USING and WITH CHECK. This paragraph said the
@@ -777,7 +777,7 @@ Chi/phái/nhánh within a clan. Supports nested hierarchy.
 ### `clan_settings` — dropped 2026-08-22, and not replaced
 
 > ❌ **This table no longer exists.** Migration `039_drop_clan_settings` removed it whole
-> (seed S-065, [ADR-054](../decisions/054-clan-settings-table-is-dropped.md)), after
+> ([ADR-054](../decisions/054-clan-settings-table-is-dropped.md)), after
 > `037` and `038` had already taken `allow_public_tree` and `privacy_level` under ADR-044.
 > The section is kept as a tombstone rather than deleted, because this file described the
 > table in detail for months and a reader who remembers it needs to find out what happened.
@@ -870,7 +870,7 @@ Immutable log of all write actions. `clan_id` is nullable, so a row may belong t
 to none.
 
 > ⚠️ **RLS (2026-08-22, migration `034_rls_audit_notification`, ADR-008 Phase 9,
-> [ADR-043](../decisions/043-audit-notification-rls-posture.md), seed S-014) — read the shape
+> [ADR-043](../decisions/043-audit-notification-rls-posture.md)) — read the shape
 > before writing anything against this table.** It is **not** the clan-isolation template the
 > nine covered tables use. Three answers on one table:
 >
@@ -934,13 +934,13 @@ Tracks push notification delivery. FCM tokens are stored in `user_fcm_tokens` (n
 | `error_message` | TEXT | | Lỗi nếu có |
 | `created_at` | TIMESTAMPTZ | NOT NULL, auto | |
 
-> `sent_on` was missing from this table until 2026-08-22 (seed S-014), five migrations after
+> `sent_on` was missing from this table until 2026-08-22, five migrations after
 > `017_notification_sent_on` added it. It is the platform-timezone day the scheduler decided
 > to send for, and `(event_id, notification_type, sent_on)` is uniquely indexed — see
 > [notifications-scheduler.md](notifications-scheduler.md).
 
 > ✅ **RLS (2026-08-22, migration `034_rls_audit_notification`, ADR-008 Phase 9, ADR-043 § 2,
-> seed S-014).** The ordinary clan-isolation template, unchanged:
+> ADR-043).** The ordinary clan-isolation template, unchanged:
 > `notification_log_clan_isolation USING (clan_id = <app.clan_id GUC>) WITH CHECK (same)`.
 > `clan_id` is `NOT NULL`, so no row is mishandled by the predicate.
 >
@@ -1031,7 +1031,7 @@ CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 
 ## RLS Policies
 
-> **Correction (2026-08-22, seeds S-012 and S-014): the SQL below never shipped, and the
+> **Correction (2026-08-22): the SQL below never shipped, and the
 > paragraph under it is out of date about what did.** RLS layer-2 is **active**. Twelve
 > tables now carry policies (migrations `002` and `026`–`034`); the request path connects as
 > the non-bypass `familyroots_app` role and sets `app.clan_id` per transaction. **Ten are

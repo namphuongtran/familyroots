@@ -23,9 +23,8 @@ import 'message_page.dart';
 /// so the screen cannot contradict the guard that sent the user here.
 ///
 /// No copy promises a notification, because no notification exists for any
-/// queue event. `docs/SEEDS.md` carries that in its `Owed` register: "A
-/// notifications API. None exists, and the design spec refuses to draw a bell
-/// for one."
+/// queue event. There is no notifications API: none exists, and the design spec
+/// refuses to draw a bell for one.
 class PendingApprovalPage extends StatelessWidget {
   const PendingApprovalPage({super.key, required this.status});
 

@@ -40,7 +40,7 @@ function pendingAuthState(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
   } as unknown as ReturnType<typeof useAuth>
 }
 
-describe('PendingApprovalScreen (S-026, spec §7.2a)', () => {
+describe('PendingApprovalScreen (spec §7.2a)', () => {
   beforeEach(() => {
     mockUseAuth.mockReset()
   })
@@ -55,7 +55,7 @@ describe('PendingApprovalScreen (S-026, spec §7.2a)', () => {
         'Bạn đã gửi yêu cầu tham gia dòng họ Nguyễn Hữu Thanh Oai. Quản trị dòng họ sẽ xem xét yêu cầu này.',
       ),
     ).toBeInTheDocument()
-    // Does not promise a notification (S-026's end state overrides the older
+    // Does not promise a notification (the pending-approval screen's end state overrides the older
     // spec copy — see the component's own doc comment).
     expect(screen.queryByText(/thông báo/)).not.toBeInTheDocument()
     expect(screen.getByText('Tạo tài khoản')).toBeInTheDocument()

@@ -2,16 +2,16 @@ import { expect, test as setup } from '@playwright/test'
 import { SEEDED_PASSWORD, SEEDED_USERS, type SeededUser } from './fixtures'
 
 /**
- * Seed S-070. The only place in this repository that turns credentials into a session, and
+ * the authenticated e2e harness. The only place in this repository that turns credentials into a session, and
  * it does it the way a member does: it types into `/vi/login` and presses the button.
  *
  * **Why a real login rather than a signed token or a stubbed `getSession`.** The maintainer
- * chose the full Supabase CLI stack on 2026-08-22 (S-070's own text), and the two rejected
+ * chose the full Supabase CLI stack on 2026-08-22 (the authenticated e2e harness's own text), and the two rejected
  * options are rejected here too. Minting a JWT in the test would exercise none of
  * `LoginPage` → `useAuthActions.signIn` → `@supabase/ssr`'s cookie writer →
  * `middleware.ts`'s session check → `requireServerRole`'s call to `GET /me/clans`, which is
  * the chain no test had ever executed. A stub at `requireServerRole` would put a
- * session-shaped hole in shipped code, which S-070 forbids in as many words.
+ * session-shaped hole in shipped code, which the authenticated e2e harness forbids in as many words.
  *
  * **Each setup ends on a reading, not on a file write.** A login that succeeds at Supabase
  * and then reaches nothing would otherwise leave a storage-state file that looks fine and a
@@ -26,7 +26,7 @@ const BACKOFFICE_PATH = '/vi/backoffice/dashboard'
  * `middleware.ts` sends a request with no session to `/{locale}/login`, and
  * `requireServerRole` sends an authenticated user with too low a role to
  * `/{locale}/dashboard`. Those two Locations are how a "refused" reading is told apart from
- * a "no session at all" reading — the distinction `.claude/rules/seeds.md` demands when it
+ * a "no session at all" reading — the distinction `.claude/rules/testing.md` demands when it
  * says the failing reading must differ from the passing one.
  */
 const DASHBOARD_LOCATION = /\/vi\/dashboard$/
@@ -37,7 +37,7 @@ async function signIn(page: import('@playwright/test').Page, user: SeededUser): 
   // The two inputs carry no `id` and their `<label>`s carry no `htmlFor`
   // (`src/app/[locale]/(auth)/login/page.tsx`), so `getByLabel` finds nothing. Selecting by
   // input type is what `e2e/dark-theme.spec.ts` already does on this same form. That missing
-  // label association is a real a11y defect; S-070 reports it and does not fix it.
+  // label association is a real a11y defect; the authenticated e2e harness reports it and does not fix it.
   await page.locator('input[type="email"]').fill(user.email)
   await page.locator('input[type="password"]').fill(SEEDED_PASSWORD)
   await page.locator('form button[type="submit"]').click()
@@ -49,7 +49,7 @@ async function signIn(page: import('@playwright/test').Page, user: SeededUser): 
    * measured 2026-08-26, `/vi/dashboard` re-ran `useAuth`'s mount effect 2613 times in
    * seven seconds and issued 18174 `GET /auth/me` calls until the backend's
    * 20-per-60-second limiter on `/api/v1/auth/*` (`backend/app/main.py:221-226`) began
-   * answering 429. That defect is reported by S-070 and is not S-070's to fix — see
+   * answering 429. That defect is reported by the authenticated e2e harness and is not the authenticated e2e harness's to fix — see
    * `web/CLAUDE.md`, "The `(dashboard)` group runs away". This harness therefore does not
    * linger there: the cookie appears while `signInWithEmail` is still resolving, so polling
    * for it lets the setup navigate away before the loop has a page to run on.

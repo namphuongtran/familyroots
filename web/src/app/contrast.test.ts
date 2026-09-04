@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Seed S-003 opened this file. Spec § 1 rule 6 says the contrast floor "is
+ * the contrast fix opened this file. Spec § 1 rule 6 says the contrast floor "is
  * enforced at the token level, so a designer cannot accidentally ship an
  * unreadable pairing". Nothing enforced it, and four pairs shipped below AA.
  * This test is the enforcement.
  *
- * Seed S-006 ran the same table over the dark palette, and had to change how the
+ * The dark-palette change ran the same table over the dark palette, and had to change how the
  * values are read to do it. **Read the next paragraph before editing the parser.**
  *
  * It reads the real stylesheet rather than a copy of the values, because a copy
@@ -59,13 +59,13 @@ const css = readFileSync(new URL('globals.css', import.meta.url), 'utf8').replac
 /**
  * Returns the body of the block that `opener` opens, found by counting braces.
  *
- * **Why a brace walk and not a regex, added 2026-08-21 by seed S-006.** Until
- * S-006 this file matched `--color-x: #hex;` over the whole stylesheet. That was
+ * **Why a brace walk and not a regex, added 2026-08-21 by the dark-palette change.** Until
+ * the dark-palette change this file matched `--color-x: #hex;` over the whole stylesheet. That was
  * correct only while one scope declared colours. Once a second scope declares
  * `--color-background`, a file-wide match keeps whichever came last, so the
  * *light* table starts measuring the *dark* palette.
  *
- * **And it does not fail when that happens.** S-006 planted exactly that defect
+ * **And it does not fail when that happens.** the dark-palette change planted exactly that defect
  * on 2026-08-21 — `hexTokens(css)` in place of `hexTokens(LIGHT_SCOPE)` — and all
  * 156 cases still passed, because each palette is internally consistent, so
  * dark-on-dark clears AA just as light-on-light does. A silent pass is worse than
@@ -97,7 +97,7 @@ const blockBody = (source: string, opener: string): string => {
 
 /**
  * The two colour scopes. `prefers-color-scheme` is the one dark mechanism this
- * app has, decided by ADR-045 and seed S-006; the class variant and the
+ * app has, decided by ADR-045 and the dark-palette change; the class variant and the
  * `data-theme` selector spec § 2.8 also named are absent, and the block below
  * asserts that they stay absent.
  */
@@ -162,7 +162,7 @@ const reader =
  * because `body` painted it while the semantic token called the page
  * `background`, and a foreground had to clear both. ADR-041 § 3 ended that on
  * 2026-08-14: the page is one value under one name, `background` #fbf8f1, and
- * the bare `--color-cream` is gone. Seed S-005 removed the fourth entry here in
+ * the bare `--color-cream` is gone. The leaf-green rename removed the fourth entry here in
  * the same change, which is why `token('cream')` now throws.
  */
 const GROUNDS = ['card', 'background', 'muted'] as const
@@ -174,17 +174,17 @@ const everyGround = (text: string, floor: number): Case[] =>
 
 const CASES: readonly Case[] = [
   // Body and helper text, against every ground it can land on. The second row
-  // is the one S-003 was written for.
+  // is the one the contrast fix was written for.
   ...everyGround('foreground', AA_NORMAL_TEXT),
   ...everyGround('muted-foreground', AA_NORMAL_TEXT),
 
   // Red error text, and coloured link/action text. `heritage` is the ceremonial
-  // red (thủy tổ, giỗ), added with the family by seed S-005.
+  // red (thủy tổ, giỗ), added with the family by the leaf-green rename.
   ...everyGround('destructive', AA_NORMAL_TEXT),
   ...everyGround('primary', AA_NORMAL_TEXT),
   ...everyGround('heritage', AA_NORMAL_TEXT),
 
-  // Positive/success state, added by ADR-055 (seed S-068) for the approve
+  // Positive/success state, added by ADR-055 for the approve
   // action, the active/suspended badge, and a positive trend reading — each
   // paired against an already-tested `destructive` for its negative half.
   ...everyGround('success', AA_NORMAL_TEXT),
@@ -241,7 +241,7 @@ describe.each(THEMES)(
 )
 
 /**
- * Seed S-006's end state, stated as the thing that would be wrong without it: a
+ * the dark-palette change's end state, stated as the thing that would be wrong without it: a
  * dark screen must not resolve a single one of these through a light value.
  * Without this case, forgetting an override is not a failure but a pass, because
  * `DARK` inherits from `LIGHT` exactly as the cascade does.
@@ -280,7 +280,7 @@ describe('the dark scope covers the palette rather than inheriting it', () => {
 /**
  * Spec § 2.8 asks for two dark mechanisms and `globals.css:3` shipped a third,
  * the class-based `@custom-variant dark (&:is(.dark *))`. Three mechanisms for
- * one behaviour is the contradiction seed S-006 was written to settle, and
+ * one behaviour is the contradiction the dark-palette change was written to settle, and
  * ADR-045 settles it: the media query wins, and it wins alone. The other two
  * need something to set a class or an attribute, and that something is the theme
  * switch this app does not have, so either one would have shipped a palette that
@@ -313,8 +313,8 @@ describe('exactly one dark mechanism reaches the stylesheet', () => {
  * value.
  *
  * Spec § 4.1 line 582 gives both halves: hover is the fill "darkened 6% (light)
- * / lightened 8% (dark)". The dark half was missed until seed S-006, because
- * S-005 only needed the light one. The direction is the point: darkening an
+ * / lightened 8% (dark)". The dark half was missed until the dark-palette change, because
+ * the leaf-green rename only needed the light one. The direction is the point: darkening an
  * already-light dark-theme fill moves it toward the ground rather than away from
  * it, so the two scopes mix opposite colours on purpose.
  */

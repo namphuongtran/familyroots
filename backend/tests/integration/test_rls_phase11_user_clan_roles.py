@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 11 (S-052, ADR-050): ``user_clan_roles`` is HALF covered, on purpose.
+"""RLS layer-2 Phase 11 (ADR-050): ``user_clan_roles`` is HALF covered, on purpose.
 
 Migration 036 does not give this table the migration-027 template. It gives it four
 per-command policies:

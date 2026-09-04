@@ -24,7 +24,7 @@ function authWith(clanMemberships: Array<{ clan_id: string; clan_name: string }>
   } as unknown as ReturnType<typeof useAuth>)
 }
 
-describe('ClanSuspendedScreen (S-026, spec §7.2c, `403 clan_suspended`)', () => {
+describe('ClanSuspendedScreen (spec §7.2c, `403 clan_suspended`)', () => {
   it('offers "switch clan" when the user has another approved clan besides the suspended one', () => {
     mockUseSearchParams.mockReturnValue(
       new URLSearchParams(

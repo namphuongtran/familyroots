@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 7 (S-043, ADR-048): clan_invitations is clan-isolated at the DB.
+"""RLS layer-2 Phase 7 (ADR-048): clan_invitations is clan-isolated at the DB.
 
 Migration 032 enables the migration-027 clan-isolation policy on ``clan_invitations``. The
 row says "this clan has offered this email address a role", which is membership intent plus

@@ -3,9 +3,9 @@ import { persist } from 'zustand/middleware'
 import type { UserClanMembership, UserProfile } from '@/lib/types'
 
 /**
- * Session state only (S-025). The active clan is not here: it used to be
+ * Session state only. The active clan is not here: it used to be
  * `currentClanId`/`setCurrentClan`, persisted to `localStorage` by this same
- * middleware, while `current_clan_id` cookie (S-023) held the same fact for
+ * middleware, while `current_clan_id` cookie held the same fact for
  * the server to read. Two persisted sources for one fact is exactly the
  * defect this tracker exists to catch, so the clan id was removed rather
  * than kept in sync. Read it with `useCurrentClanId()`

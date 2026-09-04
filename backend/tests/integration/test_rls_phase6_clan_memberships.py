@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 6 (S-009, ADR-008): clan_memberships is clan-isolated at the DB.
+"""RLS layer-2 Phase 6 (ADR-008): clan_memberships is clan-isolated at the DB.
 
 Migration 031 enables the migration-027 clan-isolation policy on ``clan_memberships``.
 The row says "this person belongs to this clan", and carries the clan's own structural

@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted (2026-08-26), by seed **S-080**, opened by the maintainer from using the register screen.
+Accepted (2026-08-26), opened by the maintainer from using the register screen.
 
-The maintainer made the choice this ADR records. The three questions S-080 posed were put to them
+The maintainer made the choice this ADR records. The three questions were put to them
 on 2026-08-26 and answered: the invitation link is primary, a typed clan code survives as a
 secondary path in the form of the slug, and what an admin shares is a browser URL.
 
@@ -17,17 +17,17 @@ line and not inferred from a file name or a nearby document.
 > **The `file:line` coordinates in this section were correct on 2026-08-26 and most of them are
 > now wrong. They are left as written on purpose, and this note is the repair.**
 >
-> Checked at source 2026-08-27, after seeds S-081, S-082, S-083 and S-085 all landed in
-> `integration/batch-2026-08-26`. Every claim below still holds; only the line numbers moved,
-> because S-081 inserted a comment block and S-085 inserted `_CLAN_FIELDS` plus a validator into
-> `backend/app/schemas/auth.py`, and S-082 and S-083 both rewrote the register page.
+> Checked at source 2026-08-27, after four changes all landed in `integration/batch-2026-08-26`.
+> Every claim below still holds; only the line numbers moved, because the contract change inserted a
+> comment block and ADR-058's change inserted `_CLAN_FIELDS` plus a validator into
+> `backend/app/schemas/auth.py`, and two web changes both rewrote the register page.
 >
 > | Written here | Where it is now |
 > |---|---|
 > | `auth.py:18`, `clan_action` on `RegisterRequest` | `auth.py:34` |
 > | `auth.py:25`, `clan_action` on `AuthenticatedOnboardingRequest` | `auth.py:78` |
 > | `auth.py:19`, `clan_id: uuid.UUID \| None` | `auth.py:41` |
-> | `register/page.tsx:246`, `placeholder="UUID"` | **deleted by S-082**, which is what this ADR asked for |
+> | `register/page.tsx:246`, `placeholder="UUID"` | **deleted**, which is what this ADR asked for |
 > | `register/page.tsx:244`, binds `clanId` | **gone**; the field binds the code and submits `clan_code` |
 > | `register/page.tsx:81,91`, submits `clan_id` | **gone**; `:155` and `:165` submit `clan_code` |
 >
@@ -35,13 +35,12 @@ line and not inferred from a file name or a nearby document.
 > and `auth.py:11` for `_SLUG_PATTERN`.
 >
 > **Why the numbers are not simply corrected in place.** This section records what was read when
-> the decision was made, and `docs/SEEDS.md` already holds the standing rule for that case: nine
-> dated pointers at a deleted file were left alone because "editing any of them to match today
-> would destroy the evidence it exists to hold". An ADR's Context is the same kind of record. What
-> a later reader needs is this table, not a rewritten history.
+> the decision was made. The standing rule for that case is that a dated pointer is left alone,
+> because editing it to match today destroys the evidence it exists to hold. An ADR's Context is
+> that kind of record. What a later reader needs is this table, not a rewritten history.
 >
 > **It is worth knowing this is the second instance in one batch.** Commit `e2ae368` repaired six
-> citations broken the same way, by composing S-081 with S-083 — but those were in code comments
+> citations broken the same way, by composing two of those changes — but those were in code comments
 > and test files, which describe the tree as it is, so repointing them was correct. The rule that
 > separates the two cases: **repoint a citation that claims to describe the tree now; annotate one
 > that records what was read on a date.**
@@ -99,9 +98,9 @@ person types nothing at all.
 `backend/app/schemas/invitation.py:41` comments that the admin shares it. That path answers `POST`
 only (`docs/contracts/rest-invitations-api.md:64`). Pasting it into a browser is a `GET`.
 `find web/src/app -ipath "*invit*"` returned nothing on 2026-08-26, so there is no page for such a
-link to land on either. That gap is seed S-084.
+link to land on either. That gap is owed.
 
-### Two things the seed did not know, read at source while writing this ADR
+### Two things not known at the outset, read at source while writing this ADR
 
 Both were found on 2026-08-26 and both change what "primary" costs. Neither is a reason to reverse
 the decision; both are recorded here so the next reader does not discover them as a surprise.
@@ -122,8 +121,8 @@ required on both. `backend/app/application/auth/handlers.py:128-131` then reject
 token and has neither.
 
 **Taken together, these two mean the invitation flow is unreachable end to end for a new user
-today, and it is unreachable for a reason no seed had named.** S-084 builds the page; the page alone
-does not close this. The register-without-a-clan gap is opened as seed **S-085**.
+today, and it is unreachable for a reason nobody had named.** A separate change builds the page; the
+page alone does not close this. The register-without-a-clan gap is opened separately.
 
 ## Decision
 
@@ -158,7 +157,7 @@ slug. **Nothing new has to reach the database.**
   place to be wrong.
 
 **Whether `clan_id` is removed at once or accepted alongside the code for one release is not decided
-here.** It is a contract question, and `docs/contracts/rest-auth-api.md` owns it. Seed S-081
+here.** It is a contract question, and `docs/contracts/rest-auth-api.md` owns it.
 decides it and writes it down there.
 
 ### 3. What an admin shares is a browser URL
@@ -193,7 +192,7 @@ https://<origin>/<locale>/invitations/<token>
 | Alternative | Why it lost |
 |---|---|
 | **Typed clan code only, invitations left unadvertised** | The invitation flow is already built, tested, and audited (`docs/contracts/rest-invitations-api.md:70`, invitation create/accept/revoke emit auditable domain events). Leaving it unreachable keeps a built feature dead and keeps the weaker path — a person copying a string by hand — as the only door. It also does not remove the collision problem: two unrelated Nguyễn clans still need `origin_place` in the code to be told apart |
-| **Invitation link only, no typed identifier at all** | Cheapest to build and the narrowest surface: S-081 and S-082 would both close as withdrawn. Rejected because it makes the admin's email list the only way into a clan. A relative the admin cannot email has no path, and the slug remains the clan's URL identifier either way, so the field is not saved by removing it from one screen |
+| **Invitation link only, no typed identifier at all** | Cheapest to build and the narrowest surface: the backend and web halves would both close as withdrawn. Rejected because it makes the admin's email list the only way into a clan. A relative the admin cannot email has no path, and the slug remains the clan's URL identifier either way, so the field is not saved by removing it from one screen |
 | **A searchable list of clan names** | The register screen would let a stranger type "Nguyễn" and pick from the matching families. Rejected as a new public surface: root `CLAUDE.md:40` forbids bypassing clan isolation, and ADR-044 dropped `allow_public_tree` rather than enforce it. It is not merely more work — it is a privacy decision against a standing one, and it would need its own ADR |
 | **Keep the UUID and fix only the label** | Honest, and one edit. Rejected because it makes the screen worse in the direction the maintainer complained about: the label would stop promising a code and would start promising a UUID, which nobody can be asked to type. Spec § 7.1b already decided the field is a code |
 
@@ -203,36 +202,36 @@ https://<origin>/<locale>/invitations/<token>
 
 - **The register screen's label stops lying.** The field asks for the code its label names.
 - **The invitation flow becomes reachable by a human**, which it has never been.
-- **The lookup already exists**, so the backend half of the secondary path (seed S-081) is small.
+- **The lookup already exists**, so the backend half of the secondary path is small.
 - **No new public surface.** No route lets a stranger enumerate clans.
 
 ### What this costs, stated plainly
 
 - **Two public routes change shape.** `POST /auth/register` and `POST /auth/onboard` accept a code
   where they accepted a UUID. `docs/contracts/rest-auth-api.md` moves in the same pull request as
-  the code, per root `CLAUDE.md`. Seed S-081 owns it.
-- **The invitation link cannot work end to end until seed S-085 lands.** Findings 1 and 2 in
+  the code, per root `CLAUDE.md`. The contract change owns it.
+- **The invitation link cannot work end to end until ADR-058's change lands.** Findings 1 and 2 in
   Context are the reason. A page built against the token is necessary and not sufficient.
 - **`accept_path` and its comment are now wrong** and are not fixed here. Owed below.
 - **This ADR is documentation only and no gate ran.** Nothing in it is verified by a test, because
-  nothing in it is code. Saying so is the requirement, per `.claude/rules/seeds.md`.
+ nothing in it is code. Saying so is the requirement, per `.claude/rules/testing.md`.
 
 ### Owed, named rather than left to be found
 
-1. **Seed S-085: let a person register with no clan, so an invitee can create an account.** Finding
+1. **Let a person register with no clan, so an invitee can create an account.** Finding
    2 in Context. Backend, and it changes `RegisterRequest`, `AuthenticatedOnboardingRequest`, the
    handler validation at `backend/app/application/auth/handlers.py:128-131`, and
    `docs/contracts/rest-auth-api.md`.
 2. **Repair `accept_path` and the comment at `backend/app/schemas/invitation.py:41`** so the field
    the admin is handed is the browser URL this ADR names. It becomes actionable once the page exists
-   and the origin variable has a name. Recorded in `docs/SEEDS.md`.
+   and the origin variable has a name.
 
 ## What this ADR deliberately does not decide
 
 - **Public clan discovery or search.** Out of scope, and it would need its own ADR against
   [ADR-044](044-privacy-toggles-dropped-from-v1.md). **Do not read a clan directory into this
   document.** Nothing here creates a route that answers "which clans exist".
-- **Whether `clan_id` is dropped at once or deprecated over one release.** Seed S-081 decides it in
+- **Whether `clan_id` is dropped at once or deprecated over one release.** The contract change decides it in
   `docs/contracts/rest-auth-api.md`.
 - **The name of the web-origin configuration variable.** Only that it is not
   `NEXT_PUBLIC_API_URL`.
@@ -249,8 +248,6 @@ https://<origin>/<locale>/invitations/<token>
 
 ## Related
 
-- Seed **S-080** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes, and seeds **S-081**,
-  **S-082**, **S-083**, and **S-084**, which it unblocks.
 - [ADR-056](056-next-public-api-url-splits-into-a-browser-and-a-server-variable.md) — owns
   `NEXT_PUBLIC_API_URL`, and the reason the link origin cannot reuse that name.
 - [ADR-044](044-privacy-toggles-dropped-from-v1.md) — dropped the privacy toggles, and the standing

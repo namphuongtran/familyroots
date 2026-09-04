@@ -2,12 +2,12 @@ import { expect, test } from '@playwright/test'
 import { BANNER_BASE_URL } from '../playwright.config'
 
 /**
- * S-042, the half of `T-04` that S-041 made invisible to every other spec in this file: with
+ * the banner spec, the half of `T-04` that the hermetic e2e config made invisible to every other spec in this file: with
  * both `NEXT_PUBLIC_SUPABASE_*` variables genuinely unset, `SupabaseSetupNotice.tsx` renders the
  * missing-Supabase banner, and at 320px width and 200% root font size the banner's own hint text
  * — which names both variables literally, so a developer who hits it knows what to set — used to
  * scroll the whole page sideways (measured 2026-08-22: page `scrollWidth` 569 vs `clientWidth`
- * 320, hint paragraph 504 vs 190; see docs/SEEDS.md S-042 and `.claude/rules/tailwind.md` § 7).
+ * 320, hint paragraph 504 vs 190; see `.claude/rules/tailwind.md` § 7).
  *
  * This spec talks to its own dev server on `BANNER_PORT`, not the shared `BASE_URL` every other
  * spec in this directory uses — see `playwright.config.ts`'s `NO_SUPABASE_ENV` webServer entry
@@ -47,7 +47,7 @@ for (const path of PUBLIC_PAGES) {
     test('the missing-Supabase banner renders', async ({ page }) => {
       // A precondition, not the assertion this case exists for: if the banner did not render at
       // all, the page-scroll assertion below would pass for the wrong reason — there would be
-      // nothing left to overflow, and the whole point of this spec (S-041's placeholders must not
+      // nothing left to overflow, and the whole point of this spec (the hermetic e2e config's placeholders must not
       // leak into this one server) would be silently unverified.
       await expect(page.getByText('NEXT_PUBLIC_SUPABASE_URL')).toBeVisible()
     })
