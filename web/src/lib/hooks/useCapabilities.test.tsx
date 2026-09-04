@@ -1,14 +1,14 @@
 /**
- * S-027 rewired `useCapabilities` off the deleted
+ * the legacy-transport deletion rewired `useCapabilities` off the deleted
  * `src/application/auth/use-cases/capabilities.ts` and onto
- * `src/domain/capability/capability.ts` (S-024) — see that hook's own doc comment. This file
+ * `src/domain/capability/capability.ts` — see that hook's own doc comment. This file
  * replaces the coverage `tests/behavior/auth-and-invalidation.test.ts` used to carry for the
  * deleted module's `deriveCapabilities`, for the four capability names a real component still
  * reads (`grep -rn "useCapabilities()" src`).
  *
  * Each case renders the hook through a host component — the same shape
  * `src/shared/http/clan-switch.test.tsx` uses for `useCurrentClanId` — rather than asserting
- * on a store field or a role string, per `.claude/rules/seeds.md`'s "a test pins an outcome,
+ * on a store field or a role string, per `.claude/rules/testing.md`'s "a test pins an outcome,
  * not a setting": the outcome here is which of the four booleans a real render produces.
  */
 import { screen } from '@testing-library/react'
@@ -57,7 +57,7 @@ async function readCapabilities() {
 
 const CLAN_A = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
 
-describe('useCapabilities, rewired onto domain/capability (S-027)', () => {
+describe('useCapabilities, rewired onto domain/capability', () => {
   afterEach(() => {
     setClanCookie(null)
     useAuthStore.getState().clear()

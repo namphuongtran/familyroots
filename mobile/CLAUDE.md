@@ -19,8 +19,7 @@ transports and a fake-async widget tester**. `Supabase.initialize` and
 `SentryFlutter.init` need platform channels and have therefore **never executed**.
 Treat login, token refresh against real Supabase, and session survival across a
 relaunch as *unverified* until that walk happens.
-[`docs/SEEDS.md`](../docs/SEEDS.md#owed-with-an-owner-and-a-trigger) holds the Task 20
-row and lists the blockers — no device or emulator, no credentials, no test accounts.
+The blockers are known: no device or emulator, no credentials, and no test accounts.
 
 Authoritative sources, in order:
 
@@ -28,7 +27,6 @@ Authoritative sources, in order:
 |---|---|
 | [`docs/superpowers/specs/2026-08-02-mobile-architecture-design.md`](../docs/superpowers/specs/2026-08-02-mobile-architecture-design.md) | the design and its rationale (decisions D1–D9) |
 | [`docs/superpowers/plans/2026-08-02-mobile-m0-spine.md`](../docs/superpowers/plans/2026-08-02-mobile-m0-spine.md) | the 20 M0 tasks, with literal code and verified gotchas |
-| [`docs/SEEDS.md`](../docs/SEEDS.md) | what is scheduled, what is owed, and what is not verified. The Task 20 row is in its `Owed` register |
 
 ## R1: run `build_runner` or CI will fail — read this before editing anything
 
@@ -315,7 +313,7 @@ Four test-host traps, all of which have already cost time here:
     Use an in-memory `CacheStore` fake — `FakeCacheStore` in
     `test/support/main_container.dart`.
   - **A `dio` request, even through a canned adapter that does no I/O at all.**
-    Measured 2026-08-26 by seed S-093: `await`ing
+    Measured 2026-08-26: `await`ing
     `SessionController.signIn()` directly in a `testWidgets` body hung for **25
     minutes** with no output, `flutter_tester` at 0% CPU, and the per-test
     timeout never fired, because the fake clock only advances when the tester
@@ -378,8 +376,8 @@ hardcodes a colour or a radius. Reach them with `context.tokens`.
 
 ### The palette is the spec's and ADR-041's, and six things about it are load-bearing
 
-Landed by seed S-037 on 2026-08-22, extended by seeds S-044, S-048 and S-049 the same day. Each
-note exists because the obvious move is wrong.
+Landed on 2026-08-22 and extended three times the same day. Each note exists because the obvious
+move is wrong.
 
 **1. `surface` is `#FBF8F1`, not the `#FDFCF7` mobile used to hold.** ADR-041 decision 3
 picked the spec's value over *both* incumbents on purpose, so that no client has to
@@ -402,7 +400,7 @@ this: "`ColorScheme` is populated from the same values so Material widgets inher
 correctly". `test/core/theme/theme_test.dart` pins every one of the six, so removing an
 override turns red.
 
-**`surfaceContainerLow` was the override S-037 missed, and S-044 added it.** Measured
+**`surfaceContainerLow` was the override the first pass missed, and a later one added it.** Measured
 2026-08-22 before the fix: `scheme.surfaceContainerLow` was `#F2F5EB`, a green-tinted tone
 the leaf-green seed derived, while the token said `#F5F1E6`. No shipped screen showed the
 difference, because `cardTheme.color` and both widgets that draw a card ground read the
@@ -416,7 +414,7 @@ rejected.** ADR-041 decision 2 creates `heritage` `#A3182F`, `heritage-foregroun
 `#FFFFFF`, `heritage-container` `#F6DFE0` and `heritage-container-foreground` `#4A0A14`,
 and it argues the container pair should ship ahead of its first consumer. That argument
 is web-shaped and does not transfer: web's rename *removes* red from `primary`, so
-without the family a ceremonial red would have no token at all the day S-005 lands.
+without the family a ceremonial red would have no token at all the day web's rename lands.
 Mobile's `primary` was a bronze, so this change takes no red away from anything. Against
 that, a Flutter token is not a CSS variable — each colour must be threaded through a
 hand-written `copyWith` and `lerp`, no screen renders it, and mobile has no equivalent of
@@ -424,9 +422,9 @@ web's `contrast.test.ts` sweep, so a wrong value would be invisible to every gat
 values no gate can check and no screen can show are the dead-token defect.
 
 **So the rule is written here instead of in the code.** When the first thủy tổ marker,
-giỗ chip, or ancestral-emphasis surface is built, that seed adds the four fields to
+giỗ chip, or ancestral-emphasis surface is built, that change adds the four fields to
 `ArborTokens` *with* the widget and the golden that renders them, at ADR-041's values
-above. **Never reach for `error` for a ceremonial red.** Since S-044 that warning is
+above. **Never reach for `error` for a ceremonial red.** Since the 2026-08-22 fix that warning is
 stricter, not weaker: `error` is now `#A32218` and `heritage` is `#A3182F`, one digit
 apart, so the wrong token no longer looks wrong on screen. Only the meaning separates
 them, and reaching for the nearest token is exactly what put red in web's `primary` and
@@ -434,7 +432,7 @@ cost an ADR to undo. `web/src/app/globals.css:45-48` carries the same warning fo
 pair.
 
 **4. `surfaceContainerLow` and `error` are spec § 2.1's values, and mobile's originals were
-sourced by nothing.** Seed S-044 moved `surfaceContainerLow` from `#F5F1E6` to `#F4EFE4`
+sourced by nothing.** A 2026-08-22 change moved `surfaceContainerLow` from `#F5F1E6` to `#F4EFE4`
 and `error` from `#8C1D18` to `#A32218`, both read at source on 2026-08-22. Neither
 original appeared in the spec or in any ADR: `grep` found each of them in exactly two
 places, `tokens.dart` and `docs/superpowers/plans/2026-08-02-mobile-m0-spine.md`, which is
@@ -457,7 +455,7 @@ prefix. The value is the spec's; only the spelling is this repository's.
 buys one red under one value across both clients.
 
 **5. "No token reads it" and "no `ColorScheme` field takes it" are two different claims,
-and `outlineVariant` is where they came apart.** Seed S-048 moved `outlineVariant` from
+and `outlineVariant` is where they came apart.** A 2026-08-22 change moved `outlineVariant` from
 `#CFC7B4` to spec § 2.1's `#B3A98F` on 2026-08-22, and passed it to `ColorScheme.fromSeed`.
 Read at source that day: `mobile/lib/core/theme/tokens.dart:49` for the old value, and
 `docs/superpowers/specs/2026-08-02-design-system-and-screens.md:90` for the spec's. Like
@@ -475,8 +473,7 @@ and `_TabsSecondaryDefaultsM3` (`tabs.dart:2806` and `:2885`), `_ChipDefaultsM3`
 (`chip.dart:2534`) and `_BannerDefaultsM3` (`banner.dart:516`). Measured 2026-08-22 before
 the fix, `buildAppTheme().colorScheme.outlineVariant` was **`#C2C8BC`**, a green-tinted
 tone the leaf-green seed derived, while the token said `#CFC7B4`. That is note 2's
-`fromSeed` trap a **third** time, after `primary` in S-037 and `surfaceContainerLow` in
-S-044. **Check the `ColorScheme` counterpart of every token, one at a time. The score so
+`fromSeed` trap a **third** time, after `primary` and `surfaceContainerLow`. **Check the `ColorScheme` counterpart of every token, one at a time. The score so
 far is three for three.**
 
 **Deleting the field was the other live option, and this is why it lost.** Note 3 rejected
@@ -493,8 +490,8 @@ counterpart, so the symmetric question resolved the other way.
 rule above allows `outline_variant` only in high-contrast mode, at 15% opacity, and mobile
 has no high-contrast mode. That is a reason no widget may draw a full-opacity line with it.
 It is not a reason for the token to hold the wrong colour: a mode that renders it at 15%
-needs a correct base value to take 15% of. Building that mode is explicitly out of S-048's
-scope, and out of this note's.
+needs a correct base value to take 15% of. Building that mode was explicitly out of scope for that
+change, and is out of this note's.
 
 **One gap this left open, which is not `outlineVariant`'s defect.** `app_theme.dart`'s
 `dividerTheme` was `DividerThemeData(thickness: 0, space: 0)`, commented as implementing the
@@ -507,9 +504,9 @@ thickness". Thickness zero is not absence. Flutter documents it at
 style BorderStyle.solid` — the token, because the theme set no divider colour — and the
 widget lays out at `Size(800.0, 0.0)` because `space` is 0. So the theme picked the colour
 of a line it believed it had suppressed. Whether that hairline is visible at zero height
-was **not** measured pixel by pixel by S-048. Deciding what the theme should do instead
-changes rendering and is its own decision, so S-048 reported it rather than folding it in.
-**Seed S-049 closed it on 2026-08-22. Note 6 is that answer.**
+was **not** measured pixel by pixel at the time. Deciding what the theme should do instead
+changes rendering and is its own decision, so it was reported rather than folded in.
+**It was closed on 2026-08-22. Note 6 is that answer.**
 
 **Contrast, computed 2026-08-22 with the WCAG 2.1 relative-luminance formula**, using an
 implementation checked against note 4's published figures (`onSurface` on `surface` 16.22:1
@@ -522,11 +519,11 @@ this role behind high-contrast mode at 15% anyway, which is fainter still. The f
 recorded so the next reader does not have to re-derive it, not as a compliance claim.
 
 **6. The theme now suppresses the divider line, and the test reads pixels instead of a
-field.** Seed S-049 settled note 5's open gap on 2026-08-22. `dividerTheme` gained
+field.** Note 5's open gap was settled on 2026-08-22. `dividerTheme` gained
 `color: Colors.transparent`; `thickness: 0` and `space: 0` stayed.
 
-**The hairline was measured, and it is painted.** S-048 established the colour and the
-layout but said plainly that it had not looked at pixels. S-049 did. Method: put a real
+**The hairline was measured, and it is painted.** The earlier pass established the colour and the
+layout but said plainly that it had not looked at pixels. The later one did. Method: put a real
 `Divider` in a `Column` inside a `ColoredBox` inside a `RepaintBoundary`, so nothing else
 paints in that subtree, then `toImageSync(pixelRatio: 3.0)` and read every pixel back as
 raw RGBA. Over the page ground `#FBF8F1`, two raster rows changed, to `#D7D1C0` and
@@ -552,7 +549,7 @@ them. Deleting `dividerTheme` is the honest-sounding one and it loses on arithme
 16 pixels of gap, instead of a 1.44:1 hairline. Honesty would have been bought by making
 the forbidden thing larger. Beyond that, "enforced by review at the widget layer" is what
 already failed here: the comment claimed the theme did the job from the day it was written
-(`0785036`, 2026-08-03) and nothing checked it for the 19 days until S-048 looked. This repository prefers a mechanism to a convention everywhere else — see the
+(`0785036`, 2026-08-03) and nothing checked it for the 19 days until someone looked. This repository prefers a mechanism to a convention everywhere else — see the
 import-boundary test — and a global visual mandate belongs in the one global place.
 
 **Where high-contrast mode turns the line back on.** In this same field, and nowhere else.
@@ -580,7 +577,7 @@ the theme at `search_anchor.dart:1076-1080`.
 `expect(theme.dividerTheme.thickness, 0)` under the name "dividers have no thickness"
 (`theme_test.dart:129,131` at commit `27a446f`). It was true, it was green, and it would have
 stayed green the day a screen added its first `Divider`. **No screen ever added one**, checked
-2026-08-22 by S-049 and re-checked the same day by S-051: `grep -rn "Divider" mobile/lib` returns
+2026-08-22 and re-checked the same day: `grep -rn "Divider" mobile/lib` returns
 14 lines and every one is the `orDivider` localisation key, a comment, or the `dividerTheme`
 declaration itself. So nothing was painted on any screen, and the sentence "the app painted a line
 the whole time" that this note used to carry was wrong. It is corrected here rather than deleted,
@@ -593,7 +590,7 @@ in paint. Both halves were watched failing: removing `color` produced
 `Actual: _DebugSize:<Size(9.0, 16.0)>`.
 
 **The general rule is written once, and not here.** A test that pins a setting cannot fail for the
-reason anyone cares about. `.claude/rules/seeds.md`, section "A test pins an outcome, not a
+reason anyone cares about. `.claude/rules/testing.md`, section "A test pins an outcome, not a
 setting", holds it, with this instance, the `web` token probe, and the `backend` RLS coverage guard
 beside it. That file loads in every session. This note keeps the Flutter-specific evidence and does
 not restate the rule.

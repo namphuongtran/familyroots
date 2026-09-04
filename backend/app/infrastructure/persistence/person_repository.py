@@ -258,7 +258,7 @@ class SqlAlchemyPersonRepository:
         # otherwise spouse/child counts would leak the existence of cross-clan edges.
         #
         # An edge counts only when neither of its endpoint persons is soft-deleted,
-        # not merely when the edge row is live (seed S-054, 2026-08-22). Nothing
+        # not merely when the edge row is live (2026-08-22). Nothing
         # cascades a person's soft delete onto its edges, so `m.is_deleted=false`
         # alone counted a spouse the same API answers 404 for — the card rendered
         # "2 spouses" for a person with one. Same rule as the edge reads in

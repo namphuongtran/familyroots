@@ -1,7 +1,7 @@
 """Read-side ports for the Relationship bounded context.
 
 **Separate from ``repository.py`` on purpose, and this is the whole point of
-seed S-056.** ``MarriageRepository.get_by_id`` and
+ADR-051 § 8.** ``MarriageRepository.get_by_id`` and
 ``ParentChildRepository.get_by_id`` load an edge for a **write** —
 ``app/application/relationship/handlers.py`` calls them from update and delete —
 so they must keep returning an edge whose endpoint person is soft-deleted.
@@ -11,7 +11,7 @@ becomes unreachable through the API entirely (ADR-051 § 8).
 The ports here answer the **read** question instead: what may a client be shown.
 An edge whose endpoint person is soft-deleted is hidden, which is the same rule
 the batch edge reads carry (``PersonQueryPort.get_marriages_batch`` and
-``get_parent_child_links_batch``, seed S-054). Nothing cascades a person's delete
+``get_parent_child_links_batch``). Nothing cascades a person's delete
 onto its edges — ADR-051 decided against that — so the rule is derived at read
 time and both edge rows keep ``is_deleted = false``.
 

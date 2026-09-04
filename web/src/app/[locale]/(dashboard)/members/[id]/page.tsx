@@ -7,10 +7,10 @@ import { getServerRequestContext } from '@/shared/http/context.server'
 import { ApiError } from '@/shared/http/errors'
 
 /**
- * Spec §7.6, "Hồ sơ một người" (S-031). A Server Component: `getPerson`
- * (`@/features/persons`, the S-030 repository) runs here directly rather
+ * Spec §7.6, "Hồ sơ một người". A Server Component: `getPerson`
+ * (`@/features/persons`, the persons repository repository) runs here directly rather
  * than through `usePerson` — nothing on this screen needs to refetch after a
- * mutation (create/edit is S-032), so there is no reason to pay for a client
+ * mutation (create/edit is the persons form), so there is no reason to pay for a client
  * bundle and a loading flash a plain `await` avoids.
  *
  * **404 is answered inline, not via `notFound()`.** Spec §7.6 wants

@@ -121,7 +121,7 @@ file_size_limit = "50MiB"
 # backend/app/core/config.py:79 (SUPABASE_STORAGE_BUCKET) and :88 (SUPABASE_AVATAR_BUCKET).
 # In production these are created by hand in the Supabase dashboard; here they are declared so a
 # fresh stack has them without anyone remembering. Buckets are containers, not data. No object is
-# seeded (that is S-073's territory).
+# seeded (that is `make seed`'s territory).
 
 # Documents + event files. PRIVATE, read only through short-lived presigned URLs.
 [storage.buckets.family-roots-files]

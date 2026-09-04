@@ -148,7 +148,7 @@ resolve to their spouse term — bereavement does not end the kinship, only divo
   matches guards literally named `person(s)_in_clan`, so the differently-named
   `get_live_person` is pinned separately by
   `test_claim_live_person_resolver_filters_soft_deleted` in the same file.
-- **The read side was closed on 2026-08-22, seven weeks later, by seed S-054.**
+- **The read side was closed on 2026-08-22, seven weeks later.**
   Three reads filtered only the **edge's own** `is_deleted` and never looked at
   the person the edge pointed at: `GET /persons/{id}/marriages`,
   `GET /persons/{id}/parent-child`, and `POST /persons/batch` with
@@ -172,7 +172,7 @@ resolve to their spouse term — bereavement does not end the kinship, only divo
   **This is a read filter and not a cascade.** The edge rows still carry
   `is_deleted = false`, nothing consumes `PersonDeleted`, and the cascade
   ADR-006's update of 2026-07-02 promised is still unbuilt — whether to build it
-  is seed S-055's decision. When adding any new read over `marriages` or
+  is ADR-051's decision. When adding any new read over `marriages` or
   `parent_child`, filtering the edge's own flag is **half** the predicate.
 - **Audited updates.** `update()` records old/new values into the `PersonUpdated`
   event for the audit trail.

@@ -121,13 +121,13 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 > building a screen on any row.
 >
 > **`View clan settings` and `Edit clan settings` were rows here until 2026-08-22.** They
-> were removed by seed S-065 / [ADR-054](../decisions/054-clan-settings-table-is-dropped.md),
+> were removed by [ADR-054](../decisions/054-clan-settings-table-is-dropped.md),
 > which dropped the `clan_settings` table itself. No endpoint ever read or wrote it, nothing
 > ever created a row in it, and the design spec § 7.10d refuses to draw its knobs. The clan
 > screen that does exist edits clan **info** — the `clans` row, `PATCH /clans/me` — which is
 > the `Edit clan info` row above and a different thing.
 >
-> **Two rows above are still unbacked, measured 2026-08-22 by S-065 and left standing
+> **Two rows above are still unbacked, measured 2026-08-22 and left standing
 > because deciding their fate was not that seed's to make.** `Export tree as PDF`:
 > `grep -rni pdf backend/app/api/ backend/app/application/` returns nothing, and ADR-020 puts
 > PDF export out of scope pending ADR-005's unbuilt worker — this is J22's original instance,

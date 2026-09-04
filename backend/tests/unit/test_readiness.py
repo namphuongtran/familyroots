@@ -18,7 +18,7 @@ def test_expected_head_reads_migration_scripts() -> None:
     """A ``None`` head silently disables the whole readiness check.
 
     This asserts only the **source tree** layout, whatever its docstring used to
-    claim. It was green for the entire life of S-075, during which the deployed
+    claim. It was green for the entire life of the readiness-path fix, during which the deployed
     wheel carried no migration scripts at all and the production image could not
     boot. The deployed layout is pinned by
     ``tests/unit/test_wheel_carries_migration_scripts.py`` instead."""

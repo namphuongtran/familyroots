@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 5: enable clan-isolation RLS on change_requests (S-008, ADR-008).
+"""RLS layer-2 Phase 5: enable clan-isolation RLS on change_requests (ADR-008).
 
 ``change_requests`` is keyed by a NOT-NULL ``clan_id``
 (``app/models/change_request.py:19``), so the migration 027 template applies unchanged:

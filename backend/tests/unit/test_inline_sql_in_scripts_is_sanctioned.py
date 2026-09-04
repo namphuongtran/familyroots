@@ -1,9 +1,9 @@
 """Fail when a shell script under `scripts/` runs SQL that no decision sanctions.
 
-## The asymmetry this closes (seed S-077, 2026-08-22)
+## The asymmetry this closes (2026-08-22)
 
 `test_scripts_sql_is_sanctioned.py` reads `.sql` files. **The dangerous statements are not
-all in `.sql` files.** Verified at source 2026-08-22, and both line numbers seed S-077 cited
+all in `.sql` files.** Verified at source 2026-08-22, and both line numbers cited
 are still correct:
 
     scripts/restore_drill.sh:116, the argument of a `psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -c`:
@@ -25,7 +25,7 @@ invisible.
 
 *Extract, do not grep.* A guard that swept shell scripts for the word `CREATE` would fire on
 `echo "==> creating scratch DB"`, on every `--help` banner, and on the drill's own header
-comment. S-060's rule is that a guard with a high false-positive rate gets suppressed, and a
+comment. The rule is that a guard with a high false-positive rate gets suppressed, and a
 suppressed guard is worse than none. So the scanner recognises four shapes and nothing else:
 
 1. a `-c` / `-tAc` / `--command` argument on a logical line that invokes `psql`,
@@ -68,7 +68,7 @@ not arise in a `.sql` file under `scripts/`:
 2. **A named script may run only the classes its decisions cover.** `unknown` is in no set.
 3. **No inline SQL anywhere under a scripts root may confer an escalating privilege**, in any
    file, sanctioned or not. Not overridable by `_SANCTIONED`, exactly as in the `.sql` guard,
-   and it is the check both of S-077's planted controls fail.
+   and it is the check both planted controls fail.
 
 ## What this misses. Read this list before trusting the guard
 
@@ -379,7 +379,7 @@ def test_no_sanctioned_script_runs_a_class_its_decisions_did_not_cover() -> None
 def test_no_script_runs_inline_sql_that_confers_an_escalating_privilege() -> None:
     """Check 3: never overridable by `_SANCTIONED`, in any script, ever.
 
-    This is the check S-077's two planted controls fail. `ALTER ROLE familyroots_app
+    This is the check the two planted controls fail. `ALTER ROLE familyroots_app
     BYPASSRLS` is class `role`; putting it in a script sanctioned for `role` would satisfy
     check 2 and it would still fail here. It would switch off row-level security for every
     request the application makes, on a database restored from a backup, silently.
@@ -424,11 +424,11 @@ def test_the_shell_sweep_actually_reaches_files_and_extracts_sql() -> None:
 
 
 def test_the_scanner_reads_the_real_drill_as_two_database_statements_and_nothing_else() -> None:
-    """The measurement S-077 rests on, re-taken by the test itself on every run.
+    """The measurement this guard rests on, re-taken by the test itself on every run.
 
     Verified by hand 2026-08-22: `scripts/restore_drill.sh` runs `DROP DATABASE IF EXISTS
     … WITH (FORCE)` at `:116` and `CREATE DATABASE` at `:122`, and every other inline
-    statement is a `SELECT` or a `SET LOCAL ROLE`. Both line numbers are as seed S-077 cited
+    statement is a `SELECT` or a `SET LOCAL ROLE`. Both line numbers are as first cited
     them. Asserting the count as well as the set is what stops a future extractor regression
     from passing here while quietly reading half the file.
     """
@@ -635,7 +635,7 @@ def test_the_inline_classifier_raises_no_anchor_for_statements_that_declare_noth
 def test_check_three_would_fire_on_the_statements_it_exists_to_catch(sql: str) -> None:
     """Check 3 reads regions, so pin that the imported detector fires on the region text.
 
-    Both of S-077's planted controls are the first line of this list, put into a script
+    Both planted controls are the first line of this list, put into a script
     rather than into a `.sql` file.
     """
     assert [label for label, p in _ESCALATIONS if p.search(_strip_comments(sql))]

@@ -3,7 +3,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Seed S-070's fence, and the reason it is a test and not a sentence in a document.
+ * the authenticated e2e harness's fence, and the reason it is a test and not a sentence in a document.
  *
  * The authenticated e2e harness has no switch. It cannot be enabled in production because
  * there is nothing in the shipped app to enable: `web/playwright.config.ts` and `web/e2e/`
@@ -30,17 +30,17 @@ const SRC_ROOT = join(WEB_ROOT, 'src')
 /**
  * Every marker the harness introduces, plus the two generic shapes a session bypass takes.
  * A hit under `src/` means shipped code has learned that a test harness exists, which is
- * the whole thing S-070 was told to prevent: "a session stub that can be reached in
+ * the whole thing the authenticated e2e harness was told to prevent: "a session stub that can be reached in
  * production is worse than no e2e coverage at all."
  */
 const FORBIDDEN_IN_SRC: readonly { readonly pattern: RegExp; readonly why: string }[] = [
   {
     pattern: /\bE2E_[A-Z0-9_]+/,
-    why: 'an env var from the authenticated e2e harness (web/e2e/auth/fixtures.ts). Shipped code must not branch on it — that is the session stub S-070 refused to build.',
+    why: 'an env var from the authenticated e2e harness (web/e2e/auth/fixtures.ts). Shipped code must not branch on it — that is the session stub the authenticated e2e harness refused to build.',
   },
   {
     pattern: /PLAYWRIGHT/,
-    why: 'a Playwright-only variable. `next.config.ts` may read one (S-042 needs a separate distDir); nothing under src/ has a reason to.',
+    why: 'a Playwright-only variable. `next.config.ts` may read one (the banner spec needs a separate distDir); nothing under src/ has a reason to.',
   },
   {
     pattern: /storageState/,
@@ -71,7 +71,7 @@ describe('the authenticated e2e harness cannot be reached from shipped code', ()
   const files = sourceFilesUnder(SRC_ROOT)
 
   /**
-   * A guard that scanned nothing would pass. `.claude/rules/seeds.md` calls that "worse
+   * A guard that scanned nothing would pass. `.claude/rules/testing.md` calls that "worse
    * than no check", so the file count is asserted before the contents are: 100 is far
    * below the 300-odd files `src/` holds today and far above zero, so this fails on a
    * broken path rather than on a refactor.

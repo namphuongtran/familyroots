@@ -5,7 +5,7 @@ import { PersonsList } from '@/features/persons'
 import { getServerAuthContext } from '@/lib/server/auth-context'
 
 /**
- * Spec §7.5, "Danh sách thành viên" (S-031). The shell stays a Server
+ * Spec §7.5, "Danh sách thành viên". The shell stays a Server
  * Component — the title and the role-gated "add" link need no client JS —
  * and `PersonsList` (`@/features/persons`, `ui/PersonsList.tsx`) is the one
  * Client Component boundary, because cursor pagination is inherently
@@ -15,7 +15,7 @@ import { getServerAuthContext } from '@/lib/server/auth-context'
  *
  * **Search and filters (spec §7.5's SearchField and filter sheet) are not
  * built here.** The seed's own end state is "paginates by cursor... renders
- * one person" — the minimal read surface `usePersonsList` (S-030) already
+ * one person" — the minimal read surface `usePersonsList` already
  * supports. Search would need `usePersonSearch` wired to a text input plus
  * a debounce, and filters need a sheet/panel neither this seed nor any
  * earlier one designed. Both are a materially larger feature than this
@@ -23,11 +23,11 @@ import { getServerAuthContext } from '@/lib/server/auth-context'
  * spec's fuller design, not an oversight.
  *
  * **Row `⋯` actions (admin: `Xóa`, `Đặt làm thủy tổ`) are not built either.**
- * `useDeletePerson`/`useRestorePerson` exist (S-030), but wiring a working
+ * `useDeletePerson`/`useRestorePerson` exist, but wiring a working
  * delete/restore action needs a confirmation and a toast pattern this
  * codebase has not established anywhere yet — inventing one here would be
  * exactly the kind of write-UX decision this seed does not own (create and
- * edit are S-032's).
+ * edit are the persons form's).
  */
 export default async function MembersPage() {
   const t = await getTranslations('members')

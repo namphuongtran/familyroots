@@ -10,7 +10,7 @@ Migration 026's EXECUTE grants are smoke-tested under the role.
 What this file does NOT pin: these assert that the two known settings hold the right
 VALUES, which stays true whether the seam writes two settings or twenty. The exact SET is
 pinned by ``test_rls_seam_settings_pinned.py`` and ``tests/unit/test_rls_seam_writer_inventory.py``
-(seed S-045). That gap is why ADR-008 § 2 could promise an ``app.user_id`` the seam never
+(pinned separately). That gap is why ADR-008 § 2 could promise an ``app.user_id`` the seam never
 wrote, for roughly two months, with every gate green — see ADR-047.
 """
 
@@ -167,10 +167,10 @@ async def test_role_grants_allow_calling_functions(engine: AsyncEngine) -> None:
 
 # The RLS-enabled set, split by what the policies actually DO. The split exists because
 # "RLS enabled with at least one policy" is not one claim, and ADR-042 shipped the first
-# table where the claims diverge (S-012, migration 033). ADR-043 then shipped a third
-# posture (S-014, migration 034) and ADR-050 a fourth (S-052, migration 036), so there are
+# table where the claims diverge (ADR-042, migration 033). ADR-043 then shipped a third
+# posture (migration 034) and ADR-050 a fourth (migration 036), so there are
 # now four sets, not two. Which tables the four are OBLIGED to cover is a separate question
-# and no assertion here asked it until S-015; that gate is below the sets.
+# and no assertion here asked it until the coverage gate; that gate is below the sets.
 #
 # CLAN-ISOLATED: every policy's USING clause compares the row's clan to the app.clan_id
 # GUC, so the request role reads its own clan and nothing else, and every write it can make
@@ -188,20 +188,20 @@ _CLAN_ISOLATED_TABLES = {
     "change_requests",
     "clan_memberships",
     "clan_invitations",
-    # Joined 2026-08-22 (S-014, ADR-043 § 2, migration 034). The migration-027 template,
+    # Joined 2026-08-22 (ADR-043 § 2, migration 034). The migration-027 template,
     # unchanged: clan_id is NOT NULL and the only accessor is the anniversary scheduler,
     # which runs on a bare connection with no seam and so bypasses. The policy is INERT
     # today — it guards a reader that does not exist yet. ADR-043 took that over a
-    # permanent exemption row in S-015's list, on the grounds that a second place to
+    # permanent exemption row in the coverage list, on the grounds that a second place to
     # record a fact is a second place to be wrong.
     "notification_log",
-    # `clan_settings` was in this set from 2026-08-22 (S-010, migration 035) until the same
-    # day, when ADR-054 dropped the whole table (S-065, migration 039). It was the clearest
+    # `clan_settings` was in this set from 2026-08-22 (migration 035) until the same
+    # day, when ADR-054 dropped the whole table (migration 039). It was the clearest
     # case of a policy guarding a reader that never arrived: nothing constructed a
     # `ClanSettings`, nothing created a row, and the table had no endpoint. Its name is gone
     # from here rather than moved to an exemption list, because the table is gone.
     #
-    # S-010's OTHER table, `user_clan_roles`, joined the schema on 2026-08-22 (S-052,
+    # Phase 10's OTHER table, `user_clan_roles`, joined the schema on 2026-08-22 (ADR-050,
     # ADR-050, migration 036) and it is NOT in this set. Its SELECT and INSERT policies are
     # `true` on purpose, so listing it here would pass this set's assertion (some policy's
     # USING reads the GUC — its UPDATE policy does) while telling a later reader its reads
@@ -219,7 +219,7 @@ _REQUEST_ROLE_DENIED_TABLES = {"identity_claims"}
 
 # APPEND-ONLY-WITH-CLAN-KEYED-READS: reads are clan-keyed, the INSERT is admitted
 # unconditionally, and UPDATE and DELETE have no policy at all so they are denied.
-# `audit_logs` is the only member (S-014, ADR-043 § 3, migration 034) and it fits NEITHER
+# `audit_logs` is the only member (ADR-043 § 3, migration 034) and it fits NEITHER
 # set above, which is why this third one exists rather than a name being pushed into
 # whichever half it half-matches:
 #
@@ -240,13 +240,13 @@ _REQUEST_ROLE_DENIED_TABLES = {"identity_claims"}
 # Listing `audit_logs` under _CLAN_ISOLATED_TABLES would have PASSED that set's assertion
 # (which only asks whether some policy's USING reads the GUC) while telling a later reader
 # that its writes are confined to one clan, which is false. That is the class of silent lie
-# the S-012 split exists to stop.
+# the deny-all split exists to stop.
 _PER_COMMAND_TABLES = {"audit_logs"}
 
 # CLAN-KEYED-MUTATIONS-ONLY: SELECT and INSERT are `true`, UPDATE and DELETE are clan-keyed
-# on every half they have. `user_clan_roles` is the only member (S-052, ADR-050, migration
+# on every half they have. `user_clan_roles` is the only member (ADR-050, migration
 # 036) and it fits NEITHER of the three sets above, so a fourth one exists rather than a
-# name being pushed into whichever half it half-matches — the S-014 rule, applied again:
+# name being pushed into whichever half it half-matches — the `audit_logs` rule, again:
 #
 #   * it is not clan-isolated — two of its four policies compare nothing. The clan-less
 #     readers are the authorization gate itself (`app/core/security.py:249-254`, which runs
@@ -275,13 +275,13 @@ _CLAN_KEYED_MUTATION_TABLES = {"user_clan_roles"}
 _GUC_MARKER = "app.clan_id"
 
 # ---------------------------------------------------------------------------
-# WHICH TABLES THE FOUR SETS ARE OBLIGED TO COVER (seed S-015)
+# WHICH TABLES THE FOUR SETS ARE OBLIGED TO COVER
 #
 # The four sets above answer "what does THIS table's policy do". None of them can answer
 # "is every table that needs a policy in one of them", because each assertion iterates
 # its own members: a table nobody listed is a table nobody checks. That silence is how
-# all three gaps survived — S-012's deny-all, S-014's per-command reads, S-052's
-# clan-keyed mutations — and it is the gap S-015 closes. Eight tables also went uncovered
+# all three gaps survived — the deny-all, the per-command reads, the clan-keyed
+# mutations — and it is the gap this gate closes. Eight tables also went uncovered
 # across migrations 027, 028 and 029 with every gate green, found on 2026-08-13 by
 # listing `__tablename__` and grepping the migrations by hand.
 #
@@ -333,7 +333,7 @@ _NOT_CLAN_OWNED_TABLES: dict[str, str] = {
         "state as a fact that the table carries no policy "
         "(`048-invitation-accept-runs-on-the-system-session.md:144`, "
         "`050-user-clan-roles-clan-keyed-mutations.md:224`); neither decides that it "
-        "should not. S-015 recorded the decision as owed rather than citing an ADR that "
+        "should not. The decision was recorded as owed rather than citing an ADR that "
         "does not say it."
     ),
     "user_fcm_tokens": (
@@ -411,28 +411,28 @@ async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncE
     pins the CURRENT scope, table by table — a later phase updates this set deliberately
     when it adds one.
 
-    `clan_invitations` joined on 2026-08-22 (S-043, ADR-048, migration 032). It could not
+    `clan_invitations` joined on 2026-08-22 (ADR-048, migration 032). It could not
     before, because accept-by-token ran on the request session with no clan selected;
     ADR-048 moved accept to its own privileged provider, which is what made the policy
     safe. See test_rls_phase7_clan_invitations and test_invitation_accept_no_clan_context.
 
-    `identity_claims` joined on 2026-08-22 too (S-012, ADR-042, migration 033) and is
+    `identity_claims` joined on 2026-08-22 too (ADR-042, migration 033) and is
     **enumerated separately on purpose**. Its policy is deny-all. A guard that only asked
     "is RLS on, and is there a policy" would answer yes for it and mean nothing by it —
     the table has ONE layer of clan isolation, in the application layer, where the nine
     above have two. Adding its name to the clan-isolated set would be a lie a later reader
     could not detect, so the two sets are asserted with different questions below.
 
-    `notification_log` and `audit_logs` joined on 2026-08-22 (S-014, ADR-043, migration
+    `notification_log` and `audit_logs` joined on 2026-08-22 (ADR-043, migration
     034), and they went into DIFFERENT sets: `notification_log` takes the 027 template
     unchanged, while `audit_logs` gets clan-keyed reads, permissive inserts, and no
     UPDATE/DELETE policy at all. That third shape is `_PER_COMMAND_TABLES`.
 
-    `clan_settings` joined the clan-isolated set on 2026-08-22 (S-010, migration 035) and
-    LEFT it the same day, when ADR-054 dropped the table (S-065, migration 039). A name
+    `clan_settings` joined the clan-isolated set on 2026-08-22 (migration 035) and
+    LEFT it the same day, when ADR-054 dropped the table (migration 039). A name
     leaves this file when its table leaves the schema; it is not moved to an exemption list.
 
-    `user_clan_roles` joined on 2026-08-22 too (S-052, ADR-050, migration 036), into a
+    `user_clan_roles` joined on 2026-08-22 too (ADR-050, migration 036), into a
     FOURTH set. It is the table the authorization gate reads, so a policy on it decides
     what a caller may DO rather than merely what it may see: its SELECT and INSERT are
     permissive by decision and only its UPDATE and DELETE are clan-keyed. Four postures now
@@ -547,7 +547,7 @@ async def test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_g
 async def test_every_clan_owned_table_is_covered_by_exactly_one_of_the_four_postures(
     engine: AsyncEngine,
 ) -> None:
-    """The gate seed S-015 exists for: a clan-owned table in NONE of the four sets fails.
+    """The gate this file exists for: a clan-owned table in NONE of the four sets fails.
 
     Every other assertion in this file iterates a set and asks what its members' policies
     do. That leaves the complement silent, and the complement is where every gap this file

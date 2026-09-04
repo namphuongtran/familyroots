@@ -10,7 +10,7 @@ import {
 } from './clan-code'
 
 /**
- * Seed S-083. These assertions are about what `suggestClanCode` **returns**, not about
+ * the clan-code spec. These assertions are about what `suggestClanCode` **returns**, not about
  * what it is configured with — but on their own they still do not establish the seed's
  * end state, which is about the value in the code field on the register screen. That is
  * `src/app/[locale]/(auth)/register/page.test.tsx` (jsdom) and

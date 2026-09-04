@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 
 /**
  * `selectClan` (`useAuth.ts`) calls the legacy axios client (`src/lib/api/axios.ts`,
- * frozen). S-027 audited whether this seed deletes it and found it cannot: `axios.ts` is
+ * frozen). The legacy-transport deletion audited whether this seed deletes it and found it cannot: `axios.ts` is
  * the shared transport for every remaining legacy slice (admin, documents, events, persons,
  * relationships, tree — `grep -rln "lib/api/axios\|from 'axios'" src`, 2026-08-22), not an
  * auth-only file, and deleting it would break all of them. It leaves only when the last

@@ -222,12 +222,12 @@ Example error shape:
 }
 
 ## Versioning & Compatibility Rules
-- **2026-08-22 (seed S-053, ADR-049), documentation only, no change of any kind**: the
+- **2026-08-22 (ADR-049), documentation only, no change of any kind**: the
   `phone`/`email` redaction rule above has been in force since 2026-07-05 and was never
   written down here. Nothing about the API changed on this date. A client that assumed a
   `null` `phone` meant "no number on file" was wrong before this section existed and is
   wrong after it; the section says so out loud.
-- **2026-08-22 (seed S-054), behaviour change, no schema change**: the four edge
+- **2026-08-22, behaviour change, no schema change**: the four edge
   reads listed above stopped returning edges whose counterpart person is
   soft-deleted, and `spouse_count`/`child_count` stopped counting them. No field
   was added, removed, or renamed, so this is not breaking under the rules below.

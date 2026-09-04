@@ -8,7 +8,7 @@
  *
  * `context` is a `RequestContext` the caller passes in, same as the
  * repository itself takes — no hook here reaches for `getClientRequestContext`
- * internally. A screen (S-031/S-032) is what owns deciding how it gets one,
+ * internally. A screen is what owns deciding how it gets one,
  * typically `useCurrentClanId()` (`@/shared/http/context.client`) for the
  * reactive clan id plus the rest of the session; wiring that up is a screen
  * concern, not this one, and keeping it out of this file is what makes the

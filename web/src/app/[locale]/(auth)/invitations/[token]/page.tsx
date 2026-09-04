@@ -4,7 +4,7 @@ import { InvitationAcceptScreen } from '@/features/invitations'
 /**
  * The browser route an invitation link lands on: `/{locale}/invitations/{token}`.
  *
- * That is the shape the S-080 decision picked for the link an admin shares — a
+ * That is the shape the ADR-057 decision picked for the link an admin shares — a
  * browser URL on the web app's own origin, not the API path. See
  * `web/.env.example`'s `NEXT_PUBLIC_INVITE_LINK_ORIGIN` entry for the origin half
  * of it, and the finding recorded there about `accept_path`.

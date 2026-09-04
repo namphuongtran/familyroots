@@ -40,7 +40,7 @@ export const MemberNode = memo(function MemberNode({
       {/*
         The crown carries the founder state as a glyph, not as a colour, which is
         what T-06 asks for. It used to carry `text-gold-500` as well; that class
-        was removed by S-003 because gold is never a text colour, and it painted
+        was removed by the contrast fix because gold is never a text colour, and it painted
         nothing anyway: a colour emoji font supplies its own colours and ignores
         `color`.
       */}

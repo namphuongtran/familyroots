@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed S-043, which split out of S-009 because it carries a decision.
+Accepted (2026-08-22). It split out of the `clan_memberships` RLS work because it carries a decision.
 **This ADR ships code**, unlike ADR-042, ADR-043 and ADR-047, which were decision-only: a new
 dependency provider, one route re-pointed at it, migration `032`, and the tests.
 
@@ -17,9 +17,9 @@ on branch `seed/s-043-invitation-accept-session`, from commit `d262514`.
 are clan-scoped, but the fourth cannot be. Does the table get a policy, and where does the fourth
 route run?
 
-### What S-009 measured, and what it could not decide
+### What the earlier measurement found, and what it could not decide
 
-Seed S-009 enabled RLS on `clan_memberships` (migration `031`) and stopped at
+Migration `031` enabled RLS on `clan_memberships` and stopped at
 `clan_invitations`. The reason is written into `031_rls_clan_memberships.py:28-39` and pinned by a
 test: adding `clan_invitations` to that migration's table list makes every invitation acceptance
 raise `EntityNotFoundError: invitation.not_found`.
@@ -40,7 +40,7 @@ rows and a rejected write. Fail-closed is the correct default and it is wrong fo
 
 ### The seed's framing is wrong on one point, and the correction changes the shape of the problem
 
-Seed S-043 says create, list and revoke "share the same handler" as accept. **List does not.**
+It was said that create, list and revoke "share the same handler" as accept. **List does not.**
 Read at source on 2026-08-22:
 
 | Route | Handler dependency | Provider | Session |
@@ -82,11 +82,11 @@ guessing it.
 
 ### `user_clan_roles` makes this decision unavoidable rather than merely convenient
 
-Point 3 above is the part that outlives this ADR. Seed **S-010** covers `user_clan_roles`. The
+Point 3 above is the part that outlives this ADR. `user_clan_roles` is covered by ADR-050. The
 accept path **inserts** a row into that table for a clan the caller is not yet a member of. Under
 the seam with an unset GUC, that insert fails the `WITH CHECK` exactly as the invitation read
-fails the `USING`. So even if `clan_invitations` were left uncovered forever, S-010 would hit the
-same wall on the same route. Moving accept off the seam is a precondition for S-010, not only for
+fails the `USING`. So even if `clan_invitations` were left uncovered forever, that work would hit
+the same wall on the same route. Moving accept off the seam is a precondition for it, not only for
 this seed.
 
 ## Decision
@@ -104,7 +104,7 @@ def get_invitation_accept_handler(
 ```
 
 `backend/app/api/v1/invitations.py:99` points the accept route at it. **Named by name, because
-seed S-043 requires it:**
+this decision requires it:**
 
 - **create** keeps `get_invitation_command_handler` on `get_db`. Unchanged. It gains DB-level
   isolation from § 2.
@@ -149,7 +149,7 @@ holds. A whole-route assertion would have asserted something untrue.
 | Alternative | Why not |
 |---|---|
 | **Move `get_invitation_command_handler` to `get_system_db`** — the seed's option A | It is shared by create and revoke (`invitations.py:42`, `:76`), both clan-scoped writes with a real GUC. It trades one uncovered path for three, and buys nothing the per-route split does not |
-| **Leave `clan_invitations` uncovered** — the seed's option B | Unlike `identity_claims` (ADR-042 Fact 1), this table has three live request-role paths, so a policy here is not inert. It also does not survive S-010: accept writes `user_clan_roles`, so the same wall arrives on the same route from a different table. Leaving it uncovered postpones the decision without removing it, and it makes S-015's coverage list carry a permanent exemption for a table that does not need one |
+| **Leave `clan_invitations` uncovered** — option B | Unlike `identity_claims` (ADR-042 Fact 1), this table has three live request-role paths, so a policy here is not inert. It also does not survive the `user_clan_roles` work: accept writes `user_clan_roles`, so the same wall arrives on the same route from a different table. Leaving it uncovered postpones the decision without removing it, and it makes the coverage list carry a permanent exemption for a table that does not need one |
 | **A permissive clause in the policy for the clan-less case**, e.g. `OR current_setting('app.clan_id', true) = ''` | Strictly worse than the system session. It would let **any** clan-less request session read **every** clan's invitations, including a future route nobody has written yet, and it would do so silently. The system session at least is one greppable wiring decision in one file. A policy that opens itself when context is missing inverts the fail-closed rule in ADR-008 § 3, "Default-deny" (its lines 173-176) |
 | **Read the invitation privileged, then set `app.clan_id` from it and finish under the seam** — the hybrid | Three independent objections. (a) It redefines the GUC. Today `app.clan_id` is only ever a clan the caller has an **approved** membership in (`security.py:248-268` rejects anything else), and every policy in the tree is written against that meaning; setting it from a token would make the GUC mean "a clan someone claims" on one path. (b) It splits the token read from the conditional-UPDATE claim at `handlers.py:83-89` across two sessions, and that UPDATE is the accept-vs-revoke race guard the handler's own comment calls C3 (`handlers.py:79-82`) — its atomicity with the surrounding transaction is load-bearing. (c) It needs a second population site for the clan ContextVar outside `get_current_clan_id`, which is a change to `app/core/rls.py` or beside it; ADR-047 § "What a later seed must establish" sets the bar for touching that seam, and this would not clear it |
 | **A dedicated Postgres role for the accept path, with its own policy** | A role per use case is not this repository's shape: there is one login role and one `familyroots_app` (ADR-043's table at its lines 34-38). It would also need a second policy on the table whose predicate is "any row", which is the permissive clause above wearing a hat |
@@ -164,9 +164,9 @@ holds. A whole-route assertion would have asserted something untrue.
   `get_by_id` is now stopped by the database rather than by review.
 - The accept path's session is an explicit, tested, one-line wiring decision instead of an
   accident of a shared provider.
-- **S-010 is unblocked on its hardest edge.** The `user_clan_roles` write inside accept no longer
+- **The `user_clan_roles` work is unblocked on its hardest edge.** The `user_clan_roles` write inside accept no longer
   runs under the seam, so a policy on that table does not have to reason about this route.
-- The failure mode that S-009 measured is now impossible to reintroduce silently: it fails in
+- The failure mode measured earlier is now impossible to reintroduce silently: it fails in
   `test_invitation_accept_session_wiring` before it can fail in production.
 
 ### What this costs, stated plainly
@@ -179,10 +179,10 @@ holds. A whole-route assertion would have asserted something untrue.
   down. The guards are the 256-bit token (`handlers.py:36`), the pending-status check in the
   aggregate (`handlers.py:77`), expiry, and ADR-021's rate limit.
 - **The audit row for `InvitationAccepted` is written on the privileged session.** ADR-043 gives
-  `audit_logs` per-command policies, built by seed **S-014**. That seed must count this writer
+  `audit_logs` per-command policies. That work must count this writer
   among the privileged ones, alongside the identity-claim and platform-admin handlers at
   `dependencies.py:144`, `:149`, `:167` and `:174`. It is not a new class of writer, but it is a
-  new member of the class and S-014's list has to include it.
+  new member of the class and that list has to include it.
 - **Four test modules had to learn about the second session.** Anything that exercises accept over
   HTTP now overrides `get_system_db` as well as `get_db`
   (`test_e2e_journeys.py`, `test_deactivation_invariant.py`, `test_invitation_rate_limit.py`), and
@@ -204,8 +204,8 @@ E   Extra items in the left set:
 E   'clan_invitations'
 ```
 
-Run 2026-08-22. That file was fenced to a concurrent agent (seed **S-045**, which pins the exact
-set of settings the seam writes, and touches the same file at `:70-84`), so seed S-043 left it
+Run 2026-08-22. That file was fenced to a concurrent agent (the change that pins the exact set of
+settings the seam writes, touching the same file at `:70-84`), so this ADR left it
 untouched rather than racing it. The edit is two lines: add `"clan_invitations",` to the set, and
 replace the docstring sentence with one saying the table joined the set in migration 032 per
 ADR-048. With that one assertion deselected the suite is `1274 passed, 1 deselected`.
@@ -217,18 +217,16 @@ that touches the seam collide on it by construction.
 
 ## What this ADR deliberately does not decide
 
-- **`user_clan_roles` and `clan_settings`**, which are seed S-010. This ADR removes one obstacle
-  in front of S-010 and decides nothing else about them.
-- **The invitation-expiry disagreement**, which is seed S-019.
-- **`audit_logs` policies**, which ADR-043 decided and seed S-014 builds.
+- **`user_clan_roles` and `clan_settings`**, which are ADR-050 and migration `035`. This ADR removes
+  one obstacle in front of them and decides nothing else.
+- **The invitation-expiry disagreement**, which is ADR-053.
+- **`audit_logs` policies**, which ADR-043 decided and its migration builds.
 - **Any change to the invitation request or response contract.** There is none: the route, its
   body, and its envelope are byte-identical before and after.
 - **`FORCE ROW LEVEL SECURITY`**, which ADR-008 lines 104-105 leaves until every table is covered.
 
 ## Related
 
-- Seed **S-043** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes, and seed **S-009**, which
-  split it out.
 - [ADR-008: Row-Level Security as Defense-in-Depth Layer-2](008-rls-defense-in-depth.md) — § 3, "Default-deny"
   (its lines 173-176), is the fail-closed rule this policy keeps for the three covered paths.
 - [ADR-042: `identity_claims` Keeps Application-Layer Clan Isolation](042-identity-claims-app-layer-isolation-system-session-lockout.md) —
@@ -237,7 +235,7 @@ that touches the seam collide on it by construction.
 - [ADR-047: The RLS Seam Sets `app.clan_id` Only](047-rls-seam-sets-clan-id-only.md) — the seam
   contract, and the bar the rejected hybrid option would have had to clear.
 - [ADR-043: `audit_logs` Is Inside Layer 2 with Per-Command Policies](043-audit-notification-rls-posture.md) —
-  seed S-014 inherits one new privileged writer from this ADR.
+  the `audit_logs` policies inherit one new privileged writer from this ADR.
 - [ADR-021: Non-Enumerating Auth Surfaces + Invitation-Accept Rate Limit](021-non-enumerating-auth-surfaces.md) —
   the guard that stands in front of the token.
 - [ADR-014: UoW In-Transaction Domain-Event Dispatch](014-uow-in-transaction-domain-events.md) —

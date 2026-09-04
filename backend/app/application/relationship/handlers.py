@@ -197,7 +197,7 @@ class MarriageQueryHandler:
     Takes a ``MarriageReadPort``, **not** the repository the command handlers
     above use. The repository's ``get_by_id`` must keep returning an edge whose
     spouse is soft-deleted so that update and delete can still reach it; this
-    handler must not (ADR-051 § 8, seed S-056).
+    handler must not (ADR-051 § 8).
     """
 
     def __init__(self, read_port: MarriageReadPort) -> None:

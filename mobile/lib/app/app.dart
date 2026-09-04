@@ -37,7 +37,7 @@ class _FamilyRootsAppState extends ConsumerState<FamilyRootsApp> {
         signedIn: profile != null,
         // The whole three-way answer, not `isApproved` flattened to a bool: a
         // clanless user and a pending user need different copy on the same
-        // route (spec § 7.2a, seed S-093). No profile means signed out, so the
+        // route (spec § 7.2a). No profile means signed out, so the
         // membership guard must not hold anyone anywhere.
         membership: profile?.membershipStatus ?? MembershipStatus.approved,
       );

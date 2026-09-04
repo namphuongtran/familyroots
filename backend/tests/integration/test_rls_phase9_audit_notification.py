@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 9 (S-014, ADR-043): audit_logs per command, notification_log by template.
+"""RLS layer-2 Phase 9 (ADR-043): audit_logs per command, notification_log by template.
 
 Migration ``034`` covers two tables with two different policy shapes, and reading them as one
 change is the mistake this file exists to prevent:
@@ -7,7 +7,7 @@ change is the mistake this file exists to prevent:
   on writes. ``clan_id`` is ``NOT NULL`` and the only accessor is the anniversary scheduler,
   which runs on a bare connection with no RLS seam. **The policy is inert today.** It guards a
   reader that does not exist yet, which ADR-043 § 2 took over a permanent exemption row in
-  S-015's list.
+  the coverage gate's list.
 * ``audit_logs`` gets ``audit_logs_sel`` (clan-keyed SELECT), ``audit_logs_ins``
   (``WITH CHECK (true)``), and **no UPDATE or DELETE policy at all**. Reads are isolated,
   writes are not, and the two commands with no policy are denied outright for the request
@@ -19,7 +19,7 @@ is no clan-facing API for either table, so an API-level test would prove nothing
 these policies. ``GET /api/v1/platform-admin/audit-log`` is the single reader of either table
 and it runs privileged, so it cannot exercise a policy either.
 
-Two vacuous-pass traps are guarded explicitly, both learned on S-012:
+Two vacuous-pass traps are guarded explicitly, both learned on the deny-all migration:
 
 1. **"Zero rows" is also what an empty table returns.** Every denial assertion below is
    followed by a privileged read proving the rows were there the whole time.

@@ -1,6 +1,6 @@
 // Person types — aligned with backend PersonResponse
 //
-// S-033 deleted `PersonCreateInput`, `PersonUpdateInput`, `TimelineEvent`,
+// the legacy-component deletion deleted `PersonCreateInput`, `PersonUpdateInput`, `TimelineEvent`,
 // `PersonProfile`, `PersonBatchGetInput`, `PersonBatchGetError`, and
 // `PersonBatchGetResponse` from this file: each one's last real reader was
 // legacy code this same seed deleted (`src/lib/api/members.ts`'s removed

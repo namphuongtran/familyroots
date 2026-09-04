@@ -11,7 +11,7 @@ import messages from '../../../../messages/vi.json'
  * `selectClan` with the same shape `axios.ts`'s interceptor leaves a `403` rejection in —
  * `{ response: { data: { error: { code, message, detail } } } }` (`docs/contracts/error-codes.md`'s
  * envelope, unwrapped one level for the HTTP layer) — the exact shape `backendErrorCode` in
- * `page.tsx` reads. This is the "real, live call site" the S-026 report names: the routing
+ * `page.tsx` reads. This is the "real, live call site" the pending-approval screen report names: the routing
  * decision under test is on the real `code`, never on `.message`.
  */
 function clanSuspendedRejection(message = 'Dòng họ đang tạm ngưng') {

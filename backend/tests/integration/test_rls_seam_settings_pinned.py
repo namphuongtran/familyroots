@@ -1,6 +1,6 @@
 """The RLS request seam sets `SET LOCAL ROLE` + `app.clan_id`, and NOTHING else.
 
-Seed S-045. ADR-008 § 2 promised the seam would inject `app.clan_id` *and* `app.user_id`.
+ADR-008 § 2 promised the seam would inject `app.clan_id` *and* `app.user_id`.
 The shipped seam never wrote the second one. That disagreement survived roughly two months
 and was closed by [ADR-047](../../../docs/decisions/047-rls-seam-sets-clan-id-only.md) on
 2026-08-22, which corrected the ADR rather than building the missing half. It survived
@@ -48,7 +48,7 @@ in the DSN — would show up there.
 
 ## Both writers, re-read at source on 2026-08-22
 
-The seam has **two** writers, which is the detail seed S-040's own text got wrong:
+The seam has **two** writers, which is the detail ADR-047's own text got wrong:
 
 1. The `after_begin` event on `RlsSession`, at `app/core/rls.py:63` and `:65`. It issues
    `SET LOCAL ROLE <role>` and then `set_config('app.clan_id', …)`, at the start of every
@@ -249,7 +249,7 @@ async def test_no_clan_selected_still_sets_exactly_the_same_two(engine: AsyncEng
 async def test_mid_request_writer_adds_no_setting_beyond_the_clan_guc(
     engine: AsyncEngine,
 ) -> None:
-    """`app/core/security.py:290` — the SECOND writer, which seed S-040's text missed.
+    """`app/core/security.py:290` — the SECOND writer, which ADR-047's text missed.
 
     The transaction begins during auth, before the clan is known, so `after_begin` writes
     an empty GUC and `get_current_clan_id` re-applies the resolved one to the *same*

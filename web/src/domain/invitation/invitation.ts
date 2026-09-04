@@ -7,7 +7,7 @@
  * (`web/.dependency-cruiser.cjs`) fail the build if this file reaches for any of
  * them.
  *
- * Seed S-084. The reason the mapping lives here and not in the screen is that it
+ * The invitation page. The reason the mapping lives here and not in the screen is that it
  * is the whole substance of the page: every one of the five refusals below is a
  * distinct thing to tell a relative, they come from a contract
  * (`docs/contracts/rest-invitations-api.md:64-78`), and a pure function is the

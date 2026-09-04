@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed **S-076**, opened by seed **S-071** while it fixed the two
+Accepted (2026-08-22). It was opened by the Supabase-variable fix while that change fixed the two
 Supabase build-time variables and correctly declined to fix this one in the same change, because
 unlike those two it has no single correct value.
 
@@ -12,18 +12,18 @@ Every measurement below was taken on **2026-08-22** in
 
 ## Context
 
-### The mechanism, established by S-071 and re-verified here rather than re-derived
+### The mechanism, established by that fix and re-verified here rather than re-derived
 
 `NEXT_PUBLIC_*` inlining in Next.js is **not scoped to Client Components**. It is a build-time
 text substitution across the whole bundler graph: every static reference to
 `process.env.NEXT_PUBLIC_X` anywhere the bundler can see it — a Client Component, a Server
 Component, middleware, a route handler — is replaced with the literal value `process.env.X` held
 **at `pnpm build` time**, and a value passed only through `environment:`/`docker run -e` at
-container start never reaches it. S-071 proved this for `NEXT_PUBLIC_SUPABASE_URL` and
+container start never reaches it. This was proved for `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` with a two-run probe: one image built with both as empty build
 arguments, run twice with two different runtime values on the same names, both runs read back the
 empty build-time value. `web/Dockerfile`'s own comment on `ARG NEXT_PUBLIC_SUPABASE_URL` (added by
-S-071) carries the account.
+that fix) carries the account.
 
 ### `NEXT_PUBLIC_API_URL` has the identical exposure, and a second, harder problem on top of it
 
@@ -55,13 +55,13 @@ used at `:44` to fetch `${getApiBaseUrl()}/me/clans` from inside `getServerAuthC
 mechanism above, this reference is inlined too — it is not exempt for being server code.
 
 **The two callers need different values, which is the reason this is a decision and not a second
-instance of S-071's fix.** Inside `docker-compose.yml`, `auth-context.ts`'s fetch runs _inside the
+instance of that fix.** Inside `docker-compose.yml`, `auth-context.ts`'s fetch runs _inside the
 `web` container_, on the `familyroots` bridge network, where the backend is reachable only at the
 compose-network hostname `http://api:8000/api/v1` — `localhost` from inside that container means
 the `web` container itself. A browser on the host has no route to that hostname at all: Docker's
 embedded DNS resolves compose service names only for other containers on the same network, never
 for the host's own resolver. **One literal baked at build time cannot be both values**, which is
-exactly what the pre-existing `docker-compose.yml` comment (written by S-071 while declining to fix
+exactly what the pre-existing `docker-compose.yml` comment (written by that fix while declining to fix
 this) already said, and what the paragraph below confirms with a real browser rather than reasoning
 about DNS in the abstract.
 
@@ -96,7 +96,7 @@ live, server-side) on each run:
 **Two different readings for `API_URL`, matching each run's own runtime value — the split does
 what it is supposed to.** **The same, frozen reading for `NEXT_PUBLIC_API_URL` on both runs,
 ignoring the runtime override entirely — confirming, in a server-side code path this time rather
-than only middleware and the callback route, that S-071's finding generalises to this variable.**
+than only middleware and the callback route, that the finding generalises to this variable.**
 The failing-would-look-like case (both readings equal to `RUNTIME-OVERRIDE-*`, meaning the prefix
 was not actually inlined and the split bought nothing) did not occur.
 
@@ -136,7 +136,7 @@ network. `ERR_CONNECTION_REFUSED` means the name resolved to `127.0.0.1`/`::1` a
 and failed to open a socket there — proof the _name_ was fine and nothing was listening on that
 port on the host at the time of the probe (no `api` container was published to port 8000 during
 this measurement). This is the pass/fail contrast the seed asked for, not a token reading that
-would pass either way (`.claude/rules/seeds.md`, "A test pins an outcome, not a setting").
+would pass either way (`.claude/rules/testing.md`, "A test pins an outcome, not a setting").
 
 ### What this control does not prove, stated plainly
 
@@ -179,15 +179,15 @@ it is not required. Vercel already builds `NEXT_PUBLIC_*` per environment (Produ
 Development), so nothing about how the browser value is supplied changes at all.
 
 **Compose (local dev, `docker-compose.yml`).** `web/Dockerfile` gains one more `ARG`/`ENV` pair,
-mirroring the two S-071 already added — this seed's whole code diff in that file. `docker-compose.yml`'s
+mirroring the two already added — this change's whole code diff in that file. `docker-compose.yml`'s
 `web.build.args` gains `NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}`
-(the browser-facing default, changed from the compose-hostname default S-071 flagged as wrong), and
+(the browser-facing default, changed from the compose-hostname default flagged as wrong), and
 `web.environment` gains `API_URL: ${API_URL:-http://api:8000/api/v1}` (the compose-network default,
 genuinely live because it carries no prefix). **The image stays environment-specific for the
-browser half**, exactly as S-071 already documented for the two Supabase variables — an image built
+browser half**, exactly as documented for the two Supabase variables — an image built
 for one environment's public backend origin cannot be promoted to a different one unchanged — and
 this seed adds nothing new to that cost, since `NEXT_PUBLIC_API_URL` was already going to need a
-rebuild per environment the moment it held a real value instead of the empty string S-071 left it
+rebuild per environment the moment it held a real value instead of the empty string it was left
 at.
 
 **A future container deploy on a shared network (ECS, Kubernetes, or similar).** Same split,
@@ -205,7 +205,7 @@ network the browser cannot reach.
 | **A same-origin path, proxied through Next.js** (the browser always calls a relative path such as `/api/v1/...`, and Next.js forwards server-side to the real backend using a server-only variable) | Would remove the two-value problem entirely — there would be exactly one real caller of the backend origin, the Next.js server, on every deployment shape. Rejected on an existing, explicit rule rather than on the merits of the idea: `.claude/rules/nextjs.md` § 4, "Do not add a route handler to proxy or re-wrap a backend endpoint. Call the backend through `apiFetch` instead" — written before this seed and binding on new code in `web/`. A `next.config.ts` rewrite is not literally a route handler, but it is the same shape the rule exists to forbid: an added indirection between the browser and the real API that this codebase has already decided against once. Overriding a standing rule to solve one variable is a larger, separate decision than this seed is sized for |
 | **Fetch the API origin at runtime from a Server Component and stop treating it as `NEXT_PUBLIC_*` at all**                                                                                          | Removes the build-time bake for the browser too, but trades it for a real cost on every page load: `axios.ts` sets `baseURL` at module-evaluation time, synchronously, so the browser would need to block its first request on a config fetch (or accept a race where early requests use a wrong default). It does not remove the underlying two-origin problem either — the browser would still need _some_ runtime-supplied, host-reachable value, fetched over a new endpoint that itself has to be reachable before it can say where anything else is. More moving parts than the two-variable split, for a problem the split already resolves                                                                                                                                                 |
 | **Bake `http://api:8000/api/v1` as the one value, keep the compose default as-is, and tell the browser to reach the API through a different host mapping instead**                                  | This is what `docker-compose.yml` did before this seed, and Control 2 shows it directly: the browser gets `net::ERR_NAME_NOT_RESOLVED`, not a slower path, a hard failure. Fixing it by changing what `api` resolves to on the host (an `/etc/hosts` entry, a second published hostname) pushes an operational step onto every developer's machine for a problem the app's own two-variable split solves in the repo instead                                                                                                                                                                                                                                                                                                                                                                       |
-| **One variable, always the browser-facing value, and let `auth-context.ts` also point at the browser-facing origin inside compose**                                                                 | Works only where the backend's published host port is reachable from _inside_ the `web` container too — true today on a Linux Docker host reaching `localhost` back to itself only via `host-gateway` tricks already in use elsewhere in this file for Supabase (`extra_hosts`), false in general, and needlessly round-trips a same-network call out to the host's port mapping and back in in the cases where it does work. Kept `API_URL` as the real compose-network hostname instead, which is what `docker-compose.yml` already did for `SUPABASE_URL` in the `api` service (S-072)                                                                                                                                                                                                          |
+| **One variable, always the browser-facing value, and let `auth-context.ts` also point at the browser-facing origin inside compose** | Works only where the backend's published host port is reachable from _inside_ the `web` container too — true today on a Linux Docker host reaching `localhost` back to itself only via `host-gateway` tricks already in use elsewhere in this file for Supabase (`extra_hosts`), false in general, and needlessly round-trips a same-network call out to the host's port mapping and back in in the cases where it does work. Kept `API_URL` as the real compose-network hostname instead, which is what `docker-compose.yml` already did for `SUPABASE_URL` in the `api` service |
 
 ## Consequences
 
@@ -227,7 +227,7 @@ network the browser cannot reach.
 
 - **It does not remove the underlying bake.** `NEXT_PUBLIC_API_URL` is still inlined at build time,
   with everything that implies: a running container cannot pick up a new browser-facing origin
-  without a rebuild, exactly as the two Supabase variables already cannot (S-071).
+ without a rebuild, exactly as the two Supabase variables already cannot.
 - **It does not add a test.** Per the "What this control does not prove" section above, nothing in
   `pnpm test:unit`/`test:component`/`test:e2e`/`build` asserts what a browser bundle was built
   with, before or after this change. A future defect in this area — for example, a compose default
@@ -237,7 +237,7 @@ network the browser cannot reach.
   meaningfully larger undertaking than a two-variable split and is not named as owed by this ADR,
   since no seed has asked for it yet.
 - **It does not touch `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY`.** Both hold
-  one correct value for every caller already (S-071's own finding), so neither needs a second,
+  one correct value for every caller already, so neither needs a second,
   non-public variable.
 - **It does not revisit `.claude/rules/nextjs.md` § 4's proxy rule.** The rule stands; see
   "Alternatives considered" for why this decision does not need to challenge it.
@@ -261,15 +261,14 @@ Two files existed only for Control 1 and Control 2 above and are not part of thi
 `web/src/app/api/debug-probe-s076/route.ts` and
 `web/src/app/[locale]/debug-api-probe-s076/page.tsx`. Both were created, built into the test image,
 read from, and deleted before committing — the same "throwaway... not in this diff" pattern
-`web/Dockerfile`'s own S-071 comment already uses for its console.error probes.
+`web/Dockerfile`'s own comment already uses for its console.error probes.
 
 ## Related
 
-- Seed **S-076** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes.
-- Seed **S-071** in the same file, which found this problem while fixing the two Supabase
+- The Supabase-variable fix in the same file, which found this problem while fixing the two
   variables and opened this seed rather than fixing it in the same change — see its own dated
   correction for the mechanism this ADR builds on.
-- `web/Dockerfile` and `docker-compose.yml`'s `web` service — S-071's comments there, and this
+- `web/Dockerfile` and `docker-compose.yml`'s `web` service — the comments there, and this
   seed's additions beside them.
 - `.claude/rules/nextjs.md` § 4 — the standing rule the "same-origin proxy" alternative would have
   had to override.

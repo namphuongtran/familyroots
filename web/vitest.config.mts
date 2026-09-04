@@ -10,10 +10,10 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          // messages/**: seed S-062's locale key-set parity test. It lives outside src/ on
-          // purpose (S-038 sweeps web/src the same batch), so the include glob was widened
+          // messages/**: the message-key parity test's locale key-set parity test. It lives outside src/ on
+          // purpose (the palette sweep sweeps web/src the same batch), so the include glob was widened
           // rather than moving the test under src/. See messages/message-key-parity.test.ts.
-          // e2e/**/*.guard.test.ts: seed S-070's fence. It scans web/src for any sign that
+          // e2e/**/*.guard.test.ts: the authenticated e2e harness's fence. It scans web/src for any sign that
           // shipped code has learned the authenticated e2e harness exists, so it is a unit
           // test about src/ that lives beside the harness it protects. The `.guard.` infix
           // keeps Playwright from claiming it — see playwright.config.ts's AUTH_SPECS.

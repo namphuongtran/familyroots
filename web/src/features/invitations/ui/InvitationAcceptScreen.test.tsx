@@ -8,8 +8,8 @@ import { InvitationAcceptScreen } from './InvitationAcceptScreen'
 import messages from '../../../../messages/vi.json'
 
 /**
- * Seed S-084. Every case below drives the real screen and reads what it rendered,
- * per `.claude/rules/seeds.md` § "A test pins an outcome, not a setting": the
+ * the invitation page. Every case below drives the real screen and reads what it rendered,
+ * per `.claude/rules/testing.md` § "A test pins an outcome, not a setting": the
  * assertions are on the Vietnamese copy from `messages/vi.json`, not on a state
  * variable or on the presence of a route file.
  *

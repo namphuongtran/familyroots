@@ -78,7 +78,7 @@ the ContextVar so post-commit transactions re-apply it).
     **Standing constraint:** any new `persons` write path must insert the membership row
     first or avoid `RETURNING`. Proven by `test_rls_person_create`.
 
-- **Phase 5 (2026-08-22, migration `030_rls_change_requests`, seed S-008)** — RLS extended
+- **Phase 5 (2026-08-22, migration `030_rls_change_requests`)** — RLS extended
   to `change_requests`. It takes the Phase-2 template unchanged: the column is a NOT-NULL
   `clan_id` (`app/models/change_request.py:19`), so the policy is
   `clan_id = <app.clan_id GUC>` on both USING and WITH CHECK. The table is read and written
@@ -92,20 +92,20 @@ the ContextVar so post-commit transactions re-apply it).
   touching no row, default-deny, and an ORM insert with RETURNING). Coverage guard now
   `{documents, events, branches, parent_child, marriages, persons, change_requests}`.
 
-> **Gap in this list, recorded 2026-08-22 by seed S-012 rather than backfilled.** Phases 6
+> **Gap in this list, recorded 2026-08-22 rather than backfilled.** Phases 6
 > and 7 shipped on 2026-08-22 and have no bullet here: `clan_memberships` (migration
-> `031_rls_clan_memberships`, seed S-009, proven by `test_rls_phase6_clan_memberships`) and
+> `031_rls_clan_memberships`, proven by `test_rls_phase6_clan_memberships`) and
 > `clan_invitations` (migration `032_rls_clan_invitations`,
-> [ADR-048](048-invitation-accept-runs-on-the-system-session.md), seed S-043, proven by
+> [ADR-048](048-invitation-accept-runs-on-the-system-session.md), proven by
 > `test_rls_phase7_clan_invitations`). Both take the Phase-2 template on a NOT-NULL
-> `clan_id`. S-012 did not write their entries, because it did not do that work and an ADR
+> `clan_id`. The Phase 8 work did not write their entries, because it did not do that work and an ADR
 > entry is a dated claim about what its author checked. The authority on the covered set is
 > `test_rls_activation.py`, which enumerates it and fails on drift; this prose list is not.
 > **The "Not yet" paragraph below is also stale in one clause as of that date:** it gives
 > `clan_invitations` as excluded because of the unauthenticated accept-by-token path, and
 > ADR-048 resolved exactly that by moving the accept route to the privileged session.
 
-- **Phase 8 (2026-08-22, migration `033_rls_identity_claims`, seed S-012, decided by
+- **Phase 8 (2026-08-22, migration `033_rls_identity_claims`, decided by
   [ADR-042](042-identity-claims-app-layer-isolation-system-session-lockout.md))** — RLS
   enabled on `identity_claims` with **one deny-all policy**,
   `identity_claims_system_session_only FOR ALL USING (false) WITH CHECK (false)`.
@@ -128,7 +128,7 @@ the ContextVar so post-commit transactions re-apply it).
   `test_rls_activation.py` was split into `_CLAN_ISOLATED_TABLES` and
   `_REQUEST_ROLE_DENIED_TABLES`, and each half is asserted with its own question.
 
-- **Phase 9 (2026-08-22, migration `034_rls_audit_notification`, seed S-014, decided by
+- **Phase 9 (2026-08-22, migration `034_rls_audit_notification`, decided by
   [ADR-043](043-audit-notification-rls-posture.md))** — RLS enabled on **two** tables with
   **two different shapes**, and the pair is the clearest statement of what decides membership
   of this layer: the reader, not the writer.
@@ -164,10 +164,10 @@ the ContextVar so post-commit transactions re-apply it).
     reason for a `SELECT`-only clan predicate, and the super-admin reader bypasses RLS
     entirely. The paragraph is left as the dated record of what was believed in 2026-06.
 
-- **Phase 10 (2026-08-22, migration `035_rls_clan_settings`, seed S-010)** — `clan_settings`
+- **Phase 10 (2026-08-22, migration `035_rls_clan_settings`)** — `clan_settings`
   takes the Phase-2 template unchanged on a `clan_id` that is both NOT NULL and UNIQUE, one
   row per clan. It joins `_CLAN_ISOLATED_TABLES` because both halves of its single policy are
-  clan-keyed. **S-010's other table, `user_clan_roles`, did not ship and could not**; see the
+  clan-keyed. **Phase 10's other table, `user_clan_roles`, did not ship and could not**; see the
   amendment to the "Not yet" paragraph below.
   - Like `notification_log` in Phase 9, this policy is **inert on the day it ships**, and more
     completely so. Measured 2026-08-22 by `grep -rn 'clan_settings\|ClanSettings' backend/app`:
@@ -176,7 +176,7 @@ the ContextVar so post-commit transactions re-apply it).
     `ClanSettings`, no route, repository or query port touches the table, and `001_initial.py`
     installs no trigger that would populate it. The table is empty and unread. ADR-043 § 2's
     reasoning applies unchanged: a cheap correct policy beats a permanent exemption row in
-    S-015's list, because a second place to record a fact is a second place to be wrong.
+    the coverage list, because a second place to record a fact is a second place to be wrong.
   - **One live read path did have to be checked, and it is a trap worth naming.**
     `Clan.settings` is `lazy="selectin"`, so every load of a `Clan` ORM entity emits a second
     SELECT against `clan_settings`. Two such loads run on the RLS request session with **no
@@ -191,9 +191,9 @@ the ContextVar so post-commit transactions re-apply it).
   - Because this table is empty in the running application, **"zero rows returned" is also its
     honest answer with no policy at all**. Every denial assertion in
     `backend/tests/integration/test_rls_phase10_clan_settings.py` therefore ends with a
-    privileged read proving the rows were there — S-012's rule, at its sharpest here.
+    privileged read proving the rows were there — the rule at its sharpest here.
 
-- **Phase 11 (2026-08-22, migration `036_rls_user_clan_roles`, seed S-052, decided by
+- **Phase 11 (2026-08-22, migration `036_rls_user_clan_roles`, decided by
   [ADR-050](050-user-clan-roles-clan-keyed-mutations.md))** — RLS enabled on `user_clan_roles`
   with **four per-command policies, two of which compare nothing**. `user_clan_roles_sel` is
   `USING (true)` and `user_clan_roles_ins` is `WITH CHECK (true)`; `user_clan_roles_upd` and
@@ -213,12 +213,12 @@ the ContextVar so post-commit transactions re-apply it).
   denied with no clan selected, each denial closed by a privileged read proving the row was there
   and unchanged, and the permissive halves asserted so nobody closes one by accident) and by
   `test_rls_login_two_clans`, which drives login, `/me/clans` and both onboard branches over the
-  real seam and adds the two-clan role check S-010 named. Because a fourth posture now exists, the
+  real seam and adds the two-clan role check Phase 10 named. Because a fourth posture now exists, the
   coverage guard in `test_rls_activation.py` gained a fourth set,
   `_CLAN_KEYED_MUTATION_TABLES`, with its own question — listing this table as clan-isolated would
   have **passed** that set's assertion, because its UPDATE policy's `USING` does read the GUC.
 
-> **Amendment (2026-08-22, Phase 11, seed S-052) — the `user_clan_roles` clause below, and the
+> **Amendment (2026-08-22, Phase 11) — the `user_clan_roles` clause below, and the
 > Phase-10 amendment above it, are now resolved by [ADR-050](050-user-clan-roles-clan-keyed-mutations.md).**
 > The measurement stands: the migration-027 template does break the table in both directions, and
 > both halves were reproduced again on 2026-08-22. What changed is the conclusion. The table is
@@ -227,7 +227,7 @@ the ContextVar so post-commit transactions re-apply it).
 > working on the session they were already on, and no handler moved. `clans` remains outside layer
 > 2, so the clause below is still correct about that table.
 
-> **Amendment (2026-08-22, Phase 10, seed S-010) — the `user_clan_roles` clause below is
+> **Amendment (2026-08-22, Phase 10) — the `user_clan_roles` clause below is
 > right, and it is now measured rather than predicted, in both directions.** It says RLS
 > there "would default-deny and break every request". Re-measured on 2026-08-22 by adding
 > `user_clan_roles` to migration 035's table list: it breaks two ways that look nothing
@@ -253,7 +253,7 @@ by `get_current_clan_id` *before* it sets the GUC (RLS there would default-deny 
 every request until the GUC is moved earlier), `clan_invitations` is read by the
 unauthenticated accept-by-token path, and `audit_logs` has nullable-clan platform rows +
 a super-admin cross-clan reader. `change_requests` had none of those obstacles, which is
-why it went first among the remainder (S-008). `persons`/`parent_child`/`marriages` need care (the M:N
+why it went first among the remainder. `persons`/`parent_child`/`marriages` need care (the M:N
 `persons` policy is a `clan_memberships` subquery needing a perf check; the tree SQL
 functions run SECURITY INVOKER under the role and would become RLS-filtered — verify they
 still return correctly with the GUC set). A possible final `FORCE ROW LEVEL SECURITY`
@@ -309,7 +309,7 @@ Implement it as follows (incrementally, pilot-first):
    `SET LOCAL` is transaction-scoped, so it is pgbouncer-safe and cannot leak
    across pooled clients.
 
-   > **Amended 2026-08-22 by [ADR-047](047-rls-seam-sets-clan-id-only.md), seed S-040 — read
+   > **Amended 2026-08-22 by [ADR-047](047-rls-seam-sets-clan-id-only.md) — read
    > this clause as `SET LOCAL app.clan_id = …` alone.** The `app.user_id` half was never
    > built and is not going to be. The shipped seam sets `SET LOCAL ROLE` plus `app.clan_id`
    > and nothing else (`backend/app/core/rls.py:63-65`), `get_current_clan_id` re-applies the
@@ -359,6 +359,6 @@ Harder:
 - [ADR-002: Single Schema Clan-Scoped Multitenancy](002-clan-scoped-multitenancy.md)
 - [ADR-038: `persons` RLS — Fix the RETURNING/`persons_sel` Collision in the ORM, Not in the Policy](038-persons-returning-vs-membership-rls.md) — amends Phase 4
 - [ADR-047: The RLS Seam Sets `app.clan_id` Only](047-rls-seam-sets-clan-id-only.md) — amends
-  Decision § 2 (2026-08-22, seed S-040); the `app.user_id` GUC was never built and is not added
+ Decision § 2 (2026-08-22); the `app.user_id` GUC was never built and is not added
 - Backend production-hardening effort: application-layer isolation (SP-2B) is the
   primary mechanism; this RLS layer is SP-3C.

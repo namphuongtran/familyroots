@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 8 (S-012, ADR-042): identity_claims DENIES the request role outright.
+"""RLS layer-2 Phase 8 (ADR-042): identity_claims DENIES the request role outright.
 
 Migration 033 gives this table one policy, ``identity_claims_system_session_only``,
 ``FOR ALL USING (false) WITH CHECK (false)``. **Read that as a tripwire, not as clan
@@ -29,7 +29,7 @@ What is pinned here:
   ``get_system_db`` privileged) — this is the half that would break if someone "fixed" the
   policy by pointing the handlers at the request session;
 * the ``ON DELETE CASCADE`` from ``persons`` still reaches this table under the policy.
-  ADR-042 § "What S-012 must build" item 6 asked for that to be measured rather than taken
+  ADR-042 § "What migration 033 must build" item 6 asked for that to be measured rather than taken
   from the Postgres manual, because a referential action that RLS could block would strand
   claim rows behind a deleted person.
 
@@ -356,7 +356,7 @@ async def test_system_session_still_reads_and_writes(engine: AsyncEngine) -> Non
 async def test_person_delete_still_cascades_into_claims_under_the_policy(
     engine: AsyncEngine,
 ) -> None:
-    """ADR-042 § "What S-012 must build" item 6.
+    """ADR-042 § "What the deny-all migration must build" item 6.
 
     ``identity_claims.person_id`` is ``ON DELETE CASCADE``
     (``app/models/identity_claim.py:32-36``). Postgres runs referential actions outside row
@@ -448,7 +448,7 @@ async def test_claim_routes_still_work_with_the_request_role_locked_out(
     """Submit, list-mine, list-for-clan, approve — over real HTTP, with ``get_db`` on the
     RLS request session that migration 033 denies.
 
-    This is ADR-042 § "What S-012 must build" item 3, and it is the test that would catch
+    This is ADR-042 § "What migration 033 must build" item 3, and it is the test that would catch
     the mistake of "fixing" the lockout by re-pointing the claim handlers at ``get_db``.
     ``GET /api/v1/claims`` is the sharpest of the four: it resolves NO clan, so on the
     request session it would answer ``200`` with an empty list and no error at all.

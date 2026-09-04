@@ -5,7 +5,7 @@ that ``migrations`` is a real package: importable by name, and therefore
 installed into the environment by ``uv sync``/``pip install`` rather than left
 behind in the source tree.
 
-Two callers depend on that (S-075):
+Two callers depend on that :
 
 * ``app/core/readiness.py`` reads the head revision through
   ``importlib.resources.files("migrations")``. Before this file existed it

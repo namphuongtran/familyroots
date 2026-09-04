@@ -96,7 +96,7 @@ case "${1:-}" in
     ;;
   destroy)
     # --no-backup DELETES the Supabase database. Every auth.users row goes with it, and
-    # S-073's seeding has to run again. `down` is the one you usually want.
+    # the seeding has to run again. `down` is the one you usually want.
     supa stop --no-backup
     ;;
   wait)

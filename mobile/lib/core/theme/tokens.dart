@@ -31,12 +31,12 @@ class ArborTokens extends ThemeExtension<ArborTokens> {
   /// decision 1 for the leaf green and decision 3 for the one warm ground.
   ///
   /// `surfaceContainerLow` and `error` are spec § 2.1's values, taken exactly,
-  /// by seed S-044. `error` is the spec's `danger` under Flutter's name for the
+  /// on 2026-08-22. `error` is the spec's `danger` under Flutter's name for the
   /// role; only the spelling is this repository's, the value is the spec's.
   /// It is the same hex as web's `destructive`. `mobile/CLAUDE.md` records why
   /// that makes the `heritage` rule stricter rather than looser.
   ///
-  /// `outlineVariant` is spec § 2.1's value, taken exactly, by seed S-048.
+  /// `outlineVariant` is spec § 2.1's value, taken exactly.
   factory ArborTokens.light() => const ArborTokens(
     surface: Color(0xFFFBF8F1),
     surfaceContainerLow: Color(0xFFF4EFE4),
@@ -47,8 +47,8 @@ class ArborTokens extends ThemeExtension<ArborTokens> {
     // No widget in `lib/` reads this token, but the role is NOT dead:
     // `ColorScheme.outlineVariant` exists, six Material `…DefaultsM3` classes
     // read it, and `buildAppTheme` passes this value into it. Measured
-    // 2026-08-22 before S-048: the scheme held #C2C8BC, a tone the leaf-green
-    // seed derived, while the token said #CFC7B4 — the S-044 `fromSeed` trap a
+    // 2026-08-22 before the fix: the scheme held #C2C8BC, a tone the leaf-green
+    // seed derived, while the token said #CFC7B4 — the same `fromSeed` trap a
     // third time. The no-line rule still forbids drawing a line with it outside
     // high-contrast mode at 15% opacity; that is a rule about widgets, and this
     // is the base value such a widget would take 15% of.

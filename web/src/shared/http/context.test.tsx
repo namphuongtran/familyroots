@@ -49,7 +49,7 @@ function setBrowserCookie(value: string | null) {
 
 /**
  * Stands in for a `features/<slice>/server` repository function, which does
- * not exist yet — `src/features/` lands with the first slice PR (S-024 onward).
+ * not exist yet — `src/features/` lands with the first slice PR (the capability module onward).
  * A repository does nothing but call `apiFetch` with the context it is
  * handed, so this is the part of "the same repository call returns the same
  * result in both runtimes" (web/CLAUDE.md, "The spine") that is already
@@ -60,7 +60,7 @@ async function pingRepository(context: RequestContext) {
   return apiFetch('/ping', { context })
 }
 
-describe('one session, two runtimes (S-023)', () => {
+describe('one session, two runtimes', () => {
   const clanId = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
 
   beforeEach(() => {

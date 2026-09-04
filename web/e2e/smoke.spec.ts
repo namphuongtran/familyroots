@@ -28,7 +28,7 @@ test('the login page renders and carries a sign-in form', async ({ page }) => {
  *
  * `src/app/layout.tsx` used to hardcode `<html lang="en">`, so every Vietnamese
  * page told assistive technology it was English — screen readers applied the
- * wrong pronunciation rules to the entire product. Seed S-022 fixed it:
+ * wrong pronunciation rules to the entire product. The `<html lang>` fix fixed it:
  * `RootLayout` now reads the negotiated locale with next-intl's `getLocale()`
  * (a request-scoped read of the header the intl middleware sets, not tied to
  * which layout calls it) rather than hardcoding a value, so `<html lang>`

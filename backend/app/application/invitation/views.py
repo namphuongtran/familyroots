@@ -1,7 +1,7 @@
 """Read models for the invitation query side.
 
 Separate from the ORM row on purpose. ``status`` here is **derived**, not the stored
-column, so handing the route an ORM row would hand it the field that lies (S-019).
+column, so handing the route an ORM row would hand it the field that lies.
 """
 
 from __future__ import annotations

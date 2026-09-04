@@ -23,7 +23,7 @@ export type InvitationsApiCallOptions = Pick<
 /**
  * `POST /invitations/{token}/accept` — the path
  * `backend/app/application/invitation/handlers.py:65` returns to the admin as
- * `accept_path`, and the reason seed S-084 exists: it answers `POST` only
+ * `accept_path`, and the reason the invitation page exists: it answers `POST` only
  * (`docs/contracts/rest-invitations-api.md:64`), so a relative who pastes it into
  * a browser sends a `GET` and gets an error instead of an invitation.
  *

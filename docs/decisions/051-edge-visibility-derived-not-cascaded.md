@@ -1,9 +1,9 @@
 # ADR-051: Person Soft-Delete Does Not Cascade to Its Edges — an Edge's Visibility Is Derived, Not Stored
 
 ## Status
-Accepted (2026-08-22, seed S-055) — **decision only, no code in this ADR's pull
+Accepted (2026-08-22) — **decision only, no code in this ADR's pull
 request**. Amends [ADR-006](006-soft-vs-hard-delete.md)'s update of 2026-07-02 by
-the dated amendment carried in that file. The work it leaves is seed S-056, and
+the dated amendment carried in that file. The work it leaves is in § 8, and
 that work is **not** a cascade; see § 8.
 
 ## 1. What was decided before, and what is different now
@@ -22,10 +22,10 @@ emits `PersonDeleted`; `Person.restore` (`:282`) clears them and emits
 `backend/app/domain/person`, run 2026-08-22, returns one catalogue row
 (`docs/contracts/domain-events-catalog.md:78`), three prose references
 (`backend/CLAUDE.md:72`, `docs/architecture/domain-rules.md:119,173`), one module
-docstring (`person_query_port.py:11`), three test references, and three `SEEDS.md`
+docstring (`person_query_port.py:11`), three test references, and three tracker
 lines. **No consumer.** The edge rows still carry `is_deleted = false`.
 
-**Seed S-054 landed on 2026-08-22 and closed the half a client can see.** The three
+**A change landed on 2026-08-22 and closed the half a client can see.** The three
 batch reads that showed an edge to a soft-deleted person now hide it, using a
 `NOT EXISTS` anti-join over both endpoints: `get_marriages_batch` and
 `get_parent_child_links_batch` via the shared helper `_no_deleted_endpoint`
@@ -85,7 +85,7 @@ predicate.** That risk is real and is named in § 8. It is bounded by three thin
 single helper `_no_deleted_endpoint` (`person_query_port.py:84`), the trap paragraph in
 `backend/CLAUDE.md` under "A soft-deleted person and a soft-deleted edge are two
 different things", and the test obligation in § 8, which must pin the **outcome** (what
-a read returns) and not a setting, per `.claude/rules/seeds.md`.
+a read returns) and not a setting, per `.claude/rules/testing.md`.
 
 Note the asymmetry that makes this workable: a stored cascade has the failure direction
 running the **wrong** way. A cascade that is lost mid-transaction leaves the edge row
@@ -188,7 +188,7 @@ What the two formats then do with those rows differs, and both cut against a cas
   was written.** `backend/app/services/gedcom_export.py:62` builds `live_persons`, and
   `:68-81` keeps a marriage or a parent-child edge only when it is itself live **and both
   endpoints are in `persons_by_id`**, which contains live persons only. The interop export
-  therefore already agrees with S-054's reads with no cascade anywhere. This is documented
+  therefore already agrees with those reads with no cascade anywhere. This is documented
   behaviour: `docs/contracts/rest-exports-api.md` says soft-deleted persons, marriages and
   parent-child edges are "**Excluded entirely** — not present anywhere in the output".
 - **The JSON archive is lossless by contract, and a cascade would make it lossy.**
@@ -218,7 +218,7 @@ candidates, all rejected:
   `A–B`. Delete `A` at `T1`: the cascade stamps the edge `T1`. Delete `B` at `T2`: the edge
   is already deleted, so the cascade skips it and the stamp stays `T1`. Restore `A` at `T3`:
   the edge's `deleted_at` equals `A`'s, so the rule re-activates it — **while `B` is still
-  deleted**. The data is now inconsistent, and only S-054's read filter is hiding it.
+  deleted**. The data is now inconsistent, and only that read filter is hiding it.
 - **`deleted_by`** — a cascade writes the same actor as the person delete, so it cannot
   separate a cascade from an admin who deleted the edge and then the person in one session.
 - **`version`** (ADR-017 optimistic concurrency) — a monotonic counter, not a provenance
@@ -293,14 +293,14 @@ land a second live row for the same pair, and the archive then carries both.
   rule by hand. This is stated in `docs/contracts/rest-exports-api.md`'s lossless rule
   already; a database-level view is a possible future convenience and is not built here.
 - The `NOT EXISTS` anti-join costs about `0.13 ms` on the marriages batch read for 100 ids
-  (`0.115 ms` → `0.246 ms`, measured by S-054 on PostgreSQL 18.4 against 20,000 persons /
+  (`0.115 ms` → `0.246 ms`, measured on PostgreSQL 18.4 against 20,000 persons /
   10,000 marriages; the numbers and the plans are in `person_query_port.py`'s module
   docstring). A stored flag would have been free at read time. That is the trade, and it was
-  already paid by S-054.
+  already paid by that change.
 
-## 8. What is left, and it is not a cascade — the brief for S-056
+## 8. What is left, and it is not a cascade — the brief for the by-id reads
 
-**Closed 2026-08-22 by S-056, exactly as briefed below and with nothing added.** The two
+**Closed 2026-08-22, exactly as briefed below and with nothing added.** The two
 reads now go through `MarriageReadPort` / `ParentChildReadPort`
 (`backend/app/domain/relationship/query_port.py`), implemented by
 `SqlAlchemyMarriageReadPort` / `SqlAlchemyParentChildReadPort`
@@ -319,7 +319,7 @@ and `SqlAlchemyParentChildRepository.get_by_id` (`:191-200`) filter the clan and
 `ParentChildQueryHandler.get_by_id` (`backend/app/application/relationship/handlers.py:197-198`
 and `:205-206`) are pass-throughs. So **`GET /relationships/marriages/{id}` and
 `GET /relationships/parent-child/{id}` still return an edge whose endpoint person is
-soft-deleted**, which is the same defect S-054 fixed on the three batch reads, reached by id
+soft-deleted**, which is the same defect fixed on the three batch reads, reached by id
 instead of by person.
 
 **The fix is not to add the predicate to `get_by_id`, and this is the part worth writing
@@ -329,14 +329,14 @@ update, delete). Hiding the row there would take away an admin's ability to dele
 an edge that touches a soft-deleted person, and would leave that row unreachable through the
 API entirely. **The derived rule belongs on the read projection, not on the shared loader.**
 
-So S-056 is: give the two by-id **reads** their own accessor carrying the same predicate the
+So the brief is: give the two by-id **reads** their own accessor carrying the same predicate the
 batch reads carry — reuse `_no_deleted_endpoint` (`person_query_port.py:84`) rather than
 writing a third copy — and leave the command handlers on the unfiltered loader. The test
 must pin the **outcome**: with a spouse soft-deleted, `GET /relationships/marriages/{id}`
 answers `404` while `DELETE /relationships/marriages/{id}` still succeeds for the same id,
 and the negative control deletes the predicate and watches the first assertion fail.
 
-**S-056 builds no cascade, adds no column, and adds no `PersonDeleted` consumer.** If a later
+**It builds no cascade, adds no column, and adds no `PersonDeleted` consumer.** If a later
 reader believes it should, re-open this ADR rather than adding one, and start with § 4.1.
 
 ## Related

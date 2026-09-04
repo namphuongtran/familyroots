@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * Spec §7.7, "Thêm / Sửa người" — the persons create and edit form (S-032).
- * Builds on the S-030 repository/hooks through this feature's own public
+ * Spec §7.7, "Thêm / Sửa người" — the persons create and edit form.
+ * Builds on the persons repository repository/hooks through this feature's own public
  * surface conventions (`../hooks/use-person-mutations`,
  * `../server/persons-repository` for the one-shot refetch a `409` needs —
  * `ui/` may reach its own `server/`, only `ui-does-not-call-transport`

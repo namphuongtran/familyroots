@@ -25,7 +25,7 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
   const t = useTranslations('Backoffice')
   // `auth.logout` rather than a new `Backoffice.*` key: the sentence already has one key,
   // real translations in all four locale files, and three other callers (`Header.tsx`,
-  // `PendingApprovalScreen.tsx`, `ClanSuspendedScreen.tsx`). Seed S-092.
+  // `PendingApprovalScreen.tsx`, `ClanSuspendedScreen.tsx`). The logout-label fix.
   const tAuth = useTranslations('auth')
   const { signOut } = useAuth()
   const pathname = usePathname()

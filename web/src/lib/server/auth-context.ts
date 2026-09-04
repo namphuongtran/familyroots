@@ -18,9 +18,9 @@ interface ServerAuthContext {
 const CURRENT_CLAN_COOKIE = 'current_clan_id'
 
 /**
- * ADR-056 / seed S-076: `NEXT_PUBLIC_API_URL` is inlined into the JS bundle at
+ * ADR-056 / ADR-056: `NEXT_PUBLIC_API_URL` is inlined into the JS bundle at
  * `pnpm build` time (Next.js statically replaces every `process.env.NEXT_PUBLIC_*`
- * reference across the whole bundler graph, server code included — S-071 proved this
+ * reference across the whole bundler graph, server code included — the Supabase-variable fix proved this
  * for the two Supabase variables). A server-to-server caller running inside a shared
  * network (compose, or a future container deploy) needs a *different*, network-internal
  * origin than the browser does, and that origin can change per deployment without a
@@ -79,7 +79,7 @@ export async function getServerAuthContext(): Promise<ServerAuthContext | null> 
     }
   }
 
-  // `data`, not `clans`: the canonical envelope. This read said `clans` until seed S-070
+  // `data`, not `clans`: the canonical envelope. This read said `clans` until the authenticated e2e harness
   // ran the first authenticated e2e case on 2026-08-26 and found `currentClanRole`
   // permanently `undefined`, which silently hid every role-gated element on every
   // server-rendered screen and sent `requireServerRole` to `/pending-approval` for a

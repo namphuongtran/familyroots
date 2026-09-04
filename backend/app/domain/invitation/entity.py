@@ -30,10 +30,10 @@ from app.domain.shared.value_objects import ActorInfo
 def is_expired(expires_at: datetime | None, *, now: datetime) -> bool:
     """Whether an invitation whose deadline is ``expires_at`` has timed out at ``now``.
 
-    ONE predicate, two callers, on purpose (S-019). ``accept`` below refuses on it, and
+    ONE predicate, two callers, on purpose. ``accept`` below refuses on it, and
     the read side derives the reported status from it. If the two ever disagree, a list
     reports ``pending`` for an invitation that ``accept`` refuses — which is the exact
-    defect S-019 closed. Keeping the comparison in one function is what stops them
+    defect ADR-053 closed. Keeping the comparison in one function is what stops them
     drifting apart again.
     """
     return expires_at is not None and expires_at < now

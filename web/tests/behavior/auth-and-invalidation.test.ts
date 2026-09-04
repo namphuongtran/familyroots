@@ -1,25 +1,25 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-// S-027 deleted `src/application/auth/use-cases/capabilities.ts` and, with it, this file's
+// the legacy-transport deletion deleted `src/application/auth/use-cases/capabilities.ts` and, with it, this file's
 // `deriveCapabilities respects clan context, approval state, and role hierarchy` test — that
 // module's only real (non-comment) importer was `src/lib/hooks/useCapabilities.ts`, which
-// S-027 rewired onto `src/domain/capability/capability.ts` instead. Equivalent coverage for
+// the legacy-transport deletion rewired onto `src/domain/capability/capability.ts` instead. Equivalent coverage for
 // the new hook lives in `src/lib/hooks/useCapabilities.test.tsx`. `hydrateAuthContext`,
 // `mapSessionUserToProfile`, and `selectActiveClan` below are untouched: `auth-context.ts`
-// still backs the live `useAuth()` session-sync path and was not deleted by S-027 — see
+// still backs the live `useAuth()` session-sync path and was not deleted by the legacy-transport deletion — see
 // `web/CLAUDE.md`, "Migration notes", for why.
 import {
   hydrateAuthContext,
   mapSessionUserToProfile,
   selectActiveClan,
 } from '../../src/application/auth/use-cases/auth-context.ts'
-// S-033 deleted `personCreateInvalidationKeys`, `personUpdateInvalidationKeys`, and
+// the legacy-component deletion deleted `personCreateInvalidationKeys`, `personUpdateInvalidationKeys`, and
 // `personDeleteInvalidationKeys` from `query-invalidation.ts`, along with the
 // `'person invalidation helpers cover list, detail, and tree refreshes'` test below that
 // covered only them — their sole caller was `useMembers.ts`'s `usePersonMutations`, deleted
 // the same seed because its own sole caller, `src/components/members/MemberForm.tsx`, was
-// dead (S-032 had already found it unreachable; S-033 confirmed zero importers and deleted
+// dead (the persons form had already found it unreachable; the legacy-component deletion confirmed zero importers and deleted
 // it). `documentUploadInvalidationKeys` and `eventMutationInvalidationKeys` still back the
 // live `src/lib/hooks/{useDocuments,useEvents}.ts`, so they and their own tests stay.
 import {

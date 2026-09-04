@@ -10,9 +10,9 @@ import { isSupabaseConfigured } from '@/lib/supabase/config'
  * var names, not translatable content. Both are one unbreakable word to a browser: no space, no
  * hyphen, nothing but underscores. At 320px width and 200% root font size the hint's own column
  * (the banner's `px-4` plus the page's `px-4` and `max-w-sm`, all of which scale with the root
- * font size too) is far narrower than either token, so the whole page scrolled sideways (S-042,
+ * font size too) is far narrower than either token, so the whole page scrolled sideways (the banner spec,
  * measured 2026-08-22: page `scrollWidth` 569 vs `clientWidth` 320; the hint paragraph 504 vs
- * 190). This is the same defect shape S-034 fixed on the `FamilyRoots` wordmark
+ * 190). This is the same defect shape the text-scale spec fixed on the `FamilyRoots` wordmark
  * (`.claude/rules/tailwind.md` § 7), and the fix is the same shape too: `<wbr />` after each
  * underscore gives the browser a break *opportunity* it uses only when the line does not fit, so
  * the token stays on one line at every normal size and `textContent` is unchanged — nothing a

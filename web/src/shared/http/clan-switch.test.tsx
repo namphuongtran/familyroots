@@ -1,8 +1,8 @@
 /**
- * S-025's two required proofs: switching clan changes what a query returns
+ * the auth-store split's two required proofs: switching clan changes what a query returns
  * without a page reload, and a reload preserves the selection. Both rest on
  * the same mechanism — `useCurrentClanId` (this file's `context.client.ts`)
- * reads the `current_clan_id` cookie (S-023) reactively, so a TanStack Query
+ * reads the `current_clan_id` cookie reactively, so a TanStack Query
  * key built from it refetches on `writeClanCookie` without any component
  * unmounting, and a fresh mount (standing in for a real page reload, which
  * always re-reads the cookie rather than any client-side store) resolves the
@@ -63,7 +63,7 @@ function ClanScopedPing({ useCurrentClanId }: { useCurrentClanId: () => string |
 const CLAN_A = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
 const CLAN_B = 'a1b2c3d4-1111-2222-3333-444455556666'
 
-describe('switching the active clan (S-025)', () => {
+describe('switching the active clan', () => {
   afterEach(() => {
     setBrowserCookie(null)
   })

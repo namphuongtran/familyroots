@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 8: a DENY-ALL tripwire on identity_claims (S-012, ADR-042).
+"""RLS layer-2 Phase 8: a DENY-ALL tripwire on identity_claims (ADR-042).
 
 **This is not clan isolation, and it must not be counted as clan isolation.** Every other
 policy in this chain compares a row's clan to the ``app.clan_id`` GUC. This one compares

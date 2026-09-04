@@ -34,7 +34,7 @@ services:
       APP_ENV: development
       APP_DEBUG: "true"
       APP_SECRET_KEY: ${APP_SECRET_KEY:-change-me-in-production}
-      # S-072: `supabase.localhost`, never `127.0.0.1`. The Supabase stack pins its
+      # Use `supabase.localhost`, never `127.0.0.1`. The Supabase stack pins its
       # token issuer to this hostname via `[auth] external_url` in supabase/config.toml,
       # because 127.0.0.1 cannot mean both the host and the inside of a container.
       # `supabase status` prints the 127.0.0.1 form; pasting it here yields 401
@@ -53,9 +53,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    # S-072: resolves `supabase.localhost` to the host, where the Supabase stack runs.
+    # Resolves `supabase.localhost` to the host, where the Supabase stack runs.
     # This line is load-bearing: without it the container cannot reach the issuer and
-    # every token is rejected. Verified on macOS 2026-08-22; S-074 must re-check it on
+    # every token is rejected. Verified on macOS 2026-08-22; re-check it on
     # CI, where an /etc/hosts entry is the fallback.
     extra_hosts:
       - "supabase.localhost:host-gateway"
@@ -85,7 +85,7 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-      # S-071: Next.js inlines every `NEXT_PUBLIC_*` value into the browser bundle
+      # Next.js inlines every `NEXT_PUBLIC_*` value into the browser bundle
       # during `pnpm build`, which runs inside this build step — not at container
       # start. The `environment:` block below is run time and cannot reach a value
       # a Client Component already had baked into its JS at build time
@@ -98,7 +98,7 @@ services:
       # (`docker compose build web`) with the target environment's `.env` before
       # promoting.
       #
-      # `NEXT_PUBLIC_API_URL` joined the two above by seed S-076 / ADR-056, which
+      # `NEXT_PUBLIC_API_URL` joined the two above by ADR-056, which
       # decided it holds the *browser-facing* origin only — host-reachable from
       # wherever a browser on the host runs, `http://localhost:8000/api/v1` by default,
       # since `api`'s port 8000 is published to the host below. It is deliberately NOT
@@ -113,14 +113,14 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     container_name: familyroots-web
     restart: unless-stopped
-    # S-072: the server half of Next.js (middleware, route handlers) reaches Supabase
+    # The server half of Next.js (middleware, route handlers) reaches Supabase
     # by this name too. See the api service above for why it is not 127.0.0.1.
     extra_hosts:
       - "supabase.localhost:host-gateway"
     ports:
       - "3000:3000"
     environment:
-      # `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` here are inert for this container: S-071
+      # `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` here are inert for this container: the build
       # measured that every `NEXT_PUBLIC_*` name is inlined into the built JS wherever
       # `pnpm build` sees it referenced — `middleware.ts` and the callback route
       # included, not only Client Components — so the values that actually reach this
@@ -138,7 +138,7 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      # ADR-056 / S-076: the server-to-server value. `API_URL` carries no `NEXT_PUBLIC_`
+      # ADR-056: the server-to-server value. `API_URL` carries no `NEXT_PUBLIC_`
       # prefix, so Next.js never inlines it — `src/lib/server/auth-context.ts` reads
       # `process.env.API_URL` live, at request time, inside this already-built image.
       # This is genuinely run time, unlike the two lines above: the compose-network

@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test'
  * which Playwright cannot set directly. `e2e/fonts.spec.ts` uses the same lever.
  *
  * Why the wordmark gets its own assertion: it was the only overflowing box on
- * either page when S-034 was opened (`h1` `clientWidth` 256, `scrollWidth` 350).
+ * either page when the text-scale spec was opened (`h1` `clientWidth` 256, `scrollWidth` 350).
  * Asserting the page total alone would report "something overflows" and leave
  * the next reader to find out what.
  */

@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed S-013. **Nothing is shipped by this ADR.** It is a decision, and
-seed S-014 is the change that carries it. No gate was run, because this file and its index row are
+Accepted (2026-08-22). **Nothing is shipped by this ADR.** It is a decision, and a follow-up
+migration is the change that carries it. No gate was run, because this file and its index row are
 the whole diff.
 
 Every measurement below was taken on **2026-08-22** in
@@ -54,7 +54,7 @@ Read from the tree on 2026-08-22.
 `dependencies.py:97` is `_repo_uow`, whose seven callers (`109, 134, 242, 248, 279, 298, 311`) are
 all `Depends(get_db)` read handlers, so it is counted as a request site.
 
-**The seed's premise is half wrong, and this is the fact that shapes the decision.** S-013 says
+**The opening premise is half wrong, and this is the fact that shapes the decision.** It said
 "both tables are written by privileged paths, not by request handlers". That holds for
 `notification_log` and does **not** hold for `audit_logs`: 13 of 15 dispatcher sites hang off
 `Depends(get_db)`, so most audit rows in this system are written by the non-bypass request role.
@@ -150,7 +150,7 @@ so there is no row the predicate mishandles; the only accessor is the scheduler 
 session, so nothing breaks; and no request path touches the table, so nothing regresses.
 
 **The policy is inert today, and that is accepted deliberately.** It guards a reader that does not
-exist yet. The alternative is a permanent exemption row in S-015's clan-owned table list, which is
+exist yet. The alternative is a permanent exemption row in the clan-owned table list, which is
 a second place to record the same fact and therefore a second place to be wrong. A cheap correct
 policy beats a permanent exception.
 
@@ -215,7 +215,7 @@ apply to it at all.
 `audit_logs_sel` therefore cannot narrow that surface. ADR-030's retention rule (both tables
 retained indefinitely, no purge) is likewise untouched: neither policy deletes anything.
 
-### 6. S-014 must fix the `RETURNING` collision in the ORM, following ADR-038
+### 6. The migration must fix the `RETURNING` collision in the ORM, following ADR-038
 
 Because of Measurement 3, adding `audit_logs_sel` **without** an ORM change would reject exactly
 the writes § 3 was shaped to protect: the `RETURNING created_at` row is matched against the SELECT
@@ -239,10 +239,10 @@ the timestamp authority.
 build, and it will not be visible in a unit test — ADR-038 records that its own instance stayed
 invisible "until a test drove an HTTP write through a real `RlsSession`".
 
-## What S-014 is obliged to build
+## What the migration is obliged to build
 
-Read this section as the specification; it is what the seed's "the two tables may get different
-answers" resolved to.
+Read this section as the specification; it is what "the two tables may get different answers"
+resolved to.
 
 1. **One reversible migration** enabling RLS and creating: `notification_log_clan_isolation` as in
    § 2; `audit_logs_sel` and `audit_logs_ins` as in § 3, and no `UPDATE` or `DELETE` policy.
@@ -271,8 +271,8 @@ answers" resolved to.
 
 ### What this buys
 
-- The two tables stop being exceptions. After S-014, eight of fourteen clan-owned tables carry a
-  policy, and S-015's coverage gate can be written without a permanent exemption list beside it.
+- The two tables stop being exceptions. Afterwards, eight of fourteen clan-owned tables carry a
+  policy, and the coverage gate can be written without a permanent exemption list beside it.
 - A future clan-facing audit endpoint is guarded before it is written, which is the only order in
   which a defense-in-depth layer is ever cheap.
 - The audit trail becomes immutable at the database for the request role, not only by convention.
@@ -296,7 +296,7 @@ answers" resolved to.
 |---|---|
 | Copy the migration-027 template onto `audit_logs` | It breaks the three routes in Measurement 2. `POST /auth/register` is the whole registration flow |
 | `USING (clan_id = GUC OR clan_id IS NULL)` — the predicate "nullable on purpose" invites | It makes **every** platform-level action and every orphaned row readable by **every** clan. That is strictly worse than hiding them, and it is the shape a reader is most likely to reach for, which is why it is named here rather than left out |
-| Leave both tables outside layer 2 and record it as "not verified" | S-015 would need two permanent exemptions, and each is a second place to record a fact. `notification_log` in particular has no property that justifies an exception, only an absence of readers |
+| Leave both tables outside layer 2 and record it as "not verified" | The coverage gate would need two permanent exemptions, and each is a second place to record a fact. `notification_log` in particular has no property that justifies an exception, only an absence of readers |
 | Put `audit_logs` inside but `notification_log` outside, on the grounds that nothing reads it | Symmetrical to the row above, and the same objection. "No reader yet" is a reason to add the guard cheaply, not to skip it |
 | Fix the `RETURNING` collision by widening `audit_logs_sel` instead of the ORM | ADR-038 rejected exactly this on `persons` and the reasoning transfers: a policy widened to admit a write stops describing the read rule it exists for |
 | `FORCE ROW LEVEL SECURITY` on either table | Out of scope. ADR-008 puts it after full coverage, and it would make the table owner subject to its own policies, which changes what migrations can do |
@@ -309,8 +309,8 @@ answers" resolved to.
   it does not argue for building one.
 - **A notifications history API.** `docs/contracts/push-notifications.md:135` says there is none,
   and this ADR does not change that.
-- **`identity_claims`**, which has no `clan_id` at all. That is seed S-011 and ADR-042.
-- **The list of tables S-015 calls clan-owned**, and where that list lives.
+- **`identity_claims`**, which has no `clan_id` at all. That is ADR-042.
+- **The list of tables the coverage gate calls clan-owned**, and where that list lives.
 - **`FORCE ROW LEVEL SECURITY`**, and the final sweep ADR-008 leaves open.
 - **Whether ADR-008's `SYSTEM_DATABASE_URL` sentence should be repaired.** It is a dated record of
   what was decided; the shipped design at `specs/2026-07-25-rls-activation-phase1-design.md:119`
@@ -318,8 +318,6 @@ answers" resolved to.
 
 ## Related
 
-- Seed **S-013** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes, and seed **S-014**, which
-  implements it. S-014 unblocks S-015.
 - [ADR-008](008-rls-defense-in-depth.md) — the layer this joins, and the ADR whose "not yet" list
   named `audit_logs` without settling it.
 - [ADR-038](038-persons-returning-vs-membership-rls.md) — the `RETURNING`/SELECT-policy collision,

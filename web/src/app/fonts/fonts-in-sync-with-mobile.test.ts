@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
  * The two mandated typefaces ship twice: once for Flutter in
  * `mobile/assets/fonts/`, once for `next/font/local` here. Two copies can drift,
  * and drift means the two clients render different shapes for the same clan
- * name, which is the failure this seed (S-002) was written to prevent.
+ * name, which is the failure this seed was written to prevent.
  *
  * Why two copies at all: `next/font/local` resolves `src` through the bundler,
  * and the web app is built with `web/` as its root. A path reaching out to

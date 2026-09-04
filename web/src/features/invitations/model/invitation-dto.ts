@@ -12,8 +12,7 @@
  *
  * Only the accept response is modelled. The admin surface (create, list, revoke —
  * `docs/contracts/rest-invitations-api.md:23-58`) belongs to the admin invitation
- * screen, which is PR 7 in the `Owed` register of `docs/SEEDS.md` and is named
- * out of scope by seed S-084.
+ * screen, which is not built yet and is out of scope here.
  */
 
 import { z } from 'zod'

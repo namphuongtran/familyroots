@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed **S-016**. **Nothing is shipped by this ADR.** It is a decision.
-Seeds **S-017** and **S-018** are the changes that carry it, one column each. No gate was run,
+Accepted (2026-08-22). **Nothing is shipped by this ADR.** It is a decision. Two follow-up
+migrations carry it, one column each. No gate was run,
 because this file and its index row are the whole diff — the seed's `Verification` field says so.
 
 Every measurement below was taken on **2026-08-22** in `.claude/worktrees/design`, at commit
@@ -42,7 +42,7 @@ backend/app/models/clan_settings.py:30:    privacy_level: Mapped[str] = mapped_c
 Two hits, both declarations, in one file. No reader in the backend, the web client, or the mobile
 client.
 
-> **Amended 2026-08-22 by seed S-017, which dropped `allow_public_tree` and checked first.** The
+> **Amended 2026-08-22 by the change that dropped `allow_public_tree` and checked first.** The
 > command above searches `backend/app web/src mobile/lib`. **`backend/tests` is not in it**, and the
 > sentence "no reader in the backend" reads wider than the command supports. One hit lies outside
 > that root: `backend/tests/integration/test_rls_phase10_clan_settings.py:270` wrote
@@ -50,7 +50,7 @@ client.
 > `test_update_of_the_other_clans_settings_touches_no_row`.
 >
 > **It was never a reader of the column's meaning** — the RLS policy under test does not refer to the
-> column, which was only an arbitrary value to update. S-017 repointed it at `default_language`,
+> column, which was only an arbitrary value to update. It was repointed at `default_language`,
 > which `_seed_two` writes explicitly, so the closing assertion can no longer pass on a server
 > default the way `assert allow_public is False` could. The decision in § 1 is unchanged.
 >
@@ -59,7 +59,7 @@ client.
 
 ### Measurement 2 — the same question asked about the **concept**, because a name search is a claim about names
 
-Seed **S-020** established on 2026-08-22 that its own absence claim was false: it had searched for
+A re-measurement on 2026-08-22 established that its own absence claim was false: it had searched for
 `field_visibility|visible_fields`, column names nobody ever chose, while a field-level visibility
 rule ships as `_PII_FIELDS` and `_redact_person_pii`
 (`backend/app/application/person/handlers.py:29-54`). **An absence claim built on a name search is
@@ -104,13 +104,13 @@ Its fields are `id, name, slug, description, origin_place, founded_year, avatar_
 ancestral_hall_location, clan_rules, is_active, created_at, updated_at, stats` — the `clans` row,
 matching `backend/app/schemas/clan.py:29-46`. Its only consumer renders four inputs and no toggle.
 A name search for "clan settings" in the web client therefore lands on a type that has nothing to
-do with `clan_settings`, which is exactly the shape of the S-020 trap running in the other
+do with `clan_settings`, which is exactly the shape of that name-search trap running in the other
 direction.
 
 ### Measurement 3 — the table is empty, and **every** column in it is dead, not only these two
 
-The precondition S-010 and S-020 added to the seed is that nothing constructs a `ClanSettings`.
-Re-run today, it holds, and it is broader than the seed says.
+The precondition added by the two earlier measurements is that nothing constructs a `ClanSettings`.
+Re-run today, it holds, and it is broader than first stated.
 
 ```
 $ grep -rn "ClanSettings(" backend/app
@@ -135,13 +135,13 @@ The only application reference to the table is the `Clan.settings` relationship
 table either.
 
 **So `clan_settings` is not a live table with two dormant columns. It is a dead table**, and these
-two are two of seven. That is a finding S-016 did not have; it is recorded in § 5 rather than acted
-on here.
+two are two of seven. That is a finding this decision did not start with; it is recorded in § 5
+rather than acted on here.
 
-### Measurement 4 — the value domain **is** written down, and the seed's claim is corrected
+### Measurement 4 — the value domain **is** written down, and the opening claim is corrected
 
-S-016 says `privacy_level` is "a `String(20)` whose value domain is not stated anywhere the seed
-found", and S-018 offers "the domain is genuinely undecided" as a possible finding. **Neither is
+The opening claim was that `privacy_level` is "a `String(20)` whose value domain is not stated
+anywhere", and that "the domain is genuinely undecided" was offered as a possible finding. **Neither is
 true.** The domain is stated, at `docs/architecture/data-model.md:836`, read at source today:
 
 ```
@@ -165,19 +165,19 @@ The domain is decided. What is missing is every mechanism that would make it mea
 
 So the domain is not undecided. It is **documented, unenforced, and one third meaningless.**
 
-> **Amended 2026-08-22 by seed S-018, which dropped `privacy_level` and had to find every copy of
+> **Amended 2026-08-22 by the change that dropped `privacy_level` and had to find every copy of
 > the domain before it could.** This measurement points at
 > `docs/architecture/data-model.md:836` as the home of the domain. **Two things were wrong with
 > that pointer, and the second is the one that mattered.**
 >
-> The line number had already moved to `:842`, because S-017 inserted a note above it earlier the
+> The line number had already moved to `:842`, because the earlier column drop inserted a note above it the
 > same day. **And the domain was written in two places in that file, not one**: the column table,
 > and the ER diagram at `:212`, which read
 > `varchar privacy_level "private | clan_members | public"`. Both are now removed with the column.
 > **Had the single-source claim been trusted, the domain would have outlived the column in the
-> diagram** — which is exactly the failure S-018 was written to prevent.
+> diagram** — which is exactly the failure that check was written to prevent.
 >
-> The finding in § 2 is unchanged. S-018 confirmed the "unenforced" half by writing `'wide-open'`
+> The finding in § 2 is unchanged. The "unenforced" half was confirmed by writing `'wide-open'`
 > into the restored column, which Postgres accepted without complaint.
 >
 > **A single-source claim is a claim about where you looked** — the same shape as this ADR's own
@@ -205,17 +205,16 @@ INSERT 0 1
 ```
 
 Case C ends with a privileged read proving the row was there, because on an empty table a denial
-assertion proves nothing on its own (S-012's rule, restated by S-010).
+assertion proves nothing on its own.
 
 **Read case A against the obvious implementation.** "Auto-create a settings row when a clan is
-created" is precisely what `docs/architecture/data-model.md` claimed already happened until S-010
-corrected it on 2026-08-22. Clan creation runs in `POST /auth/register`, on the request session,
+created" is precisely what `docs/architecture/data-model.md` claimed already happened until it was
+corrected on 2026-08-22. Clan creation runs in `POST /auth/register`, on the request session,
 with no clan GUC: `backend/app/api/v1/auth.py:17` imports `get_current_user` and nothing else from
 `app.core.security`, so no route in that file can have one. Under `035`'s `WITH CHECK`, that insert
 is case A.
 
-This is not an analogy. It is the **same failure S-010 measured on `user_clan_roles`** the same
-day: `add_membership` (`auth_repository.py:69-88`) inserts on that same clan-less session, and both
+This is not an analogy. It is the **same failure measured on `user_clan_roles`** the same day: `add_membership` (`auth_repository.py:69-88`) inserts on that same clan-less session, and both
 onboard flows raise `psycopg.errors.InsufficientPrivilege` and answer 500.
 
 So creating the row has exactly two shapes, and neither is a default:
@@ -263,12 +262,12 @@ re-adds a column of the same type with the same `server_default`, and the table 
 way, so the round trip is exact.
 
 The fourth shape follows. **The question is not "keep or delete". It is "delete, on what terms of
-return" — and the two columns get different terms.** That is the per-column difference S-016 asked
-for, and it is a real one rather than the same answer written twice.
+return" — and the two columns get different terms.** That is the per-column difference this decision
+asked for, and it is a real one rather than the same answer written twice.
 
 ## Decision
 
-### 1. `allow_public_tree` is dropped, and this column does not come back (S-017)
+### 1. `allow_public_tree` is dropped, and this column does not come back 
 
 Dropped by a reversible migration. The **concept** it names may return one day. **This column may
 not.**
@@ -283,7 +282,7 @@ and this ADR closes that door now rather than leaving it to whoever builds the f
 It is also the specific control the design spec refuses by its Vietnamese label: `Cho phép xem công
 khai` (`specs/2026-08-02-design-system-and-screens.md:1787-1789`).
 
-### 2. `privacy_level` is dropped from v1, and it may return on four named terms (S-018)
+### 2. `privacy_level` is dropped from v1, and it may return on four named terms 
 
 Dropped by a reversible migration. It is the right **shape** for the concept and the wrong
 **type**, and Measurement 4 shows its documented domain is undefended and one third meaningless.
@@ -344,11 +343,11 @@ backstop against a missed `WHERE clan_id`, not an authorization system.
 
 Measurement 3 found all seven data columns unread, so this is a dead table rather than a live table
 with two dormant columns. **This ADR drops two columns and nothing else**, because the other five
-were not in the seed and one of them is named out of scope by it.
+were not in scope and one of them is named out of scope explicitly.
 
-That leaves a finding rather than a change: after S-017 and S-018 land, `clan_settings` is a table
+That leaves a finding rather than a change: after both migrations land, `clan_settings` is a table
 with zero rows, five unread columns, and an RLS policy guarding a reader that does not exist. That
-is a new seed or an `Owed` row, and it belongs to the coordinator.
+is its own piece of work, and it belongs to the coordinator.
 
 Two documents also promise this feature and should be corrected by whoever owns them, in a change
 that is not this one:
@@ -361,7 +360,7 @@ that is not this one:
   using "clan settings" to mean the `PATCH /clans/me` clan-info body rather than this table. It is
   the only mention of settings in the whole contract set, and it reads as covering the table.
 
-> **Amended 2026-08-22 by seed S-065, which closed this hand-off as
+> **Amended 2026-08-22 by the change that closed this hand-off as
 > [ADR-054](054-clan-settings-table-is-dropped.md).** Both named consequences are discharged: the
 > table is dropped whole by migration `039_drop_clan_settings`, and both documents are corrected in
 > that same change.
@@ -369,10 +368,10 @@ that is not this one:
 > **One claim in this section needs narrowing.** It says Measurement 3 found all seven data columns
 > unread. That is true of `backend/app`, the root Measurement 1 searched, and **false of the tracked
 > tree**: `default_language` was read by
-> `backend/tests/integration/test_rls_phase10_clan_settings.py:198,205` from the moment S-017
-> repointed the RLS payload column at it on 2026-08-22. **This is the same defect as this ADR's own
-> amendment under Measurement 1, one column further along** — and seed S-065 inherited the narrow
-> root from here and restated the wide claim, so it reached a third document before anyone read it
+> `backend/tests/integration/test_rls_phase10_clan_settings.py:198,205` from the moment the RLS
+> payload column was repointed at it on 2026-08-22. **This is the same defect as this ADR's own
+> amendment under Measurement 1, one column further along** — and ADR-054 inherited the narrow root
+> from here and restated the wide claim, so it reached a third document before anyone read it
 > at source. It changes nothing about the decision.
 
 ## Consequences
@@ -385,13 +384,13 @@ that is not this one:
 - **The columns stop being documentation that outranks the documentation.** A column is read by the
   next agent as a statement of intent. This repository has three dated instances of a stale
   statement costing real work, each read at source: `roadmap.md:125-129` listing audit
-  `ip_address`/`user_agent` as dormant when both had shipped (the paragraph that adopted seeds,
-  `.claude/rules/seeds.md`, and S-020); `data-model.md`'s "auto-created with new clans" (S-010);
+  `ip_address`/`user_agent` as dormant when both had shipped; `data-model.md`'s "auto-created with
+  new clans";
   and a `Not verified` row claiming no dated restore drill existed when `docs/ops/backup-restore.md`
-  already carried one from 2026-07-12 (S-021). This ADR becomes the record instead, and an ADR is a
+ already carried one from 2026-07-12. This ADR becomes the record instead, and an ADR is a
   place that is read on purpose.
-- S-017 and S-018 each become one reversible migration with no behaviour change, which is the
-  smallest a seed can honestly be.
+- Each column becomes one reversible migration with no behaviour change, which is the smallest a
+  change can honestly be.
 
 ### What this does not buy, stated plainly
 
@@ -435,23 +434,20 @@ that is not this one:
   concept returns as one column on § 2's terms. It takes no position on the product question.
 - **What `private` should mean.** Measurement 4 records that nobody has decided. Deciding it is
   part of the change that brings the column back, not part of dropping it.
-- **`clan_settings.max_upload_size_mb`**, named out of scope by S-016 and already documented as
+- **`clan_settings.max_upload_size_mb`**, named out of scope here and already documented as
   dead at `app/core/config.py:126-127`.
 - **The other four unread columns, and the fate of the table itself** (§ 5).
-- **The two documents that promise the feature** (§ 5). They are named, not edited: this seed owns
+- **The two documents that promise the feature** (§ 5). They are named, not edited: this change owns
   one file.
-- **Field-level visibility**, which is seed S-053 and ADR-049. It is a different question — which
+- **Field-level visibility**, which is ADR-049. It is a different question — which
   *fields* of a person a member sees, not who may read the clan at all.
 - **The RLS policy on `clan_settings`.** Migration `035` is untouched. § 4 says why it is not the
   enforcement point; it does not argue for removing it.
 
 ## Related
 
-- Seed **S-016** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes, and seeds **S-017** and
-  **S-018**, which carry one column each.
-- Seed **S-010**, which found the empty-table precondition and measured on `user_clan_roles` the
-  clan-less write failure that Measurement 5 reproduces for `clan_settings`.
-- Seed **S-020**, whose own false absence claim is the reason Measurement 2 exists.
+- The `user_clan_roles` measurement, which found the empty-table precondition and the clan-less
+  write failure that Measurement 5 reproduces for `clan_settings`.
 - [ADR-008](008-rls-defense-in-depth.md) and migration `035_rls_clan_settings` — the policy this
   table carries, and § 4 on why it is not an authorization layer.
 - [ADR-009](009-clan-deletion-restrict.md) — the RESTRICT foreign key a settings row would activate.

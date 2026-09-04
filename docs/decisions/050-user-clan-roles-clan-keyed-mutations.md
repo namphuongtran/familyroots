@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, shipped (2026-08-22), by seed S-052, which split out of S-010 because it carries a
+Accepted, shipped (2026-08-22). It split out of the Phase 10 RLS work because it carries a
 decision. **This ADR ships code**: migration `036_rls_user_clan_roles`, a fourth coverage-guard
 set, and three test files. No application module changes, and that absence is the decision.
 
@@ -91,7 +91,7 @@ Two more sites are not application queries but emit SQL against the table:
 - `app/models/clan.py:34` declares `Clan.user_roles` as `lazy="selectin"`, so **every** load of a
   `Clan` ORM entity emits a SELECT here. Measured 2026-08-22: `grep -rn "\.user_roles" backend/app
   --include='*.py'` returns no consumer at all, so the collection is loaded and never read. This
-  is the same trap S-010 found for `clan_settings` (`clan.py:35`), on the neighbouring line.
+  is the same trap found for `clan_settings` (`clan.py:35`), on the neighbouring line.
 - `app/services/notification.py:127`, inside `send_to_clan`, joins the table in raw SQL. Its only
   caller is `app/services/scheduler.py:188`, and the scheduler binds its session to a bare
   `engine.connect()` (`scheduler.py:90`, `:102`), which is not an `RlsSession`, so no seam fires
@@ -121,7 +121,7 @@ nothing at the database stops it.
 
 ### Why the ADR-048 shape does not transfer
 
-Seed S-052 asks this first, and the answer is no, for a reason that is countable. ADR-048 moved
+This is asked first, and the answer is no, for a reason that is countable. ADR-048 moved
 **one** route of four onto the privileged session, so three of four kept two layers. Here the
 clan-less accessors are rows 1, 4, 5 and 6 of the census — six routes (`POST /auth/register`,
 `POST /auth/onboard`, `POST /auth/login`, `GET /auth/me`, `GET /me/clans`,
@@ -159,7 +159,7 @@ opposite halves, for opposite reasons.
 
 ### 2. No handler, repository or route changes the session it runs on
 
-Named by name, because seed S-052 requires that this ADR state what it does to every other
+Named by name, because this ADR must state what it does to every other
 reader and writer of the table. Using the census numbering above:
 
 - **1. `get_current_clan_id`** (`security.py:249-254`) — unchanged, on `get_db`, reading with no
@@ -214,8 +214,8 @@ none of them, so `_CLAN_KEYED_MUTATION_TABLES` is added and asserted by
 Listing it under `_CLAN_ISOLATED_TABLES` would have **passed** that set's assertion, because
 that assertion asks whether *some* policy's `USING` reads the GUC and this table's `UPDATE`
 policy does. It would then have told every later reader that reads on the authorization table are
-confined to one clan, which is false. That is the S-014 finding recurring one table later, and
-`.claude/rules/seeds.md` § "A set is a setting too" is the rule it recurred against.
+confined to one clan, which is false. That is the `audit_logs` finding recurring one table later, and
+`.claude/rules/testing.md` § "A set is a setting too" is the rule it recurred against.
 
 ## Alternatives considered
 
@@ -226,7 +226,7 @@ confined to one clan, which is false. That is the S-014 finding recurring one ta
 | **(c) Leave the table outside layer 2 permanently**, the seed's option (c) | Honest, and it was the expected answer until row 8 of the census was read. Four statements that mutate authority are keyed on the primary key alone. A per-command policy covers exactly those four at no cost to any other path, so the honest absence is available for the read half only, and this ADR records it there instead |
 | **(d) A "self or same clan" policy**, `USING (clan_id = <GUC> OR user_id = <a new app.user_id GUC>)` | This is the shape that fits the table's two real access patterns, and it clears every one of [ADR-047](047-rls-seam-sets-clan-id-only.md)'s five preconditions on paper. It is rejected on two grounds. **First, the GUC would mean two different things.** On `POST /auth/onboard` the value is the JWT subject; on `POST /auth/register` and `POST /auth/login` there is no authenticated identity at all when the query runs, so it would be a user id the request itself just minted from the identity provider's response. ADR-048 rejected its hybrid for exactly this — a GUC must mean one thing everywhere — and the objection transfers unchanged. **Second, it costs four population sites, not one.** ADR-047 Measurement 4 already counts a second ContextVar, a write in `rls.py:63-65`, a write beside `security.py:290` and a clear at `database.py:81-83`; the login and register paths add two more, inside `app/infrastructure/persistence/auth_repository.py`, which puts a seam writer in adapter code. **Third, its write half is a permissive clause wearing a hat.** `WITH CHECK (… OR user_id = <me>)` admits a self-insert of an approved admin row into any clan, which is the escalation a strict clan-keyed check exists to stop |
 | **A deny-all tripwire**, as ADR-042 gives `identity_claims` | ADR-042 chose deny-all because **no** request-role path touches that table. Here nine of the eleven census rows are request-role paths with live traffic. Deny-all breaks login, onboarding, every role check and every clan member route |
-| **Add the missing `clan_id` predicate to the four statements in row 8, and skip the policy** | Worth doing and it is not a substitute. Layer 2 exists because layer 1 can be forgotten; a fix that lives only in layer 1 is the thing layer 2 backs up. It is also a change to code seed S-052 was not asked to touch. Recorded as a finding below, not done here |
+| **Add the missing `clan_id` predicate to the four statements in row 8, and skip the policy** | Worth doing and it is not a substitute. Layer 2 exists because layer 1 can be forgotten; a fix that lives only in layer 1 is the thing layer 2 backs up. It is also a change to code this decision was not asked to touch. Recorded as a finding below, not done here |
 | **`USING (clan_id = <GUC> OR current_setting('app.clan_id', true) = '')`**, permissive when no clan is selected | ADR-048 priced this one already: it lets **any** clan-less request session read **every** clan's rows, including a route nobody has written yet, and it inverts ADR-008 § 3's default-deny. A permissive `USING (true)` that is written down and asserted is more honest than a predicate that looks like isolation and opens itself |
 
 ## Consequences
@@ -239,7 +239,7 @@ confined to one clan, which is false. That is the S-014 finding recurring one ta
   `backend/tests/integration/test_rls_phase11_user_clan_roles.py`.
 - An UPDATE cannot move a membership row into another clan, which would hand that clan a member
   it never approved. That is the `WITH CHECK` half, and it has its own test.
-- **The assertion S-010 named and could not run now exists.** A user who is admin in one clan and
+- **The assertion named earlier, which could not be run then, now exists.** A user who is admin in one clan and
   viewer in another gets `200` from an admin-only route in the first and `403
   insufficient_permissions` in the second, with a second test proving the viewer clan is a real
   membership and not simply invisible.
@@ -260,7 +260,8 @@ confined to one clan, which is false. That is the S-014 finding recurring one ta
   this ADR does not reach.
 - **`_CLAN_KEYED_MUTATION_TABLES` is a fourth set in a guard that had three.** Four postures is a
   lot to hold in the head, and the alternative — pushing a name into a set whose assertion it
-  passes for the wrong reason — is the defect S-012, S-014 and now S-052 each found once.
+  passes for the wrong reason — is the defect `identity_claims`, `audit_logs` and now this table
+  each found once.
 - **`test_rls_login_two_clans.py` changed meaning.** It used to prove the table could not be
   covered. It now proves which half of it is not covered, and it is the test that fails if
   someone tightens `user_clan_roles_sel` or `user_clan_roles_ins`.
@@ -268,7 +269,7 @@ confined to one clan, which is false. That is the S-014 finding recurring one ta
 ### A finding this ADR does not act on
 
 The four statements in row 8 should also carry `clan_id` in their own `WHERE` clauses. That is a
-layer-1 change in `app/infrastructure/persistence/clan_repository.py`, it is outside seed S-052's
+layer-1 change in `app/infrastructure/persistence/clan_repository.py`, it is outside this decision's
 scope, and it does not make this migration unnecessary — the point of layer 2 is that layer 1 can
 be forgotten. It is reported to the coordinator as a candidate seed.
 
@@ -280,14 +281,12 @@ be forgotten. It is reported to the coordinator as a candidate seed.
 - **The read half of this table.** If the clan-less readers are ever moved off the request
   session, `user_clan_roles_sel` should be tightened and this ADR amended by dated note. The
   guard test says so in its own failure message.
-- **`clan_settings`**, closed by S-010 and migration `035`.
+- **`clan_settings`**, closed by migration `035`.
 - **The platform-admin role**, which is not clan-scoped.
 - **`FORCE ROW LEVEL SECURITY`**, which ADR-008 § "Not yet" leaves until every table is covered.
 
 ## Related
 
-- Seed **S-052** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes, and seed **S-010**, which
-  split it out. Seed **S-015** is unblocked by it.
 - [ADR-008: Row-Level Security as Defense-in-Depth Layer-2](008-rls-defense-in-depth.md) — § 3's
   default-deny rule, which the two permissive policies here depart from by decision and with a
   measurement, and Phase 11 in its phase list.
@@ -302,5 +301,5 @@ be forgotten. It is reported to the coordinator as a candidate seed.
   preconditions alternative (d) was measured against.
 - [ADR-035: Deterministic Login Membership Selection](035-deterministic-login-membership-selection.md) —
   why `get_login_profile` orders the way it does, and why the login tests assert a specific clan.
-- `.claude/rules/seeds.md`, § "A test pins an outcome, not a setting" — the rule the fourth
+- `.claude/rules/testing.md`, § "A test pins an outcome, not a setting" — the rule the fourth
   guard set and the two-clan role test are both written against.

@@ -1,6 +1,6 @@
-"""Drop the ``clan_settings`` table (S-065, ADR-054).
+"""Drop the ``clan_settings`` table (ADR-054).
 
-ADR-044 § 5 handed the fate of this table to the coordinator after S-017 and S-018 took
+ADR-044 § 5 handed the fate of this table to the coordinator after the two column drops took
 two of its columns. ADR-054 decides it: the table is dropped whole. This docstring is the
 durable record of what that costs and what the ``downgrade`` has to put back, because the
 seed tracker is not what the next agent reads when it opens a migration.
@@ -21,7 +21,7 @@ should.** So the table has no reader, no writer, no row, no screen, and no sched
 
 The round trip is exact on everything that carries meaning, and NOT on ``attnum``
 --------------------------------------------------------------------------------
-Stated plainly because S-018 recorded the mirror-image fact and this one is its reverse.
+Stated plainly because the ``privacy_level`` drop recorded the mirror-image fact and this one is its reverse.
 
 At ``038`` the live table's ``attnum`` sequence is ``1,2,3,4,5,7,9,10,11``: the gaps at 6 and
 8 are the tombstones ``037`` and ``038`` left when they dropped ``allow_public_tree`` and
@@ -33,7 +33,7 @@ downgrade produces a catalogue with no tombstones rather than one with two. Colu
 types, ``NOT NULL``, defaults, ordering, the primary key, the unique constraint, the foreign
 key and its ``RESTRICT``, the ``updated_at`` trigger, the RLS flags, the policy and its two
 predicates, and the ``familyroots_app`` grants all come back identical. Verified by ``cmp``
-on a catalogue dump, against a database that never carried this revision (S-018's pattern).
+on a catalogue dump, against a database that never carried this revision (the same pattern).
 
 What ``DROP TABLE`` takes with it, and what ``downgrade`` therefore has to rebuild
 ---------------------------------------------------------------------------------

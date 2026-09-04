@@ -1,11 +1,11 @@
-"""One pending identity claim per user GLOBALLY — across clans (S-012, ADR-042 § 5).
+"""One pending identity claim per user GLOBALLY — across clans (ADR-042 § 5).
 
 ``uq_identity_claim_user_pending`` (``app/models/identity_claim.py:17-23``, created in
 ``migrations/versions/001_initial.py:770``) is unique on ``user_id`` where
 ``status = 'PENDING'``. It carries no clan, and ADR-007 calls it the spam guard: **at most
 one pending claim per user, across every clan on the platform.** That makes this table the
 one place in the schema where a clan-keyed policy would have broken an invariant instead of
-protecting one, and it is why seed S-011 had to decide the policy shape before S-012 could
+protecting one, and it is why ADR-042 had to decide the policy shape before migration 033 could
 build anything.
 
 The invariant is enforced in two places and this file pins both, because they fail

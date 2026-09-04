@@ -1,5 +1,5 @@
 /**
- * Public surface of the `invitations` slice (seed S-084).
+ * Public surface of the `invitations` slice.
  *
  * `cross-feature-only-via-index` (`.dependency-cruiser.cjs`) requires every other
  * feature — and `src/app/**`, which composes the screen — to import through this

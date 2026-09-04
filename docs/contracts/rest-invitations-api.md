@@ -39,7 +39,7 @@ Headers:
   Expiry is realized lazily on re-invite (no background sweep) and emits no event; the
   timed-out row remains as `expired` history. Only a *still-valid* pending invite blocks.
 - The invitation `token` is a ~256-bit `secrets.token_urlsafe(32)` value.
-- **`status` on a list row is DERIVED at read time, not the stored column** (S-019).
+- **`status` on a list row is DERIVED at read time, not the stored column**.
   Because expiry is realized lazily (previous bullet), a timed-out invitation keeps
   `status = 'pending'` in storage until somebody re-invites that email — possibly
   forever. Reporting the stored value made the list say `pending` for a link `accept`
@@ -105,7 +105,7 @@ Error envelope: standard `{ "error": { "code", "message", "detail" } }`.
 - Non-breaking: add optional invitation metadata, add optional query params.
 - Breaking: change the token scheme, the email-match rule, the role-grant semantics,
   or the error envelope.
-- Deriving `status` (S-019) changed no field name and no type. It changed the **value**
+- Deriving `status` changed no field name and no type. It changed the **value**
   a timed-out row reports, from `pending` to `expired` — which is the defect it fixed,
   and matches what a client was already told to compute for itself. A client that
   counted `status == "pending"` rows now gets a smaller, truthful count.

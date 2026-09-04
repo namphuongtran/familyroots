@@ -9,11 +9,11 @@ import { useCapabilities } from '@/lib/hooks/useCapabilities'
 import { Skeleton } from '@/components/ui/skeleton'
 
 /**
- * Spec §7.7, create (S-032). Replaces the legacy `MemberForm` this route
- * used through S-031 — same migration shape as the list/detail screens:
+ * Spec §7.7, create. Replaces the legacy `MemberForm` this route
+ * used through the persons list screens — same migration shape as the list/detail screens:
  * this route no longer imports anything under `src/components/members/` or
  * `src/lib/hooks/useMembers`. `MemberForm.tsx` itself is left in place;
- * deleting it is S-033's.
+ * deleting it is the legacy-component deletion's.
  */
 export default function NewMemberPage() {
   const t = useTranslations('member')

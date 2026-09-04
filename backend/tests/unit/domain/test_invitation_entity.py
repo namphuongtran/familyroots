@@ -116,7 +116,7 @@ def test_revoke_rejects_non_pending() -> None:
     assert inv.collect_events() == []
 
 
-# ── S-019: the status a reader is told ──────────────────────────────────────────
+# ── ADR-053: the status a reader is told ──────────────────────────────────────────
 
 
 def test_effective_status_reports_a_timed_out_pending_as_expired() -> None:

@@ -4,12 +4,12 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Seed S-005. ADR-041 § 5 makes the focus ring the on-surface colour `#1d1b16`
+ * the leaf-green rename. ADR-041 § 5 makes the focus ring the on-surface colour `#1d1b16`
  * rather than an accent, and the offset that ships with it is load-bearing
  * rather than decoration. Measured 2026-08-14: the ring is **2.29:1** drawn
  * straight onto a filled `primary` button, and **16.22:1** against
  * `background`. So a `focus:ring-ring` with no offset is non-compliant under
- * WCAG 1.4.11 whatever the token says, and the ADR's own words are that S-005
+ * WCAG 1.4.11 whatever the token says, and the ADR's own words are that the leaf-green rename
  * "must ship the offset with the ring".
  *
  * Nothing else can see this. The class list type-checks, lints, and builds

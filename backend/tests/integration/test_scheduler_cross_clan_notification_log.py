@@ -1,4 +1,4 @@
-"""The anniversary job still crosses clans after migration 034 — S-014, ADR-043 § 2, item 8.
+"""The anniversary job still crosses clans after migration 034 — migration 034, ADR-043 § 2, item 8.
 
 **This is the path a naive policy breaks silently, and no request test touches it.** The job
 is one process serving every clan on the platform: one advisory lock, one query over all of
@@ -22,7 +22,7 @@ mean something:
 3. the policy is **live** during that run — checked by reading the same two rows back under
    the request role, where clan A sees exactly its own and not clan B's. Without part 3 this
    whole file would pass just as happily against a database where migration 034 never ran,
-   which is precisely the vacuous pass S-012 warned about.
+   which is precisely the vacuous pass the deny-all migration warned about.
 """
 
 from __future__ import annotations

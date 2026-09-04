@@ -41,7 +41,7 @@ build-backend = "hatchling.build"
 # ``migrations`` ships alongside ``app`` because app/core/readiness.py reads the
 # expected head revision from it at runtime, and backend/Dockerfile installs the
 # project with ``uv sync --no-editable``. A wheel that carries only ``app`` puts
-# the scripts out of the running code's reach, which is the S-075 defect: the
+# the scripts out of the running code's reach, which is that defect: the
 # production image could not boot against a fully migrated database.
 packages = ["app", "migrations"]
 

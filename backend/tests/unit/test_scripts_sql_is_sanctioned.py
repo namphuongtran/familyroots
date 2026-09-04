@@ -1,10 +1,10 @@
 """Fail when a `.sql` file under a `scripts/` directory declares DDL no decision sanctions.
 
-## Why this guard exists, and why it is not the `infra/` one widened (seed S-069, 2026-08-22)
+## Why this guard exists, and why it is not the `infra/` one widened (2026-08-22)
 
 `test_no_parallel_table_ddl_under_infra.py` carries two sweeps, and **both watch a directory
 where SQL never ran.** Everything under `infra/` is inert: nothing in the tree reads it, no
-workflow applies it, and S-064 and S-067 deleted the two files that lived there precisely
+workflow applies it, and two deletions removed the two files that lived there precisely
 because nothing executed them.
 
 **The one place SQL genuinely executes is `scripts/.`** Verified 2026-08-22 by reading the
@@ -62,7 +62,7 @@ list.
   `CREATE DATABASE` at `:122` through `psql -c`, and this guard sees neither. That is the
   largest hole. Closing it means deciding how to scan shell heredocs and `-c` arguments
   without drowning in false positives, which is a second decision and therefore a second seed.
-  **That seed is S-077 and it landed on 2026-08-22**: `test_inline_sql_in_scripts_is_sanctioned
+  **That guard landed on 2026-08-22**: `test_inline_sql_in_scripts_is_sanctioned
   .py` extracts what a `psql` invocation executes and reuses `_classify`, `_strip_comments`
   and `_ESCALATIONS` from this module, so a statement gets the same verdict inline as it does
   in a `.sql` file. This paragraph still describes **this** guard correctly: it reads `.sql`
@@ -309,7 +309,7 @@ def test_the_scripts_sweep_actually_reaches_files() -> None:
 
 
 def test_the_classifier_reads_the_real_bootstrap_file_as_exactly_role_and_grant() -> None:
-    """Anti-vacuity for the classifier itself, and the measurement S-069 rests on.
+    """Anti-vacuity for the classifier itself, and the measurement this guard rests on.
 
     A scanner that matched nothing would satisfy checks 2 and 3 forever. Measured 2026-08-22:
     nine statements, one `CREATE ROLE` at `:38` and eight grant statements.

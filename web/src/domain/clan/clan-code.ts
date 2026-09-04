@@ -1,7 +1,7 @@
 /**
  * The clan code — the `slug` the backend stores — and how a clan name becomes one.
  *
- * Seed S-083. ADR-057 kept the typed clan code as the **secondary** join path, so this
+ * The clan-code spec. ADR-057 kept the typed clan code as the **secondary** join path, so this
  * value is both the clan's URL identifier and the string a relative may be asked to
  * type. Spec § 7.1b
  * (`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:862-864`) asks for it
@@ -36,9 +36,9 @@ export const CLAN_CODE_TAKEN_ERROR_CODE = 'auth.clan_slug_taken'
  * detail and the platform-admin routes, so its backend `message` is deliberately generic
  * ("Không tìm thấy dòng họ", `backend/app/i18n/vi.json:4`). Spec § 7.1b asks the register
  * field for its own wording, so the register page renders `auth.clan_slug_not_found` from
- * `web/messages/*.json` and drops the backend message on this one branch. Seed S-081's
+ * `web/messages/*.json` and drops the backend message on this one branch. The join-code backend change's
  * commit `bc73f7c` says so in as many words: "the inline register-field wording spec
- * s7.1b asks for belongs to S-082".
+ * s7.1b asks for belongs to the web register form".
  */
 export const CLAN_NOT_FOUND_ERROR_CODE = 'clan_not_found'
 

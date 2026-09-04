@@ -1,7 +1,7 @@
-// S-033 deleted `personCreateInvalidationKeys`, `personUpdateInvalidationKeys`, and
+// The legacy-component deletion deleted `personCreateInvalidationKeys`, `personUpdateInvalidationKeys`, and
 // `personDeleteInvalidationKeys`: their one caller, `useMembers.ts`'s `usePersonMutations`,
 // was deleted the same seed (its own one caller, `MemberForm.tsx`, was already
-// unreachable — S-032 flagged it, S-033 confirmed and deleted it). See
+// unreachable — the persons form flagged it, the legacy-component deletion confirmed and deleted it). See
 // `tests/behavior/auth-and-invalidation.test.ts` for the test that covered only these three
 // and was deleted with them.
 

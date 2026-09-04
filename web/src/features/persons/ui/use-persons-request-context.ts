@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * The decision `web/CLAUDE.md` (S-030's own section, "Hooks... take a
+ * The decision `web/CLAUDE.md` (the persons repository's own section, "Hooks... take a
  * `RequestContext` the caller passes in") left for whichever screen needed
  * one first: "almost certainly `useCurrentClanId()` plus the rest of the
  * session." This is that screen, and this is that decision.
@@ -17,7 +17,7 @@
  * query until that resolve finishes, in `PersonsList`.
  *
  * **What this deliberately does not do.** It passes no `refreshAuth` to the
- * hooks it feeds. `web/CLAUDE.md`'s account of S-030 says building a real
+ * hooks it feeds. `web/CLAUDE.md`'s account of the persons repository says building a real
  * browser `refreshAuth` — wiring `createSingleFlight`
  * (`shared/http/refresh.ts`) to a Supabase `refreshSession()` call — needs a
  * decision about where a browser-wide singleton like that lives, and "no

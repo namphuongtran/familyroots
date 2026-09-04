@@ -12,7 +12,7 @@ import type { ReactElement, ReactNode } from 'react'
  * `wrapper` option TypeScript resolves `render` to a narrower result than the
  * default `RenderResult`, and reports all 48 query helpers as missing.
  *
- * `messages`/`locale` are new for S-026: the first component tests to render
+ * `messages`/`locale` are new for the pending-approval screen: the first component tests to render
  * a screen that calls `useTranslations` (the blocked-state screens) need a
  * real `NextIntlClientProvider` in the tree, or the hook throws. Pass the
  * real locale file (`web/messages/<locale>.json`), never a hand-written

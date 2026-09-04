@@ -1,11 +1,11 @@
 """``user_clan_roles`` is half covered, and this file is the standing proof of which half.
 
-The name says "login two clans" because S-009 opened it on the read half. It now covers
-both halves of the table's hazard, read and write, plus the role check S-010 named and
+The name says "login two clans" because Phase 6 opened it on the read half. It now covers
+both halves of the table's hazard, read and write, plus the role check the Phase 10 work named and
 could not run, because keeping one table's evidence in one file is worth more than a tidy
 file name.
 
-**Migration 036 gave this table policies on 2026-08-22 (S-052, ADR-050), and the four cases
+**Migration 036 gave this table policies on 2026-08-22 (ADR-050), and the four cases
 below are the reason two of those four policies are permissive.** ``user_clan_roles_sel`` is
 ``USING (true)`` and ``user_clan_roles_ins`` is ``WITH CHECK (true)``. Only ``UPDATE`` and
 ``DELETE`` are clan-keyed. Everything in this file would fail under the migration-027
@@ -18,7 +18,7 @@ Any clan-isolation policy placed on a table that the pre-selection read touches 
 "this user belongs to two clans" into "this user belongs to none", and the user is told
 they have no approved membership. No error is logged. Nothing fails closed loudly.
 
-The pre-selection READS are, re-measured 2026-08-22 by S-052:
+The pre-selection READS are, re-measured 2026-08-22 by ADR-050:
 
 * ``SqlAlchemyAuthQueryPort.get_login_profile`` — ``user_clan_roles`` joined to ``clans``
   (``app/infrastructure/persistence/auth_repository.py:120-137``);
@@ -28,7 +28,7 @@ The pre-selection READS are, re-measured 2026-08-22 by S-052:
   (``app/core/security.py:249-254``), which runs before it sets the GUC at
   ``app/core/security.py:290``.
 
-The pre-selection WRITE, which S-009 and S-010 both missed and S-010 measured:
+The pre-selection WRITE, which Phase 6 and Phase 10 both missed and the Phase 10 work measured:
 
 * ``SqlAlchemyAuthRepository.add_membership``
   (``app/infrastructure/persistence/auth_repository.py:69-88``) INSERTs the
@@ -39,7 +39,7 @@ The pre-selection WRITE, which S-009 and S-010 both missed and S-010 measured:
 These tests drive the real routes over the real ``RlsSession`` seam, so the day a migration
 puts a **clan-keyed SELECT or INSERT** on this table, they fail.
 
-Negative control, re-run 2026-08-22 by S-052 by applying the migration-027 template to
+Negative control, re-run 2026-08-22 by ADR-050 by applying the migration-027 template to
 ``user_clan_roles`` in a throwaway migration. It breaks in both directions, and the two
 failures look nothing alike:
 
@@ -357,7 +357,7 @@ async def test_the_seam_really_was_active_during_those_requests(
         assert await s.scalar(sa.text("SELECT current_setting('app.clan_id', true)")) == ""
 
 
-# ── The role check S-010 named and could not run ────────────────────────────────
+# ── The role check the Phase 10 work named and could not run ────────────────────────────────
 
 
 @pytest.fixture()
@@ -402,11 +402,11 @@ async def test_the_role_that_resolves_is_the_one_for_the_selected_clan(
     rls_session_factory: async_sessionmaker[AsyncSession],
     admin_here_viewer_there: dict[str, Any],
 ) -> None:
-    """The assertion S-010 named. Same user, same token, same admin-only route, two values
+    """The assertion Phase 10 named. Same user, same token, same admin-only route, two values
     of ``X-Current-Clan-Id`` — and the answers must differ.
 
     This asserts the OUTCOME (what the caller is allowed to do) rather than the setting
-    (what ``require_role`` returned), per ``.claude/rules/seeds.md``, "A test pins an
+    (what ``require_role`` returned), per ``.claude/rules/testing.md``, "A test pins an
     outcome, not a setting". ``GET /clans/me/users/pending`` is ``RequireAdmin``
     (``app/api/v1/clans.py:123-128``), so a 200 in one clan and a 403 in the other is the
     role resolving per clan context, read through the response body.

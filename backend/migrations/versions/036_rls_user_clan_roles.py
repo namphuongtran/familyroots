@@ -1,9 +1,9 @@
-"""RLS layer-2 Phase 11: user_clan_roles takes per-command policies (S-052, ADR-050).
+"""RLS layer-2 Phase 11: user_clan_roles takes per-command policies (ADR-050).
 
 **This table does NOT take the migration-027 template, and the difference is the whole
 decision.** ``user_clan_roles`` is the table the authorization gate reads, so a policy on
 it does not merely hide data: it decides what a caller may do. The 027 template breaks it
-in two directions at once, re-measured 2026-08-22 by seed S-052 by putting the table in a
+in two directions at once, re-measured 2026-08-22 by putting the table in a
 copy of migration 035's table list and running
 ``tests/integration/test_rls_login_two_clans.py``:
 

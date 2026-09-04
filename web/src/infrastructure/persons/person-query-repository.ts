@@ -2,7 +2,7 @@ import type { PersonQueryRepository } from '@/application/persons/ports/person-q
 import type { Person } from '@/lib/types'
 import { personsApi } from '@/lib/api/members'
 
-// S-033 trimmed this class to the one method the port still declares. See
+// the legacy-component deletion trimmed this class to the one method the port still declares. See
 // that port's own comment for which methods left and why `get` did not.
 
 export class HttpPersonQueryRepository implements PersonQueryRepository {

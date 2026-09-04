@@ -161,7 +161,7 @@ class InvitationQueryHandler:
         The stored ``status`` is not reported as-is. Nothing sweeps the table, so a
         timed-out row stays ``pending`` in storage until the next create for that
         (clan, email) retires it — and a list that repeated that would show an admin
-        ``Đang chờ`` for a link ``accept`` already refuses (S-019).
+        ``Đang chờ`` for a link ``accept`` already refuses.
 
         ``datetime.now(UTC)`` is deliberately the SAME clock ``accept`` reads
         (``InvitationCommandHandler.accept`` above), not the DB-side ``now()`` that

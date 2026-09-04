@@ -15,9 +15,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/shared/http/errors'
 
 /**
- * Spec §7.7, edit (S-032). Replaces the legacy `MemberForm` +
- * `useMembers().usePerson` this route used through S-031, same as `new/page.tsx`.
- * `usePerson` here is S-030's own hook (`@/features/persons`), not the
+ * Spec §7.7, edit. Replaces the legacy `MemberForm` +
+ * `useMembers().usePerson` this route used through the persons list screens, same as `new/page.tsx`.
+ * `usePerson` here is the persons repository's own hook (`@/features/persons`), not the
  * legacy `src/lib/hooks/useMembers.ts` one the two share a name with.
  */
 export default function EditMemberPage() {

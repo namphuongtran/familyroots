@@ -1,7 +1,7 @@
 # The local Supabase stack
 
 **What it is for.** Auth and Storage, locally, so a test can hold a real session. Nothing else.
-Added by seed S-072 on 2026-08-22, because five seeds in a row could not reach an authenticated
+Added on 2026-08-22, because five changes in a row could not reach an authenticated
 route and four of them invented the same throwaway-route workaround.
 
 **Read this first if you are about to change `supabase/config.toml`.** Two of its settings are load
@@ -24,7 +24,7 @@ them:
 **Neither migrates the other.** No Alembic revision may reach into the Supabase database, and
 nothing in `supabase/` may create an application table. A user therefore exists in two places at
 once, joined by the JWT `sub` claim. **Getting those two halves in step is
-[`seed-test-users.md`](seed-test-users.md)**, landed by S-073 on 2026-08-22, not this
+[`seed-test-users.md`](seed-test-users.md)**, landed on 2026-08-22, not this
 document. `make seed` is the one command; `make seed-verify` is what tells you which half is
 missing.
 
@@ -58,7 +58,7 @@ how you prove the assertion still works.
 
 ### The health assertion had the "a set is a setting" defect, and the control caught it
 
-Recorded because it is a fourth instance of the pattern in `.claude/rules/seeds.md`, found the same
+Recorded because it is a fourth instance of the pattern in `.claude/rules/testing.md`, found the same
 way as the other three: by planting the failure the check exists to catch.
 
 The first version asked *"is every container I can see healthy?"* and looped over
@@ -244,5 +244,5 @@ backend accepted returned `200 {"data":[]}` from inside the container.
 
 **On Linux CI, check that `supabase.localhost` resolves before relying on it.** It was verified on
 macOS only. `host-gateway` works on Linux Docker from 20.10, but host-side resolution of the
-`.localhost` TLD is the resolver's business, not Docker's. That is S-074's problem to settle; an
+`.localhost` TLD is the resolver's business, not Docker's. That is a separate problem to settle; an
 `/etc/hosts` line is the obvious fallback.

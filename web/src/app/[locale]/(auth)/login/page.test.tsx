@@ -6,13 +6,13 @@ import { renderWithProviders } from '@/shared/testing/render'
 import messages from '../../../../../messages/vi.json'
 
 /**
- * Seed S-091. The end state is "every input on the sign-in screen has an accessible name
+ * the login-label fix. The end state is "every input on the sign-in screen has an accessible name
  * that comes from its visible label", so every assertion here reads a *name*, never an
  * attribute. `getByLabelText` and `toHaveAccessibleName` both run the accessible-name
  * computation over the rendered tree, which is the thing a screen reader announces.
  * Asserting `htmlFor === 'email'` would pin the attribute the fix sets, not the outcome the
  * fix exists to produce, and would still pass if the matching `id` were missing
- * (`.claude/rules/seeds.md` § "A test pins an outcome, not a setting").
+ * (`.claude/rules/testing.md` § "A test pins an outcome, not a setting").
  *
  * Negative control, run 2026-08-26 against the parent of this commit: both cases failed.
  * `getByLabelText` reported "Found a label with the text of: Email, however no form control
@@ -28,7 +28,7 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-describe('the sign-in form labels name their inputs (S-091)', () => {
+describe('the sign-in form labels name their inputs', () => {
   it('querying by the visible label text returns the input it labels', () => {
     renderWithProviders(<LoginPage />, { messages })
 

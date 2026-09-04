@@ -26,7 +26,7 @@ void main() {
     expect(t.surface, const Color(0xFFFBF8F1));
   });
 
-  test('S-044: the card ground and the danger red are spec 2.1 values', () {
+  test('the card ground and the danger red are spec 2.1 values', () {
     final t = ArborTokens.light();
     // `surface-container-low`. Replaces #F5F1E6, which was sourced by no spec
     // section and no ADR, only by the M0 plan that wrote it.
@@ -37,7 +37,7 @@ void main() {
     expect(t.error, const Color(0xFFA32218));
   });
 
-  test('S-048: the outline-variant role is spec 2.1 value', () {
+  test('the outline-variant role is spec 2.1 value', () {
     final t = ArborTokens.light();
     // Replaces #CFC7B4, sourced only by the M0 plan that wrote it. No widget in
     // `lib/` reads this token, but `ColorScheme.outlineVariant` is real and the
@@ -56,12 +56,12 @@ void main() {
     expect(scheme.onPrimary, t.onPrimary);
     expect(scheme.surface, t.surface);
     expect(scheme.onSurface, t.onSurface);
-    // Both were unpinned before S-044. `error` was already overridden and
+    // Both were unpinned before the surfaceContainerLow fix. `error` was already overridden and
     // survived; `surfaceContainerLow` was not, and `fromSeed` derived #F2F5EB
     // from the leaf-green seed while the token said #F5F1E6.
     expect(scheme.error, t.error);
     expect(scheme.surfaceContainerLow, t.surfaceContainerLow);
-    // S-048: the same trap a third time. Unpinned, `fromSeed` derived #C2C8BC
+    // the outlineVariant fix: the same trap a third time. Unpinned, `fromSeed` derived #C2C8BC
     // from the leaf-green seed while the token said #CFC7B4. Six Material
     // `…DefaultsM3` classes read this field, so an unsourced value here is a
     // colour the app would paint the day a `Divider` or a `Chip` lands.
@@ -75,7 +75,7 @@ void main() {
     // border, so the two must not be the same colour.
     expect(t.surfaceContainerLow, isNot(t.surface));
     // Ambient depth, not a rigid drop shadow. Moved here from the divider test
-    // by S-049, which is now about pixels and only about dividers.
+    // by the divider fix, which is now about pixels and only about dividers.
     expect(buildAppTheme().cardTheme.elevation, 0);
   });
 
@@ -134,7 +134,7 @@ void main() {
   testWidgets('the no-line rule: a real Divider paints no pixel', (
     tester,
   ) async {
-    // S-049 replaced `expect(theme.dividerTheme.thickness, 0)` with this.
+    // the divider fix replaced `expect(theme.dividerTheme.thickness, 0)` with this.
     // Thickness zero is not absence: Flutter draws a thickness-0 divider as a
     // hairline of exactly one device pixel (`material/divider.dart:86-87`),
     // and before this test the app painted one. Measured 2026-08-22 over the

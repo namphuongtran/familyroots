@@ -8,7 +8,7 @@ const intlMiddleware = createMiddleware(routing)
 
 /**
  * `/verify-email` and `/clan-suspended` joined this list with the three blocked-state
- * screens (S-026). Both are reached by an immediate client-side `router.push`/`.replace`
+ * screens. Both are reached by an immediate client-side `router.push`/`.replace`
  * right after a call made with the session that was already in the browser — `/verify-email`
  * would be, if the live sign-in path called the backend endpoint that raises
  * `email_not_verified` (see `components/auth/VerifyEmailScreen.tsx`'s comment for why it does
@@ -25,7 +25,7 @@ const PUBLIC_ROUTES = [
   '/pending-approval',
   '/verify-email',
   '/clan-suspended',
-  // `/invitations/{token}` joined the list with seed S-084, and it is the one entry
+  // `/invitations/{token}` joined the list with the invitation page, and it is the one entry
   // here that is public for a different reason from all the others. Every route
   // above is public because a session check can race a sign-in that just happened.
   // This one is public because the visitor is a stranger: an invited relative who

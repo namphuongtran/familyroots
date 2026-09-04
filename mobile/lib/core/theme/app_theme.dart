@@ -13,15 +13,15 @@ ThemeData buildAppTheme() {
   // "ColorScheme is populated from the same values so Material widgets inherit
   // correctly."
   //
-  // `surfaceContainerLow` joined the list in S-044 for the same reason, and it
-  // was the one token the S-037 fix missed. Measured 2026-08-22 before the fix:
+  // `surfaceContainerLow` joined the list later for the same reason, and it
+  // was the one token the first fix missed. Measured 2026-08-22 before the fix:
   // `scheme.surfaceContainerLow` was #F2F5EB, a green-tinted tone derived from
   // the leaf-green seed, while the token said #F5F1E6. `cardTheme` below reads
   // the token directly, so no shipped screen showed it, but every Material
   // widget that defaults to `colorScheme.surfaceContainerLow` (Drawer, and the
   // M3 menu and sheet surfaces) would have painted the derived tone.
   //
-  // `outlineVariant` joined in S-048, and it is the same trap a third time.
+  // `outlineVariant` joined later still, and it is the same trap a third time.
   // Measured 2026-08-22 before that fix: `scheme.outlineVariant` was #C2C8BC,
   // another leaf-green tone, while the token said #CFC7B4. Six Flutter 3.44.8
   // `…DefaultsM3` classes read `colorScheme.outlineVariant` — `_DividerDefaults`
@@ -59,10 +59,10 @@ ThemeData buildAppTheme() {
     // The no-line rule: boundaries come from background shifts, not borders.
     //
     // `thickness: 0` does not suppress the line, and this theme claimed that it
-    // did from `0785036` (2026-08-03) until S-049. Flutter states the opposite at
+    // did from `0785036` (2026-08-03) until 2026-08-22. Flutter states the opposite at
     // `material/divider.dart:86-87`: "A divider with a [thickness] of 0.0 is
     // always drawn as a line with a height of exactly one device pixel."
-    // Measured 2026-08-22 by S-049, rasterising a real `Divider` over the page
+    // Measured 2026-08-22, rasterising a real `Divider` over the page
     // ground `#FBF8F1` at this host's device pixel ratio of 3.0: two raster
     // rows changed, to `#D7D1C0` and `#D7D0C0` — one device pixel of ink,
     // antialiased across the two rows the hairline straddles. That is 1.44:1
@@ -83,7 +83,7 @@ ThemeData buildAppTheme() {
     // A high-contrast mode turns the line back on here, and only here: the rule
     // allows `outline_variant` at 15% opacity in that mode, which is this same
     // `DividerThemeData` with `color: t.outlineVariant.withValues(alpha: 0.15)`
-    // and `thickness: 1`. Building that mode is out of S-049's scope.
+    // and `thickness: 1`. Building that mode is out of scope here.
     //
     // `test/core/theme/theme_test.dart` asserts the pixels, not this field.
     dividerTheme: const DividerThemeData(

@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 
 /**
- * Seed S-084: the page an invitation link lands on, driven in a real browser.
+ * the invitation page: the page an invitation link lands on, driven in a real browser.
  *
  * Three things here cannot be measured anywhere else, which is why this file
  * exists alongside `src/features/invitations/ui/InvitationAcceptScreen.test.tsx`:
@@ -289,7 +289,7 @@ test.describe('the token is treated as a credential', () => {
 
     // `WebVitalsReporter` is mounted on every locale route and used to report
     // `window.location.pathname` verbatim, which on this route is the token
-    // (seed S-084, `src/shared/telemetry/redact.ts`). Force the metrics out by
+    // (`src/shared/telemetry/redact.ts`). Force the metrics out by
     // hiding the page, which is what flushes CLS/LCP/INP.
     await page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
@@ -306,7 +306,7 @@ test.describe('the token is treated as a credential', () => {
 
 /**
  * `T-04`: no horizontal page scroll at 320 dp width and 200% root font size. The
- * shape is `e2e/text-scale.spec.ts`'s, added by seed S-034 — including its trap 4,
+ * shape is `e2e/text-scale.spec.ts`'s, added by the text-scale spec — including its trap 4,
  * which is why the scale is set with `addStyleTag` and not by writing to
  * `documentElement.style`.
  */

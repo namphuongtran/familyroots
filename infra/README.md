@@ -66,7 +66,7 @@ Backend API is deployed on [Render](https://render.com/) using native `render.ya
 **The database schema is not managed here.** The Alembic chain under `backend/migrations/` is
 the only source of truth, and `docs/ops/migrations.md` is the document that owns it.
 
-`supabase/migrations/` used to hold a hand-written mirror of the baseline DDL. Seed S-064
+`supabase/migrations/` used to hold a hand-written mirror of the baseline DDL. A 2026-08-22 review
 deleted it on 2026-08-22. Nothing executed it and no check read it, so it had drifted past the
 point of being safe to bootstrap from. Measured on 2026-08-22 by applying both sets to the same
 Postgres 18 server and diffing `information_schema`:
@@ -86,14 +86,14 @@ Postgres 18 server and diffing `information_schema`:
   and psql stopped with `ERROR: schema "auth" does not exist`.
 
 **The RLS policy set is not managed here either.** `rls_policies.sql` was a hand-written set of
-20 policies of the same kind, and seed **S-067 deleted it on 2026-08-22** after reviewing it.
+20 policies of the same kind, and **it was deleted on 2026-08-22** after review.
 The policies the deployed database runs come from Alembic migrations `002` and `027`-`036`
 (ADR-008, ADR-043): 20 policies over 13 RLS-enabled tables at head, counted on 2026-08-22
 against a fresh `alembic upgrade head`. (`infra/README.md` previously said 21 over 14. That was
-correct when S-064 measured it and stopped being correct the same day: migration
+correct when it was measured and stopped being correct the same day: migration
 `039_drop_clan_settings` dropped the `clan_settings` table and its one policy with it.)
 
-S-064 recorded `rls_policies.sql` as an unreviewed liability. The review found three things, all
+That review recorded `rls_policies.sql` as an unreviewed liability. The review found three things, all
 measured on 2026-08-22 against a fresh `alembic upgrade head` on Postgres 18.
 
 - **It contradicted ADR-008 § 2 at its root.** Every policy in it keyed on `auth.uid()`.

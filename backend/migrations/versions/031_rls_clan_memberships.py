@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 6: enable clan-isolation RLS on clan_memberships (S-009, ADR-008).
+"""RLS layer-2 Phase 6: enable clan-isolation RLS on clan_memberships (ADR-008).
 
 ``clan_memberships`` is keyed by a NOT-NULL ``clan_id``
 (``app/models/clan_membership.py:28``), so the migration 027 template applies unchanged:
@@ -25,7 +25,7 @@ cross-clan session, which bypasses RLS exactly as it already does for ``persons`
 The auth/login path never touches this table: it reads ``user_clan_roles``, a different
 table (``app/infrastructure/persistence/auth_repository.py:100-135``).
 
-**``clan_invitations`` is deliberately NOT included, although seed S-009 names it.**
+**``clan_invitations`` is deliberately NOT included, although Phase 6 names it.**
 ``POST /api/v1/invitations/{token}/accept`` (``app/api/v1/invitations.py:89-102``) has no
 ``Depends(get_current_clan_id)`` — the invitee is not a member of the clan yet, so there
 is no clan to select — but its handler is wired to ``get_db``

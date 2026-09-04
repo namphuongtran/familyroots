@@ -1,5 +1,5 @@
 /**
- * The `PersonForm` (S-032) form values, its zod validation, and the pure
+ * The `PersonForm` form values, its zod validation, and the pure
  * mappers to and from the wire request/response shapes.
  *
  * Deliberately not `model/` — that directory holds zod DTOs for *wire*

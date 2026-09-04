@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # ``[tool.hatch.build.targets.wheel] packages`` is what puts them in the wheel,
 # and ``tests/unit/test_wheel_carries_migration_scripts.py`` is what proves it.
 #
-# S-075: the previous form was ``Path(__file__).resolve().parents[2]``, under a
+# The previous form was ``Path(__file__).resolve().parents[2]``, under a
 # comment reading "resolved from the file location, not the CWD, so it works
 # however the process is launched". That is true of *launching* and false of
 # *installing*. ``backend/Dockerfile`` runs ``uv sync --no-editable``, so in the

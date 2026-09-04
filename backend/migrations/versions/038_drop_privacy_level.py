@@ -1,4 +1,4 @@
-"""Drop ``clan_settings.privacy_level`` (S-018, ADR-044 § 2).
+"""Drop ``clan_settings.privacy_level`` (ADR-044 § 2).
 
 **Dropping this column is not a decision against per-clan privacy.** It is a refusal to
 carry a control that restricts nothing. A ``privacy_level`` column that exists is the field
@@ -20,10 +20,10 @@ arm — the failure direction the design rule forbids.
 **The drop loses nothing, which is why this is a migration and not a deprecation.**
 ``clan_settings`` has no rows: nothing constructs a ``ClanSettings``, ``001_initial.py``
 installs no trigger that would create one (its only triggers are ``trg_<table>_updated_at``,
-``001_initial.py:930-937``), and no code reads the column. Measured by S-010, by S-016
+``001_initial.py:930-937``), and no code reads the column. Measured three times over,
 (ADR-044 Measurement 3), and re-measured on 2026-08-22 by this seed over the **whole**
 tracked tree rather than ``backend/app web/src mobile/lib`` — the narrower root is the
-scope defect S-017 amended into ADR-044 Measurement 1. ``git grep -n "privacy_level"``
+scope defect amended into ADR-044 Measurement 1. ``git grep -n "privacy_level"``
 returned no hit under ``backend/tests``: unlike ``allow_public_tree``, this column was never
 even an arbitrary test payload.
 

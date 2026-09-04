@@ -6,7 +6,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  // S-042: `web/playwright.config.ts` boots a second `next dev` instance, deliberately without
+  // `web/playwright.config.ts` boots a second `next dev` instance, deliberately without
   // the two `NEXT_PUBLIC_SUPABASE_*` variables, so `e2e/supabase-banner.spec.ts` can measure the
   // missing-Supabase banner at all. Next.js refuses a second `next dev` that shares a `distDir`
   // (`node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js`, the
@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
   // Moved out of `experimental` in Next.js 15+ (Next.js 16 uses top-level key)
   serverExternalPackages: [],
   /**
-   * Seed S-084. The invitation route's path carries a bearer credential: the token
+   * The invitation route's path carries a bearer credential: the token
    * "is the only thing that decides which clan the caller is granted a role in"
    * (`docs/contracts/rest-invitations-api.md:74`).
    *

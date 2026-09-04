@@ -1,12 +1,12 @@
-// Seed S-093. Two states the domain layer distinguished — a pending member and
+// The membership route fix. Two states the domain layer distinguished — a pending member and
 // a person attached to no clan at all — reached one screen, and that screen
 // said "your join request is waiting" to somebody who had made no request.
 //
 // **These tests read the screen the app actually renders, never a predicate.**
 // `UserProfile.needsOnboarding` already returned the right answer for 23 days
-// while the router ignored it (`docs/SEEDS.md`, S-093), so a test that asserts
+// while the router ignored it, so a test that asserts
 // the getter would have been green throughout the defect. That is the shape
-// `.claude/rules/seeds.md` § "A test pins an outcome, not a setting" forbids,
+// `.claude/rules/testing.md` § "A test pins an outcome, not a setting" forbids,
 // and the same rule's mobile instance — `dividerTheme.thickness == 0`, green
 // for 19 days — is why it is written down.
 //

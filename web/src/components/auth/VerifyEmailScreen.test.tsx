@@ -17,7 +17,7 @@ vi.mock('next/link', () => ({
 const mockUseSearchParams = vi.mocked(useSearchParams)
 const API = `${process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'}/api/v1`
 
-describe('VerifyEmailScreen (S-026, spec §7.1c surface 1)', () => {
+describe('VerifyEmailScreen (spec §7.1c surface 1)', () => {
   it('shows the email in the body and resends against the real envelope on click', async () => {
     mockUseSearchParams.mockReturnValue(
       new URLSearchParams('email=lan%40example.com') as unknown as ReturnType<

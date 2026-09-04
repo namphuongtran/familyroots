@@ -247,7 +247,7 @@ describe('createPerson / updatePerson — write bodies carry no zod validation',
    * Spec §7.7a: "`meta.warning` on a successful write ... the save
    * succeeds, and a `warning` toast appears afterwards." Proven with a
    * negative control: reverting `readWriteWarning`'s call in `createPerson`
-   * back to a bare `unwrapData(raw, parsePerson)` (S-032's own diff) makes
+   * back to a bare `unwrapData(raw, parsePerson)` (the persons form's own diff) makes
    * this assertion fail with `undefined` where `'...'` was expected, because
    * nothing else in the repository ever reads past `data`.
    */
@@ -268,7 +268,7 @@ describe('createPerson / updatePerson — write bodies carry no zod validation',
   })
 
   /**
-   * S-029 recorded this decision (`../api/persons-api.ts`, `web/CLAUDE.md`):
+   * the first persons slice recorded this decision (`../api/persons-api.ts`, `web/CLAUDE.md`):
    * a write body is caller-constructed, not untrusted wire data, so nothing
    * here validates it — it goes to `JSON.stringify` unchanged. This proves
    * that decision rather than asserting it in prose: an extra key no

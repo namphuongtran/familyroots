@@ -75,7 +75,7 @@ Validation rules (current behavior):
   (marriage) re-runs the same rules `create` enforces, excluding the edge being
   updated itself
 
-Read visibility (seed S-056, 2026-08-22; [ADR-051](../decisions/051-edge-visibility-derived-not-cascaded.md)):
+Read visibility (2026-08-22; [ADR-051](../decisions/051-edge-visibility-derived-not-cascaded.md)):
 - `GET /marriages/{id}` and `GET /parent-child/{id}` answer **404**
   (`marriage_not_found` / `parent_child_not_found`) when the edge row is
   soft-deleted **or** when either person it points at is soft-deleted. The second
@@ -122,7 +122,7 @@ Response shapes (see [Response envelope](README.md#response-envelope)):
   `expected_version` (soft-delete only) but still bump `version`.
 
 ## Versioning & Compatibility Rules
-- **2026-08-22 (seed S-056), behaviour change, no schema change**: `GET
+- **2026-08-22, behaviour change, no schema change**: `GET
   /marriages/{id}` and `GET /parent-child/{id}` began answering `404` for an edge
   whose endpoint person is soft-deleted. No field was added, removed, or renamed.
   A client will notice one thing: an id that returned `200` can now return `404`

@@ -5,12 +5,12 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Seed S-007. **Seventeen dead colour tokens survived every gate this repository
+ * the token gate. **Seventeen dead colour tokens survived every gate this repository
  * runs.** On 2026-08-13 `pnpm type-check`, `pnpm lint`, `pnpm depcruise`, and
  * `pnpm build` all passed over a `globals.css` in which those seventeen were
  * declared as `hsl(var(--x))` over values that were hex strings. `hsl(#e5e7eb)`
  * is not valid CSS, so the browser dropped the whole declaration and every one
- * of the seventeen painted the inherited body colour instead. Seed S-001 fixed
+ * of the seventeen painted the inherited body colour instead. The token fix fixed
  * the instance. This file closes the class: CSS that a browser drops is not a
  * build error, so nothing but a check written for it will ever see it.
  *
@@ -27,7 +27,7 @@ import { describe, expect, it } from 'vitest'
  *    tell you that.
  * 2. Lightning CSS rewrites values on the way out. It resolves a `var()` inside
  *    a `color-mix()` when it emits the pre-`color-mix()` sRGB fallback, and seed
- *    S-006 measured it resolving one against the wrong scope. The emitted text
+ *    the dark-palette change measured it resolving one against the wrong scope. The emitted text
  *    is the only place that is visible.
  * 3. A value can be a literal and still be nonsense. `#ff` and `hsl(#8a8072)`
  *    are both literals.
@@ -84,7 +84,7 @@ const uncommented = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '\
  * A brace walk rather than a lazy `{([^}]*)}` because `@theme` contains nested
  * `@keyframes` blocks. Scoped rather than file-wide because `globals.css` holds
  * two colour palettes since ADR-045, and a file-wide read of a two-palette file
- * silently measures whichever came last. Seed S-006 planted exactly that in
+ * silently measures whichever came last. The dark-palette change planted exactly that in
  * `contrast.test.ts` on 2026-08-21 and all 156 cases still passed.
  */
 const blockBody = (source: string, opener: string, what: string): string => {
@@ -130,7 +130,7 @@ const asMap = (pairs: [string, string][]): Map<string, string> => new Map(pairs)
  */
 const UTILITY_PREFIX = new Map([
   // `bg-`, not `text-`: `bg-gold-*` is legal and `text-gold-*` is a lint error
-  // (`web/eslint.config.mjs`, seed S-003). Either utility proves the same thing,
+  // (`web/eslint.config.mjs`). Either utility proves the same thing,
   // so this file uses the one the repository allows for every colour.
   ['color', 'bg-'],
   ['font', 'font-'],
@@ -234,7 +234,7 @@ const RUNTIME = 'RuntimeInjectedFamily'
  * Substitutes every `var()` against the scope until none is left, and throws
  * naming the token and the variable it reached for when one is not declared.
  *
- * That throw is the S-001 defect caught at its root: `--color-border` read
+ * That throw is the token fix defect caught at its root: `--color-border` read
  * `hsl(var(--border))` while `--border` lived in a `:root` block that no longer
  * exists, so the value could never become a colour whatever `hsl()` did with it.
  */
@@ -496,7 +496,7 @@ describe('the dark scope overrides tokens that exist', () => {
  * The validator's own negative control. `isColour` is the one piece of judgement
  * here that is not measured against a real build, so it is measured against a
  * table instead, in both directions. The first three invalid rows are the shapes
- * that actually shipped: `hsl()` over a hex is the S-001 defect, and the two
+ * that actually shipped: `hsl()` over a hex is the token fix defect, and the two
  * malformed hexes are what "an invalid value that is still a literal" means.
  */
 describe('the colour validator judges both ways', () => {

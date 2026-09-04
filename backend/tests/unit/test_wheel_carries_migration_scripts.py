@@ -1,4 +1,4 @@
-"""The built distribution must carry the migration scripts (S-075).
+"""The built distribution must carry the migration scripts.
 
 Why this is not simply ``assert expected_head() is not None``
 -------------------------------------------------------------
@@ -20,7 +20,7 @@ What they still cannot see
 They do not build or run the container image. A Dockerfile change that dropped
 the virtualenv, or a base image missing a runtime dependency, would pass here and
 fail in production. The image is checked by hand today; making CI build it is
-S-074.
+the hostname follow-up.
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ def _read_head_from(import_roots: list[Path], cwd: Path) -> dict[str, str]:
 def test_head_is_readable_from_the_unpacked_wheel(unpacked_wheel: Path, tmp_path: Path) -> None:
     """The wheel must carry the migration scripts.
 
-    Before S-075 this failed with ``head`` equal to ``None``: the wheel held
+    Before the readiness-path fix this failed with ``head`` equal to ``None``: the wheel held
     ``app`` and no ``migrations`` at all."""
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()

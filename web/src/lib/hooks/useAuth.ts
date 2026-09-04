@@ -31,8 +31,8 @@ export function useAuth() {
     setAccessState,
     clear,
   } = useAuthStore()
-  // The active clan lives in the current_clan_id cookie (S-023), not the
-  // auth store (S-025) — this is the one reactive read, so switching clans
+  // The active clan lives in the current_clan_id cookie, not the
+  // auth store — this is the one reactive read, so switching clans
   // re-renders every consumer without a page reload.
   const currentClanId = useCurrentClanId() ?? undefined
   const router = useRouter()

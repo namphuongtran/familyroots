@@ -1,4 +1,4 @@
-"""RLS layer-2 Phase 7: enable clan-isolation RLS on clan_invitations (S-043, ADR-048).
+"""RLS layer-2 Phase 7: enable clan-isolation RLS on clan_invitations (ADR-048).
 
 ``clan_invitations`` is keyed by a NOT-NULL ``clan_id``
 (``app/models/clan_invitation.py:27-31``), so the migration 027 template applies unchanged:

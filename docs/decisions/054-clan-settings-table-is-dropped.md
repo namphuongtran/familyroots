@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-08-22), by seed **S-065**, which closes the hand-off ADR-044 § 5 made to the
+Accepted (2026-08-22). It closes the hand-off ADR-044 § 5 made to the
 coordinator by name. **Shipped**: migration `039_drop_clan_settings`, the ORM model, the
 `Clan.settings` relationship, and four documents, in one change.
 
@@ -13,7 +13,7 @@ commit `206c802`. Postgres 18.4 (`postgres:18-alpine`).
 
 ### The question, in one sentence
 
-After S-017 and S-018, `clan_settings` is a table with zero rows, five unread columns, and an
+After the two column drops, `clan_settings` is a table with zero rows, five unread columns, and an
 RLS policy guarding a reader that does not exist. Does it stay, get built out, or go?
 
 ### What was verified rather than inherited
@@ -33,7 +33,7 @@ all `from app.core.config import settings` and its uses in `events.py:13,126` an
 
 **"Five unread columns" is true of `backend/app` and false of the tracked tree.**
 `default_language` **is** read, at `backend/tests/integration/test_rls_phase10_clan_settings.py:198,
-:205, :292`. S-017 repointed the RLS payload column there when it dropped `allow_public_tree`,
+:205, :292`. The RLS payload column was repointed there when `allow_public_tree` was dropped,
 and ADR-044's own amendment under Measurement 1 warns about exactly this: "The scope of a
 search is part of the claim it supports." The seed inherited the narrower root and stated the
 wider claim. **It does not change the decision** — a test writing a value into a table to prove
@@ -60,7 +60,7 @@ them. **There is no designed screen for this table and there never was.**
 design-decision rows in `plans/2026-08-02-web-spine.md:68` and three spec files. **There is no
 roadmap item D3.** The pointer resolved to nothing. The only row in `docs/roadmap.md` that
 named the table is the M1 privacy-toggle boundary at `:41`, and it cites
-`backend/app/models/clan_settings.py:28,30` for two columns that S-017 and S-018 dropped the
+`backend/app/models/clan_settings.py:28,30` for two columns that were dropped the
 same day — `:28` is now `notification_defaults` and `:30` is inside a comment.
 
 **3. ADR-044 § 3 already decided nothing creates a row and nothing should**, with three
@@ -75,8 +75,8 @@ declined for the *same* structural reason, which neither inherited from the othe
 
 | Work | What it wanted to store per clan | Why it declined |
 |---|---|---|
-| ADR-044 § 2 (S-018) | `privacy_level` | Missing row is the universal case, so the failure direction must resolve to the most restrictive value; and the row creator has to be built first |
-| ADR-049 (S-053) | a configurable PII field set | Recorded at `docs/decisions/README.md:53`: it "lands on `clan_settings`, which ADR-044 measured dead, and 'no row' is universal, so a configurable set must resolve missing to the maximal set or ship as total disclosure" |
+| ADR-044 § 2 | `privacy_level` | Missing row is the universal case, so the failure direction must resolve to the most restrictive value; and the row creator has to be built first |
+| ADR-049 | a configurable PII field set | Recorded at `docs/decisions/README.md:53`: it "lands on `clan_settings`, which ADR-044 measured dead, and 'no row' is universal, so a configurable set must resolve missing to the maximal set or ship as total disclosure" |
 
 **The wall is ADR-044 Measurement 5 case A**: on a stand-in table carrying `035`'s policy
 verbatim, an insert with no `app.clan_id` set — which is the register and onboard path, where
@@ -97,11 +97,11 @@ The costs were enumerated before choosing, not after:
 - **ADR-009's RESTRICT set goes from eleven foreign keys to ten.** `009-clan-deletion-restrict.md:26`
   lists `clan_settings` among the eleven, and `tests/integration/test_schema_baseline.py`
   asserts the clan FKs partition exactly. The test set is updated in this change; **ADR-009
-  needs a dated amendment, which S-065 may not write** (one seed owns one ADR), so the text is
+  needs a dated amendment, which this ADR may not write** (one change owns one ADR), so the text is
   handed to the coordinator.
 - **`infra/supabase/migrations/001_initial_schema.sql:421` still declares the table.** That
-  file is **seed S-064's** this batch and is not touched here. It was already two columns out
-  of date before this change; it is now one table out of date. S-064's end state repairs it in
+  file is **fenced to a concurrent change** this batch and is not touched here. It was already two
+  columns out of date before this change; it is now one table out of date. That change repairs it in
   either direction it chooses — deletion removes the divergence, regeneration picks the drop
   up. `docs/ops/migrations.md` "Known risks" already records Alembic as the source of truth.
 - **`web/src/domain/capability/capability.ts:92` declares an `editClanSettings` capability**,
@@ -171,7 +171,7 @@ mechanical check.
 `_CLAN_ISOLATED_TABLES`, and `tests/integration/test_rls_phase10_clan_settings.py` is deleted
 whole.
 
-**This is the S-014 rule running forwards rather than backwards.** S-014 established that when
+**This is the `audit_logs` rule running forwards rather than backwards.** It established that when
 a table fits none of the guard's sets, you add a set rather than push the name into one that
 passes. The converse is this: when a table leaves the schema, its name leaves the guard
 entirely. It is not parked in an exemption list, because an exemption row is a second place to
@@ -194,7 +194,7 @@ the schema is the last part, not the first:
 | **A row creator that survives the policy** | ADR-044 Measurement 5. The obvious creator — insert during clan creation, on the request session with no clan GUC — is rejected. It runs on the system session (the ADR-048 precedent) or lazily on a clan-scoped write |
 | **A failure direction closed at the most restrictive value** | "No row" is not an edge case here, it is the universal case. A missing row, an unreadable row, NULL, or an unrecognised value all resolve to the most restrictive setting the domain holds. ADR-044 § 2 and ADR-049 both reached this independently |
 | **A named reader, before the column** | Every one of the seven columns this table ever had was written before anything read it, and not one reader ever arrived. Build the reader first and let it say what it needs |
-| **A value domain closed at the database** | `NOT NULL`, a default, and a `CHECK` or enum. S-018 proved the old `privacy_level` accepted `'wide-open'` without complaint, which is what an unconstrained `String(20)` buys |
+| **A value domain closed at the database** | `NOT NULL`, a default, and a `CHECK` or enum. The old `privacy_level` was proved to accept `'wide-open'` without complaint, which is what an unconstrained `String(20)` buys |
 
 ### 5. Two documents stop promising a feature no endpoint backs
 
@@ -253,11 +253,11 @@ at the row rather than in a chat reply.
 - **The round trip is not exact on `attnum`, and it is the tidier direction.** At `038` the
   live columns are `1,2,3,4,5,7,9,10,11` — the gaps at 6 and 8 are tombstones from `037` and
   `038`, and Postgres never reuses a dropped `attnum`. `CREATE TABLE` cannot reproduce a gap,
-  so `downgrade` returns `1..9` contiguous. This is the mirror of S-018's finding that
+  so `downgrade` returns `1..9` contiguous. This is the mirror of the `privacy_level` finding that
   `ADD COLUMN` could not restore ordinal position either. Everything that carries meaning
   round-trips identically, proved by `cmp` against a database that never carried `039`.
 - **`infra/supabase/migrations/001_initial_schema.sql` is now one table out of date**, and
-  this ADR does not fix it. It belongs to S-064 this batch.
+  this ADR does not fix it. It belongs to the concurrent change this batch.
 - **`web`'s `editClanSettings` capability keeps its name and loses its `rbac.md` citation.**
   Nothing breaks; it never touched this table.
 
@@ -269,14 +269,14 @@ at the row rather than in a chat reply.
 | **Keep it dormant and write down that it is dormant** | The seed's own "costs least and buys least", and it was the leading candidate. It lost on evidence: **the warning-at-the-table approach had already been tried on this exact table and did not stop the cost.** `app/models/clan_settings.py:29-32` carried a five-line "NOT wired yet — do NOT start reading it" comment about `max_upload_size_mb`, mirrored at `app/core/config.py:126-127`. That comment warns about one column's default. It does not say the table has no rows and that nothing can create one on the request session, which is the fact ADR-044 and ADR-049 each had to establish on their own. A dormancy note would have to carry the whole of Measurement 5 to be worth more than the two ADRs that already carry it |
 | **Drop only the three remaining scalar columns, keep the table** | Strictly worse than either end. It leaves a table with `approval_config` and `notification_defaults`, the same empty-table problem, the same policy, the same selectin, and a fourth migration in the same series. It optimises for the size of the diff rather than the state of the tree |
 | **Delete the ORM model but leave the table in the database** | The schema is the thing a later agent reads as intent, and `test_schema_baseline.py` compares the ORM to Alembic, so this would fail the gate immediately. It also inverts the repository's own rule that the code is the truth |
-| **Wait for S-064 to settle `infra/supabase/migrations/` first** | Considered seriously, because that file is the one real divergence this change creates. Rejected because S-064's end state repairs the divergence in **either** direction it chooses, its two options are deletion and regeneration-from-Alembic, and both absorb this drop. Sequencing the decision behind it would trade a known, tracked, one-file divergence for a delay, and ADR-044 § 5's hand-off is already the second batch old |
+| **Wait for the concurrent change to settle `infra/supabase/migrations/` first** | Considered seriously, because that file is the one real divergence this change creates. Rejected because that change repairs the divergence in **either** direction it chooses, its two options are deletion and regeneration-from-Alembic, and both absorb this drop. Sequencing the decision behind it would trade a known, tracked, one-file divergence for a delay, and ADR-044 § 5's hand-off is already the second batch old |
 | **Write a `Not verified` row instead of deciding** | Nothing here is unverified. Every claim above is dated and re-runnable, and the seed is a decision seed: shipping the wrong answer is worse than shipping nothing, but shipping *no* answer is what left the table in this state for two batches |
 
 ## What this ADR deliberately does not decide
 
 - **Whether FamilyRoots ever ships per-clan configuration.** It decides that the current table
   is not the way in, and § 4 names what the way in must include.
-- **The fate of `infra/supabase/migrations/`** — seed S-064.
+- **The fate of `infra/supabase/migrations/`** — a concurrent change.
 - **The two remaining unbacked `rbac.md` rows** (§ 6). Named, measured, and left standing.
 - **`web`'s `editClanSettings` capability and its stale `rbac.md` line citations.** Out of
   scope; handed to the coordinator.
@@ -285,10 +285,9 @@ at the row rather than in a chat reply.
 
 ## Related
 
-- Seed **S-065** in [`../SEEDS.md`](../SEEDS.md), which this ADR closes.
 - [ADR-044](044-privacy-toggles-dropped-from-v1.md) — § 5 handed this question over by name;
   Measurement 3 is the empty-table proof, and Measurement 5 is the row-creation wall § 4 rests
-  on. Seeds **S-016**, **S-017** and **S-018** carried it.
+  on. The decision and its two column drops carried it.
 - [ADR-049](049-contact-pii-is-the-whole-field-visibility-rule.md) — reached the same wall from
   the field-visibility side, independently.
 - [ADR-008](008-rls-defense-in-depth.md) and migration `035_rls_clan_settings` — the policy
@@ -296,7 +295,7 @@ at the row rather than in a chat reply.
   reader that never arrived.
 - [ADR-009](009-clan-deletion-restrict.md) — the `RESTRICT` set that goes from eleven foreign
   keys to ten. **Needs a dated amendment.**
-- [ADR-050](050-user-clan-roles-clan-keyed-mutations.md) — the other half of seed S-010, which
+- [ADR-050](050-user-clan-roles-clan-keyed-mutations.md) — the other half of the Phase 10 work, which
   named both tables.
 - [`../superpowers/specs/2026-08-02-design-system-and-screens.md`](../superpowers/specs/2026-08-02-design-system-and-screens.md)
   § 7.10d and § 9-J21, which refuse to draw this table, and § 9-J22, the matrix rule § 5 and

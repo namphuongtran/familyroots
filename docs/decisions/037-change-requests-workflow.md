@@ -192,13 +192,13 @@ the queue for any editor, bypassing the redaction the person read path applies
 `avatar_url` is excluded because it is set by the document/avatar flow, not typed.
 
 > **Amended 2026-08-22 by [ADR-049](049-contact-pii-is-the-whole-field-visibility-rule.md),
-> seed S-059 — read `(L11)` above as
+> ADR-049 — read `(L11)` above as
 > [ADR-049](049-contact-pii-is-the-whole-field-visibility-rule.md).** `L11` names nothing in
 > the tree today. ADR-049 § "Measurement 8b" counted six files citing it and none defining
 > it, and this ADR was one of the six.
 >
 > **The history is one step longer than ADR-049 recorded, re-measured 2026-08-22 by seed
-> S-059.** ADR-049 says the label "entered with commit `8dbf159` on 2026-07-05, where it is
+> the same pass.** ADR-049 says the label "entered with commit `8dbf159` on 2026-07-05, where it is
 > a label from a review list that was never committed". It *was* committed. `git log -S"L11"`
 > run over the whole tree, rather than over `backend/`, returns `bae1ee4` (2026-07-04) one
 > commit earlier, which added `docs/architecture/backend-review-2026-07-04.md`. That file
@@ -216,7 +216,7 @@ the queue for any editor, bypassing the redaction the person read path applies
 > sentence above is left exactly as written, including the dangling label, because this file
 > is a dated record of what was believed on 2026-08-02 and erasing the citation would erase
 > the evidence that an ADR rested on one. The five citing sites under `backend/` were
-> repointed by seed S-059 on 2026-08-22; this one is corrected by this note instead, because
+> repointed on 2026-08-22; this one is corrected by this note instead, because
 > `docs/decisions/README.md` asks that prior ADRs stay immutable except for Status updates,
 > and ADR-047 § 3 draws the line at an **append** rather than a rewrite.
 >

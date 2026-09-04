@@ -9,7 +9,7 @@ import zhMessages from '../../../messages/zh.json'
 import viMessages from '../../../messages/vi.json'
 
 /**
- * Seed S-092. `BackofficeSidebar.tsx:84` carried the literal `Sign out` as the button's only text,
+ * the logout-label fix. `BackofficeSidebar.tsx:84` carried the literal `Sign out` as the button's only text,
  * so a Vietnamese admin read English in the rail while every other label around it was translated.
  *
  * The string resolves through the existing `auth.logout` key rather than a new `Backoffice.*` one.
@@ -42,7 +42,7 @@ function renderRail(locale: string, messages: AbstractIntlMessages) {
   return screen.getByRole('button')
 }
 
-describe('BackofficeSidebar sign-out label (S-092)', () => {
+describe('BackofficeSidebar sign-out label', () => {
   it('names the button in Vietnamese under the default locale', () => {
     expect(renderRail('vi', viMessages)).toHaveAccessibleName(viMessages.auth.logout)
   })

@@ -12,7 +12,7 @@
 # next.js
 /.next/
 /out/
-# S-042: e2e/supabase-banner.spec.ts's dedicated dev server builds here (web/next.config.ts,
+# e2e/supabase-banner.spec.ts's dedicated dev server builds here (web/next.config.ts,
 # web/playwright.config.ts) so it doesn't collide with the primary e2e server's /.next/ lock.
 /.next-banner-e2e/
 
@@ -42,8 +42,8 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /blob-report/
-# S-070: e2e/auth/session.setup.ts writes real Supabase sessions here. They are
+# e2e/auth/session.setup.ts writes real Supabase sessions here. They are
 # short-lived credentials for a local fixture user, and they must never be committed.
 /e2e/.auth/
-# S-070's authenticated dev server needs its own distDir, like S-042's banner server.
+# The authenticated dev server needs its own distDir, like the banner server's.
 /.next-auth-e2e/

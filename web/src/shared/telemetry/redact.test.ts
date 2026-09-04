@@ -4,7 +4,7 @@ import { REDACTED, redactInvitationToken, redactInvitationTokensDeep } from './r
 /**
  * These tests assert the **outcome** — the token is not in the string that comes
  * out — rather than the setting that the regex has a particular shape, per
- * `.claude/rules/seeds.md` § "A test pins an outcome, not a setting".
+ * `.claude/rules/testing.md` § "A test pins an outcome, not a setting".
  *
  * `TOKEN` is a real-shaped value: `secrets.token_urlsafe(32)`
  * (`docs/contracts/rest-invitations-api.md:41`) produces 43 URL-safe base64

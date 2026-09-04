@@ -1,6 +1,6 @@
 # ADR-053: An Invitation's Reported Status Is Derived From `expires_at`, Not Stored
 
-**Status:** Accepted (2026-08-22, seed S-019). Shipped in the same change.
+**Status:** Accepted (2026-08-22). Shipped in the same change.
 
 **This ADR supersedes an owner decision, and that is the reason it exists rather than being
 a contract note.** `docs/superpowers/specs/2026-07-25-invitation-expiry-reinvite-design.md:5`
@@ -82,7 +82,7 @@ Three readings, taken 2026-08-22, and none of them found a client depending on t
   has no server-side filter (`docs/contracts/rest-invitations-api.md:70-74`). Anyone adding that
   query parameter must repeat the `expires_at` predicate in SQL, and that is worth its own seed
   before the parameter exists.
-- **There is no invitation detail route.** S-019's end state asked for consistency "in the list and
+- **There is no invitation detail route.** The end state asked for consistency "in the list and
   in the detail". `backend/app/api/v1/invitations.py` has three admin routes — create (201), list,
   delete (204) — plus accept. `status` is returned in exactly one response, the list row, and the
   201 create body has no `status` field at all. Recorded in the contract so the next reader does not

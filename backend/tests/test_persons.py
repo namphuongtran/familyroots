@@ -61,7 +61,7 @@ class _FakePersonQueryHandler:
         # A no-op on purpose, and it proves nothing about redaction — _FakePerson carries
         # no phone or email to redact. That the list route really calls this, and that a
         # viewer reads null while an admin reads the number, is proved over HTTP against
-        # a real database in tests/integration/test_person_pii_over_http.py (seed S-058).
+        # a real database in tests/integration/test_person_pii_over_http.py.
         # This module is about the {data, meta} envelope.
         return None
 
