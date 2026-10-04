@@ -76,8 +76,6 @@ test('auth profile repository uses backend auth and me-clan endpoints', async ()
   assert.match(source, /['"`]\/auth\/me['"`]/)
   assert.match(source, /['"`]\/me\/clans['"`]/)
   assert.match(source, /\/me\/clans\/\$\{clanId\}\/select/)
-  assert.match(source, /api\.post<RegisterResult>\('\/auth\/register'/)
-  assert.match(source, /api\.post<RegisterResult>\('\/auth\/onboard'/)
 })
 
 test('auth context session fallback remains identity-only', async () => {

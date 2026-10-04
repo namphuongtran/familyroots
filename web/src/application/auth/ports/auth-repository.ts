@@ -27,6 +27,16 @@ export interface AuthenticatedOnboardingInput {
   clan_slug?: string
 }
 
+/**
+ * What `POST /auth/register` answers, unwrapped: `MessageData`, one localised sentence. The
+ * route is non-enumerating (ADR-021), so it says the same thing whether or not the email
+ * already has an account, and carries no user, clan or approval state. #182.
+ */
+export interface RegistrationReceived {
+  message: string
+}
+
+/** What `POST /auth/onboard` answers, unwrapped: the backend's `RegisterResponse`. */
 export interface RegisterResult {
   user_id: string
   email: string
@@ -44,7 +54,7 @@ export interface AuthProfileRepository {
   }): Promise<void>
   listMyClans(): Promise<UserClansResponse>
   selectClan(clanId: string): Promise<ClanSwitchResponse>
-  register(input: RegisterInput): Promise<RegisterResult>
+  register(input: RegisterInput): Promise<RegistrationReceived>
   onboard(input: AuthenticatedOnboardingInput): Promise<RegisterResult>
 }
 
