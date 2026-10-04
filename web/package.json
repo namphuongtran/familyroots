@@ -13,6 +13,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "prototype:backoffice-shell": "NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= next dev --port 3199",
     "build": "next build",
     "start": "next start",
     "test:behavior": "node --experimental-strip-types --test tests/behavior/*.test.ts",
