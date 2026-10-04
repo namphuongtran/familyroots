@@ -109,8 +109,11 @@ is affected by `clan_id` still being accepted.
 `web/src/app/[locale]/(auth)/register/page.tsx:155` for `completeOnboarding` and
 `:165` for `signUp`, and the field was **removed** from `RegisterInput` and
 `AuthenticatedOnboardingInput` rather than kept beside the new one
-(`web/src/application/auth/ports/auth-repository.ts:17,25`), so nothing the web
-app can build is the both-together request the 422 below refuses. Together with
+(`web/src/application/auth/ports/auth-repository.ts:17,25`, deleted by #183), so nothing the web
+app can build is the both-together request the 422 below refuses. Since #183 the two
+types are `RegisterInput` and `OnboardInput` in
+`web/src/features/auth/model/session-dto.ts`: the generated request types with
+`clan_id` omitted, which keeps that guarantee. Together with
 "No other client sends it" beneath this, the window is now empty: closing it is a
 deletion nobody has owned yet, not a wait for a caller to catch up.
 

@@ -113,7 +113,7 @@ graph LR
   browser[Browser]:::comp
   ck["cookies: current_clan_id, preferred_locale"]:::comp
   path["URL path - locale segment"]:::comp
-  store[auth.store - writes the clan cookie on change]:::comp
+  store["features/auth - selecting a clan writes the cookie"]:::comp
   ctxsrv["context.server.ts<br/>getServerRequestContext()"]:::comp
   ctxcli["context.client.ts<br/>getClientRequestContext()"]:::comp
   rc["RequestContext<br/>locale, clanId, accessToken"]:::good

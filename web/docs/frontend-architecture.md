@@ -87,12 +87,11 @@ Rules:
 
 5. Hook migration to application layer. `src/lib/hooks/useMembers.ts` is deleted, see 3.
 
-6. Auth + clan context application/infrastructure layering
-   - `src/application/auth/ports/auth-repository.ts`
-   - `src/application/auth/use-cases/auth-context.ts`
-   - `src/infrastructure/auth/http-auth-profile-repository.ts`
-   - `src/infrastructure/auth/supabase-auth-session-port.ts`
-   - `src/lib/hooks/useAuth.ts` now hydrates auth context via use-cases.
+6. Auth + clan context application/infrastructure layering. **Deleted 2026-10-04 (#183)**, with
+   `src/lib/hooks/useAuth.ts` and `src/store/auth.store.ts`. Auth now lives in
+   `src/features/auth`: the session is one TanStack Query query, and where a user belongs is one
+   pure function, `src/domain/session/access-state.ts`. See `web/CLAUDE.md`, "The session is one
+   query".
 
 7. Tree read flow layering
    - `src/application/tree/ports/tree-query-repository.ts`

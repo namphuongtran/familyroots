@@ -106,8 +106,10 @@ Match what the code already does.
   `MemberCard.tsx`. 25 of the 27 `.tsx` files under `src/components/` follow this.
 - Domain, shared, and transport modules: `kebab-case`, for example `api-client.ts`,
   `historical-date.ts`.
-- Hooks: `camelCase` with a `use` prefix, for example `useAuth.ts`.
-- Zustand stores: `<name>.store.ts`, for example `auth.store.ts`.
+- Hooks: a `use` prefix. Legacy hooks are `camelCase` files, for example `useCapabilities.ts`;
+  a feature slice's hooks are `kebab-case` files, for example `features/auth/hooks/use-session.ts`.
+- Zustand stores: `<name>.store.ts`, for example `ui.store.ts`. Server state is never a store:
+  #183 replaced `auth.store.ts` with a TanStack Query query.
 - Tests sit next to the file they test: `historical-date.test.ts`, `msw.test.tsx`.
 - Variables and functions `camelCase`, types and interfaces `PascalCase`, constants
   `UPPER_SNAKE_CASE`.
