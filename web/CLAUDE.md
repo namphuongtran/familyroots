@@ -183,7 +183,8 @@ Legacy is being deleted, not refactored into compliance. What follows from that:
   besides the 32 baselined `nothing-imports-legacy` edges (21 since #183). With no exclusion and no `pathNot` at
   all, legacy raises nothing either, so the guards above protect against future edits only.
   Re-measured 2026-10-05 after #184: one warning, `lib/utils/pagination.ts`, and the same 21
-  baselined edges.
+  baselined edges. After #185 the same day: the same one warning and 19 edges, because persons'
+  two routes stopped importing the legacy capability hook.
 
 **`api-layer-has-no-react` was vacuous from the day it was written, on every package
 manager, and the first persons slice (2026-08-22) is what found it.** `to.path` in dependency-cruiser
@@ -594,42 +595,42 @@ no React, no store, no `apiFetch`, enforced by `domain-is-pure` and `domain-impo
 client offers to render.
 
 **Do not replace the table with a role-hierarchy comparison, even though every row looks nested.**
-`docs/architecture/rbac.md:78` gives `editor` ✅ for deleting an event, while `:70` and `:57` give
+`docs/architecture/rbac.md:106` gives `editor` ✅ for deleting an event, while `:98` and `:85` give
 `editor` ❌ for deleting a relationship and a person. The nesting is empirical, not guaranteed, and a
 hierarchy shortcut would hide that.
 
-**Consumed since the legacy-transport deletion (2026-08-22) — and the `no-orphans` warning above still fires anyway,
-which is itself worth recording.** `src/lib/hooks/useCapabilities.ts` now calls
-`getCapabilities(role)` here instead of the deleted `deriveCapabilities` in
-`src/application/auth/use-cases/capabilities.ts`. The hook keeps its old external shape — the
-four capability names (`canEditPersons`, `canUploadDocuments`, `canDeleteDocuments`,
-`canEditRelationships`) the four real callers destructure (`grep -rn "useCapabilities()" src`) —
-mapped from this module's names, rather than pushing the full 25-key `CapabilitySet` onto those
-callers as a drive-by rename. **`pnpm depcruise` on 2026-08-22 still reports 4 warnings, not 3,
-and that is the tool's own blind spot rather than a failed rewire.** `.dependency-cruiser.cjs`'s
-`LEGACY` pattern (`^src/(lib/(api|hooks)|application|infrastructure|types)/`) is in the
-`options.exclude` list, so `src/lib/hooks/**` is not a node in the graph at all — an import
-_from_ an excluded file draws no edge, so `capability.ts` reads as orphaned no matter how real
-its consumer is, for as long as the consumer lives in `lib/hooks`. Confirmed by inspecting
-`depcruise --output-type json`'s own module list on 2026-08-22: it contains no `src/lib/hooks/*`
-entry at all. The real consumption is proven by `grep -rn "domain/capability/capability"
-src/lib/hooks/useCapabilities.ts`, by `pnpm type-check`, and by
-`src/lib/hooks/useCapabilities.test.tsx`, not by this warning count — do not read a future "3
-warnings" as this having regressed, and do not read today's "4" as the rewire having failed.
-Widening `LEGACY` to stop excluding `lib/hooks` would fix the tool's blind spot but was not
-attempted here: it would newly subject every file in that tree to orphan-checking in one step,
-which is a change to what the gate covers, not a deletion, and was not that change's to make.
-**Closed by #171 (2026-10-04).** `LEGACY` is no longer in `options.exclude`, so `lib/hooks/**` is
-cruised and `useCapabilities.ts → capability.ts` is a real edge. `capability.ts` had already stopped
-showing as an orphan for another reason: `src/domain/invitation/invitation.ts` imports it.
+**The client reads it through `useCapabilities()` from `@/features/auth` (#185, ADR-061 § 4).**
+The hook (`features/auth/hooks/use-capabilities.ts`) returns the domain `CapabilitySet` for the
+active clan's membership role from `useSession()`. It returns `NO_CAPABILITIES`, every key false,
+when there is no session, no active clan, or a role that is not one of the three (`asClanRole`).
+The rows these names come from are `docs/architecture/rbac.md:84` (`editPerson`) and `:101-102`
+(`uploadDocument`, `deleteDocument`). **The `rbac.md:NN` citations in `capability.ts` itself are
+about 28 lines stale**, measured 2026-10-05: they predate rows added above the matrix. Read the
+row by its title, not its number, until they are corrected.
+Callers read the domain names: the persons create and edit routes gate on `editPerson`,
+`DocumentUpload` on `uploadDocument`, and `DocumentGallery` on `deleteDocument`. The four renamed
+booleans the legacy hook in `lib/hooks/` returned are gone, and so is that hook. A caller that
+needs another capability reads it off the same set. Do not add a named boolean beside it.
 
-**One behaviour changed on purpose while rewiring.** The deleted legacy module hardcoded
-`canDeleteEvents: isAdmin`. This module's own `deleteEvent` entry, cited to
-`docs/architecture/rbac.md:78` two paragraphs up, grants `editor` too. `useCapabilities.ts` does
-not expose `canDeleteEvents` at all — nothing read it (`grep -rn "canDeleteEvents" src` before that
-deletion found only the legacy definition) — so nothing regressed, but the discrepancy is real and
-recorded in that hook's own doc comment so a future reader who wires the field back in reaches
-for the wider, correct grant rather than reintroducing the narrower one.
+**Every capability is also false while the session loads**, so a gated screen shows its denied
+state until the session lands. A test of a denied case must therefore wait for the session to
+settle on the role before it reads, or it passes whatever role arrives. The three tests that pin
+the hook do: `features/auth/hooks/use-capabilities.test.tsx`, `members/new/page.test.tsx` and
+`components/documents/documents-capabilities.test.tsx`, all through the real session hook with MSW
+serving `/me/clans`. Each was seen to fail on 2026-10-05 against its planted defect. A set that is
+all true failed the viewer case on `members/new`. `deleteDocument` mapped from `uploadDocument`
+failed the editor case on the documents components. A viewer read as an editor failed both viewer
+cases, which is what shows the wait is real.
+
+**`editor` deletes events.** `deleteEvent` follows `docs/architecture/rbac.md:106`, which grants
+`editor`, unlike person, relationship and document deletion. The legacy module deleted on
+2026-08-22 hardcoded it admin-only. No screen reads `deleteEvent` yet. When one does, the wider
+grant is the correct one.
+
+**Why `no-orphans` once counted `capability.ts`.** Until #171 (2026-10-04), `LEGACY` sat in
+`options.exclude`, so the legacy hook that consumed this module drew no edge, and `capability.ts`
+read as an orphan on 2026-08-22. #171 put legacy back in the graph, and by then
+`domain/invitation/invitation.ts` imported the module anyway. `features/auth` imports it too now.
 
 ### The session is one query (`src/features/auth`, #183)
 
@@ -680,8 +681,9 @@ zustand keeps only `ui.store.ts`.
   `SupabaseSetupNotice`. Their `app/` pages only route.
 - **Three interim adaptations, each replaced by a later issue.** The `(dashboard)` layout keeps a
   client redirect, driven by the access state, and writes a ready user's active clan back to the
-  cookie when the cookie names another (#186 makes it a server layout). `lib/hooks/useCapabilities.ts`
-  reads the role from the session and keeps its four names (#185). The legacy
+  cookie when the cookie names another (#186 makes it a server layout). The legacy capability hook
+  read the role from the session and kept its four names, until #185 replaced it with the slice's
+  own `useCapabilities()` (see "Clan capabilities"). The legacy
   `infrastructure/http/request-context.ts` reads the clan from the cookie only and the locale from
   the URL; its `useAuthStore` fallback and its `localStorage['preferred_locale']` read are gone.
   The issue said nothing writes that key any more. That was wrong: `ui.store`'s `setLocale` still
@@ -1099,8 +1101,9 @@ engine rather than computed from the stylesheet.
   feature should add to it. **Since #171 (2026-10-04) that is a gate, and the gate only shrinks**
   (ADR-060 § 4). `nothing-imports-legacy` forbids any module outside the set from importing one
   inside it. The imports that already existed are the baseline,
-  `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04 and 21 after #183, which
-  `pnpm depcruise` reads through `--ignore-known`. None of the 21 starts in `features/auth`.
+  `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, 21 after #183 and 19
+  after #185, which `pnpm depcruise` reads through `--ignore-known`. None of the 19 starts in
+  `features/auth`, and none starts in a persons route.
   - **When a slice deletes or re-points a legacy import, shrink the baseline in the same pull
     request:** run `pnpm depcruise:baseline` and commit the shorter file. Do not edit it by hand.
     `pnpm depcruise:ratchet origin/main` fails while the baseline still lists an import the tree no
@@ -1139,8 +1142,11 @@ engine rather than computed from the stylesheet.
   - `lib/types/member.ts` declares `PersonSummary` only, under § 2's fallback. `lib/types/tree.ts`
     embeds it and persons has no replacement for tree's wire shape, so the tree slice owns the
     file and deletes it.
-  - Persons' own routes still import the legacy `useCapabilities`. That is the second half of
-    "done", and the auth slice re-points it (#165, ADR-060 § 3).
+  - ~~Persons' own routes still import the legacy capability hook.~~ The auth slice re-pointed
+    them at `@/features/auth` in #185 (2026-10-05), per ADR-060 § 3, and the baseline lost both
+    entries. `members/page.tsx` and `members/[id]/page.tsx` still call `getServerAuthContext`
+    from `lib/server/auth-context.ts`, which is outside the legacy set the baseline polices. #186
+    replaces it.
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
   The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of
@@ -1161,8 +1167,8 @@ engine rather than computed from the stylesheet.
   `BackofficeSidebar`, the `(dashboard)` layout, the login, register and select-clan pages, the
   three blocked-state pages, and `useCapabilities`. The baseline lost 11 entries, and
   `features/auth` imports no legacy. What of auth's legacy is left, and who removes it (ADR-061 § 8):
-  - `lib/hooks/useCapabilities.ts`, reading the session now. #185 replaces it, and with it the last
-    two auth imports persons' routes hold.
+  - ~~The capability hook in `lib/hooks/`~~: replaced by `useCapabilities()` in `features/auth`
+    by #185 (2026-10-05), with the last two auth imports persons' routes held.
   - `lib/server/auth-context.ts` and `lib/utils/with-role.ts`, the server guard. #186 replaces them;
     #183 only swapped the server's clan resolution for the domain one.
   - ~~`lib/supabase/`~~: moved to `shared/supabase/` by #184 (2026-10-05). The grep for

@@ -100,24 +100,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/app/[locale]/(dashboard)/members/[id]/edit/page.tsx",
-    "to": "src/lib/hooks/useCapabilities.ts",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/[locale]/(dashboard)/members/new/page.tsx",
-    "to": "src/lib/hooks/useCapabilities.ts",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/app/[locale]/(dashboard)/tree/page.tsx",
     "to": "src/components/family-tree/MemberSidebar.tsx",
     "rule": {

@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { PersonForm, PersonsErrorState, usePerson } from '@/features/persons'
-import { useCapabilities } from '@/lib/hooks/useCapabilities'
+import { useCapabilities } from '@/features/auth'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useClientRequestContext } from '@/shared/http/context.client'
 import { ApiError } from '@/shared/http/errors'
@@ -20,7 +20,7 @@ export default function EditMemberPage() {
   const t = useTranslations('member')
   const router = useRouter()
   const { id, locale } = useParams<{ id: string; locale: string }>()
-  const { canEditPersons } = useCapabilities()
+  const { editPerson } = useCapabilities()
   const { context, ready, refreshAuth } = useClientRequestContext()
   const {
     data: person,
@@ -29,7 +29,7 @@ export default function EditMemberPage() {
     refetch,
   } = usePerson(id, {}, { context, refreshAuth, enabled: ready })
 
-  if (!canEditPersons) {
+  if (!editPerson) {
     return <p className="text-muted-foreground text-sm">{t('no_permission_edit')}</p>
   }
 

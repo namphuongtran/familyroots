@@ -6,7 +6,7 @@ import { ExternalLink, FileText, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getDocument } from '@/application/documents/use-cases/document-queries'
 import { documentQueryRepository } from '@/infrastructure/documents/document-query-repository'
-import { useCapabilities } from '@/lib/hooks/useCapabilities'
+import { useCapabilities } from '@/features/auth'
 import { documentKeys, useDocuments, useDocumentMutations } from '@/lib/hooks/useDocuments'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils/date'
@@ -17,7 +17,7 @@ interface DocumentGalleryProps {
 
 export function DocumentGallery({ personId }: DocumentGalleryProps) {
   const t = useTranslations('documents')
-  const { canDeleteDocuments } = useCapabilities()
+  const capabilities = useCapabilities()
   const { data, isLoading } = useDocuments(personId)
   const { deleteDocument } = useDocumentMutations()
   const queryClient = useQueryClient()
@@ -87,7 +87,7 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
             </button>
           </div>
 
-          {canDeleteDocuments && (
+          {capabilities.deleteDocument && (
             <div className="absolute inset-x-0 bottom-0 flex justify-end bg-linear-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
               {confirmDeleteId === doc.id ? (
                 <button

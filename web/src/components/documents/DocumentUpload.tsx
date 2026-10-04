@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Upload, X, FileText } from 'lucide-react'
-import { useCapabilities } from '@/lib/hooks/useCapabilities'
+import { useCapabilities } from '@/features/auth'
 import { useDocumentMutations } from '@/lib/hooks/useDocuments'
 import { cn } from '@/lib/utils/cn'
 
@@ -17,7 +17,7 @@ interface DocumentUploadProps {
 
 export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
   const t = useTranslations('documents')
-  const { canUploadDocuments } = useCapabilities()
+  const capabilities = useCapabilities()
   const { uploadDocument } = useDocumentMutations()
   const inputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -44,14 +44,14 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedFile || !canUploadDocuments) return
+    if (!selectedFile || !capabilities.uploadDocument) return
     await uploadDocument.mutateAsync({ file: selectedFile, title, person_id: personId })
     setSelectedFile(null)
     setTitle('')
     onSuccess?.()
   }
 
-  if (!canUploadDocuments) {
+  if (!capabilities.uploadDocument) {
     return (
       <p className="text-muted-foreground text-sm">
         You do not have permission to upload documents.
