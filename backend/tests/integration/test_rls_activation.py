@@ -329,21 +329,19 @@ _NOT_CLAN_OWNED_TABLES: dict[str, str] = {
         "before any clan and may belong to several, so no single clan owns the row. Its "
         "only path to `clans` is the nullable `person_id` link "
         "(`app/models/user_profile.py:38`, ON DELETE SET NULL), which is an optional "
-        "self-link and not provenance. NO ADR DECIDES THIS. ADR-048 and ADR-050 each "
-        "state as a fact that the table carries no policy "
-        "(`048-invitation-accept-runs-on-the-system-session.md:144`, "
-        "`050-user-clan-roles-clan-keyed-mutations.md:224`); neither decides that it "
-        "should not. The decision was recorded as owed rather than citing an ADR that "
-        "does not say it."
+        "self-link and not provenance. ADR-059 decides it: the table is user-owned and "
+        "stays outside layer 2, and § 2 of that ADR is the rule an exemption must pass "
+        "(`docs/decisions/059-user-owned-tables-stay-outside-layer-2.md`). ADR-048 and "
+        "ADR-050 only state as a fact that the table carries no policy."
     ),
     "user_fcm_tokens": (
         "One row per device push token, owned by a user and not by a clan. `user_id` is "
         "its only foreign key (`app/models/user_fcm_token.py:24`) and every statement "
         "against it keys on the token or the user "
         "(`app/infrastructure/persistence/auth_repository.py:165`, `:175`, "
-        "`app/services/notification.py:43`). `docs/architecture/data-model.md:701-712` "
-        "is the table's own description. NO ADR DECIDES THIS either — the same owed row "
-        "as `user_profiles`."
+        "`app/services/notification.py:43`). `docs/architecture/data-model.md`, section "
+        "`user_fcm_tokens`, is the table's own description. ADR-059 decides it, together "
+        "with `user_profiles`: user-owned, outside layer 2."
     ),
 }
 

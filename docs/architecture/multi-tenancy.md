@@ -57,14 +57,13 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
 | `parent_child` | yes | `created_by_clan_id` (global edge, write-gated) | clan-isolated |
 | `change_requests` | yes | `clan_id` | clan-isolated |
 | `clan_invitations` | yes | `clan_id` | clan-isolated (accept moved to the system session, ADR-048) |
-| `clan_settings` | yes | `clan_id`, NOT NULL and UNIQUE | clan-isolated, inert today |
 | `notification_log` | yes | `clan_id`, NOT NULL | clan-isolated, inert today |
 | `identity_claims` | yes | no clan column at all; reaches one through `person_id` | deny-all tripwire (point 8, ADR-042) |
 | `audit_logs` | yes | `clan_id`, nullable by decision | clan-keyed reads only (point 9, ADR-043) |
 | `user_clan_roles` | yes | `clan_id` | clan-keyed `UPDATE`/`DELETE` only (point 7, ADR-050) |
 | `clans` | **no** | it IS the tenant | outside layer 2 (ADR-008) |
-| `user_profiles` | **no** | per-user identity; no owning clan | none |
-| `user_fcm_tokens` | **no** | per-device push token, owned by a user | none |
+| `user_profiles` | **no** | per-user identity; no owning clan | outside layer 2 (ADR-059) |
+| `user_fcm_tokens` | **no** | per-device push token, owned by a user | outside layer 2 (ADR-059) |
 | `alembic_version` | **no** | Alembic's own bookkeeping | none |
 
 ## How isolation works (application layer — the active mechanism)
@@ -312,13 +311,15 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
     clan-owned. That is what stops an exemption being added quietly to make a red gate go
     green — the one edit that would otherwise defeat the whole check.
 
-    **Four tables are named as not clan-owned, and two of them rest on no ADR.** `clans` is
+    **Four tables are named as not clan-owned, and each rests on a decision.** `clans` is
     the tenant registry itself, kept outside layer 2 by ADR-008. `alembic_version` belongs to
-    Alembic. `user_profiles` and `user_fcm_tokens` are per-user identity: a profile exists
-    before any clan and may belong to several, so no single clan owns the row.
-    **No ADR decides that last pair.** ADR-048 and ADR-050 each state as a fact that
-    `user_profiles` carries no policy; neither decides that it should not. The 2026-08-22 pass recorded
-    that as owed rather than citing an ADR that does not say it.
+    Alembic. `user_profiles` and `user_fcm_tokens` are **user-owned**: a profile exists before
+    any clan and may belong to several, so no single clan owns the row. ADR-059 decides that
+    pair and keeps it outside layer 2, and states the risk that posture accepts. Its § 2 is the
+    rule any exemption must pass: no row may reach a clan except through a nullable link, which
+    means no `*clan_id` column, no foreign key to `clans`, and no chain of NOT NULL foreign keys
+    ending at a table that has either. The veto below enforces the first two clauses. The third
+    is issue #169.
 
     The gate is `test_every_clan_owned_table_is_covered_by_exactly_one_of_the_four_postures`,
     and it fails on four shapes: a clan-owned table in no set, a set naming a table that is
