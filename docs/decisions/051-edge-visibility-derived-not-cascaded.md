@@ -6,6 +6,11 @@ request**. Amends [ADR-006](006-soft-vs-hard-delete.md)'s update of 2026-07-02 b
 the dated amendment carried in that file. The work it leaves is in § 8, and
 that work is **not** a cascade; see § 8.
 
+> **Amendment (2026-10-04, issue #164):** this ADR leaves no work. § 8 was built as briefed in
+> `b60ea64` on 2026-08-22. `backend/tests/integration/test_relationship_by_id_soft_deleted_endpoint.py`
+> pins the outcome: with an endpoint person soft-deleted, the by-id `GET` answers 404 while
+> `DELETE` on the same id succeeds, and restoring the person brings the `GET` back.
+
 ## 1. What was decided before, and what is different now
 
 ADR-006's update dated **2026-07-02** says, in full:
