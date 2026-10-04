@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuth, useAuthActions } from '@/lib/hooks/useAuth'
 import { renderWithProviders } from '@/shared/testing/render'
@@ -29,10 +30,13 @@ import messages from '../../../../../messages/vi.json'
  * copied from `backend/app/i18n/vi.json:96`.
  */
 
+/** `?mode=oauth` is OAuth onboarding. Every other case reads the bare `/register` URL. */
+const searchParams = vi.hoisted(() => ({ current: new URLSearchParams() }))
+
 vi.mock('@/lib/hooks/useAuth', () => ({ useAuth: vi.fn(), useAuthActions: vi.fn() }))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams.current,
 }))
 
 const mockUseAuth = vi.mocked(useAuth)
@@ -69,6 +73,7 @@ function clanNotFoundRejection() {
 
 /** Join is the mode the screen opens in, so this renders and touches nothing else. */
 function renderJoinMode(signUp = vi.fn()) {
+  searchParams.current = new URLSearchParams()
   mockUseAuth.mockReturnValue({
     user: null,
     isLoading: false,
@@ -88,6 +93,30 @@ function renderJoinMode(signUp = vi.fn()) {
   return { ...rendered, signUp }
 }
 
+/**
+ * OAuth onboarding: `?mode=oauth` and a signed-in user who still needs onboarding. The email
+ * input is prefilled and disabled, and there is no password field.
+ */
+function renderOAuthOnboardingMode() {
+  searchParams.current = new URLSearchParams('mode=oauth')
+  mockUseAuth.mockReturnValue({
+    user: { full_name: 'Trần Văn A', email: 'a@example.com' },
+    isLoading: false,
+    isAuthenticated: true,
+    isPendingApproval: false,
+    needsOnboarding: true,
+  } as unknown as ReturnType<typeof useAuth>)
+  mockUseAuthActions.mockReturnValue({
+    signUp: vi.fn(),
+    signInWithGoogle: vi.fn(),
+    completeOnboarding: vi.fn(),
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+  } as unknown as ReturnType<typeof useAuthActions>)
+
+  return renderWithProviders(<RegisterPage />, { messages })
+}
+
 function renderCreateMode(signUp = vi.fn()) {
   const rendered = renderJoinMode(signUp)
   // "Tạo dòng họ mới" — messages.auth.create_clan.
@@ -95,27 +124,15 @@ function renderCreateMode(signUp = vi.fn()) {
   return rendered
 }
 
-/**
- * The full-name, email, and password inputs carry no `id`/`htmlFor` pair, so
- * `getByLabelText` cannot see them. They are shared by this screen's join half (seed
- * the web register form) and its OAuth-onboarding mode, so the clan-code spec left them alone rather than reach
- * outside the create branch it owns. This walks label → containing block → input, the
- * same way `select-clan/page.test.tsx` walks around the radio labels there.
- *
- * The two clan fields deliberately do **not** go through this: they use
- * `getByLabelText`, so the label association the clan-code spec added is itself asserted.
- */
-function unlabelledField(labelText: string) {
-  const label = screen.getByText(labelText)
-  const input = label.parentElement?.querySelector('input')
-  if (!input) throw new Error(`no input beside the "${labelText}" label`)
-  return input as HTMLInputElement
-}
-
-function fillTheFieldsThisSeedDoesNotOwn() {
-  fireEvent.change(unlabelledField(messages.auth.full_name), { target: { value: 'Trần Văn A' } })
-  fireEvent.change(unlabelledField(messages.auth.email), { target: { value: 'a@example.com' } })
-  fireEvent.change(unlabelledField(messages.auth.password), {
+/** Fills full name, email and password, so the form can be submitted. */
+function fillTheAccountFields() {
+  fireEvent.change(screen.getByLabelText(messages.auth.full_name), {
+    target: { value: 'Trần Văn A' },
+  })
+  fireEvent.change(screen.getByLabelText(messages.auth.email), {
+    target: { value: 'a@example.com' },
+  })
+  fireEvent.change(screen.getByLabelText(messages.auth.password), {
     target: { value: 'correct horse battery' },
   })
 }
@@ -127,6 +144,88 @@ function clanNameField() {
 function clanCodeField() {
   return screen.getByLabelText(messages.auth.clan_slug) as HTMLInputElement
 }
+
+/**
+ * #195. The end state is "full name, email and password each take their accessible name from
+ * their visible label", so every reading here is a *name* or a *focus*, never an attribute:
+ * `getByLabelText` and `toHaveAccessibleName` run the accessible-name computation over the
+ * rendered tree. An assertion that `htmlFor` equals an id pins the setting, and would pass
+ * with the `id` missing (`.claude/rules/testing.md` § "A test pins an outcome, not a setting").
+ * The login page's copy of these cases is `login/page.test.tsx`.
+ *
+ * Negative control, run 2026-10-04 against the page as found (no `htmlFor`/`id` on the three):
+ * all eight cases failed. `getByLabelText` threw "Found a label with the text of: Họ và tên,
+ * however no form control was found associated to that label."; the enumeration reported
+ * `form input 0, type text`, `1, type email` and, outside OAuth onboarding, `2, type password`
+ * failing `toHaveAccessibleName()`, and no other input; and after each label click
+ * `document.activeElement` was `<body>`.
+ */
+describe('register: the full name, email and password labels name their inputs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('querying by the visible label text returns the input it labels', () => {
+    renderJoinMode()
+
+    const fullName = screen.getByLabelText(messages.auth.full_name)
+    expect(fullName).toBeInstanceOf(HTMLInputElement)
+    expect(fullName).toHaveProperty('type', 'text')
+
+    const email = screen.getByLabelText(messages.auth.email)
+    expect(email).toBeInstanceOf(HTMLInputElement)
+    expect(email).toHaveProperty('type', 'email')
+
+    const password = screen.getByLabelText(messages.auth.password)
+    expect(password).toBeInstanceOf(HTMLInputElement)
+    expect(password).toHaveProperty('type', 'password')
+  })
+
+  it('in OAuth onboarding, full name and the disabled email are still named by their labels', () => {
+    renderOAuthOnboardingMode()
+
+    expect(screen.getByLabelText(messages.auth.full_name)).toHaveProperty('type', 'text')
+    const email = screen.getByLabelText(messages.auth.email)
+    expect(email).toHaveProperty('type', 'email')
+    expect(email).toBeDisabled()
+    expect(screen.queryByLabelText(messages.auth.password)).toBeNull()
+  })
+
+  // The bare matcher is right here: this case asks only whether a name exists. The case
+  // above pins which name. The counts are the screen's own: three account fields (two in
+  // OAuth onboarding), two radios, and one clan field in join mode or two in create mode.
+  it.each([
+    ['join', () => renderJoinMode(), 6],
+    ['create', () => renderCreateMode(), 7],
+    ['OAuth onboarding', () => renderOAuthOnboardingMode(), 5],
+  ])('every input in the form has an accessible name, in %s mode', (_mode, render, count) => {
+    const { container } = render()
+
+    const inputs = Array.from(container.querySelectorAll<HTMLInputElement>('form input'))
+    expect(inputs).toHaveLength(count)
+    // Soft, so a failure lists every unnamed input rather than stopping at the first.
+    inputs.forEach((input, index) => {
+      expect.soft(input, `form input ${index}, type ${input.type}`).toHaveAccessibleName()
+    })
+  })
+
+  // `document.activeElement` is read directly and the input is found by its type, not
+  // through `getByLabelText`, so this reading does not fail at the same place as the first.
+  it.each([
+    [messages.auth.full_name, 'input:not([type])'],
+    [messages.auth.email, 'input[type="email"]'],
+    [messages.auth.password, 'input[type="password"]'],
+  ])('clicking the visible label "%s" moves focus into its input', async (labelText, selector) => {
+    const user = userEvent.setup()
+    const { container } = renderJoinMode()
+    const input = container.querySelector(`form ${selector}`)
+    expect(input).toBeInstanceOf(HTMLInputElement)
+
+    await user.click(screen.getByText(labelText))
+
+    expect(document.activeElement).toBe(input)
+  })
+})
 
 describe('register, create mode: the clan code field', () => {
   beforeEach(() => {
@@ -175,7 +274,7 @@ describe('register, create mode: the clan code field', () => {
   it('submits the derived code, not an empty string', async () => {
     const { signUp } = renderCreateMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     fireEvent.change(clanNameField(), { target: { value: 'Trần Gia' } })
 
     fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
@@ -204,7 +303,7 @@ describe('register, create mode: auth.clan_slug_taken', () => {
   async function submitAndCollide() {
     const rendered = renderCreateMode(vi.fn().mockRejectedValue(clanSlugTakenRejection()))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     fireEvent.change(clanNameField(), { target: { value: 'Trần Gia' } })
     fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
 
@@ -261,7 +360,7 @@ describe('register, create mode: auth.clan_slug_taken', () => {
   it('leaves the generic page-level error alone for any other failure', async () => {
     renderCreateMode(vi.fn().mockRejectedValue(new Error('boom')))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     fireEvent.change(clanNameField(), { target: { value: 'Trần Gia' } })
     fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
 
@@ -298,7 +397,7 @@ describe('register, join mode: the clan code field', () => {
   it('submits the code as clan_code, and does not submit clan_id', async () => {
     const { signUp } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: 'nguyen-huu-thanh-oai' } })
     submitJoin()
 
@@ -315,7 +414,7 @@ describe('register, join mode: the clan code field', () => {
   it('trims a pasted code rather than sending the whitespace', async () => {
     const { signUp } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: '  nguyen-huu-thanh-oai\n' } })
     submitJoin()
 
@@ -334,7 +433,7 @@ describe('register, join mode: clan_not_found', () => {
   async function submitAndMiss() {
     const rendered = renderJoinMode(vi.fn().mockRejectedValue(clanNotFoundRejection()))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: 'khong-co-dong-ho-nay' } })
     submitJoin()
 
@@ -381,7 +480,7 @@ describe('register, join mode: clan_not_found', () => {
   it('leaves the page-level banner alone for any other failure', async () => {
     renderJoinMode(vi.fn().mockRejectedValue(new Error('boom')))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: 'nguyen-huu-thanh-oai' } })
     submitJoin()
 
@@ -398,7 +497,7 @@ describe('register, join mode: a code the backend would refuse on shape', () => 
   it('never reaches the network, and says so on the field', async () => {
     const { signUp } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheFieldsThisSeedDoesNotOwn()
+    fillTheAccountFields()
     // A space and capitals: `^[a-z0-9]+(?:-[a-z0-9]+)*$` refuses both, so the backend
     // would answer 422 `validation_error` with no copy a person can read.
     fireEvent.change(clanCodeField(), { target: { value: 'Nguyen Huu Thanh Oai' } })

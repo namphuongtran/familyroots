@@ -41,14 +41,6 @@ const registrationReceived: components['schemas']['MessageData'] = {
   message: BACKEND_VI_REGISTRATION_RECEIVED,
 }
 
-/** Same walk as `page.test.tsx`: these three inputs have no `htmlFor` (out of scope for #182). */
-function unlabelledField(labelText: string) {
-  const label = screen.getByText(labelText)
-  const input = label.parentElement?.querySelector('input')
-  if (!input) throw new Error(`no input beside the "${labelText}" label`)
-  return input as HTMLInputElement
-}
-
 describe('register: a 201 shows the success screen', () => {
   it('renders the message the backend sent, in place of the form', async () => {
     server.use(
@@ -58,9 +50,13 @@ describe('register: a 201 shows the success screen', () => {
     )
     const { container } = renderWithProviders(<RegisterPage />, { messages })
 
-    fireEvent.change(unlabelledField(messages.auth.full_name), { target: { value: 'Trần Văn A' } })
-    fireEvent.change(unlabelledField(messages.auth.email), { target: { value: 'a@example.com' } })
-    fireEvent.change(unlabelledField(messages.auth.password), {
+    fireEvent.change(screen.getByLabelText(messages.auth.full_name), {
+      target: { value: 'Trần Văn A' },
+    })
+    fireEvent.change(screen.getByLabelText(messages.auth.email), {
+      target: { value: 'a@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText(messages.auth.password), {
       target: { value: 'correct horse battery' },
     })
     fireEvent.change(screen.getByLabelText(messages.auth.clan_slug), {
