@@ -31,6 +31,13 @@ ALLOWED_MIME_TYPES = frozenset(
     }
 )
 
+# What may become an avatar, decided by the declared MIME type and not by the "photo"
+# label, which the uploader chooses (#176). An avatar is copied into a world-readable
+# bucket with no expiry (ADR-036), so a PDF, audio or video file labelled "photo" must
+# stop here. The same four types are the bucket's own allowed_mime_types in
+# supabase/config.toml, which is a second wall, not this rule.
+AVATAR_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/heic"})
+
 # The domain's default upload-size policy. It is the single source of the number:
 # Settings.MAX_UPLOAD_SIZE_MB derives its default from this, and the application
 # injects the (env-tunable) resolved limit into create() below. Kept in the domain
@@ -138,6 +145,11 @@ class Document(AggregateRoot):
             raise BusinessRuleViolation("document_not_linked_to_person")
         if self.document_type != "photo":
             raise BusinessRuleViolation("only_photo_can_be_avatar")
+        if self.mime_type not in AVATAR_MIME_TYPES:
+            raise BusinessRuleViolation(
+                "document.avatar_mime_type_not_allowed",
+                {"mime_type": self.mime_type, "allowed": sorted(AVATAR_MIME_TYPES)},
+            )
         self.is_avatar = True
 
     def unset_avatar(self) -> None:

@@ -410,6 +410,91 @@ async def test_published_object_paths_never_collide_across_clans(
     assert len(set(destinations)) == 2
 
 
+# ── The declared MIME type decides, not the "photo" label (#176) ──────────────
+
+
+async def _insert_photo(session_factory: Any, side: dict[str, Any], mime_type: str) -> uuid.UUID:
+    """A second document on the side's person, labelled "photo" by the uploader, whose
+    declared MIME type the test chooses. The label is free; the type is the fact."""
+    doc_id = uuid.uuid4()
+    async with session_factory() as s:
+        await s.execute(
+            sa.text(
+                "INSERT INTO documents "
+                "(id, clan_id, person_id, title, document_type, storage_path, mime_type, "
+                "created_by) "
+                "VALUES (:id, :cid, :pid, 'Labelled a photo', 'photo', :path, :mime, :uid)"
+            ),
+            {
+                "id": doc_id,
+                "cid": side["clan"],
+                "pid": side["person"],
+                "path": f"clans/{side['clan']}/documents/{doc_id}",
+                "mime": mime_type,
+                "uid": side["admin"],
+            },
+        )
+        await s.commit()
+    return doc_id
+
+
+async def _is_avatar(session_factory: Any, doc_id: uuid.UUID) -> bool:
+    async with session_factory() as s:
+        flag = (
+            await s.execute(
+                sa.text("SELECT is_avatar FROM documents WHERE id = :id"), {"id": doc_id}
+            )
+        ).scalar_one()
+    assert isinstance(flag, bool)
+    return flag
+
+
+async def test_a_pdf_labelled_photo_is_refused_and_nothing_is_published(
+    client: AsyncClient,
+    seeded: dict[str, Any],
+    fake_storage: FakeStorage,
+    session_factory: Any,
+) -> None:
+    """The avatars bucket is world-readable with no expiry. A PDF the uploader called a
+    "photo" must not get there: 422 with its own code, no publish call reached storage,
+    and neither the person nor the document row changed."""
+    a = seeded["a"]
+    pdf = await _insert_photo(session_factory, a, "application/pdf")
+
+    resp = await client.patch(f"/api/v1/documents/{pdf}/set-avatar", headers=_headers(a))
+
+    assert resp.status_code == 422, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "document.avatar_mime_type_not_allowed"
+    assert error["message"] and error["message"] != f"error.{error['code']}"
+    assert error["detail"]["mime_type"] == "application/pdf"
+    assert fake_storage.published == []
+    assert await _avatar_url(session_factory, a["person"]) is None
+    assert await _is_avatar(session_factory, pdf) is False
+
+
+async def test_negative_control_the_same_photo_as_a_png_is_published(
+    client: AsyncClient,
+    seeded: dict[str, Any],
+    fake_storage: FakeStorage,
+    session_factory: Any,
+) -> None:
+    """NEGATIVE CONTROL. Seeded by the same helper, same label, same person, same clan;
+    only the declared MIME type differs. This one is published, so the refusal above
+    comes from the type and not from anything else about the row."""
+    a = seeded["a"]
+    png = await _insert_photo(session_factory, a, "image/png")
+
+    resp = await client.patch(f"/api/v1/documents/{png}/set-avatar", headers=_headers(a))
+
+    assert resp.status_code == 200, resp.text
+    assert fake_storage.published == [
+        (f"clans/{a['clan']}/documents/{png}", f"clans/{a['clan']}/avatars/{a['person']}")
+    ]
+    assert await _avatar_url(session_factory, a["person"]) == resp.json()["data"]["avatar_url"]
+    assert await _is_avatar(session_factory, png) is True
+
+
 # ── Client writes to avatar_url ───────────────────────────────────────────────
 
 

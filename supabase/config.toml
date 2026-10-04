@@ -130,9 +130,12 @@ file_size_limit = "50MiB"
 
 # Avatars. PUBLIC-READ on purpose (ADR-036). Anything here is fetchable by anyone with the URL,
 # unauthenticated, across clans. Never point SUPABASE_STORAGE_BUCKET at this one.
+# allowed_mime_types is a second wall (#176). The rule is Document.set_avatar, which refuses any
+# type outside AVATAR_MIME_TYPES (backend/app/domain/document/entity.py) before anything is copied.
 [storage.buckets.family-roots-avatars]
 public = true
 file_size_limit = "50MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "image/heic"]
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]

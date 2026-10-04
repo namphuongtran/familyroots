@@ -111,6 +111,7 @@ class TestDocumentAvatar:
             title="Profile Pic",
             document_type="photo",
             storage_path="test.jpg",
+            mime_type="image/jpeg",
             person_id=uuid.uuid4(),
         )
         doc.set_avatar()
@@ -142,6 +143,53 @@ class TestDocumentAvatar:
         with pytest.raises(BusinessRuleViolation, match="document_not_linked_to_person"):
             doc.set_avatar()
 
+    # #176: the "photo" label is chosen by the uploader, so it cannot decide what reaches
+    # the world-readable avatars bucket. The declared MIME type must be one of the four
+    # image types storage.md prescribes for that bucket.
+
+    @staticmethod
+    def _photo(mime_type: str | None) -> Document:
+        return Document.create(
+            clan_id=uuid.uuid4(),
+            actor=ActorInfo(user_id=uuid.uuid4(), role="editor"),
+            title="Labelled a photo",
+            document_type="photo",
+            storage_path="test.bin",
+            mime_type=mime_type,
+            person_id=uuid.uuid4(),
+        )
+
+    def test_set_avatar_refuses_a_pdf_labelled_photo(self) -> None:
+        doc = self._photo("application/pdf")
+        with pytest.raises(BusinessRuleViolation) as err:
+            doc.set_avatar()
+        assert err.value.code == "document.avatar_mime_type_not_allowed"
+        assert err.value.detail["mime_type"] == "application/pdf"
+        assert doc.is_avatar is False
+
+    def test_set_avatar_refuses_a_photo_with_no_mime_type(self) -> None:
+        doc = self._photo(None)
+        with pytest.raises(BusinessRuleViolation) as err:
+            doc.set_avatar()
+        assert err.value.code == "document.avatar_mime_type_not_allowed"
+        assert doc.is_avatar is False
+
+    @pytest.mark.parametrize(
+        "mime_type", ["audio/mpeg", "audio/wav", "video/mp4", "video/quicktime"]
+    )
+    def test_set_avatar_refuses_every_non_image_upload_type(self, mime_type: str) -> None:
+        doc = self._photo(mime_type)
+        with pytest.raises(BusinessRuleViolation) as err:
+            doc.set_avatar()
+        assert err.value.code == "document.avatar_mime_type_not_allowed"
+        assert doc.is_avatar is False
+
+    @pytest.mark.parametrize("mime_type", ["image/jpeg", "image/png", "image/webp", "image/heic"])
+    def test_set_avatar_accepts_each_image_type(self, mime_type: str) -> None:
+        doc = self._photo(mime_type)
+        doc.set_avatar()
+        assert doc.is_avatar is True
+
     def test_unset_avatar(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
         doc = Document.create(
@@ -150,6 +198,7 @@ class TestDocumentAvatar:
             title="Photo",
             document_type="photo",
             storage_path="test.jpg",
+            mime_type="image/jpeg",
             person_id=uuid.uuid4(),
         )
         doc.set_avatar()
