@@ -343,9 +343,10 @@ Spec § 6 defines the web layout: content max-width 1200px, centred.
 | >= 1280 | sidebar 264px plus content; a detail screen may split into main `1fr` and aside 360px |
 
 - Design mobile first. Write the base classes for the narrow case, then add `md:` and `lg:`.
-- Responsive coverage is thin today: 17 `sm:`, 7 `md:`, 5 `lg:`, and no `xl:` or `2xl:` uses in
-  class strings across `web/src`, re-counted 2026-10-04 with comments and tests left out. It said
-  4, 8 and 3 until then. Treat a new screen as needing responsive work, not as inheriting it.
+- Responsive coverage is thin today: 18 `sm:`, 7 `md:`, 5 `lg:`, and no `xl:` or `2xl:` uses in
+  class strings across `web/src`, re-counted 2026-10-04 with comments and tests left out, after
+  #175 added the dashboard's `sm:px-8`. It said 4, 8 and 3 until earlier that day. Treat a new
+  screen as needing responsive work, not as inheriting it.
   The backoffice shell (#174) is the one shell with a real `lg` branch.
 - Container queries are used nowhere in `web/src`. Tailwind v4 ships them. You may use
   `@container` for a component that must adapt to its own box, but do not convert existing
@@ -476,6 +477,55 @@ Measured 2026-10-04 at 320 px and 200%, each planted and reverted against the tw
 
 So the `<wbr>` is load-bearing and `min-w-0`, today, is not. It stays, because it is what lets the
 brand shrink if a later change takes that room away again.
+
+**The dashboard inside that column clipped every stat value and put a badge on a title. Fixed by
+#175 (2026-10-04).** The shell gave `main` the whole 320 px, and the page and shell readings
+passed. Inside the stat card, though, the icon box and `gap-4` took all of the room, so the
+`min-w-0 flex-1` text column was 0 px wide, and the card's `overflow-hidden` hid what spilled out.
+The approvals badge was `absolute top-4 right-4` and sat on its card's title. **`overflow-hidden`
+is how a clipped glyph gets past every width reading above the box that clips it.** So the case
+reads every heading and paragraph in `main`: `clientWidth` above 0 and `scrollWidth` no wider
+than it.
+
+The layout came from measuring, not from the spec:
+
+- **Stat text wraps under its icon.** The row is `flex-wrap`, and the text column is
+  `grow basis-24`. The text stays beside the icon only while the column keeps 6rem, which is
+  wider than the widest label word. `Completeness` is 164 px at a 32px root, or 5.1rem. At 100%
+  text the cards still sit side by side at 320, 375, 640, 768, 1280 and 1440 px. At 1024 px they
+  stack, which gives the labels the room that `truncate` used to cut off.
+- **The page gutter is `px-4` below `sm`.** Once the text stacks, its column is 110 px under `p-8`
+  and 158 px under spec § 2.4's mobile gutter, `space-5`. Neither holds `Completeness`. `px-4`
+  gives 174 px.
+- **The badge leaves the title's line.** The row is `flex-wrap-reverse`, the same pattern as the
+  drawer header above. Keeping the badge beside the title and reserving its room passed the
+  e2e case, which reads `vi` only. It failed in `en`. At 320 px and 200%, `approvals` is 134 px
+  in a 110 px title, so it inked to x 207, the badge's own left edge.
+
+**A seventh trap: a transition moves the boxes after the scale changes.** The quick-action cards
+carry `transition-all`. When the root font size doubles, their `p-5` animates from 20 px to 40 px,
+so a box read right after `addStyleTag` and `document.fonts.ready` is caught mid-flight. The
+approvals title read x 91 to 229. Its padding lands it at 105 to 215. The `beforeEach` in
+`backoffice.auth.spec.ts` now awaits every `CSSTransition` before reading. Do the same in any
+case that changes the scale and then reads a box.
+
+Measured 2026-10-04 at 320×640 with a 32px root. Each control was planted and reverted against
+the case in `web/e2e/auth/backoffice.auth.spec.ts`:
+
+| Plant | Reading |
+|---|---|
+| none | every stat line fits its 174 px box; the badge is on its own line, title 174 px wide below it |
+| old stat row and `p-8` | `248`, `7`, `134`, `73%` at `clientWidth` 0, `scrollWidth` 85, 25, 77, 96 |
+| old stat row only | every label and value at `clientWidth` 54 |
+| `p-8` only | `Approvals` 111, `Documents` 130 and `Completeness` 164, each in 110 |
+| badge `absolute top-4 right-4` | badge x 215 to 255, y 2651 to 2691, meets the title box, x 73 to 247, y 2659 to 2739 |
+
+**Not fixed, and outside T-04's 320 px.** At 640 px and 200% the grid goes to two columns and
+`Tree Completeness` clips again, 164 against 154, in both locales. At 1280 px and 200%, four
+columns beside the rail leave each card's text 44 px, and every line in the cards but `7` clips.
+The `sm:` and `lg:` column counts are viewport breakpoints, and they do not grow with text. An
+intrinsic grid, such as `auto-fill` over a `minmax` in rem, would grow with it. That changes the
+dashboard's layout, so it belongs with spec § 7's redesign.
 
 **The 2026-08-13 text-scale record named a third wordmark that does not exist, and its line number
 for the second one was one place off.** Its out-of-scope note cites `components/layout/Sidebar.tsx:65`

@@ -929,12 +929,20 @@ Two things the prototype did not show, found by reading the drawer at 320 px and
 
 The `test.fail()` is gone. Two cases, one navigation each, read these outcomes at 320×640 with a
 32px root, measured 2026-10-04: `main` 320 wide against `clientWidth` 320; `main.scrollWidth` 320
-against its `clientWidth` 320; the `h1` from x 64 to 256 and y 176 to 368; the top bar's
-`scrollWidth` 320 against 320; and after the menu button, the four links visible by name, the
-drawer's `scrollWidth` 272 against `clientWidth` 272, no line of the brand inked across the close
-button, no hydration request, and a scrim tap that closes it. The page-level scroll case stays, with
-its comment, because the reason it proves nothing still holds. The dashboard page's own clipping
-inside that full-width column is #175, not this.
+against its `clientWidth` 320; the `h1` from x 64 to 256 and y 176 to 368 (x 32 to 288 and y 176
+to 304 since #175's `px-4`); the top bar's `scrollWidth` 320 against 320; and after the menu button,
+the four links visible by name, the drawer's `scrollWidth` 272 against `clientWidth` 272, no line of
+the brand inked across the close button, no hydration request, and a scrim tap that closes it. The
+page-level scroll reading stays, with its comment, because the reason it proves nothing still holds.
+
+**Then the page inside that column failed T-04 too, and the scroll reading passed over it again.
+Fixed by #175 (2026-10-04).** Every stat value was clipped to nothing and the approvals badge sat on
+its card's title, because the cards hide their overflow. The scroll reading now lives in one case
+with T-04's other two clauses, on the same navigation, so the suite is still ten tests: every
+heading and paragraph in `main` has width and fits it, and the badge's box meets neither the
+title's box nor any line of the title as inked. `.claude/rules/tailwind.md` § 7 has the layout
+chosen, the readings, the negative controls, and two traps: a transition that moves the boxes after
+the scale changes, and a fix that passed in `vi` and failed in `en`.
 
 **Two smaller findings the harness reported and did not fix. Both are fixed now, and this
 paragraph is corrected rather than deleted so the finding keeps its history.**

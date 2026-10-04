@@ -52,8 +52,11 @@ export default async function BackofficeDashboardPage({
   const { locale } = await params
   const t = await getTranslations({ locale, namespace: 'Backoffice' })
 
+  // #175: `px-4` below `sm`, not `p-8`, because T-04 needs the room. At 320 px and a 32px root
+  // a stacked stat card's text column is 110 px under `p-8` and 158 px under spec § 2.4's
+  // `space-5`, and the widest unbreakable label word, `Completeness`, is 164 px. `px-4` gives 174.
   return (
-    <div className="p-8">
+    <div className="px-4 py-8 sm:px-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-foreground text-2xl font-bold">{t('dashboard_title')}</h1>
@@ -61,23 +64,27 @@ export default async function BackofficeDashboardPage({
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {mockStats.map((stat) => {
           const Icon = stat.icon
           return (
-            <div
+            <li
               key={stat.label}
               className="border-border bg-card overflow-hidden rounded-xl border shadow-xs"
             >
               <div className="p-5">
-                <div className="flex items-center gap-4">
+                {/*
+                  #175: the text sits beside the icon only while its column keeps
+                  `basis-24`, 6rem, which clears the widest label word (`Completeness`,
+                  5.1rem). Below that it wraps under the icon. Beside it at 320 px and
+                  200% text, the column was 0 px wide and every value was clipped.
+                */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                   <div className="bg-accent rounded-lg p-3">
                     <Icon className="text-accent-foreground h-5 w-5" />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-muted-foreground truncate text-xs font-medium">
-                      {stat.label}
-                    </p>
+                  <div className="min-w-0 grow basis-24">
+                    <p className="text-muted-foreground text-xs font-medium">{stat.label}</p>
                     <p className="text-foreground mt-0.5 text-2xl font-semibold">{stat.value}</p>
                   </div>
                 </div>
@@ -96,10 +103,10 @@ export default async function BackofficeDashboardPage({
                   {stat.change}
                 </p>
               </div>
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
 
       {/* Quick actions */}
       <div className="mt-8">
@@ -141,21 +148,30 @@ function QuickAction({
   return (
     <a
       href={href}
-      className="border-border bg-card hover:border-accent-foreground/40 relative flex flex-col rounded-xl border p-5 shadow-xs transition-all hover:shadow-sm"
+      className="border-border bg-card hover:border-accent-foreground/40 flex flex-col rounded-xl border p-5 shadow-xs transition-all hover:shadow-sm"
     >
       {/*
-        ADR-055: was `bg-orange-500 text-white`, untokened. A count badge on
-        a pending-approval action is the same "needs attention" reading
-        `destructive` already carries elsewhere in this codebase (the reject
-        button, the admin role state) — reused rather than adding a solid
-        warning-fill token nothing else needs yet.
+        #175: the badge shares the title's line only while the title fits on one line
+        beside it. Otherwise `flex-wrap-reverse` lifts it onto a line of its own above,
+        and the title gets the card's whole width. It was `absolute top-4 right-4`, which
+        at 320 px and 200% text sat on the title. Reserving its room beside the title
+        was not enough either: the title kept 110 px, and English's `approvals` is 134.
       */}
-      {badge && (
-        <span className="bg-destructive text-destructive-foreground absolute top-4 right-4 flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium">
-          {badge}
-        </span>
-      )}
-      <h3 className="text-foreground text-sm font-semibold">{title}</h3>
+      <div className="flex flex-wrap-reverse items-center gap-x-3 gap-y-2">
+        <h3 className="text-foreground min-w-0 grow text-sm font-semibold">{title}</h3>
+        {/*
+          ADR-055: was `bg-orange-500 text-white`, untokened. A count badge on
+          a pending-approval action is the same "needs attention" reading
+          `destructive` already carries elsewhere in this codebase (the reject
+          button, the admin role state) — reused rather than adding a solid
+          warning-fill token nothing else needs yet.
+        */}
+        {badge && (
+          <span className="bg-destructive text-destructive-foreground ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+            {badge}
+          </span>
+        )}
+      </div>
       <p className="text-muted-foreground mt-1 text-xs">{description}</p>
     </a>
   )

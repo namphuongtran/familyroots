@@ -113,23 +113,116 @@ test.describe('the backoffice dashboard, as an admin', () => {
       await page.goto(BACKOFFICE_PATH)
       await page.addStyleTag({ content: ':root { font-size: 32px; }' })
       await page.evaluate(() => document.fonts.ready)
+      // Then let every transition the new size started land. The quick-action cards carry
+      // `transition-all`, so their `p-5` animates from 20 to 40 px, and a box read before it
+      // lands is one the page never settles on (#175: the approvals title read x 91 to 229
+      // mid-transition, where its padding lands it at 105 to 215). A cancelled transition has
+      // nothing to wait for.
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            .filter((animation) => animation instanceof CSSTransition)
+            .map((animation) => animation.finished.catch(() => undefined)),
+        ),
+      )
     })
 
-    test('the page reports no horizontal scroll, which here proves almost nothing', async ({
+    /**
+     * T-04's three clauses, as far as this page can break them: no horizontal scroll, no clipped
+     * line of text in `main`, and no badge on its title, the one element that was ever placed
+     * over another. One case and one navigation, because the page-level scroll reading already
+     * paid for this load and the auth budget below has no room for another.
+     *
+     * **#175, the two defects the scroll reading passed over.** Measured 2026-10-04 at 320×640
+     * with `:root { font-size: 32px }`, before the fix: the icon box and `gap-4` filled the
+     * stat card, so its text column was 0 px wide and the card's `overflow-hidden` hid every
+     * value, `248`, `7`, `134` and `73%` at `clientWidth` 0 against `scrollWidth` 85, 25, 77
+     * and 96. And the approvals badge, `absolute top-4 right-4`, sat on its card's title: badge
+     * x 183 to 223, title x 105 to 215, on the same lines.
+     *
+     * The fix, read the same way after it: the stat text wraps under its icon, every line of
+     * every card fits its box at 174 px, and the badge takes a line of its own above a title
+     * 174 px wide. The negative controls, each planted and reverted on 2026-10-04: the old stat
+     * row and `p-8` together read the four values at `clientWidth` 0 against 85, 25, 77 and 96;
+     * the old row alone reads every label and value at 54; `p-8` alone clips `Approvals`,
+     * `Documents` and `Completeness` at 110 against 111, 130 and 164; and the absolute badge
+     * reads x 215 to 255, y 2651 to 2691, across a title box from x 73 to 247, y 2659 to 2739.
+     * **This case reads `vi` only.** A
+     * badge kept beside the title passes it, and fails in `en`: `approvals` inks 24 px past a
+     * 110 px title, to the badge's edge. `.claude/rules/tailwind.md` § 7 has that measurement.
+     */
+    test('the page passes T-04: no scroll, no clipped text, no badge on a title', async ({
       page,
     }) => {
-      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      }))
+      await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE)
+
+      const reading = await page.evaluate(() => {
+        const edges = (r: DOMRect) => ({
+          left: r.left,
+          right: r.right,
+          top: r.top,
+          bottom: r.bottom,
+        })
+        const main = document.querySelector('main')!
+        const action = main.querySelector('a[href$="/backoffice/approvals"]')!
+        const title = action.querySelector('h3')!
+        const range = document.createRange()
+        range.selectNodeContents(title)
+        return {
+          page: {
+            scrollWidth: document.documentElement.scrollWidth,
+            clientWidth: document.documentElement.clientWidth,
+          },
+          cards: [...main.querySelectorAll('ul > li')].map((card) => ({
+            scrollWidth: card.scrollWidth,
+            clientWidth: card.clientWidth,
+            lines: card.querySelectorAll('p').length,
+          })),
+          lines: [...main.querySelectorAll('h1, h2, h3, p')].map((line) => ({
+            text: line.textContent,
+            clientWidth: line.clientWidth,
+            scrollWidth: line.scrollWidth,
+          })),
+          title: { text: title.textContent, box: edges(title.getBoundingClientRect()) },
+          inked: [...range.getClientRects()].map(edges),
+          badges: [...action.querySelectorAll('span')].map((b) => edges(b.getBoundingClientRect())),
+        }
+      })
+      type Edges = (typeof reading.badges)[number]
+      const meets = (a: Edges, b: Edges) =>
+        a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 
       // Kept, because `e2e/text-scale.spec.ts` asks exactly this of the two public pages and
       // a reader will look for it here. **Do not read it as "the screen is usable."** It
-      // passed on this screen while every pixel of content sat outside the viewport — see
-      // the comment below for the measurement, and the two cases below it for the readings
-      // that replaced it (#174). `.claude/rules/testing.md`'s the token fix instance is the
-      // same shape: a reading whose passing and failing values are indistinguishable.
-      expect(scrollWidth).toBe(clientWidth)
+      // passed on this screen while every pixel of content sat outside the viewport (#174,
+      // measured below), and again while every stat value was clipped to nothing (#175, above).
+      // `.claude/rules/testing.md`'s token-fix instance is the same shape: a reading whose
+      // passing and failing values are indistinguishable.
+      expect.soft(reading.page.scrollWidth).toBe(reading.page.clientWidth)
+
+      // 1. Every heading and paragraph in `main` shows whole: each stat card's label, value and
+      //    trend line, and each quick action's title and description. A line with no width is
+      //    the stat defect, and a line wider than its box is clipped by `truncate` or by the
+      //    card. The stat counts first, so a selector that finds no card cannot pass vacuously.
+      expect(reading.cards).toHaveLength(4)
+      for (const card of reading.cards) expect(card.lines).toBeGreaterThanOrEqual(2)
+      const clipped = reading.lines.filter(
+        (line) => line.clientWidth === 0 || line.scrollWidth > line.clientWidth,
+      )
+      expect.soft(clipped).toEqual([])
+      const spilled = reading.cards.filter((card) => card.scrollWidth > card.clientWidth)
+      expect.soft(spilled).toEqual([])
+
+      // 2. The badge clears its card's title: the title's box, and every line of the title as
+      //    inked, which can spill past that box.
+      expect(reading.badges).toHaveLength(1)
+      const [badge] = reading.badges
+      expect(reading.inked.length).toBeGreaterThan(0)
+      expect
+        .soft(meets(badge, reading.title.box), JSON.stringify({ badge, title: reading.title }))
+        .toBe(false)
+      expect.soft(reading.inked.filter((line) => meets(badge, line))).toEqual([])
     })
 
     /**
