@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { cookies } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/shared/supabase/server'
 import {
   CLAN_COOKIE,
   LOCALE_COOKIE,

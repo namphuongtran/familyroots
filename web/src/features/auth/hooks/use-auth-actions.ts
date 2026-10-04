@@ -34,7 +34,7 @@ import type {
   RegistrationReceived,
 } from '../model/session-dto'
 import * as repository from '../server/auth-repository'
-import { authRequestContext } from './auth-request-context'
+import { authCallOptions } from './auth-request-context'
 import { clearSession, sessionQueryOptions } from './use-session'
 
 /**
@@ -97,17 +97,17 @@ export function useAuthActions() {
 
   const register = useCallback(
     async (input: RegisterInput): Promise<RegistrationReceived> =>
-      repository.register(input, { context: await authRequestContext() }),
+      repository.register(input, await authCallOptions()),
     [],
   )
 
   const completeOnboarding = useCallback(
     async ({ full_name, ...input }: OnboardingInput): Promise<OnboardResult> => {
-      const context = await authRequestContext()
+      const options = await authCallOptions()
       if (full_name?.trim()) {
-        await repository.updateProfile({ full_name: full_name.trim() }, { context })
+        await repository.updateProfile({ full_name: full_name.trim() }, options)
       }
-      const result = await repository.onboard(input, { context })
+      const result = await repository.onboard(input, options)
       await routeOnFreshSession()
       return result
     },
@@ -119,9 +119,7 @@ export function useAuthActions() {
    * notifies `useCurrentClanId`, and every access state and clan-keyed query re-derives.
    */
   const selectClan = useCallback(async (clanId: string): Promise<string> => {
-    const confirmed = await repository.selectClan(clanId, {
-      context: await authRequestContext(),
-    })
+    const confirmed = await repository.selectClan(clanId, await authCallOptions())
     writeClanCookie(confirmed)
     return confirmed
   }, [])

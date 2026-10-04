@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { createClientOrNull } from '@/lib/supabase/client'
+import { createClientOrNull } from '@/shared/supabase/client'
 import { getRequestContext } from '@/infrastructure/http/request-context'
 
 const api = axios.create({

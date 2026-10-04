@@ -17,7 +17,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { MailCheck } from 'lucide-react'
-import { authRequestContext } from '../hooks/auth-request-context'
+import { authCallOptions } from '../hooks/auth-request-context'
 import { resendVerification } from '../server/auth-repository'
 
 const RESEND_COOLDOWN_SECONDS = 60
@@ -45,7 +45,7 @@ export function VerifyEmailScreen() {
     if (!email) return
     setStatus('sending')
     try {
-      await resendVerification(email, { context: await authRequestContext() })
+      await resendVerification(email, await authCallOptions())
       setStatus('sent')
       setCooldown(RESEND_COOLDOWN_SECONDS)
     } catch {

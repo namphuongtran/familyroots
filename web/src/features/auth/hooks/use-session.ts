@@ -33,7 +33,7 @@ import { useCurrentClanId } from '@/shared/http/context.client'
 import { onAuthStateChange } from '../api/supabase-auth'
 import { fetchSession } from '../server/auth-repository'
 import { authKeys } from '../server/query-keys'
-import { authRequestContext } from './auth-request-context'
+import { authCallOptions } from './auth-request-context'
 
 /**
  * Set here rather than inherited from whichever `QueryClient` the hook sits under, so the
@@ -47,9 +47,9 @@ const LEGACY_AUTH_STORE_KEY = 'auth-store'
 
 /** No Supabase session is "signed out", and costs no request. */
 export async function loadSession(): Promise<Session | null> {
-  const context = await authRequestContext()
-  if (context.accessToken === null) return null
-  return fetchSession({ context })
+  const options = await authCallOptions()
+  if (options.context.accessToken === null) return null
+  return fetchSession(options)
 }
 
 /** Signed out, known without asking anyone. Sign-out and Supabase's `SIGNED_OUT` both say so. */

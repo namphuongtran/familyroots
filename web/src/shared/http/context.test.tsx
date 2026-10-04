@@ -19,12 +19,12 @@ vi.mock('server-only', () => ({}))
 // depend on whether NEXT_PUBLIC_SUPABASE_URL happens to be set wherever this
 // runs. `context.server.ts` and `context.client.ts` both catch a throwing
 // client and fall back to `accessToken: null`.
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/shared/supabase/server', () => ({
   createClient: vi.fn(async () => {
     throw new Error('no Supabase session in this test')
   }),
 }))
-vi.mock('@/lib/supabase/client', () => ({
+vi.mock('@/shared/supabase/client', () => ({
   createClientOrNull: vi.fn(() => null),
 }))
 

@@ -2,8 +2,8 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { activeClanOf } from '@/domain/session/access-state'
 import type { UserClanMembership } from '@/lib/types'
-import { createClientOrNull as createSupabaseServerClientOrNull } from '@/lib/supabase/server'
-import { isSupabaseConfigured } from '@/lib/supabase/config'
+import { createClientOrNull as createSupabaseServerClientOrNull } from '@/shared/supabase/server'
+import { isSupabaseConfigured } from '@/shared/supabase/config'
 
 export type ServerAppRole = 'viewer' | 'editor' | 'admin' | 'super_admin'
 

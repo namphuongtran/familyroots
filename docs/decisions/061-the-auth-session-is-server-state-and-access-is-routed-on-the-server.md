@@ -23,6 +23,12 @@ numbers as hints and its quoted text as the claim.
 2026-10-04: § 9's registration defect, Context finding 10, is fixed by #182. `register` and
 `onboard` unwrap the envelope, and `register/page.success.test.tsx` is the test #183 keeps green.
 
+2026-10-05: § 6 is built by #184. `useClientRequestContext()` and a module-level `refreshAuth`
+live in `web/src/shared/http/context.client.ts`. Persons, invitations and the auth slice's calls
+pass it, and the two `use-*-request-context.ts` copies are deleted. `lib/supabase/` is now
+`shared/supabase/`. § 8's "two concurrent 401s cause one refresh" is
+`web/src/shared/http/use-client-request-context.test.tsx`.
+
 ## Context
 
 ### The spec's auth slice, and what happened instead

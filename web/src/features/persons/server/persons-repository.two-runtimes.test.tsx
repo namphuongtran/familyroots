@@ -20,12 +20,12 @@ import { CLAN_COOKIE } from '@/shared/http/request-context'
 import { getPerson } from './persons-repository'
 
 vi.mock('server-only', () => ({}))
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/shared/supabase/server', () => ({
   createClient: vi.fn(async () => {
     throw new Error('no Supabase session in this test')
   }),
 }))
-vi.mock('@/lib/supabase/client', () => ({
+vi.mock('@/shared/supabase/client', () => ({
   createClientOrNull: vi.fn(() => null),
 }))
 

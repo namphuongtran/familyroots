@@ -9,9 +9,9 @@ import {
   formatHistoricalDate,
   isKnownDate,
   usePerson,
-  usePersonsRequestContext,
   type Person,
 } from '@/features/persons'
+import { useClientRequestContext } from '@/shared/http/context.client'
 
 interface MemberSidebarProps {
   personId: string
@@ -40,8 +40,12 @@ function lifespan(person: Person, locale: string): string {
 export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
   const t = useTranslations('tree')
   const locale = useLocale()
-  const { context, ready } = usePersonsRequestContext()
-  const { data: person, isPending } = usePerson(personId, {}, { context, enabled: ready })
+  const { context, ready, refreshAuth } = useClientRequestContext()
+  const { data: person, isPending } = usePerson(
+    personId,
+    {},
+    { context, refreshAuth, enabled: ready },
+  )
 
   return (
     <div className="border-border bg-card absolute top-4 left-4 z-20 w-64 overflow-hidden rounded-xl border shadow-lg">

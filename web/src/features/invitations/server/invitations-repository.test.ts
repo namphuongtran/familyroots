@@ -14,7 +14,8 @@ const TOKEN = 'Zx-9Qa_bC3dEfGhIjKlMnOpQrStUvWxYz0123456789'
 /**
  * `clanId: null` on purpose. The invitee surface "takes no `X-Current-Clan-Id`, and
  * cannot" (`docs/contracts/rest-invitations-api.md:72-74`), and
- * `ui/use-invitation-request-context.ts` is what guarantees that in the browser.
+ * `useClientRequestContext({ clanScoped: false })` in `ui/InvitationAcceptScreen.tsx` is what
+ * guarantees that in the browser.
  */
 const context: RequestContext = { locale: 'vi', clanId: null, accessToken: 'tok-1' }
 

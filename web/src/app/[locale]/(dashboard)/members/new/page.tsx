@@ -4,9 +4,10 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { PersonForm, usePersonsRequestContext } from '@/features/persons'
+import { PersonForm } from '@/features/persons'
 import { useCapabilities } from '@/lib/hooks/useCapabilities'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useClientRequestContext } from '@/shared/http/context.client'
 
 /**
  * Spec §7.7, create. Replaces the legacy `MemberForm` this route
@@ -20,7 +21,7 @@ export default function NewMemberPage() {
   const router = useRouter()
   const { locale } = useParams<{ locale: string }>()
   const { canEditPersons } = useCapabilities()
-  const { context, ready } = usePersonsRequestContext()
+  const { context, ready, refreshAuth } = useClientRequestContext()
 
   if (!canEditPersons) {
     return <p className="text-muted-foreground text-sm">{t('no_permission_edit')}</p>
@@ -39,6 +40,7 @@ export default function NewMemberPage() {
         <PersonForm
           mode="create"
           context={context}
+          refreshAuth={refreshAuth}
           onSuccess={(person) => router.push(`/${locale}/members/${person.id}`)}
           onCancel={() => router.back()}
         />

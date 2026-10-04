@@ -2,7 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { components } from '@/generated/api-types'
-import { createClientOrNull } from '@/lib/supabase/client'
+import { createClientOrNull } from '@/shared/supabase/client'
 import { clearClanCookie, writeClanCookie } from '@/shared/http/context.client'
 import { envelope, server } from '@/shared/testing/msw'
 import { renderWithProviders } from '@/shared/testing/render'
@@ -19,7 +19,7 @@ import { useSession } from './use-session'
  * `e2e/auth/dashboard.auth.spec.ts` reads the same outcome in a browser, on the real dashboard.
  */
 
-vi.mock('@/lib/supabase/client', () => ({ createClientOrNull: vi.fn() }))
+vi.mock('@/shared/supabase/client', () => ({ createClientOrNull: vi.fn() }))
 
 const API = `${process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'}/api/v1`
 const CLAN_A = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -126,6 +126,45 @@ describe('useSession: one query however many consumers', () => {
     expect(fake.listenerCount()).toBe(1)
     unmount()
     expect(fake.listenerCount()).toBe(0)
+  })
+
+  it('a 401 refreshes the token once and reads the session, rather than failing it', async () => {
+    fake = fakeSupabaseClient({ accessToken: 'expired-token', refreshedAccessToken: 'fresh-token' })
+    vi.mocked(createClientOrNull).mockReturnValue(fake.client as never)
+    const seen: Record<string, { authorization: string | null; clan: string | null }[]> = {
+      me: [],
+      clans: [],
+    }
+    const fresh = (route: 'me' | 'clans', request: Request) => {
+      const authorization = request.headers.get('authorization')
+      seen[route].push({ authorization, clan: request.headers.get('x-current-clan-id') })
+      return authorization === 'Bearer fresh-token'
+    }
+    const expired = () =>
+      HttpResponse.json(
+        { error: { code: 'invalid_token', message: 'Token expired', detail: {} } },
+        { status: 401 },
+      )
+    server.use(
+      http.get(`${API}/auth/me`, ({ request }) =>
+        fresh('me', request) ? HttpResponse.json(envelope(profile())) : expired(),
+      ),
+      http.get(`${API}/me/clans`, ({ request }) =>
+        fresh('clans', request) ? HttpResponse.json(envelope([membership(CLAN_A)])) : expired(),
+      ),
+    )
+    writeClanCookie(CLAN_A)
+
+    renderWithProviders(<Probe name="page" />)
+
+    await waitFor(() => expect(screen.getByTestId('page')).toHaveTextContent(`ready:${CLAN_A}`))
+    expect(fake.auth.refreshSession).toHaveBeenCalledTimes(1)
+    // The cookie names a clan, and no auth route is clan-scoped: neither attempt sends it.
+    const expiredThenFresh = [
+      { authorization: 'Bearer expired-token', clan: null },
+      { authorization: 'Bearer fresh-token', clan: null },
+    ]
+    expect(seen).toEqual({ me: expiredThenFresh, clans: expiredThenFresh })
   })
 
   it('with no Supabase session, reads signed out and sends nothing', async () => {

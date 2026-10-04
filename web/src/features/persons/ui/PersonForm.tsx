@@ -76,6 +76,11 @@ export interface PersonFormProps {
   /** Required, and used, only when `mode === 'edit'`. */
   person?: Person
   context: RequestContext
+  /**
+   * The browser-wide refresh from `useClientRequestContext`, for a 401 on save or on reload.
+   * Required, as `context` is: leaving it out would quietly turn an expired token into an error.
+   */
+  refreshAuth: () => Promise<RequestContext | null>
   onSuccess: (person: Person) => void
   onCancel: () => void
 }
@@ -110,7 +115,14 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-export function PersonForm({ mode, person, context, onSuccess, onCancel }: PersonFormProps) {
+export function PersonForm({
+  mode,
+  person,
+  context,
+  refreshAuth,
+  onSuccess,
+  onCancel,
+}: PersonFormProps) {
   const t = useTranslations('member_form')
   const locale = useLocale()
 
@@ -165,7 +177,7 @@ export function PersonForm({ mode, person, context, onSuccess, onCancel }: Perso
   async function openConflict(mine: PersonFormValues, repeated: boolean): Promise<void> {
     if (!person) return
     try {
-      const latestPerson = await getPerson(person.id, {}, { context })
+      const latestPerson = await getPerson(person.id, {}, { context, refreshAuth })
       const latestValues = personToFormValues(latestPerson)
       const rows = diffPersonFormValues(t, locale, initialValues, mine, latestValues)
       const choices: Record<string, FieldChoice> = {}
@@ -177,8 +189,8 @@ export function PersonForm({ mode, person, context, onSuccess, onCancel }: Perso
     }
   }
 
-  const createMutation = useCreatePerson({ context })
-  const updateMutation = useUpdatePerson({ context })
+  const createMutation = useCreatePerson({ context, refreshAuth })
+  const updateMutation = useUpdatePerson({ context, refreshAuth })
 
   async function onSubmit(values: PersonFormValues): Promise<void> {
     setSubmitError(null)

@@ -8,11 +8,10 @@
  *
  * `context` is a `RequestContext` the caller passes in, same as the
  * repository itself takes — no hook here reaches for `getClientRequestContext`
- * internally. A screen is what owns deciding how it gets one,
- * typically `useCurrentClanId()` (`@/shared/http/context.client`) for the
- * reactive clan id plus the rest of the session; wiring that up is a screen
- * concern, not this one, and keeping it out of this file is what makes the
- * hooks below testable with a plain object.
+ * internally. A screen gets one, with the `refreshAuth` to pass beside it,
+ * from `useClientRequestContext()` (`@/shared/http/context.client`). Keeping
+ * that out of this file is what makes the hooks below testable with a plain
+ * object.
  */
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'

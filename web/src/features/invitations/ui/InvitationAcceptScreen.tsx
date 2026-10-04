@@ -44,10 +44,10 @@ import {
   UserCheck,
   type LucideIcon,
 } from 'lucide-react'
+import { useClientRequestContext } from '@/shared/http/context.client'
 import { ApiError } from '@/shared/http/errors'
 import { asClanRole, refusalFor, type InvitationRefusal } from '@/domain/invitation/invitation'
 import { useAcceptInvitation } from '../hooks/use-accept-invitation'
-import { useInvitationRequestContext } from './use-invitation-request-context'
 
 export interface InvitationAcceptScreenProps {
   /** The opaque token from the URL. Passed down, never logged, never stored. */
@@ -123,8 +123,19 @@ const PRIMARY_BUTTON =
 
 export function InvitationAcceptScreen({ token, locale }: InvitationAcceptScreenProps) {
   const t = useTranslations('invitation')
-  const { context, ready } = useInvitationRequestContext()
-  const accept = useAcceptInvitation({ token, context })
+  /**
+   * **No `X-Current-Clan-Id`, and that is the contract's rule rather than a shortcut.**
+   * `docs/contracts/rest-invitations-api.md:72-74`: "The invitee surface takes no
+   * `X-Current-Clan-Id`, and cannot. The invitee is not a member of the clan yet, so there is no
+   * clan for them to select." A stale `current_clan_id` cookie from an earlier session would
+   * otherwise put a header on this request that means nothing here, so `clanScoped: false` leaves
+   * it off the context and off the context a refresh resolves.
+   *
+   * `ready` keeps the Accept button disabled until the session has been read, rather than firing a
+   * call with no `Authorization` header and turning a signed-in user into a spurious 401.
+   */
+  const { context, ready, refreshAuth } = useClientRequestContext({ clanScoped: false })
+  const accept = useAcceptInvitation({ token, context, refreshAuth })
 
   /**
    * The signed-out case, caught before the button rather than after a 401.
@@ -136,9 +147,9 @@ export function InvitationAcceptScreen({ token, locale }: InvitationAcceptScreen
    * and its email has to match. Offering an Accept button to a signed-out visitor
    * would be offering a button whose only possible answer is 401.
    *
-   * The 401 branch below is kept as well, and is not redundant: an access token
-   * that expired while this page sat open is signed *in* by this check and refused
-   * by the backend.
+   * The 401 branch below is kept as well, and is not redundant. An access token that
+   * expired while this page sat open is refreshed and the accept retried, through
+   * `refreshAuth`, but a session Supabase will no longer refresh still ends in a 401.
    */
   const signedOut = ready && context.accessToken === null
 
