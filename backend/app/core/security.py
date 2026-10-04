@@ -20,6 +20,7 @@ from app.core.exceptions import AppError, AuthenticationError, ForbiddenError
 from app.core.locale import SUPPORTED_LOCALES
 from app.core.rls import set_request_clan_id
 from app.domain.auth.identity_provider import IdentityUnavailableError
+from app.domain.auth.platform_role import platform_role_of
 from app.models.user_profile import UserProfile
 
 # auto_error=False so a MISSING/malformed Authorization header raises our own
@@ -216,7 +217,7 @@ async def get_super_admin(
     Queries ``user_profiles.platform_role``; ``ensure_user_profile`` has already
     rejected a deactivated account.
     """
-    if profile.platform_role != "super_admin":
+    if platform_role_of(profile.platform_role) != "super_admin":
         raise ForbiddenError("super_admin_required")
     return profile
 

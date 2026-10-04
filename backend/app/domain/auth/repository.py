@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
+from app.domain.auth.platform_role import PlatformRole
+
 
 @dataclass(frozen=True)
 class AuthProfileView:
@@ -23,6 +25,7 @@ class AuthProfileView:
     clan_name: str | None = None
     role: str | None = None
     is_approved: bool = False
+    platform_role: PlatformRole = "user"
 
 
 class AuthRepository(Protocol):

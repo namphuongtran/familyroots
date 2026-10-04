@@ -436,6 +436,7 @@ class AuthCommandHandler:
                 is_approved=view.is_approved if view else False,
                 has_pending_membership=has_pending_membership,
                 person_id=view.person_id if view else None,
+                platform_role=view.platform_role if view else "user",
             ),
         )
 
@@ -471,6 +472,7 @@ class AuthQueryHandler:
             is_approved=view.is_approved if view else False,
             has_pending_membership=has_pending_membership,
             person_id=view.person_id if view else None,
+            platform_role=view.platform_role if view else "user",
         )
 
 
