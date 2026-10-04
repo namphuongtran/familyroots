@@ -2,11 +2,21 @@
  * Frontend layer boundaries — the counterpart of the backend's import-linter
  * ratchet (ADR-013). A violation is a CI failure, not something to catch in review.
  *
- * Legacy trees (src/lib/api, src/lib/hooks, src/application, src/infrastructure)
- * are excluded: they are being deleted slice by slice, and failing on them now
- * would only teach people to disable the tool.
+ * The legacy trees (the web architecture spec's § 3.2 list) are in the graph as
+ * leaves: `doNotFollow` adds a legacy module when something imports it and never
+ * cruises its own imports. So no edge starts inside legacy, no cycle runs through
+ * it, and no legacy module can be an orphan. The rules below see what they saw
+ * when legacy was excluded, plus the edges into it. Legacy is being deleted slice
+ * by slice (ADR-060), not refactored into compliance.
+ *
+ * `nothing-imports-legacy` is a ratchet. Today's violations sit in
+ * `.dependency-cruiser-known-violations.json`, which `pnpm depcruise` reads through
+ * `--ignore-known`, and `pnpm depcruise:ratchet` fails a pull request that adds an
+ * entry to it (ADR-060 § 4, issue #171). See web/CLAUDE.md, "Migration notes".
  */
-const LEGACY = '^src/(lib/(api|hooks)|application|infrastructure|types)/'
+const LEGACY =
+  '^src/(lib/(api|hooks|types)|application|infrastructure|types|' +
+  'components/(admin|auth|backoffice|documents|events|family-tree|members))/'
 
 module.exports = {
   forbidden: [
@@ -84,6 +94,17 @@ module.exports = {
       to: { path: '^src/app/' },
     },
     {
+      name: 'nothing-imports-legacy',
+      comment:
+        'The legacy trees are frozen, not extended (ADR-060 § 4). A legacy module may ' +
+        'import another; nothing else may import one. The imports that already exist are ' +
+        'the baseline, and it may only shrink: delete or re-point the import, then run ' +
+        '`pnpm depcruise:baseline`.',
+      severity: 'error',
+      from: { pathNot: LEGACY },
+      to: { path: LEGACY },
+    },
+    {
       name: 'no-circular',
       severity: 'error',
       from: {},
@@ -105,8 +126,8 @@ module.exports = {
     },
   ],
   options: {
-    doNotFollow: { path: 'node_modules' },
-    exclude: { path: [LEGACY, '\\.test\\.tsx?$', '^src/generated/'] },
+    doNotFollow: { path: ['node_modules', LEGACY] },
+    exclude: { path: ['\\.test\\.tsx?$', '^src/generated/'] },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
     enhancedResolveOptions: { exportsFields: ['exports'], conditionNames: ['import', 'require'] },

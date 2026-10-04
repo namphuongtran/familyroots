@@ -26,11 +26,12 @@ Facts about the repo in this file were checked on 2026-08-13. Re-check before yo
 Do not apply the generic layout (`lib/`, `components/`, `contexts/`, `hooks/`, `types/` at the
 top level). This repo has its own layout, and `pnpm depcruise` enforces part of it in CI.
 
-- Read the layout and the nine dependency-cruiser rules in `web/CLAUDE.md` before you add a
+- Read the layout and the dependency-cruiser rules in `web/CLAUDE.md` before you add a
   file.
 - New code belongs in `src/domain/`, `src/shared/`, or `src/features/<slice>/`.
 - `src/lib/api/`, `src/lib/hooks/`, `src/application/`, and `src/infrastructure/` are frozen
-  legacy trees. Do not add to them.
+  legacy trees. Do not add to them. The full legacy set is in `web/CLAUDE.md` "Dependency
+  rules", and `nothing-imports-legacy` fails CI on a new import into any of it.
 - Route groups: `(auth)` and `(dashboard)` under `src/app/[locale]/`. Every route is locale
   prefixed, because `localePrefix` is `'always'`.
 - `src/app/**` holds routing only: `layout`, `page`, `loading`, `error`, `not-found`.

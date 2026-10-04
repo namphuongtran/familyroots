@@ -19,7 +19,7 @@ Companion rules, and who owns what:
 |---|---|
 | `.claude/rules/nextjs.md` | App Router, Server and Client components, route handlers, envelope, caching, testing |
 | this file | Tailwind, tokens, dark mode, responsive layout, accessibility, images and fonts |
-| `web/CLAUDE.md` | the full architecture and the nine dependency-cruiser rules |
+| `web/CLAUDE.md` | the full architecture and the dependency-cruiser rules |
 | `mobile/CLAUDE.md` § "UI: Arbor Heritage design system" | the design mandates, for both clients |
 | `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` | the full token set, components, and screens |
 

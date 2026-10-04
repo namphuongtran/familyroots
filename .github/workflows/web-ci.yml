@@ -23,6 +23,9 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The legacy ratchet below reads the baseline at the merge base, so it needs history.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -50,6 +53,16 @@ jobs:
 
       - name: Dependency boundaries
         run: pnpm depcruise
+
+      # ADR-060 § 4. `pnpm depcruise` admits every legacy import the committed baseline lists, so
+      # on its own it admits whatever a pull request regenerates the baseline to include. This
+      # compares the baseline with the one at the merge base and fails on an added entry, or on an
+      # entry whose import is gone. See web/CLAUDE.md, "Migration notes".
+      - name: Legacy baseline only shrinks
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: pnpm depcruise:ratchet "$BASE_SHA"
 
       # This step is also where the stylesheet gates live, and none of them is
       # reachable from any other job. `src/app/theme-tokens.test.ts` compiles

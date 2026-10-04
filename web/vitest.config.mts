@@ -17,7 +17,15 @@ export default defineConfig({
           // shipped code has learned the authenticated e2e harness exists, so it is a unit
           // test about src/ that lives beside the harness it protects. The `.guard.` infix
           // keeps Playwright from claiming it — see playwright.config.ts's AUTH_SPECS.
-          include: ['src/**/*.test.ts', 'messages/**/*.test.ts', 'e2e/**/*.guard.test.ts'],
+          // scripts/**: the legacy baseline's gate test. It drives depcruise and
+          // scripts/legacy-baseline.mjs against a throwaway git repository, so it is a test of the
+          // tooling and lives beside it. See scripts/legacy-baseline.test.ts.
+          include: [
+            'src/**/*.test.ts',
+            'messages/**/*.test.ts',
+            'e2e/**/*.guard.test.ts',
+            'scripts/**/*.test.ts',
+          ],
         },
       },
       {

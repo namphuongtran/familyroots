@@ -88,7 +88,7 @@ ratchet (ADR-013):
 | `app/**` | `features/*/index.ts`, `shared/**` | `api` directly |
 | anything | — | `app/**` |
 
-**Only the third column is machine-enforced.** `pnpm depcruise` runs nine rules in
+**Only the third column is machine-enforced.** `pnpm depcruise` runs ten rules in
 `.dependency-cruiser.cjs`, and dependency-cruiser can only forbid — it has no allow-list —
 so the *May import* column is architecture we hold ourselves to, not a gate that will catch
 us. The rule names and exactly what each one forbids are listed in `web/CLAUDE.md`;
@@ -96,9 +96,11 @@ consult that before assuming a boundary is protected. `src/shared/` is `http/`,
 `telemetry/` and `testing/` — there is no `shared/ui/` yet, and where reusable
 presentational components should live is an open sub-project B decision.
 
-The legacy trees (`src/lib/api`, `src/lib/hooks`, `src/application`, `src/infrastructure`,
-`src/types`) are excluded from these rules — they are being deleted, not refactored into
-compliance.
+The legacy trees (the web architecture spec's § 3.2 list) are in the graph as leaves: one rule,
+`nothing-imports-legacy`, forbids new imports into them, and today's imports are a committed
+baseline that may only shrink (ADR-060 § 4). No other rule sees an edge that starts inside legacy;
+it is being deleted, not refactored into compliance. `web/CLAUDE.md` "Migration notes" says how
+to shrink the baseline.
 
 Path alias `@/*` → `./src/*`.
 
