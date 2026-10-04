@@ -37,6 +37,9 @@ const DOUBLED_ROOT_FONT_SIZE = '32px'
 
 /** `web/messages/vi.json`, `auth` namespace. `/vi/…` is the default locale route. */
 const VI = {
+  fullName: 'Họ và tên',
+  email: 'Email',
+  password: 'Mật khẩu',
   joinClan: 'Tham gia dòng họ',
   clanCode: 'Mã dòng họ',
   joinHelper: 'Mã do quản trị dòng họ cung cấp, ví dụ: nguyen-huu-thanh-oai.',
@@ -59,9 +62,9 @@ const ONE_LONG_WORD_CODE = 'a'.repeat(100)
 
 /** Fills the three fields this seed does not own, so the form can be submitted. */
 async function fillTheRest(page: Page): Promise<void> {
-  await page.locator('form input').first().fill('Trần Văn A')
-  await page.locator('form input[type="email"]').fill('a@example.com')
-  await page.locator('form input[type="password"]').fill('correct horse battery')
+  await page.getByLabel(VI.fullName).fill('Trần Văn A')
+  await page.getByLabel(VI.email).fill('a@example.com')
+  await page.getByLabel(VI.password).fill('correct horse battery')
 }
 
 async function serveClanNotFound(page: Page): Promise<void> {

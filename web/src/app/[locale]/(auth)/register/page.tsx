@@ -261,10 +261,14 @@ export default function RegisterPage() {
           )}
 
           <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">
+            <label
+              htmlFor="register-full-name"
+              className="text-foreground mb-1 block text-sm font-medium"
+            >
               {t('full_name')}
             </label>
             <input
+              id="register-full-name"
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -273,8 +277,14 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">{t('email')}</label>
+            <label
+              htmlFor="register-email"
+              className="text-foreground mb-1 block text-sm font-medium"
+            >
+              {t('email')}
+            </label>
             <input
+              id="register-email"
               type="email"
               required
               autoComplete="email"
@@ -287,10 +297,14 @@ export default function RegisterPage() {
 
           {!isOAuthMode && (
             <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">
+              <label
+                htmlFor="register-password"
+                className="text-foreground mb-1 block text-sm font-medium"
+              >
                 {t('password')}
               </label>
               <input
+                id="register-password"
                 type="password"
                 required
                 minLength={8}

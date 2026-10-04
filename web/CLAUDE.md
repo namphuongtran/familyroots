@@ -968,10 +968,20 @@ paragraph is corrected rather than deleted so the finding keeps its history.**
   that already had three callers rather than adding a fourth spelling, and the second is
   `aria-label={sidebarOpen ? t('common.collapse') : t('common.expand')}`.
 
-**The register page still has the login page's defect, in the same file as the new fields.**
-Counted 2026-08-27: three labels there carry no `htmlFor` and their inputs no `id`, while the
-three fields added below them by the join-code work are correct. So one file now has three labelled
-inputs and three unlabelled ones. That is still open.
+**The register page had the login page's defect, in the same file as the new fields. Fixed by
+#195 (2026-10-04).** Counted 2026-08-27: three labels there carried no `htmlFor` and their inputs
+no `id`, while the three fields added below them by the join-code work were correct. **Fixed**:
+the three take the login page's prefix, `htmlFor="register-full-name"` at
+`(auth)/register/page.tsx:265` with its `id` at `:271`, `register-email` at `:281`/`:287`, and
+`register-password` at `:301`/`:307`. The clan fields and the two wrapping radio labels are
+unchanged. `register/page.test.tsx` reads a name or a focus, never the attribute: each label
+through `getByLabelText`, every `form input` in join, create and OAuth onboarding mode (6, 7 and
+5 inputs) through `toHaveAccessibleName`, and `document.activeElement` after a click on each
+label. Both e2e `fillTheRest` helpers and `page.success.test.tsx` fill the three by label. Negative
+control, 2026-10-04, with the attributes reverted: `getByLabelText` throws "Found a label with the
+text of: Họ và tên, however no form control was found associated to that label", `form input`
+0, 1 and 2 fail `toHaveAccessibleName`, focus stays on `body`, and 12 e2e cases time out "waiting
+for getByLabel('Họ và tên')". jsdom and Chromium resolve the pairing; neither is a screen reader.
 
 ### The four workarounds this replaces
 

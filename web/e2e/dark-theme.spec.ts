@@ -121,7 +121,9 @@ for (const path of PUBLIC_PAGES) {
     test("the email field's boundary is the input token in both schemes", async ({ page }) => {
       // Both pages' email field carries `border-input`, replacing
       // `border-gray-300` — the exact class the form-border move named as its whole point.
-      const emailField = page.locator('input[type="email"]')
+      // Found by its label, which both pages pair with the field (`login-email`, #195's
+      // `register-email`).
+      const emailField = page.getByLabel('Email', { exact: true })
 
       await page.emulateMedia({ colorScheme: 'light' })
       await page.goto(path)

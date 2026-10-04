@@ -26,6 +26,9 @@ const DOUBLED_ROOT_FONT_SIZE = '32px'
 
 /** `web/messages/vi.json`, `auth` namespace. `/vi/…` is the default locale route. */
 const VI = {
+  fullName: 'Họ và tên',
+  email: 'Email',
+  password: 'Mật khẩu',
   createClan: 'Tạo dòng họ mới',
   clanName: 'Tên dòng họ',
   clanCode: 'Mã dòng họ',
@@ -53,9 +56,9 @@ async function openCreateMode(page: Page): Promise<void> {
 
 /** Fills the three fields the clan-code spec does not own, so the form can be submitted. */
 async function fillTheRest(page: Page): Promise<void> {
-  await page.locator('form input').first().fill('Trần Văn A')
-  await page.locator('form input[type="email"]').fill('a@example.com')
-  await page.locator('form input[type="password"]').fill('correct horse battery')
+  await page.getByLabel(VI.fullName).fill('Trần Văn A')
+  await page.getByLabel(VI.email).fill('a@example.com')
+  await page.getByLabel(VI.password).fill('correct horse battery')
 }
 
 async function serveClanSlugTaken(page: Page): Promise<void> {
