@@ -522,8 +522,8 @@ dedicated public avatars bucket that the backend writes.
   a bucket the environment needs has not been created yet — the public avatars bucket,
   or the private documents bucket the photo is copied from. An operator action, not
   something a retry fixes. Surface it as "files are not available in this environment"
-  rather than a generic retry prompt. Document upload, detail and restore can answer
-  the same code since #177.
+  rather than a generic retry prompt. Document upload, detail and restore, and the
+  JSON clan export, can answer the same code since #177.
 - Privacy, so the UI does not over-promise: an avatar is readable by **anyone with the
   link, without logging in, regardless of clan**, and stays readable after the
   underlying document is deleted. Do not describe avatars as private or clan-only.

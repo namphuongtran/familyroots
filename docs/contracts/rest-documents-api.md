@@ -48,18 +48,29 @@ Upload expectations:
 - person_id, description, taken_date, taken_place optional
 - supports approved media and document MIME types
 
-### Storage errors on every route that touches a blob
+### Storage errors on the routes that mint a presigned URL
 
-`POST /`, `GET /{id}` and `POST /{id}/restore` call the private bucket
-(`SUPABASE_STORAGE_BUCKET`): upload, then a presigned URL. Each can answer:
+`POST /` uploads to the private bucket (`SUPABASE_STORAGE_BUCKET`) and then mints a
+presigned URL. `GET /{id}` and `POST /{id}/restore` only mint the URL. Each can answer:
 
 | Status | Code | When |
 |---|---|---|
 | 404 | `storage_not_found` | The document's object is missing from the bucket |
-| 503 | `storage_bucket_not_configured` | The bucket itself is missing or unreachable with the server's key — an operator action, not the caller's fault and not fixed by a retry (#177) |
-| 503 | `storage_unavailable` | Provider outage, transport failure, or a rejected key — retry later |
+| 503 | `storage_bucket_not_configured` | The bucket itself is missing or unreachable with the server's key — an operator action, not the caller's fault (#177) |
+| 503 | `storage_unavailable` | Provider outage, transport failure, or a rejected key |
 
-`GET /` (list) mints no URL and touches no blob.
+**A 503 does not always mean nothing happened.** `POST /` and `POST /{id}/restore`
+commit their row **before** they mint the URL. So a 503 from the URL step arrives
+after the write: the document exists, or is restored, but the response carries no
+URL. Do not retry those two blindly. Re-read with `GET /` or `GET /{id}` first, or a
+retried upload makes a second document and a retried restore answers `404
+document_not_found`. A missing bucket fails the upload itself, before any row is
+written, so `storage_bucket_not_configured` on `POST /` means nothing was saved; on
+restore it means the restore went through. `GET /{id}` writes nothing and is safe to
+retry once the cause is fixed.
+
+`GET /` (list) mints no URL and touches no blob. Set-avatar's own storage errors are
+in its section below, and the JSON export's in [rest-exports-api.md](rest-exports-api.md).
 
 ### Delete is soft, with a restore window (ADR-019)
 

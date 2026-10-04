@@ -1,8 +1,8 @@
 # File Storage
 
-How document/photo blobs are stored in Supabase Storage: one shared bucket,
-path-based clan isolation, presigned reads, and a soft-delete → retention →
-purge lifecycle.
+How document/photo blobs are stored in Supabase Storage: two buckets (a private one
+for documents, a public one for avatars), path-based clan isolation, presigned reads,
+and a soft-delete → retention → purge lifecycle.
 
 ## Delete lifecycle (ADR-019)
 
