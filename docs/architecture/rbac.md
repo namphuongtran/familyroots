@@ -29,8 +29,15 @@ super_admin                             admin
 ### Platform Level — `super_admin`
 
 - Stored in `public.user_profiles` table with `platform_role = 'super_admin'`
-- Exactly **one** super admin exists, created via `scripts/bootstrap_super_admin.py` — **never via API**
-- Cannot be deleted via API — only via Supabase Dashboard directly
+- Exactly **one** super admin exists, created via `scripts/bootstrap_super_admin.py` — **never via API**.
+  Like every user it has two halves in two databases (`docs/ops/local-supabase.md` § "The
+  topology"): the script creates the **identity** in the Supabase project's `auth.users`, and
+  writes the **profile row** with `platform_role = 'super_admin'` to the application database
+  named by `DATABASE_URL`. Its "already exists" check reads that same application database.
+- Cannot be deleted via API. Deleting it is two manual steps, one per database: the identity
+  in the Supabase Dashboard, and the `user_profiles` row in the application database. Deleting
+  the identity alone stops new logins, but a token already issued still passes `get_super_admin`
+  until it expires, because that check reads the row (`backend/app/core/security.py:211`)
 - All actions are audit-logged with `actor_id`, `action`, `target`, `timestamp`
 - Checked via `user_profiles.platform_role` column (not JWT metadata)
 
@@ -213,7 +220,7 @@ last-admin-cannot-demote protection.)
 
 - No API endpoint to create super admin — bootstrap script only
 - No API endpoint to promote to super admin — this role cannot be granted via app
-- Super admin cannot be deleted via API — only via Supabase Dashboard
+- Super admin cannot be deleted via API — only by hand, in both databases (see Platform Level above)
 - Super admin status stored in `user_profiles.platform_role` (queried from DB, not JWT metadata)
 - User profiles created lazily on first login via `ensure_user_profile()` (no Supabase webhook needed)
 
