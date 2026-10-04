@@ -30,6 +30,10 @@ Accepted.
 > half-applied — are in ADR-051 § 4. Two by-id reads still carry half the predicate; that
 > is ADR-051 § 8, and it is not a cascade.
 
+> **Amendment (2026-10-04, issue #164):** the last sentence above is out of date. ADR-051 § 8 was
+> closed by `b60ea64` on 2026-08-22, so both by-id reads carry the whole predicate. No cascade
+> was built.
+
 > **Update (2026-07-02):** Person/Marriage/ParentChild FKs use `ON DELETE RESTRICT`
 > (persons are never hard-deleted). Soft-deleting a person currently leaves its edges
 > live (they are hidden from the clan-scoped tree, which filters `is_deleted=false`,

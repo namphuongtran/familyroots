@@ -8,6 +8,14 @@ index row handed to the coordinator. The seed's `Verification` field says a "kee
 runs no gate, so **no gate was run for the decision**. Two measurements below did run the backend
 suite, and they are reported with their dates because they are evidence, not a gate.
 
+> **Amendment (2026-10-04, issue #164):** both hand-offs this ADR made are closed. The body is
+> left as written. The § 5 test landed in `9353b6f` on 2026-08-22,
+> `backend/tests/integration/test_person_pii_over_http.py`: each of the four routes is requested,
+> and the JSON body is read as a restricted role and as an admin. The six `L11` citations were
+> repointed at this ADR in `136bbdb` the same day, and ADR-037 carries the dated amendment. The two
+> Consequences bullets "It does not close the untested wiring" and "It does not repoint the six
+> `L11` citations" describe 2026-08-22, not today.
+
 Every measurement below was taken on **2026-08-22** in
 `.claude/worktrees/design`, at commit `8e137a1`.
 
