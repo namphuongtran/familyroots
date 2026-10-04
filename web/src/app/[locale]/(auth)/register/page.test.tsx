@@ -71,6 +71,16 @@ function clanNotFoundRejection() {
   return backendRejection(404, 'clan_not_found', BACKEND_VI_CLAN_NOT_FOUND_MESSAGE)
 }
 
+function mockActions(signUp = vi.fn()) {
+  mockUseAuthActions.mockReturnValue({
+    signUp,
+    signInWithGoogle: vi.fn(),
+    completeOnboarding: vi.fn(),
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+  } as unknown as ReturnType<typeof useAuthActions>)
+}
+
 /** Join is the mode the screen opens in, so this renders and touches nothing else. */
 function renderJoinMode(signUp = vi.fn()) {
   searchParams.current = new URLSearchParams()
@@ -81,13 +91,7 @@ function renderJoinMode(signUp = vi.fn()) {
     isPendingApproval: false,
     needsOnboarding: false,
   } as unknown as ReturnType<typeof useAuth>)
-  mockUseAuthActions.mockReturnValue({
-    signUp,
-    signInWithGoogle: vi.fn(),
-    completeOnboarding: vi.fn(),
-    signIn: vi.fn(),
-    signOut: vi.fn(),
-  } as unknown as ReturnType<typeof useAuthActions>)
+  mockActions(signUp)
 
   const rendered = renderWithProviders(<RegisterPage />, { messages })
   return { ...rendered, signUp }
@@ -106,13 +110,7 @@ function renderOAuthOnboardingMode() {
     isPendingApproval: false,
     needsOnboarding: true,
   } as unknown as ReturnType<typeof useAuth>)
-  mockUseAuthActions.mockReturnValue({
-    signUp: vi.fn(),
-    signInWithGoogle: vi.fn(),
-    completeOnboarding: vi.fn(),
-    signIn: vi.fn(),
-    signOut: vi.fn(),
-  } as unknown as ReturnType<typeof useAuthActions>)
+  mockActions()
 
   return renderWithProviders(<RegisterPage />, { messages })
 }
@@ -154,7 +152,7 @@ function clanCodeField() {
  * The login page's copy of these cases is `login/page.test.tsx`.
  *
  * Negative control, run 2026-10-04 against the page as found (no `htmlFor`/`id` on the three):
- * all eight cases failed. `getByLabelText` threw "Found a label with the text of: Họ và tên,
+ * all nine cases failed. `getByLabelText` threw "Found a label with the text of: Họ và tên,
  * however no form control was found associated to that label."; the enumeration reported
  * `form input 0, type text`, `1, type email` and, outside OAuth onboarding, `2, type password`
  * failing `toHaveAccessibleName()`, and no other input; and after each label click
@@ -182,13 +180,14 @@ describe('register: the full name, email and password labels name their inputs',
   })
 
   it('in OAuth onboarding, full name and the disabled email are still named by their labels', () => {
-    renderOAuthOnboardingMode()
+    const { container } = renderOAuthOnboardingMode()
 
     expect(screen.getByLabelText(messages.auth.full_name)).toHaveProperty('type', 'text')
     const email = screen.getByLabelText(messages.auth.email)
     expect(email).toHaveProperty('type', 'email')
     expect(email).toBeDisabled()
-    expect(screen.queryByLabelText(messages.auth.password)).toBeNull()
+    // By type, not by label: an unlabelled password field would pass a label query.
+    expect(container.querySelector('form input[type="password"]')).toBeNull()
   })
 
   // The bare matcher is right here: this case asks only whether a name exists. The case
@@ -211,6 +210,8 @@ describe('register: the full name, email and password labels name their inputs',
 
   // `document.activeElement` is read directly and the input is found by its type, not
   // through `getByLabelText`, so this reading does not fail at the same place as the first.
+  // Full name has no `type`. Neither does the clan code, which comes after it, so the first
+  // match is full name: this selector depends on that order.
   it.each([
     [messages.auth.full_name, 'input:not([type])'],
     [messages.auth.email, 'input[type="email"]'],
@@ -222,6 +223,18 @@ describe('register: the full name, email and password labels name their inputs',
     expect(input).toBeInstanceOf(HTMLInputElement)
 
     await user.click(screen.getByText(labelText))
+
+    expect(document.activeElement).toBe(input)
+  })
+
+  // The disabled email is the one label that cannot move focus, so full name is the case.
+  it('in OAuth onboarding, clicking the full name label moves focus into its input', async () => {
+    const user = userEvent.setup()
+    const { container } = renderOAuthOnboardingMode()
+    const input = container.querySelector('form input:not([type])')
+    expect(input).toBeInstanceOf(HTMLInputElement)
+
+    await user.click(screen.getByText(messages.auth.full_name))
 
     expect(document.activeElement).toBe(input)
   })
