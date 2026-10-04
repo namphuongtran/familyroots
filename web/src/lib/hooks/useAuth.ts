@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type {
   AuthenticatedOnboardingInput,
   RegisterResult,
+  RegistrationReceived,
 } from '@/application/auth/ports/auth-repository'
 import { hydrateAuthContext, selectActiveClan } from '@/application/auth/use-cases/auth-context'
 import { authProfileRepository } from '@/infrastructure/auth/http-auth-profile-repository'
@@ -220,7 +221,7 @@ export function useAuthActions() {
       clan_code?: string
       clan_name?: string
       clan_slug?: string
-    }): Promise<RegisterResult> => {
+    }): Promise<RegistrationReceived> => {
       return authProfileRepository.register(input)
     },
     [],

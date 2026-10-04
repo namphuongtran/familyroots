@@ -3,6 +3,7 @@ import type {
   AuthProfileRepository,
   RegisterInput,
   RegisterResult,
+  RegistrationReceived,
 } from '@/application/auth/ports/auth-repository'
 import api from '@/lib/api/axios'
 import type {
@@ -77,14 +78,23 @@ export class HttpAuthProfileRepository implements AuthProfileRepository {
     return data.data
   }
 
-  async register(input: RegisterInput): Promise<RegisterResult> {
-    const { data } = await api.post<RegisterResult>('/auth/register', input)
-    return data
+  /**
+   * The third and fourth read sites of the same envelope defect, fixed by #182. Both routes
+   * answer `{"data": ...}` (`backend/app/api/v1/auth.py`, `register` and
+   * `onboard_authenticated_user`), and both used to return the whole body. `register`'s
+   * caller read `result.message` off it, got `undefined`, and the register page never
+   * showed its success screen: **a successful registration showed the user nothing.**
+   * `src/app/[locale]/(auth)/register/page.success.test.tsx` and this file's own test hold
+   * the two unwraps.
+   */
+  async register(input: RegisterInput): Promise<RegistrationReceived> {
+    const { data } = await api.post<ApiResponse<RegistrationReceived>>('/auth/register', input)
+    return data.data
   }
 
   async onboard(input: AuthenticatedOnboardingInput): Promise<RegisterResult> {
-    const { data } = await api.post<RegisterResult>('/auth/onboard', input)
-    return data
+    const { data } = await api.post<ApiResponse<RegisterResult>>('/auth/onboard', input)
+    return data.data
   }
 }
 
