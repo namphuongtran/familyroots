@@ -6,41 +6,21 @@
  * "Auth & session"). Surface 2 of §7.1c — the screen that lands from the email link itself — is
  * out of scope here: deep links from an email are not built.
  *
- * **Why this screen has no real caller yet.** The only live sign-in path in this codebase,
- * `useAuth().signInWithEmail` (`src/lib/hooks/useAuth.ts`), calls
- * `authSessionPort.signInWithEmail` (`src/infrastructure/auth/supabase-auth-session-port.ts`),
- * which calls `supabase.auth.signInWithPassword` directly — it never reaches the backend's own
- * `POST /api/v1/auth/login`, which is the one endpoint that raises `email_not_verified`
- * (`docs/contracts/rest-auth-api.md`, "Email verification"). The backend-calling equivalent,
- * `authApi.login` in `src/lib/api/auth.ts`, is dead code today: `grep -rln "lib/api/auth'" src`
- * finds no importer. So this screen is reachable by direct navigation
- * (`/{locale}/verify-email?email=...`) and is fully tested against the real
- * `POST /auth/resend-verification` envelope, but nothing in this seed makes the login button
- * navigate here on a real 403 — that needs the sign-in path to call the backend endpoint that can
- * raise the code, which is a legacy-transport change reserved for a later seed, not a screen
- * change. Recorded here rather than silently wired around.
+ * **How a real sign-in reaches it (#183, ADR-061 § 7).** Sign-in is Supabase-direct, so the
+ * backend's `403 email_not_verified` is never raised on the way here. Supabase refuses a password
+ * sign-in for an unconfirmed account with its own error code, `email_not_confirmed`, and
+ * `useAuthActions().signInWithEmail` routes that to `/{locale}/verify-email?email=…`. Before #183
+ * nothing did, and the screen was reachable only by typing its URL.
  */
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { MailCheck } from 'lucide-react'
-import { apiFetch } from '@/shared/http/api-client'
-import { getClientRequestContext } from '@/shared/http/context.client'
-import { unwrapData } from '@/shared/http/envelope'
+import { authRequestContext } from '../hooks/auth-request-context'
+import { resendVerification } from '../server/auth-repository'
 
 const RESEND_COOLDOWN_SECONDS = 60
-
-/** `POST /auth/resend-verification` is a message envelope (`rest-auth-api.md`): `{"data": {"message": "..."}}`. */
-function parseMessageEnvelope(raw: unknown): void {
-  if (
-    typeof raw !== 'object' ||
-    raw === null ||
-    typeof (raw as { message?: unknown }).message !== 'string'
-  ) {
-    throw new Error('resend-verification response missing "message"')
-  }
-}
 
 type ResendStatus = 'idle' | 'sending' | 'sent' | 'error'
 
@@ -65,13 +45,7 @@ export function VerifyEmailScreen() {
     if (!email) return
     setStatus('sending')
     try {
-      const context = await getClientRequestContext()
-      const body = await apiFetch('/auth/resend-verification', {
-        context,
-        method: 'POST',
-        body: { email },
-      })
-      unwrapData(body, parseMessageEnvelope)
+      await resendVerification(email, { context: await authRequestContext() })
       setStatus('sent')
       setCooldown(RESEND_COOLDOWN_SECONDS)
     } catch {

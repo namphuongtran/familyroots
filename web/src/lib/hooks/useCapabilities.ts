@@ -2,8 +2,7 @@
 
 import { useMemo } from 'react'
 import { CLAN_ROLES, getCapabilities, type ClanRole } from '@/domain/capability/capability'
-import { useCurrentClanId } from '@/shared/http/context.client'
-import { useAuthStore } from '@/store/auth.store'
+import { useSession } from '@/features/auth'
 
 const CLAN_ROLE_SET = new Set<string>(CLAN_ROLES)
 
@@ -12,6 +11,12 @@ function asClanRole(role: string | undefined): ClanRole | undefined {
 }
 
 /**
+ * **#183: the role comes from the session's access state.** The active clan's membership role
+ * when the access state is ready, and no role otherwise, so a pending user, a user who has not
+ * chosen among several clans, and a signed-out visitor all get the four `false`s. It used to read
+ * `user.role` out of the zustand store beside the cookie. The four names stay until #185 replaces
+ * this hook with one that returns the domain `CapabilitySet`.
+ *
  * Rewired onto `domain/capability/capability.ts` by the legacy-transport deletion, which closes the
  * `no-orphans` warning that module carried since the capability module landed it with no consumer — see
  * `web/CLAUDE.md`, "Clan capabilities". This hook used to call the legacy
@@ -30,11 +35,10 @@ function asClanRole(role: string | undefined): ClanRole | undefined {
  * not mistake the wider grant for a bug.
  */
 export function useCapabilities() {
-  const { user, isPendingApproval } = useAuthStore()
-  const currentClanId = useCurrentClanId()
+  const activeRole = useSession().activeClan?.role
 
   return useMemo(() => {
-    const role = !isPendingApproval && currentClanId ? asClanRole(user?.role) : undefined
+    const role = asClanRole(activeRole)
 
     if (!role) {
       return {
@@ -52,5 +56,5 @@ export function useCapabilities() {
       canDeleteDocuments: capabilities.deleteDocument,
       canEditRelationships: capabilities.editRelationship,
     }
-  }, [currentClanId, isPendingApproval, user?.role])
+  }, [activeRole])
 }

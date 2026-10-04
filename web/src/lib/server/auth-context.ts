@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { activeClanOf } from '@/domain/session/access-state'
 import type { UserClanMembership } from '@/lib/types'
 import { createClientOrNull as createSupabaseServerClientOrNull } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/supabase/config'
@@ -92,7 +93,18 @@ export async function getServerAuthContext(): Promise<ServerAuthContext | null> 
     data: UserClanMembership[]
   }
   const clanMemberships = membershipData.data ?? []
-  const currentClanId = resolveCurrentClanId(clanMemberships, preferredClanId)
+  // The one clan resolution, shared with the browser since #183. This file used to carry its
+  // own copy, which disagreed with the client's: the client fell back to the profile's
+  // `clan_id` and this one did not. #186 replaces the rest of this file.
+  const currentClanId = activeClanOf(
+    clanMemberships.map((membership) => ({
+      clanId: membership.clan_id,
+      clanName: membership.clan_name,
+      clanSlug: membership.clan_slug,
+      role: membership.role,
+    })),
+    preferredClanId ?? null,
+  )?.clanId
   const currentMembership = clanMemberships.find(
     (membership) => membership.clan_id === currentClanId,
   )
@@ -168,19 +180,4 @@ export function hasMinServerRole(
   } as const
 
   return hierarchy[userRole] >= hierarchy[minRole]
-}
-
-function resolveCurrentClanId(
-  memberships: UserClanMembership[],
-  preferredClanId?: string,
-): string | undefined {
-  if (preferredClanId && memberships.some((membership) => membership.clan_id === preferredClanId)) {
-    return preferredClanId
-  }
-
-  if (memberships.length === 1) {
-    return memberships[0]?.clan_id
-  }
-
-  return undefined
 }

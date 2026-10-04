@@ -43,26 +43,18 @@ async function signIn(page: import('@playwright/test').Page, user: SeededUser): 
   await page.locator('form button[type="submit"]').click()
 
   /**
-   * Waiting for the Supabase cookie rather than for a URL, and then leaving at once.
+   * Waiting for where the sign-in lands, which is the dashboard for both seeded users: each holds
+   * one approved membership in `nguyen-phuc`.
    *
-   * `signInWithEmail` pushes to `/vi/dashboard`, and **that screen currently runs away**:
-   * measured 2026-08-26, `/vi/dashboard` re-ran `useAuth`'s mount effect 2613 times in
-   * seven seconds and issued 18174 `GET /auth/me` calls until the backend's
-   * 20-per-60-second limiter on `/api/v1/auth/*` (`backend/app/main.py:221-226`) began
-   * answering 429. That defect is reported by the authenticated e2e harness and is not the authenticated e2e harness's to fix — see
-   * `web/CLAUDE.md`, "The `(dashboard)` group runs away". This harness therefore does not
-   * linger there: the cookie appears while `signInWithEmail` is still resolving, so polling
-   * for it lets the setup navigate away before the loop has a page to run on.
+   * Until #183 this polled for the Supabase cookie and left at once, because `/vi/dashboard` ran
+   * away: 9037 `GET /auth/me` in twelve seconds, measured 2026-10-04, until the backend's
+   * 20-per-60-second limiter on `/api/v1/auth/*` (`backend/app/main.py:221-226`) answered 429.
+   * The session is one query now, so the setup can wait for the dashboard like a member would.
+   * `dashboard.auth.spec.ts` counts the requests.
    */
-  await expect
-    .poll(
-      async () => {
-        const cookies = await page.context().cookies()
-        return cookies.some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'))
-      },
-      { timeout: 30_000, intervals: [100] },
-    )
-    .toBe(true)
+  await expect(page).toHaveURL(/\/vi\/dashboard$/, { timeout: 30_000 })
+  const cookies = await page.context().cookies()
+  expect(cookies.some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'))).toBe(true)
 }
 
 setup('capture a real admin session, ending on the gated screen', async ({ page }) => {

@@ -3,17 +3,14 @@
 /**
  * Spec §7.2c (`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:955-961`), for
  * `403 clan_suspended` (`docs/contracts/error-codes.md`, "Clan context & permissions"). Reached
- * with `?clanId=&clanName=` from `select-clan/page.tsx`, the one real, already-wired call site
- * in this codebase that can surface this code today: `useAuth().selectClan` →
- * `authProfileRepository.selectClan` → `POST /me/clans/{clan_id}/select` via the legacy axios
- * client (`src/lib/api/axios.ts`), which does not normalize its error into `ApiError` — the
- * envelope's `error.code` sits at `AxiosError.response.data.error.code`. `select-clan/page.tsx`
- * reads it there rather than importing anything from the frozen axios tree.
+ * with `?clanId=&clanName=` from `SelectClanScreen`, the one call site in this codebase that can
+ * surface this code today: `useAuthActions().selectClan` → `POST /me/clans/{clan_id}/select`
+ * through `apiFetch`, whose `ApiError` carries the `code`.
  *
  * The `clanName` query param is the name from the membership row the user just clicked in
- * `select-clan/page.tsx` — sent through rather than re-fetched, since the clan itself may now be
+ * `SelectClanScreen` — sent through rather than re-fetched, since the clan itself may now be
  * failing every lookup. `clanId` lets this screen tell "another approved clan besides this one"
- * apart from "this was the only one", via `useAuth().clanMemberships` (approved memberships;
+ * apart from "this was the only one", via the session's memberships (approved memberships;
  * whether a suspended clan still appears in that list is not verified against backend source —
  * `docs/contracts/frontend-integration-guide.md` §1.2 documents no filter on `clans.is_active` —
  * but the "some other entry exists" check below is correct either way).
@@ -31,7 +28,8 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { ShieldAlert } from 'lucide-react'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useAuthActions } from '../hooks/use-auth-actions'
+import { useSession } from '../hooks/use-session'
 
 export function ClanSuspendedScreen() {
   const t = useTranslations('auth')
@@ -39,9 +37,12 @@ export function ClanSuspendedScreen() {
   const searchParams = useSearchParams()
   const clanId = searchParams.get('clanId') ?? undefined
   const clanName = searchParams.get('clanName') || undefined
-  const { clanMemberships, signOut } = useAuth()
+  const { session } = useSession()
+  const { signOut } = useAuthActions()
 
-  const hasOtherClans = clanMemberships.some((membership) => membership.clan_id !== clanId)
+  const hasOtherClans = (session?.memberships ?? []).some(
+    (membership) => membership.clanId !== clanId,
+  )
 
   return (
     <div className="bg-accent flex min-h-screen items-center justify-center px-4 py-12">

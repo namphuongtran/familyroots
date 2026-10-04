@@ -15,12 +15,11 @@ import { SEEDED_USERS } from './fixtures'
  * a browser. These cases read it.
  *
  * **Why not `/vi/members`, which four seeds actually wanted.** It was the first choice and it
- * was withdrawn on evidence. `members` is inside the `(dashboard)` group, whose layout runs
+ * was withdrawn on evidence. `members` is inside the `(dashboard)` group, whose layout ran
  * away: 2613 mount-effect re-runs and 18174 `GET /auth/me` calls in seven seconds, measured
  * 2026-08-26. A suite cannot take a stable reading on a screen that is re-rendering
- * thousands of times a second, and the loop is in `useAuth` and its store — legacy auth code
- * the authenticated e2e harness must not redesign. `web/CLAUDE.md` carries the measurement and the "how to add the
- * next one" recipe; the loop needs its own seed.
+ * thousands of times a second. #183 removed the loop by holding the session in one query, and
+ * `dashboard.auth.spec.ts` now reads `/vi/members`.
  *
  * **Every case reads an outcome the markup alone cannot produce.** The role pair is the
  * clearest: one URL, one build, two sessions, and the difference is a claim in a token a
@@ -281,7 +280,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
     })
 
     test('the rail is one tap away, in a drawer that fits', async ({ page }) => {
-      // Let the mount-time `useAuth()` hydration finish before counting what the tap costs.
+      // Let the page's own requests finish before counting what the tap costs.
       await page.waitForLoadState('networkidle')
       const hydrations: string[] = []
       page.on('request', (request) => {
@@ -330,8 +329,8 @@ test.describe('the backoffice dashboard, as an admin', () => {
       )
       expect(overlapping).toEqual([])
 
-      // Opening the drawer mounts a second copy of the rail body. It must not mount a second
-      // `useAuth()` consumer: each one hydrates, and two is the `(dashboard)` render loop.
+      // Opening the drawer mounts a second copy of the rail body. It must not read the session
+      // again: the rail's sign-out is an action, and an action sends nothing until it is used.
       await page.waitForLoadState('networkidle')
       expect(hydrations).toEqual([])
 

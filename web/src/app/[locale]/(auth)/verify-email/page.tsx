@@ -1,4 +1,4 @@
-import { VerifyEmailScreen } from '@/components/auth/VerifyEmailScreen'
+import { VerifyEmailScreen } from '@/features/auth'
 
 export default function VerifyEmailPage() {
   return <VerifyEmailScreen />

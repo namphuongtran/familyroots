@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { VerifyEmailScreen } from './VerifyEmailScreen'
 import { envelope, errorEnvelope, server } from '@/shared/testing/msw'
 import { renderWithProviders } from '@/shared/testing/render'
-import messages from '../../../messages/vi.json'
+import messages from '../../../../messages/vi.json'
 
 vi.mock('next/navigation', () => ({ useSearchParams: vi.fn() }))
 vi.mock('next/link', () => ({

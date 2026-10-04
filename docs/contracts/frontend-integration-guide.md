@@ -164,10 +164,11 @@ implement the reactive single-flight strategy above itself.
 ### Storage guidance
 
 - **Web**: session lives in Supabase SSR cookies (`@supabase/ssr`) so
-  `web/src/middleware.ts` can gate protected routes server-side; client-side app
-  state (profile, current clan, memberships) lives in the persisted Zustand store
-  (`web/src/store/auth.store.ts` — persists non-sensitive fields only). Do not
-  duplicate tokens into localStorage.
+  `web/src/middleware.ts` can gate protected routes server-side. The profile and the
+  memberships are server state, held in one TanStack Query query
+  (`web/src/features/auth/hooks/use-session.ts`) and never persisted in the browser;
+  the active clan is the `current_clan_id` cookie (ADR-061 § 2, #183). Do not
+  duplicate tokens, the profile or the role into localStorage.
 - **Mobile**: satisfied. `supabase_flutter` is configured with a `LocalStorage`
   backed by `flutter_secure_storage` (`mobile/lib/core/storage/secure_session_store.dart`),
   so the session sits in the iOS Keychain / Android Keystore, never in shared
@@ -252,7 +253,7 @@ helper adds one, even though `ClientOptions.flow_type` defaults to `"pkce"`. Sup
 Auth chooses the flow from that challenge (`supabase/auth`
 `internal/api/recover.go:43`). With no challenge, the flow is **implicit**.
 `web/src/app/api/auth/callback/route.ts` is the **Google OAuth** callback
-(`web/src/infrastructure/auth/supabase-auth-session-port.ts:62-75`), not an email
+(`web/src/features/auth/api/supabase-auth.ts`, `signInWithOAuth`), not an email
 landing. An email link that reaches it carries no `code`, so it redirects to
 `/vi/login?error=auth_callback_failed`.
 

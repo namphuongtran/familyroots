@@ -176,7 +176,7 @@ Legacy is being deleted, not refactored into compliance. What follows from that:
   importer, `components/family-tree/RelationshipPath.tsx`, had no outgoing edges.
 - Measured 2026-10-04, `pnpm depcruise` on `main`'s config and on this one reports the same two
   `no-orphans` warnings, `shared/http/refresh.ts` and `lib/utils/pagination.ts`, and nothing else
-  besides the 32 baselined `nothing-imports-legacy` edges. With no exclusion and no `pathNot` at
+  besides the 32 baselined `nothing-imports-legacy` edges (21 since #183). With no exclusion and no `pathNot` at
   all, legacy raises nothing either, so the guards above protect against future edits only.
 
 **`api-layer-has-no-react` was vacuous from the day it was written, on every package
@@ -476,7 +476,8 @@ readings above are what was verified this way.
   from a transport failure.
 - Request context (`RequestContext`) is always **passed in**, never read from a global —
   `context.server.ts` builds it from `cookies()` + Supabase SSR in an RSC,
-  `context.client.ts` builds it from the auth store + Supabase browser client. The same
+  `context.client.ts` builds it from the `current_clan_id` cookie, the URL and the Supabase
+  browser client. The same
   repository function runs, and is tested, in both runtimes.
 - `unwrapData` / `unwrapPage` (`src/shared/http/envelope.ts`) are the **only** readers of
   the `{"data": ...}` / `{"data": ..., "meta": {...}}` envelope. No component ever sees the
@@ -523,9 +524,11 @@ re-deciding:**
 `clan_id` takes in the backend (cast `::uuid` throughout `docs/architecture/data-model.md`),
 and returns `null` rather than forwarding garbage as `X-Current-Clan-Id`.
 
-**The cookie is now the only writer too.** `useAuth`'s `selectClan` and
-`syncAuthContext` (`src/lib/hooks/useAuth.ts`) call `writeClanCookie` / `clearClanCookie`
-directly. The legacy `persistCurrentClanId` / `clearCurrentClanId`
+**The cookie is now the only writer too.** Since #183 three places write it, each through
+`writeClanCookie` / `clearClanCookie`: `useAuthActions().selectClan`, a sign-in or onboarding that
+lands a user ready in one clan, and the `(dashboard)` layout when the cookie names a clan the
+user has left. Sign-out clears it. Before #183 the legacy `useAuth`'s `selectClan` and
+`syncAuthContext` did. The legacy `persistCurrentClanId` / `clearCurrentClanId`
 (`src/infrastructure/auth/clan-selection-storage.ts`) are unused now — nothing imports
 them — because they also wrote `localStorage.current_clan_id`, which the cookie rule forbids. The
 file was left in place rather than deleted at the time: deleting the legacy auth transport was its
@@ -587,52 +590,69 @@ deletion found only the legacy definition) — so nothing regressed, but the dis
 recorded in that hook's own doc comment so a future reader who wires the field back in reaches
 for the wider, correct grant rather than reintroducing the narrower one.
 
-### The auth store holds session state only
+### The session is one query (`src/features/auth`, #183)
 
-**ADR-061 § 2 replaces this store; it does not move it.** #183 holds the session in one TanStack
-Query query and deletes `store/auth.store.ts`. Until #183 lands, what follows is the live state.
+**ADR-061 § 2, built by #183.** `store/auth.store.ts` and `lib/hooks/useAuth.ts` are deleted, with
+`application/auth/`, `infrastructure/auth/`, `components/auth/` and `lib/hooks/useClanContext.ts`.
+zustand keeps only `ui.store.ts`.
 
-**`src/store/auth.store.ts` no longer has a `currentClanId` field or a `setCurrentClan`
-action.** It used to hold both the session (`user`, `clanMemberships`, the access-state flags) and
-the active clan, while the `current_clan_id` cookie held
-the same clan fact for the server to read — two persisted sources for one fact, since the
-store's `zustand/middleware` `persist` wrote `currentClanId` to
-`localStorage['auth-store']` alongside the cookie. Two places recording one fact is two places to
-be wrong, so the clan id was removed from the store rather than kept in sync with the cookie.
+- **The session is one TanStack Query query**, `useSession()` (`features/auth/hooks/use-session.ts`),
+  over `GET /auth/me` and `GET /me/clans`, fetched through `apiFetch` and parsed in
+  `server/auth-repository.ts`. Every consumer reads the one cache entry `authKeys.session()` names,
+  so the request count does not grow with the number of components that ask: one `GET /auth/me`
+  per `/vi/dashboard` load, measured 2026-10-04, against 9037 before (finding 2 below). The key
+  carries no clan id, because the session says who is signed in and never which clan they act in.
+- **Nothing persists it.** Nothing writes the user, the role or the memberships to
+  `localStorage`, and the first consumer to mount removes the `localStorage['auth-store']` entry a
+  browser kept from the old app. `use-session.test.tsx` reads both.
+- **Supabase's `onAuthStateChange` resets it, through one subscription per query client**, however
+  many consumers mount: the first subscribes and the last to unmount lets go. `SIGNED_OUT` sets the
+  session to none with no request. `SIGNED_IN` and `USER_UPDATED` invalidate it, which keeps the
+  current value on screen while it refetches, because Supabase also sends `SIGNED_IN` when a tab
+  becomes visible again and a reset there would flash every screen to its loading state.
+- **Where a user belongs is one pure function**, `accessStateOf(session, cookieClanId)` in
+  `src/domain/session/access-state.ts`: signed out, pending approval, needs onboarding, needs clan
+  selection, platform, or ready in an active clan. It replaces both copies of
+  `resolveCurrentClanId`, which disagreed: the client's fell back to the profile's `clan_id` and
+  the server's did not. `activeClanOf` in the same file is the one clan resolution, and
+  `lib/server/auth-context.ts` calls it too until #186 replaces that file. `access-state.test.ts`
+  has one case per row, and deleting any branch fails its row (run 2026-10-04).
+- **`landingPath(access, locale)`** (`model/landing.ts`) is the one table from a state to a route.
+  Sign-in, onboarding, the blocked-state screens and the `(dashboard)` layout all route through it.
+  A super_admin with no membership lands on `/platform/clans`.
+- **The actions are `useAuthActions()`**: sign in with email, Google or Apple, sign out, register,
+  onboard, select clan. They read no session through `useSession`, so a sign-out button adds no
+  consumer. Sign-in stays Supabase-direct (ADR-061 § 7), and a password sign-in Supabase refuses
+  with `email_not_confirmed` routes to `/{locale}/verify-email?email=…`. Routing uses the URL's
+  locale; the legacy hook used the profile's `preferred_locale`.
+- **The slice builds its own request context, the one exception to "hooks take a
+  `RequestContext` the caller passes in".** The session is where the identity behind every other
+  context comes from, so nothing above it holds one to pass. `hooks/auth-request-context.ts` reads
+  `getClientRequestContext()` with no `X-Current-Clan-Id`, since no auth route is clan-scoped. #184
+  replaces what it reads with the shared browser context and its `refreshAuth` (ADR-061 § 6).
+- **`useSession()` returns `activeClan`** beside `access`: the membership the user acts in when
+  the state is ready, `null` otherwise. `Header`, `Sidebar`, `SelectClanScreen` and
+  `useCapabilities` read it rather than each testing `access.kind`.
+- **The screens live in `features/auth/ui/`**: `LoginScreen`, `RegisterScreen`,
+  `SelectClanScreen`, `PendingApprovalScreen`, `ClanSuspendedScreen`, `VerifyEmailScreen` and
+  `SupabaseSetupNotice`. Their `app/` pages only route.
+- **Three interim adaptations, each replaced by a later issue.** The `(dashboard)` layout keeps a
+  client redirect, driven by the access state, and writes a ready user's active clan back to the
+  cookie when the cookie names another (#186 makes it a server layout). `lib/hooks/useCapabilities.ts`
+  reads the role from the session and keeps its four names (#185). The legacy
+  `infrastructure/http/request-context.ts` reads the clan from the cookie only and the locale from
+  the URL; its `useAuthStore` fallback and its `localStorage['preferred_locale']` read are gone.
+  The issue said nothing writes that key any more. That was wrong: `ui.store`'s `setLocale` still
+  writes it, from `LocaleSwitcher`. The legacy `useAuth` was the other writer. Nothing reads it
+  now.
 
-**The one reactive read is `useCurrentClanId()` (`src/shared/http/context.client.ts`).** It
-wraps `useSyncExternalStore` around the `current_clan_id` cookie: `writeClanCookie` and
-`clearClanCookie` (same file) notify a module-level listener set after they write the
-cookie, since a `document.cookie` write fires no native change event. A component that
-calls `useCurrentClanId()` re-renders on every clan switch, which is what lets a TanStack
-Query key built from the clan id refetch without a page reload — proved by
-`src/shared/http/clan-switch.test.tsx`. A non-reactive one-shot read is
-`readCurrentClanId()`, for a caller that is not a component, such as `useAuth`'s
-`syncAuthContext`.
-
-**`useAuth()` (`src/lib/hooks/useAuth.ts`) still returns `currentClanId`**, now sourced from
-`useCurrentClanId()` rather than the store, so `useClanContext`, `select-clan/page.tsx`, and
-every other existing caller of `useAuth().currentClanId` needed no change. `Header.tsx`,
-`(dashboard)/tree/page.tsx`, and `useCapabilities.ts` read the clan id directly —
-`useCurrentClanId()` for the two client components, since they had no other reason to pull
-in the whole of `useAuth()`.
-
-**`selectClan` and `syncAuthContext` write the cookie through `writeClanCookie` /
-`clearClanCookie` now, not the legacy `persistCurrentClanId` / `clearCurrentClanId`.** See
-"What still writes the cookie" in the cookie section above for what that leaves behind.
-
-**The legacy `src/infrastructure/http/request-context.ts` lost its `localStorage` fallback.**
-It used to read, in order, `useAuthStore.currentClanId`, then `user.clan_id`, then
-`localStorage.getItem('current_clan_id')` — the three-way read the cookie rule replaced. It now reads `readCurrentClanId()` (the cookie) then `user.clan_id`, with
-no `localStorage` step. This file backs the legacy `axios.ts` interceptor, which is
-untouched: fixing the read it depends on was in scope, deleting the file it lives in was a separate
-change.
-
-**`grep -rn "localStorage.current_clan_id\|current_clan_id" web/src` after that change** finds
-only the cookie name itself (`request-context.ts`'s `CLAN_COOKIE` constant and its
-callers, `middleware.test.ts`'s literal cookie header) and prose about the cookie in
-comments — no `localStorage.getItem` or `.setItem` call against that key anywhere in `src`.
-`clan-selection-storage.ts`, the file that constant used to live in, is deleted (see below).
+**The one reactive read of the active clan is still `useCurrentClanId()`**
+(`src/shared/http/context.client.ts`), a `useSyncExternalStore` over the `current_clan_id` cookie
+that `writeClanCookie` and `clearClanCookie` notify. `useSession` derives the access state from it
+on every render, so a clan switch re-derives every consumer's state with no refetch of the session,
+and a TanStack Query key built from the clan id refetches without a page reload
+(`src/shared/http/clan-switch.test.tsx`). `readCurrentClanId()` is the one-shot read for a caller
+that is not a component, such as the sign-in action.
 
 ### Backend contract — required headers and query semantics
 
@@ -648,10 +668,9 @@ headers plus `traceparent` from a `RequestContext` (`src/shared/http/request-con
 
 **Legacy code only:** the shared Axios client `src/lib/api/axios.ts` attaches all three via
 interceptors. On `401` it signs out and redirects to `/<locale>/login`. The clan id comes
-from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which reads in
-order: `readCurrentClanId()` — the `current_clan_id` cookie — → `user.clan_id`. No
-`localStorage` step remains. SSR returns a minimal context (`{ locale: 'vi' }`). Do not
-extend this path — it is being deleted by the slice PRs.
+from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which reads the
+`current_clan_id` cookie only, and the locale from the URL, since #183. SSR returns a minimal
+context (`{ locale: 'vi' }`). Do not extend this path — it is being deleted by the slice PRs.
 
 **The legacy-transport deletion (2026-08-22) tried to remove `axios.ts`, `src/lib/api/auth.ts`, and
 `src/infrastructure/http/request-context.ts` outright, and could only close two of the three.** It
@@ -680,7 +699,8 @@ change than "delete legacy code with a live-behind replacement", so it was left 
 rather than rewritten under a deletion's name. `axios.ts` and `request-context.ts` leave only
 when the last legacy slice PR (persons, tree, events, documents, admin, and then auth's own
 transport) replaces its own repository, per this section's existing rule that they are "being
-deleted by the slice PRs" — plural, and not yet all landed.
+deleted by the slice PRs" — plural, and not yet all landed. **#183 deleted the four auth files
+named above** once `features/auth` replaced them; `axios.ts` and `request-context.ts` remain.
 
 Query semantics that must be preserved when touching list/detail endpoints:
 
@@ -696,10 +716,9 @@ Query semantics that must be preserved when touching list/detail endpoints:
 ### State management split
 
 - **Server state**: TanStack Query (`src/lib/hooks/use*.ts`). Cross-feature invalidation helpers live in `src/lib/hooks/query-invalidation.ts`.
-- **Client state**: Zustand — `src/store/auth.store.ts` (session only — see
-  "The auth store holds session state only" above; the active clan is
-  `useCurrentClanId()` over the `current_clan_id` cookie, not the store),
-  `src/store/ui.store.ts`.
+- **Client state**: Zustand — `src/store/ui.store.ts` only. The session is server state, one
+  TanStack Query query (see "The session is one query" above), and the active clan is
+  `useCurrentClanId()` over the `current_clan_id` cookie.
 - Forms: react-hook-form + zod resolvers.
 
 ### UI
@@ -784,16 +803,19 @@ export E2E_AUTH_API_ORIGIN=http://127.0.0.1:8073
 pnpm test:e2e:auth
 ```
 
-**Ten tests, 2026-10-04**: two `auth-setup` logins and eight `auth-chromium` cases. It was nine on
-2026-08-26, one of them a deliberate `test.fail()` over an open T-04 defect; #174 fixed the defect
-and replaced that case with two that read the fix (finding 3, below).
+**Twelve tests, 2026-10-04**: two `auth-setup` logins and ten `auth-chromium` cases. #183 added
+`dashboard.auth.spec.ts`'s two. It was ten earlier that day, and nine on 2026-08-26, one of them a
+deliberate `test.fail()` over an open T-04 defect; #174 fixed the defect and replaced that case
+with two that read the fix (finding 3, below).
 
 ### What holds the session, and why there is no stub
 
 `e2e/auth/session.setup.ts` types a seeded user's real password into `/vi/login`, presses the
-button, waits for the `sb-…-auth-token` cookie `@supabase/ssr` writes, and saves the context
-with `storageState()` into `e2e/.auth/` (git-ignored — those files are live credentials).
-`e2e/auth/backoffice.auth.spec.ts` then loads a state file per `test.describe`.
+button, waits for the sign-in to land on `/vi/dashboard`, checks the `sb-…-auth-token` cookie
+`@supabase/ssr` writes, and saves the context with `storageState()` into `e2e/.auth/`
+(git-ignored — those files are live credentials). Until #183 it polled for the cookie and left at
+once, because the dashboard ran away (finding 2). `e2e/auth/backoffice.auth.spec.ts` and
+`dashboard.auth.spec.ts` then load a state file per `test.describe`.
 
 **Nothing under `src/` participates.** That is the fence, and it is a mechanism rather than a
 promise:
@@ -843,14 +865,18 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
    re-evaluates the media query in place, and ADR-045 made the media query the only
    mechanism. One page load per case matters: see the rate limit below.
 5. **Budget the requests.** `/api/v1/auth/*` allows 20 requests per 60 seconds per IP
-   (`backend/app/main.py:221-226`, hardcoded). One load of an authenticated screen spends
-   about three `GET /auth/me`, because `useAuth()` hydrates once per consumer. Keep a case to
-   one navigation.
+   (`backend/app/main.py:221-226`, hardcoded). One load of a `(dashboard)` screen spends one
+   `GET /auth/me` since #183, because every consumer shares the session query; it was about
+   three per load, and then thousands, before. Keep a case to one navigation anyway.
+6. **The backend has to be current.** `GET /auth/me` sends `platform_role` since #181, and the
+   session's schema requires it. A backend started before #181 merged answers without it, and every
+   sign-in then fails on the login screen with the zod error naming `platform_role`. Seen
+   2026-10-04, against a backend on `:8073` started that morning.
 
 ### Three things found by looking at the harness
 
-Findings 1 and 3 are fixed (#182 and #174, 2026-10-04). Each is marked fixed rather than
-deleted, so it keeps its history. Finding 2 says below what of it is still open.
+All three are fixed: 1 by #182, 2 by #183 and 3 by #174, all on 2026-10-04. Each is marked fixed
+rather than deleted, so it keeps its history.
 
 **1. `GET /me/clans` and `POST /me/clans/{id}/select` were read as unenveloped, and both are now
 fixed.** The web client read `{"clans": […]}` and `{clan_id: …}` while the backend has
@@ -879,16 +905,19 @@ as `RegistrationReceived` (`{ message }`, the `MessageData` the route sends) rat
 onboard shape. `register/page.success.test.tsx` mocks only `next/navigation`: the real
 `useAuthActions` and repository run against MSW serving the real 201 envelope, and the test reads
 the message on screen and the form gone. It reaches nothing #183 moves, and its handler matches
-any origin, so #183, which rewrites the repository onto `apiFetch`, keeps it green unchanged.
-`infrastructure/auth/http-auth-profile-repository.test.tsx` reads `clan_id` off `onboard`'s
-result, with the fixture typed by the generated `RegisterResponse`. Negative controls, 2026-10-04:
+any origin, so #183, which rewrites the repository onto `apiFetch`, keeps it green unchanged. It
+did: unedited, it passes against #183 with the Supabase variables unset and set to placeholders.
+`infrastructure/auth/http-auth-profile-repository.test.tsx` read `clan_id` off `onboard`'s result;
+#183 deleted it with that repository, and `features/auth/server/auth-repository.test.ts`'s
+`onboard` case reads the same value, with the fixture typed by the generated `RegisterResponse`. Negative controls, 2026-10-04:
 reverting the `register` unwrap fails the first with "Unable to find an element with the text"
 and no error banner on the page; reverting the `onboard` unwrap fails the second with `expected
 undefined to be '4bf92f35-…'`. The two source-text assertions in
 `tests/contracts/api-clients.test.mjs` that pinned the defective `api.post<RegisterResult>` calls
 are deleted: they pinned a setting, per `.claude/rules/testing.md`.
 
-**2. The `(dashboard)` group runs away, so `/vi/members` is not the covered route.** The harness's
+**2. The `(dashboard)` group runs away, so `/vi/members` is not the covered route. Fixed by #183
+(2026-10-04).** The harness's
 first choice was `/vi/members`, the screen the persons and calendar work each wanted. It cannot be
 read: measured 2026-08-26, `/vi/dashboard` re-ran `useAuth`'s mount effect **2613 times in
 seven seconds** and issued **18174 `GET /auth/me`** until the backend's limiter answered 429.
@@ -900,6 +929,27 @@ first call and fall into its own `catch`; fixing the envelope is what let the lo
 is legacy auth code and its own piece of work — do not fix it inside a feature PR. **ADR-061 § 9:**
 #183 removes it by design, with no stopgap. #182 fixed the `register`/`onboard` defect above
 first.
+
+**The fix, #183.** The session is one query that every consumer shares ("The session is one
+query", above), so no consumer hydrates on its own and nothing writes a store that re-renders the
+others. `e2e/auth/dashboard.auth.spec.ts` loads `/vi/dashboard` as the seeded admin, waits for the
+network to go idle and five seconds more, and counts `GET /auth/me`. Measured 2026-10-04:
+
+| Build                                                          | `GET /auth/me` | Reading                                                       |
+| -------------------------------------------------------------- | -------------- | ------------------------------------------------------------- |
+| `main` before #183, one 12-second probe, deleted after         | 9037           | 3111 of them answered 429; the network never went idle in 7 s |
+| #183                                                           | 1              |                                                               |
+| #183 with `Header` reading the session under its own query key | 2              | the planted defect                                            |
+
+The issue asked for "at most 2", with the planted defect having to cross it. It does not: two keys
+send two requests, and "at most 2" passed the plant. A bound the defect it names cannot cross pins
+nothing (`.claude/rules/testing.md`, question 2), so the case asserts exactly 1, and the plant
+fails it with `Expected: 1, Received: 2`. The second case loads `/vi/members`: `GET /persons`
+answers 200 and the list renders its empty state, since `make seed` writes no persons.
+
+Run against a backend on `:8074` started from `main` at #181 or later; see step 6 above for why
+the older one on `:8073` could not be used. The "before" probe ran against `:8073`, whose missing
+`platform_role` the legacy client never read.
 
 **3. "No horizontal page scroll" is not a usability reading, and this screen proved it. Fixed by
 #174 (2026-10-04).** `e2e/text-scale.spec.ts`'s T-04 assertion passed on `/vi/backoffice/dashboard`
@@ -988,12 +1038,12 @@ for getByLabel('Họ và tên')". jsdom and Chromium resolve the pairing; neithe
 Four changes each built a throwaway route, screenshotted it, and deleted it before committing,
 because no test could hold a session. **Use this harness instead of rebuilding one.**
 
-| The change              | What it could not reach                  | What it did instead                            |
-| ----------------------- | ---------------------------------------- | ---------------------------------------------- |
-| the persons list/detail | `/vi/members` with data                  | a throwaway route                              |
-| the persons form        | the conflict dialog (`StaleWriteDialog`) | a throwaway preview route                      |
-| the calendar            | the calendar with data                   | a throwaway preview route                      |
-| the ten-file conversion | none of the files on a reachable route   | its own verification was impossible as written |
+| The change              | What it could not reach                                                  | What it did instead                            |
+| ----------------------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
+| the persons list/detail | `/vi/members` with data (reachable since #183, `dashboard.auth.spec.ts`) | a throwaway route                              |
+| the persons form        | the conflict dialog (`StaleWriteDialog`)                                 | a throwaway preview route                      |
+| the calendar            | the calendar with data                                                   | a throwaway preview route                      |
+| the ten-file conversion | none of the files on a reachable route                                   | its own verification was impossible as written |
 
 ADR-046 is the fifth case and the one now covered directly: it could not read the
 backoffice rail in a browser and said so. `backoffice.auth.spec.ts` reads that rail's `muted`
@@ -1007,8 +1057,8 @@ engine rather than computed from the stylesheet.
   feature should add to it. **Since #171 (2026-10-04) that is a gate, and the gate only shrinks**
   (ADR-060 § 4). `nothing-imports-legacy` forbids any module outside the set from importing one
   inside it. The imports that already existed are the baseline,
-  `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, which `pnpm depcruise`
-  reads through `--ignore-known`.
+  `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04 and 21 after #183, which
+  `pnpm depcruise` reads through `--ignore-known`. None of the 21 starts in `features/auth`.
   - **When a slice deletes or re-points a legacy import, shrink the baseline in the same pull
     request:** run `pnpm depcruise:baseline` and commit the shorter file. Do not edit it by hand.
     `pnpm depcruise:ratchet origin/main` fails while the baseline still lists an import the tree no
@@ -1063,23 +1113,25 @@ engine rather than computed from the stylesheet.
   into `src/domain/<feature>/`.
 - New transport code goes in `src/shared/http/` (or, once a feature slice PR lands,
   `src/features/<slice>/api/`) — never in `src/lib/api/` or `src/infrastructure/`.
-- **The auth slice's legacy tree is now split between dead and live, not simply "frozen".**
-  The 2026-08-22 deletion removed `src/lib/api/auth.ts` and
-  `src/infrastructure/auth/clan-selection-storage.ts` outright (both had zero real importers). It left
-  `src/application/auth/{ports/auth-repository.ts,use-cases/auth-context.ts}` and
-  `src/infrastructure/auth/{http-auth-profile-repository.ts,supabase-auth-session-port.ts}` in
-  place: `useAuth()` (`src/lib/hooks/useAuth.ts`) still calls all four for session sync,
-  sign-in, onboarding, and clan selection, and no `features/auth/` slice exists yet to replace
-  them. **Superseded by ADR-061 § 8 and ADR-060 § 1:** #183 deletes these four as auth's
-  slice-owned legacy. `axios.ts` and `request-context.ts` are cross-cutting and leave with the last
-  slice that imports them, not with auth.
-- **`VerifyEmailScreen` (`src/components/auth/VerifyEmailScreen.tsx`) is still unreachable
-  from a real sign-in.** It handles `403 email_not_verified`, which only
-  `POST /auth/login` can raise, and the live sign-in path
-  (`useAuth().signInWithEmail` → `authSessionPort.signInWithEmail`) calls
-  `supabase.auth.signInWithPassword` directly, bypassing the backend endpoint entirely. The
-  2026-08-22 deletion left this path untouched for the same reason it left
-  `http-auth-profile-repository.ts` in place: swapping `useAuth()`'s Supabase-direct sign-in for a backend-calling one is the
-  auth slice's transport rewrite, not a deletion. The screen stays reachable only by direct
-  navigation to `/{locale}/verify-email?email=...` and by its own component test. ADR-061 § 7
-  keeps sign-in Supabase-direct: #183 routes Supabase's `email_not_confirmed` error code here.
+- **Auth applied it second (#183, 2026-10-04).** `lib/hooks/useAuth.ts`, `lib/hooks/useClanContext.ts`,
+  `store/auth.store.ts`, `application/auth/`, `infrastructure/auth/` and `components/auth/` are
+  deleted, after every importer was re-pointed at `@/features/auth`: `Header`, `Sidebar`,
+  `BackofficeSidebar`, the `(dashboard)` layout, the login, register and select-clan pages, the
+  three blocked-state pages, and `useCapabilities`. The baseline lost 11 entries, and
+  `features/auth` imports no legacy. What of auth's legacy is left, and who removes it (ADR-061 § 8):
+  - `lib/hooks/useCapabilities.ts`, reading the session now. #185 replaces it, and with it the last
+    two auth imports persons' routes hold.
+  - `lib/server/auth-context.ts` and `lib/utils/with-role.ts`, the server guard. #186 replaces them;
+    #183 only swapped the server's clan resolution for the domain one.
+  - `lib/supabase/`, which moves to `shared/supabase/` with #184.
+  - The auth types in `lib/types/api.ts` (`UserProfile`, `UserClanMembership` and the rest).
+    `lib/server/auth-context.ts` still reads `UserClanMembership`, so they go with #186.
+  - `axios.ts` and `infrastructure/http/request-context.ts` are cross-cutting and leave with the last
+    slice that imports them, not with auth.
+- **`VerifyEmailScreen` (`src/features/auth/ui/VerifyEmailScreen.tsx`) is reachable from a real
+  sign-in since #183.** Sign-in stays Supabase-direct (ADR-061 § 7), so the backend's
+  `403 email_not_verified` is still never raised on the way. Supabase refuses a password sign-in
+  for an unconfirmed account with the code `email_not_confirmed`, and `useAuthActions().signInWithEmail`
+  routes that to `/{locale}/verify-email?email=…`. `features/auth/ui/LoginScreen.test.tsx` makes the
+  fake Supabase client refuse with that code and reads the route; with the mapping removed it reads
+  no route and Supabase's "Email not confirmed" on the form instead (run 2026-10-04).

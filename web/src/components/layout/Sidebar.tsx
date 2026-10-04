@@ -15,8 +15,8 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { useSession } from '@/features/auth'
 import { useUIStore } from '@/store/ui.store'
-import { useAuthStore } from '@/store/auth.store'
 
 interface NavItem {
   href: string
@@ -40,11 +40,13 @@ export function Sidebar() {
   const t = useTranslations()
   const pathname = usePathname()
   const { sidebarOpen, toggleSidebar } = useUIStore()
-  const { user } = useAuthStore()
+  const { session, activeClan } = useSession()
 
-  const role = user?.role
-  const isAdmin = role === 'admin' || role === 'super_admin'
-  const isSuperAdmin = role === 'super_admin'
+  // The active clan's role, and the platform role beside it. They are independent: a clan role
+  // is never `super_admin` (`docs/architecture/rbac.md:29-35`), which is why the old reading of
+  // `role === 'super_admin'` never showed the platform link to anyone.
+  const isAdmin = activeClan?.role === 'admin'
+  const isSuperAdmin = session?.profile.platformRole === 'super_admin'
 
   const visibleItems = navItems.filter((item) => {
     if (item.superAdminOnly && !isSuperAdmin) return false
@@ -74,10 +76,10 @@ export function Sidebar() {
       </div>
 
       {/* Clan name */}
-      {sidebarOpen && user?.clan_name && (
+      {sidebarOpen && activeClan && (
         <div className="border-cream-200 border-b px-4 py-2">
           <p className="text-muted-foreground text-xs tracking-wide uppercase">Dòng họ</p>
-          <p className="text-primary truncate text-sm font-medium">{user.clan_name}</p>
+          <p className="text-primary truncate text-sm font-medium">{activeClan.clanName}</p>
         </div>
       )}
 

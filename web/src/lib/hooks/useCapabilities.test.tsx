@@ -12,36 +12,52 @@
  * not a setting": the outcome here is which of the four booleans a real render produces.
  */
 import { screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { useCapabilities } from './useCapabilities'
-import { CLAN_COOKIE } from '@/shared/http/request-context'
+import { accessStateOf } from '@/domain/session/access-state'
+import { useSession } from '@/features/auth'
+import type { Membership, Session } from '@/features/auth'
 import { renderWithProviders } from '@/shared/testing/render'
-import { useAuthStore } from '@/store/auth.store'
-import type { UserProfile } from '@/lib/types'
 
-function setClanCookie(clanId: string | null) {
-  // jsdom keeps a cookie around between assignments (same trap
-  // `clan-switch.test.tsx` documents), so clear the slot before writing.
-  document.cookie = `${CLAN_COOKIE}=; path=/; max-age=0`
-  if (clanId !== null) {
-    document.cookie = `${CLAN_COOKIE}=${encodeURIComponent(clanId)}; path=/`
-  }
+/**
+ * #183: the hook reads the role from the session's access state, so each case builds a session
+ * and a cookie and lets the real `accessStateOf` decide, rather than setting a role on a store.
+ */
+vi.mock('@/features/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/auth')>()),
+  useSession: vi.fn(),
+}))
+
+const CLAN_A = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
+const CLAN_B = 'bbbbbbbb-0000-4000-8000-000000000002'
+
+function membership(clanId: string, role: string): Membership {
+  return { clanId, clanName: 'Dòng họ', clanSlug: clanId, role }
 }
 
-function setSession(role: UserProfile['role'], options?: { isPendingApproval?: boolean }) {
-  useAuthStore.getState().setUser({
-    id: 'user-1',
-    email: 'user@example.com',
-    full_name: 'Test User',
-    clan_id: 'clan-1',
-    role,
-    is_approved: true,
-    preferred_locale: 'vi',
-  })
-  useAuthStore.getState().setAccessState({
-    isPendingApproval: options?.isPendingApproval ?? false,
-    needsOnboarding: false,
-    needsClanSelection: false,
+function setSession(
+  memberships: Membership[],
+  options: { cookieClanId?: string | null; pending?: boolean } = {},
+) {
+  const session: Session = {
+    profile: {
+      userId: 'user-1',
+      email: 'user@example.com',
+      fullName: 'Test User',
+      preferredLocale: 'vi',
+      platformRole: 'user',
+      hasPendingMembership: options.pending ?? false,
+    },
+    memberships,
+  }
+  const access = accessStateOf(session, options.cookieClanId ?? null)
+  vi.mocked(useSession).mockReturnValue({
+    session,
+    access,
+    activeClan: access.kind === 'ready' ? access.activeClan : null,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
   })
 }
 
@@ -50,24 +66,16 @@ function CapabilitiesProbe() {
   return <div data-testid="capabilities">{JSON.stringify(capabilities)}</div>
 }
 
-async function readCapabilities() {
+function readCapabilities() {
   renderWithProviders(<CapabilitiesProbe />)
   return JSON.parse(screen.getByTestId('capabilities').textContent ?? '{}')
 }
 
-const CLAN_A = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
-
 describe('useCapabilities, rewired onto domain/capability', () => {
-  afterEach(() => {
-    setClanCookie(null)
-    useAuthStore.getState().clear()
-  })
+  it('grants an admin every one of the four capabilities a component reads', () => {
+    setSession([membership(CLAN_A, 'admin')], { cookieClanId: CLAN_A })
 
-  it('grants an admin every one of the four capabilities a component reads', async () => {
-    setClanCookie(CLAN_A)
-    setSession('admin')
-
-    expect(await readCapabilities()).toEqual({
+    expect(readCapabilities()).toEqual({
       canEditPersons: true,
       canUploadDocuments: true,
       canDeleteDocuments: true,
@@ -75,11 +83,10 @@ describe('useCapabilities, rewired onto domain/capability', () => {
     })
   })
 
-  it("matches rbac.md's editor row: create/edit and upload, never delete a document", async () => {
-    setClanCookie(CLAN_A)
-    setSession('editor')
+  it("matches rbac.md's editor row: create/edit and upload, never delete a document", () => {
+    setSession([membership(CLAN_A, 'editor')], { cookieClanId: CLAN_A })
 
-    expect(await readCapabilities()).toEqual({
+    expect(readCapabilities()).toEqual({
       canEditPersons: true,
       canUploadDocuments: true,
       canDeleteDocuments: false,
@@ -87,11 +94,10 @@ describe('useCapabilities, rewired onto domain/capability', () => {
     })
   })
 
-  it('denies a viewer all four', async () => {
-    setClanCookie(CLAN_A)
-    setSession('viewer')
+  it('denies a viewer all four', () => {
+    setSession([membership(CLAN_A, 'viewer')], { cookieClanId: CLAN_A })
 
-    expect(await readCapabilities()).toEqual({
+    expect(readCapabilities()).toEqual({
       canEditPersons: false,
       canUploadDocuments: false,
       canDeleteDocuments: false,
@@ -99,11 +105,10 @@ describe('useCapabilities, rewired onto domain/capability', () => {
     })
   })
 
-  it('denies an admin with no active clan selected — hasActiveClan is a precondition, not just a role check', async () => {
-    setClanCookie(null)
-    setSession('admin')
+  it('denies an admin of two clans who has selected neither — an active clan is a precondition, not just a role check', () => {
+    setSession([membership(CLAN_A, 'admin'), membership(CLAN_B, 'admin')])
 
-    expect(await readCapabilities()).toEqual({
+    expect(readCapabilities()).toEqual({
       canEditPersons: false,
       canUploadDocuments: false,
       canDeleteDocuments: false,
@@ -111,11 +116,10 @@ describe('useCapabilities, rewired onto domain/capability', () => {
     })
   })
 
-  it('denies an admin still pending approval, even with a clan cookie already set', async () => {
-    setClanCookie(CLAN_A)
-    setSession('admin', { isPendingApproval: true })
+  it('denies a user still pending approval, even with a clan cookie already set', () => {
+    setSession([], { cookieClanId: CLAN_A, pending: true })
 
-    expect(await readCapabilities()).toEqual({
+    expect(readCapabilities()).toEqual({
       canEditPersons: false,
       canUploadDocuments: false,
       canDeleteDocuments: false,

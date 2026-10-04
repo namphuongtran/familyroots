@@ -70,27 +70,11 @@ test('platform metrics type matches backend counters', async () => {
   assert.doesNotMatch(page, /\bactive_clans_30d\b/)
 })
 
-test('auth profile repository uses backend auth and me-clan endpoints', async () => {
-  const source = await read('src/infrastructure/auth/http-auth-profile-repository.ts')
-
-  assert.match(source, /['"`]\/auth\/me['"`]/)
-  assert.match(source, /['"`]\/me\/clans['"`]/)
-  assert.match(source, /\/me\/clans\/\$\{clanId\}\/select/)
-})
-
-test('auth context session fallback remains identity-only', async () => {
-  const source = await read('src/application/auth/use-cases/auth-context.ts')
-
-  assert.match(source, /role: undefined/)
-  assert.match(source, /clan_id: undefined/)
-  assert.match(source, /clan_name: undefined/)
-  assert.match(source, /platform_role: undefined/)
-  assert.match(source, /has_pending_membership: false/)
-  assert.match(
-    source,
-    /Keep a minimal identity-only fallback; do not derive clan or role truth from Supabase metadata\./,
-  )
-})
+// #183 deleted the two auth tests that sat here, with the files they read:
+// `src/infrastructure/auth/http-auth-profile-repository.ts` and
+// `src/application/auth/use-cases/auth-context.ts`. Both read source text, which pins a setting
+// (`.claude/rules/testing.md`). `src/features/auth/server/auth-repository.test.ts` sends each
+// request and reads what comes back instead.
 
 // the legacy-component deletion deleted both person contract tests that used to sit here.
 //
