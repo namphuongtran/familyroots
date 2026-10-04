@@ -2,11 +2,23 @@
  * Frontend layer boundaries — the counterpart of the backend's import-linter
  * ratchet (ADR-013). A violation is a CI failure, not something to catch in review.
  *
- * Legacy trees (src/lib/api, src/lib/hooks, src/application, src/infrastructure)
- * are excluded: they are being deleted slice by slice, and failing on them now
- * would only teach people to disable the tool.
+ * The legacy trees (the web architecture spec's § 3.2 list, `LEGACY` below) are in
+ * the graph, cruised like everything else, so an import out of legacy is a real
+ * edge and a module only legacy imports is not an orphan. No rule but
+ * `nothing-imports-legacy` takes a legacy module as its subject: every rule whose
+ * `from` could match a legacy path names `LEGACY` in `pathNot`, and `no-circular`
+ * also skips an edge that ends inside legacy. A new rule with a broad `from` needs
+ * the same. Legacy is being deleted slice by slice (ADR-060), not refactored into
+ * compliance.
+ *
+ * `nothing-imports-legacy` is a ratchet. Today's violations sit in
+ * `.dependency-cruiser-known-violations.json`, which `pnpm depcruise` reads through
+ * `--ignore-known`, and `pnpm depcruise:ratchet` fails a pull request that adds an
+ * entry to it (ADR-060 § 4, issue #171). See web/CLAUDE.md, "Migration notes".
  */
-const LEGACY = '^src/(lib/(api|hooks)|application|infrastructure|types)/'
+const LEGACY =
+  '^src/(lib/(api|hooks|types)|application|infrastructure|types|' +
+  'components/(admin|auth|backoffice|documents|events|family-tree|members))/'
 
 module.exports = {
   forbidden: [
@@ -80,14 +92,32 @@ module.exports = {
       name: 'nothing-imports-app',
       comment: 'src/app is the entry point; it is imported by the framework only.',
       severity: 'error',
-      from: { pathNot: '^src/app/' },
+      from: { pathNot: ['^src/app/', LEGACY] },
       to: { path: '^src/app/' },
     },
     {
-      name: 'no-circular',
+      name: 'nothing-imports-legacy',
+      comment:
+        'The legacy trees are frozen, not extended (ADR-060 § 4). A legacy module may ' +
+        'import another; nothing else may import one. The imports that already exist are ' +
+        'the baseline, and it may only shrink: delete or re-point the import, then run ' +
+        '`pnpm depcruise:baseline`.',
       severity: 'error',
-      from: {},
-      to: { circular: true },
+      from: { pathNot: LEGACY },
+      to: { path: LEGACY },
+    },
+    {
+      name: 'no-circular',
+      comment:
+        'An edge with an end inside legacy is never reported, so a cycle wholly inside ' +
+        'legacy is silent. A cycle that passes through legacy is still reported on its ' +
+        'edges outside legacy. Filtering on the cycle instead (`viaOnly`) would hide real ' +
+        'ones: dependency-cruiser records only the first cycle its search finds for an ' +
+        'edge (`getCycle`, src/graph-utl/indexed-module-graph.mjs), and that can be a ' +
+        'route through legacy when one outside it also exists.',
+      severity: 'error',
+      from: { pathNot: LEGACY },
+      to: { circular: true, pathNot: LEGACY },
     },
     {
       name: 'no-orphans',
@@ -99,6 +129,7 @@ module.exports = {
           '^src/app/',
           '^src/generated/',
           '(^|/)(instrumentation|middleware)\\.ts$',
+          LEGACY,
         ],
       },
       to: {},
@@ -106,7 +137,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: [LEGACY, '\\.test\\.tsx?$', '^src/generated/'] },
+    exclude: { path: ['\\.test\\.tsx?$', '^src/generated/'] },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
     enhancedResolveOptions: { exportsFields: ['exports'], conditionNames: ['import', 'require'] },

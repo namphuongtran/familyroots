@@ -88,7 +88,7 @@ ratchet (ADR-013):
 | `app/**` | `features/*/index.ts`, `shared/**` | `api` directly |
 | anything | — | `app/**` |
 
-**Only the third column is machine-enforced.** `pnpm depcruise` runs nine rules in
+**Only the third column is machine-enforced.** `pnpm depcruise` runs ten rules in
 `.dependency-cruiser.cjs`, and dependency-cruiser can only forbid — it has no allow-list —
 so the *May import* column is architecture we hold ourselves to, not a gate that will catch
 us. The rule names and exactly what each one forbids are listed in `web/CLAUDE.md`;
@@ -96,9 +96,11 @@ consult that before assuming a boundary is protected. `src/shared/` is `http/`,
 `telemetry/` and `testing/` — there is no `shared/ui/` yet, and where reusable
 presentational components should live is an open sub-project B decision.
 
-The legacy trees (`src/lib/api`, `src/lib/hooks`, `src/application`, `src/infrastructure`,
-`src/types`) are excluded from these rules — they are being deleted, not refactored into
-compliance.
+The legacy trees (the web architecture spec's § 3.2 list) are in the graph. One rule,
+`nothing-imports-legacy`, forbids new imports into them, and today's imports are a committed
+baseline that may only shrink (ADR-060 § 4). No other rule takes a legacy module as its subject;
+legacy is being deleted, not refactored into compliance. `web/CLAUDE.md` "Migration notes" says how
+to shrink the baseline.
 
 Path alias `@/*` → `./src/*`.
 
@@ -182,6 +184,7 @@ Four harnesses, one gate each — see `web/CLAUDE.md` for the exact commands:
   (`pnpm test:contracts`) — the pre-spine Node built-in test runner suites, scoped to the
   legacy trees; not part of the gate for new code.
 
-CI gate (`.github/workflows/web-ci.yml`): type-check, lint, `depcruise`, unit, component,
+CI gate (`.github/workflows/web-ci.yml`): type-check, lint, `depcruise`, the legacy ratchet
+on pull requests (`pnpm depcruise:ratchet`, ADR-060 § 4), unit, component,
 build, e2e, and `api-types-fresh` (fails if `src/generated/api-types.ts` drifts from the
 backend's OpenAPI schema — triggered by changes under `web/**` **or** `backend/app/**`).

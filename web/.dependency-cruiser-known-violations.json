@@ -1,0 +1,290 @@
+[
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(auth)/clan-suspended/page.tsx",
+    "to": "src/components/auth/ClanSuspendedScreen.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(auth)/login/page.tsx",
+    "to": "src/components/auth/SupabaseSetupNotice.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(auth)/login/page.tsx",
+    "to": "src/lib/hooks/useAuth.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(auth)/pending-approval/page.tsx",
+    "to": "src/components/auth/PendingApprovalScreen.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(auth)/register/page.tsx",
+    "to": "src/components/auth/SupabaseSetupNotice.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(auth)/register/page.tsx",
+    "to": "src/lib/hooks/useAuth.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(auth)/verify-email/page.tsx",
+    "to": "src/components/auth/VerifyEmailScreen.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/admin/clan/page.tsx",
+    "to": "src/lib/hooks/useAdmin.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/admin/clan/page.tsx",
+    "to": "src/lib/types/index.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/admin/users/page.tsx",
+    "to": "src/components/admin/PendingUsersList.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/admin/users/page.tsx",
+    "to": "src/components/admin/RoleSelector.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/admin/users/page.tsx",
+    "to": "src/lib/hooks/useAdmin.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/admin/users/page.tsx",
+    "to": "src/lib/types/index.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/documents/page.tsx",
+    "to": "src/components/documents/DocumentGallery.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/documents/page.tsx",
+    "to": "src/components/documents/DocumentUpload.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/events/page.tsx",
+    "to": "src/components/events/EventCalendar.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/events/page.tsx",
+    "to": "src/components/events/EventCard.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/events/page.tsx",
+    "to": "src/components/events/EventListClient.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/layout.tsx",
+    "to": "src/lib/hooks/useAuth.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/members/[id]/edit/page.tsx",
+    "to": "src/lib/hooks/useCapabilities.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/members/new/page.tsx",
+    "to": "src/lib/hooks/useCapabilities.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/tree/page.tsx",
+    "to": "src/components/family-tree/MemberSidebar.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/(dashboard)/tree/page.tsx",
+    "to": "src/components/family-tree/TreeCanvas.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/backoffice/layout.tsx",
+    "to": "src/components/backoffice/BackofficeSidebar.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/platform/clans/page.tsx",
+    "to": "src/lib/hooks/useAdmin.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/platform/metrics/page.tsx",
+    "to": "src/lib/hooks/useAdmin.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/app/[locale]/select-clan/page.tsx",
+    "to": "src/lib/hooks/useAuth.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/layout/Header.tsx",
+    "to": "src/lib/hooks/useAuth.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/lib/server/auth-context.ts",
+    "to": "src/lib/types/index.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/lib/utils/kinship.ts",
+    "to": "src/lib/types/relationship.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/lib/utils/tree-transform.ts",
+    "to": "src/lib/types/tree.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/store/auth.store.ts",
+    "to": "src/lib/types/index.ts",
+    "rule": {
+      "severity": "error",
+      "name": "nothing-imports-legacy"
+    }
+  }
+]
