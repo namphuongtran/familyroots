@@ -131,7 +131,8 @@ class StoragePort(Protocol):
         the public object stays inside that clan's prefix exactly like the private one.
 
         Raises ``StorageBucketNotConfiguredError`` when the public bucket is missing
-        or is not public-read, ``StorageNotFoundError`` when ``source_path`` is gone,
+        or is not public-read, or when the private bucket ``source_path`` lives in is
+        missing (#177), ``StorageNotFoundError`` when ``source_path`` is gone,
         and ``StorageUnavailableError`` for provider/transport failures. It never
         returns a URL it could not actually publish.
         """

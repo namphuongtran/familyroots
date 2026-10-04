@@ -7,7 +7,9 @@ adapter's delete() is monkeypatched at the purge module's import seam
 (app.services.document_purge.SupabaseStorageAdapter) with a spy that records calls
 and can be told to raise (StorageError) or confirm not-found (returns True — the
 StoragePort contract, per FIX 2 of the task 3 review, no longer has a False case:
-"not found" and "deleted" are both success) per path.
+"not found" and "deleted" are both success) per path. The exception is
+test_missing_bucket_keeps_the_row, which puts the real adapter back and fakes only
+the Supabase SDK client, because the classification is what it tests (#177).
 
 The per-item flow is claim-row -> delete-blob -> commit (owner decision
 2026-07-12, FIX 1 of the task 3 review): the guarded per-row DELETE (id +

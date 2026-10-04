@@ -3,6 +3,10 @@
 Mirrors tests/unit/infrastructure/test_identity_error_classification.py: a
 missing object → 404 type, anything infrastructural → 503 type, an unexpected
 error → returned unchanged so it stays a loud 500.
+
+The adapter tests below drive each private-bucket call with a faked SDK client.
+Every call classifies through _classify_bucket first, so a missing BUCKET is its
+own 503 type rather than a missing object (#177).
 """
 
 from unittest.mock import MagicMock

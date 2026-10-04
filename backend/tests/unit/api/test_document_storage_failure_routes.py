@@ -6,7 +6,8 @@ regression that unwraps a storage call site (letting a raw httpx/KeyError escape
 silently become a 500 with nothing catching it. This drives GET /documents/{id} and
 POST /documents through create_app() (which registers the storage handlers) with a
 StoragePort-backed handler that raises, and asserts the 503 storage_unavailable /
-404 storage_not_found envelopes — with no raw storage detail leaked.
+503 storage_bucket_not_configured / 404 storage_not_found envelopes — with no raw
+storage detail leaked.
 """
 
 from __future__ import annotations
@@ -18,7 +19,11 @@ from fastapi.testclient import TestClient
 
 from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
-from app.domain.document.repository import StorageNotFoundError, StorageUnavailableError
+from app.domain.document.repository import (
+    StorageBucketNotConfiguredError,
+    StorageNotFoundError,
+    StorageUnavailableError,
+)
 from app.infrastructure.dependencies import (
     get_document_command_handler,
     get_document_query_handler,
@@ -86,3 +91,29 @@ def test_upload_storage_outage_is_503() -> None:
     assert resp.status_code == 503, resp.text
     assert resp.json()["error"]["code"] == "storage_unavailable"
     assert "bucket unreachable" not in resp.text
+
+
+def test_get_document_missing_bucket_is_503_not_404() -> None:
+    """A missing private bucket used to reach the client as 404 storage_not_found,
+    telling it the document was gone (#177). It is the server's configuration."""
+    client = _client(
+        query_exc=StorageBucketNotConfiguredError("bucket 'family-roots-files' does not exist")
+    )
+    resp = client.get(f"/api/v1/documents/{uuid.uuid4()}")
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["error"]["code"] == "storage_bucket_not_configured"
+    assert "family-roots-files" not in resp.text
+
+
+def test_upload_missing_bucket_is_503_not_404() -> None:
+    client = _client(
+        cmd_exc=StorageBucketNotConfiguredError("bucket 'family-roots-files' does not exist")
+    )
+    resp = client.post(
+        "/api/v1/documents",
+        files={"file": ("photo.jpg", b"binarydata", "image/jpeg")},
+        data={"title": "Family photo", "document_type": "photo"},
+    )
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["error"]["code"] == "storage_bucket_not_configured"
+    assert "family-roots-files" not in resp.text
