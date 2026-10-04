@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import exists, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.auth.platform_role import platform_role_of
 from app.domain.auth.repository import (
     AuthProfileView,
     AuthQueryPort,
@@ -35,6 +36,7 @@ def _profile_view(row: Any | None) -> AuthProfileView | None:
         clan_name=clan.name if clan else None,
         role=membership.role if membership else None,
         is_approved=bool(membership and membership.is_approved),
+        platform_role=platform_role_of(profile.platform_role),
     )
 
 

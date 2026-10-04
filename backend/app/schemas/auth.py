@@ -5,6 +5,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
+from app.domain.auth.platform_role import PlatformRole
+
 # Slugs land in URLs and in the export Content-Disposition header (latin-1
 # only), so restrict them at the door: lowercase ASCII alphanumerics and
 # single hyphens, no leading/trailing hyphen.
@@ -113,6 +115,7 @@ class UserProfile(BaseModel):
     has_pending_membership: bool = False
     person_id: uuid.UUID | None = None
     preferred_locale: str = "vi"
+    platform_role: PlatformRole
 
 
 class LoginResponse(BaseModel):

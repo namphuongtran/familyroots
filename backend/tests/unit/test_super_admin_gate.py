@@ -27,6 +27,9 @@ async def test_active_super_admin_allowed() -> None:
     assert result is p  # type: ignore[comparison-overlap]
 
 
-async def test_non_super_admin_rejected() -> None:
+@pytest.mark.parametrize("platform_role", [None, "user", "Super_Admin"])
+async def test_non_super_admin_rejected(platform_role: str | None) -> None:
+    # "Super_Admin" is the unknown-value case GET /auth/me reports as "user"
+    # (test_login_profile_contract.py). The two must refuse the same rows.
     with pytest.raises(ForbiddenError):
-        await get_super_admin(_profile(None))  # type: ignore[arg-type]
+        await get_super_admin(_profile(platform_role))  # type: ignore[arg-type]

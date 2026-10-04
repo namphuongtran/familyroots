@@ -8,6 +8,8 @@ Three long-standing gaps, all pinned here:
   B with role null. Approved memberships must win, oldest first.
 - preferred_locale was never echoed (always default "vi") even after
   PATCH /auth/me stored one.
+- platform_role was never sent (#181), so the web could not tell the platform
+  super admin from anyone else without probing GET /platform/metrics.
 
 The identity provider is the only stubbed seam (same approach as
 test_auth_http_flow.py); the login profile projection runs against real
@@ -17,7 +19,8 @@ Postgres.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
@@ -270,3 +273,119 @@ async def test_me_echoes_preferred_locale_from_metadata(
         resp = await ac.get("/api/v1/auth/me", headers={"Authorization": "Bearer x"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["preferred_locale"] == "en"
+
+
+@asynccontextmanager
+async def _profile_with_platform_role(
+    session_factory: async_sessionmaker[AsyncSession], platform_role: str
+) -> AsyncIterator[dict[str, Any]]:
+    """A ``user_profiles`` row with no membership, deleted on exit.
+
+    The database is shared by the whole session, and ``test_bootstrap_super_admin.py``
+    starts by requiring that no super admin exists.
+    """
+    user_id = uuid.uuid4()
+    email = f"{user_id.hex[:12]}@example.com"
+    async with session_factory() as s:
+        await s.execute(
+            sa.text(
+                "INSERT INTO user_profiles (id, email, display_name, platform_role) "
+                "VALUES (:id, :e, 'u', :role)"
+            ),
+            {"id": user_id, "e": email, "role": platform_role},
+        )
+        await s.commit()
+    try:
+        yield {"user_id": user_id, "email": email}
+    finally:
+        async with session_factory() as s:
+            await s.execute(sa.text("DELETE FROM user_profiles WHERE id = :id"), {"id": user_id})
+            await s.commit()
+
+
+@pytest.fixture()
+async def super_admin(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncGenerator[dict[str, Any]]:
+    """A platform super admin with no clan membership."""
+    async with _profile_with_platform_role(session_factory, "super_admin") as seed:
+        yield seed
+
+
+async def _me(session_factory: async_sessionmaker[AsyncSession], user_id: uuid.UUID) -> Any:
+    app = _app(session_factory, _StubIdentity(str(user_id)))
+
+    async def _user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        return {"sub": str(user_id), "email": "", "user_metadata": {}}
+
+    app.dependency_overrides[get_current_user] = _user
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        resp = await ac.get("/api/v1/auth/me", headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["data"]
+
+
+async def _login_user(
+    session_factory: async_sessionmaker[AsyncSession], seed: dict[str, Any]
+) -> Any:
+    app = _app(session_factory, _StubIdentity(str(seed["user_id"])))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        resp = await ac.post(
+            "/api/v1/auth/login", json={"email": seed["email"], "password": _PASSWORD}
+        )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["data"]["user"]
+
+
+async def test_me_reports_platform_role(
+    session_factory: async_sessionmaker[AsyncSession],
+    super_admin: dict[str, Any],
+    seeded: dict[str, Any],
+) -> None:
+    """#181: ``platform_role`` is read from ``user_profiles.platform_role``.
+
+    Negative control: hard-code ``"user"`` in ``AuthQueryHandler.get_profile`` and the
+    super admin reads back as ``"user"``.
+    """
+    assert (await _me(session_factory, super_admin["user_id"]))["platform_role"] == "super_admin"
+    assert (await _me(session_factory, seeded["user_id"]))["platform_role"] == "user"
+
+
+async def test_me_without_a_profile_row_reports_platform_role_user(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """``GET /me`` depends on ``get_current_user`` only, so a user can reach it before any
+    ``user_profiles`` row exists. That user is not a super admin.
+
+    Negative control: make ``get_profile`` fall back to ``"super_admin"`` when the view is
+    ``None``.
+    """
+    assert (await _me(session_factory, uuid.uuid4()))["platform_role"] == "user"
+
+
+async def test_me_reports_an_unknown_platform_role_as_user(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """``platform_role`` has no CHECK constraint, so the column can hold a value the
+    response type does not name. ``get_super_admin`` grants nothing to such a row, and
+    ``GET /me`` must say ``"user"`` for it rather than answer 500.
+
+    Negative control: map ``profile.platform_role`` straight through in ``_profile_view``
+    and the response fails validation.
+    """
+    async with _profile_with_platform_role(session_factory, "Super_Admin") as seed:
+        assert (await _me(session_factory, seed["user_id"]))["platform_role"] == "user"
+
+
+async def test_login_reports_platform_role(
+    session_factory: async_sessionmaker[AsyncSession],
+    super_admin: dict[str, Any],
+    seeded: dict[str, Any],
+) -> None:
+    """Login's ``user`` is the same ``UserProfile`` shape as ``GET /me``, so it carries the
+    field too, read from the same column.
+
+    Negative control: hard-code ``"user"`` in ``AuthCommandHandler.login``.
+    """
+    assert (await _login_user(session_factory, super_admin))["platform_role"] == "super_admin"
+    assert (await _login_user(session_factory, seeded))["platform_role"] == "user"

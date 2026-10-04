@@ -3726,6 +3726,11 @@ export interface components {
              * @default vi
              */
             preferred_locale: string;
+            /**
+             * Platform Role
+             * @enum {string}
+             */
+            platform_role: "user" | "super_admin";
         };
         /**
          * UserRoleChangeResponse

@@ -17,6 +17,9 @@ numbers as hints and its quoted text as the claim.
 [ADR-063](063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md). Its landing pages are
 #200 and #201, both blocked by #183.
 
+2026-10-04: § 5's backend half is built by #181. `GET /auth/me`, and login's `user` with it, send
+`platform_role`. The web's `/platform/metrics` probe stays until #186 deletes it.
+
 ## Context
 
 ### The spec's auth slice, and what happened instead

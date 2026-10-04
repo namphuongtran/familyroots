@@ -67,7 +67,7 @@ def _admin_client(handler: _FakeCreateHandler, clan_id: uuid.UUID) -> TestClient
     app = FastAPI()
     app.include_router(admin_invitations_router, prefix="/api/v1/clans/{clan_id}/invitations")
     app.dependency_overrides[ensure_user_profile] = lambda: UserProfile(
-        id=uuid.uuid4(), email="admin@x.com", full_name="Admin"
+        id=uuid.uuid4(), email="admin@x.com", full_name="Admin", platform_role="user"
     )
     app.dependency_overrides[get_current_clan_id] = lambda: clan_id
     app.dependency_overrides[get_db] = lambda: _FakeDb()
