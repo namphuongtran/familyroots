@@ -54,7 +54,7 @@ System-wide design that touches more than one service.
 - [API Design](architecture/api-design.md) — REST conventions, endpoint inventory, pagination, sparse fields, includes
 - [Data Model](architecture/data-model.md) — database schema reference
 - [RBAC](architecture/rbac.md) — clan roles, permission model, hierarchy
-- [Multi-Tenancy](architecture/multi-tenancy.md) — clan-scoped isolation (`X-Current-Clan-Id`; row-level security live on 6 of 14 clan-owned tables, measured 2026-08-13)
+- [Multi-Tenancy](architecture/multi-tenancy.md) — clan-scoped isolation (`X-Current-Clan-Id`; row-level security on all 13 clan-owned tables, gated by `backend/tests/integration/test_rls_activation.py`, read 2026-10-05)
 - [Auth Flow](architecture/auth-flow.md) — JWT/JWKS pipeline, email verification, authorization gates
 - [Tree Read-Model](architecture/tree-read-model.md) — computed đời, đa thê mother attribution, SQL tree functions
 - [Backend i18n](architecture/i18n.md) — locale resolution, `t()` fallback chain, key namespaces, coverage guard
