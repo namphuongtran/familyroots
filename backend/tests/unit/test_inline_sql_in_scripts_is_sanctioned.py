@@ -76,10 +76,16 @@ not arise in a `.sql` file under `scripts/`:
   is the largest hole and it is a choice, not an oversight. Scanning every Python string
   literal would fire on prose: a module docstring saying "this does not drop the database"
   is a string literal, and `_strip_comments` cannot tell it from a statement. Doing it with
-  `ast` to skip docstrings is a second decision and belongs in its own seed. Measured
-  2026-08-22, this costs nothing yet: `scripts/bootstrap_super_admin.py` calls PostgREST
-  builders (`.execute()` at `:39` and `:73`, no SQL string) and `scripts/seed_dev_data.py`
-  is a `NotImplementedError` stub.
+  `ast` to skip docstrings is a second decision and belongs in its own seed. It is no
+  longer free: both `.py` scripts now hold SQL strings, written to the application
+  database through `psycopg` — `scripts/seed_dev_data.py` since S-073 (`dbfde3a`), and
+  `scripts/bootstrap_super_admin.py` since issue #168. Measured 2026-10-04 by passing
+  every `SQL_*` constant in both through `_classify_inline`, which is what check 1 uses:
+  the bootstrap script's `SELECT EXISTS` and `INSERT INTO user_profiles` raise nothing,
+  and `seed_dev_data.py`'s `SQL_UPSERT_USER_CLAN_ROLE` raises `session_role`. That one is
+  a **false positive**: `ON CONFLICT … DO UPDATE SET role = EXCLUDED.role` matches the
+  `SET … ROLE` anchor in `_EXTRA_ANCHORS`. So the `ast` seed owes either a `_SANCTIONED`
+  entry or a narrower anchor, and a `GRANT` added to either script today is not read.
 - **Client CLIs that are not `psql` are invisible.** `createdb`, `dropdb`, and above all
   `createuser --superuser` do the damage without any SQL text for this scanner to read.
   `pg_restore` and `pg_dump` are not read either. Only the word `psql` opens a region.

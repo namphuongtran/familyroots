@@ -186,10 +186,13 @@ familyroots/
 
 ### Platform Super Admin Bootstrap
 
-The super admin account is created **once** via CLI script (never via API):
+The super admin account is created **once** via CLI script (never via API). It creates the
+identity in Supabase and writes the `super_admin` profile row to the application database, so it
+needs both:
 
 ```bash
 cd backend
+export DATABASE_URL=postgresql://user:password@host:5432/family_roots   # the application database
 export SUPABASE_URL=https://xxxx.supabase.co
 export SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 uv run python ../scripts/bootstrap_super_admin.py
