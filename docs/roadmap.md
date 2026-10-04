@@ -69,12 +69,14 @@ that claim has to be true. Work whose trigger is not met stays off the board.
 |---|---|---|
 | Work one agent can finish | a GitHub issue labelled `ready-for-agent` | A policy on `change_requests` |
 | Work that needs a decision first | a GitHub issue labelled `ready-for-human`, blocking the rest | The decision that repaints the product |
-| Work nobody in this repository can do | a GitHub issue held open with its owner and trigger named in the body | Creating the Supabase avatars bucket |
+| Work nobody in this repository can do | a GitHub issue held open with its owner and trigger named in the body | The mobile M0 device walk |
 
-**Four owner actions block shipped code right now**: the missing avatars bucket, which makes
-`set-avatar` return `503` in every environment; the unknown Supabase email-template format;
-`delete-branch-on-merge` being off; and the mobile M0 device walk. None can be done from a terminal
-in this repository.
+**One owner action still blocks shipped code**: the mobile M0 device walk. Three of the original
+four are discharged. `delete-branch-on-merge` read `true` on 2026-09-04. Under #163, on 2026-10-04,
+the hosted project's buckets were created and verified, and the email-template format was recorded
+([ops/supabase-hosted-project.md](ops/supabase-hosted-project.md)). The buckets did not need the
+dashboard after all: once the owner had logged the CLI in, `supabase seed buckets --linked` created
+them from `supabase/config.toml`.
 
 ## Restarting the agent team
 

@@ -197,8 +197,10 @@ without anyone remembering:
 | `family-roots-files` | no | `SUPABASE_STORAGE_BUCKET`, `backend/app/core/config.py:79` |
 | `family-roots-avatars` | **yes** | `SUPABASE_AVATAR_BUCKET`, `backend/app/core/config.py:88` (ADR-036) |
 
-In production these are still created by hand in the Supabase dashboard. A bucket is a container,
-not data: no object is seeded here.
+The hosted project gets them from the same declaration with `supabase seed buckets --linked`. That
+was done on 2026-10-04 ([supabase-hosted-project.md](supabase-hosted-project.md) § 2). A bucket is a
+container, not data: no object is seeded here. **Never `supabase config push` this file to the hosted
+project.** It would overwrite the hosted Site URL and auth settings with the local ones (same file, § 5).
 
 ---
 
