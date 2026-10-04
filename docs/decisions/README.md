@@ -37,7 +37,7 @@
 | [033](033-w3c-trace-context-sentry.md) | W3C Trace Context for Correlation, Exported Through Sentry | Accepted (2026-08-02) |
 | [034](034-mobile-riverpod-rebuild.md) | Rebuild the Flutter App on Riverpod, Deleting the Mock Scaffold | Accepted (2026-08-02) |
 | [035](035-deterministic-login-membership-selection.md) | Deterministic Membership Selection in the Login/Profile Response | Accepted (2026-08-02) |
-| [036](036-public-avatar-urls.md) | `persons.avatar_url` Is a Permanent Public URL, Written Only by set-avatar | Accepted (2026-08-02) |
+| [036](036-public-avatar-urls.md) | `persons.avatar_url` Is a Permanent Public URL, Written Only by set-avatar | Accepted (2026-08-02). Dated 2026-10-04 amendment under "Known gaps" (#176): only a declared image MIME type can be published, enforced by `Document.set_avatar` |
 | [037](037-change-requests-workflow.md) | Change Requests — Adopt the Dormant Table, Editor-or-Admin Review, Three-Way Merge on Approval | Accepted, shipped (2026-08-02) |
 | [038](038-persons-returning-vs-membership-rls.md) | `persons` RLS — Fix the RETURNING/`persons_sel` Collision in the ORM, Not in the Policy | Accepted, shipped (2026-08-02, amends ADR-008 Phase 4) |
 | [039](039-clan-user-list-identity-asymmetry.md) | Clan User Lists — `display_name` on Both, `email` Only on the Admin Pending Queue | Accepted, shipped (2026-08-02) |

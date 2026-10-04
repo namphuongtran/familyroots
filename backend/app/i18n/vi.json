@@ -156,7 +156,7 @@
   "error.person.avatar_url_invalid": "Địa chỉ ảnh đại diện không hợp lệ",
   "error.person.avatar_url_not_permanent": "Ảnh đại diện phải dùng địa chỉ công khai vĩnh viễn",
   "error.document.avatar_source_outside_clan": "Tệp ảnh không thuộc dòng họ hiện tại",
-  "error.document.avatar_mime_type_not_allowed": "Chỉ ảnh JPEG, PNG, WebP hoặc HEIC mới có thể đặt làm ảnh đại diện",
+  "error.document.avatar_mime_type_not_allowed": "Chỉ tệp ảnh mới có thể đặt làm ảnh đại diện",
   "error.invitation.already_member": "Người dùng này đã là thành viên của dòng họ",
   "error.invitation.email_mismatch": "Lời mời này được cấp cho email khác",
   "error.invitation.expired": "Lời mời đã hết hạn",

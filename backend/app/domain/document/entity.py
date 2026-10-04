@@ -17,12 +17,15 @@ from app.domain.shared.value_objects import ActorInfo
 
 _VALID_DOC_TYPES = frozenset({"photo", "id_document", "certificate", "audio", "video", "other"})
 
-ALLOWED_MIME_TYPES = frozenset(
+# What may become an avatar, decided by the declared MIME type and not by the "photo"
+# label, which the uploader chooses (#176). An avatar is copied into a world-readable
+# bucket with no expiry (ADR-036), so a PDF, audio or video file labelled "photo" must
+# stop here. The same four types are the bucket's own allowed_mime_types in
+# supabase/config.toml, which is a second wall, not this rule.
+AVATAR_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/heic"})
+
+ALLOWED_MIME_TYPES = AVATAR_MIME_TYPES | frozenset(
     {
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "image/heic",
         "application/pdf",
         "audio/mpeg",
         "audio/wav",
@@ -30,13 +33,6 @@ ALLOWED_MIME_TYPES = frozenset(
         "video/quicktime",
     }
 )
-
-# What may become an avatar, decided by the declared MIME type and not by the "photo"
-# label, which the uploader chooses (#176). An avatar is copied into a world-readable
-# bucket with no expiry (ADR-036), so a PDF, audio or video file labelled "photo" must
-# stop here. The same four types are the bucket's own allowed_mime_types in
-# supabase/config.toml, which is a second wall, not this rule.
-AVATAR_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/heic"})
 
 # The domain's default upload-size policy. It is the single source of the number:
 # Settings.MAX_UPLOAD_SIZE_MB derives its default from this, and the application

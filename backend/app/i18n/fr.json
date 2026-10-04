@@ -156,7 +156,7 @@
   "error.person.avatar_url_invalid": "L'URL de l'avatar n'est pas valide",
   "error.person.avatar_url_not_permanent": "Un avatar doit utiliser une URL publique permanente",
   "error.document.avatar_source_outside_clan": "Ce fichier n'appartient pas au clan actuel",
-  "error.document.avatar_mime_type_not_allowed": "Seule une image JPEG, PNG, WebP ou HEIC peut servir d'avatar",
+  "error.document.avatar_mime_type_not_allowed": "Seul un fichier image peut servir d'avatar",
   "error.invitation.already_member": "Cet utilisateur est déjà membre du clan",
   "error.invitation.email_mismatch": "Cette invitation a été émise pour un autre e-mail",
   "error.invitation.expired": "Cette invitation a expiré",
