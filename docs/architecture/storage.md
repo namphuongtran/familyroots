@@ -127,9 +127,15 @@ to a person.
 
 ### Operator setup — the public bucket does not exist until someone creates it
 
-`SUPABASE_AVATAR_BUCKET` (default `family-roots-avatars`) must be created by hand in
-the Supabase dashboard, per environment. Until it is, every set-avatar call returns
-`503 storage_bucket_not_configured` and nothing is written.
+`SUPABASE_AVATAR_BUCKET` (default `family-roots-avatars`) must exist, public, in every
+environment. Until it does, every set-avatar call returns
+`503 storage_bucket_not_configured` and nothing is written. `supabase/config.toml`
+declares it, and `supabase seed buckets --linked` creates it on a hosted project. The
+hosted project has had it since 2026-10-04 ([ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md)).
+
+**The MIME row below is prescribed but not enforced** (#176). Neither `config.toml` nor
+the hosted bucket carries `allowed_mime_types`, and `Document.set_avatar` checks only
+`document_type == "photo"`, a label the uploader chooses.
 
 | Setting | Value |
 |---|---|

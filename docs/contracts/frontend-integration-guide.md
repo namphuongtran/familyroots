@@ -236,30 +236,50 @@ What the backend does for the underlying email delivery (verified):
 - Logging in before verifying → **403 `email_not_verified`** (not 401) — show a
   "resend verification" screen on that code.
 
-What the client receives on the landing URL: the backend never sees this leg — it is
-Supabase → user's mailbox → client. Per Supabase's confirm-signup email flow the link
-lands on your redirect URL with `token_hash` and `type=signup` (or `type=email`)
-query params, and the client completes verification with the Supabase SDK:
+### 3.1 What the email link lands as (answered 2026-10-04, issue #163)
 
-```ts
-// web (supabase-js)
-await supabase.auth.verifyOtp({ type: 'signup', token_hash })
-```
-```dart
-// mobile (supabase_flutter)
-await supabase.auth.verifyOTP(type: OtpType.signup, tokenHash: tokenHash);
-```
+The backend never sees this leg. It runs Supabase → the user's mailbox → the client.
+The shape of the landing URL follows from two facts. One is in this repository, and
+one is in the project's email templates.
 
-On success, route to login and have the user sign in through
-`POST /api/v1/auth/login` so the client gets the backend profile bootstrap (§1).
+**1. A `?code=` landing is impossible for these emails.** The backend sends every
+auth email itself, through `auth.resend` (type `signup`) and `auth.reset_password_email`
+(`backend/app/infrastructure/supabase_identity_provider.py:162-187`). The pinned
+`supabase_auth` 2.31.0 sends **no `code_challenge`** on either call. Only its OAuth
+helper adds one, even though `ClientOptions.flow_type` defaults to `"pkce"`. Supabase
+Auth chooses the flow from that challenge (`supabase/auth`
+`internal/api/recover.go:43`). With no challenge, the flow is **implicit**.
+`web/src/app/api/auth/callback/route.ts` is the **Google OAuth** callback
+(`web/src/infrastructure/auth/supabase-auth-session-port.ts:62-75`), not an email
+landing. An email link that reaches it carries no `code`, so it redirects to
+`/vi/login?error=auth_callback_failed`.
 
-**⚠️ VERIFY WITH SUPABASE DOCS**: the exact landing-URL parameter names
-(`token_hash` + `type` vs. a PKCE `?code=` param) depend on the Supabase project's
-email-template and flow configuration and are **not verifiable from this repo**.
-Note that the web app already has a PKCE handler at
-`web/src/app/api/auth/callback/route.ts` (`exchangeCodeForSession(code)`), so if the
-project is configured for the PKCE flow the confirmation link should point there
-instead. Pin down the project's Supabase email template before shipping this screen.
+**2. The email template picks between the two remaining shapes:**
+
+| Template link | The link opens | The client lands with | The client finishes with |
+|---|---|---|---|
+| `{{ .ConfirmationURL }}`, **the Supabase default and the value this project must carry** | `https://<ref>.supabase.co/auth/v1/verify?token=…&type=signup\|recovery&redirect_to=…`. Supabase verifies it on the click | `<redirect_to>#access_token=…&refresh_token=…&expires_in=…&token_type=bearer&type=signup\|recovery`, a **URL fragment**. A failure arrives as `#error=…&error_code=…&error_description=…` | **signup**: nothing. The address is already confirmed on the click, so route to login. **recovery**: read the fragment in browser code, set the session, then `updateUser({ password })` |
+| a custom link built from `{{ .TokenHash }}` | our own page, directly | `?token_hash=…&type=…` | `verifyOtp({ type, token_hash })` |
+
+**Two traps in the default shape:**
+- A fragment never reaches a server. A Next.js route handler or server component
+  cannot read it.
+- The web's browser client cannot read it either. `@supabase/ssr` 0.12.4 fixes
+  `createBrowserClient` to `flowType: "pkce"`, and auth-js 2.111.0 throws
+  `Not a valid PKCE flow url.` when a PKCE client meets an implicit fragment
+  (`GoTrueClient.js:3250-3254` in the installed package). A recovery screen on the
+  default template must parse the fragment and call `setSession` itself.
+
+**Where `redirect_to` lands.** It is `EMAIL_VERIFY_REDIRECT_URL` (or
+`PASSWORD_RESET_REDIRECT_URL`) only when Supabase allows that URL. Otherwise it is the
+project's **Site URL**. A URL is allowed when it has the Site URL's scheme and host
+(any port, for a loopback host), or when it is listed under Redirect URLs (`supabase/auth`
+`internal/utilities/request.go:106-113`). The live values are recorded in
+[ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md).
+
+**What is not built.** No web page reads the fragment, and no password-reset screen
+exists. Which of the two shapes the product should use is an open decision, not
+this document's to make.
 
 ---
 
@@ -272,19 +292,22 @@ Code: `app/api/v1/auth.py` (`forgot_password`),
    (non-enumerating; provider failures are swallowed). Sends a Supabase recovery
    email with `redirect_to = PASSWORD_RESET_REDIRECT_URL` when configured (else the
    Supabase Site URL).
-2. The email link opens the client with `token_hash` / `type=recovery`.
-3. The client completes the reset **entirely via the Supabase SDK** — the backend has
-   no reset-password endpoint by design:
+2. The email link lands in one of the two shapes in §3.1, with `type=recovery`. With
+   the default template it is a URL fragment that carries a session.
+3. The client completes the reset **entirely via the Supabase SDK**. The backend has
+   no reset-password endpoint, by design. It establishes the session from the link,
+   then sets the password:
 
 ```ts
-await supabase.auth.verifyOtp({ type: 'recovery', token_hash })
+// default template: the session is in the fragment (see §3.1 for why the PKCE browser
+// client cannot pick it up by itself)
+await supabase.auth.setSession({ access_token, refresh_token })
+// custom {{ .TokenHash }} template instead:
+// await supabase.auth.verifyOtp({ type: 'recovery', token_hash })
 await supabase.auth.updateUser({ password: newPassword })
 ```
 
 4. Route to login.
-
-The same **⚠️ VERIFY WITH SUPABASE DOCS** caveat from §3 applies to the exact link
-parameter format (token-hash vs PKCE code), which depends on Supabase project config.
 
 ---
 

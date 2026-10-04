@@ -16,8 +16,8 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `SUPABASE_URL` | `""` | Supabase project URL (auth JWKS, storage) | **Boot fails** if empty |
 | `SUPABASE_SERVICE_ROLE_KEY` | `""` | Service-role key (register/storage; bypasses RLS) | **Boot fails** if empty |
 | `SUPABASE_ANON_KEY` | `""` | Anon key (sign-in) | **Boot fails** if empty |
-| `SUPABASE_STORAGE_BUCKET` | `family-roots-files` | **Private** blob bucket ([storage](../architecture/storage.md)) | Default is correct |
-| `SUPABASE_AVATAR_BUCKET` | `family-roots-avatars` | **Public-read** avatars bucket (ADR-036). Must differ from `SUPABASE_STORAGE_BUCKET` | Default is correct, but **the bucket must be created by hand** per environment (Supabase dashboard, public read). Until then set-avatar returns `503 storage_bucket_not_configured` |
+| `SUPABASE_STORAGE_BUCKET` | `family-roots-files` | **Private** blob bucket ([storage](../architecture/storage.md)) | Default is correct. The bucket must **exist** in each environment: `supabase seed buckets --linked` creates it from `supabase/config.toml`. On the hosted project it was created on 2026-10-04 ([supabase-hosted-project.md](supabase-hosted-project.md) § 2) |
+| `SUPABASE_AVATAR_BUCKET` | `family-roots-avatars` | **Public-read** avatars bucket (ADR-036). Must differ from `SUPABASE_STORAGE_BUCKET` | Default is correct. The bucket must exist **and be public**, or set-avatar returns `503 storage_bucket_not_configured`. `supabase seed buckets --linked` creates it public from `supabase/config.toml`. On the hosted project it was created on 2026-10-04 and verified by an anonymous fetch ([supabase-hosted-project.md](supabase-hosted-project.md) § 2) |
 | `AVATAR_CACHE_CONTROL_SECONDS` | `300` | `Cache-Control: max-age` on published avatars. The path is stable per person, so this is how long a replaced portrait can still be served stale | Tune for cacheability vs freshness |
 | `FIREBASE_CREDENTIALS_PATH` | `./firebase-credentials.json` | FCM service-account file | Optional — missing file just disables pushes (warning) |
 | `SENTRY_DSN` | `""` | Sentry error reporting | Optional — empty disables Sentry |
@@ -28,8 +28,8 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Single platform clock for the cron **and** its date math | **Boot fails** on a non-IANA name (any env) |
 | `NOTIFICATION_CRON_HOUR` | `7` | Daily anniversary-job hour in the platform zone (the `document_purge` job also keys off this hour, at `minute=30`) | — |
 | `DOCUMENT_RETENTION_DAYS` | `30` | Days a soft-deleted document's row+blob survive before the daily `document_purge` job permanently removes them ([ADR-019](../decisions/019-document-soft-delete-purge.md)) | Tune per data-retention policy |
-| `PASSWORD_RESET_REDIRECT_URL` | `""` | Recovery-email landing page | Empty → Supabase Site URL fallback |
-| `EMAIL_VERIFY_REDIRECT_URL` | `""` | Signup-confirmation landing page | Empty → Supabase Site URL fallback |
+| `PASSWORD_RESET_REDIRECT_URL` | `""` | Recovery-email landing page | Empty → Supabase Site URL fallback. Also falls back to the Site URL when Supabase does not allow it: it must share the Site URL's host or be listed under Redirect URLs ([supabase-hosted-project.md](supabase-hosted-project.md) § 3) |
+| `EMAIL_VERIFY_REDIRECT_URL` | `""` | Signup-confirmation landing page | Empty → Supabase Site URL fallback. The same allow-list rule applies as for `PASSWORD_RESET_REDIRECT_URL` |
 | `INVITATION_TTL_DAYS` | `7` | Invitation link lifetime | — |
 | `DB_POOL_SIZE` | `10` | Async engine `pool_size` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
 | `DB_MAX_OVERFLOW` | `20` | Async engine `max_overflow` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
