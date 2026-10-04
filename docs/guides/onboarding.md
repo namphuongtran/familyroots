@@ -6,7 +6,7 @@ Welcome to **FamilyRoots**! This guide will help you set up your local developme
 
 | Tool      | Version  | Install                                       |
 |-----------|----------|-----------------------------------------------|
-| Python    | ≥ 3.12   | [python.org](https://python.org)              |
+| Python    | ≥ 3.14   | [python.org](https://python.org)              |
 | uv        | latest   | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | Flutter   | ≥ 3.x    | [flutter.dev](https://flutter.dev/docs/get-started/install) |
 | Docker    | latest   | [docker.com](https://docker.com)              |
@@ -15,7 +15,7 @@ Welcome to **FamilyRoots**! This guide will help you set up your local developme
 ## 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/familyroots.git
+git clone https://github.com/namphuongtran/familyroots.git
 cd familyroots
 ```
 
