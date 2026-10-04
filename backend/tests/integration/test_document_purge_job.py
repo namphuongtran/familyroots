@@ -21,6 +21,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
@@ -30,9 +31,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from storage3.exceptions import StorageApiError
 
 import app.core.database  # noqa: F401 — imported early so _reset_settings can't rebind it
 from app.domain.document.repository import StorageError
+from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
 from app.services.document_purge import purge_expired_documents
 
 pytestmark = pytest.mark.integration
@@ -335,3 +338,37 @@ async def test_restore_race_between_snapshot_and_claim_is_safe(seeded: Seeded) -
     # poison's own claim + blob delete completed normally in the same run.
     assert await _row_count(maker, seeded.poison_id) == 0
     assert poison_path in storage.calls
+
+
+@pytest.mark.asyncio
+async def test_missing_bucket_keeps_the_row(
+    seeded: Seeded, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A wrong SUPABASE_STORAGE_BUCKET must not read as "blob already gone" (#177).
+
+    Drives the REAL SupabaseStorageAdapter, with only the Supabase SDK client faked,
+    so the classification the job depends on is the one under test. Supabase
+    answers a missing bucket with "Bucket not found"; if delete() reads that as a
+    missing object it returns True and the job commits the purge, leaving the blob
+    for ever in the bucket the setting should have named."""
+    maker = seeded.maker
+    monkeypatch.setattr(
+        "app.services.document_purge.SupabaseStorageAdapter", SupabaseStorageAdapter
+    )
+    bucket = MagicMock()
+    bucket.remove.side_effect = StorageApiError(
+        message="Bucket not found", code="error", status="400"
+    )
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(
+        "app.infrastructure.storage.supabase_adapter.get_service_client", lambda: client
+    )
+
+    await purge_expired_documents()
+
+    # Both expired rows reached the blob delete, and both survive it.
+    assert bucket.remove.call_count == 2
+    assert await _row_count(maker, seeded.expired_id) == 1
+    assert await _is_deleted(maker, seeded.expired_id) is True
+    assert await _row_count(maker, seeded.poison_id) == 1

@@ -80,8 +80,9 @@ class StorageBucketNotConfiguredError(StorageError):
     ``storage_bucket_not_configured`` (ADR-036).
 
     Distinct from ``StorageUnavailableError`` on purpose: this is not a transient
-    provider outage but an infrastructure gap the operator must close by hand (the
-    public avatars bucket is created in the Supabase dashboard, not by this code).
+    provider outage but an infrastructure gap the operator must close by hand. No
+    bucket is created by this code — neither the public avatars one nor the private
+    documents one; ``supabase/config.toml`` declares both and the operator seeds them.
     Distinct from ``StorageNotFoundError`` too — a missing *bucket* is our
     misconfiguration, a missing *object* is the caller's 404. Surfacing it as its
     own code is what keeps a misconfigured deployment from either 500-ing or,

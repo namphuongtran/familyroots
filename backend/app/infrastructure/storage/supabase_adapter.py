@@ -65,8 +65,11 @@ def _classify_bucket(exc: Exception, bucket: str) -> Exception:
     Supabase reports a missing bucket as a 400/404 whose message is "Bucket not
     found" — which ``_classify_storage`` would read as a missing *object* and turn
     into a 404 ``storage_not_found``, blaming the caller for our own infrastructure
-    gap. The public avatars bucket has to be created by hand (ADR-036), so this is
-    the misconfiguration we most expect to hit and it gets its own code.
+    gap. Every call on a bucket goes through here, the private
+    ``SUPABASE_STORAGE_BUCKET`` as much as the public avatars one: neither is created
+    by this code, and the hosted project had no buckets at all until 2026-10-04 (#177).
+    For ``delete`` the distinction is not cosmetic — a missing object is success, a
+    missing bucket confirms nothing about the blob.
     """
     if isinstance(exc, StorageApiError):
         info: Mapping[str, object] = {}
@@ -110,7 +113,7 @@ class SupabaseStorageAdapter:
                 },
             )
         except Exception as e:
-            raise _classify_storage(e) from e
+            raise _classify_bucket(e, settings.SUPABASE_STORAGE_BUCKET) from e
         return path
 
     async def delete(self, storage_path: str) -> bool:
@@ -120,14 +123,15 @@ class SupabaseStorageAdapter:
         # row before calling this and only commits the claim once this
         # returns — so "not found" and "we don't know" must never be conflated
         # (the latter has to raise, or a row could be purged while its blob
-        # deletion is genuinely unconfirmed).
+        # deletion is genuinely unconfirmed). A missing BUCKET is "we don't
+        # know": it raises StorageBucketNotConfiguredError, never returns True.
         client = get_service_client()
         try:
             await asyncio.to_thread(
                 client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove, [storage_path]
             )
         except Exception as e:
-            classified = _classify_storage(e)
+            classified = _classify_bucket(e, settings.SUPABASE_STORAGE_BUCKET)
             if isinstance(classified, StorageNotFoundError):
                 return True
             raise classified from e
@@ -144,7 +148,7 @@ class SupabaseStorageAdapter:
                 expires_in,
             )
         except Exception as e:
-            raise _classify_storage(e) from e
+            raise _classify_bucket(e, settings.SUPABASE_STORAGE_BUCKET) from e
         signed_url = result["signedURL"]
         if not signed_url:
             # storage3 2.31 types signedURL as str | None. A success response with
@@ -191,7 +195,7 @@ class SupabaseStorageAdapter:
                 client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).download, source_path
             )
         except Exception as e:
-            raise _classify_storage(e) from e
+            raise _classify_bucket(e, settings.SUPABASE_STORAGE_BUCKET) from e
 
         try:
             await asyncio.to_thread(

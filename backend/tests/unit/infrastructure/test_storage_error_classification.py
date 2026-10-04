@@ -10,7 +10,11 @@ from unittest.mock import MagicMock
 import pytest
 from storage3.exceptions import StorageApiError
 
-from app.domain.document.repository import StorageNotFoundError, StorageUnavailableError
+from app.domain.document.repository import (
+    StorageBucketNotConfiguredError,
+    StorageNotFoundError,
+    StorageUnavailableError,
+)
 from app.infrastructure.storage.supabase_adapter import _classify_storage
 
 
@@ -34,6 +38,13 @@ def test_classify_reraises_unexpected_4xx_unchanged() -> None:
     assert _classify_storage(dup) is dup
 
 
+def _bucket_not_found() -> StorageApiError:
+    # The shape Supabase answers with when SUPABASE_STORAGE_BUCKET does not exist.
+    # Its message contains "not found", which is what _classify_storage reads as a
+    # missing *object*.
+    return StorageApiError(message="Bucket not found", code="error", status="400")
+
+
 @pytest.mark.asyncio
 async def test_get_presigned_url_raises_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.infrastructure.storage import supabase_adapter as mod
@@ -45,6 +56,22 @@ async def test_get_presigned_url_raises_not_found(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(mod, "get_service_client", lambda: client)
 
     with pytest.raises(StorageNotFoundError):
+        await mod.SupabaseStorageAdapter().get_presigned_url("clans/x/documents/y.jpg")
+
+
+@pytest.mark.asyncio
+async def test_get_presigned_url_on_a_missing_bucket_is_a_config_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.create_signed_url.side_effect = _bucket_not_found()
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
+    with pytest.raises(StorageBucketNotConfiguredError):
         await mod.SupabaseStorageAdapter().get_presigned_url("clans/x/documents/y.jpg")
 
 
@@ -132,6 +159,42 @@ async def test_delete_returns_true_on_confirmed_not_found(monkeypatch: pytest.Mo
     result = await mod.SupabaseStorageAdapter().delete("clans/x/documents/y.jpg")
 
     assert result is True
+
+
+@pytest.mark.asyncio
+async def test_delete_raises_on_a_missing_bucket(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing bucket confirms nothing about the blob, so delete() must raise.
+
+    Returning True here tells the purge job the blob is gone; it then commits the
+    row purge while the blob stays in the bucket the setting should have named."""
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.remove.side_effect = _bucket_not_found()
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
+    with pytest.raises(StorageBucketNotConfiguredError):
+        await mod.SupabaseStorageAdapter().delete("clans/x/documents/y.jpg")
+
+
+@pytest.mark.asyncio
+async def test_upload_on_a_missing_bucket_is_a_config_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Our misconfiguration, so 503 storage_bucket_not_configured, never a 404 that
+    blames the caller for an object they were only trying to create."""
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.upload.side_effect = _bucket_not_found()
+    client = MagicMock()
+    client.storage.from_.return_value = bucket
+    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+
+    with pytest.raises(StorageBucketNotConfiguredError):
+        await mod.SupabaseStorageAdapter().upload("p", b"data", "image/jpeg")
 
 
 @pytest.mark.asyncio

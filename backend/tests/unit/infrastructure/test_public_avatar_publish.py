@@ -191,6 +191,19 @@ async def test_missing_source_object_is_a_404_not_a_bucket_problem(
         await _publish()
 
 
+async def test_missing_private_bucket_on_download_is_a_config_error_not_a_404(
+    configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The source lives in SUPABASE_STORAGE_BUCKET, not the avatars bucket. If that
+    bucket is missing, the caller's document is not the problem — the deployment is."""
+    storage = _FakeStorage(download_error=_api_error("Bucket not found", status="400"))
+    _install(monkeypatch, storage)
+
+    with pytest.raises(StorageBucketNotConfiguredError):
+        await _publish()
+    assert storage.uploaded == []
+
+
 async def test_provider_outage_on_upload_is_503_unavailable(
     configured: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

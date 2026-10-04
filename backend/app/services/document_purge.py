@@ -19,11 +19,14 @@ claim, so the row survives to be retried next run — never a silent, partial
 purge. A blob that was actually deleted moments before a crash simply
 surfaces as "already gone" on the retry (the storage adapter treats
 confirmed-not-found as success), so the row is purged cleanly next time —
-never a permanent orphan blob. And a restore that races the sweep either
-lands before this row's claim (rowcount 0, skip, blob and row both survive)
-or blocks on the claim's row lock and loses cleanly once the claim commits
-(the row is gone; the restore call then 404s) — never a document silently
-destroyed out from under a user who just restored it.
+never a permanent orphan blob. A missing *bucket* is not "already gone": the
+adapter raises on it, so a wrong SUPABASE_STORAGE_BUCKET leaves every row in
+place rather than purging rows whose blobs live elsewhere (#177). And a
+restore that races the sweep either lands before this row's claim (rowcount
+0, skip, blob and row both survive) or blocks on the claim's row lock and
+loses cleanly once the claim commits (the row is gone; the restore call then
+404s) — never a document silently destroyed out from under a user who just
+restored it.
 
 Per-item isolation: one failure never stops the sweep. Advisory-locked on its
 own key so multi-replica deployments run it once.
