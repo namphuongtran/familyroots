@@ -230,7 +230,9 @@ What the backend does for the underlying email delivery (verified):
   anon client: `auth.resend({"type": "signup", "email": ...,
   "options": {"email_redirect_to": EMAIL_VERIFY_REDIRECT_URL}})`.
   `email_redirect_to` is only passed when `EMAIL_VERIFY_REDIRECT_URL` is configured;
-  when empty, **Supabase falls back to the project's Site URL**.
+  when empty, **Supabase falls back to the project's Site URL**. ADR-063 § 4 deletes
+  this setting and its reset twin, because the decided template ignores `{{ .RedirectTo }}`.
+  #202 removes them.
 - `POST /auth/resend-verification` `{"email"}` sends the same email; always 200 with
   the same message (non-enumerating).
 - Logging in before verifying → **403 `email_not_verified`** (not 401) — show a
@@ -258,8 +260,8 @@ landing. An email link that reaches it carries no `code`, so it redirects to
 
 | Template link | The link opens | The client lands with | The client finishes with |
 |---|---|---|---|
-| `{{ .ConfirmationURL }}`, **the Supabase default and the value this project must carry** | `https://<ref>.supabase.co/auth/v1/verify?token=…&type=signup\|recovery&redirect_to=…`. Supabase verifies it on the click | `<redirect_to>#access_token=…&refresh_token=…&expires_in=…&token_type=bearer&type=signup\|recovery`, a **URL fragment**. A failure arrives as `#error=…&error_code=…&error_description=…` | **signup**: nothing. The address is already confirmed on the click, so route to login. **recovery**: read the fragment in browser code, set the session, then `updateUser({ password })` |
-| a custom link built from `{{ .TokenHash }}` | our own page, directly | `?token_hash=…&type=…` | `verifyOtp({ type, token_hash })` |
+| `{{ .ConfirmationURL }}`, **the Supabase default, and what the hosted project carries until #203** | `https://<ref>.supabase.co/auth/v1/verify?token=…&type=signup\|recovery&redirect_to=…`. Supabase verifies it on the click | `<redirect_to>#access_token=…&refresh_token=…&expires_in=…&token_type=bearer&type=signup\|recovery`, a **URL fragment**. A failure arrives as `#error=…&error_code=…&error_description=…` | **signup**: nothing. The address is already confirmed on the click, so route to login. **recovery**: read the fragment in browser code, set the session, then `updateUser({ password })` |
+| a custom link built from `{{ .TokenHash }}`, **the shape ADR-063 decides** | our own page, directly: `{{ .SiteURL }}/verify-email/confirm?token_hash=…&type=email` or `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery` | `?token_hash=…&type=email\|recovery` | `verifyOtp({ type, token_hash })`, **only on a user action**, never on load (ADR-063 § 2) |
 
 **Two traps in the default shape:**
 - A fragment never reaches a server. A Next.js route handler or server component
@@ -277,9 +279,11 @@ project's **Site URL**. A URL is allowed when it has the Site URL's scheme and h
 `internal/utilities/request.go:106-113`). The live values are recorded in
 [ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md).
 
-**What is not built.** No web page reads the fragment, and no password-reset screen
-exists. Which of the two shapes the product should use is an open decision, not
-this document's to make.
+**Decided, not yet built (2026-10-04).** [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
+chose the `token_hash` row. The default link has a third trap: an email scanner that
+fetches it spends the token before the person clicks. The landing pages are #200 and
+#201. The templates move into the repository in #202, and the owner pushes them in #203.
+**Until #203, the hosted emails still carry the default link, and no page reads it.**
 
 ---
 
@@ -293,10 +297,12 @@ Code: `app/api/v1/auth.py` (`forgot_password`),
    email with `redirect_to = PASSWORD_RESET_REDIRECT_URL` when configured (else the
    Supabase Site URL).
 2. The email link lands in one of the two shapes in §3.1, with `type=recovery`. With
-   the default template it is a URL fragment that carries a session.
+   the default template it is a URL fragment that carries a session. ADR-063 decides
+   the `token_hash` shape, landing on `/{locale}/reset-password` (#201).
 3. The client completes the reset **entirely via the Supabase SDK**. The backend has
    no reset-password endpoint, by design. It establishes the session from the link,
-   then sets the password:
+   then sets the password. Under ADR-063 § 2, both calls run on the form's one submit,
+   never on page load, and a retry after a failed `updateUser` calls `updateUser` only:
 
 ```ts
 // default template: the session is in the fragment (see §3.1 for why the PKCE browser
@@ -307,7 +313,8 @@ await supabase.auth.setSession({ access_token, refresh_token })
 await supabase.auth.updateUser({ password: newPassword })
 ```
 
-4. Route to login.
+4. Keep the session and go on to the server guard's entry (ADR-063 § 3). This
+   replaces "route to login".
 
 ---
 

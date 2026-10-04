@@ -13,6 +13,10 @@ only, so no gate applies. The code is in six build issues, #181 to #186, listed 
 Every reading below was taken on **2026-10-04** at commit `6879ace` on `main`. Treat its line
 numbers as hints and its quoted text as the claim.
 
+2026-10-04: the email-link question this ADR left to #178 is decided by
+[ADR-063](063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md). Its landing pages are
+#200 and #201, both blocked by #183.
+
 ## Context
 
 ### The spec's auth slice, and what happened instead

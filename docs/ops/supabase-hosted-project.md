@@ -108,7 +108,10 @@ and host (any port, for a loopback host), or when it is listed under Redirect UR
 ## 4. Email templates
 
 Both the **Confirm signup** and **Reset Password** templates must link `{{ .ConfirmationURL }}`
-until the decision in #178 says otherwise. These are the Supabase default bodies:
+until #203 pushes the repository's templates. [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
+decided on 2026-10-04 that both will link a `token_hash` page of ours. Pushing that earlier would
+leave sign-ups unconfirmable, because the pages (#200, #201) do not exist yet. Until then, these
+are the Supabase default bodies:
 
 ```html
 <h2>Confirm your signup</h2>
@@ -152,14 +155,22 @@ body (see trap 3). So read the email itself:
    rejection can come back, so the fail reading can equal the pass reading. Fetch an object that
    exists, as in section 2.
 3. **`supabase config diff` and `config pull` carry email-template subjects, never bodies.** A body
-   changed in the dashboard leaves no trace this repository can read, and the editor keeps no
-   history. Only the outcome check in section 4 sees it.
+   changed in the dashboard leaves no trace in either, and the editor keeps no history.
+   **Corrected 2026-10-04:** the body *is* readable. The Management API's
+   `GET https://api.supabase.com/v1/projects/bftqrkgbulwtbptnpfca/config/auth` returns
+   `mailer_templates_confirmation_content` and `mailer_templates_recovery_content` to a personal
+   access token with `auth:read`. That is a source reading of the API's OpenAPI schema, under
+   ADR-063, and it has not yet been run against this project. #202 builds the read-back on it.
 4. **Never run `supabase config push` from `supabase/config.toml` against this project.** That file
    configures the local stack, and a push writes every property it declares. Its Site URL, redirect
    list and confirmation setting would overwrite the hosted values. To change one hosted property,
    push from a throwaway directory whose `supabase/config.toml` declares only that property, after
    `supabase config diff --workdir <dir>` shows exactly the change you mean. Undeclared properties are
-   left alone. Template bodies cannot be previewed this way (trap 3).
+   left alone. Template bodies cannot be previewed this way (trap 3). **A push does send a declared
+   body**, read from `content_path`. Both facts were read at the source of CLI 2.119.0, which is
+   TypeScript (ADR-063, Context). The older Go CLI always sent `site_url` and others, so check
+   `supabase --version` before relying on either. #202 checks in a config that declares only the two
+   templates.
 5. **`NXDOMAIN` on the project host does not mean the project is gone.** Earlier on 2026-10-04 the
    host did not resolve. After the owner opened the dashboard, it resolved, and
    `supabase projects list` reported `ACTIVE_HEALTHY`. Look in the dashboard before concluding

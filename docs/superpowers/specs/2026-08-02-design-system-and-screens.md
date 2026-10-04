@@ -886,14 +886,17 @@ Two surfaces:
 1. **Blocked-at-login** (`403 email_not_verified`): full screen, `heritage-container`
    icon block, `headline` `Xin xác thực email trước`, `body-lg` explanation, primary
    `Gửi lại thư xác thực`, ghost `Đổi địa chỉ email` → support/admin contact.
-2. **Landing from the email link**: three states in one screen — *Đang xác thực…*
-   (spinner + text, no skeleton, this is genuinely a wait), *Xác thực thành công* →
-   `success-container`, auto-route to login after 3s with a manual `Đăng nhập ngay`, and
+2. **Landing from the email link** (`/{locale}/verify-email/confirm`, #200): four states
+   in one screen. *Ready*: a primary `Xác nhận email`, because the token is spent only
+   on a press, never on load, so an email scanner cannot spend it. Then *Đang xác thực…*
+   (spinner + text, no skeleton, this is genuinely a wait). Then *Xác thực thành công* →
+   `success-container`. The person stays signed in, and `Tiếp tục` goes on to the
+   access routing. The copy adds that they can now sign in on the app too. Or
    *Liên kết đã hết hạn* → `warning-container` + `Gửi lại thư xác thực`.
 
-**Open risk.** The landing URL parameter shape (`token_hash`+`type` vs PKCE `?code=`)
-is unresolved in the contracts. The screen is designed to handle both and to show the
-expired state on any failure rather than a raw error.
+**Resolved 2026-10-04 by ADR-063.** The link lands as `?token_hash=…&type=email`, never
+`?code=`. This replaces the earlier "auto-route to login after 3s". Any failure, a
+missing parameter included, shows the expired state rather than a raw error.
 
 **Role.** N/A — pre-authentication.
 
