@@ -6,6 +6,20 @@ Accepted (2026-10-04). Resolves issue #160, "The RLS posture for user_profiles a
 which no ADR decides", on the map in issue #158. The maintainer chose every option below in a
 grilling session on 2026-10-04.
 
+> **Amendment (2026-10-04, issue #169):** the third clause of § 2 is now enforced. The veto in
+> `test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_global` follows chains of
+> NOT NULL foreign keys to any depth, read from `pg_constraint` and `pg_attribute.attnotnull`, and
+> refuses an exemption for any table whose chain ends at a table with a `*clan_id` column or a
+> foreign key to `clans`. A MATCH FULL key with one NOT NULL column counts as a NOT NULL link,
+> because MATCH FULL refuses a row that mixes NULL and non-NULL key values. Two negative controls
+> stay in the suite and run the gate's own body.
+> `test_the_exemption_veto_refuses_a_table_whose_not_null_chain_reaches_a_clan` plants a table with
+> a NOT NULL `person_id` and a grandchild behind it, must see both refused, then makes the link
+> nullable and must see them pass.
+> `test_the_exemption_veto_follows_a_match_full_key_that_one_not_null_column_binds` does the same
+> for a MATCH FULL key and its MATCH SIMPLE twin. The sentences below that call the clause prose,
+> or owed to #169, describe the state before this amendment.
+
 **This ADR ships no runtime code.** The diff is this file, its index row, a glossary, and citation
 edits in three places that named this decision as owed: the two reason strings in
 `_NOT_CLAN_OWNED_TABLES`, `docs/architecture/multi-tenancy.md`, and `docs/ops/local-supabase.md`.
