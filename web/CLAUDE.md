@@ -899,8 +899,18 @@ engine rather than computed from the stylesheet.
 
 - `src/lib/api/*.ts`, `src/lib/hooks/use*.ts`, `src/application/<feature>/`, and
   `src/infrastructure/<feature>/` predate the envelope contract and the spine built above.
-  They are frozen, not extended: no new feature should add to them, and each is deleted
-  outright when the matching feature slice PR lands (§3.2 of the architecture spec).
+  They are frozen, not extended: no new feature should add to them. **"Frozen" is not yet a
+  gate**: `.dependency-cruiser.cjs` lists these trees in `options.exclude`, so no rule can see an
+  import into them. ADR-060 § 4 turns it into a baseline that may only shrink.
+- **How a slice deletes its legacy is ADR-060, not "the matching PR deletes it".** In short: a slice
+  deletes its *slice-owned* legacy, after re-pointing every importer, in any slice, at its own
+  `index.ts`. Adapting an importer to the domain shape is part of the migration. A file stays,
+  trimmed, only where `index.ts` has no replacement, and the importing slice's build issue then
+  owns it. *Cross-cutting* files go with the last slice (next bullet). A *misfiled primitive*,
+  such as `components/members/MemberAvatar.tsx`, moves to `shared/ui`. A slice is done when none of
+  its slice-owned legacy remains **and** it imports no legacy itself. The trimmed
+  `src/lib/hooks/useMembers.ts`, whose header comment calls itself the `axios.ts` precedent repeated,
+  is the shape ADR-060 replaced: it kept a file alive for a different slice with no end condition.
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
   The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of
