@@ -43,6 +43,12 @@ const BACKOFFICE_PATH = '/vi/backoffice/dashboard'
 const DASHBOARD_TITLE = 'Bảng điều khiển'
 /** `messages/vi.json`, the four `Backoffice.nav_*` keys, in `NAV_ITEMS` order. */
 const RAIL_LABELS = ['Tổng quan', 'Thành viên', 'Dòng họ', 'Cây gia phả']
+/** `messages/vi.json`, `Backoffice.menu_open`: the top bar's menu button below `lg`. */
+const MENU_OPEN = 'Mở menu điều hướng'
+/** `messages/vi.json`, `common.close`: the drawer's close button. */
+const CLOSE = 'Đóng'
+/** T-04's viewport: 320 px wide, and tall enough to be a phone. */
+const NARROW = { width: 320, height: 640 }
 
 test.describe('the backoffice dashboard, as an admin', () => {
   test.use({ storageState: SEEDED_USERS.admin.storageState })
@@ -103,7 +109,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
     // browser text zoom, which Playwright cannot set directly; `e2e/text-scale.spec.ts` uses
     // the same lever and explains why the style goes in a tag rather than on `<html>`.
     test.beforeEach(async ({ page }) => {
-      await page.setViewportSize({ width: 320, height: 640 })
+      await page.setViewportSize(NARROW)
       await page.goto(BACKOFFICE_PATH)
       await page.addStyleTag({ content: ':root { font-size: 32px; }' })
       await page.evaluate(() => document.fonts.ready)
@@ -119,15 +125,16 @@ test.describe('the backoffice dashboard, as an admin', () => {
 
       // Kept, because `e2e/text-scale.spec.ts` asks exactly this of the two public pages and
       // a reader will look for it here. **Do not read it as "the screen is usable."** It
-      // passes on this screen while every pixel of content sits outside the viewport — see
-      // the case below for the measurement. `.claude/rules/testing.md`'s the token fix instance is the
+      // passed on this screen while every pixel of content sat outside the viewport — see
+      // the comment below for the measurement, and the two cases below it for the readings
+      // that replaced it (#174). `.claude/rules/testing.md`'s the token fix instance is the
       // same shape: a reading whose passing and failing values are indistinguishable.
       expect(scrollWidth).toBe(clientWidth)
     })
 
     /**
-     * **A real, open T-04 defect, pinned rather than papered over.** Measured 2026-08-26 at
-     * 320×640 with `:root { font-size: 32px }`, on this screen:
+     * **#174, the defect this describe used to pin with `test.fail()`.** Measured 2026-08-26 at
+     * 320×640 with `:root { font-size: 32px }`, before the fix:
      *
      * ```
      * aside     x=0    width=480     // `w-60` is 15rem, 480px at a 32px root
@@ -136,32 +143,109 @@ test.describe('the backoffice dashboard, as an admin', () => {
      * documentElement scrollWidth 320 === clientWidth 320, overflow-x: visible
      * ```
      *
-     * The content column is pushed entirely off a 320px viewport and squeezed to zero width,
-     * and because zero-width content cannot be scrolled to, the page still reports no
-     * horizontal overflow. `src/app/[locale]/backoffice/layout.tsx:31-32` pairs a `fixed w-60`
-     * rail with `ml-60` on `main`, and neither has a small-screen branch.
-     *
-     * `test.fail()` rather than a deleted case or an inverted assertion, following
-     * `e2e/smoke.spec.ts`'s `lang` precedent: a `test.skip` would let a fix land unnoticed and
-     * the coverage never come back, while an assertion that the heading *is* off-screen would
-     * lock the bug in. This turns **red** the moment someone gives the rail a responsive
-     * branch, which is the reminder to delete this comment and the `.fail`.
-     *
-     * Fixing it is out of the authenticated e2e harness's scope — the seed says "any new screen" and "changing what
-     * any route requires" are excluded, and a responsive backoffice rail is a design decision
-     * ADR-046 did not make. It needs its own seed.
+     * Below `lg` the rail is now a drawer behind a top bar, so these two cases read what the
+     * fix is for rather than what the page reports. Two cases, one navigation each, because
+     * `/api/v1/auth/*` allows 20 requests per 60 seconds and one load of this screen spends
+     * about three. The negative controls, each planted and reverted on 2026-10-04, are in the
+     * #174 pull request. Restoring `fixed w-60` + `ml-60` reads `main` width 0. An icon-only rail
+     * reads width 176 and `scrollWidth` 190. The rail stacked above `main` puts the heading's
+     * bottom at 968. Removing the `<wbr>` overflows the top bar, 325 against 320. Putting the
+     * drawer's brand and close button back on one line inks the wordmark across the button, and
+     * doing that with the `<wbr>` and `min-w-0` gone too, the prototype's arrangement, overflows
+     * the drawer, 341 against 272.
      */
-    test.fail(
-      'the content column is off-screen entirely, so the heading is not inside the viewport',
-      async ({ page }) => {
-        const clientWidth = await page.evaluate(() => document.documentElement.clientWidth)
-        const box = await page.locator('main h1').boundingBox()
+    test('the content column fills the screen, and its heading is in the first viewport', async ({
+      page,
+    }) => {
+      await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE)
 
-        expect(box).not.toBeNull()
-        expect(box!.x).toBeGreaterThanOrEqual(0)
-        expect(box!.x + box!.width).toBeLessThanOrEqual(clientWidth)
-      },
-    )
+      const reading = await page.evaluate(() => {
+        const main = document.querySelector('main')!
+        const box = main.getBoundingClientRect()
+        const heading = main.querySelector('h1')!.getBoundingClientRect()
+        const topBar = document.querySelector('header')!
+        return {
+          clientWidth: document.documentElement.clientWidth,
+          topBar: { scrollWidth: topBar.scrollWidth, clientWidth: topBar.clientWidth },
+          main: { width: box.width, scrollWidth: main.scrollWidth, clientWidth: main.clientWidth },
+          heading: { x: heading.x, y: heading.y, right: heading.right, bottom: heading.bottom },
+        }
+      })
+
+      // Soft, so a planted failure reports every reading it breaks rather than the first.
+      // 1. The column is the whole screen, not the 0 px it was.
+      expect.soft(reading.clientWidth).toBe(NARROW.width)
+      expect.soft(reading.main.width).toBe(reading.clientWidth)
+      // 2. Nothing overflows inside it. The page-level scroll case above cannot see this.
+      expect.soft(reading.main.scrollWidth).toBeLessThanOrEqual(reading.main.clientWidth)
+      // 3. The heading is inside the first viewport, so the top bar costs no more than it must.
+      expect.soft(reading.heading.x).toBeGreaterThanOrEqual(0)
+      expect.soft(reading.heading.right).toBeLessThanOrEqual(NARROW.width)
+      expect.soft(reading.heading.y).toBeGreaterThanOrEqual(0)
+      expect.soft(reading.heading.bottom).toBeLessThanOrEqual(NARROW.height)
+      // The top bar holds its brand. Unbroken, the wordmark ran 5px past it.
+      expect.soft(reading.topBar.scrollWidth).toBeLessThanOrEqual(reading.topBar.clientWidth)
+    })
+
+    test('the rail is one tap away, in a drawer that fits', async ({ page }) => {
+      // Let the mount-time `useAuth()` hydration finish before counting what the tap costs.
+      await page.waitForLoadState('networkidle')
+      const hydrations: string[] = []
+      page.on('request', (request) => {
+        if (/\/api\/v1\/(auth\/me|me\/clans)$/.test(new URL(request.url()).pathname)) {
+          hydrations.push(request.url())
+        }
+      })
+
+      await page.getByRole('button', { name: MENU_OPEN }).click()
+      const drawer = page.getByRole('dialog')
+
+      // 4. The four links, by accessible name, and the drawer holds them without overflowing.
+      for (const label of RAIL_LABELS) {
+        await expect(drawer.getByRole('link', { name: label })).toBeVisible()
+      }
+      const { scrollWidth, clientWidth } = await drawer.evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      }))
+      expect(scrollWidth).toBe(clientWidth)
+
+      // No overlap, which the width above cannot see: the brand's text may spill out of its own
+      // box and still sit inside the drawer. Read where each line of it is inked, and require
+      // every line to clear the close button.
+      const close = (await drawer.getByRole('button', { name: CLOSE }).boundingBox())!
+      const inked = await drawer.evaluate((el) =>
+        [...el.querySelectorAll('p')].flatMap((p) => {
+          const range = document.createRange()
+          range.selectNodeContents(p)
+          return [...range.getClientRects()].map((r) => ({
+            text: p.textContent,
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom,
+          }))
+        }),
+      )
+      expect(inked.length).toBeGreaterThan(0)
+      const overlapping = inked.filter(
+        (r) =>
+          r.left < close.x + close.width &&
+          r.right > close.x &&
+          r.top < close.y + close.height &&
+          r.bottom > close.y,
+      )
+      expect(overlapping).toEqual([])
+
+      // Opening the drawer mounts a second copy of the rail body. It must not mount a second
+      // `useAuth()` consumer: each one hydrates, and two is the `(dashboard)` render loop.
+      await page.waitForLoadState('networkidle')
+      expect(hydrations).toEqual([])
+
+      // A tap on the scrim closes it: a navigation drawer has nothing to lose on dismiss.
+      await page.mouse.click(NARROW.width - 8, NARROW.height / 2)
+      await expect(drawer).toBeHidden()
+    })
   })
 })
 

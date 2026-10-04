@@ -396,7 +396,9 @@
     "nav_members": "Thành viên",
     "nav_clans": "Dòng họ",
     "nav_tree": "Cây gia phả",
-    "rail_label": "Quản trị"
+    "rail_label": "Quản trị",
+    "menu_open": "Mở menu điều hướng",
+    "menu_title": "Điều hướng quản trị"
   },
   "common": {
     "loading": "Đang tải...",

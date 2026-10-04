@@ -396,7 +396,9 @@
     "nav_members": "Members",
     "nav_clans": "Clans",
     "nav_tree": "Family Tree",
-    "rail_label": "Backoffice"
+    "rail_label": "Backoffice",
+    "menu_open": "Open navigation menu",
+    "menu_title": "Backoffice navigation"
   },
   "common": {
     "loading": "Loading...",

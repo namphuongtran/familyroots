@@ -396,7 +396,9 @@
     "nav_members": "Membres",
     "nav_clans": "Clans",
     "nav_tree": "Arbre généalogique",
-    "rail_label": "Back-office"
+    "rail_label": "Back-office",
+    "menu_open": "Ouvrir le menu de navigation",
+    "menu_title": "Navigation du back-office"
   },
   "common": {
     "loading": "Chargement...",

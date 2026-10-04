@@ -784,8 +784,9 @@ export E2E_AUTH_API_ORIGIN=http://127.0.0.1:8073
 pnpm test:e2e:auth
 ```
 
-**Nine tests, 2026-08-26**: two `auth-setup` logins and seven `auth-chromium` cases, one of
-which is a deliberate `test.fail()` over an open T-04 defect (below).
+**Ten tests, 2026-10-04**: two `auth-setup` logins and eight `auth-chromium` cases. It was nine on
+2026-08-26, one of them a deliberate `test.fail()` over an open T-04 defect; #174 fixed the defect
+and replaced that case with two that read the fix (finding 3, below).
 
 ### What holds the session, and why there is no stub
 
@@ -846,7 +847,10 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
    about three `GET /auth/me`, because `useAuth()` hydrates once per consumer. Keep a case to
    one navigation.
 
-### Three things found by looking at the harness, all of them still open
+### Three things found by looking at the harness
+
+Finding 3 is fixed (#174, 2026-10-04). It is marked fixed rather than deleted, so it keeps its
+history. Findings 1 and 2 each say below what of them is still open.
 
 **1. `GET /me/clans` and `POST /me/clans/{id}/select` were read as unenveloped, and both are now
 fixed.** The web client read `{"clans": […]}` and `{clan_id: …}` while the backend has
@@ -884,9 +888,10 @@ is legacy auth code and its own piece of work — do not fix it inside a feature
 #183 removes it by design, with no stopgap, and #182 fixes the `register`/`onboard` defect above
 first.
 
-**3. "No horizontal page scroll" is not a usability reading, and this screen proves it.**
-`e2e/text-scale.spec.ts`'s T-04 assertion passes on `/vi/backoffice/dashboard` at 320×640
-with a 32px root, while every pixel of content is outside the viewport. Measured 2026-08-26:
+**3. "No horizontal page scroll" is not a usability reading, and this screen proved it. Fixed by
+#174 (2026-10-04).** `e2e/text-scale.spec.ts`'s T-04 assertion passed on `/vi/backoffice/dashboard`
+at 320×640 with a 32px root, while every pixel of content was outside the viewport. Measured
+2026-08-26:
 
 ```
 aside     x=0    width=480      // `w-60` is 15rem = 480px at a 32px root
@@ -895,12 +900,41 @@ main h1   x=544  width=0
 documentElement scrollWidth 320 === clientWidth 320, overflow-x: visible on html and body
 ```
 
-Zero-width content cannot be scrolled to, so the page reports no overflow. The spec keeps the
+Zero-width content cannot be scrolled to, so the page reported no overflow. The spec kept the
 scroll assertion (a reader will look for it) with a comment saying it proves almost nothing,
-and pins the real defect with `test.fail()` so a future responsive fix turns the suite red
-instead of leaving the case behind. `backoffice/layout.tsx:31-32` pairs a `fixed w-60` rail
-with `ml-60` and has no small-screen branch. This is a fourth instance of the pattern in
+and pinned the real defect with `test.fail()` so a future responsive fix would turn the suite
+red instead of leaving the case behind. `backoffice/layout.tsx:31-32` paired a `fixed w-60` rail
+with `ml-60` and had no small-screen branch. This is a fourth instance of the pattern in
 `.claude/rules/testing.md` § "A test pins an outcome, not a setting".
+
+**The fix, #174.** Spec § 6's drawer nav, chosen over an icon rail and a stacked rail by the
+#162 prototype's measurements. Below `lg` (64rem), `BackofficeSidebar` renders a top bar with a
+menu button and the brand, and the rail in a `@radix-ui/react-dialog` drawer,
+`min(85vw, 16.5rem)` wide, that a link, Escape and a scrim tap all close. At `lg` and up the
+rail is an in-flow, `sticky` `16.5rem` sibling of `main` in one flex row, and `main` is `min-w-0 flex-1`. No
+`fixed` rail is paired with an `ml-*` anywhere in the shell. The two bodies are one `RailBody`,
+and the component calls `useAuth()` once for both: every consumer hydrates on mount, so a drawer
+body that called it would add a `GET /auth/me` on every open, and two live consumers is finding
+2's loop. Planting that call in the body made six hydration requests on one open.
+
+Two things the prototype did not show, found by reading the drawer at 320 px and 200%:
+
+- **The drawer's brand overlapped its close button while the drawer reported no overflow.**
+  `.claude/rules/tailwind.md` § 7 has the measurement. The header now wraps the close button onto
+  its own line when the two do not fit, and the drawer case reads where each line of the brand is
+  inked rather than trusting `scrollWidth`.
+- **The nav scrolled on its own inside the drawer**, inherited from the `lg` rail, so two of the
+  four links sat below a scroll edge with nothing on screen to say so, and `toBeVisible()` passed
+  over it. The rail and the drawer now each scroll as a whole. No case pins this one.
+
+The `test.fail()` is gone. Two cases, one navigation each, read these outcomes at 320×640 with a
+32px root, measured 2026-10-04: `main` 320 wide against `clientWidth` 320; `main.scrollWidth` 320
+against its `clientWidth` 320; the `h1` from x 64 to 256 and y 176 to 368; the top bar's
+`scrollWidth` 320 against 320; and after the menu button, the four links visible by name, the
+drawer's `scrollWidth` 272 against `clientWidth` 272, no line of the brand inked across the close
+button, no hydration request, and a scrim tap that closes it. The page-level scroll case stays, with
+its comment, because the reason it proves nothing still holds. The dashboard page's own clipping
+inside that full-width column is #175, not this.
 
 **Two smaller findings the harness reported and did not fix. Both are fixed now, and this
 paragraph is corrected rather than deleted so the finding keeps its history.**
