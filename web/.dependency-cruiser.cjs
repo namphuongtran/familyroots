@@ -2,12 +2,14 @@
  * Frontend layer boundaries — the counterpart of the backend's import-linter
  * ratchet (ADR-013). A violation is a CI failure, not something to catch in review.
  *
- * The legacy trees (the web architecture spec's § 3.2 list) are in the graph as
- * leaves: `doNotFollow` adds a legacy module when something imports it and never
- * cruises its own imports. So no edge starts inside legacy, no cycle runs through
- * it, and no legacy module can be an orphan. The rules below see what they saw
- * when legacy was excluded, plus the edges into it. Legacy is being deleted slice
- * by slice (ADR-060), not refactored into compliance.
+ * The legacy trees (the web architecture spec's § 3.2 list, `LEGACY` below) are in
+ * the graph, cruised like everything else, so an import out of legacy is a real
+ * edge and a module only legacy imports is not an orphan. No rule but
+ * `nothing-imports-legacy` takes a legacy module as its subject: every rule whose
+ * `from` could match a legacy path names `LEGACY` in `pathNot`, and `no-circular`
+ * also skips an edge that ends inside legacy. A new rule with a broad `from` needs
+ * the same. Legacy is being deleted slice by slice (ADR-060), not refactored into
+ * compliance.
  *
  * `nothing-imports-legacy` is a ratchet. Today's violations sit in
  * `.dependency-cruiser-known-violations.json`, which `pnpm depcruise` reads through
@@ -90,7 +92,7 @@ module.exports = {
       name: 'nothing-imports-app',
       comment: 'src/app is the entry point; it is imported by the framework only.',
       severity: 'error',
-      from: { pathNot: '^src/app/' },
+      from: { pathNot: ['^src/app/', LEGACY] },
       to: { path: '^src/app/' },
     },
     {
@@ -106,9 +108,16 @@ module.exports = {
     },
     {
       name: 'no-circular',
+      comment:
+        'An edge with an end inside legacy is never reported, so a cycle wholly inside ' +
+        'legacy is silent. A cycle that passes through legacy is still reported on its ' +
+        'edges outside legacy. Filtering on the cycle instead (`viaOnly`) would hide real ' +
+        'ones: dependency-cruiser records only the first cycle its search finds for an ' +
+        'edge (`getCycle`, src/graph-utl/indexed-module-graph.mjs), and that can be a ' +
+        'route through legacy when one outside it also exists.',
       severity: 'error',
-      from: {},
-      to: { circular: true },
+      from: { pathNot: LEGACY },
+      to: { circular: true, pathNot: LEGACY },
     },
     {
       name: 'no-orphans',
@@ -120,13 +129,14 @@ module.exports = {
           '^src/app/',
           '^src/generated/',
           '(^|/)(instrumentation|middleware)\\.ts$',
+          LEGACY,
         ],
       },
       to: {},
     },
   ],
   options: {
-    doNotFollow: { path: ['node_modules', LEGACY] },
+    doNotFollow: { path: 'node_modules' },
     exclude: { path: ['\\.test\\.tsx?$', '^src/generated/'] },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },

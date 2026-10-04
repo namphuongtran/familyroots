@@ -96,10 +96,10 @@ consult that before assuming a boundary is protected. `src/shared/` is `http/`,
 `telemetry/` and `testing/` — there is no `shared/ui/` yet, and where reusable
 presentational components should live is an open sub-project B decision.
 
-The legacy trees (the web architecture spec's § 3.2 list) are in the graph as leaves: one rule,
+The legacy trees (the web architecture spec's § 3.2 list) are in the graph. One rule,
 `nothing-imports-legacy`, forbids new imports into them, and today's imports are a committed
-baseline that may only shrink (ADR-060 § 4). No other rule sees an edge that starts inside legacy;
-it is being deleted, not refactored into compliance. `web/CLAUDE.md` "Migration notes" says how
+baseline that may only shrink (ADR-060 § 4). No other rule takes a legacy module as its subject;
+legacy is being deleted, not refactored into compliance. `web/CLAUDE.md` "Migration notes" says how
 to shrink the baseline.
 
 Path alias `@/*` → `./src/*`.
@@ -184,6 +184,7 @@ Four harnesses, one gate each — see `web/CLAUDE.md` for the exact commands:
   (`pnpm test:contracts`) — the pre-spine Node built-in test runner suites, scoped to the
   legacy trees; not part of the gate for new code.
 
-CI gate (`.github/workflows/web-ci.yml`): type-check, lint, `depcruise`, unit, component,
+CI gate (`.github/workflows/web-ci.yml`): type-check, lint, `depcruise`, the legacy ratchet
+on pull requests (`pnpm depcruise:ratchet`, ADR-060 § 4), unit, component,
 build, e2e, and `api-types-fresh` (fails if `src/generated/api-types.ts` drifts from the
 backend's OpenAPI schema — triggered by changes under `web/**` **or** `backend/app/**`).

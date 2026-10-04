@@ -49,8 +49,26 @@ function key(entry) {
   return `${entry.rule.name}\t${entry.from}\t${entry.to}`
 }
 
-function describe(entry) {
+function formatEdge(entry) {
   return `${entry.from} → ${entry.to}`
+}
+
+function plural(count, one, many) {
+  return `${count} ${count === 1 ? one : many}`
+}
+
+/** The entries of `entries` that `others` does not list. */
+function missingFrom(entries, others) {
+  const keys = new Set(others.map(key))
+  return entries.filter((entry) => !keys.has(key(entry)))
+}
+
+/** Prints `message` and one `label`led line per entry. Returns whether there were any. */
+function report(label, entries, message) {
+  if (entries.length === 0) return false
+  console.error(message)
+  for (const entry of entries) console.error(`  ${label}  ${formatEdge(entry)}`)
+  return true
 }
 
 function git(...args) {
@@ -77,41 +95,34 @@ function check(ref) {
   const short = mergeBase.slice(0, 12)
   const before = baselineAt(mergeBase)
   const now = JSON.parse(readFileSync(BASELINE, 'utf8'))
-  let failed = false
 
-  const imports = new Set(currentEntries().map(key))
-  const stale = now.filter((entry) => !imports.has(key(entry)))
-  if (stale.length > 0) {
-    failed = true
-    console.error(
-      `${BASELINE} lists ${stale.length} import${stale.length === 1 ? '' : 's'} the tree no ` +
-        `longer has. Run \`pnpm depcruise:baseline\` and commit the result.`,
-    )
-    for (const entry of stale) console.error(`  stale  ${describe(entry)}`)
-  }
+  const stale = missingFrom(now, currentEntries())
+  const added = before === null ? [] : missingFrom(now, before)
+  const failed = [
+    report(
+      'stale',
+      stale,
+      `${BASELINE} lists ${plural(stale.length, 'import', 'imports')} the tree no longer has. ` +
+        `Run \`pnpm depcruise:baseline\` and commit the result.`,
+    ),
+    report(
+      'added',
+      added,
+      `${BASELINE} gained ${plural(added.length, 'entry', 'entries')} since the merge base ` +
+        `${short}. The legacy may only shrink (ADR-060 § 4): import the slice's index.ts ` +
+        `instead of legacy code.`,
+    ),
+  ].includes(true)
+  if (failed) return 1
 
   if (before === null) {
     console.log(`No ${BASELINE} at the merge base ${short}: this change introduces it.`)
-    return failed ? 1 : 0
-  }
-
-  const known = new Set(before.map(key))
-  const added = now.filter((entry) => !known.has(key(entry)))
-  if (added.length > 0) {
-    failed = true
-    console.error(
-      `${BASELINE} gained ${added.length} entr${added.length === 1 ? 'y' : 'ies'} since the ` +
-        `merge base ${short}. The legacy may only shrink (ADR-060 § 4): import the slice's ` +
-        `index.ts instead of legacy code.`,
+  } else {
+    console.log(
+      `${BASELINE}: ${plural(before.length, 'entry', 'entries')} at the merge base ${short}, ` +
+        `${now.length} now. None added, none stale.`,
     )
-    for (const entry of added) console.error(`  added  ${describe(entry)}`)
   }
-
-  if (failed) return 1
-  console.log(
-    `${BASELINE}: ${before.length} entries at the merge base ${short}, ${now.length} now. ` +
-      `None added, none stale.`,
-  )
   return 0
 }
 

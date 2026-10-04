@@ -50,7 +50,7 @@ type Run = { status: number; output: string }
 
 let repo: string
 
-function write(path: string, content: string) {
+function put(path: string, content: string) {
   mkdirSync(dirname(join(repo, path)), { recursive: true })
   writeFileSync(join(repo, path), content)
 }
@@ -88,8 +88,8 @@ const baseline = {
 beforeEach(() => {
   repo = mkdtempSync(join(tmpdir(), 'legacy-baseline-'))
   copyFileSync(join(WEB_ROOT, '.dependency-cruiser.cjs'), join(repo, '.dependency-cruiser.cjs'))
-  write('tsconfig.json', TSCONFIG)
-  for (const [path, content] of Object.entries(SEED)) write(path, content)
+  put('tsconfig.json', TSCONFIG)
+  for (const [path, content] of Object.entries(SEED)) put(path, content)
   git('init', '-q', '-b', 'main')
   expect(baseline.write().status).toBe(0)
   git('add', '-A')
@@ -110,7 +110,7 @@ describe('the legacy gate', { timeout: 60_000 }, () => {
   })
 
   it('reading 1: fails on a planted import and names the rule and the edge', () => {
-    write(...PLANT)
+    put(...PLANT)
 
     const { status, output } = gate()
 
@@ -118,6 +118,63 @@ describe('the legacy gate', { timeout: 60_000 }, () => {
       'nothing-imports-legacy: src/features/persons/ui/PersonRow.ts → src/lib/hooks/useAuth.ts',
     )
     expect(status).toBe(1)
+  })
+})
+
+/**
+ * "The rules that exist today still do not fire on edges inside the legacy set. That includes
+ * `no-circular` and the `no-orphans` warning." Each silence is paired with the same plant outside
+ * legacy, where the rule must fire: a rule that fires nowhere passes every silence case.
+ */
+describe('the other rules inside legacy', { timeout: 60_000 }, () => {
+  it('no-circular fires on a cycle outside legacy', () => {
+    put('src/features/persons/ui/PersonRow.ts', "import '../index'\nexport const PersonRow = 0\n")
+
+    const { status, output } = gate()
+
+    expect(output).toMatch(/no-circular: src\/features\/persons\//)
+    expect(status).toBe(1)
+  })
+
+  it('no-circular stays silent on a cycle inside legacy', () => {
+    put('src/lib/hooks/useAuth.ts', "import './useSession'\nexport const useAuth = () => 1\n")
+
+    const { status, output } = gate()
+
+    expect(output).not.toContain('no-circular')
+    expect(status).toBe(0)
+  })
+
+  it('no-circular still reports a cycle through legacy, on its edges outside legacy', () => {
+    put(...PLANT)
+    put('src/lib/hooks/useAuth.ts', "import '@/features/persons'\nexport const useAuth = () => 1\n")
+
+    const { status, output } = gate()
+
+    expect(output).toContain(
+      'no-circular: src/features/persons/index.ts → \n      src/features/persons/ui/PersonRow.ts',
+    )
+    expect(output).not.toMatch(/no-circular: src\/lib\/hooks\//)
+    expect(status).not.toBe(0)
+  })
+
+  it('no-orphans fires on a module nothing imports', () => {
+    put('src/lib/utils/label.ts', 'export const label = 0\n')
+
+    expect(gate().output).toContain('no-orphans: src/lib/utils/label.ts')
+  })
+
+  it('no-orphans stays silent on a legacy module nothing imports', () => {
+    put('src/lib/hooks/useDead.ts', 'export const useDead = 0\n')
+
+    expect(gate().output).not.toContain('src/lib/hooks/useDead.ts')
+  })
+
+  it('no-orphans stays silent on a module only legacy imports', () => {
+    put('src/lib/utils/label.ts', 'export const label = 0\n')
+    put('src/lib/hooks/useAuth.ts', "import '@/lib/utils/label'\nexport const useAuth = () => 1\n")
+
+    expect(gate().output).not.toContain('no-orphans: src/lib/utils/label.ts')
   })
 })
 
@@ -129,7 +186,7 @@ describe('the ratchet', { timeout: 60_000 }, () => {
   })
 
   it('reading 2: fails when the baseline was regenerated to admit a planted import', () => {
-    write(...PLANT)
+    put(...PLANT)
     expect(baseline.write().status).toBe(0)
     expect(gate().status).toBe(0)
     git('commit', '-q', '-am', 'plant')
@@ -141,20 +198,20 @@ describe('the ratchet', { timeout: 60_000 }, () => {
   })
 
   it('reading 3: passes a shrink, an import deleted and its entry dropped', () => {
-    write('src/app/page.ts', 'export default () => 0\n')
+    put('src/app/page.ts', 'export default () => 0\n')
     expect(baseline.write().status).toBe(0)
     expect(gate().status).toBe(0)
     git('commit', '-q', '-am', 'shrink')
 
     const { status, output } = baseline.check('main')
 
-    expect(output).toContain('1 entries at the merge base')
+    expect(output).toContain('1 entry at the merge base')
     expect(output).toContain('0 now')
     expect(status).toBe(0)
   })
 
   it('fails when an import is gone but its entry stays, since the entry would re-admit it', () => {
-    write('src/app/page.ts', 'export default () => 0\n')
+    put('src/app/page.ts', 'export default () => 0\n')
     git('commit', '-q', '-am', 'delete the import, keep the entry')
 
     const { status, output } = baseline.check('main')

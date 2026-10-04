@@ -130,7 +130,8 @@ Match what the code already does.
 
 The upstream guide names Jest. This repo does not use Jest.
 
-- `pnpm test:unit` — Vitest, node environment, `*.test.ts` under `src/`.
+- `pnpm test:unit` — Vitest, node environment, `*.test.ts` under `src/`, plus the globs
+  `web/vitest.config.mts` adds outside it.
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`, React Testing Library plus MSW.
 - `pnpm test:e2e` — Playwright. It boots `next dev` on port 3100 itself.
 - MSW handlers build real envelopes. A test must not invent a response shape.

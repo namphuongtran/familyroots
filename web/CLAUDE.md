@@ -19,7 +19,7 @@ pnpm depcruise                                 # dependency-cruiser — enforces
 pnpm depcruise:baseline                        # rewrite .dependency-cruiser-known-violations.json, the legacy baseline — see "Migration notes"
 pnpm depcruise:ratchet origin/main             # fail if that baseline gained an entry since the merge base, or lists an import that is gone; CI-gated on pull requests
 pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)
-pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/)
+pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/, plus the globs vitest.config.mts adds)
 pnpm test:component                            # vitest --project component (jsdom, *.test.tsx, RTL + MSW)
 pnpm test:e2e                                  # playwright test — boots `next dev` on :3100 itself
 pnpm test:e2e:ui                                # playwright test --ui
@@ -149,22 +149,31 @@ cost of encoding.
 presentational components currently live in `src/components/ui/`, and moving them is a
 sub-project B decision that has not been made.
 
-**The legacy trees are in the graph as leaves, and only `nothing-imports-legacy` looks at them.**
+**The legacy trees are in the graph, and only `nothing-imports-legacy` takes one as its subject.**
 The set is the web architecture spec's § 3.2 list: `src/lib/api/`, `src/lib/hooks/`,
 `src/lib/types/`, `src/application/`, `src/infrastructure/`, `src/types/`, and
 `src/components/<feature>/` for `admin`, `auth`, `backoffice`, `documents`, `events`,
-`family-tree` and `members`. `src/components/ui/`, `src/components/layout/`,
-`src/components/providers.tsx`, `src/lib/utils/` and `src/lib/server/` are not legacy. The `LEGACY`
-pattern sits in `options.doNotFollow`, not `options.exclude`: a legacy module joins the graph when
-something imports it, and its own imports are never cruised. So no edge starts inside legacy, no
-cycle runs through it, and no legacy module can be an orphan. Legacy is being deleted, not
-refactored into compliance. Two consequences to know:
+`family-tree` and `members`. Nothing else under `src/` is legacy: not `src/components/ui/`,
+`src/components/layout/` or `src/components/providers.tsx`, and not the rest of `src/lib/`. Legacy
+is cruised like any other code, so an import out of legacy is a real edge. Every rule whose `from`
+could match a legacy path names `LEGACY` in `pathNot` (`nothing-imports-app`, `no-circular`,
+`no-orphans`; the others only match `src/domain`, `src/features` or `src/app`), and `no-circular`
+also skips an edge that ends inside legacy. **A new rule with a broad `from` needs the same.**
+Legacy is being deleted, not refactored into compliance. What follows from that:
 
-- `src/lib/types/` and `src/components/<feature>/` were cruised in full until #171 (2026-10-04).
-  Their own imports are no longer checked by any rule. That is the point, not an oversight.
-- Measured 2026-10-04, `pnpm depcruise` reported the same two `no-orphans` warnings with legacy
-  excluded and with legacy as leaves, `shared/http/refresh.ts` and `lib/utils/pagination.ts`, and
-  no other error or warning besides the 32 baselined `nothing-imports-legacy` edges.
+- A cycle wholly inside legacy is silent, and so is a legacy module nothing imports.
+- A cycle that passes through legacy is still reported, on its edges outside legacy. Filtering on
+  the cycle with `viaOnly` was rejected: dependency-cruiser records one cycle per edge, the first
+  its depth-first search finds (`getCycle` in `src/graph-utl/indexed-module-graph.mjs`), so a route
+  through legacy could hide a real cycle outside it.
+- A module only legacy imports is not an orphan. Putting legacy in `doNotFollow` instead, so that
+  legacy modules are leaves, was tried and rejected for this: once
+  `lib/utils/kinship.ts` re-pointed its one legacy import, it read as an orphan, because its only
+  importer, `components/family-tree/RelationshipPath.tsx`, had no outgoing edges.
+- Measured 2026-10-04, `pnpm depcruise` on `main`'s config and on this one reports the same two
+  `no-orphans` warnings, `shared/http/refresh.ts` and `lib/utils/pagination.ts`, and nothing else
+  besides the 32 baselined `nothing-imports-legacy` edges. With no exclusion and no `pathNot` at
+  all, legacy raises nothing either, so the guards above protect against future edits only.
 
 **`api-layer-has-no-react` was vacuous from the day it was written, on every package
 manager, and the first persons slice (2026-08-22) is what found it.** `to.path` in dependency-cruiser
@@ -562,10 +571,9 @@ warnings" as this having regressed, and do not read today's "4" as the rewire ha
 Widening `LEGACY` to stop excluding `lib/hooks` would fix the tool's blind spot but was not
 attempted here: it would newly subject every file in that tree to orphan-checking in one step,
 which is a change to what the gate covers, not a deletion, and was not that change's to make.
-**Since #171 (2026-10-04) `LEGACY` is in `doNotFollow`, not `exclude`, and the blind spot stands:**
-`lib/hooks/**` is a node now, but its own imports are still never cruised, so an import from it
-still draws no edge. `capability.ts` stopped showing as an orphan for another reason:
-`src/domain/invitation/invitation.ts` imports it.
+**Closed by #171 (2026-10-04).** `LEGACY` is no longer in `options.exclude`, so `lib/hooks/**` is
+cruised and `useCapabilities.ts → capability.ts` is a real edge. `capability.ts` had already stopped
+showing as an orphan for another reason: `src/domain/invitation/invitation.ts` imports it.
 
 **One behaviour changed on purpose while rewiring.** The deleted legacy module hardcoded
 `canDeleteEvents: isAdmin`. This module's own `deleteEvent` entry, cited to
@@ -700,7 +708,9 @@ Four harnesses, one gate each:
 
 - `pnpm test:unit` — Vitest, node environment, `*.test.ts` under `src/`. Pure domain and
   `shared/http` logic: `HistoricalDate`, envelope unwrapping, the error taxonomy, request
-  context, trace id generation, single-flight refresh, `apiFetch`, the logger.
+  context, trace id generation, single-flight refresh, `apiFetch`, the logger. `vitest.config.mts`
+  adds three globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
+  and `scripts/**`, which holds the legacy gate's test.
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
   response shape.
@@ -735,7 +745,8 @@ e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rathe
   gate for new code.
 - `tests/contracts/` (legacy) — `.mjs` contract tests that pin the legacy API client shapes.
 
-CI (`.github/workflows/web-ci.yml`) runs type-check, lint, `depcruise`, unit, component,
+CI (`.github/workflows/web-ci.yml`) runs type-check, lint, `depcruise`, the legacy ratchet on pull
+requests, unit, component,
 build, e2e, and `api-types-fresh` (regenerates `src/generated/api-types.ts` from the
 backend's OpenAPI schema and fails the build if it drifts — the anti-R3 gate). The
 freshness job is triggered by changes under either `web/**` or `backend/app/**`, so a
@@ -947,7 +958,9 @@ engine rather than computed from the stylesheet.
     throwaway git repository with the real `.dependency-cruiser.cjs`, plants
     `import { useAuth } from '@/lib/hooks/useAuth'` in a feature, and reads what a pull request
     would see: `pnpm depcruise` fails naming the edge; with the baseline regenerated to admit it,
-    the ratchet fails naming the edge; a shrink passes; a stale entry fails.
+    the ratchet fails naming the edge; a shrink passes; a stale entry fails. It also plants each
+    of the legacy cases in "Dependency rules", beside the same plant outside legacy, where the
+    rule must fire.
 - **How a slice deletes its legacy is ADR-060, not "the matching PR deletes it".** In short: a slice
   deletes its _slice-owned_ legacy, after re-pointing every importer, in any slice, at its own
   `index.ts`. Adapting an importer to the domain shape is part of the migration. A file stays,
