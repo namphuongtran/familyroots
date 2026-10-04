@@ -136,6 +136,12 @@ Rules:
   ISO-8601 timestamps (`datetime.now(UTC)`), not clan-local time.
 - Serialization is `ensure_ascii=False` (Vietnamese diacritics readable raw in
   the file) and `default=str` for UUID/date/datetime values.
+- Minting each `download_url` calls the private bucket, so the JSON export fails
+  as a whole on a storage error, with the standard error envelope: `404
+  storage_not_found` for a document whose object is missing, `503
+  storage_bucket_not_configured` when `SUPABASE_STORAGE_BUCKET` names a bucket
+  that does not exist (#177; it used to be the 404), `503 storage_unavailable`
+  for an outage. GEDCOM carries no document URLs.
 
 ### `format_version` stability rule
 `format_version` bumps only on a **breaking** change to this archive shape (a
