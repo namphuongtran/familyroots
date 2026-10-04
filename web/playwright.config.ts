@@ -43,7 +43,7 @@ const NO_SUPABASE_ENV = {
   // Explicit empty strings, not simply omitted: omitting a key lets the invoking shell's own
   // export (a developer's real `.env.local`-sourced shell, or a future CI job) leak through and
   // render the banner absent again, which is exactly the non-determinism the placeholders closed for every
-  // other spec. `getSupabaseEnv()` (`src/lib/supabase/config.ts:8`) treats `''` the same as
+  // other spec. `getSupabaseEnv()` (`src/shared/supabase/config.ts:8`) treats `''` the same as
   // missing, via `!url || !anonKey`.
   NEXT_PUBLIC_SUPABASE_URL: '',
   NEXT_PUBLIC_SUPABASE_ANON_KEY: '',

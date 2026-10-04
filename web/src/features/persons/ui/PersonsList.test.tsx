@@ -4,20 +4,20 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { envelope, pageEnvelope, server as mswServer } from '@/shared/testing/msw'
 import { renderWithProviders } from '@/shared/testing/render'
+import { fakeSupabaseClient } from '@/shared/testing/supabase'
 import { CLAN_COOKIE } from '@/shared/http/request-context'
 import { PersonsList } from './PersonsList'
 
 /**
  * `PersonsList` builds its own `RequestContext` via
- * `usePersonsRequestContext` (`use-persons-request-context.ts`) rather than
+ * `useClientRequestContext` (`@/shared/http/context.client`) rather than
  * taking one as a prop, so this test drives that hook through its real
  * inputs — the clan cookie and the (mocked, absent) Supabase session — the
  * same way `persons-repository.two-runtimes.test.tsx` does for the
  * repository layer, rather than stubbing the hook itself.
  */
-vi.mock('@/lib/supabase/client', () => ({
-  createClientOrNull: vi.fn(() => null),
-}))
+const { createClientOrNull } = vi.hoisted(() => ({ createClientOrNull: vi.fn() }))
+vi.mock('@/shared/supabase/client', () => ({ createClientOrNull }))
 
 const API = `${process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'}/api/v1`
 const CLAN_ID = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
@@ -86,6 +86,7 @@ const messages = {
 
 beforeEach(() => {
   setClanCookie()
+  createClientOrNull.mockReturnValue(null)
 })
 
 afterEach(() => {
@@ -195,5 +196,26 @@ describe('PersonsList', () => {
     // `isFetchNextPageError`) would fail this next line, since the first
     // page's row would have been removed along with the error state.
     expect(screen.getByText('Người Một')).toBeInTheDocument()
+  })
+
+  it('refreshes an expired token and shows the list, rather than the error state', async () => {
+    createClientOrNull.mockReturnValue(
+      fakeSupabaseClient({ accessToken: 'expired-token', refreshedAccessToken: 'fresh-token' })
+        .client,
+    )
+    mswServer.use(
+      http.get(`${API}/persons`, ({ request }) =>
+        request.headers.get('authorization') === 'Bearer fresh-token'
+          ? HttpResponse.json(pageEnvelope([personFixture()]))
+          : HttpResponse.json(
+              { error: { code: 'invalid_token', message: 'Token expired', detail: {} } },
+              { status: 401 },
+            ),
+      ),
+    )
+    renderWithProviders(<PersonsList />, { messages })
+
+    expect(await screen.findByText('Nguyễn Văn An')).toBeInTheDocument()
+    expect(screen.queryByText('Không thể tải danh sách thành viên')).not.toBeInTheDocument()
   })
 })

@@ -8,8 +8,8 @@
  */
 
 import type { AuthChangeEvent } from '@supabase/supabase-js'
-import { createClientOrNull } from '@/lib/supabase/client'
-import { createMissingSupabaseEnvError } from '@/lib/supabase/config'
+import { createClientOrNull } from '@/shared/supabase/client'
+import { createMissingSupabaseEnvError } from '@/shared/supabase/config'
 
 export type OAuthProvider = 'google' | 'apple'
 

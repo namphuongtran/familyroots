@@ -10,11 +10,11 @@ import viMessages from '../../../messages/vi.json'
 import { MemberSidebar } from './MemberSidebar'
 
 /**
- * The sidebar builds its own `RequestContext` through persons'
- * `usePersonsRequestContext`, so this drives it through the real inputs, the
+ * The sidebar builds its own `RequestContext` through
+ * `useClientRequestContext`, so this drives it through the real inputs, the
  * clan cookie and an absent Supabase session, as `PersonsList.test.tsx` does.
  */
-vi.mock('@/lib/supabase/client', () => ({
+vi.mock('@/shared/supabase/client', () => ({
   createClientOrNull: vi.fn(() => null),
 }))
 

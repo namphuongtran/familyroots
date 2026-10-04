@@ -21,6 +21,8 @@ const messages = viMessages as unknown as AbstractIntlMessages
 
 const API = `${process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'}/api/v1`
 const context: RequestContext = { locale: 'vi', clanId: 'clan-1', accessToken: 'tok-1' }
+/** No case here sends a 401, so no refresh is ever asked for. */
+const refreshAuth = async (): Promise<RequestContext | null> => null
 
 function wirePerson(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
@@ -109,6 +111,7 @@ describe('PersonForm — edit, a plain successful save', () => {
         mode="edit"
         person={personProp()}
         context={context}
+        refreshAuth={refreshAuth}
         onSuccess={onSuccess}
         onCancel={vi.fn()}
       />,
@@ -137,6 +140,7 @@ describe('PersonForm — edit, a plain successful save', () => {
         mode="edit"
         person={personProp()}
         context={context}
+        refreshAuth={refreshAuth}
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -202,6 +206,7 @@ describe('PersonForm — edit, 409 stale_write (spec §7.7c)', () => {
         mode="edit"
         person={personProp()}
         context={context}
+        refreshAuth={refreshAuth}
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -248,6 +253,7 @@ describe('PersonForm — edit, 409 stale_write (spec §7.7c)', () => {
         mode="edit"
         person={personProp()}
         context={context}
+        refreshAuth={refreshAuth}
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -282,6 +288,7 @@ describe('PersonForm — edit, 409 stale_write (spec §7.7c)', () => {
         mode="edit"
         person={personProp()}
         context={context}
+        refreshAuth={refreshAuth}
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,

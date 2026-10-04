@@ -1,12 +1,12 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import { useClientRequestContext } from '@/shared/http/context.client'
 import { ApiError } from '@/shared/http/errors'
 import { usePersonsList } from '../hooks/use-persons-queries'
 import { PersonRow } from './PersonRow'
 import { PersonsErrorState } from './PersonsErrorState'
 import { PersonsListSkeleton } from './PersonsListSkeleton'
-import { usePersonsRequestContext } from './use-persons-request-context'
 
 /** `message` is only ever shown, never branched on — `ApiError.message` arrives already localized from the backend (`web/CLAUDE.md`, "The spine"). */
 function errorMessage(error: unknown): string | null {
@@ -27,7 +27,7 @@ function errorMessage(error: unknown): string | null {
  */
 export function PersonsList() {
   const t = useTranslations('members')
-  const { context, ready } = usePersonsRequestContext()
+  const { context, ready, refreshAuth } = useClientRequestContext()
   const {
     data,
     isPending,
@@ -37,7 +37,7 @@ export function PersonsList() {
     hasNextPage,
     isFetchingNextPage,
     isFetchNextPageError,
-  } = usePersonsList({}, { context, enabled: ready })
+  } = usePersonsList({}, { context, refreshAuth, enabled: ready })
 
   if (!ready || isPending) {
     return <PersonsListSkeleton rows={8} />

@@ -30,7 +30,7 @@ const CLAN_ID = '6f1c4f7e-0000-4000-8000-000000000001'
 /**
  * The cookie `@supabase/ssr`'s browser client reads a session out of.
  *
- * `createBrowserClient` (`src/lib/supabase/client.ts:11`) stores the session in
+ * `createBrowserClient` (`src/shared/supabase/client.ts:11`) stores the session in
  * `document.cookie`, not `localStorage` — that is the point of the SSR package.
  * The name is `sb-${hostname.split('.')[0]}-auth-token`
  * (`node_modules/@supabase/supabase-js/dist/index.mjs:680`). The value is `base64-`

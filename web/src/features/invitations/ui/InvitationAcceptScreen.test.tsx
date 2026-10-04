@@ -4,6 +4,8 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { envelope, errorEnvelope, server as mswServer } from '@/shared/testing/msw'
 import { renderWithProviders } from '@/shared/testing/render'
+import { fakeSupabaseClient } from '@/shared/testing/supabase'
+import { CLAN_COOKIE } from '@/shared/http/request-context'
 import { InvitationAcceptScreen } from './InvitationAcceptScreen'
 import messages from '../../../../messages/vi.json'
 
@@ -14,7 +16,7 @@ import messages from '../../../../messages/vi.json'
  * variable or on the presence of a route file.
  *
  * The screen builds its own `RequestContext` through
- * `use-invitation-request-context.ts`, so these tests drive that hook through its
+ * `useClientRequestContext`, so these tests drive that hook through its
  * real input — the Supabase browser client — rather than stubbing the hook. That is
  * the pattern `PersonsList.test.tsx` set.
  */
@@ -28,7 +30,7 @@ const CLAN_ID = '6f1c4f7e-0000-4000-8000-000000000001'
 
 const { createClientOrNull } = vi.hoisted(() => ({ createClientOrNull: vi.fn() }))
 
-vi.mock('@/lib/supabase/client', () => ({ createClientOrNull }))
+vi.mock('@/shared/supabase/client', () => ({ createClientOrNull }))
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -38,11 +40,9 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-/** A signed-in browser: `getClientRequestContext` finds an access token. */
+/** A signed-in browser: `useClientRequestContext` finds an access token. */
 function signedIn(): void {
-  createClientOrNull.mockReturnValue({
-    auth: { getSession: async () => ({ data: { session: { access_token: 'tok-1' } } }) },
-  })
+  createClientOrNull.mockReturnValue(fakeSupabaseClient({ accessToken: 'tok-1' }).client)
 }
 
 /** A signed-out browser: no Supabase client at all, so no access token. */
@@ -248,6 +248,37 @@ describe('the invitation page — the fifth outcome: there is no session', () =>
     await pressAccept()
 
     expect(await screen.findByText('Hãy đăng nhập trước')).toBeInTheDocument()
+  })
+
+  it('401 on accept, and Supabase still refreshes: the accept is retried with the new token, still with no clan header', async () => {
+    createClientOrNull.mockReturnValue(
+      fakeSupabaseClient({ accessToken: 'tok-1', refreshedAccessToken: 'tok-2' }).client,
+    )
+    // Left over from an earlier session. The invitee surface sends no clan header all the same,
+    // on the retry as on the first attempt (`rest-invitations-api.md:72-74`).
+    document.cookie = `${CLAN_COOKIE}=${CLAN_ID}; path=/`
+    const seen: { authorization: string | null; clan: string | null }[] = []
+    mswServer.use(
+      http.post(`${API}/invitations/:token/accept`, ({ request }) => {
+        const authorization = request.headers.get('authorization')
+        seen.push({ authorization, clan: request.headers.get('x-current-clan-id') })
+        return authorization === 'Bearer tok-2'
+          ? HttpResponse.json(envelope({ clan_id: CLAN_ID, role: 'viewer', message: 'x' }))
+          : refusal('invalid_token', 401)
+      }),
+    )
+
+    try {
+      render()
+      await pressAccept()
+      expect(await screen.findByText('Bạn đã tham gia dòng họ')).toBeInTheDocument()
+    } finally {
+      document.cookie = `${CLAN_COOKIE}=; path=/; max-age=0`
+    }
+    expect(seen).toEqual([
+      { authorization: 'Bearer tok-1', clan: null },
+      { authorization: 'Bearer tok-2', clan: null },
+    ])
   })
 })
 

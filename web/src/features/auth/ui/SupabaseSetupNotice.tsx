@@ -2,7 +2,7 @@
 
 import { Fragment, type ReactNode } from 'react'
 import { useTranslations } from 'next-intl'
-import { isSupabaseConfigured } from '@/lib/supabase/config'
+import { isSupabaseConfigured } from '@/shared/supabase/config'
 
 /**
  * The hint names `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` literally, in

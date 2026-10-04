@@ -1,5 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
-import { createMissingSupabaseEnvError, getSupabaseEnv } from '@/lib/supabase/config'
+import { createMissingSupabaseEnvError, getSupabaseEnv } from '@/shared/supabase/config'
 
 export function createClientOrNull() {
   const env = getSupabaseEnv()

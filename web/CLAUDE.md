@@ -104,6 +104,7 @@ Two trees coexist during the migration described in
   │   └── index.ts            # PUBLIC SURFACE — the only import path for other code
   ├── shared/
   │   ├── http/               # api-client, request-context, envelope, errors, refresh
+  │   ├── supabase/           # the browser and server Supabase clients, and their env
   │   ├── telemetry/          # logger, trace, Sentry, Web Vitals
   │   ├── testing/            # MSW + RTL harness
   │   └── ui/                 # presentational primitives no slice owns
@@ -134,7 +135,7 @@ has no allow-list concept — so a rule name is the thing to grep for when a bui
 | `nothing-imports-app`          | anything outside `src/app/` importing `src/app/**`                                                                                                                                                                      | error    |
 | `nothing-imports-legacy`       | anything outside the legacy set importing a module inside it; legacy importing legacy is allowed. Today's imports are a baseline that may only shrink, see "Migration notes"                                            | error    |
 | `no-circular`                  | import cycles                                                                                                                                                                                                           | error    |
-| `no-orphans`                   | modules nothing imports — 2 known and accepted, measured 2026-10-04: `shared/http/refresh.ts`, `lib/utils/pagination.ts`. It was 3 on 2026-08-22, with `domain/capability/capability.ts`, see "Clan capabilities" below | **warn** |
+| `no-orphans`                   | modules nothing imports: only 1 known and accepted, measured on 2026-10-05, `lib/utils/pagination.ts`. It was 2 until #184 gave `shared/http/refresh.ts` its caller, and 3 on 2026-08-22, see "Clan capabilities" below | **warn** |
 
 The exit code is the count of error-level violations, so one error returns 1. Warnings do
 not fail the build.
@@ -146,7 +147,10 @@ not fail the build.
 `model`. Follow it anyway; the rules above only catch the directions that were worth the
 cost of encoding.
 
-`src/shared/` is `http/`, `telemetry/`, `testing/` and `ui/`. `shared/ui/` arrived with #172
+`src/shared/` is `http/`, `supabase/`, `telemetry/`, `testing/` and `ui/`. `shared/supabase/`
+arrived with #184 (2026-10-05): `client.ts`, `server.ts` and `config.ts` moved there from
+`lib/supabase/`, because `shared/http` imported them and `shared` importing `lib/` pointed the
+dependency the wrong way (ADR-061 § 1). `shared/ui/` arrived with #172
 (2026-10-04) and holds one file, `InitialsAvatar.tsx`: the initials circle that used to be
 `components/members/MemberAvatar.tsx`, a misfiled primitive under ADR-060 § 1. A pending account
 renders it directly, and `PersonAvatar` is built on it. `src/components/ui/` still holds the other
@@ -178,6 +182,8 @@ Legacy is being deleted, not refactored into compliance. What follows from that:
   `no-orphans` warnings, `shared/http/refresh.ts` and `lib/utils/pagination.ts`, and nothing else
   besides the 32 baselined `nothing-imports-legacy` edges (21 since #183). With no exclusion and no `pathNot` at
   all, legacy raises nothing either, so the guards above protect against future edits only.
+  Re-measured 2026-10-05 after #184: one warning, `lib/utils/pagination.ts`, and the same 21
+  baselined edges.
 
 **`api-layer-has-no-react` was vacuous from the day it was written, on every package
 manager, and the first persons slice (2026-08-22) is what found it.** `to.path` in dependency-cruiser
@@ -289,13 +295,10 @@ invalid_cursor` `ApiError` and retries once with `cursor: null` before it ever r
   `createSingleFlight`, `shared/http/refresh.ts`) collapse onto one refresh rather than
   each calling it independently. `persons-repository.test.ts` proves it by calling
   `getPerson` twice concurrently with a shared, deliberately slow-to-resolve
-  `refreshAuth`, and asserting the underlying refresh operation ran once. **Building an
-  actual browser `refreshAuth` — wiring `createSingleFlight` to a real Supabase
-  `refreshSession()` call — is explicitly not done here.** No screen exists yet to need
-  one, and no auth slice exists yet to own where a browser-wide singleton like that should live;
-  inventing one now, untested against a real caller, would be the kind of decision that belongs on
-  its own rather than smuggled into an unrelated change.
-  A hook here only ever forwards whatever `refreshAuth` its caller passes in.
+  `refreshAuth`, and asserting the underlying refresh operation ran once. The real browser
+  `refreshAuth` arrived with #184: `createSingleFlight` over Supabase's `refreshSession()`, one
+  per tab, in `shared/http/context.client.ts` (see "One browser request context" below). A hook
+  here still only forwards whatever `refreshAuth` its caller passes in.
 - **`batchGetPersons` gets its own small envelope reader rather than reusing
   `unwrapPage`.** `POST /persons/batch`'s `meta` is `{errors: BatchError[]}`, not the
   cursor triplet `unwrapPage` requires, so forcing it through `unwrapPage` would mean
@@ -330,10 +333,8 @@ entry that never invalidates together.
 
 **Hooks (`hooks/use-persons-queries.ts`, `hooks/use-person-mutations.ts`) take a
 `RequestContext` the caller passes in — they do not call `getClientRequestContext()`
-themselves.** No screen exists yet to decide how a context gets built and kept reactive (almost
-certainly `useCurrentClanId()` plus the rest of the session), and deciding that inside a hook nobody
-calls yet would be exactly the kind of premature decision one change should not make for a later
-one. This keeps
+themselves.** A screen gets the context and the `refreshAuth` to pass beside it from
+`useClientRequestContext()` (#184, see "One browser request context" below). This keeps
 every hook testable with a plain `RequestContext` object and MSW, which is what
 `hooks/*.test.tsx` do.
 
@@ -477,7 +478,7 @@ readings above are what was verified this way.
 - Request context (`RequestContext`) is always **passed in**, never read from a global —
   `context.server.ts` builds it from `cookies()` + Supabase SSR in an RSC,
   `context.client.ts` builds it from the `current_clan_id` cookie, the URL and the Supabase
-  browser client. The same
+  browser client. A client component reads it through `useClientRequestContext()`. The same
   repository function runs, and is tested, in both runtimes.
 - `unwrapData` / `unwrapPage` (`src/shared/http/envelope.ts`) are the **only** readers of
   the `{"data": ...}` / `{"data": ..., "meta": {...}}` envelope. No component ever sees the
@@ -487,11 +488,51 @@ readings above are what was verified this way.
 - The UI branches on the error **`code`**, never on `message` — `message` arrives already
   localized from the backend (`src/shared/http/errors.ts`, `ApiError` / `NetworkError` /
   `MalformedResponseError`).
-- 401 triggers a single-flight refresh-then-retry (`src/shared/http/refresh.ts`); 403 never
-  refreshes — it is a policy decision, not a stale credential.
+- 401 triggers a single-flight refresh-then-retry (`src/shared/http/refresh.ts`, wired to
+  Supabase as `refreshAuth` in `context.client.ts`); 403 never refreshes, because it is a
+  policy decision, not a stale credential.
 - `HistoricalDate` (`src/domain/date/historical-date.ts`) owns its own render rule (`date`
   when `precision === 'exact'`, else `display`, falling back to `date`); no component
   re-implements it.
+
+### One browser request context (`useClientRequestContext`, #184)
+
+**ADR-061 § 6, built by #184.** A slice's client component reads its context from
+`useClientRequestContext()` in `shared/http/context.client.ts`, and passes `context` and
+`refreshAuth` to its slice's hooks. It returns `{ context, ready, refreshAuth }`. Persons'
+`use-persons-request-context.ts` and invitations' `use-invitation-request-context.ts`, which each
+read the token once on mount and passed no `refreshAuth`, are deleted.
+
+**The legacy slices are the exception.** `infrastructure/{admin,documents,events,relationships,tree}`
+still call the backend through `lib/api/axios.ts`, whose interceptor signs out and redirects on a
+401 instead of refreshing. They gain the refresh when their own slice PR moves them onto `apiFetch`.
+
+- **The token follows Supabase.** The hook reads `getSession()` once and then every
+  `onAuthStateChange` event, so a `TOKEN_REFRESHED` from Supabase's own timer or from
+  `refreshAuth` reaches the next request with no remount. An event that lands first wins over the
+  first read, which may be older. The access token is not in any query key, and need not be:
+  TanStack Query runs the latest render's `queryFn`.
+- **`refreshAuth` is one per tab.** The module-level export is `createSingleFlight` over
+  `refreshSession()`, so concurrent 401s from every caller of it share one refresh. It resolves
+  the refreshed context, or `null` when Supabase refuses, and then `apiFetch` surfaces the 401.
+  `refreshAuthFor(clanId)` wraps it so a retry carries the clan its first attempt carried; the
+  hook's own `refreshAuth` is that wrapper.
+- **`ready` gates the request.** It is false until the first session read finishes, so no call
+  goes out without the `Authorization` header a signed-in user has. A Supabase client that cannot
+  be built reads as signed out rather than leaving `ready` false.
+- **`clanScoped: false` sends no `X-Current-Clan-Id`**, on the first attempt or the retry. The
+  invitee surface uses it, because its contract forbids the header. The auth slice's
+  `authCallOptions()` passes `refreshAuthFor(null)` for the same rule, since its callers are a
+  query function and callbacks, not components.
+
+`src/shared/http/use-client-request-context.test.tsx` holds the two outcomes the issue named, each
+seen to fail against its planted defect on 2026-10-05. Two persons queries in two components, both
+401ing on the old token, cause one `refreshSession()` and both retry with the new one; built per
+hook call instead, the count was 2. A `TOKEN_REFRESHED` reaches the next request's `Authorization`;
+with the token read once on mount, the old token went out. Two more cases there pin the first-read
+guard and the unbuildable client. `PersonsList.test.tsx`, `InvitationAcceptScreen.test.tsx` and
+`use-session.test.tsx` each pin that their screen refreshes, and the last two that the retry
+carries no clan.
 
 ### Routing, locales, auth gating
 
@@ -627,9 +668,10 @@ zustand keeps only `ui.store.ts`.
   locale; the legacy hook used the profile's `preferred_locale`.
 - **The slice builds its own request context, the one exception to "hooks take a
   `RequestContext` the caller passes in".** The session is where the identity behind every other
-  context comes from, so nothing above it holds one to pass. `hooks/auth-request-context.ts` reads
-  `getClientRequestContext()` with no `X-Current-Clan-Id`, since no auth route is clan-scoped. #184
-  replaces what it reads with the shared browser context and its `refreshAuth` (ADR-061 § 6).
+  context comes from, so nothing above it holds one to pass. `authCallOptions()` in
+  `hooks/auth-request-context.ts` reads `getClientRequestContext()` per call with no
+  `X-Current-Clan-Id`, since no auth route is clan-scoped, and passes the shared browser
+  `refreshAuth` with the same rule (#184, ADR-061 § 6).
 - **`useSession()` returns `activeClan`** beside `access`: the membership the user acts in when
   the state is ready, `null` otherwise. `Header`, `Sidebar`, `SelectClanScreen` and
   `useCapabilities` read it rather than each testing `access.kind`.
@@ -1123,7 +1165,8 @@ engine rather than computed from the stylesheet.
     two auth imports persons' routes hold.
   - `lib/server/auth-context.ts` and `lib/utils/with-role.ts`, the server guard. #186 replaces them;
     #183 only swapped the server's clan resolution for the domain one.
-  - `lib/supabase/`, which moves to `shared/supabase/` with #184.
+  - ~~`lib/supabase/`~~: moved to `shared/supabase/` by #184 (2026-10-05). The grep for
+    `@/lib/supabase` under `web/src` prints nothing.
   - The auth types in `lib/types/api.ts` (`UserProfile`, `UserClanMembership` and the rest).
     `lib/server/auth-context.ts` still reads `UserClanMembership`, so they go with #186.
   - `axios.ts` and `infrastructure/http/request-context.ts` are cross-cutting and leave with the last

@@ -4,14 +4,10 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import {
-  PersonForm,
-  PersonsErrorState,
-  usePerson,
-  usePersonsRequestContext,
-} from '@/features/persons'
+import { PersonForm, PersonsErrorState, usePerson } from '@/features/persons'
 import { useCapabilities } from '@/lib/hooks/useCapabilities'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useClientRequestContext } from '@/shared/http/context.client'
 import { ApiError } from '@/shared/http/errors'
 
 /**
@@ -25,8 +21,13 @@ export default function EditMemberPage() {
   const router = useRouter()
   const { id, locale } = useParams<{ id: string; locale: string }>()
   const { canEditPersons } = useCapabilities()
-  const { context, ready } = usePersonsRequestContext()
-  const { data: person, isPending, error, refetch } = usePerson(id, {}, { context, enabled: ready })
+  const { context, ready, refreshAuth } = useClientRequestContext()
+  const {
+    data: person,
+    isPending,
+    error,
+    refetch,
+  } = usePerson(id, {}, { context, refreshAuth, enabled: ready })
 
   if (!canEditPersons) {
     return <p className="text-muted-foreground text-sm">{t('no_permission_edit')}</p>
@@ -52,6 +53,7 @@ export default function EditMemberPage() {
           mode="edit"
           person={person}
           context={context}
+          refreshAuth={refreshAuth}
           onSuccess={() => router.push(`/${locale}/members/${id}`)}
           onCancel={() => router.back()}
         />

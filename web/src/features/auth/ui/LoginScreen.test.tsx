@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { components } from '@/generated/api-types'
-import { createClientOrNull } from '@/lib/supabase/client'
+import { createClientOrNull } from '@/shared/supabase/client'
 import { clearClanCookie, readCurrentClanId } from '@/shared/http/context.client'
 import { envelope, server } from '@/shared/testing/msw'
 import { renderWithProviders } from '@/shared/testing/render'
@@ -21,7 +21,7 @@ import messages from '../../../../messages/vi.json'
 
 const push = vi.fn()
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }) }))
-vi.mock('@/lib/supabase/client', () => ({ createClientOrNull: vi.fn() }))
+vi.mock('@/shared/supabase/client', () => ({ createClientOrNull: vi.fn() }))
 
 const API = `${process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'}/api/v1`
 const CLAN_A = 'aaaaaaaa-0000-4000-8000-000000000001'

@@ -31,7 +31,7 @@ export type InvitationsApiCallOptions = Pick<
  * is not a member of any clan yet, so there is no clan to select, and the header
  * has no effect on this route (`docs/contracts/rest-invitations-api.md:72-74`).
  * `apiFetch` sends the header only when `context.clanId` is set, and
- * `ui/use-invitation-request-context.ts` deliberately sets it to `null`.
+ * `ui/InvitationAcceptScreen.tsx` reads its context with `clanScoped: false`, which sets it to `null`.
  *
  * `encodeURIComponent` on the token: it is `secrets.token_urlsafe(32)`
  * (`docs/contracts/rest-invitations-api.md:41`), so in practice it needs no

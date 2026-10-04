@@ -89,8 +89,6 @@ export { PersonsList } from './ui/PersonsList'
 export { PersonsListSkeleton } from './ui/PersonsListSkeleton'
 export { PersonProfile } from './ui/PersonProfile'
 export { formatHistoricalDate, isKnownDate } from './ui/format-person-date'
-export { usePersonsRequestContext } from './ui/use-persons-request-context'
-export type { PersonsRequestContext } from './ui/use-persons-request-context'
 
 // Landed by the persons form — the create/edit form and its §7.7c conflict dialog.
 // `HistoricalDateField`, `StaleWriteDialog`, `ForbiddenWriteDialog`, and the

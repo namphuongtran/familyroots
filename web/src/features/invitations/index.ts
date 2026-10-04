@@ -26,5 +26,3 @@ export { useAcceptInvitation } from './hooks/use-accept-invitation'
 
 export { InvitationAcceptScreen } from './ui/InvitationAcceptScreen'
 export type { InvitationAcceptScreenProps } from './ui/InvitationAcceptScreen'
-export { useInvitationRequestContext } from './ui/use-invitation-request-context'
-export type { InvitationRequestContext } from './ui/use-invitation-request-context'

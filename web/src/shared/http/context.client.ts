@@ -1,7 +1,8 @@
 'use client'
 
-import { useSyncExternalStore } from 'react'
-import { createClientOrNull } from '@/lib/supabase/client'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { createClientOrNull } from '@/shared/supabase/client'
+import { createSingleFlight } from './refresh'
 import {
   CLAN_COOKIE,
   localeFromPathname,
@@ -136,5 +137,142 @@ export async function getClientRequestContext(): Promise<RequestContext> {
     locale: localeFromPathname(window.location.pathname),
     clanId: parseClanCookie(readCookie(CLAN_COOKIE)),
     accessToken,
+  }
+}
+
+/**
+ * The one browser-wide `refreshAuth`, for `apiFetch`'s 401 retry. ADR-061 § 6.
+ *
+ * Module-level, so every caller in the tab shares one single flight: when a token expires, every
+ * request in flight 401s at once, and they must collapse onto one `refreshSession()` rather than
+ * rotate the refresh token once each. Built per hook call instead, two screens would each refresh.
+ *
+ * Resolves the refreshed context, or `null` when there is no Supabase client or Supabase refuses
+ * the refresh. `null` tells `apiFetch` to surface the 401 rather than retry, and signing out is the
+ * screen's decision, not transport's. A successful refresh also reaches every
+ * `useClientRequestContext` through Supabase's `TOKEN_REFRESHED`, so the request after the retry
+ * carries the new token too.
+ */
+export const refreshAuth: () => Promise<RequestContext | null> = createSingleFlight(async () => {
+  try {
+    const supabase = createClientOrNull()
+    if (!supabase) return null
+    const { data, error } = await supabase.auth.refreshSession()
+    const accessToken = data.session?.access_token
+    if (error || !accessToken) return null
+    return {
+      locale: localeFromPathname(window.location.pathname),
+      clanId: readCurrentClanId(),
+      accessToken,
+    }
+  } catch {
+    return null
+  }
+})
+
+/**
+ * `refreshAuth`, resolving a context that carries `clanId` rather than whatever the cookie names
+ * when the refresh lands. A retry then goes to the clan its first attempt went to, and a surface
+ * that sends no clan sends none on the retry either. Every caller still shares the one refresh.
+ */
+export function refreshAuthFor(clanId: string | null): () => Promise<RequestContext | null> {
+  return async () => {
+    const refreshed = await refreshAuth()
+    return refreshed && { ...refreshed, clanId }
+  }
+}
+
+export interface ClientRequestContextOptions {
+  /**
+   * False for a surface that must send no `X-Current-Clan-Id` whatever the cookie says, such as
+   * the invitee surface, whose contract forbids it. The context and the context `refreshAuth`
+   * resolves both leave the clan out.
+   */
+  clanScoped?: boolean
+}
+
+export interface ClientRequestContext {
+  context: RequestContext
+  /** False until the first read of the Supabase session has finished. Gate requests on it. */
+  ready: boolean
+  /** The browser-wide `refreshAuth` above, through `refreshAuthFor` this hook's clan. */
+  refreshAuth: () => Promise<RequestContext | null>
+}
+
+interface BrowserSession {
+  locale: RequestContext['locale']
+  accessToken: RequestContext['accessToken']
+}
+
+/**
+ * The request context for a client component. Every slice reads this one, and passes `context`
+ * and `refreshAuth` to its hooks. ADR-061 § 6.
+ *
+ * - **The clan** is `useCurrentClanId()`, so a clan switch re-renders with the new id and a query
+ *   key built from it refetches.
+ * - **The locale** is the URL's first segment, read on mount, as `getClientRequestContext` reads it.
+ * - **The access token follows Supabase.** It is read once from `getSession()` and then from every
+ *   auth event, so `TOKEN_REFRESHED`, whether from Supabase's own timer or from `refreshAuth`,
+ *   reaches the next request without a remount. Once an event has arrived, the first read's answer
+ *   is dropped, since it may predate the event.
+ */
+export function useClientRequestContext(
+  options: ClientRequestContextOptions = {},
+): ClientRequestContext {
+  const { clanScoped = true } = options
+  const cookieClanId = useCurrentClanId()
+  const clanId = clanScoped ? cookieClanId : null
+  const [session, setSession] = useState<BrowserSession | null>(null)
+
+  useEffect(() => {
+    const locale = localeFromPathname(window.location.pathname)
+    let active = true
+    let heardEvent = false
+    const apply = (accessToken: string | null) => {
+      if (active) setSession({ locale, accessToken })
+    }
+
+    let listener: { data: { subscription: { unsubscribe: () => void } } } | undefined
+    let firstRead: Promise<string | null>
+    try {
+      // With no Supabase configured there is no session to read and no event to hear.
+      const supabase = createClientOrNull()
+      listener = supabase?.auth.onAuthStateChange((_event, changed) => {
+        heardEvent = true
+        apply(changed?.access_token ?? null)
+      })
+      firstRead = supabase
+        ? supabase.auth.getSession().then(({ data }) => data.session?.access_token ?? null)
+        : Promise.resolve(null)
+    } catch {
+      // A client that cannot be built reads as signed out, as `getClientRequestContext` reads it,
+      // rather than leaving `ready` false for good.
+      firstRead = Promise.resolve(null)
+    }
+    firstRead.then(
+      (accessToken) => {
+        if (!heardEvent) apply(accessToken)
+      },
+      () => {
+        if (!heardEvent) apply(null)
+      },
+    )
+
+    return () => {
+      active = false
+      listener?.data.subscription.unsubscribe()
+    }
+  }, [])
+
+  const refreshAuthForClan = useMemo(() => refreshAuthFor(clanId), [clanId])
+
+  return {
+    context: {
+      locale: session?.locale ?? 'vi',
+      clanId,
+      accessToken: session?.accessToken ?? null,
+    },
+    ready: session !== null,
+    refreshAuth: refreshAuthForClan,
   }
 }
