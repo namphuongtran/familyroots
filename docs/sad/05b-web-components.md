@@ -93,8 +93,9 @@ ratchet (ADR-013):
 so the *May import* column is architecture we hold ourselves to, not a gate that will catch
 us. The rule names and exactly what each one forbids are listed in `web/CLAUDE.md`;
 consult that before assuming a boundary is protected. `src/shared/` is `http/`,
-`telemetry/` and `testing/` — there is no `shared/ui/` yet, and where reusable
-presentational components should live is an open sub-project B decision.
+`telemetry/`, `testing/` and `ui/`. `shared/ui/` holds the initials avatar, moved there by #172 as
+a misfiled primitive (ADR-060 § 1). Whether the rest of `src/components/ui/` moves there is an open
+sub-project B decision.
 
 The legacy trees (the web architecture spec's § 3.2 list) are in the graph. One rule,
 `nothing-imports-legacy`, forbids new imports into them, and today's imports are a committed

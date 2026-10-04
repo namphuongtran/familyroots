@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { useRouter } from 'next/navigation'
-import { MemberAvatar } from '@/components/members/MemberAvatar'
+import { PersonAvatar } from '@/features/persons'
 import { cn } from '@/lib/utils/cn'
 import type { TreeNode } from '@/lib/types'
 
@@ -48,11 +48,10 @@ export const MemberNode = memo(function MemberNode({
 
       <Handle type="target" position={Position.Top} className="bg-muted-foreground! h-2! w-2!" />
 
-      <MemberAvatar
-        avatarUrl={data.avatar_url ?? undefined}
+      <PersonAvatar
+        avatarUrl={data.avatar_url}
         fullName={data.full_name}
-        gender={data.gender}
-        size="sm"
+        size="xs"
         isDeceased={isDeceased}
       />
 

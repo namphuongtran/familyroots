@@ -2,9 +2,9 @@
 
 import { useTranslations } from 'next-intl'
 import { CheckCircle, XCircle, Clock } from 'lucide-react'
-import { MemberAvatar } from '@/components/members/MemberAvatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils/date'
+import { InitialsAvatar } from '@/shared/ui/InitialsAvatar'
 
 // Pending users list — fetched from the admin users endpoint
 // This component accepts its data via props so it can be used from a server component
@@ -57,7 +57,7 @@ export function PendingUsersList({ users, isLoading, onApprove, onReject }: Pend
     <div className="divide-border divide-y">
       {users.map((user) => (
         <div key={user.id} className="flex items-center gap-3 py-3">
-          <MemberAvatar fullName={user.label} gender="unknown" size="md" />
+          <InitialsAvatar name={user.label} size={40} />
           <div className="min-w-0 flex-1">
             <p className="text-foreground truncate text-sm font-medium">{user.label}</p>
             {user.role && <p className="text-muted-foreground truncate text-xs">{user.role}</p>}
