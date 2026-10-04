@@ -226,6 +226,7 @@ Branches are **hard-deleted** (no soft-delete flag) — see [ADR-006](../decisio
 | File size limit | ≤ 50 MB | `file_too_large` |
 | Avatar needs a person | `set_avatar()` requires `person_id` | `document_not_linked_to_person` |
 | Only photos as avatar | `document_type == "photo"` | `only_photo_can_be_avatar` |
+| Only an image as avatar | declared `mime_type` in `AVATAR_MIME_TYPES` (jpeg, png, webp, heic); `None` refused. The "photo" label is the uploader's choice, and the avatar is world-readable (ADR-036, #176) | `document.avatar_mime_type_not_allowed` |
 
 Documents are **soft-deleted** (ADR-019): the row is flagged and the storage blob
 survives; an admin can `POST /documents/{id}/restore` until the daily purge job

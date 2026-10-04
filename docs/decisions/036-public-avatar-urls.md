@@ -186,6 +186,18 @@ the thing to re-read before extending the same pattern to any other image.
 3. **No moderation.** Any photo an editor can upload can be published. The existing MIME
    and size checks are the only filter.
 
+   > **Amended 2026-10-04 by #176.** The MIME row in the operator table above ("Only photos
+   > are ever published here") was not true when this ADR was accepted. `Document.set_avatar`
+   > checked only `document_type == "photo"`, a label the uploader chooses, while upload admits
+   > `application/pdf`, audio and video. So a PDF labelled "photo" could be published, and no
+   > bucket list stopped it: neither `supabase/config.toml` nor the hosted bucket carried
+   > `allowed_mime_types`. Since #176, `Document.set_avatar` refuses any declared `mime_type`
+   > outside `AVATAR_MIME_TYPES` (the four image types in that row), including none, with
+   > `422 document.avatar_mime_type_not_allowed`. `config.toml` declares the same list on the
+   > bucket as a second wall. Both read the type the client **declared**; neither reads the
+   > bytes. That remains out of scope, so the "existing MIME check" this gap names is a check
+   > on a declaration.
+
 ## Related
 
 - [ADR-019](019-document-soft-delete-purge.md) — soft delete + retention purge; the

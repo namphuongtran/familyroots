@@ -105,7 +105,10 @@ whitelist and from the `CreatePerson` command.
 Sequence (`DocumentCommandHandler.set_avatar`):
 
 1. Load the document clan-scoped; `Document.set_avatar()` validates it is a `photo`
-   linked to a person.
+   linked to a person, **and that its declared `mime_type` is one of
+   `AVATAR_MIME_TYPES`** (`image/jpeg`, `image/png`, `image/webp`, `image/heic`), else
+   `422 document.avatar_mime_type_not_allowed`. A missing `mime_type` is refused too.
+   The "photo" label is the uploader's choice and decides nothing on its own (#176).
 2. **Clan backstop**: the document's `clan_id` and its storage key prefix must both
    match the acting clan, else `422 document.avatar_source_outside_clan`. A public
    bucket is the last place to discover an isolation mistake.
@@ -133,9 +136,17 @@ environment. Until it does, every set-avatar call returns
 declares it, and `supabase seed buckets --linked` creates it on a hosted project. The
 hosted project has had it since 2026-10-04 ([ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md)).
 
-**The MIME row below is prescribed but not enforced** (#176). Neither `config.toml` nor
-the hosted bucket carries `allowed_mime_types`, and `Document.set_avatar` checks only
-`document_type == "photo"`, a label the uploader chooses.
+**The MIME row below is enforced twice since #176, and only one of the two is the rule.**
+The rule is `Document.set_avatar` (step 1 above): nothing outside the four image types is
+ever copied. The second wall is the bucket's own `allowed_mime_types`, declared in
+`supabase/config.toml`. It reads the **declared** content type, not the bytes: measured on
+the local stack 2026-10-04, a `.txt` upload was refused with `415 InvalidMimeType`, a
+`.png` was accepted, and the same `.txt` sent with `--content-type image/png` was
+**accepted**. So the bucket catches a backend that forgets the rule, not a client that
+lies about its file. Sniffing bytes is out of scope. The hosted bucket gets the list from
+`supabase seed buckets --linked`, which updates an existing bucket in place; see
+[ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md) for whether that has
+been run.
 
 | Setting | Value |
 |---|---|

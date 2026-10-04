@@ -120,6 +120,7 @@ Errors:
 | 404 | `person_not_found` | The linked person is not a live member of the acting clan |
 | 422 | `document_not_linked_to_person` | The document has no `person_id` |
 | 422 | `only_photo_can_be_avatar` | `document_type != "photo"` |
+| 422 | `document.avatar_mime_type_not_allowed` | The document's declared `mime_type` is not `image/jpeg`, `image/png`, `image/webp` or `image/heic`, **including no `mime_type` at all**. A "photo" label does not make a PDF an image (#176). `detail`: `mime_type` (the declared value or `null`), `allowed` (list) |
 | 422 | `document.avatar_source_outside_clan` | Clan backstop: the document's storage key is not under the acting clan's prefix |
 | 422 | `person.avatar_url_not_permanent` | The publish returned a non-permanent URL (a signed/expiring one). Server-side invariant; should never reach a client |
 | 503 | `storage_bucket_not_configured` | The public avatars bucket is missing, unreachable, or not public-read — an operator action, see [storage.md](../architecture/storage.md) |
@@ -146,3 +147,10 @@ longer mints the 30-day presigned URL it used to compute and discard.
   now return 503 where it previously always succeeded on the DB write. Existing
   clients that only read `message`/`document_id` are unaffected apart from the new
   failure mode (ADR-036).
+- `PATCH /{id}/set-avatar` refuses a "photo" whose declared `mime_type` is not one of
+  the four image types with `422 document.avatar_mime_type_not_allowed` (#176). Before
+  that, a PDF, audio or video file labelled "photo" was published into the
+  world-readable avatars bucket. This is a new failure mode, not a shape change. On
+  2026-10-04 no web or mobile code called this endpoint (only the generated
+  `web/src/generated/api-types.ts` names it). Upload is unchanged: a PDF can still be
+  uploaded as a "photo", it just cannot become an avatar.

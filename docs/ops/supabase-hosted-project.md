@@ -51,7 +51,7 @@ supabase db query --linked "select id, public, file_size_limit, allowed_mime_typ
 
 | id | public | file_size_limit | allowed_mime_types |
 |---|---|---|---|
-| `family-roots-avatars` | `true` | 52428800 | `null`, see #176 |
+| `family-roots-avatars` | `true` | 52428800 | `null` on that day; #176 adds the list, see § 2a |
 | `family-roots-files` | `false` | 52428800 | `null` |
 
 **How it was verified: by outcome, with a control.** The same file went into both buckets and was
@@ -74,6 +74,43 @@ the removal, `storage.objects` held 0 rows.
 
 **Not created:** the private `backups` bucket from the go-live checklist in
 [backup-restore.md](backup-restore.md). It is not in `config.toml`, so the seed does not make it.
+
+### 2a. The avatars bucket's MIME list (#176): owner step, NOT yet run on hosted
+
+`supabase/config.toml` now declares
+`allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "image/heic"]` on
+`family-roots-avatars`. It is a second wall. The rule is `Document.set_avatar`, which refuses
+any other declared type before a byte is copied
+([storage.md](../architecture/storage.md), set-avatar step 1). The hosted bucket only gets the
+list when someone seeds it, **after the #176 pull request merges**:
+
+```bash
+supabase seed buckets --linked
+#   expect "buckets_updated" to name family-roots-avatars (the seed updates an existing bucket)
+supabase db query --linked "select id, allowed_mime_types from storage.buckets order by id;"
+#   expect family-roots-avatars | {image/jpeg,image/png,image/webp,image/heic}
+#   expect family-roots-files   | null   (unchanged; that bucket has no list)
+
+printf 'familyroots avatar mime probe\n' > probe.txt     # and any real 1x1 PNG as probe.png
+supabase storage cp probe.txt ss:///family-roots-avatars/probe.txt --linked --experimental
+#   expect REFUSED: 415 InvalidMimeType, "mime type text/plain; charset=utf-8 is not supported"
+supabase storage cp probe.png ss:///family-roots-avatars/probe.png --linked --experimental
+#   expect accepted          (control: the bucket still takes an image)
+supabase storage rm ss:///family-roots-avatars/probe.png --linked --experimental --yes
+supabase db query --linked "select count(*) from storage.objects where bucket_id = 'family-roots-avatars';"
+#   expect 0
+```
+
+**Why the expectations above are not guesses.** The same sequence ran on the **local** stack on
+2026-10-04 with CLI 2.119.0. Before the seed, a `.txt` into the avatars bucket was accepted.
+`supabase seed buckets --local` reported `"buckets_updated":["family-roots-files","family-roots-avatars"]`.
+After it, the `.txt` was refused with `415 InvalidMimeType` and the `.png` was accepted. The
+probes were removed and `storage.objects` held 0 rows for the bucket.
+
+**What the bucket does not check.** In the same local run, the `.txt` sent with
+`--content-type image/png` was accepted. The bucket reads the declared type, not the bytes.
+
+When the hosted run is done, replace this section's heading with the date and the readings.
 
 ---
 

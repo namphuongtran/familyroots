@@ -156,6 +156,7 @@
   "error.person.avatar_url_invalid": "头像地址无效",
   "error.person.avatar_url_not_permanent": "头像必须使用永久公开地址",
   "error.document.avatar_source_outside_clan": "该文件不属于当前宗族",
+  "error.document.avatar_mime_type_not_allowed": "仅图片文件可设为头像",
   "error.invitation.already_member": "该用户已是宗族成员",
   "error.invitation.email_mismatch": "该邀请发给了其他邮箱",
   "error.invitation.expired": "该邀请已过期",

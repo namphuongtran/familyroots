@@ -238,6 +238,7 @@ See also **Optimistic concurrency** above: `PATCH /relationships/marriages/{id}`
 | `file_too_large` | 400 | Upload exceeds the size limit | `max_bytes` | Show size limit |
 | `document_not_linked_to_person` | 422 | Setting a document as avatar when it has no `person_id` | — | Explain requirement |
 | `only_photo_can_be_avatar` | 422 | Setting a non-photo document as avatar | — | Explain requirement |
+| `document.avatar_mime_type_not_allowed` | 422 | Setting as avatar a "photo" whose declared `mime_type` is not `image/jpeg`, `image/png`, `image/webp` or `image/heic`, or is absent. The avatars bucket is world-readable, so the label alone does not decide (#176) | `mime_type` (declared value or `null`), `allowed` (list) | Explain that only an image file can be an avatar |
 | `document.avatar_source_outside_clan` | 422 | Clan backstop on set-avatar: the document's storage key is not under the acting clan's prefix (ADR-036) | `document_id` | Should be unreachable — report it |
 | `person.avatar_url_invalid` | 422 | A published avatar URL was not an absolute http(s) URL within 500 chars (server-side invariant, ADR-036) | `max_length` | Should be unreachable — report it |
 | `person.avatar_url_not_permanent` | 422 | A published avatar URL carried a query string or fragment, i.e. was presigned/expiring (ADR-036) | — | Should be unreachable — report it |
