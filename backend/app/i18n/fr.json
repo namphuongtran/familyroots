@@ -152,7 +152,7 @@
   "error.storage_unavailable": "Stockage temporairement indisponible",
   "error.database_unavailable": "Le service est temporairement indisponible, veuillez réessayer sous peu",
   "error.storage_not_found": "Fichier introuvable",
-  "error.storage_bucket_not_configured": "Le bucket public des avatars n'est pas configuré",
+  "error.storage_bucket_not_configured": "Un bucket de stockage n'est pas configuré sur le serveur",
   "error.person.avatar_url_invalid": "L'URL de l'avatar n'est pas valide",
   "error.person.avatar_url_not_permanent": "Un avatar doit utiliser une URL publique permanente",
   "error.document.avatar_source_outside_clan": "Ce fichier n'appartient pas au clan actuel",

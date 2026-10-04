@@ -244,7 +244,7 @@ See also **Optimistic concurrency** above: `PATCH /relationships/marriages/{id}`
 | `person.avatar_url_not_permanent` | 422 | A published avatar URL carried a query string or fragment, i.e. was presigned/expiring (ADR-036) | — | Should be unreachable — report it |
 | `storage_not_found` | 404 | Referenced storage object missing from the storage backend | — | Treat as missing file |
 | `storage_unavailable` | 503 | Storage backend outage/misconfiguration | — | Retry-later banner |
-| `storage_bucket_not_configured` | 503 | The public avatars bucket is missing, unreachable, or not public-read — an operator action, not a transient outage (ADR-036) | — | "Avatars unavailable in this environment"; a retry will not help |
+| `storage_bucket_not_configured` | 503 | A storage bucket is missing or unreachable — the private documents bucket on document upload, read, restore, set-avatar or the JSON clan export (#177), or the public avatars bucket, which must also be public-read (ADR-036). An operator action, not a transient outage | — | "Files unavailable in this environment"; a retry will not help |
 
 Note: the three upload-validation codes are emitted with **400** (domain
 `ValidationError` falls through the domain→HTTP mapper's default), unlike other

@@ -107,6 +107,15 @@ transient outage. Nothing is written: no `is_avatar` flag, no URL. Uploading int
 private bucket would "succeed" and leave a person pointing at a URL that 400s forever,
 which is the failure mode this check exists to prevent.
 
+> **Amended 2026-10-04 by #177.** `storage_bucket_not_configured` is no longer the public
+> bucket's code alone. The adapter's private-bucket calls (`upload`, `delete`,
+> `get_presigned_url`, and the `download` inside `publish_public`) read Supabase's "Bucket
+> not found" as a missing **object**: a 404 `storage_not_found` to the caller, and a
+> `delete` that returned success, so the retention purge committed row purges and left the
+> blobs behind. Since #177 every call on either bucket classifies through `_classify_bucket`,
+> so a missing private bucket is the same 503 and `delete` raises on it. The routes that
+> answered 404 for it now answer 503; see [rest-documents-api.md](../contracts/rest-documents-api.md).
+
 This also changes the ordering guarantee: set-avatar used to be a pure-DB write that
 tolerated a storage outage by returning `presigned_url: null`. It cannot be any more —
 it publishes a blob, so a storage failure is now a truthful 503 and the avatar is

@@ -1,8 +1,8 @@
 # File Storage
 
-How document/photo blobs are stored in Supabase Storage: one shared bucket,
-path-based clan isolation, presigned reads, and a soft-delete → retention →
-purge lifecycle.
+How document/photo blobs are stored in Supabase Storage: two buckets (a private one
+for documents, a public one for avatars), path-based clan isolation, presigned reads,
+and a soft-delete → retention → purge lifecycle.
 
 ## Delete lifecycle (ADR-019)
 
@@ -212,7 +212,16 @@ distinct code because a missing bucket is an infrastructure gap an operator must
 not a transient outage to retry (`storage_unavailable`) and not the caller's missing
 object (`storage_not_found`). Supabase reports a missing bucket as a 400/404 saying
 "Bucket not found", which the generic classifier would otherwise read as a missing
-*object*; `_classify_bucket` catches that first.
+*object*; `_classify_bucket` catches that first. **Every** call on a bucket goes
+through it — `upload`, `delete`, `get_presigned_url` and the `download` inside
+`publish_public` on the private `SUPABASE_STORAGE_BUCKET`, as well as the avatars
+bucket (#177). Until #177 only the avatars bucket did, and the cost on the private
+one was not just a wrong 404: `delete` treats a missing object as success, so with a
+wrong bucket name the retention purge committed every row purge and left the blobs
+in the real bucket for ever. A missing bucket now raises from `delete`, and the purge
+keeps the row. Pinned by `test_missing_bucket_keeps_the_row` in
+`backend/tests/integration/test_document_purge_job.py`, which drives the real
+adapter with only the SDK client faked.
 
 The blocking `storage3` SDK is offloaded with `asyncio.to_thread` so it never freezes
 the event loop.

@@ -48,6 +48,30 @@ Upload expectations:
 - person_id, description, taken_date, taken_place optional
 - supports approved media and document MIME types
 
+### Storage errors on the routes that mint a presigned URL
+
+`POST /` uploads to the private bucket (`SUPABASE_STORAGE_BUCKET`) and then mints a
+presigned URL. `GET /{id}` and `POST /{id}/restore` only mint the URL. Each can answer:
+
+| Status | Code | When |
+|---|---|---|
+| 404 | `storage_not_found` | The document's object is missing from the bucket |
+| 503 | `storage_bucket_not_configured` | The bucket itself is missing or unreachable with the server's key — an operator action, not the caller's fault (#177) |
+| 503 | `storage_unavailable` | Provider outage, transport failure, or a rejected key |
+
+**A 503 does not always mean nothing happened.** `POST /` and `POST /{id}/restore`
+commit their row **before** they mint the URL. So a 503 from the URL step arrives
+after the write: the document exists, or is restored, but the response carries no
+URL. Do not retry those two blindly. Re-read with `GET /` or `GET /{id}` first, or a
+retried upload makes a second document and a retried restore answers `404
+document_not_found`. A missing bucket fails the upload itself, before any row is
+written, so `storage_bucket_not_configured` on `POST /` means nothing was saved; on
+restore it means the restore went through. `GET /{id}` writes nothing and is safe to
+retry once the cause is fixed.
+
+`GET /` (list) mints no URL and touches no blob. Set-avatar's own storage errors are
+in its section below, and the JSON export's in [rest-exports-api.md](rest-exports-api.md).
+
 ### Delete is soft, with a restore window (ADR-019)
 
 `DELETE /{id}` (admin) no longer removes the row or the blob. It calls the
@@ -79,6 +103,12 @@ returns 404 like any other missing document — there is no recovery once the
 purge has run for that row. See [ADR-019](../decisions/019-document-soft-delete-purge.md)
 for the full claim-row → delete-blob → commit ordering and crash-safety
 analysis.
+
+A missing bucket is **not** "blob already gone": if `SUPABASE_STORAGE_BUCKET`
+names a bucket that does not exist, the purge removes nothing and every eligible
+row survives to the next run (#177). Before that fix the job read Supabase's
+"Bucket not found" as a missing object and purged the rows, leaving their blobs
+in the real bucket for ever.
 
 Avatar interplay: soft-deleting a document currently set as a person's avatar
 does not clear `is_avatar`, and since ADR-036 it does not affect the person's
@@ -123,7 +153,7 @@ Errors:
 | 422 | `document.avatar_mime_type_not_allowed` | The document's declared `mime_type` is not `image/jpeg`, `image/png`, `image/webp` or `image/heic`, **including no `mime_type` at all**. A "photo" label does not make a PDF an image (#176). `detail`: `mime_type` (the declared value or `null`), `allowed` (list) |
 | 422 | `document.avatar_source_outside_clan` | Clan backstop: the document's storage key is not under the acting clan's prefix |
 | 422 | `person.avatar_url_not_permanent` | The publish returned a non-permanent URL (a signed/expiring one). Server-side invariant; should never reach a client |
-| 503 | `storage_bucket_not_configured` | The public avatars bucket is missing, unreachable, or not public-read — an operator action, see [storage.md](../architecture/storage.md) |
+| 503 | `storage_bucket_not_configured` | The public avatars bucket is missing, unreachable, or not public-read; or the private documents bucket the photo is copied from is missing (#177). An operator action, see [storage.md](../architecture/storage.md) |
 | 503 | `storage_unavailable` | Provider outage during the copy |
 
 **Behaviour change:** set-avatar is no longer a pure-DB write. It previously committed
@@ -154,3 +184,8 @@ longer mints the 30-day presigned URL it used to compute and discard.
   2026-10-04 no web or mobile code called this endpoint (only the generated
   `web/src/generated/api-types.ts` names it). Upload is unchanged: a PDF can still be
   uploaded as a "photo", it just cannot become an avatar.
+- A missing **private** bucket answers `503 storage_bucket_not_configured` on `POST /`,
+  `GET /{id}`, `POST /{id}/restore` and set-avatar (#177). It used to answer
+  `404 storage_not_found`, which told the client its document was gone. Same envelope,
+  a different code and status for a server misconfiguration only; a genuinely missing
+  object is still `404 storage_not_found`.

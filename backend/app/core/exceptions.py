@@ -170,10 +170,11 @@ async def storage_bucket_not_configured_handler(request: Request, exc: Exception
     """The target bucket is missing / not public — 503 with its own code (ADR-036).
 
     Separate from ``storage_unavailable`` so an operator reading the log or the client
-    reading the envelope can tell "the provider is down, retry" apart from "the public
-    avatars bucket was never created, go create it". The alternative — letting a
-    missing bucket 500, or letting the write "succeed" with an unresolvable URL —
-    is exactly what this code exists to prevent."""
+    reading the envelope can tell "the provider is down, retry" apart from "a bucket
+    was never created, go create it" — the public avatars bucket or, since #177, the
+    private documents bucket. The alternative — letting a missing bucket 500 or 404,
+    or letting the write "succeed" with an unresolvable URL — is exactly what this
+    code exists to prevent."""
     from app.services.translator import t
 
     logger.error(
