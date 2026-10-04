@@ -1,4 +1,4 @@
-import { ClanSuspendedScreen } from '@/components/auth/ClanSuspendedScreen'
+import { ClanSuspendedScreen } from '@/features/auth'
 
 export default function ClanSuspendedPage() {
   return <ClanSuspendedScreen />

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { AbstractIntlMessages } from 'next-intl'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useAuthActions } from '@/features/auth'
 import { renderWithProviders } from '@/shared/testing/render'
 import { BackofficeSidebar } from './BackofficeSidebar'
 import enMessages from '../../../messages/en.json'
@@ -26,7 +26,7 @@ import viMessages from '../../../messages/vi.json'
  *       Sign out
  */
 
-vi.mock('@/lib/hooks/useAuth', () => ({ useAuth: vi.fn() }))
+vi.mock('@/features/auth', () => ({ useAuthActions: vi.fn() }))
 vi.mock('next/navigation', () => ({ usePathname: () => '/vi/backoffice/dashboard' }))
 vi.mock('next/link', () => ({
   // `onClick` passes through, because the drawer closes on it. The default is prevented after
@@ -52,10 +52,12 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-const mockUseAuth = vi.mocked(useAuth)
+const mockUseAuthActions = vi.mocked(useAuthActions)
 
 function renderSidebar(locale: string, messages: AbstractIntlMessages) {
-  mockUseAuth.mockReturnValue({ signOut: vi.fn() } as unknown as ReturnType<typeof useAuth>)
+  mockUseAuthActions.mockReturnValue({ signOut: vi.fn() } as unknown as ReturnType<
+    typeof useAuthActions
+  >)
   renderWithProviders(<BackofficeSidebar locale={locale} />, { locale, messages })
 }
 

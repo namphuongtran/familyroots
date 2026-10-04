@@ -19,8 +19,8 @@ import messages from '../../../../../messages/vi.json'
  * was found associated to that label.", and the enumeration reported
  * `Expected element to have accessible name:` for each of the two inputs.
  */
-vi.mock('@/lib/hooks/useAuth', () => ({
-  useAuthActions: () => ({ signIn: vi.fn(), signInWithGoogle: vi.fn() }),
+vi.mock('@/features/auth/hooks/use-auth-actions', () => ({
+  useAuthActions: () => ({ signInWithEmail: vi.fn(), signInWithGoogle: vi.fn() }),
 }))
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (

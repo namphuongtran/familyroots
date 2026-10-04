@@ -15,7 +15,7 @@ import {
   Menu,
   X,
 } from 'lucide-react'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useAuthActions } from '@/features/auth'
 import { cn } from '@/lib/utils/cn'
 
 /** The menu and close buttons: icon-only, so each carries an `aria-label`. T-03's 44×44 px at
@@ -71,10 +71,10 @@ function Brand() {
  * The rail's body: the four links and sign-out, written once. The rail at `lg` and up and the
  * drawer below it both render this, so the two cannot drift apart.
  *
- * It takes `onSignOut` rather than calling `useAuth()` itself. Every `useAuth()` consumer
- * hydrates the session on mount, so a body that called it would add a hydration each time the
- * drawer opened, and two live consumers is the shape `web/CLAUDE.md` records as the `(dashboard)`
- * render loop. `BackofficeSidebar` calls it once for both.
+ * It takes `onSignOut` rather than calling `useAuthActions()` itself, so the rail and the drawer
+ * share one sign-out. Before #183 this mattered more: every legacy `useAuth()` consumer hydrated
+ * the session on mount, so a body that called it added a hydration each time the drawer opened.
+ * `useAuthActions` reads no session, so that cost is gone, but one call for both still holds.
  */
 function RailBody({
   locale,
@@ -164,7 +164,7 @@ function RailBody({
 export function BackofficeSidebar({ locale }: { locale: string }) {
   const t = useTranslations('Backoffice')
   const tCommon = useTranslations('common')
-  const { signOut } = useAuth()
+  const { signOut } = useAuthActions()
   const [open, setOpen] = useState(false)
   const onSignOut = () => void signOut()
 

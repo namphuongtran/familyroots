@@ -4,7 +4,7 @@ import { useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import { LogOut, User, ChevronDown } from 'lucide-react'
 import { LocaleSwitcher } from './LocaleSwitcher'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useAuthActions, useSession } from '@/features/auth'
 import { cn } from '@/lib/utils/cn'
 import { useState } from 'react'
 
@@ -14,8 +14,13 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const t = useTranslations()
-  const { user, currentClanId, clanMemberships, needsClanSelection, signOut, selectClan } =
-    useAuth()
+  // The same cache entry the layout reads: this adds a consumer, not a request.
+  const { session, access } = useSession()
+  const { signOut, selectClan } = useAuthActions()
+  const profile = session?.profile
+  const clanMemberships = session?.memberships ?? []
+  const currentClanId = access?.kind === 'ready' ? access.activeClan.clanId : null
+  const needsClanSelection = access?.kind === 'needs-clan-selection'
   const [menuOpen, setMenuOpen] = useState(false)
   const [isSwitching, startTransition] = useTransition()
 
@@ -45,8 +50,8 @@ export function Header({ title }: HeaderProps) {
             >
               {needsClanSelection && <option value="">Select clan</option>}
               {clanMemberships.map((membership) => (
-                <option key={membership.clan_id} value={membership.clan_id}>
-                  {membership.clan_name}
+                <option key={membership.clanId} value={membership.clanId}>
+                  {membership.clanName}
                 </option>
               ))}
             </select>
@@ -62,7 +67,7 @@ export function Header({ title }: HeaderProps) {
             className="hover:bg-cream-100 text-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm"
           >
             <User className="h-4 w-4" />
-            <span className="hidden max-w-[120px] truncate sm:block">{user?.full_name}</span>
+            <span className="hidden max-w-[120px] truncate sm:block">{profile?.fullName}</span>
             <ChevronDown className="h-3 w-3 opacity-60" />
           </button>
 
@@ -77,8 +82,10 @@ export function Header({ title }: HeaderProps) {
                 )}
               >
                 <div className="border-cream-100 border-b px-3 py-2">
-                  <p className="text-foreground truncate text-xs font-medium">{user?.full_name}</p>
-                  <p className="text-muted-foreground truncate text-xs">{user?.email}</p>
+                  <p className="text-foreground truncate text-xs font-medium">
+                    {profile?.fullName}
+                  </p>
+                  <p className="text-muted-foreground truncate text-xs">{profile?.email}</p>
                 </div>
                 {clanMemberships.length > 1 && (
                   <div className="border-cream-100 border-b px-3 py-2">
@@ -102,8 +109,8 @@ export function Header({ title }: HeaderProps) {
                       className="border-input bg-card text-foreground w-full rounded-md border px-2 py-1 text-sm"
                     >
                       {clanMemberships.map((membership) => (
-                        <option key={membership.clan_id} value={membership.clan_id}>
-                          {membership.clan_name}
+                        <option key={membership.clanId} value={membership.clanId}>
+                          {membership.clanName}
                         </option>
                       ))}
                     </select>

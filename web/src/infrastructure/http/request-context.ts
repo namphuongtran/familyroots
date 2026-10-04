@@ -1,36 +1,25 @@
 import type { RequestContext } from '@/domain/shared/types'
 import { readCurrentClanId } from '@/shared/http/context.client'
-import { useAuthStore } from '@/store/auth.store'
-
-const SUPPORTED_LOCALES = new Set(['vi', 'en', 'zh', 'fr'])
-
-function normalizeLocale(raw: string | null | undefined): RequestContext['locale'] {
-  if (raw && SUPPORTED_LOCALES.has(raw)) {
-    return raw as RequestContext['locale']
-  }
-  return 'vi'
-}
+import { localeFromPathname } from '@/shared/http/request-context'
 
 /**
  * Centralized request context retrieval so adapters/interceptors stay consistent.
  *
- * The three-way read this used to do — `useAuthStore.currentClanId`, then
- * `user.clan_id`, then `localStorage.current_clan_id` — is gone : the
- * store no longer holds a clan id at all, and nothing here reads
- * `localStorage.current_clan_id`. The `current_clan_id` cookie is the
- * one source now, read through `readCurrentClanId`; `user.clan_id` stays as a
- * fallback for the moment before the cookie is written on first sync.
+ * Two reads, one per fact, and both are ones the server can make too. The clan is the
+ * `current_clan_id` cookie, through `readCurrentClanId`. The locale is the URL's first segment,
+ * as `getClientRequestContext` reads it, because `localePrefix` is `'always'`.
+ *
+ * #183 removed the last two fallbacks. The zustand store's `user.clan_id` went with the store,
+ * and `localStorage['preferred_locale']` went because nothing writes it any more: the legacy
+ * `useAuth` was its only writer.
  */
 export function getRequestContext(): RequestContext {
   if (typeof window === 'undefined') {
     return { locale: 'vi' }
   }
 
-  const locale = normalizeLocale(localStorage.getItem('preferred_locale'))
-  const currentClanId = readCurrentClanId() ?? useAuthStore.getState().user?.clan_id ?? undefined
-
   return {
-    locale,
-    currentClanId,
+    locale: localeFromPathname(window.location.pathname),
+    currentClanId: readCurrentClanId() ?? undefined,
   }
 }

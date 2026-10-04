@@ -1,7 +1,9 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAuth, useAuthActions } from '@/lib/hooks/useAuth'
+import { useAuthActions } from '@/features/auth/hooks/use-auth-actions'
+import { useSession } from '@/features/auth/hooks/use-session'
+import { ApiError } from '@/shared/http/errors'
 import { renderWithProviders } from '@/shared/testing/render'
 import RegisterPage from './page'
 import messages from '../../../../../messages/vi.json'
@@ -21,36 +23,38 @@ import messages from '../../../../../messages/vi.json'
  * shows it, which is what this file is for. What it cannot reach is layout: jsdom has no
  * layout engine, so the 320px/200% reading is `e2e/register-clan-code.spec.ts`.
  *
- * The `clan_slug_taken` rejection is shaped like the real one, not invented:
- * `authProfileRepository.register` goes through the legacy axios client
- * (`src/lib/api/axios.ts:49` re-rejects the raw axios error), the backend raises
- * `ConflictError("auth.clan_slug_taken")` (`backend/app/application/auth/handlers.py:171`)
- * and `app_exception_handler` turns that into `{"error": {code, message, detail}}` with
- * `message` already localised (`backend/app/core/exceptions.py`). The vi wording below is
- * copied from `backend/app/i18n/vi.json:96`.
+ * The `clan_slug_taken` rejection is shaped like the real one, not invented: since #183,
+ * `register` goes through `apiFetch`, which rejects with the `ApiError` `parseErrorBody` builds
+ * from the envelope. The backend raises `ConflictError("auth.clan_slug_taken")`
+ * (`backend/app/application/auth/handlers.py:171`) and `app_exception_handler` turns that into
+ * `{"error": {code, message, detail}}` with `message` already localised
+ * (`backend/app/core/exceptions.py`). The vi wording below is copied from
+ * `backend/app/i18n/vi.json:96`. `features/auth/server/auth-repository.test.ts` sends the real
+ * 409 through the transport and reads the same `ApiError` back.
  */
 
 /** `?mode=oauth` is OAuth onboarding. Every other case reads the bare `/register` URL. */
 const searchParams = vi.hoisted(() => ({ current: new URLSearchParams() }))
 
-vi.mock('@/lib/hooks/useAuth', () => ({ useAuth: vi.fn(), useAuthActions: vi.fn() }))
+vi.mock('@/features/auth/hooks/use-session', () => ({ useSession: vi.fn() }))
+vi.mock('@/features/auth/hooks/use-auth-actions', () => ({ useAuthActions: vi.fn() }))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   useSearchParams: () => searchParams.current,
 }))
 
-const mockUseAuth = vi.mocked(useAuth)
+const mockUseSession = vi.mocked(useSession)
 const mockUseAuthActions = vi.mocked(useAuthActions)
 
 const BACKEND_VI_TAKEN_MESSAGE = 'Đường dẫn dòng họ đã được sử dụng'
 
 /**
- * The envelope shape the legacy axios client rejects with, for any backend error code.
- * The web register form generalised this out of `clanSlugTakenRejection` so the join half's 404 is built
- * the same way rather than by a second hand-written literal.
+ * What `apiFetch` rejects with for any backend error code. The web register form generalised
+ * this out of `clanSlugTakenRejection` so the join half's 404 is built the same way rather than
+ * by a second hand-written literal.
  */
 function backendRejection(status: number, code: string, message: string) {
-  return { response: { status, data: { error: { code, message, detail: {} } } } }
+  return new ApiError({ code, message, status })
 }
 
 function clanSlugTakenRejection() {
@@ -73,10 +77,10 @@ function clanNotFoundRejection() {
 
 function mockActions(signUp = vi.fn()) {
   mockUseAuthActions.mockReturnValue({
-    signUp,
+    register: signUp,
     signInWithGoogle: vi.fn(),
     completeOnboarding: vi.fn(),
-    signIn: vi.fn(),
+    signInWithEmail: vi.fn(),
     signOut: vi.fn(),
   } as unknown as ReturnType<typeof useAuthActions>)
 }
@@ -84,13 +88,11 @@ function mockActions(signUp = vi.fn()) {
 /** Join is the mode the screen opens in, so this renders and touches nothing else. */
 function renderJoinMode(signUp = vi.fn()) {
   searchParams.current = new URLSearchParams()
-  mockUseAuth.mockReturnValue({
-    user: null,
+  mockUseSession.mockReturnValue({
+    session: null,
+    access: { kind: 'signed-out' },
     isLoading: false,
-    isAuthenticated: false,
-    isPendingApproval: false,
-    needsOnboarding: false,
-  } as unknown as ReturnType<typeof useAuth>)
+  } as unknown as ReturnType<typeof useSession>)
   mockActions(signUp)
 
   const rendered = renderWithProviders(<RegisterPage />, { messages })
@@ -103,13 +105,11 @@ function renderJoinMode(signUp = vi.fn()) {
  */
 function renderOAuthOnboardingMode() {
   searchParams.current = new URLSearchParams('mode=oauth')
-  mockUseAuth.mockReturnValue({
-    user: { full_name: 'Trần Văn A', email: 'a@example.com' },
+  mockUseSession.mockReturnValue({
+    session: { profile: { fullName: 'Trần Văn A', email: 'a@example.com' }, memberships: [] },
+    access: { kind: 'needs-onboarding' },
     isLoading: false,
-    isAuthenticated: true,
-    isPendingApproval: false,
-    needsOnboarding: true,
-  } as unknown as ReturnType<typeof useAuth>)
+  } as unknown as ReturnType<typeof useSession>)
   mockActions()
 
   return renderWithProviders(<RegisterPage />, { messages })
