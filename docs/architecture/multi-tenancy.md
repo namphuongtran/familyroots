@@ -308,7 +308,8 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
     says nothing about whether every row has an owning clan (point 9). The column signal is
     used for the one job it is sufficient for instead: a **veto**. A table with a foreign key
     to `clans`, or a column whose name ends in `clan_id`, may never be named as not
-    clan-owned. That is what stops an exemption being added quietly to make a red gate go
+    clan-owned, and neither may a table that reaches one through a chain of NOT NULL foreign
+    keys. That is what stops an exemption being added quietly to make a red gate go
     green — the one edit that would otherwise defeat the whole check.
 
     **Four tables are named as not clan-owned, and each rests on a decision.** `clans` is
@@ -318,8 +319,14 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
     pair and keeps it outside layer 2, and states the risk that posture accepts. Its § 2 is the
     rule any exemption must pass: no row may reach a clan except through a nullable link, which
     means no `*clan_id` column, no foreign key to `clans`, and no chain of NOT NULL foreign keys
-    ending at a table that has either. The veto below enforces the first two clauses. The third
-    is issue #169.
+    ending at a table that has either. The veto enforces all three (issue #169). The chain is
+    read from `pg_constraint` and `pg_attribute.attnotnull`, at any depth. A MATCH FULL key
+    counts as binding when one of its columns is NOT NULL, because MATCH FULL refuses a row
+    that mixes NULL and non-NULL key values. The real list passes whether or not the chain
+    clause works, so two tests plant the shapes it exists for and run the gate's own body over
+    them: an `identity_claims`-shaped table and its grandchild, refused and then let through
+    once the link is nullable, and a MATCH FULL key, refused and then let through as MATCH
+    SIMPLE.
 
     The gate is `test_every_clan_owned_table_is_covered_by_exactly_one_of_the_four_postures`,
     and it fails on four shapes: a clan-owned table in no set, a set naming a table that is

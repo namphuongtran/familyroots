@@ -301,13 +301,20 @@ _GUC_MARKER = "app.clan_id"
 #
 # The signal is used for the one job it IS sufficient for: a VETO on the list below. A
 # table carrying a foreign key to `clans`, or a column whose name ends in `clan_id`, may
-# never be named as not-clan-owned. That is what stops an exemption being added quietly to
-# make this gate pass, and it is asserted by
-# `test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_global`.
+# never be named as not-clan-owned, and neither may a table that reaches one through a
+# chain of NOT NULL foreign keys, at any depth. That is ADR-059 § 2, all three clauses.
+# The veto is what stops an exemption being added quietly to make this gate pass, and it
+# is asserted by `test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_global`.
+# The chain clause is the one that would refuse `identity_claims`: it carries no signal of
+# its own, but its NOT NULL `person_id` ends at `persons`.
 #
 # Measured 2026-08-22 at migration `036_rls_user_clan_roles`: `public` holds 18 ordinary
 # tables, exactly 13 carry a clan signal, the four named below carry none, and
 # `identity_claims` is the one table with no signal that is still clan-owned.
+#
+# Re-measured 2026-10-04 at `039_drop_clan_settings`, after `clan_settings` was dropped:
+# 17 tables, 12 carry a clan signal, and `identity_claims -> persons` is the only NOT NULL
+# chain that reaches one from a table without. The four named below reach none.
 _NOT_CLAN_OWNED_TABLES: dict[str, str] = {
     "alembic_version": (
         "Alembic's own migration bookkeeping, created by the tool and not by this "
@@ -372,19 +379,10 @@ async def _tables_carrying_a_clan_signal(conn: AsyncConnection) -> set[str]:
 
     This set is never used to decide that a table IS clan-owned — see the comment above
     for the two tables that prove it cannot be. It is used only to refuse an entry in
-    ``_NOT_CLAN_OWNED_TABLES``.
+    ``_NOT_CLAN_OWNED_TABLES``, as the end of the chains ``_chains_to_a_clan_signal``
+    follows. A foreign key to ``clans`` counts whether or not it binds every row.
     """
-    by_fk = (
-        await conn.execute(
-            sa.text(
-                "SELECT DISTINCT child.relname FROM pg_constraint k "
-                "JOIN pg_class child ON child.oid = k.conrelid "
-                "JOIN pg_class parent ON parent.oid = k.confrelid "
-                "JOIN pg_namespace n ON n.oid = child.relnamespace "
-                "WHERE k.contype = 'f' AND n.nspname = 'public' AND parent.relname = 'clans'"
-            )
-        )
-    ).scalars()
+    by_fk = {child for child, parent, _binding in await _foreign_keys(conn) if parent == "clans"}
     columns = (
         (
             await conn.execute(
@@ -400,7 +398,124 @@ async def _tables_carrying_a_clan_signal(conn: AsyncConnection) -> set[str]:
     by_column = {
         str(row["table_name"]) for row in columns if str(row["column_name"]).endswith("clan_id")
     }
-    return {str(name) for name in by_fk.all()} | by_column
+    return by_fk | by_column
+
+
+async def _foreign_keys(conn: AsyncConnection) -> set[tuple[str, str, bool]]:
+    """Every foreign key in `public` as ``(child, parent, binding)``, read from the catalog.
+
+    ``binding`` says whether the schema lets a child row escape the link, which is what
+    ADR-059 § 2 calls a nullable link. It depends on the match type, read from
+    ``pg_constraint.confmatchtype`` and ``pg_attribute.attnotnull``:
+
+    * MATCH SIMPLE, the default and the only type a migration here has used, skips the
+      check for a row with a NULL in ANY key column. The key binds every row only when
+      ALL of its columns are NOT NULL. That is why ``user_profiles.person_id`` is a
+      nullable link;
+    * MATCH FULL refuses a row that mixes NULL and non-NULL key values, so ONE NOT NULL
+      column forces every column to be set. Measured 2026-10-04 on Postgres 18.6:
+      "MATCH FULL does not allow mixing of null and nonnull key values".
+
+    Never a written list, so a table a migration adds is followed the moment it exists.
+    """
+    rows = (
+        await conn.execute(
+            sa.text(
+                "SELECT child.relname AS child, parent.relname AS parent, "
+                "CASE WHEN k.confmatchtype = 'f' THEN bool_or(a.attnotnull) "
+                "ELSE bool_and(a.attnotnull) END AS binding "
+                "FROM pg_constraint k "
+                "JOIN pg_class child ON child.oid = k.conrelid "
+                "JOIN pg_class parent ON parent.oid = k.confrelid "
+                "JOIN pg_namespace n ON n.oid = child.relnamespace "
+                "JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = ANY (k.conkey) "
+                "WHERE k.contype = 'f' AND n.nspname = 'public' "
+                "GROUP BY k.oid, child.relname, parent.relname, k.confmatchtype"
+            )
+        )
+    ).all()
+    return {(str(row.child), str(row.parent), bool(row.binding)) for row in rows}
+
+
+async def _chains_to_a_clan_signal(conn: AsyncConnection) -> dict[str, tuple[str, ...]]:
+    """For every table that reaches a clan signal, the shortest chain that gets it there.
+
+    The chain starts at the table and ends at a table carrying a clan signal; a table that
+    carries one itself maps to a chain of one. Every step is a binding foreign key, followed
+    to any depth. A table absent from the result can reach a clan only through a nullable
+    link, or not at all.
+    """
+    signalled = await _tables_carrying_a_clan_signal(conn)
+    links = sorted(
+        (child, parent) for child, parent, binding in await _foreign_keys(conn) if binding
+    )
+    chains: dict[str, tuple[str, ...]] = {table: (table,) for table in signalled}
+    frontier = set(signalled)
+    while frontier:
+        reached, frontier = frontier, set()
+        for child, parent in links:
+            if parent in reached and child not in chains:
+                chains[child] = (child, *chains[parent])
+                frontier.add(child)
+    return chains
+
+
+async def _assert_the_exemption_list_agrees_with_the_schema(
+    conn: AsyncConnection, exempt: set[str]
+) -> None:
+    """The body of the exemption gate, taking the list as an argument so that
+    ``test_the_exemption_veto_refuses_a_table_whose_not_null_chain_reaches_a_clan`` can run
+    the gate's own reading over a table it plants. Every reading is taken on ``conn``, so
+    it sees DDL that ``conn`` has not committed."""
+    tables = await _public_base_tables(conn)
+    chains = await _chains_to_a_clan_signal(conn)
+    covered = {
+        str(name)
+        for name in (
+            await conn.execute(
+                sa.text(
+                    "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON "
+                    "n.oid = c.relnamespace WHERE n.nspname = 'public' AND "
+                    "c.relkind = 'r' AND c.relrowsecurity"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    }
+    policied = {
+        str(name)
+        for name in (
+            await conn.execute(
+                sa.text("SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'")
+            )
+        )
+        .scalars()
+        .all()
+    }
+
+    assert not exempt - tables, (
+        f"_NOT_CLAN_OWNED_TABLES names {sorted(exempt - tables)}, which is not a table in "
+        f"`public`. Delete the entry — a stale name silently shrinks the universe the "
+        f"coverage gate reads"
+    )
+
+    refused = sorted(" -> ".join(f"`{step}`" for step in chains[t]) for t in exempt & chains.keys())
+    assert not refused, (
+        f"{refused} is listed as NOT clan-owned, but the schema says it can reach a clan. "
+        f"The last table in each chain has a column ending in `clan_id` or a foreign key to "
+        f"`clans`, and every step before it is a foreign key no row can escape. ADR-059 § 2 "
+        f"is the rule: a table may be exempt only if no row can reach a clan except through "
+        f"a nullable link. Give it a policy and put it in one of the four posture sets — do "
+        f"not exempt it, and do not widen this assertion"
+    )
+
+    assert not exempt & (covered | policied), (
+        f"{sorted(exempt & (covered | policied))} is listed as NOT clan-owned, yet it has "
+        f"row-level security enabled or carries a policy. One of the two is wrong. If the "
+        f"table was brought inside layer 2, remove its entry here and add it to the "
+        f"posture set that matches what its policy DOES"
+    )
 
 
 async def test_rls_coverage_enabled_tables_have_policy_and_grants(engine: AsyncEngine) -> None:
@@ -479,67 +594,105 @@ async def test_the_not_clan_owned_list_names_only_tables_the_schema_agrees_are_g
 
     * a name that is not a real table is a stale entry. It would silently shrink the
       universe if the table were ever re-added under the same name;
-    * a name carrying a **clan signal** — a foreign key to ``clans``, or a column ending
-      in ``clan_id`` — may not be there at all. This is the assertion that makes an
+    * a name that can reach a clan may not be there at all. ADR-059 § 2 is the rule: no
+      column ending in ``clan_id``, no foreign key to ``clans``, and no chain of NOT NULL
+      foreign keys ending at a table that has either. This is the assertion that makes an
       exemption cost something: the two shapes the signal misses (``identity_claims``
       with no clan column, ``audit_logs`` with a nullable one) both argue that the signal
-      is too weak to INCLUDE a table, and neither weakens it as a refusal to EXCLUDE one;
+      is too weak to INCLUDE a table, and neither weakens it as a refusal to EXCLUDE one.
+      The chain clause is the one that would refuse ``identity_claims``. The real list
+      passes whether or not that clause works, so the two tests after this one plant the
+      shapes it exists for and run this gate's own body over them;
     * a name that already has RLS enabled or a policy is a contradiction. Somebody
       covered the table and left it classified as global, and the four posture sets below
       would go on ignoring it.
     """
     async with engine.connect() as conn:
-        tables = await _public_base_tables(conn)
-        signalled = await _tables_carrying_a_clan_signal(conn)
-        covered = {
-            str(name)
-            for name in (
-                await conn.execute(
-                    sa.text(
-                        "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON "
-                        "n.oid = c.relnamespace WHERE n.nspname = 'public' AND "
-                        "c.relkind = 'r' AND c.relrowsecurity"
-                    )
-                )
+        await _assert_the_exemption_list_agrees_with_the_schema(conn, set(_NOT_CLAN_OWNED_TABLES))
+
+
+async def test_the_exemption_veto_refuses_a_table_whose_not_null_chain_reaches_a_clan(
+    engine: AsyncEngine,
+) -> None:
+    """The negative control for the chain clause of ADR-059 § 2, kept in the suite.
+
+    It plants the shape of ``identity_claims``: ``veto_probe`` has a NOT NULL
+    ``person_id`` to ``persons`` and no clan column, and ``veto_probe_grandchild`` reaches
+    it through a second NOT NULL link. Both are added to the exemption list and the gate
+    must name both, with their chains. Then the probe's link is made nullable, the
+    ``user_profiles`` shape, and the same gate must pass. Two readings that differ, from one
+    change, are the control. The grandchild fails a veto that follows one hop only; the
+    second reading fails one that ignores nullability. The DDL is never committed.
+    """
+    exempt = set(_NOT_CLAN_OWNED_TABLES) | {"veto_probe", "veto_probe_grandchild"}
+    async with engine.connect() as conn:
+        await conn.execute(
+            sa.text(
+                "CREATE TABLE veto_probe ("
+                "id uuid PRIMARY KEY, person_id uuid NOT NULL REFERENCES persons (id))"
             )
-            .scalars()
-            .all()
-        }
-        policied = {
-            str(name)
-            for name in (
-                await conn.execute(
-                    sa.text(
-                        "SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'"
-                    )
-                )
+        )
+        await conn.execute(
+            sa.text(
+                "CREATE TABLE veto_probe_grandchild ("
+                "id uuid PRIMARY KEY, probe_id uuid NOT NULL REFERENCES veto_probe (id))"
             )
-            .scalars()
-            .all()
-        }
+        )
 
-    exempt = set(_NOT_CLAN_OWNED_TABLES)
+        with pytest.raises(AssertionError) as refusal:
+            await _assert_the_exemption_list_agrees_with_the_schema(conn, exempt)
+        assert "`veto_probe` -> `persons`" in str(refusal.value)
+        assert "`veto_probe_grandchild` -> `veto_probe` -> `persons`" in str(refusal.value)
 
-    assert not exempt - tables, (
-        f"_NOT_CLAN_OWNED_TABLES names {sorted(exempt - tables)}, which is not a table in "
-        f"`public`. Delete the entry — a stale name silently shrinks the universe the "
-        f"coverage gate reads"
-    )
+        await conn.execute(sa.text("ALTER TABLE veto_probe ALTER COLUMN person_id DROP NOT NULL"))
+        await _assert_the_exemption_list_agrees_with_the_schema(conn, exempt)
 
-    assert not exempt & signalled, (
-        f"{sorted(exempt & signalled)} is listed as NOT clan-owned, but the schema says "
-        f"otherwise: the table has a foreign key to `clans` or a column ending in "
-        f"`clan_id`. A table with an owning clan is clan-owned. Give it a policy and put "
-        f"it in one of the four posture sets — do not exempt it, and do not widen this "
-        f"assertion"
-    )
+        await conn.rollback()
 
-    assert not exempt & (covered | policied), (
-        f"{sorted(exempt & (covered | policied))} is listed as NOT clan-owned, yet it has "
-        f"row-level security enabled or carries a policy. One of the two is wrong. If the "
-        f"table was brought inside layer 2, remove its entry here and add it to the "
-        f"posture set that matches what its policy DOES"
-    )
+
+async def test_the_exemption_veto_follows_a_match_full_key_that_one_not_null_column_binds(
+    engine: AsyncEngine,
+) -> None:
+    """The same control for the one key shape where "all columns NOT NULL" is the wrong test.
+
+    ``veto_probe_entry`` references the clan-signalled ``veto_probe_ledger`` through a
+    two-column key, one column NOT NULL and one nullable. Under MATCH FULL no row can
+    escape that key, so the gate must refuse the exemption. Re-keyed as MATCH SIMPLE, a row
+    with a NULL ``ledger_key`` escapes it, and the same gate must pass. No migration here
+    uses MATCH FULL, so the real list cannot show whether this works. The DDL is never
+    committed.
+    """
+    exempt = set(_NOT_CLAN_OWNED_TABLES) | {"veto_probe_entry"}
+    async with engine.connect() as conn:
+        await conn.execute(
+            sa.text(
+                "CREATE TABLE veto_probe_ledger ("
+                "person_id uuid, ledger_key uuid, clan_id uuid, UNIQUE (person_id, ledger_key))"
+            )
+        )
+        await conn.execute(
+            sa.text(
+                "CREATE TABLE veto_probe_entry ("
+                "id uuid PRIMARY KEY, person_id uuid NOT NULL, ledger_key uuid, "
+                "CONSTRAINT veto_probe_entry_ledger FOREIGN KEY (person_id, ledger_key) "
+                "REFERENCES veto_probe_ledger (person_id, ledger_key) MATCH FULL)"
+            )
+        )
+
+        with pytest.raises(AssertionError) as refusal:
+            await _assert_the_exemption_list_agrees_with_the_schema(conn, exempt)
+        assert "`veto_probe_entry` -> `veto_probe_ledger`" in str(refusal.value)
+
+        await conn.execute(
+            sa.text(
+                "ALTER TABLE veto_probe_entry DROP CONSTRAINT veto_probe_entry_ledger, "
+                "ADD CONSTRAINT veto_probe_entry_ledger FOREIGN KEY (person_id, ledger_key) "
+                "REFERENCES veto_probe_ledger (person_id, ledger_key) MATCH SIMPLE"
+            )
+        )
+        await _assert_the_exemption_list_agrees_with_the_schema(conn, exempt)
+
+        await conn.rollback()
 
 
 async def test_every_clan_owned_table_is_covered_by_exactly_one_of_the_four_postures(
