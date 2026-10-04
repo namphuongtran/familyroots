@@ -69,9 +69,12 @@ Request/response expectations:
 - FCM token endpoints are used by mobile and any push-enabled clients.
 - `POST /forgot-password` is 200 always (non-enumerating); triggers a Supabase
   recovery email. Reset **completion is client-side**: the email link opens the
-  web/mobile app with a `token_hash`/`type=recovery`; the client calls the Supabase
-  SDK `verify_otp({type:'recovery', token_hash})` then `update_user({password})`.
-  The backend has no `reset-password` endpoint by design.
+  web page `/{locale}/reset-password` with a `token_hash`/`type=recovery`, and one
+  submit there calls the Supabase SDK `verify_otp({type:'recovery', token_hash})`
+  then `update_user({password})` (ADR-063; mobile users finish there too). The
+  backend has no `reset-password` endpoint by design. **Decided, not yet built**:
+  until #201 and #203 land, the hosted email still carries Supabase's default link
+  ([frontend-integration-guide.md](frontend-integration-guide.md) § 3.1).
 
 ### The join identifier: `clan_code` now, `clan_id` for one more release
 

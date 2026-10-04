@@ -70,7 +70,9 @@ never a JWT claim or env match. Bootstrap via `scripts/bootstrap_super_admin.py`
   200 with the same message whether or not the account exists (**non-enumerating**;
   register now matches this pattern too).
 - Password-reset **completion is client-side** (Supabase `verify_otp` + `update_user`);
-  the backend has no reset-password endpoint by design.
+  the backend has no reset-password endpoint by design. Both email links land as a
+  `token_hash` on a web page of ours, spent only by a user action (ADR-063, built by
+  #200 to #203).
 - Ops prerequisite: Supabase dashboard "Confirm email" ON + SMTP configured.
 
 ## Error semantics

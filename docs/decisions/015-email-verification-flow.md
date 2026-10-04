@@ -3,6 +3,10 @@
 ## Status
 Accepted (2026-07-11 — shipped, PR #66)
 
+2026-10-04: the `EMAIL_VERIFY_REDIRECT_URL` bullet is superseded by
+[ADR-063](063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md) § 4. The link's origin
+becomes the Supabase Site URL, and #202 deletes the setting.
+
 ## Context
 Registration must end with a verified email, but the backend creates identities via
 the Supabase **admin** API (to control clan setup atomically), which skips Supabase's
