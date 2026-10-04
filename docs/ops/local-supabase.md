@@ -28,6 +28,12 @@ once, joined by the JWT `sub` claim. **Getting those two halves in step is
 document. `make seed` is the one command; `make seed-verify` is what tells you which half is
 missing.
 
+**Merging the two databases reopens ADR-059.** `user_profiles` and `user_fcm_tokens` carry no
+row-level security by decision, because the application database is not exposed through the
+Supabase Data API. Move the application tables into the Supabase project and those two tables'
+grants become the only thing between the Data API and every user's email and push token. Read
+[ADR-059](../decisions/059-user-owned-tables-stay-outside-layer-2.md) § 5 before doing it.
+
 ---
 
 ## Start it, stop it

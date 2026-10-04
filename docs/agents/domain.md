@@ -17,7 +17,7 @@ This repo is single-context:
 
 ```
 /
-├── CONTEXT.md                         ← does not exist yet; created lazily
+├── CONTEXT.md                         ← the glossary, created 2026-10-04 by ADR-059
 ├── docs/
 │   ├── README.md                      ← the documentation index
 │   └── decisions/                     ← ADRs, numbered NNN-title.md
