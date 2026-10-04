@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import type { Membership } from '@/domain/session/session'
+import { cn } from '@/lib/utils/cn'
 import { ApiError } from '@/shared/http/errors'
 import { useAuthActions } from '../hooks/use-auth-actions'
 import { useSession } from '../hooks/use-session'
@@ -29,10 +30,10 @@ export function SelectClanScreen() {
   const t = useTranslations('auth')
   const locale = useLocale()
   const router = useRouter()
-  const { session, access } = useSession()
+  const { session, access, activeClan } = useSession()
   const { selectClan } = useAuthActions()
   const memberships = session?.memberships ?? NO_MEMBERSHIPS
-  const activeClanId = access?.kind === 'ready' ? access.activeClan.clanId : ''
+  const activeClanId = activeClan?.clanId ?? ''
   const [pickedClanId, setPickedClanId] = useState<string | null>(null)
   const selectedClanId = pickedClanId ?? activeClanId
   const [error, setError] = useState<string | null>(null)
@@ -96,11 +97,12 @@ export function SelectClanScreen() {
           {memberships.map((membership) => (
             <label
               key={membership.clanId}
-              className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-4 transition-colors ${
+              className={cn(
+                'flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-4 transition-colors',
                 selectedClanId === membership.clanId
                   ? 'border-primary bg-primary-container'
-                  : 'border-border hover:border-input'
-              }`}
+                  : 'border-border hover:border-input',
+              )}
             >
               <input
                 type="radio"

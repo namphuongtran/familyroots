@@ -85,6 +85,16 @@ function ThreeConsumers() {
 
 let fake: ReturnType<typeof fakeSupabaseClient>
 
+/**
+ * Lets a refetch an auth event might have started run to the end. A count read straight after
+ * `act` is read before such a refetch has even asked Supabase for the token, so it would read the
+ * same whether the event refetched or not. 200 ms is many times the whole round trip here:
+ * `getSession` on the fake, then MSW.
+ */
+function settle() {
+  return act(() => new Promise((resolve) => setTimeout(resolve, 200)))
+}
+
 beforeEach(() => {
   fake = fakeSupabaseClient({ accessToken: 'tok-1' })
   vi.mocked(createClientOrNull).mockReturnValue(fake.client as never)
@@ -169,6 +179,8 @@ describe("useSession: Supabase's auth events", () => {
     act(() => fake.emit('SIGNED_IN'))
 
     await waitFor(() => expect(count).toEqual({ me: 2, clans: 2 }))
+    await settle()
+    expect(count).toEqual({ me: 2, clans: 2 })
   })
 
   it('INITIAL_SESSION and TOKEN_REFRESHED change nothing and send nothing', async () => {
@@ -180,6 +192,7 @@ describe("useSession: Supabase's auth events", () => {
       fake.emit('INITIAL_SESSION')
       fake.emit('TOKEN_REFRESHED')
     })
+    await settle()
 
     expect(count).toEqual({ me: 1, clans: 1 })
   })

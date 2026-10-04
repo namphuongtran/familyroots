@@ -18,13 +18,7 @@ import { useLocale } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import { accessStateOf } from '@/domain/session/access-state'
 import type { Session } from '@/domain/session/session'
-import {
-  clearClanCookie,
-  getClientRequestContext,
-  readCurrentClanId,
-  writeClanCookie,
-} from '@/shared/http/context.client'
-import type { RequestContext } from '@/shared/http/request-context'
+import { clearClanCookie, readCurrentClanId, writeClanCookie } from '@/shared/http/context.client'
 import {
   signInWithOAuth,
   signInWithPassword,
@@ -40,8 +34,8 @@ import type {
   RegistrationReceived,
 } from '../model/session-dto'
 import * as repository from '../server/auth-repository'
-import { authKeys } from '../server/query-keys'
-import { sessionQueryOptions } from './use-session'
+import { authRequestContext } from './auth-request-context'
+import { clearSession, sessionQueryOptions } from './use-session'
 
 /**
  * Supabase's code for a password sign-in by an account whose email is not confirmed yet
@@ -49,11 +43,6 @@ import { sessionQueryOptions } from './use-session'
  * `VerifyEmailScreen` reachable from a real sign-in for the first time.
  */
 export const EMAIL_NOT_CONFIRMED_CODE = 'email_not_confirmed'
-
-/** The auth routes are not clan-scoped, so no `X-Current-Clan-Id` goes with them. */
-async function authRequestContext(): Promise<RequestContext> {
-  return { ...(await getClientRequestContext()), clanId: null }
-}
 
 export interface OnboardingInput extends OnboardInput {
   /** Saved to the profile first, when the person typed one. */
@@ -102,7 +91,7 @@ export function useAuthActions() {
   const signOut = useCallback(async (): Promise<void> => {
     await supabaseSignOut()
     clearClanCookie()
-    queryClient.setQueryData<Session | null>(authKeys.session(), null)
+    clearSession(queryClient)
     window.location.href = `/${locale}/login`
   }, [locale, queryClient])
 

@@ -40,12 +40,11 @@ export function Sidebar() {
   const t = useTranslations()
   const pathname = usePathname()
   const { sidebarOpen, toggleSidebar } = useUIStore()
-  const { session, access } = useSession()
+  const { session, activeClan } = useSession()
 
   // The active clan's role, and the platform role beside it. They are independent: a clan role
   // is never `super_admin` (`docs/architecture/rbac.md:29-35`), which is why the old reading of
   // `role === 'super_admin'` never showed the platform link to anyone.
-  const activeClan = access?.kind === 'ready' ? access.activeClan : null
   const isAdmin = activeClan?.role === 'admin'
   const isSuperAdmin = session?.profile.platformRole === 'super_admin'
 

@@ -34,6 +34,7 @@ function authWith({ selectClan }: { selectClan: ReturnType<typeof vi.fn> }) {
   vi.mocked(useSession).mockReturnValue({
     session: { profile: {} as never, memberships: [membership] },
     access: { kind: 'ready', activeClan: membership },
+    activeClan: membership,
     isLoading: false,
   } as unknown as ReturnType<typeof useSession>)
   vi.mocked(useAuthActions).mockReturnValue({ selectClan } as unknown as ReturnType<

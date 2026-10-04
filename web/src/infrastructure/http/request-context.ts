@@ -9,9 +9,10 @@ import { localeFromPathname } from '@/shared/http/request-context'
  * `current_clan_id` cookie, through `readCurrentClanId`. The locale is the URL's first segment,
  * as `getClientRequestContext` reads it, because `localePrefix` is `'always'`.
  *
- * #183 removed the last two fallbacks. The zustand store's `user.clan_id` went with the store,
- * and `localStorage['preferred_locale']` went because nothing writes it any more: the legacy
- * `useAuth` was its only writer.
+ * #183 removed the last two fallbacks. The zustand store's `user.clan_id` went with the store.
+ * The `localStorage['preferred_locale']` read went too, because a locale the URL does not show
+ * is not the one the page is in. `ui.store`'s `setLocale` still writes that key, and since #183
+ * nothing reads it. The legacy `useAuth` was its other writer.
  */
 export function getRequestContext(): RequestContext {
   if (typeof window === 'undefined') {

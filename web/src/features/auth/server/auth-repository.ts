@@ -52,7 +52,7 @@ export async function register(
   options: AuthApiCallOptions,
 ): Promise<RegistrationReceived> {
   const body = await api.register(input, options)
-  return unwrapData(body, (raw) => messageDataDtoSchema.parse(raw))
+  return unwrapData(body, (raw) => ({ message: messageDataDtoSchema.parse(raw).message }))
 }
 
 export async function onboard(

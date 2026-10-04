@@ -103,7 +103,7 @@ export function assertClanSwitchResponseDtoMatchesGenerated(
 }
 
 /** Mirrors `components["schemas"]["MessageData"]`: register, resend-verification, `PATCH /me`. */
-export const messageDataDtoSchema = z.object({ message: z.string() })
+export const messageDataDtoSchema = z.object({ message: z.string(), id: nullableString })
 
 export function assertMessageDataDtoMatchesGenerated(
   dto: z.infer<typeof messageDataDtoSchema>,
@@ -116,7 +116,7 @@ export function assertMessageDataDtoMatchesGenerated(
  * (ADR-021), so it carries no user, clan or approval state. The register screen shows it.
  */
 export interface RegistrationReceived {
-  message: string
+  readonly message: string
 }
 
 /** Mirrors `components["schemas"]["RegisterResponse"]`, `POST /auth/onboard`. */

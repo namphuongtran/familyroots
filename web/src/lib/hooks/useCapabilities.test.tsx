@@ -14,7 +14,8 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useCapabilities } from './useCapabilities'
-import { accessStateOf, useSession } from '@/features/auth'
+import { accessStateOf } from '@/domain/session/access-state'
+import { useSession } from '@/features/auth'
 import type { Membership, Session } from '@/features/auth'
 import { renderWithProviders } from '@/shared/testing/render'
 
@@ -49,9 +50,11 @@ function setSession(
     },
     memberships,
   }
+  const access = accessStateOf(session, options.cookieClanId ?? null)
   vi.mocked(useSession).mockReturnValue({
     session,
-    access: accessStateOf(session, options.cookieClanId ?? null),
+    access,
+    activeClan: access.kind === 'ready' ? access.activeClan : null,
     isLoading: false,
     isError: false,
     refetch: vi.fn(),

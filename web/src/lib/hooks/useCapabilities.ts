@@ -35,8 +35,7 @@ function asClanRole(role: string | undefined): ClanRole | undefined {
  * not mistake the wider grant for a bug.
  */
 export function useCapabilities() {
-  const { access } = useSession()
-  const activeRole = access?.kind === 'ready' ? access.activeClan.role : undefined
+  const activeRole = useSession().activeClan?.role
 
   return useMemo(() => {
     const role = asClanRole(activeRole)

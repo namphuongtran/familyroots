@@ -15,11 +15,11 @@ interface HeaderProps {
 export function Header({ title }: HeaderProps) {
   const t = useTranslations()
   // The same cache entry the layout reads: this adds a consumer, not a request.
-  const { session, access } = useSession()
+  const { session, access, activeClan } = useSession()
   const { signOut, selectClan } = useAuthActions()
   const profile = session?.profile
   const clanMemberships = session?.memberships ?? []
-  const currentClanId = access?.kind === 'ready' ? access.activeClan.clanId : null
+  const activeClanId = activeClan?.clanId ?? null
   const needsClanSelection = access?.kind === 'needs-clan-selection'
   const [menuOpen, setMenuOpen] = useState(false)
   const [isSwitching, startTransition] = useTransition()
@@ -33,11 +33,11 @@ export function Header({ title }: HeaderProps) {
           <label className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
             <span className="text-muted-foreground text-xs tracking-wide uppercase">Clan</span>
             <select
-              value={currentClanId ?? ''}
+              value={activeClanId ?? ''}
               disabled={isSwitching || clanMemberships.length === 1}
               onChange={(event) => {
                 const nextClanId = event.target.value
-                if (!nextClanId || nextClanId === currentClanId) {
+                if (!nextClanId || nextClanId === activeClanId) {
                   return
                 }
 
@@ -93,11 +93,11 @@ export function Header({ title }: HeaderProps) {
                       Clan
                     </p>
                     <select
-                      value={currentClanId ?? ''}
+                      value={activeClanId ?? ''}
                       disabled={isSwitching}
                       onChange={(event) => {
                         const nextClanId = event.target.value
-                        if (!nextClanId || nextClanId === currentClanId) {
+                        if (!nextClanId || nextClanId === activeClanId) {
                           return
                         }
 

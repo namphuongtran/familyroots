@@ -7,13 +7,11 @@
  * as `email_not_confirmed`, is the caller's job, so it stays testable against a fake client.
  */
 
+import type { AuthChangeEvent } from '@supabase/supabase-js'
 import { createClientOrNull } from '@/lib/supabase/client'
 import { createMissingSupabaseEnvError } from '@/lib/supabase/config'
 
 export type OAuthProvider = 'google' | 'apple'
-
-/** The auth events this slice reacts to. Supabase's own union, narrowed to a string here. */
-export type AuthEvent = string
 
 function requireClient() {
   const supabase = createClientOrNull()
@@ -49,7 +47,7 @@ export async function signOut(): Promise<void> {
 }
 
 /** Returns the unsubscribe function. With no Supabase configured there is nothing to hear. */
-export function onAuthStateChange(listener: (event: AuthEvent) => void): () => void {
+export function onAuthStateChange(listener: (event: AuthChangeEvent) => void): () => void {
   const supabase = createClientOrNull()
   if (!supabase) return () => {}
   const {

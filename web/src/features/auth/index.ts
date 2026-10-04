@@ -11,17 +11,12 @@
  * function (`@/domain/session/access-state`), which the server guard (#186) calls too.
  */
 
-export type { Membership, PlatformRole, Profile, Session } from '@/domain/session/session'
+export type { Membership, Session } from '@/domain/session/session'
 export type { AccessState } from '@/domain/session/access-state'
-export { accessStateOf } from '@/domain/session/access-state'
 
-export type { OnboardResult, RegisterInput, RegistrationReceived } from './model/session-dto'
 export { landingPath } from './model/landing'
-
-export type { SessionState } from './hooks/use-session'
 export { useSession } from './hooks/use-session'
-export type { OnboardingInput } from './hooks/use-auth-actions'
-export { EMAIL_NOT_CONFIRMED_CODE, useAuthActions } from './hooks/use-auth-actions'
+export { useAuthActions } from './hooks/use-auth-actions'
 
 export { ClanSuspendedScreen } from './ui/ClanSuspendedScreen'
 export { LoginScreen } from './ui/LoginScreen'

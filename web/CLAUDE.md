@@ -625,6 +625,14 @@ zustand keeps only `ui.store.ts`.
   consumer. Sign-in stays Supabase-direct (ADR-061 § 7), and a password sign-in Supabase refuses
   with `email_not_confirmed` routes to `/{locale}/verify-email?email=…`. Routing uses the URL's
   locale; the legacy hook used the profile's `preferred_locale`.
+- **The slice builds its own request context, the one exception to "hooks take a
+  `RequestContext` the caller passes in".** The session is where the identity behind every other
+  context comes from, so nothing above it holds one to pass. `hooks/auth-request-context.ts` reads
+  `getClientRequestContext()` with no `X-Current-Clan-Id`, since no auth route is clan-scoped. #184
+  replaces what it reads with the shared browser context and its `refreshAuth` (ADR-061 § 6).
+- **`useSession()` returns `activeClan`** beside `access`: the membership the user acts in when
+  the state is ready, `null` otherwise. `Header`, `Sidebar`, `SelectClanScreen` and
+  `useCapabilities` read it rather than each testing `access.kind`.
 - **The screens live in `features/auth/ui/`**: `LoginScreen`, `RegisterScreen`,
   `SelectClanScreen`, `PendingApprovalScreen`, `ClanSuspendedScreen`, `VerifyEmailScreen` and
   `SupabaseSetupNotice`. Their `app/` pages only route.
@@ -633,8 +641,10 @@ zustand keeps only `ui.store.ts`.
   cookie when the cookie names another (#186 makes it a server layout). `lib/hooks/useCapabilities.ts`
   reads the role from the session and keeps its four names (#185). The legacy
   `infrastructure/http/request-context.ts` reads the clan from the cookie only and the locale from
-  the URL; its `useAuthStore` fallback and its `localStorage['preferred_locale']` read are gone,
-  because nothing writes that key any more.
+  the URL; its `useAuthStore` fallback and its `localStorage['preferred_locale']` read are gone.
+  The issue said nothing writes that key any more. That was wrong: `ui.store`'s `setLocale` still
+  writes it, from `LocaleSwitcher`. The legacy `useAuth` was the other writer. Nothing reads it
+  now.
 
 **The one reactive read of the active clan is still `useCurrentClanId()`**
 (`src/shared/http/context.client.ts`), a `useSyncExternalStore` over the `current_clan_id` cookie
