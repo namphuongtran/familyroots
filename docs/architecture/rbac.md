@@ -40,6 +40,10 @@ super_admin                             admin
   until it expires, because that check reads the row (`backend/app/core/security.py:211`)
 - All actions are audit-logged with `actor_id`, `action`, `target`, `timestamp`
 - Checked via `user_profiles.platform_role` column (not JWT metadata)
+- Sent to clients as `platform_role` on `GET /auth/me` and `POST /auth/login` (#181), so a client
+  can route a super admin without probing a platform route. That copy is for routing only; the
+  platform routes still check the row on every request
+  ([rest-auth-api.md](../contracts/rest-auth-api.md#profile-field-semantics-login-and-get-me))
 
 ### Clan Level — `admin`, `editor`, `viewer`
 

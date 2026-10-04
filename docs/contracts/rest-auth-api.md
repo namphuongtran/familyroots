@@ -245,7 +245,7 @@ with no enumeration concern, so it kept `RegisterResponse`):
       "id": "...", "email": "...", "full_name": "...",
       "clan_id": "...", "clan_name": "...", "role": "...",
       "is_approved": true, "has_pending_membership": false,
-      "person_id": "...", "preferred_locale": "vi"
+      "person_id": "...", "preferred_locale": "vi", "platform_role": "user"
     }
   }
 }
@@ -280,6 +280,14 @@ nested `user`):
   a value written by `PATCH /me` appears here from the next token refresh onward.
 - `clan_id`/`clan_name`/`role`/`is_approved` describe **one** membership, chosen
   deterministically — see below.
+- `platform_role` — `"super_admin"` or `"user"`, always present, read from
+  `user_profiles.platform_role` (#181, ADR-061 § 5). It is `"super_admin"` exactly
+  when the platform routes' `get_super_admin` check would pass; any other stored
+  value, and a user with no `user_profiles` row yet, is `"user"`. It is
+  independent of `role`: a super admin with no membership has `clan_id: null`,
+  `role: null`, `platform_role: "super_admin"`. Clients use it to route, not to
+  authorize — `/api/v1/platform` checks the row itself on every request. Login
+  and `GET /me` read the same column, so they agree for the same user.
 
 ### Which membership login returns (multi-clan users)
 
