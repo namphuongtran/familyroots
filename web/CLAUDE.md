@@ -557,6 +557,9 @@ for the wider, correct grant rather than reintroducing the narrower one.
 
 ### The auth store holds session state only
 
+**ADR-061 § 2 replaces this store; it does not move it.** #183 holds the session in one TanStack
+Query query and deletes `store/auth.store.ts`. Until #183 lands, what follows is the live state.
+
 **`src/store/auth.store.ts` no longer has a `currentClanId` field or a `setCurrentClan`
 action.** It used to hold both the session (`user`, `clanMemberships`, the access-state flags) and
 the active clan, while the `current_clan_id` cookie held
@@ -842,7 +845,9 @@ Two `useAuth()` consumers mount on every `(dashboard)` page (`(dashboard)/layout
 the zustand store, and `syncAuthContext`'s identity does not survive that. **The loop was
 invisible before**, because the envelope defect above made `hydrateAuthContext` throw on its
 first call and fall into its own `catch`; fixing the envelope is what let the loop start. It
-is legacy auth code and its own piece of work — do not fix it inside a feature PR.
+is legacy auth code and its own piece of work — do not fix it inside a feature PR. **ADR-061 § 9:**
+#183 removes it by design, with no stopgap, and #182 fixes the `register`/`onboard` defect above
+first.
 
 **3. "No horizontal page scroll" is not a usability reading, and this screen proves it.**
 `e2e/text-scale.spec.ts`'s T-04 assertion passes on `/vi/backoffice/dashboard` at 320×640
@@ -903,10 +908,10 @@ engine rather than computed from the stylesheet.
   gate**: `.dependency-cruiser.cjs` lists these trees in `options.exclude`, so no rule can see an
   import into them. ADR-060 § 4 turns it into a baseline that may only shrink.
 - **How a slice deletes its legacy is ADR-060, not "the matching PR deletes it".** In short: a slice
-  deletes its *slice-owned* legacy, after re-pointing every importer, in any slice, at its own
+  deletes its _slice-owned_ legacy, after re-pointing every importer, in any slice, at its own
   `index.ts`. Adapting an importer to the domain shape is part of the migration. A file stays,
   trimmed, only where `index.ts` has no replacement, and the importing slice's build issue then
-  owns it. *Cross-cutting* files go with the last slice (next bullet). A *misfiled primitive*,
+  owns it. _Cross-cutting_ files go with the last slice (next bullet). A _misfiled primitive_,
   such as `components/members/MemberAvatar.tsx`, moves to `shared/ui`. A slice is done when none of
   its slice-owned legacy remains **and** it imports no legacy itself. The trimmed
   `src/lib/hooks/useMembers.ts`, whose header comment calls itself the `axios.ts` precedent repeated,
@@ -932,9 +937,9 @@ engine rather than computed from the stylesheet.
   `src/infrastructure/auth/{http-auth-profile-repository.ts,supabase-auth-session-port.ts}` in
   place: `useAuth()` (`src/lib/hooks/useAuth.ts`) still calls all four for session sync,
   sign-in, onboarding, and clan selection, and no `features/auth/` slice exists yet to replace
-  them. Whichever change builds that slice deletes these four along with `axios.ts` and
-  `request-context.ts`, together, once every remaining legacy repository has a replacement —
-  not auth's four files alone.
+  them. **Superseded by ADR-061 § 8 and ADR-060 § 1:** #183 deletes these four as auth's
+  slice-owned legacy. `axios.ts` and `request-context.ts` are cross-cutting and leave with the last
+  slice that imports them, not with auth.
 - **`VerifyEmailScreen` (`src/components/auth/VerifyEmailScreen.tsx`) is still unreachable
   from a real sign-in.** It handles `403 email_not_verified`, which only
   `POST /auth/login` can raise, and the live sign-in path
@@ -943,4 +948,5 @@ engine rather than computed from the stylesheet.
   2026-08-22 deletion left this path untouched for the same reason it left
   `http-auth-profile-repository.ts` in place: swapping `useAuth()`'s Supabase-direct sign-in for a backend-calling one is the
   auth slice's transport rewrite, not a deletion. The screen stays reachable only by direct
-  navigation to `/{locale}/verify-email?email=...` and by its own component test.
+  navigation to `/{locale}/verify-email?email=...` and by its own component test. ADR-061 § 7
+  keeps sign-in Supabase-direct: #183 routes Supabase's `email_not_confirmed` error code here.

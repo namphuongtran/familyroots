@@ -139,6 +139,14 @@ remains the client-side source of truth but writes the cookie whenever the clan 
 `src/middleware.ts` uses the same cookie to redirect users with no selected clan, instead
 of letting each page discover it.
 
+**Amended 2026-10-04 by
+[ADR-061](../../decisions/061-the-auth-session-is-server-state-and-access-is-routed-on-the-server.md).**
+The cookie half stands. The `auth.store` half does not: there is no store. The session is one
+TanStack Query query over `GET /auth/me` and `GET /me/clans`, and nothing persists the user, the
+role or the memberships in the browser. `context.client.ts` (the block above) reads the cookie and
+the Supabase browser client, not a store. Access state is one pure function in `domain/`, and one
+server guard routes on it. `src/middleware.ts` still checks only the session and the cookie.
+
 ### 4.2 HTTP client: `fetch`, drop axios
 
 axios cannot run cleanly inside Server Components and its current interceptors are bound
@@ -212,7 +220,7 @@ The trace-context choice is an architectural decision and ships as
 | # | PR | Contents | Outcome |
 |---|---|---|---|
 | 0 | **Spine** | `generated/api-types.ts` + generation script · `shared/http/*` · `domain/shared`, `domain/date` · `shared/telemetry` · dependency-cruiser · vitest + RTL + MSW + Playwright · **backend**: trace middleware, trace_id in logs, exposed header, `/internal/metrics`, `033-w3c-trace-context-sentry.md` | Pattern and gates exist; no screen touched |
-| 1 | **auth** | `current_clan_id` cookie, `auth.store` rewritten around the context, capabilities, middleware on the cookie, 403 screens (unverified email / suspended clan / pending approval) | Login loop matches the contract; later slices get a trustworthy context |
+| 1 | **auth** | `current_clan_id` cookie, the session as one query (no `auth.store`), capabilities, middleware on the cookie, one server guard, 403 screens (unverified email / suspended clan / pending approval). Six build issues, not one PR: see ADR-061 § 8 | Login loop matches the contract; later slices get a trustworthy context |
 | 2 | **persons** | full reference slice: dto/repo/keys/server loader/hooks/ui, `domain/person`, `HistoricalDate` on screen | Reference pattern for the rest |
 | 3 | **relationships** | marriages, parent-child, two-sided spouse order | |
 | 4 | **tree** | tree read-model + focus, XYFlow, `domain/kinship`, generation | Heaviest slice, done once the pattern is stable |
@@ -237,6 +245,12 @@ obey it while tree and admin still imported that code. What it means now:
   code itself.
 - **The legacy can only shrink.** dependency-cruiser forbids a new import of a legacy path, against
   a baseline that a pull request may shorten and never lengthen.
+
+**Row 1 amended 2026-10-04 by
+[ADR-061](../../decisions/061-the-auth-session-is-server-state-and-access-is-routed-on-the-server.md).**
+Auth is six build issues, #181 to #186, and each pull request still deletes what it replaces. Auth
+is done when its slice-owned legacy is gone, `features/auth` imports no legacy, five named outcome
+tests have each been seen to fail against a planted defect, and persons imports no auth legacy.
 
 ### 5.2 Test strategy
 
