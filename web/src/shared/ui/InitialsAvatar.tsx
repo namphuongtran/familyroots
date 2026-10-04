@@ -15,7 +15,7 @@ interface InitialsAvatarProps {
  * `T-04`'s 200%-text-scale check (`e2e/text-scale.spec.ts`) simulates OS text
  * scale by setting `:root { font-size: 32px }`, and `rem` is *defined*
  * relative to that root size — so a `rem`-sized box scales right along with
- * the text. Measured on `PersonAvatar` before this fix, in a throwaway
+ * the text. Measured on `PersonAvatar` before it was pinned, in a throwaway
  * preview route (2026-08-22): a plain two-row list at 320px width and 200%
  * scale measured `scrollWidth` 382 against `clientWidth` 320, and the
  * flex-1 text column next to a 40px avatar (which had ballooned to 80
@@ -47,9 +47,10 @@ function initials(name: string): string {
  *
  * Decorative: the name always sits beside it in text, so the image has an
  * empty `alt` and the initials are `aria-hidden`. A raw `<img>`, not
- * `next/image`: `.claude/rules/tailwind.md` §8 names the one accepted use of a
- * raw `<img>` in this app (a person's own avatar URL, which can be any
- * registered clan's storage host and is read-only per ADR-036).
+ * `next/image`: the URL is whatever the API returned (read-only, ADR-036), and
+ * nothing here can promise its host is in `images.remotePatterns`. This is the
+ * one raw `<img>` that `.claude/rules/tailwind.md` §8 records; it says to use
+ * `next/image` for anything new.
  */
 export function InitialsAvatar({ name, imageUrl, size, className }: InitialsAvatarProps) {
   return (

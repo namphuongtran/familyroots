@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import type { AbstractIntlMessages } from 'next-intl'
+import type { HistoricalDateDto, PersonResponseDto } from '@/features/persons'
 import { envelope, server as mswServer } from '@/shared/testing/msw'
 import { renderWithProviders } from '@/shared/testing/render'
 import { CLAN_COOKIE } from '@/shared/http/request-context'
@@ -22,8 +23,11 @@ const CLAN_ID = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
 const PERSON_ID = '11111111-1111-1111-1111-111111111111'
 const messages = viMessages as unknown as AbstractIntlMessages
 
-/** `PersonResponse`, every field present, the way `GET /persons/{id}` sends it. */
-function personResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+/**
+ * `PersonResponse`, every field present, the way `GET /persons/{id}` sends it. Typed as
+ * persons' own DTO, so a field the contract does not have fails `tsc`.
+ */
+function personResponse(overrides: Partial<PersonResponseDto> = {}): PersonResponseDto {
   return {
     id: PERSON_ID,
     created_by_clan_id: CLAN_ID,
@@ -60,7 +64,7 @@ function personResponse(overrides: Record<string, unknown> = {}): Record<string,
   }
 }
 
-function servePerson(body: Record<string, unknown>): void {
+function servePerson(body: PersonResponseDto): void {
   mswServer.use(http.get(`${API}/persons/${PERSON_ID}`, () => HttpResponse.json(envelope(body))))
 }
 
@@ -98,7 +102,12 @@ describe('MemberSidebar', () => {
   })
 
   it('prints no lifespan when neither date is known', async () => {
-    const unknown = { date: null, precision: 'unknown', display: null, lunar: null }
+    const unknown: HistoricalDateDto = {
+      date: null,
+      precision: 'unknown',
+      display: null,
+      lunar: null,
+    }
     servePerson(personResponse({ birth_date: unknown, death_date: unknown }))
 
     renderWithProviders(<MemberSidebar personId={PERSON_ID} onClose={() => {}} />, { messages })

@@ -131,7 +131,7 @@ services:
       #
       # `NEXT_PUBLIC_API_URL` reaches a Client Component transitively too
       # (`src/lib/api/axios.ts`, imported by `'use client'` hooks such as
-      # `useMembers.ts`), so it is inert here for the identical reason, in the built
+      # `useFamilyTree.ts`), so it is inert here for the identical reason, in the built
       # image — kept for the same non-Docker `pnpm dev`/`pnpm build` case, and now
       # matching the *browser-facing* default the `build.args` above bakes in, not the
       # compose-network hostname a browser cannot resolve.

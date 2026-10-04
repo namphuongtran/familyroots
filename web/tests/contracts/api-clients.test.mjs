@@ -109,7 +109,6 @@ test('auth context session fallback remains identity-only', async () => {
 // (deleted from that file for the same reason: their last reader went with `query-policy.ts`
 // and `members.ts`'s batch method).
 //
-// `src/lib/hooks/useMembers.ts`'s own header comment names who still needs the persons chain
-// that stayed (`MemberSidebar.tsx`, `useRelationships.ts`) and why; neither exercises a route
-// this file's harness (which reads source text, not requests) can usefully assert on beyond
-// what `members.ts`'s own remaining `get` method already is.
+// The persons chain that stayed (`useMembers.ts`, `members.ts`'s `get`) was deleted by #172,
+// which re-pointed its last readers at `@/features/persons`. Persons' contract is tested there,
+// against real envelopes, not here.
