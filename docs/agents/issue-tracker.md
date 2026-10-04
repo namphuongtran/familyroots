@@ -35,8 +35,10 @@ Run `gh issue view <number> --comments`.
 
 ## What a `ready-for-agent` issue carries
 
-Decided 2026-09-04, resolving issue #159 on the map in issue #158. It replaces the nine-field seed
-format that `.claude/rules/seeds.md` held until commit `ec73452` deleted it. Recover that file with
+Decided 2026-09-04, resolving issue #159 on the map in issue #158. **It reached `main` only on
+2026-10-04, under #167.** The commit that wrote it, `a4d6156`, was made after PR #157 had merged, and
+it stayed on a local branch for a month. It replaces the nine-field seed format that
+`.claude/rules/seeds.md` held until commit `ec73452` deleted it. Recover that file with
 `git show ec73452^:.claude/rules/seeds.md`.
 
 ### GitHub carries the state, the body carries the claim
@@ -81,8 +83,8 @@ four, in this order. None may be empty.
    write that there is nothing. An issue that excludes nothing gets read as covering more than it does.
 
 `.github/ISSUE_TEMPLATE/ready-for-agent.md` carries these four sections, so
-`gh issue create --template ready-for-agent.md` seeds them. This file holds the reasons. The template
-holds the shape.
+`gh issue create --template "Ready for agent"` seeds them. The flag takes the template's `name:`,
+not its file name. This file holds the reasons. The template holds the shape.
 
 ### One agent, one issue, no second decision
 
