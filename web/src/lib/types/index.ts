@@ -10,10 +10,8 @@ export type {
   UserClanMembership,
   UserClansResponse,
 } from './api'
-// the legacy-component deletion trimmed this re-export to `Person` and `PersonSummary`, the two
-// types `./member` still declares. See that file's own header comment for
-// why each removed type's last reader went with it.
-export type { Person, PersonSummary } from './member'
+// `./member` declares `PersonSummary` only. See that file's header comment.
+export type { PersonSummary } from './member'
 export type {
   Marriage,
   MarriageStatus,

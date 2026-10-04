@@ -105,7 +105,8 @@ Two trees coexist during the migration described in
   ├── shared/
   │   ├── http/               # api-client, request-context, envelope, errors, refresh
   │   ├── telemetry/          # logger, trace, Sentry, Web Vitals
-  │   └── testing/            # MSW + RTL harness
+  │   ├── testing/            # MSW + RTL harness
+  │   └── ui/                 # presentational primitives no slice owns
   └── generated/api-types.ts  # generated from /openapi.json, committed, CI-verified
   ```
 
@@ -145,9 +146,12 @@ not fail the build.
 `model`. Follow it anyway; the rules above only catch the directions that were worth the
 cost of encoding.
 
-`src/shared/` is `http/`, `telemetry/` and `testing/`. There is no `shared/ui/` — reusable
-presentational components currently live in `src/components/ui/`, and moving them is a
-sub-project B decision that has not been made.
+`src/shared/` is `http/`, `telemetry/`, `testing/` and `ui/`. `shared/ui/` arrived with #172
+(2026-10-04) and holds one file, `InitialsAvatar.tsx`: the initials circle that used to be
+`components/members/MemberAvatar.tsx`, a misfiled primitive under ADR-060 § 1. A pending account
+renders it directly, and `PersonAvatar` is built on it. `src/components/ui/` still holds the other
+reusable presentational components, and whether they move is still a sub-project B decision that
+has not been made.
 
 **The legacy trees are in the graph, and only `nothing-imports-legacy` takes one as its subject.**
 The set is the web architecture spec's § 3.2 list: `src/lib/api/`, `src/lib/hooks/`,
@@ -700,7 +704,7 @@ Query semantics that must be preserved when touching list/detail endpoints:
 
 ### UI
 
-Tailwind + Radix primitives. Reusable primitives in `src/components/ui/`; feature components in `src/components/<feature>/`. Mind the Arbor Heritage design mandates referenced in the repo-root `CLAUDE.md`.
+Tailwind + Radix primitives. Reusable primitives in `src/components/ui/` and `src/shared/ui/` (see "Dependency rules"); feature components in `src/components/<feature>/`. Mind the Arbor Heritage design mandates referenced in the repo-root `CLAUDE.md`.
 
 ### Testing
 
@@ -967,14 +971,24 @@ engine rather than computed from the stylesheet.
   trimmed, only where `index.ts` has no replacement, and the importing slice's build issue then
   owns it. _Cross-cutting_ files go with the last slice (next bullet). A _misfiled primitive_,
   such as `components/members/MemberAvatar.tsx`, moves to `shared/ui`. A slice is done when none of
-  its slice-owned legacy remains **and** it imports no legacy itself. The trimmed
-  `src/lib/hooks/useMembers.ts`, whose header comment calls itself the `axios.ts` precedent repeated,
-  is the shape ADR-060 replaced: it kept a file alive for a different slice with no end condition.
+  its slice-owned legacy remains **and** it imports no legacy itself.
+- **Persons applied it first (#172, 2026-10-04).** `lib/hooks/useMembers.ts`, `application/persons/`,
+  `infrastructure/persons/`, `lib/api/members.ts` and `components/members/` are deleted.
+  `MemberSidebar` reads `usePerson` from `@/features/persons` and renders the domain `Person`,
+  `MemberNode` renders `PersonAvatar`, and `MemberAvatar` became `shared/ui/InitialsAvatar.tsx`.
+  The deletion removed no baseline entry, because every importer it re-pointed sits inside legacy
+  itself (`components/family-tree/`, `components/admin/`), and legacy importing legacy is not a
+  violation. What is left:
+  - `lib/types/member.ts` declares `PersonSummary` only, under § 2's fallback. `lib/types/tree.ts`
+    embeds it and persons has no replacement for tree's wire shape, so the tree slice owns the
+    file and deletes it.
+  - Persons' own routes still import the legacy `useCapabilities`. That is the second half of
+    "done", and the auth slice re-points it (#165, ADR-060 § 3).
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
   The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of
   `src/lib/api/{documents,events,members,relationships,tree}.ts` importing it too
-  (`grep -rln "lib/api/axios\|from 'axios'" src`). So it, and the
+  (`grep -rln "lib/api/axios\|from 'axios'" src`; `members.ts` has since left with persons, #172). So it, and the
   `src/infrastructure/http/request-context.ts` it depends on, cannot leave until the **last**
   slice PR lands, not the first — "each is deleted outright when the matching feature slice PR
   lands" above is true per-slice-repository-file, not true of this shared pair. See

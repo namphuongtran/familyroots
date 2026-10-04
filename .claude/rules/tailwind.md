@@ -304,8 +304,10 @@ to a block, and keep the `two different palettes` case that catches it.
 - `class-variance-authority` is installed and used by no file. All twelve `@radix-ui/*`
   packages are installed and imported by no file under `src`. If you use either, you are the
   first, so set the pattern carefully and say so in the pull request.
-- There is no `src/shared/ui/`. Moving the primitives there is an open decision, per
-  `web/CLAUDE.md`. Do not move them as part of a feature.
+- `src/shared/ui/` holds one file, `InitialsAvatar.tsx`, since #172 (2026-10-04). ADR-060 § 1
+  moved it there as a misfiled primitive from `components/members/`. Whether the primitives in
+  `src/components/ui/` move too is still an open decision, per `web/CLAUDE.md`. Do not move them
+  as part of a feature.
 
 ## 5. Obey the Arbor Heritage mandates
 
@@ -482,7 +484,8 @@ document element, so the div was a second, dead copy) and returns a `<>` fragmen
 - `web/next.config.ts` already allows `*.supabase.co` and `*.supabase.in` under
   `/storage/v1/object/**` in `images.remotePatterns`.
 - No file in `web/src` imports `next/image`. One raw `<img>` exists, in
-  `web/src/components/members/MemberAvatar.tsx:56`, with an eslint-disable comment above it.
+  `web/src/shared/ui/InitialsAvatar.tsx`, with an eslint-disable comment above it. Every avatar
+  renders through it, `PersonAvatar` included.
 - Use `next/image` for new images. Add a hostname to `remotePatterns` when the source is new.
 - `T-16` says every screen must stay usable with all images blocked. An avatar falls back to
   initials. Reserve the space so nothing moves.

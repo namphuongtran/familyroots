@@ -19,35 +19,6 @@ export function formatDate(isoDate: string | undefined | null, locale = 'vi'): s
   }
 }
 
-/** Format ISO date to year only */
-export function formatYear(isoDate: string | undefined | null): string {
-  if (!isoDate) return ''
-  try {
-    return new Date(isoDate).getFullYear().toString()
-  } catch {
-    return ''
-  }
-}
-
-/**
- * Format a lifespan string for display in the family tree.
- * Returns: "1880 – 1960" or "1965 –" for living members
- * Approx dates are prefixed with "~"
- */
-export function formatLifespan(
-  birthDate?: string,
-  deathDate?: string,
-  birthApprox = false,
-  deathApprox = false,
-): string {
-  const birth = birthDate ? `${birthApprox ? '~' : ''}${formatYear(birthDate)}` : '?'
-  const death = deathDate ? `${deathApprox ? '~' : ''}${formatYear(deathDate)}` : ''
-
-  if (!birthDate && !deathDate) return ''
-  if (deathDate) return `${birth} – ${death}`
-  return `${birth} –`
-}
-
 /**
  * Returns a relative time string, e.g. "7 ngày nữa"
  */

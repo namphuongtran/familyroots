@@ -19,62 +19,55 @@ import type {
   ParentChildCreateInput,
   ParentChildUpdateInput,
 } from '@/lib/types'
-import { personKeys } from './useMembers'
 
-export function useMarriageMutations(personId?: string) {
+export function useMarriageMutations() {
   const qc = useQueryClient()
 
-  const invalidatePerson = () => {
-    if (personId) {
-      qc.invalidateQueries({ queryKey: personKeys.marriages(personId) })
-    }
+  const invalidateTree = () => {
     qc.invalidateQueries({ queryKey: ['tree'] })
   }
 
   const create = useMutation({
     mutationFn: (input: MarriageCreateInput) => createMarriage(marriageCommandRepository, input),
-    onSuccess: invalidatePerson,
+    onSuccess: invalidateTree,
   })
 
   const update = useMutation({
     mutationFn: ({ id, ...input }: MarriageUpdateInput & { id: string }) =>
       updateMarriage(marriageCommandRepository, id, input),
-    onSuccess: invalidatePerson,
+    onSuccess: invalidateTree,
   })
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteMarriage(marriageCommandRepository, id),
-    onSuccess: invalidatePerson,
+    onSuccess: invalidateTree,
   })
 
   return { create, update, remove }
 }
 
-export function useParentChildMutations(personId?: string) {
+export function useParentChildMutations() {
   const qc = useQueryClient()
 
-  const invalidatePerson = () => {
-    if (personId) {
-      qc.invalidateQueries({ queryKey: personKeys.parentChild(personId) })
-    }
+  const invalidateTree = () => {
     qc.invalidateQueries({ queryKey: ['tree'] })
   }
 
   const create = useMutation({
     mutationFn: (input: ParentChildCreateInput) =>
       createParentChild(parentChildCommandRepository, input),
-    onSuccess: invalidatePerson,
+    onSuccess: invalidateTree,
   })
 
   const update = useMutation({
     mutationFn: ({ id, ...input }: ParentChildUpdateInput & { id: string }) =>
       updateParentChild(parentChildCommandRepository, id, input),
-    onSuccess: invalidatePerson,
+    onSuccess: invalidateTree,
   })
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteParentChild(parentChildCommandRepository, id),
-    onSuccess: invalidatePerson,
+    onSuccess: invalidateTree,
   })
 
   return { create, update, remove }

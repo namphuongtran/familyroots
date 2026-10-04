@@ -17,8 +17,8 @@ import { ApiError } from '@/shared/http/errors'
 /**
  * Spec §7.7, edit. Replaces the legacy `MemberForm` +
  * `useMembers().usePerson` this route used through the persons list screens, same as `new/page.tsx`.
- * `usePerson` here is the persons repository's own hook (`@/features/persons`), not the
- * legacy `src/lib/hooks/useMembers.ts` one the two share a name with.
+ * `usePerson` here is the persons repository's own hook (`@/features/persons`). The legacy
+ * `src/lib/hooks/useMembers.ts` hook of the same name was deleted by #172.
  */
 export default function EditMemberPage() {
   const t = useTranslations('member')

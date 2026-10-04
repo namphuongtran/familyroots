@@ -2,20 +2,46 @@
 
 import Link from 'next/link'
 import { X, Edit, Users } from 'lucide-react'
-import { useTranslations } from 'next-intl'
-import { MemberAvatar } from '@/components/members/MemberAvatar'
-import { formatLifespan } from '@/lib/utils/date'
+import { useLocale, useTranslations } from 'next-intl'
 import { Skeleton } from '@/components/ui/skeleton'
-import { usePerson } from '@/lib/hooks/useMembers'
+import {
+  PersonAvatar,
+  formatHistoricalDate,
+  isKnownDate,
+  usePerson,
+  usePersonsRequestContext,
+  type Person,
+} from '@/features/persons'
 
 interface MemberSidebarProps {
   personId: string
   onClose: () => void
 }
 
+/**
+ * "1900 – 1975", "1900 –" while no death date is known, and nothing when
+ * neither date is. Each side goes through persons' `formatHistoricalDate`, so
+ * a `year` or `circa` date prints its `display` and an `exact` one its `date`.
+ */
+function lifespan(person: Person, locale: string): string {
+  const birthKnown = isKnownDate(person.birthDate)
+  const deathKnown = isKnownDate(person.deathDate)
+  if (!birthKnown && !deathKnown) return ''
+  const birth = formatHistoricalDate(person.birthDate, locale, '?')
+  if (!deathKnown) return `${birth} –`
+  return `${birth} – ${formatHistoricalDate(person.deathDate, locale, '?')}`
+}
+
+/**
+ * Reads `GET /persons/{id}`, whose `PersonResponse` carries no generation, so
+ * this sidebar shows none. Đời comes from the tree's own read model, and
+ * showing it here is the tree slice's call.
+ */
 export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
   const t = useTranslations('tree')
-  const { data: member, isLoading } = usePerson(personId)
+  const locale = useLocale()
+  const { context, ready } = usePersonsRequestContext()
+  const { data: person, isPending } = usePerson(personId, {}, { context, enabled: ready })
 
   return (
     <div className="border-border bg-card absolute top-4 left-4 z-20 w-64 overflow-hidden rounded-xl border shadow-lg">
@@ -30,7 +56,7 @@ export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
         </button>
       </div>
 
-      {isLoading ? (
+      {!ready || isPending ? (
         <div className="space-y-3 p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
@@ -42,52 +68,42 @@ export function MemberSidebar({ personId, onClose }: MemberSidebarProps) {
           <Skeleton className="h-3 w-full" />
           <Skeleton className="h-3 w-3/4" />
         </div>
-      ) : member ? (
+      ) : person ? (
         <div className="space-y-3 p-4">
           <div className="flex items-center gap-3">
-            <MemberAvatar
-              avatarUrl={member.avatar_url}
-              fullName={member.full_name}
-              gender={member.gender}
-              size="md"
-              isDeceased={!!member.death_date}
+            <PersonAvatar
+              avatarUrl={person.avatarUrl}
+              fullName={person.fullName}
+              size="sm"
+              isDeceased={isKnownDate(person.deathDate)}
             />
             <div>
-              <p className="text-foreground text-sm font-semibold">{member.full_name}</p>
-              <p className="text-muted-foreground text-xs">
-                {formatLifespan(member.birth_date, member.death_date, member.birth_date_approx)}
-              </p>
+              <p className="text-foreground text-sm font-semibold">{person.fullName}</p>
+              <p className="text-muted-foreground text-xs">{lifespan(person, locale)}</p>
             </div>
           </div>
 
-          {member.birth_place && (
+          {person.birthPlace && (
             <div className="text-muted-foreground text-xs">
               <span className="font-medium">{t('born_in')}: </span>
-              {member.birth_place}
+              {person.birthPlace}
             </div>
           )}
 
-          {member.generation && (
-            <div className="text-muted-foreground text-xs">
-              <span className="font-medium">{t('generation')}: </span>
-              {member.generation}
-            </div>
-          )}
-
-          {member.notes && (
-            <p className="text-muted-foreground line-clamp-3 text-xs italic">{member.notes}</p>
+          {person.notes && (
+            <p className="text-muted-foreground line-clamp-3 text-xs italic">{person.notes}</p>
           )}
 
           <div className="flex gap-2 pt-1">
             <Link
-              href={`/persons/${member.id}`}
+              href={`/persons/${person.id}`}
               className="bg-primary-container text-primary-container-foreground hover:bg-primary-container-hover flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors"
             >
               <Users className="h-3 w-3" />
               {t('view_profile')}
             </Link>
             <Link
-              href={`/persons/${member.id}/edit`}
+              href={`/persons/${person.id}/edit`}
               className="border-border text-muted-foreground hover:bg-muted flex flex-1 items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-xs transition-colors"
             >
               <Edit className="h-3 w-3" />

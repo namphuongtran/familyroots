@@ -80,15 +80,12 @@ Rules:
    - `src/infrastructure/http/query-policy.ts`
    - Enforces include/fields normalization and batch include-by-id handling.
 
-3. Persons application port + use-cases
-   - `src/application/persons/ports/person-query-repository.ts`
-   - `src/application/persons/use-cases/person-queries.ts`
+3. Persons application port + use-cases. **Deleted 2026-10-04 (#172)**, with 4 and 5. Persons now
+   lives in `src/features/persons`; see `web/CLAUDE.md`, "The `persons` slice".
 
-4. Persons infrastructure adapter
-   - `src/infrastructure/persons/person-query-repository.ts`
+4. Persons infrastructure adapter. Deleted, see 3.
 
-5. Hook migration to application layer
-   - `src/lib/hooks/useMembers.ts` now uses application use-cases for reads.
+5. Hook migration to application layer. `src/lib/hooks/useMembers.ts` is deleted, see 3.
 
 6. Auth + clan context application/infrastructure layering
    - `src/application/auth/ports/auth-repository.ts`
