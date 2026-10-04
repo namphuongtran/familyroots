@@ -301,9 +301,13 @@ to a block, and keep the `two different palettes` case that catches it.
   `src/lib/utils/` is fine to use. `src/lib/api/` and `src/lib/hooks/` are the frozen trees.
 - Reusable primitives live in `web/src/components/ui/`. It holds exactly one file today,
   `skeleton.tsx`. Feature components live in `web/src/components/<feature>/`.
-- `class-variance-authority` is installed and used by no file. All twelve `@radix-ui/*`
-  packages are installed and imported by no file under `src`. If you use either, you are the
-  first, so set the pattern carefully and say so in the pull request.
+- `class-variance-authority` is installed and used by no file. Of the twelve `@radix-ui/*`
+  packages, only `@radix-ui/react-dialog` is imported, by three files, re-counted 2026-10-04:
+  `features/persons/ui/StaleWriteDialog.tsx`, which set the pattern,
+  `features/persons/ui/ForbiddenWriteDialog.tsx`, and `components/backoffice/BackofficeSidebar.tsx`,
+  the navigation drawer (#174), whose doc comment names the three ways it departs from that pattern.
+  The other eleven are imported by no file. If you use one of them, or `class-variance-authority`,
+  you are the first, so set the pattern carefully and say so in the pull request.
 - `src/shared/ui/` holds one file, `InitialsAvatar.tsx`, since #172 (2026-10-04). ADR-060 § 1
   moved it there as a misfiled primitive from `components/members/`. Whether the primitives in
   `src/components/ui/` move too is still an open decision, per `web/CLAUDE.md`. Do not move them
@@ -339,8 +343,10 @@ Spec § 6 defines the web layout: content max-width 1200px, centred.
 | >= 1280 | sidebar 264px plus content; a detail screen may split into main `1fr` and aside 360px |
 
 - Design mobile first. Write the base classes for the narrow case, then add `md:` and `lg:`.
-- Responsive coverage is thin today: 4 `sm:`, 8 `md:`, 3 `lg:`, and no `xl:` or `2xl:` uses
-  across `web/src`. Treat a new screen as needing responsive work, not as inheriting it.
+- Responsive coverage is thin today: 17 `sm:`, 7 `md:`, 5 `lg:`, and no `xl:` or `2xl:` uses in
+  class strings across `web/src`, re-counted 2026-10-04 with comments and tests left out. It said
+  4, 8 and 3 until then. Treat a new screen as needing responsive work, not as inheriting it.
+  The backoffice shell (#174) is the one shell with a real `lg` branch.
 - Container queries are used nowhere in `web/src`. Tailwind v4 ships them. You may use
   `@container` for a component that must adapt to its own box, but do not convert existing
   breakpoint code to container queries as a drive-by change.
@@ -437,15 +443,39 @@ rendering** in every e2e run — the defect did not go away, it went where no ga
    discard — so it is committed alongside the config that introduces the second `distDir`,
    rather than left to reappear as an uncommitted diff after the next person's gate run.
 
-**One on-screen wordmark is still one unbreakable word**, the literal string `FamilyRoots` at
-`components/backoffice/BackofficeSidebar.tsx:49` (moved from `:44` by the 2026-08-22
-conversion, which renumbered the whole file — re-grep before trusting this line too). It sits
-behind a Supabase session, so nobody has measured it at 320 px and 200% scale. It still carries
-`text-xs font-semibold`, unchanged by that rebuild (ADR-046's per-line table names no change for this
-line); what moved is the line above it, the translated `rail_label`, from `text-[10px]
-text-gray-400` to `text-xs text-foreground` and first in reading order, per the ADR's own table.
-So it is still no more likely to overflow than it was, but "no more likely" is not a measurement.
-Treat it as unverified, not as fixed.
+**The third unbreakable wordmark, the backoffice rail's, did overflow. Fixed by #174
+(2026-10-04).** This paragraph used to say the literal `FamilyRoots` in
+`components/backoffice/BackofficeSidebar.tsx` sat behind a Supabase session, so nobody had measured
+it at 320 px and 200% scale, and to treat it as unverified rather than fixed. The #162 prototype
+measured it: at 320×640 with a 32px root, inside the new top bar and drawer, the wordmark ran **5 px
+past the top bar and pushed the drawer's close button off screen**, drawer `scrollWidth` 341 against
+`clientWidth` 272. "No more likely to overflow than it was" had been true and beside the point:
+nothing about it had ever been measured in a box that small.
+
+The fix is trap 2's, `Family<wbr />Roots`, and the prototype also gave the brand row and its text
+column `min-w-0`. **Then a sixth trap, found while building it: a box that does not overflow can
+still overlap.** With the brand and the drawer's 88 px close button on one line, the text column was
+39 px wide, and `min-w-0` let it be: the words inked past their own box, "Quản trị" to x 156 and
+"Family" to x 169, across the close button's left edge at x 152. The drawer's `scrollWidth` stayed
+272 against 272, because the spill never left the drawer. A width reading cannot see this. Only
+reading where the text is inked can (`Range.getClientRects()` on each line, intersected with the
+button's box), and English's unbreakable `Backoffice` would have reached the X glyph itself. The
+drawer header is now `flex-wrap-reverse`, so when the two do not fit, the close button takes a line
+of its own above the brand and the brand gets the drawer's whole width.
+
+Measured 2026-10-04 at 320 px and 200%, each planted and reverted against the two e2e cases in
+`web/e2e/auth/backoffice.auth.spec.ts`:
+
+| Plant | Reading |
+|---|---|
+| none | top bar `scrollWidth` 320 against 320; drawer 272 against 272; no inked line meets the close button |
+| `<wbr>` removed | top bar 325 against 320, and the page scrolls by the same 5 px |
+| brand and close button back on one line | drawer still 272 against 272; "Quản trị" and "Family" inked across the close button |
+| `min-w-0` removed from both | no reading changes. Once the header wraps, the brand has room without it |
+| all three: no `<wbr>`, no `min-w-0`, one line (the prototype's arrangement) | drawer 341 against 272, the prototype's own figure, and the top bar 325 |
+
+So the `<wbr>` is load-bearing and `min-w-0`, today, is not. It stays, because it is what lets the
+brand shrink if a later change takes that room away again.
 
 **The 2026-08-13 text-scale record named a third wordmark that does not exist, and its line number
 for the second one was one place off.** Its out-of-scope note cites `components/layout/Sidebar.tsx:65`

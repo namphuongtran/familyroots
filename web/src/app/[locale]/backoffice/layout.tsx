@@ -26,10 +26,14 @@ export default async function BackofficeLayout({
   // Hard server-side gate — redirect to /[locale]/dashboard if insufficient role
   await requireRole(['admin', 'super_admin'], locale)
 
+  // Below `lg` the sidebar is a top bar and a drawer; at `lg` and up it is an in-flow sibling of
+  // `main` in one flex row, and `main` takes the rest of the row from `min-w-0 flex-1`. No `ml-*`
+  // matches the rail's width: that pairing, with a `fixed` rail, is what left `main` zero pixels
+  // wide at 320px and 200% text (#174).
   return (
-    <div className="bg-background flex min-h-screen">
+    <div className="bg-background min-h-screen lg:flex">
       <BackofficeSidebar locale={locale} />
-      <main className="bg-background ml-60 min-h-screen flex-1 overflow-y-auto">{children}</main>
+      <main className="bg-background min-w-0 flex-1">{children}</main>
     </div>
   )
 }

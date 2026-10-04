@@ -396,7 +396,9 @@
     "nav_members": "成员",
     "nav_clans": "家族",
     "nav_tree": "家谱",
-    "rail_label": "后台"
+    "rail_label": "后台",
+    "menu_open": "打开导航菜单",
+    "menu_title": "后台导航"
   },
   "common": {
     "loading": "加载中...",
