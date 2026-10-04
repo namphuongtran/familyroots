@@ -20,6 +20,9 @@ numbers as hints and its quoted text as the claim.
 2026-10-04: § 5's backend half is built by #181. `GET /auth/me`, and login's `user` with it, send
 `platform_role`. The web's `/platform/metrics` probe stays until #186 deletes it.
 
+2026-10-04: § 9's registration defect, Context finding 10, is fixed by #182. `register` and
+`onboard` unwrap the envelope, and `register/page.success.test.tsx` is the test #183 keeps green.
+
 ## Context
 
 ### The spec's auth slice, and what happened instead

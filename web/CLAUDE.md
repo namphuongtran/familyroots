@@ -849,8 +849,8 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
 
 ### Three things found by looking at the harness
 
-Finding 3 is fixed (#174, 2026-10-04). It is marked fixed rather than deleted, so it keeps its
-history. Findings 1 and 2 each say below what of them is still open.
+Findings 1 and 3 are fixed (#182 and #174, 2026-10-04). Each is marked fixed rather than
+deleted, so it keeps its history. Finding 2 says below what of it is still open.
 
 **1. `GET /me/clans` and `POST /me/clans/{id}/select` were read as unenveloped, and both are now
 fixed.** The web client read `{"clans": […]}` and `{clan_id: …}` while the backend has
@@ -861,19 +861,32 @@ permanently `undefined`, so **every role-gated element on every server-rendered 
 hidden and `requireServerRole` sent approved admins to `/pending-approval`**. The second wrote
 the literal string `undefined` into the `current_clan_id` cookie. Both read sites are now
 unwrapped in `HttpAuthProfileRepository`, which is the one place the port's shape is built —
-see the doc comments there. **`register` and `onboard` in that same file have the identical
-defect and are still untouched.** They were once said to be covered by the invitation-accept work;
-**that is stale, corrected 2026-08-27.** That work landed and its 27-file diff never touched this
-file, so the two remaining read sites are still open.
+see the doc comments there. **`register` and `onboard` in that same file had the identical
+defect, and #182 fixed both (2026-10-04).** They were once said to be covered by the
+invitation-accept work; that was stale, corrected 2026-08-27, because that work's 27-file diff
+never touched this file.
 
-**The defect is live and user-facing, so do not read "still untouched" as "harmless".** Read at
-source 2026-08-27: `http-auth-profile-repository.ts:81` is
+**What the `register` half cost, as it was read at source 2026-08-27:** `http-auth-profile-repository.ts:81` is
 `api.post<RegisterResult>('/auth/register', input)` and returns `data`, which is the whole body
-`{"data": {"message": ...}}` that `backend/app/api/v1/auth.py:61` sends. So `result.message` is
+`{"data": {"message": ...}}` that `backend/app/api/v1/auth.py:62` sends (`:61` until #182 corrected it). So `result.message` is
 `undefined`, `setSuccess(undefined)` leaves `success` falsy, and the `if (success)` branch never
-renders — **a successful registration shows the user nothing.** No test catches it, and
-`register/page.test.tsx` says so in its own comment: the reading there is "the inline error went
-away", not "the success screen replaced it".
+renders — **a successful registration showed the user nothing.** No test caught it, because
+`register/page.test.tsx` mocks `useAuthActions`, so its `signUp` resolves whatever the test hands
+it.
+
+**The fix and what holds it.** Both methods now return `data.data`, and the port types `register`
+as `RegistrationReceived` (`{ message }`, the `MessageData` the route sends) rather than the
+onboard shape. `register/page.success.test.tsx` mocks only `next/navigation`: the real
+`useAuthActions` and repository run against MSW serving the real 201 envelope, and the test reads
+the message on screen and the form gone. It reaches nothing #183 moves, and its handler matches
+any origin, so #183, which rewrites the repository onto `apiFetch`, keeps it green unchanged.
+`infrastructure/auth/http-auth-profile-repository.test.tsx` reads `clan_id` off `onboard`'s
+result, with the fixture typed by the generated `RegisterResponse`. Negative controls, 2026-10-04:
+reverting the `register` unwrap fails the first with "Unable to find an element with the text"
+and no error banner on the page; reverting the `onboard` unwrap fails the second with `expected
+undefined to be '4bf92f35-…'`. The two source-text assertions in
+`tests/contracts/api-clients.test.mjs` that pinned the defective `api.post<RegisterResult>` calls
+are deleted: they pinned a setting, per `.claude/rules/testing.md`.
 
 **2. The `(dashboard)` group runs away, so `/vi/members` is not the covered route.** The harness's
 first choice was `/vi/members`, the screen the persons and calendar work each wanted. It cannot be
@@ -885,7 +898,7 @@ the zustand store, and `syncAuthContext`'s identity does not survive that. **The
 invisible before**, because the envelope defect above made `hydrateAuthContext` throw on its
 first call and fall into its own `catch`; fixing the envelope is what let the loop start. It
 is legacy auth code and its own piece of work — do not fix it inside a feature PR. **ADR-061 § 9:**
-#183 removes it by design, with no stopgap, and #182 fixes the `register`/`onboard` defect above
+#183 removes it by design, with no stopgap. #182 fixed the `register`/`onboard` defect above
 first.
 
 **3. "No horizontal page scroll" is not a usability reading, and this screen proved it. Fixed by
