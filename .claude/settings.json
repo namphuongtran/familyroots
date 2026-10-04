@@ -9,6 +9,9 @@
     "sentry@claude-plugins-official": true,
     "pydantic-ai@claude-plugins-official": true,
     "firebase@claude-plugins-official": true,
-    "mattpocock-skills@claude-plugins-official": true
+    "mattpocock-skills@claude-plugins-official": true,
+    "frontend-design@anthropic-plugin-directory": true,
+    "playwright@anthropic-plugin-directory": true,
+    "commit-commands@anthropic-plugin-directory": true
   }
 }
