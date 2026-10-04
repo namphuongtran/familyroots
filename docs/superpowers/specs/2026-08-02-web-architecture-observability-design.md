@@ -112,6 +112,10 @@ Enforced by **dependency-cruiser** in CI — the frontend counterpart of the bac
 `src/lib/api/`, `src/lib/hooks/`, `src/application/`, `src/infrastructure/`, `src/types/`,
 `src/lib/types/`, `src/components/<feature>/`, and the `axios` dependency.
 
+Which slice deletes which part, and when a slice counts as done, is decided by
+[ADR-060](../../decisions/060-a-slice-deletes-its-own-legacy-and-re-points-its-importers.md)
+(2026-10-04), not by this list. See § 5.1.
+
 ### 3.3 Why this is still DDD/SOLID
 
 Dependency inversion at the frontend is already provided by module boundaries plus types.
@@ -216,7 +220,23 @@ The trace-context choice is an architectural decision and ships as
 | 6 | **documents** | upload, soft delete, visibility | |
 | 7 | **admin + platform + backoffice** | member approval, invitations, audit, platform metrics | `lib/api`, `lib/hooks`, `application/`, `infrastructure/`, `axios` all deleted. R3 closed |
 
-Each PR migrates its slice **and** deletes the corresponding legacy code. No PR only adds.
+Each PR migrates its slice **and** deletes its own legacy code. No PR only adds.
+
+**Amended 2026-10-04 by
+[ADR-060](../../decisions/060-a-slice-deletes-its-own-legacy-and-re-points-its-importers.md).**
+The sentence above used to say "the corresponding legacy code", and the persons slice could not
+obey it while tree and admin still imported that code. What it means now:
+
+- **A slice deletes its slice-owned legacy**: code that models its own concept. Code no single
+  slice owns, such as `axios.ts`, goes with the last slice that imports it. A generic primitive
+  filed in a slice's folder moves to `shared/ui`.
+- **It re-points every importer first**, in any slice, at its own `index.ts`, adapting the importer
+  to the domain shape where needed. A file may stay, trimmed, only where `index.ts` has no
+  replacement. The importing slice's build issue then owns it.
+- **A slice is done** when none of its slice-owned legacy remains **and** it imports no legacy
+  code itself.
+- **The legacy can only shrink.** dependency-cruiser forbids a new import of a legacy path, against
+  a baseline that a pull request may shorten and never lengthen.
 
 ### 5.2 Test strategy
 
