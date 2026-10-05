@@ -84,12 +84,18 @@ Four agent definitions live in [`../.claude/agents/`](../.claude/agents/): `back
 `web-engineer`, `flutter-engineer`, and `product-designer`. Each carries this project's gates, so a
 dispatch only needs to say *what*, not *how*.
 
-Four rules apply when more than one runs at a time. Each cost real time to learn.
+Five rules apply when more than one runs at a time. Each cost real time to learn.
 
 - **Every parallel backend dispatch sets its own `TEST_PG_DB_NAME`.** The integration harness drops
   its throwaway database `WITH (FORCE)`, so two runs sharing the name drop each other's. It cost 182
   spurious failures in one session. ADR-016 made the name an env var, which makes concurrent runs
   safe **only if each dispatch sets it**.
+- **Every parallel web dispatch that runs `pnpm test:e2e` sets its own `E2E_PORT_BASE`**, at least
+  three apart, for example 3110 and 3120. Before #192 a second run attached to the first run's dev
+  servers and measured the other worktree's code, which could come back green. Since #192 that
+  collision fails before any spec ("is already used"), so a dispatch that forgets the variable
+  queues rather than lies. `web/CLAUDE.md`, "Two worktrees, one machine". `pnpm test:e2e:auth`
+  shares one Supabase stack and backend, so run that one at a time.
 - **Agents never push and never open pull requests.** They commit to a worktree branch and stop.
   This caught a defect no single agent could see: two backend branches, each green alone, red
   together.

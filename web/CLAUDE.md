@@ -21,7 +21,7 @@ pnpm depcruise:ratchet origin/main             # fail if that baseline gained an
 pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)
 pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/, plus the globs vitest.config.mts adds)
 pnpm test:component                            # vitest --project component (jsdom, *.test.tsx, RTL + MSW)
-pnpm test:e2e                                  # playwright test — boots `next dev` on :3100 itself
+pnpm test:e2e                                  # playwright test — boots its own `next dev` servers, :3100 and :3101 by default; a busy port fails the run, see "Two worktrees, one machine"
 pnpm test:e2e:ui                                # playwright test --ui
 pnpm test:behavior                             # legacy: node --test on tests/behavior/*.test.ts (TS via --experimental-strip-types)
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
@@ -56,17 +56,19 @@ variables on the `e2e` job (`.github/workflows/web-ci.yml`).
 
 `web/playwright.config.ts`'s `webServer.env` now supplies both variables as obvious
 placeholders (`https://e2e-fake-project.example.supabase.co`, `e2e-fake-anon-key`) whenever the
-shell running the tests has not already exported them, so **the e2e dev server on :3100 always
+shell running the tests has not already exported them, so **the hermetic e2e dev server always
 sees the two variables, in a fresh clone, in a worktree, and in CI**, regardless of whether
 `.env.local` exists. Next.js's own env-file loader never overwrites a variable already present
 in `process.env` when the process starts, so this wins over `.env.local` even in a primary
 checkout that has one — deliberately: no e2e spec talks to a live Supabase backend, so the run
 must not depend on real credentials, and a result that only holds where a stray file happens to
 exist is the exact defect this closed. Real Supabase env in `.env.local` still governs `pnpm dev`
-on :3000 for manual local development; only the self-booted :3100 e2e server is affected. One
-caveat this does not cover: `reuseExistingServer: !process.env.CI` means a dev server already
-running on :3100 from an earlier manual `pnpm dev --port 3100` is reused as-is, with whatever env
-it already has — this only guarantees the placeholders when Playwright starts the server itself.
+on :3000 for manual local development; only the self-booted e2e servers are affected. **The
+placeholders hold whenever a spec runs, because since #192 a run only measures a server it
+started.** Until then `reuseExistingServer: !process.env.CI` reused any server already answering on
+:3100, such as an earlier manual `pnpm dev --port 3100`, as-is and with whatever env it had. Now a
+server already answering fails the run before any spec. Only `E2E_REUSE_SERVER=1` reuses one, and a
+server reused that way keeps whatever env it was started with. See "Two worktrees, one machine".
 
 **What this gate does not guarantee.** The missing-Supabase banner's own text-scale overflow is
 untouched — supplying the variables makes the banner stop rendering in this suite, it does not
@@ -827,13 +829,14 @@ Four harnesses, one gate each:
 - `pnpm test:unit` — Vitest, node environment, `*.test.ts` under `src/`. Pure domain and
   `shared/http` logic: `HistoricalDate`, envelope unwrapping, the error taxonomy, request
   context, trace id generation, single-flight refresh, `apiFetch`, the logger. `vitest.config.mts`
-  adds three globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
-  and `scripts/**`, which holds the legacy gate's test.
+  adds four globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
+  `scripts/**`, which holds the legacy gate's test, and `playwright.config.test.ts`, which reads
+  whether an e2e run uses a server it did not start (#192).
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
   response shape.
-- `pnpm test:e2e` — Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots `next dev` on
-  `:3100` itself; runs desktop Chrome and a Pixel 5 viewport. **Eight specs, counted on disk
+- `pnpm test:e2e` — Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots its own `next dev`
+  on `:3100`, and the banner spec's on `:3101`, unless `E2E_PORT_BASE` moves them; runs desktop Chrome and a Pixel 5 viewport. **Eight specs, counted on disk
   2026-08-27**, and `CI=1 pnpm test:e2e` reported `106 passed` the same day. This said "Four
   specs" until then and was already undercounting by one at the batch base — `git ls-tree
 e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rather than trusting a
@@ -870,6 +873,61 @@ backend's OpenAPI schema and fails the build if it drifts — the anti-R3 gate).
 freshness job is triggered by changes under either `web/**` or `backend/app/**`, so a
 backend-only PR that changes response shapes cannot skip it.
 
+## Two worktrees, one machine (#192)
+
+**An e2e run only measures dev servers it started.** This is the web counterpart of the backend's
+`TEST_PG_DB_NAME` (`backend/CLAUDE.md`, "Running two suites at once"; ADR-016), and it is worse in
+one way: two backend suites sharing a database fail loudly, and a port collision did not. Before
+#192 all three `webServer` entries set `reuseExistingServer: !process.env.CI`, so outside CI a run
+that found its URL already answering used that server and started nothing. On 2026-08-26 an agent's
+second run resolved `:3100` to a `next dev` whose working directory was another seed's worktree. It
+reported 48 passed and 10 failed, and the failures were `ERR_CONNECTION_REFUSED` only because the
+other worktree's servers shut down partway. Had they stayed up, it would have reported a pass.
+
+- **By default a busy port fails the run.** Each entry starts its own server, and if its URL
+  already answers, the run stops before any spec with Playwright's own message:
+  `http://127.0.0.1:3100 is already used, make sure that nothing is running on the port/url or set
+reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting it in the config
+  is the defect this closed. Use one of the two variables below instead.
+- **`E2E_PORT_BASE` moves all three ports**, to base, base+1 and base+2. Unset, they are 3100
+  (hermetic), 3101 (banner) and 3102 (authenticated). `BASE_URL`, `BANNER_BASE_URL` and
+  `AUTH_BASE_URL` follow it, and so must the backend's `CORS_ORIGINS` and `INVITE_LINK_ORIGIN` in
+  the authenticated recipe below, which compute the auth origin from it. Every parallel web
+  dispatch that runs the e2e gate sets its own, at least three apart, for example
+  `E2E_PORT_BASE=3110` and `E2E_PORT_BASE=3120`. A value that is not a whole number from 1024 to
+  65533 fails the run, naming the variable and the value. A hash of the worktree path was rejected:
+  two hashes can collide, and the auth origin has to be predictable for `CORS_ORIGINS`.
+- **`E2E_REUSE_SERVER=1` attaches**, to whatever already answers on each URL, as-is and with
+  whatever env it was started with. Use it only for a server you started yourself on purpose, such
+  as a warm `:3102` (the authenticated harness's cold-compile trap, below). Under `CI` a run never
+  attaches, whatever this says.
+- **Who holds a port:** `lsof -nP -iTCP:3100 -sTCP:LISTEN` prints the listening PID, then
+  `lsof -a -p <pid> -d cwd` prints its working directory, which names the checkout. Read it for
+  every port a run uses before you trust a reading from it.
+- **Do not broad-`pkill` a dev server you did not start.** `pkill -f "next dev"` kills every
+  worktree's servers, another agent's mid-run included, and that run then fails with
+  `ERR_CONNECTION_REFUSED` for a reason in neither checkout. Stop only the PID `lsof` resolved to
+  your own checkout.
+- **Why CI never caught it.** Under `CI` the old setting was already false, so in CI the defect
+  did not exist. It lived only on developer machines and agent worktrees, where nothing gates.
+- **What this does not make safe.** Two **authenticated** runs side by side still share one
+  Supabase stack, one seeded database, the backend `E2E_AUTH_API_ORIGIN` names, and that backend's
+  20-per-60-seconds limit on `/api/v1/auth` per IP. That collision fails loudly with 429s rather
+  than passing, and it is out of #192's scope: run `pnpm test:e2e:auth` one at a time.
+
+**`playwright.config.test.ts` holds it in the unit gate.** Two stand-in servers hold base and
+base+1, the way another worktree's `next dev` would, and record every path asked of them. Each case
+runs the real `playwright test` with a wrapper config that spreads the real one and changes only
+`testDir`, to a throwaway spec that requests one path through the `request` fixture, so no browser
+is needed. It reads which server the spec reached, not the setting: with nothing set the run fails
+naming `http://127.0.0.1:<base>` and the stand-in never sees the spec's path; with
+`E2E_REUSE_SERVER=1` it does; under `CI=1` with the opt-in, it does not; and `E2E_PORT_BASE=31OO`
+fails naming the value. Every case removes `CI` from the run but the one that sets it, because
+under `CI` the old config never attached either. Each case was seen to fail on 2026-10-05 against
+its plant: the old `!process.env.CI` fails the first, the opt-in honoured under `CI` fails the
+third, reuse never on fails the second, a literal hermetic or banner port fails the cases that
+reach it, and no validation fails the last, on `TypeError: Invalid URL`.
+
 ## The authenticated e2e harness (2026-08-26)
 
 **One command, and it is not part of `pnpm test:e2e`:**
@@ -881,13 +939,16 @@ docker compose up -d pgdb
 scripts/supabase_local.sh up
 make seed                                  # both halves of five test users
 
-# a backend that trusts the LOCAL stack, and whose CORS admits the e2e origin.
+# a backend that trusts the LOCAL stack, and whose CORS admits the auth origin in use:
+# base+2 of E2E_PORT_BASE, which is :3102 when it is unset ("Two worktrees, one machine").
 # `docker compose up api` also works when the shell has no cloud Supabase values
-# exported; the harness only needs some backend on E2E_AUTH_API_ORIGIN.
+# exported and the auth origin is :3102; the harness only needs some backend on
+# E2E_AUTH_API_ORIGIN.
+AUTH_ORIGIN="http://127.0.0.1:$(( ${E2E_PORT_BASE:-3100} + 2 ))"
 cd backend && DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/family_roots \
   SUPABASE_URL=http://supabase.localhost:54321 \
   SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=...  \
-  CORS_ORIGINS='["http://127.0.0.1:3102"]' INVITE_LINK_ORIGIN=http://127.0.0.1:3102 \
+  CORS_ORIGINS="[\"$AUTH_ORIGIN\"]" INVITE_LINK_ORIGIN="$AUTH_ORIGIN" \
   APP_SECRET_KEY=e2e-local-secret \
   uv run uvicorn app.main:app --host 127.0.0.1 --port 8073
 
@@ -904,7 +965,9 @@ pnpm test:e2e:auth
 directly and so need it started with `INVITE_LINK_ORIGIN` as above. Two traps the first full run
 on a machine with Docker hit that day, neither from #191's cases. **A cold `next dev` compiles a
 route in about 18 seconds**, so the three setup logins, which each wait 30, timed out on a fresh
-server; a second run, reusing the warm `:3102` server outside CI, passed them. **The full run
+server; a second run, reusing the warm `:3102` server outside CI, passed them. Since #192 a run
+reuses a server only under `E2E_REUSE_SERVER=1`, so warm one by starting it yourself with
+`authStackEnv()`'s variables and then run with that set. **The full run
 spends the 20-per-minute bucket**: the server guard's `GET /auth/me` met a 429 (`Quá nhiều yêu
 cầu`) and `guard.auth.spec.ts`'s super_admin case read `500` where it expects `307`.
 **Eighteen tests as written on 2026-10-05 (#186)**: three `auth-setup` logins and fifteen
@@ -945,14 +1008,14 @@ promise:
    `AssertionError: expected [ 'src/lib/server/auth-context.ts' ] to deeply equal []`,
    naming the file. Removed; the suite went back to 434 passing.
 3. **The credential is worthless elsewhere.** `backoffice.auth.spec.ts`'s last case replays
-   the captured admin state against the hermetic `:3100` server, which points at
+   the captured admin state against the hermetic server (`BASE_URL`, `:3100` by default), which points at
    `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. Cookies are
    named for their project (`sb-<ref>-auth-token`) and the token is signed by the stack that
    issued it. **This does not prove middleware checks a signature — it does not**;
    `supabase.auth.getSession()` reads the cookie. Signature checking is the backend's JWKS
    flow (`backend/app/core/security.py`), which is that layer's guarantee, not this one's.
 
-`E2E_AUTH_STACK=1` gates the projects _and_ the third `next dev` (`:3102`). Absent, neither
+`E2E_AUTH_STACK=1` gates the projects _and_ the third `next dev` (`:3102` by default). Absent, neither
 exists, so `pnpm test:e2e` keeps its guarantee: no Docker, no network, same answer in a
 fresh clone, in a worktree, and in CI. Present but under-configured, `authStackEnv()` throws
 naming the missing variables — deliberately not a skip, because a suite that quietly covers
