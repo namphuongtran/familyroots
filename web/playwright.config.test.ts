@@ -41,7 +41,8 @@ let requested: string[] = []
 let child: ChildProcess | undefined
 let scratch: string | undefined
 
-function listen(port: number): Promise<Server> {
+/** A server that answers every path with 200, as a `next dev` would, and records each path. */
+function standIn(port: number): Promise<Server> {
   return new Promise((resolve, reject) => {
     const server = createServer((request, response) => {
       requested.push(request.url ?? '')
@@ -63,8 +64,8 @@ async function holdTwoPorts(): Promise<number> {
     const base = 20_000 + 2 * Math.floor(Math.random() * 10_000)
     const held: Server[] = []
     try {
-      held.push(await listen(base))
-      held.push(await listen(base + 1))
+      held.push(await standIn(base))
+      held.push(await standIn(base + 1))
       standIns = held
       return base
     } catch {
@@ -99,9 +100,11 @@ function runPlaywright(env: Record<string, string>): Promise<Run> {
 
   return new Promise((resolve) => {
     let output = ''
+    // Async, unlike `scripts/legacy-baseline.test.ts`'s `spawnSync`: the stand-ins answer from this
+    // process's event loop, so blocking it would make every port look dead to Playwright.
     // `detached` gives the run its own process group, so `afterEach` can stop it, and anything it
     // started, if a case times out.
-    const run = spawn(
+    const playwright = spawn(
       PLAYWRIGHT,
       [
         'test',
@@ -112,10 +115,10 @@ function runPlaywright(env: Record<string, string>): Promise<Run> {
       ],
       { cwd: WEB_ROOT, env: { ...inherited, FORCE_COLOR: '0', ...env }, detached: true },
     )
-    child = run
-    run.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    run.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    run.on('close', (status) => {
+    child = playwright
+    playwright.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
+    playwright.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
+    playwright.on('close', (status) => {
       child = undefined
       resolve({ status, output })
     })
@@ -132,7 +135,7 @@ afterEach(async () => {
   scratch = undefined
 })
 
-describe('a busy e2e port, held by a server this run did not start', () => {
+describe('a busy e2e port, held by a server this run did not start', { timeout: 60_000 }, () => {
   it('fails the run before any spec, naming the URL, when nothing asks to reuse it', async () => {
     const base = await holdTwoPorts()
 
@@ -141,7 +144,7 @@ describe('a busy e2e port, held by a server this run did not start', () => {
     expect(run.output).toContain(`http://127.0.0.1:${base} is already used`)
     expect(requested).not.toContain(SPEC_PATH)
     expect(run.status).not.toBe(0)
-  }, 60_000)
+  })
 
   it('is what the spec reaches when E2E_REUSE_SERVER=1 asks for it by name', async () => {
     const base = await holdTwoPorts()
@@ -151,7 +154,7 @@ describe('a busy e2e port, held by a server this run did not start', () => {
     expect(run.output).not.toContain('is already used')
     expect(requested).toContain(SPEC_PATH)
     expect(run.status).toBe(0)
-  }, 60_000)
+  })
 
   it('is never attached to under CI, even when E2E_REUSE_SERVER=1 asks', async () => {
     const base = await holdTwoPorts()
@@ -165,15 +168,15 @@ describe('a busy e2e port, held by a server this run did not start', () => {
     expect(run.output).toContain(`http://127.0.0.1:${base} is already used`)
     expect(requested).not.toContain(SPEC_PATH)
     expect(run.status).not.toBe(0)
-  }, 60_000)
+  })
 })
 
-describe('E2E_PORT_BASE', () => {
+describe('E2E_PORT_BASE', { timeout: 60_000 }, () => {
   it('fails the run, naming the variable and the value, when it is not a port', async () => {
     const run = await runPlaywright({ E2E_PORT_BASE: '31OO' })
 
     expect(run.output).toContain('E2E_PORT_BASE')
     expect(run.output).toContain('"31OO"')
     expect(run.status).not.toBe(0)
-  }, 60_000)
+  })
 })

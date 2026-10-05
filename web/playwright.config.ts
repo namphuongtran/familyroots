@@ -33,10 +33,10 @@ function portBase(raw: string | undefined): number {
   return base
 }
 
-const PORT = PORT_BASE
+const HERMETIC_PORT = PORT_BASE
 // Exported for `e2e/auth/backoffice.auth.spec.ts`, which replays a real captured session
 // against this hermetic server on purpose — see that file's "does not travel" case.
-export const BASE_URL = `http://127.0.0.1:${PORT}`
+export const BASE_URL = `http://127.0.0.1:${HERMETIC_PORT}`
 
 // The e2e gate must give the same result on a fresh clone, in a git
 // worktree, and in CI, without a `web/.env.local` — which git does not carry
@@ -89,7 +89,7 @@ const NO_SUPABASE_ENV = {
 /**
  * The third `next dev`, the only one with a session.
  *
- * **Why a third server and not the primary one.** The primary server on `PORT` is
+ * **Why a third server and not the primary one.** The primary server on `HERMETIC_PORT` is
  * deliberately hermetic : fake Supabase placeholders, no network dependency, same
  * result in a fresh clone, in a worktree and in CI. Pointing it at the local Supabase
  * stack would make every existing spec depend on Docker, which is a regression for every
@@ -156,7 +156,7 @@ export default defineConfig({
       // bind, Next treats 127.0.0.1 as a cross-origin dev client and blocks
       // /_next/webpack-hmr on every run — harmless noise now, but noise that would
       // hide a real cross-origin problem once the slices add journeys.
-      command: `pnpm dev --port ${PORT} --hostname 127.0.0.1`,
+      command: `pnpm dev --port ${HERMETIC_PORT} --hostname 127.0.0.1`,
       url: BASE_URL,
       reuseExistingServer: REUSE_EXISTING_SERVER,
       timeout: 120_000,

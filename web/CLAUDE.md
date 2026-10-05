@@ -21,7 +21,7 @@ pnpm depcruise:ratchet origin/main             # fail if that baseline gained an
 pnpm gen:api [path/to/openapi.json]            # regenerate src/generated/api-types.ts from the backend's OpenAPI schema; no arg hits a running backend, a path arg reads a dumped schema (what CI uses)
 pnpm test:unit                                 # vitest --project unit (node environment, *.test.ts under src/, plus the globs vitest.config.mts adds)
 pnpm test:component                            # vitest --project component (jsdom, *.test.tsx, RTL + MSW)
-pnpm test:e2e                                  # playwright test — boots its own `next dev` servers, :3100 and :3101 by default; a busy port fails the run, see "Two worktrees, one machine"
+pnpm test:e2e                                  # playwright test: boots its own `next dev` servers; see "Two worktrees, one machine"
 pnpm test:e2e:ui                                # playwright test --ui
 pnpm test:behavior                             # legacy: node --test on tests/behavior/*.test.ts (TS via --experimental-strip-types)
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
@@ -835,8 +835,9 @@ Four harnesses, one gate each:
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
   response shape.
-- `pnpm test:e2e` — Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots its own `next dev`
-  on `:3100`, and the banner spec's on `:3101`, unless `E2E_PORT_BASE` moves them; runs desktop Chrome and a Pixel 5 viewport. **Eight specs, counted on disk
+- `pnpm test:e2e`: Playwright (`web/playwright.config.ts`, `web/e2e/`). Boots its own `next dev`
+  on `:3100`, and the banner spec's on `:3101`, unless `E2E_PORT_BASE` moves them. Runs desktop
+  Chrome and a Pixel 5 viewport. **Eight specs, counted on disk
   2026-08-27**, and `CI=1 pnpm test:e2e` reported `106 passed` the same day. This said "Four
   specs" until then and was already undercounting by one at the batch base — `git ls-tree
 e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rather than trusting a
@@ -898,9 +899,10 @@ reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting i
   65533 fails the run, naming the variable and the value. A hash of the worktree path was rejected:
   two hashes can collide, and the auth origin has to be predictable for `CORS_ORIGINS`.
 - **`E2E_REUSE_SERVER=1` attaches**, to whatever already answers on each URL, as-is and with
-  whatever env it was started with. Use it only for a server you started yourself on purpose, such
-  as a warm `:3102` (the authenticated harness's cold-compile trap, below). Under `CI` a run never
-  attaches, whatever this says.
+  whatever env it was started with. It covers all three ports at once, so a server you meant to
+  reuse, such as a warm `:3102` (the authenticated harness's cold-compile trap, below), brings
+  whatever else answers on :3100 and :3101 with it. Check every port before you set it. Under `CI`
+  a run never attaches, whatever this says.
 - **Who holds a port:** `lsof -nP -iTCP:3100 -sTCP:LISTEN` prints the listening PID, then
   `lsof -a -p <pid> -d cwd` prints its working directory, which names the checkout. Read it for
   every port a run uses before you trust a reading from it. **On Linux with lsof 4.99.4 the first
@@ -912,8 +914,8 @@ reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting i
   (`ps -o ppid= -p <pid>`).
 - **Do not broad-`pkill` a dev server you did not start.** `pkill -f "next dev"` kills every
   worktree's servers, another agent's mid-run included, and that run then fails with
-  `ERR_CONNECTION_REFUSED` for a reason in neither checkout. Stop only the PID `lsof` resolved to
-  your own checkout.
+  `ERR_CONNECTION_REFUSED` for a reason in neither checkout. Stop only a PID whose working
+  directory, read as in the bullet above, is your own checkout.
 - **Why CI never caught it.** Under `CI` the old setting was already false, so in CI the defect
   did not exist. It lived only on developer machines and agent worktrees, where nothing gates.
 - **What this does not make safe.** Two **authenticated** runs side by side still share one
@@ -934,25 +936,29 @@ its plant: the old `!process.env.CI` fails the first, the opt-in honoured under 
 third, reuse never on fails the second, a literal hermetic or banner port fails the cases that
 reach it, and no validation fails the last, on `TypeError: Invalid URL`.
 
-**The four readings with two worktrees, 2026-10-05.** A and B were worktrees of this repository.
-The plant was `lang="en"` for `lang={locale}` in `src/app/layout.tsx`, which fails `smoke.spec.ts`'s
-"declares Vietnamese" case with `Received: "en"`. Every port was attributed while specs ran, with
-the `ss` form above.
+**The issue's four readings with two worktrees, 2026-10-05.** Reading 3 has two halves, 3a and
+3b. A and B were worktrees of this repository. The plant was `lang="en"` for `lang={locale}` in
+`src/app/layout.tsx`, which fails `smoke.spec.ts`'s "declares Vietnamese" case with
+`Received: "en"`. Every port was attributed while specs ran, with the `ss` form above.
 
-| Reading                                                                  | B's result                                           | B's ports resolved to    |
-| ------------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------ |
-| 1. `main` in both, A planted and serving 3100/3101, B clean, nothing set | 104 passed, 2 failed, both `Received: "en"`          | A                        |
-| 2. this fix in both, the same servers, nothing set                       | `http://127.0.0.1:3100 is already used`, no spec ran | A (held), B started none |
-| 3. B `E2E_PORT_BASE=3200`, clean, A still planted                        | 106 passed                                           | B on 3200/3201           |
-| 3. the plant moved: A clean and serving, B planted, `E2E_PORT_BASE=3200` | both smoke cases `Received: "en"`                    | B on 3200/3201           |
-| 4. A planted, B clean, `E2E_REUSE_SERVER=1`, no base                     | 104 passed, 2 failed, both `Received: "en"`          | A, by request            |
+| Reading                                                                   | B's result                                           | B's ports resolved to    |
+| ------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------ |
+| 1. `main` in both, A planted and serving 3100/3101, B clean, nothing set  | 104 passed, 2 failed, both `Received: "en"`          | A                        |
+| 2. this fix in both, the same servers, nothing set                        | `http://127.0.0.1:3100 is already used`, no spec ran | A (held), B started none |
+| 3a. B `E2E_PORT_BASE=3200`, clean, A still planted                        | 106 passed                                           | B on 3200/3201           |
+| 3b. the plant moved: A clean and serving, B planted, `E2E_PORT_BASE=3200` | both smoke cases `Received: "en"`                    | B on 3200/3201           |
+| 4. A planted, B clean, `E2E_REUSE_SERVER=1`, no base                      | 104 passed, 2 failed, both `Received: "en"`          | A, by request            |
 
-Two runs with B on 3200, the first try at reading 3 and the moved plant, also failed one case the
+Two runs with B on 3200, the first try at reading 3a and reading 3b, also failed one case the
 plant does not touch: `invitation-accept.spec.ts`'s "no request the page makes carries the token in
 a Referer header", once in `chromium` and once in `mobile`, reading B's own
 `http://127.0.0.1:3200/vi/invitations/<token>`. Alone, on B's cold servers at 3200, it passed four
-of four. It is intermittent under a full run's load and not explained yet. Reading 3's pass above is
-the rerun.
+of four. It is intermittent under a full run's load and not explained yet. Reading 3a's pass above is
+the rerun. The gate's own `pnpm test:e2e` in the primary checkout, at the default ports with nothing
+else listening, failed once the same day: 86 passed and 20 failed, every one of them
+`invitation-accept.spec.ts`, every page Next's own 404. The spec passed ten of ten alone, and the
+full suite rerun reported 106 passed. Also not explained. With nothing listening, the old and new
+configs start the same servers, so neither failure reads on this change.
 
 ## The authenticated e2e harness (2026-08-26)
 
@@ -967,9 +973,11 @@ make seed                                  # both halves of five test users
 
 # a backend that trusts the LOCAL stack, and whose CORS admits the auth origin in use:
 # base+2 of E2E_PORT_BASE, which is :3102 when it is unset ("Two worktrees, one machine").
-# `docker compose up api` also works when the shell has no cloud Supabase values
-# exported and the auth origin is :3102; the harness only needs some backend on
-# E2E_AUTH_API_ORIGIN.
+# Set E2E_PORT_BASE to the same value, or leave it unset, in this shell and in web/'s.
+# `docker compose up api` does not do this: its `environment:` sets neither CORS_ORIGINS
+# nor INVITE_LINK_ORIGIN, so it runs on config.py's http://localhost:3000 defaults, which
+# admit no auth origin (read at source 2026-10-05). The harness only needs some backend on
+# E2E_AUTH_API_ORIGIN that admits it.
 AUTH_ORIGIN="http://127.0.0.1:$(( ${E2E_PORT_BASE:-3100} + 2 ))"
 cd backend && DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/family_roots \
   SUPABASE_URL=http://supabase.localhost:54321 \
@@ -992,8 +1000,10 @@ directly and so need it started with `INVITE_LINK_ORIGIN` as above. Two traps th
 on a machine with Docker hit that day, neither from #191's cases. **A cold `next dev` compiles a
 route in about 18 seconds**, so the three setup logins, which each wait 30, timed out on a fresh
 server; a second run, reusing the warm `:3102` server outside CI, passed them. Since #192 a run
-reuses a server only under `E2E_REUSE_SERVER=1`, so warm one by starting it yourself with
-`authStackEnv()`'s variables and then run with that set. **The full run
+reuses a server only under `E2E_REUSE_SERVER=1`, and that variable reuses **every** port the run
+uses, :3100 and :3101 included, which `backoffice.auth.spec.ts`'s replay reads. So before running
+with it, check that each port is free or held by your own checkout ("Who holds a port"). On
+2026-10-05 the setup logins passed cold without it. **The full run
 spends the 20-per-minute bucket**: the server guard's `GET /auth/me` met a 429 (`Quá nhiều yêu
 cầu`) and `guard.auth.spec.ts`'s super_admin case read `500` where it expects `307`.
 **Eighteen tests as written on 2026-10-05 (#186)**: three `auth-setup` logins and fifteen
@@ -1034,15 +1044,15 @@ promise:
    `AssertionError: expected [ 'src/lib/server/auth-context.ts' ] to deeply equal []`,
    naming the file. Removed; the suite went back to 434 passing.
 3. **The credential is worthless elsewhere.** `backoffice.auth.spec.ts`'s last case replays
-   the captured admin state against the hermetic server (`BASE_URL`, `:3100` by default), which points at
-   `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. Cookies are
+   the captured admin state against the hermetic server (`BASE_URL`, `:3100` by default), which
+   points at `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. Cookies are
    named for their project (`sb-<ref>-auth-token`) and the token is signed by the stack that
    issued it. **This does not prove middleware checks a signature — it does not**;
    `supabase.auth.getSession()` reads the cookie. Signature checking is the backend's JWKS
    flow (`backend/app/core/security.py`), which is that layer's guarantee, not this one's.
 
-`E2E_AUTH_STACK=1` gates the projects _and_ the third `next dev` (`:3102` by default). Absent, neither
-exists, so `pnpm test:e2e` keeps its guarantee: no Docker, no network, same answer in a
+`E2E_AUTH_STACK=1` gates the projects _and_ the third `next dev` (`:3102` by default). Absent,
+neither exists, so `pnpm test:e2e` keeps its guarantee: no Docker, no network, same answer in a
 fresh clone, in a worktree, and in CI. Present but under-configured, `authStackEnv()` throws
 naming the missing variables — deliberately not a skip, because a suite that quietly covers
 nothing when Docker is down is the "passed because it scanned nothing" failure
