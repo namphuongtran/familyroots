@@ -1,0 +1,293 @@
+name: Image E2E
+
+# Builds both Docker images, boots the backend image the way infra/render/render.yaml runs it,
+# and runs the authenticated e2e (`pnpm test:e2e:auth`) against that container (#193).
+#
+# Why the built image and not the source tree: on 2026-08-22 a built image refused every
+# production boot while every test, all run from source, stayed green, and compose's `api`
+# service hid it too, because it bind-mounts ./backend/app over the installed package and runs
+# APP_ENV=development (docs/ops/migrations.md, "Boot-time migration gate"). So nothing here uses
+# compose's `api` service. The backend runs the image's own CMD with APP_ENV=production, and the
+# image's own `alembic upgrade head` migrates the application database, as render.yaml's
+# `preDeployCommand` does.
+#
+# docs/ops/local-supabase.md holds the rest: "The image e2e job in CI" for every value the backend
+# gets and why, "Running it beside docker-compose.yml" for the two name-resolution readings, and
+# "What it costs" for the runner's figures. Branch protection does not require this job.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "web/**"
+      - "supabase/**"
+      - "scripts/**"
+      - "Makefile"
+      - "docker-compose.yml"
+      - "infra/render/**"
+      - ".github/workflows/image-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "web/**"
+      - "supabase/**"
+      - "scripts/**"
+      - "Makefile"
+      - "docker-compose.yml"
+      - "infra/render/**"
+      - ".github/workflows/image-e2e.yml"
+
+permissions:
+  contents: read
+
+# Nothing is uploaded from this job, on success or failure. `web/e2e/.auth/` holds live sessions
+# (web/CLAUDE.md, "What holds the session"), and a Playwright report or trace carries the same
+# cookies in its captured requests. They are only local-stack sessions, but an artefact of a public
+# repository is downloadable by any signed-in GitHub user. Read a failure in the job log.
+
+jobs:
+  image-auth-e2e:
+    name: Images, booted backend, authenticated e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Fixes the compose network name, `familyroots_familyroots`, which the backend container
+      # joins to reach `pgdb` by name.
+      COMPOSE_PROJECT_NAME: familyroots
+      COMPOSE_NETWORK: familyroots_familyroots
+      API_IMAGE: familyroots-api:ci
+      WEB_IMAGE: familyroots-web:ci
+      API_CONTAINER: familyroots-api-image
+      WEB_CONTAINER: familyroots-web-image
+      API_PORT: "8073"
+      WEB_IMAGE_PORT: "3000"
+      # Not SUPABASE_*: the Supabase CLI reads that prefix as config overrides, so the stack's
+      # values travel under these names and each step that needs one names it.
+      LOCAL_SUPABASE_URL: http://supabase.localhost:54321
+      # `playwright.config.ts`'s AUTH_BASE_URL with E2E_PORT_BASE unset: base 3100, plus two. The
+      # harness's own web origin, which the backend's CORS_ORIGINS must admit.
+      AUTH_BASE_URL: http://127.0.0.1:3102
+      # The production validator refuses a loopback INVITE_LINK_ORIGIN
+      # (backend/app/core/config.py, `names_loopback`), and the harness's web origin is
+      # 127.0.0.1. This name maps to 127.0.0.1 in the runner's /etc/hosts, so the link the
+      # backend builds opens the harness's own `next dev`. See the ops doc.
+      INVITE_LINK_HOST: familyroots-web.test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Runner size
+        run: |
+          echo "nproc: $(nproc)"
+          free -m
+          df -h /
+          docker version --format 'docker {{.Server.Version}}'
+          docker compose version
+
+      # Two questions the repository left open (docker-compose.yml's `api` comment,
+      # docs/ops/local-supabase.md). The host half is read here: the seeder, Node and the
+      # Playwright request context resolve `supabase.localhost` through the system resolver.
+      # Chromium resolves `*.localhost` itself. The container half is read after the backend boots.
+      - name: Name resolution on the runner
+        run: |
+          echo "nsswitch: $(grep '^hosts:' /etc/nsswitch.conf)"
+          if getent ahosts supabase.localhost; then
+            echo "supabase.localhost resolves on the runner with no /etc/hosts line."
+          else
+            echo "supabase.localhost does not resolve on the runner; adding the /etc/hosts fallback."
+            echo "127.0.0.1 supabase.localhost" | sudo tee -a /etc/hosts
+            getent ahosts supabase.localhost
+          fi
+          echo "127.0.0.1 $INVITE_LINK_HOST" | sudo tee -a /etc/hosts
+          getent ahosts "$INVITE_LINK_HOST"
+
+      # Pulled here, not inside `up`, so the cost of a cold pull is its own step. The Supabase
+      # list is the six containers docs/ops/local-supabase.md counts for CLI 2.115.0
+      # (scripts/supabase_local.sh pins it). If the CLI is bumped and this list goes stale, `up`
+      # pulls what is missing and the "Images the stack runs" check below warns.
+      - name: Pull runtime images
+        env:
+          SUPABASE_IMAGES: >-
+            public.ecr.aws/supabase/postgres:17.6.1.159
+            public.ecr.aws/supabase/gotrue:v2.195.0
+            public.ecr.aws/supabase/kong:2.8.1
+            public.ecr.aws/supabase/storage-api:v1.69.11
+            public.ecr.aws/supabase/mailpit:v1.30.2
+            public.ecr.aws/supabase/postgrest:v16.1
+        run: |
+          pids=()
+          docker compose pull --quiet pgdb & pids+=($!)
+          for image in $SUPABASE_IMAGES; do docker pull --quiet "$image" & pids+=($!); done
+          for pid in "${pids[@]}"; do wait "$pid"; done
+          echo "$SUPABASE_IMAGES" | tr ' ' '\n' > "$RUNNER_TEMP/prepulled-images.txt"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Start pgdb and the Supabase stack
+        run: |
+          docker compose up --detach --wait pgdb
+          scripts/supabase_local.sh up
+          eval "$(scripts/supabase_local.sh env)"
+          [ "$SUPABASE_URL" = "$LOCAL_SUPABASE_URL" ] \
+            || { echo "::error::scripts/supabase_local.sh env printed SUPABASE_URL=$SUPABASE_URL, not $LOCAL_SUPABASE_URL"; exit 1; }
+          {
+            echo "LOCAL_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            echo "LOCAL_SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Images the stack runs
+        run: |
+          docker ps --filter "name=supabase_" --format '{{.Image}}' | sort -u | while read -r image; do
+            grep -qxF "$image" "$RUNNER_TEMP/prepulled-images.txt" \
+              || echo "::warning::$image was not pre-pulled, so its pull time is inside the stack step. Update SUPABASE_IMAGES."
+          done
+
+      # Render builds with `dockerContext: ./backend` and `dockerfilePath: ./backend/Dockerfile`.
+      - name: Build the backend image
+        run: docker build --tag "$API_IMAGE" backend
+
+      # The three build arguments web/Dockerfile declares. Next.js inlines NEXT_PUBLIC_* at
+      # `pnpm build`, so a value supplied only at run time never reaches the bundle.
+      - name: Build the web image
+        run: |
+          docker build --tag "$WEB_IMAGE" \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="$LOCAL_SUPABASE_URL" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$LOCAL_SUPABASE_ANON_KEY" \
+            --build-arg NEXT_PUBLIC_API_URL="http://127.0.0.1:$API_PORT/api/v1" \
+            web
+
+      # One environment for the migration and the server, as on Render, where
+      # `preDeployCommand` runs with the service's own variables. Every value satisfies the
+      # production validator (backend/app/core/config.py, `_enforce_production_safety`); none
+      # relaxes it. The database host is `pgdb`, a name on the compose network.
+      # RATE_LIMIT_TRUST_FORWARDED_FOR is false because nothing proxies this container.
+      - name: Migrate with the image, then seed both databases
+        run: |
+          cat > "$RUNNER_TEMP/api.env" <<EOF
+          APP_ENV=production
+          APP_DEBUG=false
+          APP_SECRET_KEY=$(openssl rand -hex 32)
+          DATABASE_URL=postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots
+          ALLOWED_HOSTS=["127.0.0.1"]
+          RATE_LIMIT_TRUST_FORWARDED_FOR=false
+          CORS_ORIGINS=["$AUTH_BASE_URL"]
+          INVITE_LINK_ORIGIN=http://$INVITE_LINK_HOST:${AUTH_BASE_URL##*:}
+          SUPABASE_URL=$LOCAL_SUPABASE_URL
+          SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY
+          SUPABASE_SERVICE_ROLE_KEY=$LOCAL_SUPABASE_SERVICE_ROLE_KEY
+          EOF
+          docker run --rm --network "$COMPOSE_NETWORK" --env-file "$RUNNER_TEMP/api.env" \
+            "$API_IMAGE" alembic upgrade head
+          # `make seed` runs the source tree's `alembic upgrade head` first. The image has just
+          # taken the database to head, so that is a no-op; the seeder is what this is for.
+          # Both variables exported, so it does not shell out to `supabase status`.
+          SUPABASE_URL="$LOCAL_SUPABASE_URL" SUPABASE_SERVICE_ROLE_KEY="$LOCAL_SUPABASE_SERVICE_ROLE_KEY" make seed
+
+      # The image's own CMD, no source mount. Under APP_ENV=production a migration status other
+      # than `current` raises at boot (backend/app/main.py), so a broken image exits here.
+      - name: Boot the backend image
+        run: |
+          docker run --detach --name "$API_CONTAINER" \
+            --network "$COMPOSE_NETWORK" \
+            --add-host supabase.localhost:host-gateway \
+            --publish "127.0.0.1:$API_PORT:8000" \
+            --env-file "$RUNNER_TEMP/api.env" \
+            "$API_IMAGE"
+          deadline=$((SECONDS + 90))
+          while :; do
+            code="$(curl -sS -o "$RUNNER_TEMP/health.json" -w '%{http_code}' "http://127.0.0.1:$API_PORT/health" 2>/dev/null || true)"
+            [ "$code" = 200 ] && break
+            if [ "$(docker inspect --format '{{.State.Running}}' "$API_CONTAINER")" != true ]; then
+              docker logs "$API_CONTAINER" 2>&1 | tail -40
+              reason="$(docker logs "$API_CONTAINER" 2>&1 | grep -m1 '^RuntimeError: ' || echo 'no RuntimeError line')"
+              echo "::error::The backend image exited before answering /health, exit $(docker inspect --format '{{.State.ExitCode}}' "$API_CONTAINER"): $reason"
+              exit 1
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              docker logs "$API_CONTAINER" 2>&1 | tail -40
+              echo "::error::No 200 from GET /health within 90 s. Last answer: ${code:-none} $(cat "$RUNNER_TEMP/health.json" 2>/dev/null)"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "GET /health -> $code $(cat "$RUNNER_TEMP/health.json")"
+          grep -q '"migrations":"current"' "$RUNNER_TEMP/health.json" \
+            || { echo "::error::/health answered 200 without \"migrations\":\"current\""; exit 1; }
+          # The container half of the name-resolution question: `host-gateway` must reach the
+          # stack, or the backend cannot fetch the JWKS and every token is rejected.
+          docker exec "$API_CONTAINER" python -c "import json, urllib.request; r = urllib.request.urlopen('$LOCAL_SUPABASE_URL/auth/v1/.well-known/jwks.json', timeout=10); print('from the container: JWKS', r.status, [k['kid'] for k in json.load(r)['keys']])"
+
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Install browsers
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The outcome, not the setting: Chromium loads the page the container serves and counts
+      # the banner. A build log or the image's environment would read the same whether or not
+      # the values reached the bundle (docker-compose.yml's `web.build` comment).
+      - name: Read the web image's /vi/login
+        working-directory: web
+        run: |
+          docker run --detach --name "$WEB_CONTAINER" --publish "127.0.0.1:$WEB_IMAGE_PORT:3000" "$WEB_IMAGE"
+          deadline=$((SECONDS + 60))
+          until curl -sS -o /dev/null "http://127.0.0.1:$WEB_IMAGE_PORT/vi/login" 2>/dev/null; do
+            [ "$SECONDS" -lt "$deadline" ] || { docker logs "$WEB_CONTAINER"; echo "::error::The web image did not answer within 60 s"; exit 1; }
+            sleep 1
+          done
+          node --input-type=module -e "
+            import { chromium } from '@playwright/test'
+            const browser = await chromium.launch()
+            const page = await browser.newPage()
+            const response = await page.goto('http://127.0.0.1:$WEB_IMAGE_PORT/vi/login', { waitUntil: 'networkidle' })
+            const form = await page.locator('input[type=\"email\"]').count()
+            const banner = await page.getByText('NEXT_PUBLIC_SUPABASE_URL').count()
+            await browser.close()
+            console.log('GET /vi/login -> ' + response.status() + ', email inputs: ' + form + ', banner elements: ' + banner)
+            if (response.status() !== 200 || form !== 1) {
+              console.log('::error::The web image did not render the login form, so the banner reading means nothing')
+              process.exit(1)
+            }
+            if (banner !== 0) {
+              console.log('::error::banner: present. The web image renders the missing-Supabase banner, so its build arguments did not reach the bundle')
+              process.exit(1)
+            }
+            console.log('banner: absent')
+          "
+          docker rm --force "$WEB_CONTAINER"
+
+      - name: Authenticated e2e against the backend image
+        working-directory: web
+        env:
+          E2E_AUTH_SUPABASE_URL: ${{ env.LOCAL_SUPABASE_URL }}
+          E2E_AUTH_SUPABASE_ANON_KEY: ${{ env.LOCAL_SUPABASE_ANON_KEY }}
+          E2E_AUTH_API_ORIGIN: http://127.0.0.1:${{ env.API_PORT }}
+        run: |
+          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+          echo "containers running: $(docker ps --quiet | wc -l)"
+          pnpm test:e2e:auth --reporter=list,github
+
+      - name: Backend log on failure
+        if: failure()
+        run: |
+          docker ps --all --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+          docker logs "$API_CONTAINER" 2>&1 | tail -200 || true

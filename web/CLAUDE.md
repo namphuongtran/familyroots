@@ -27,7 +27,7 @@ pnpm test:behavior                             # legacy: node --test on tests/be
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
-Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. `pnpm test:e2e:auth` is **not** in that list and is not optional either — it needs Docker, the Supabase CLI stack and a seeded backend, so run it whenever you touch an authenticated route, and say plainly if you could not. See "The authenticated e2e harness". Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
+Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. `pnpm test:e2e:auth` is **not** in that list and is not optional either — it needs Docker, the Supabase CLI stack and a seeded backend, so run it whenever you touch an authenticated route, and say plainly if you could not. See "The authenticated e2e harness". CI runs it too since #193, in `.github/workflows/image-e2e.yml`'s `image-auth-e2e` job, against the built backend image, so a pull request whose author could not run it still gets a reading. Nothing requires that check to pass before a merge, so read it. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
 
 **`pnpm format:check` has been in CI since 2026-08-22.** Before that, `web/CLAUDE.md`
 and `.claude/rules/tailwind.md` § 9 both told contributors not to run `pnpm format`, because 112
@@ -874,6 +874,11 @@ backend's OpenAPI schema and fails the build if it drifts — the anti-R3 gate).
 freshness job is triggered by changes under either `web/**` or `backend/app/**`, so a
 backend-only PR that changes response shapes cannot skip it.
 
+`.github/workflows/image-e2e.yml` (#193) builds the web image with its three `NEXT_PUBLIC_*`
+build arguments, reads its `/vi/login` in Chromium for the missing-Supabase banner, and runs
+`pnpm test:e2e:auth` against the built backend image. `docs/ops/local-supabase.md`, "The image e2e
+job in CI".
+
 ## Two worktrees, one machine (#192)
 
 **An e2e run only measures dev servers it started.** This is the web counterpart of the backend's
@@ -993,6 +998,10 @@ export E2E_AUTH_SUPABASE_ANON_KEY="$(scripts/supabase_local.sh env | ...)"
 export E2E_AUTH_API_ORIGIN=http://127.0.0.1:8073
 pnpm test:e2e:auth
 ```
+
+**CI runs the same command against the built backend image** (`image-e2e.yml`, #193). Its backend
+values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
+"The image e2e job in CI", lists each one and why.
 
 **Twenty-one tests as written on 2026-10-05 (#191)**: three `auth-setup` logins and eighteen
 `auth-chromium` cases. #191 added `invitation-link.auth.spec.ts`'s three, which call the backend
