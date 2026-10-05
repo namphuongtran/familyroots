@@ -14,7 +14,7 @@ resources remain scaffolded.
 | mobile | push to `[main, develop]` | Flutter build + test (`mobile-ci.yml`); **no deploy step** |
 | infra | push to `[main, develop]` | `pulumi preview` on PR / `pulumi up` on `main` (`infra-ci.yml`) — currently a **no-op** because the Pulumi resources are stubs |
 | repo hygiene | pull request to `[main, develop]`, never push | gitleaks secret scan + no-committed-`.env` gate (`pr-checks.yml`) |
-| images + authenticated e2e | pull request and push to `main` | builds `backend/Dockerfile` and `web/Dockerfile`, boots the backend image under `APP_ENV=production` and runs `pnpm test:e2e:auth` against it (`image-e2e.yml`, #193). A gate, not a deploy: neither deploy job waits for it. See [local-supabase.md](local-supabase.md), "The image e2e job in CI" |
+| images + authenticated e2e | pull request and push to `main` | builds `backend/Dockerfile` and `web/Dockerfile`, boots the backend image under `APP_ENV=production` and runs `pnpm test:e2e:auth` against it (`image-e2e.yml`, #193). A check, not a deploy: neither deploy job waits for it, and branch protection does not require it (`main` has no protection and no rulesets, read 2026-10-06). See [local-supabase.md](local-supabase.md), "The image e2e job in CI" |
 | db-backup | **schedule** (`cron "15 17 * * *"` = 00:15 Asia/Ho_Chi_Minh) + `workflow_dispatch` — not push | `pg_dump` → gzip → upload to Supabase Storage `backups` bucket + rotation (`db-backup.yml`); skips green with a `::notice::` if the 3 backup secrets aren't set — see [backup-restore.md](backup-restore.md) |
 
 The workflows do not share one trigger. `backend-ci.yml`, `mobile-ci.yml` and

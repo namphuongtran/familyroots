@@ -11,8 +11,9 @@ name: Image E2E
 # image's own `alembic upgrade head` migrates the application database, as render.yaml's
 # `preDeployCommand` does.
 #
-# Readings, costs and the two Linux name-resolution questions: docs/ops/local-supabase.md,
-# "The image e2e job in CI".
+# docs/ops/local-supabase.md holds the rest: "The image e2e job in CI" for every value the backend
+# gets and why, "Running it beside docker-compose.yml" for the two name-resolution readings, and
+# "What it costs" for the runner's figures. Branch protection does not require this job.
 
 on:
   push:
@@ -65,8 +66,9 @@ jobs:
       # Not SUPABASE_*: the Supabase CLI reads that prefix as config overrides, so the stack's
       # values travel under these names and each step that needs one names it.
       LOCAL_SUPABASE_URL: http://supabase.localhost:54321
-      # `playwright.config.ts`'s AUTH_BASE_URL with E2E_PORT_BASE unset: base 3100, plus two.
-      AUTH_ORIGIN: http://127.0.0.1:3102
+      # `playwright.config.ts`'s AUTH_BASE_URL with E2E_PORT_BASE unset: base 3100, plus two. The
+      # harness's own web origin, which the backend's CORS_ORIGINS must admit.
+      AUTH_BASE_URL: http://127.0.0.1:3102
       # The production validator refuses a loopback INVITE_LINK_ORIGIN
       # (backend/app/core/config.py, `names_loopback`), and the harness's web origin is
       # 127.0.0.1. This name maps to 127.0.0.1 in the runner's /etc/hosts, so the link the
@@ -76,7 +78,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Runner
+      - name: Runner size
         run: |
           echo "nproc: $(nproc)"
           free -m
@@ -145,7 +147,6 @@ jobs:
           eval "$(scripts/supabase_local.sh env)"
           [ "$SUPABASE_URL" = "$LOCAL_SUPABASE_URL" ] \
             || { echo "::error::scripts/supabase_local.sh env printed SUPABASE_URL=$SUPABASE_URL, not $LOCAL_SUPABASE_URL"; exit 1; }
-          echo "::add-mask::$SUPABASE_SERVICE_ROLE_KEY"
           {
             echo "LOCAL_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
             echo "LOCAL_SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
@@ -186,8 +187,8 @@ jobs:
           DATABASE_URL=postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots
           ALLOWED_HOSTS=["127.0.0.1"]
           RATE_LIMIT_TRUST_FORWARDED_FOR=false
-          CORS_ORIGINS=["$AUTH_ORIGIN"]
-          INVITE_LINK_ORIGIN=http://$INVITE_LINK_HOST:3102
+          CORS_ORIGINS=["$AUTH_BASE_URL"]
+          INVITE_LINK_ORIGIN=http://$INVITE_LINK_HOST:${AUTH_BASE_URL##*:}
           SUPABASE_URL=$LOCAL_SUPABASE_URL
           SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY
           SUPABASE_SERVICE_ROLE_KEY=$LOCAL_SUPABASE_SERVICE_ROLE_KEY

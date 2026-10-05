@@ -99,6 +99,10 @@ with `familyroots-pgdb`, `familyroots-pgadmin` and three `kind` nodes already ru
 | `down` | 6.2 s |
 | `destroy` | 1 min 5.4 s |
 
+**On a cold GitHub-hosted runner** the figures are not in yet. The CI job ("The image e2e job in
+CI", below) logs each phase, the runner's size and its container count, and its first Actions run
+on #193's pull request is what fills this in. The table above is a warm Mac and does not predict them.
+
 **Six containers**, counted 2026-08-22 with `docker ps --filter name=supabase`:
 
 | Container | Image | Why it is here |
@@ -321,10 +325,13 @@ deployment from handing every invitee a link to `localhost`.
 
 **The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`.** Next 16's dev server
 refuses its `/_next/webpack-hmr` socket to a page on any host but `localhost`, `*.localhost` and the
-one it was started on (`node_modules/next/dist/server/lib/router-utils/block-cross-site-dev.js`).
-Measured on this repository's Linux dev machine on 2026-10-06, opening
-`http://familyroots-web.test:3192/vi/invitations/<token>` with Chromium mapping the name to
-`127.0.0.1`:
+one it was started on (`blockCrossSiteDEV` in Next 16.2.12's
+`dist/server/lib/router-utils/block-cross-site-dev.js:77-108`). Measured on this repository's Linux
+dev machine on 2026-10-06 at `f6f9409`: a Playwright script launched Chromium with
+`--host-resolver-rules=MAP familyroots-web.test 127.0.0.1`, opened
+`http://familyroots-web.test:3192/vi/invitations/<token>`, waited 15 s and listed the page's
+headings. The port is 3192 because the rehearsal ran with `E2E_PORT_BASE=3190`, clear of the
+machine's own dev servers. The job uses 3102.
 
 | Server | `allowedDevOrigins` | Headings on the page |
 |---|---|---|
@@ -356,7 +363,9 @@ all is not established here. Its blueprint names `healthCheckPath: /health` (`re
 20-requests-per-60-seconds bucket on `/api/v1/auth` (`backend/app/main.py:221-227`). The job runs the
 suite as written and does not change that limit, so it inherits the collision. Every request reaches
 the container from one address, the compose network's gateway, so they share one bucket, the same
-as `127.0.0.1` on a laptop. Two local rehearsals of the job on 2026-10-06, against the backend image:
+as `127.0.0.1` on a laptop. #226 tracks the collision. Two local rehearsals of the job on 2026-10-06
+at `f6f9409`, against the backend image, with the 429s counted by
+`docker logs <backend container> 2>&1 | grep -c ' 429 '` after each run:
 
 | Workers | Result | 429s in the container log |
 |---|---|---|
