@@ -8,7 +8,8 @@
  *
  * What stays outside the slice, per ADR-061 § 1: the `current_clan_id` cookie and the request
  * context (`@/shared/http`), the capability table (`@/domain/capability`), and the access-state
- * function (`@/domain/session/access-state`), which the server guard (#186) calls too.
+ * function (`@/domain/session/access-state`), which the server guard (#186) calls too. The
+ * capability *hook* is inside, because it reads the session (#185, ADR-061 § 4).
  */
 
 export type { Membership, Session } from '@/domain/session/session'
@@ -16,6 +17,7 @@ export type { AccessState } from '@/domain/session/access-state'
 
 export { landingPath } from './model/landing'
 export { useSession } from './hooks/use-session'
+export { useCapabilities } from './hooks/use-capabilities'
 export { useAuthActions } from './hooks/use-auth-actions'
 
 export { ClanSuspendedScreen } from './ui/ClanSuspendedScreen'

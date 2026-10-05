@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { PersonForm } from '@/features/persons'
-import { useCapabilities } from '@/lib/hooks/useCapabilities'
+import { useCapabilities } from '@/features/auth'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useClientRequestContext } from '@/shared/http/context.client'
 
@@ -20,10 +20,10 @@ export default function NewMemberPage() {
   const t = useTranslations('member')
   const router = useRouter()
   const { locale } = useParams<{ locale: string }>()
-  const { canEditPersons } = useCapabilities()
+  const { editPerson } = useCapabilities()
   const { context, ready, refreshAuth } = useClientRequestContext()
 
-  if (!canEditPersons) {
+  if (!editPerson) {
     return <p className="text-muted-foreground text-sm">{t('no_permission_edit')}</p>
   }
 
