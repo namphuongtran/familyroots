@@ -14,6 +14,16 @@ const nextConfig: NextConfig = {
   // 2026-08-22), so the second instance needs its own. Unset for every other invocation —
   // `pnpm dev`, `pnpm build`, and the primary e2e server all keep using `.next`.
   distDir: process.env.PLAYWRIGHT_SECOND_DIST_DIR || '.next',
+  /**
+   * `next dev` only, and only for `.github/workflows/image-e2e.yml` (#193). That job runs the
+   * backend under `APP_ENV=production`, whose validator refuses a loopback `INVITE_LINK_ORIGIN`, so
+   * invitation links are built on this name and the runner's `/etc/hosts` maps it to `127.0.0.1`.
+   * Next 16 blocks a page on any other host from the dev server's `/_next/webpack-hmr` socket, and
+   * the invitation page then never reads its session: measured 2026-10-06, the page stayed on its
+   * loading button without this entry and showed "Hãy đăng nhập trước" with it. `.test` is
+   * reserved (RFC 2606), so the name resolves nowhere that has not mapped it on purpose.
+   */
+  allowedDevOrigins: ['familyroots-web.test'],
   // Moved out of `experimental` in Next.js 15+ (Next.js 16 uses top-level key)
   serverExternalPackages: [],
   /**

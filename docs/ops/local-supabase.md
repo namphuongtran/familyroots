@@ -221,6 +221,11 @@ project.** It would overwrite the hosted Site URL and auth settings with the loc
 - **The two auth rate limits were raised for local use.** `email_sent` 2 → 100 per hour and
   `sign_in_sign_ups` 30 → 300 per five minutes, in `supabase/config.toml`. The CLI defaults are
   below what one e2e run needs. The backend's own rate limit (ADR-021) is unaffected.
+- **The CLI reads any `SUPABASE_*` variable in its environment as a config override.** Measured
+  2026-10-06: `SUPABASE_API_PORT=59999 supabase status -o env` printed
+  `API_URL="http://127.0.0.1:59999"` against a stack listening on 54321. So do not export the backend's
+  `SUPABASE_URL` or keys into a shell that then runs `scripts/supabase_local.sh`. The CI job keeps them
+  under `LOCAL_SUPABASE_*` names for this reason.
 - **GoTrue logs a `GOTRUE_MAILER_EXTERNAL_HOSTS` warning on every request.** It is because the Host
   header is `supabase.localhost`. Harmless: email links are built from `external_url`.
 
@@ -250,7 +255,113 @@ and `SUPABASE_URL: http://supabase.localhost:54321`. Verified 2026-08-22 by runn
 image on the `familyroots_familyroots` network with exactly that: the same token that a host-run
 backend accepted returned `200 {"data":[]}` from inside the container.
 
-**On Linux CI, check that `supabase.localhost` resolves before relying on it.** It was verified on
-macOS only. `host-gateway` works on Linux Docker from 20.10, but host-side resolution of the
-`.localhost` TLD is the resolver's business, not Docker's. That is a separate problem to settle; an
-`/etc/hosts` line is the obvious fallback.
+**On Linux, both halves are read rather than assumed.** Host-side resolution of the `.localhost` TLD
+is the resolver's business, not Docker's. Read on this repository's Linux dev machine on 2026-10-06:
+
+- **The host.** `getent ahosts supabase.localhost` answered `::1` and `127.0.0.1` with no
+  `/etc/hosts` line, under `hosts: files mdns4_minimal [NOTFOUND=return] dns`.
+- **A container.** The backend image, started with `--add-host supabase.localhost:host-gateway` on the
+  `familyroots_familyroots` network, fetched `http://supabase.localhost:54321/auth/v1/.well-known/jwks.json`
+  and got `200` with the key `b81269f1-21d8-4f2e-b719-c2240a840d90`. The stack publishes its ports
+  on `0.0.0.0`, which is what lets the bridge gateway reach them.
+
+The CI job takes both readings again on every run, in its "Name resolution on the runner" and "Boot
+the backend image" steps. If the host does not resolve the name, the job adds the `/etc/hosts` line
+and says so in the log.
+
+---
+
+## The image e2e job in CI (#193)
+
+`.github/workflows/image-e2e.yml` starts this stack on a GitHub-hosted runner and runs
+`pnpm test:e2e:auth` against the **built backend image**, not the source tree. A built image once
+refused every production boot while every test stayed green, because every test ran from source
+([migrations.md](migrations.md), "Boot-time migration gate"). Compose's `api` service could not have
+caught it either. It runs `APP_ENV: development` and bind-mounts `./backend/app` over the installed
+package. So the job does not use it.
+
+### What it runs, in order
+
+1. `pgdb` from `docker-compose.yml`, and this stack through `scripts/supabase_local.sh up`.
+2. `docker build backend`, the context and Dockerfile `infra/render/render.yaml` names.
+3. `docker build web`, with its three `NEXT_PUBLIC_*` build arguments set to this stack's URL, its
+   anon key, and the backend container's port on the runner.
+4. The backend image's own `alembic upgrade head` against `pgdb`, the way `render.yaml`'s
+   `preDeployCommand` runs it. Then `make seed`. Its own `alembic upgrade head` finds nothing to do.
+5. The backend image, with its own `CMD`, `APP_ENV=production` and no source mount. The step waits for
+   `GET /health` to answer 200 with `"migrations":"current"`. If the process exits first, the step
+   fails and quotes the container's `RuntimeError:` line.
+6. The web image, read once in Chromium. `/vi/login` must render the login form and no
+   missing-Supabase banner. Then the container is removed, because the harness does not use it.
+7. `pnpm test:e2e:auth`, on `next dev` as on a laptop, against the backend container.
+
+Nothing is uploaded, on success or failure. `web/e2e/.auth/` holds live sessions, and a Playwright
+report or trace carries the same cookies in its captured requests. The repository is public, so its
+artefacts are downloadable by any signed-in GitHub user.
+
+### The backend's environment satisfies the production validator and does not relax it
+
+| Variable | Value in the job | Why it passes |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots` | `pgdb` is a name on the compose network the container joins. Inside a container, `localhost` would not be the database anyway |
+| `ALLOWED_HOSTS` | `["127.0.0.1"]` | every request reaches the container through `127.0.0.1:8073` on the runner |
+| `CORS_ORIGINS` | `["http://127.0.0.1:3102"]` | the harness's auth origin. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
+| `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
+| `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Render sets `true` because its own proxy terminates TLS |
+| `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Render generates one too |
+| `SUPABASE_URL` and both keys | this stack's, from `scripts/supabase_local.sh env` | `supabase.localhost`, for the reason in "The two settings that are load bearing" |
+
+**`INVITE_LINK_ORIGIN` is a name, because the validator refuses the harness's origin.** Since #191 the
+validator refuses an empty or loopback value (`config.py:247-251`, `names_loopback`).
+`invitation-link.auth.spec.ts` opens the link the backend builds, so the link has to reach the
+harness's `next dev` on `127.0.0.1:3102`. The job adds `127.0.0.1 familyroots-web.test` to the
+runner's `/etc/hosts` and builds links on that name. `.test` is reserved by RFC 2606, so it resolves
+nowhere else. Do not "fix" this by loosening `names_loopback`. That refusal is what stops a production
+deployment from handing every invitee a link to `localhost`.
+
+**The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`.** Next 16's dev server
+refuses its `/_next/webpack-hmr` socket to a page on any host but `localhost`, `*.localhost` and the
+one it was started on (`node_modules/next/dist/server/lib/router-utils/block-cross-site-dev.js`).
+Measured on this repository's Linux dev machine on 2026-10-06, opening
+`http://familyroots-web.test:3192/vi/invitations/<token>` with Chromium mapping the name to
+`127.0.0.1`:
+
+| Server | `allowedDevOrigins` | Headings on the page |
+|---|---|---|
+| `next dev` | unset | `Lời mời tham gia dòng họ`, and the button stays on `Đang tải...` |
+| `next dev` | `['familyroots-web.test']` | `Hãy đăng nhập trước`, the signed-out state the spec reads |
+| the web image, `next start` | unset | `Hãy đăng nhập trước` |
+| `next dev`, at `127.0.0.1` instead | unset | `Hãy đăng nhập trước` |
+
+The first row is what `invitation-link.auth.spec.ts`'s first case read in a local rehearsal of the
+job, before the entry existed: the heading it waits for never appeared, on the first try or the retry. The page is not a secure context at that name
+(`isSecureContext` false, no `crypto.subtle`), and the third row shows that is not the cause. Why a
+refused HMR socket leaves the session read pending was not established.
+
+### The image's own `HEALTHCHECK` reports unhealthy here, and the job does not read it
+
+`backend/Dockerfile`'s `HEALTHCHECK` requests `http://localhost:8000/health`. `ALLOWED_HOSTS` does not
+list `localhost`, so `TrustedHostMiddleware` answers 400 and Docker marks the container unhealthy.
+Read on this repository's Linux dev machine on 2026-10-06, with the image booted as the job boots it:
+the container log held six `"GET /health HTTP/1.1" 400 Bad Request` lines from the probe beside two
+200s from the runner, and `docker inspect` read `unhealthy failing-streak=7`. The job reads
+`GET /health` from the runner, through the host the backend admits. `render.yaml` sets
+`ALLOWED_HOSTS` to `["familyroots-api.onrender.com"]`, which does not list `localhost` either, so the
+same probe fails inside a production container too. Whether Render reads the image's `HEALTHCHECK` at
+all is not established here. Its blueprint names `healthCheckPath: /health` (`render.yaml:64`).
+
+### The job inherits the harness's rate-limit collision
+
+`web/CLAUDE.md` already records that a full `pnpm test:e2e:auth` run spends the backend's
+20-requests-per-60-seconds bucket on `/api/v1/auth` (`backend/app/main.py:221-227`). The job runs the
+suite as written and does not change that limit, so it inherits the collision. Every request reaches
+the container from one address, the compose network's gateway, so they share one bucket, the same
+as `127.0.0.1` on a laptop. Two local rehearsals of the job on 2026-10-06, against the backend image:
+
+| Workers | Result | 429s in the container log |
+|---|---|---|
+| 4, the Playwright default on this 8-core machine | 17 passed, 1 flaky, 3 failed. Two failures and the flaky case are `guard.auth.spec.ts`'s super_admin cases, on 429s. The third is the invitation case, a run made before `allowedDevOrigins` existed | 7 |
+| 2, the default on a 4-vCPU runner | 19 passed, 2 flaky, each passing on its `CI` retry | 2 |
+
+A pass that leans on retries is a gate that will one day go red for a reason in no diff. The defect
+is in the suite's request budget or in the limit, not in this job, and it is not fixed here.

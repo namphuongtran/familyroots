@@ -9,15 +9,20 @@ resources remain scaffolded.
 
 | Component | Trigger | Mechanism |
 |-----------|---------|-----------|
-| backend | push to `main` (after `lint-and-test` passes) | `deploy` job posts `curl -f -s -S "$RENDER_DEPLOY_HOOK"` (`backend-ci.yml`); the job fails fast if the secret is missing |
-| web | push to `main` (after build/test) | `npx vercel deploy --prod --token=$VERCEL_TOKEN` (`web-ci.yml`) |
+| backend | push to `main` (after `lint-and-test` passes) | `deploy` job posts `curl -f -s -S "$RENDER_DEPLOY_HOOK"` (`backend-ci.yml`). With the secret missing it skips with a `::warning::` and exits 0, so the run stays green (`backend-ci.yml:96-101`) |
+| web | push to `main` (after `build-and-test`, `e2e` and `api-types-fresh` pass) | `pnpm dlx vercel deploy --prod --token="$VERCEL_TOKEN"` (`web-ci.yml`). With the secret missing it skips with a `::warning::` |
 | mobile | push to `[main, develop]` | Flutter build + test (`mobile-ci.yml`); **no deploy step** |
 | infra | push to `[main, develop]` | `pulumi preview` on PR / `pulumi up` on `main` (`infra-ci.yml`) — currently a **no-op** because the Pulumi resources are stubs |
-| repo hygiene | push to `[main, develop]` | gitleaks secret scan + no-committed-`.env` gate (`pr-checks.yml`) |
+| repo hygiene | pull request to `[main, develop]`, never push | gitleaks secret scan + no-committed-`.env` gate (`pr-checks.yml`) |
+| images + authenticated e2e | pull request and push to `main` | builds `backend/Dockerfile` and `web/Dockerfile`, boots the backend image under `APP_ENV=production` and runs `pnpm test:e2e:auth` against it (`image-e2e.yml`, #193). A gate, not a deploy: neither deploy job waits for it. See [local-supabase.md](local-supabase.md), "The image e2e job in CI" |
 | db-backup | **schedule** (`cron "15 17 * * *"` = 00:15 Asia/Ho_Chi_Minh) + `workflow_dispatch` — not push | `pg_dump` → gzip → upload to Supabase Storage `backups` bucket + rotation (`db-backup.yml`); skips green with a `::notice::` if the 3 backup secrets aren't set — see [backup-restore.md](backup-restore.md) |
 
-The first five workflows trigger on push to `[main, develop]`; `db-backup` is
-schedule/dispatch-only and never runs on push.
+The workflows do not share one trigger. `backend-ci.yml`, `mobile-ci.yml` and
+`infra-ci.yml` run on push and pull request to `[main, develop]`.
+`web-ci.yml` and `image-e2e.yml` run on `main` only. `pr-checks.yml` runs on pull requests
+only. Every workflow but `pr-checks.yml` and `db-backup` filters on paths, so a change
+outside a workflow's `paths:` runs none of its jobs. `db-backup` is schedule/dispatch-only
+and never runs on push.
 
 **There is no staging gate today — `main` → production directly.** `develop` runs
 CI (lint/test) but does not deploy. A dev → staging → prod promotion path is not yet
