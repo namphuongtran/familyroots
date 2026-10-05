@@ -20,11 +20,15 @@ export default defineConfig({
           // scripts/**: the legacy baseline's gate test. It drives depcruise and
           // scripts/legacy-baseline.mjs against a throwaway git repository, so it is a test of the
           // tooling and lives beside it. See scripts/legacy-baseline.test.ts.
+          // playwright.config.test.ts: runs the real `playwright test` against stand-in servers to
+          // read whether a run uses a dev server it did not start (#192). It sits beside the config
+          // and outside e2e/, so Playwright's testDir never claims it.
           include: [
             'src/**/*.test.ts',
             'messages/**/*.test.ts',
             'e2e/**/*.guard.test.ts',
             'scripts/**/*.test.ts',
+            'playwright.config.test.ts',
           ],
         },
       },

@@ -386,7 +386,7 @@ test.describe('the role gate answers two different refusals', () => {
  * The harness's claim is that what it holds is worthless anywhere else. Cookies written by
  * `@supabase/ssr` are named for the project they came from — `sb-<ref>-auth-token` — and the
  * token inside is signed by that stack's key. So the captured state is replayed against the
- * *hermetic* dev server on :3100, which the hermetic e2e config points at
+ * *hermetic* dev server at `BASE_URL`, which the hermetic e2e config points at
  * `https://e2e-fake-project.example.supabase.co`: a different project, a different cookie
  * name, a different key.
  *

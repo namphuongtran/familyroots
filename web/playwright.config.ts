@@ -1,10 +1,42 @@
 import { defineConfig, devices } from '@playwright/test'
 import { AUTH_STACK_ENABLED, authStackEnv } from './e2e/auth/fixtures'
 
-const PORT = 3100
-// Exported for `e2e/auth/members.auth.spec.ts`, which replays a real captured session
+/**
+ * Where the three dev servers listen, and whether a run may use one it did not start (#192).
+ *
+ * **A run starts its own servers, and a busy port fails it.** Playwright's `webServer` treats any
+ * server that answers on its URL as its own when `reuseExistingServer` is true, and returns
+ * without starting anything. With two worktrees, that measured the other checkout's code and
+ * could report a pass (measured 2026-08-26, seed S-094). So reuse is off by default, and a URL
+ * that already answers fails the run before any spec with Playwright's own message:
+ * "`<url>` is already used". A run attaches only when the shell sets `E2E_REUSE_SERVER=1`, and
+ * never under `CI`.
+ *
+ * **`E2E_PORT_BASE` moves all three**, to base, base+1 and base+2, the web counterpart of the
+ * backend's `TEST_PG_DB_NAME` (ADR-016). Unset, they are 3100, 3101 and 3102. A value that is not
+ * a whole number from 1024 to 65533 fails the run here, naming it. Deriving a port from the
+ * worktree path was rejected: two hashes can collide, and the authenticated recipe's backend
+ * `CORS_ORIGINS` has to name the auth origin. `web/CLAUDE.md`, "Two worktrees, one machine".
+ */
+const PORT_BASE = portBase(process.env.E2E_PORT_BASE)
+const REUSE_EXISTING_SERVER = !process.env.CI && process.env.E2E_REUSE_SERVER === '1'
+
+function portBase(raw: string | undefined): number {
+  if (raw === undefined || raw === '') return 3100
+  const base = Number(raw)
+  if (!/^\d+$/.test(raw) || base < 1024 || base > 65533) {
+    throw new Error(
+      `E2E_PORT_BASE must be a whole number from 1024 to 65533, so that it and the two ports ` +
+        `above it are ports; got ${JSON.stringify(raw)}.`,
+    )
+  }
+  return base
+}
+
+const HERMETIC_PORT = PORT_BASE
+// Exported for `e2e/auth/backoffice.auth.spec.ts`, which replays a real captured session
 // against this hermetic server on purpose — see that file's "does not travel" case.
-export const BASE_URL = `http://127.0.0.1:${PORT}`
+export const BASE_URL = `http://127.0.0.1:${HERMETIC_PORT}`
 
 // The e2e gate must give the same result on a fresh clone, in a git
 // worktree, and in CI, without a `web/.env.local` — which git does not carry
@@ -37,7 +69,7 @@ const E2E_SUPABASE_ENV = {
 // other spec must lose the placeholders above, and a single dev-server process bakes
 // in whichever `NEXT_PUBLIC_*` values it started with (Next.js inlines them once, at server
 // start), so the only way to give one spec a different answer is a second, separate server.
-export const BANNER_PORT = 3101
+export const BANNER_PORT = PORT_BASE + 1
 export const BANNER_BASE_URL = `http://127.0.0.1:${BANNER_PORT}`
 const NO_SUPABASE_ENV = {
   // Explicit empty strings, not simply omitted: omitting a key lets the invoking shell's own
@@ -57,7 +89,7 @@ const NO_SUPABASE_ENV = {
 /**
  * The third `next dev`, the only one with a session.
  *
- * **Why a third server and not the primary one.** The primary server on :3100 is
+ * **Why a third server and not the primary one.** The primary server on `HERMETIC_PORT` is
  * deliberately hermetic : fake Supabase placeholders, no network dependency, same
  * result in a fresh clone, in a worktree and in CI. Pointing it at the local Supabase
  * stack would make every existing spec depend on Docker, which is a regression for every
@@ -71,7 +103,7 @@ const NO_SUPABASE_ENV = {
  * names, and it is invisible in a green run. With the switch, the projects either run or do
  * not exist, and `authStackEnv()` throws by name when the switch is on and an input is not.
  */
-const AUTH_PORT = 3102
+const AUTH_PORT = PORT_BASE + 2
 export const AUTH_BASE_URL = `http://127.0.0.1:${AUTH_PORT}`
 
 /**
@@ -124,9 +156,9 @@ export default defineConfig({
       // bind, Next treats 127.0.0.1 as a cross-origin dev client and blocks
       // /_next/webpack-hmr on every run — harmless noise now, but noise that would
       // hide a real cross-origin problem once the slices add journeys.
-      command: `pnpm dev --port ${PORT} --hostname 127.0.0.1`,
+      command: `pnpm dev --port ${HERMETIC_PORT} --hostname 127.0.0.1`,
       url: BASE_URL,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_EXISTING_SERVER,
       timeout: 120_000,
       env: E2E_SUPABASE_ENV,
     },
@@ -135,11 +167,11 @@ export default defineConfig({
       // `NO_SUPABASE_ENV` above for why this can't be folded into the server above.
       command: `pnpm dev --port ${BANNER_PORT} --hostname 127.0.0.1`,
       url: BANNER_BASE_URL,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_EXISTING_SERVER,
       timeout: 120_000,
       env: NO_SUPABASE_ENV,
     },
-    // the authenticated e2e harness's server, registered only when `E2E_AUTH_STACK=1`. `authStackEnv()` reads the
+    // The authenticated e2e harness's server, registered only when `E2E_AUTH_STACK=1`. `authStackEnv()` reads the
     // local stack's URL, its anon key and the backend origin from the shell and throws
     // naming whatever is missing, so a half-configured run fails before a browser opens
     // rather than reporting a redirect to /vi/login as a product defect.
@@ -148,7 +180,7 @@ export default defineConfig({
           {
             command: `pnpm dev --port ${AUTH_PORT} --hostname 127.0.0.1`,
             url: AUTH_BASE_URL,
-            reuseExistingServer: !process.env.CI,
+            reuseExistingServer: REUSE_EXISTING_SERVER,
             timeout: 120_000,
             env: authStackEnv(),
           },
