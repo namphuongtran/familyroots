@@ -346,7 +346,7 @@ Central registry of family clans (dòng họ). Each clan is a tenant.
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
 | `name` | VARCHAR(255) | NOT NULL | Display name (e.g. "Họ Trần Văn") / Tên dòng họ |
-| `slug` | VARCHAR(100) | UNIQUE, NOT NULL | URL-safe identifier / Đường dẫn thân thiện |
+| `slug` | VARCHAR(100) | UNIQUE, NOT NULL, CHECK `ck_clans_clans_slug_format` | URL-safe identifier and the clan code a person types to join (ADR-057). Shape: 2 to 100 chars, lowercase ASCII letters and digits in runs joined by single hyphens, no edge hyphen: `char_length(slug) >= 2 AND slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'` (migration 040, #190), the API's `_ClanCode` / Đường dẫn thân thiện |
 | `description` | TEXT | | Mô tả / Lịch sử dòng họ |
 | `origin_place` | VARCHAR(255) | | Quê quán gốc |
 | `founded_year` | SMALLINT | | Năm thành lập |

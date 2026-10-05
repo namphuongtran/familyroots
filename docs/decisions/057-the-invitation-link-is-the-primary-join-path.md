@@ -156,6 +156,19 @@ slug. **Nothing new has to reach the database.**
 - **`_SLUG_PATTERN` is reused, not re-written.** A second pattern for the same shape is a second
   place to be wrong.
 
+> **Amendment (2026-10-05, issue #190):** this section set no minimum length, and the code it named
+> had none. The database did: `ck_clans_clans_slug_format` from `001_initial.py:56` refused a
+> one-character slug, while admitting a doubled hyphen that `_SLUG_PATTERN` refuses. So a
+> one-character create code passed the door, ran `create_user`, broke the CHECK and answered 500
+> for a fresh email and 201 for an existing one, which is the oracle ADR-021 Decision 1 closed.
+> **A clan code is now 2 to 100 characters matching `_SLUG_PATTERN`.** The minimum is
+> `min_length=2` on `_ClanCode` in `backend/app/schemas/auth.py`, the one declaration all four
+> clan-code fields share. It is a length beside the pattern, not folded into it, so the pattern
+> text above is still the one every layer quotes. **The database enforces the same shape**:
+> migration `040_clan_slug_one_shape` replaced the CHECK with `char_length(slug) >= 2` and
+> `_SLUG_PATTERN` verbatim. That reuses the pattern a second time, and it does not re-write it.
+> The web's `isValidClanCode` and `suggestClanCode` in `web/src/domain/clan/clan-code.ts` follow.
+
 **Whether `clan_id` is removed at once or accepted alongside the code for one release is not decided
 here.** It is a contract question, and `docs/contracts/rest-auth-api.md` owns it.
 decides it and writes it down there.
