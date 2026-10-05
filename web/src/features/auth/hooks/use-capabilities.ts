@@ -9,29 +9,18 @@
  * The role is the active clan's membership role from `useSession()`. `activeClan` is null unless
  * the access state is ready, so a signed-out visitor, a pending user and a user who has not chosen
  * among several clans all get `NO_CAPABILITIES`, and so does a membership whose role is not one of
- * the three clan roles. The backend still enforces every write (`require_role()`); this only
- * decides what a screen offers.
+ * the three clan roles. `capabilitiesOf` (`../model/capabilities.ts`) is the mapping, shared with
+ * the server guard. The backend still enforces every write (`require_role()`); this only decides
+ * what a screen offers.
  */
 
 import { useMemo } from 'react'
-import { getCapabilities, type CapabilitySet } from '@/domain/capability/capability'
-import { asClanRole } from '@/domain/invitation/invitation'
+import type { CapabilitySet } from '@/domain/capability/capability'
+import { capabilitiesOf } from '../model/capabilities'
 import { useSession } from './use-session'
-
-/**
- * Every key `getCapabilities` returns, each false. Built here rather than added to
- * `domain/capability`, which ADR-061 § 1 keeps unchanged. Not `getCapabilities('viewer')`: that
- * is all false only because rbac.md gives viewer no conditional row today.
- */
-const NO_CAPABILITIES: CapabilitySet = Object.freeze(
-  Object.fromEntries(Object.keys(getCapabilities('admin')).map((key) => [key, false])),
-) as CapabilitySet
 
 export function useCapabilities(): CapabilitySet {
   const activeRole = useSession().activeClan?.role
 
-  return useMemo(() => {
-    const role = activeRole === undefined ? null : asClanRole(activeRole)
-    return role === null ? NO_CAPABILITIES : getCapabilities(role)
-  }, [activeRole])
+  return useMemo(() => capabilitiesOf(activeRole), [activeRole])
 }

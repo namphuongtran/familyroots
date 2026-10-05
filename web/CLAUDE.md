@@ -101,7 +101,8 @@ Two trees coexist during the migration described in
   │   ├── server/             # repository: fetch → parse → map to domain; query keys
   │   ├── hooks/              # TanStack Query hooks
   │   ├── ui/                 # components — never import this slice's own api/
-  │   └── index.ts            # PUBLIC SURFACE — the only import path for other code
+  │   ├── index.ts            # PUBLIC SURFACE — the only import path for other code
+  │   └── index.server.ts     # auth only: the server-only half, for src/app (#186)
   ├── shared/
   │   ├── http/               # api-client, request-context, envelope, errors, refresh
   │   ├── supabase/           # the browser and server Supabase clients, and their env
@@ -184,7 +185,8 @@ Legacy is being deleted, not refactored into compliance. What follows from that:
   all, legacy raises nothing either, so the guards above protect against future edits only.
   Re-measured 2026-10-05 after #184: one warning, `lib/utils/pagination.ts`, and the same 21
   baselined edges. After #185 the same day: the same one warning and 19 edges, because persons'
-  two routes stopped importing the legacy capability hook.
+  two routes stopped importing the legacy capability hook. After #186: the same one warning and
+  18 edges, because `lib/server/auth-context.ts`, which imported `lib/types`, is deleted.
 
 **`api-layer-has-no-react` was vacuous from the day it was written, on every package
 manager, and the first persons slice (2026-08-22) is what found it.** `to.path` in dependency-cruiser
@@ -475,7 +477,9 @@ readings above are what was verified this way.
 - `apiFetch` (`src/shared/http/api-client.ts`) is the **only** way to reach the backend.
   It attaches `Authorization`, `Accept-Language`, `X-Current-Clan-Id`, and a `traceparent`;
   applies a timeout via `AbortSignal.timeout`; and distinguishes a caller-initiated abort
-  from a transport failure.
+  from a transport failure. **On the server it sends to `API_URL` when that is set** (ADR-056,
+  since #186), read per request, because inside compose's `web` container the browser's
+  `localhost` is the container itself. Unset, both runtimes use `NEXT_PUBLIC_API_ORIGIN`.
 - Request context (`RequestContext`) is always **passed in**, never read from a global —
   `context.server.ts` builds it from `cookies()` + Supabase SSR in an RSC,
   `context.client.ts` builds it from the `current_clan_id` cookie, the URL and the Supabase
@@ -539,8 +543,48 @@ carries no clan.
 
 - next-intl with locales `vi | en | zh | fr`, **default `vi`**, `localePrefix: 'always'` — every route is prefixed (`/vi/...`, `/en/...`). See `src/i18n/routing.ts` and `messages/*.json`.
 - Route groups under `src/app/[locale]/`: `(auth)` (login/register/callback/pending-approval — public), `(dashboard)` (protected), plus `backoffice/`, `platform/`, `select-clan/`.
+- **Three layers route a signed-in user, and only the middle one decides (#186, ADR-061 § 3).**
+  1. **`src/middleware.ts`** checks only that a Supabase session exists and, on a clan-scoped
+     route, that the `current_clan_id` cookie parses. It calls no backend. Detail below.
+  2. **The server guard** makes every other routing decision.
+     `guardClanRoute(locale, capability?)` and `guardPlatformRoute(locale)` live in
+     `features/auth/server/guard.ts` and reach `app/` through `@/features/auth/index.server`, a
+     second public entry, because `index.ts` is imported by client components and the guard is
+     `server-only`. It reads the
+     session (`GET /auth/me` and `GET /me/clans`, once per request through React `cache`) and the
+     cookie, computes `accessStateOf` (the function `useSession` uses), and redirects by
+     `clanRouteDecision` / `platformRouteDecision` in `features/auth/model/route-guard.ts`: every
+     state that is not ready goes where `landingPath` sends it; a clan route that names a
+     capability sends a member without it to `/{locale}/dashboard`; a cookie naming a clan the
+     user is not in goes to `/{locale}/select-clan`, whose picker rewrites it; a platform route
+     admits `platform_role` `super_admin` only. A failed session read throws, for
+     `app/[locale]/error.tsx`, and is never read as an access state.
+  3. **Client components only render.** `Sidebar`, `Header` and `DashboardShell` read the
+     session through `useSession` and redirect nowhere. The one exception left is
+     `SelectClanScreen`, which still routes a state it cannot serve through `landingPath`.
+- **Who calls the guard.** The `(dashboard)` layout, with no capability. `admin/users/layout.tsx`
+  with `viewPendingUsers`, `admin/clan/layout.tsx` with `editClanSettings`: those pages are client
+  components, so each guards in a layout of its own, and `admin/layout.tsx` guards nothing.
+  `backoffice/layout.tsx` with `viewPendingUsers`. `platform/layout.tsx` through
+  `guardPlatformRoute`. Persons' `members/page.tsx` and `members/[id]/page.tsx` call it for the
+  capabilities, the active clan and the request context (its token, with the active clan as
+  `X-Current-Clan-Id`), which costs no second session read. **A super_admin has no clan bypass**:
+  one without an admin membership in the active clan is turned away from `admin/` and
+  `backoffice/`, as the backend would refuse them the endpoints those pages call.
+- **Each request now spends a server-side `GET /auth/me`** on top of the browser's one from
+  `useSession`. Both come from the same address in the e2e harness, so mind its rate limit.
+- **What pins it, each seen to fail against its plant on 2026-10-05.**
+  `features/auth/model/route-guard.test.ts` holds the table: with the `platform_role` branch
+  dropped from `accessStateOf`, the platform row fails; with the capability never checked, four
+  capability cases fail; with a stale cookie admitted, its case fails.
+  `features/auth/server/guard.test.ts` runs one request through the real repository against MSW
+  and records every request sent: a `/platform/metrics` probe put back fails the three request
+  cases, naming `GET /api/v1/platform/metrics`; the session read sent with the clan header fails
+  the header case; a failed read swallowed into "signed out" fails the error case. "No probe" is
+  read there, not in an e2e network log, because the guard's requests leave the Next server.
+  `e2e/auth/guard.auth.spec.ts` holds the browser readings; its header names each plant.
 - `src/middleware.ts` runs the intl middleware first, strips the locale prefix, lets `PUBLIC_ROUTES` through, and for everything else creates a Supabase SSR client (`@supabase/ssr`) and redirects to `/<locale>/login` when there is no session. If Supabase env vars are missing the auth check is skipped — be aware in local dev.
-- **After the session check, `src/middleware.ts` gates `CLAN_SCOPED_SEGMENTS` (`dashboard`, `documents`, `events`, `members`, `tree`, `admin` — everything under the `(dashboard)` route group) on the `current_clan_id` cookie.** Missing and unparseable (not a UUID) are the same case, both read as "no clan selected" through `parseClanCookie` (`src/shared/http/request-context.ts`), and both redirect to `/<locale>/select-clan` rather than letting the route render and fire a clan-scoped `apiFetch` call with no `X-Current-Clan-Id`. `platform/*`, `backoffice/*`, and `select-clan` itself are deliberately not gated: the first two are cross-clan super-admin surfaces (`docs/architecture/multi-tenancy.md`), and gating the picker page would loop. See `web/src/middleware.test.ts`.
+- **After the session check, `src/middleware.ts` gates `CLAN_SCOPED_SEGMENTS` (`dashboard`, `documents`, `events`, `members`, `tree`, `admin` — everything under the `(dashboard)` route group) on the `current_clan_id` cookie.** Missing and unparseable (not a UUID) are the same case, both read as "no clan selected" through `parseClanCookie` (`src/shared/http/request-context.ts`), and both redirect to `/<locale>/select-clan` rather than letting the route render and fire a clan-scoped `apiFetch` call with no `X-Current-Clan-Id`. `platform/*`, `backoffice/*`, and `select-clan` itself are deliberately not gated: `platform/*` is a cross-clan super-admin surface (`docs/architecture/multi-tenancy.md`), and gating the picker page would loop. `backoffice/*` is clan-scoped, and its guard asks for `viewPendingUsers` in the active clan (#186); with no cookie, a user holding one membership acts in it, and one holding several is sent to the picker by the guard rather than by the middleware. `middleware.ts`'s own comment still calls both cross-clan. See `web/src/middleware.test.ts`.
 
 ### The `current_clan_id` cookie
 
@@ -567,9 +611,10 @@ re-deciding:**
 and returns `null` rather than forwarding garbage as `X-Current-Clan-Id`.
 
 **The cookie is now the only writer too.** Since #183 three places write it, each through
-`writeClanCookie` / `clearClanCookie`: `useAuthActions().selectClan`, a sign-in or onboarding that
-lands a user ready in one clan, and the `(dashboard)` layout when the cookie names a clan the
-user has left. Sign-out clears it. Before #183 the legacy `useAuth`'s `selectClan` and
+`writeClanCookie` / `clearClanCookie`: `useAuthActions().selectClan`, and a sign-in or onboarding
+that lands a user ready in one clan. The `(dashboard)` layout was a third until #186, when the
+cookie named a clan the user had left; the server guard now sends that case to the picker, whose
+`selectClan` writes it. Sign-out clears it. Before #183 the legacy `useAuth`'s `selectClan` and
 `syncAuthContext` did. The legacy `persistCurrentClanId` / `clearCurrentClanId`
 (`src/infrastructure/auth/clan-selection-storage.ts`) are unused now — nothing imports
 them — because they also wrote `localStorage.current_clan_id`, which the cookie rule forbids. The
@@ -598,6 +643,11 @@ client offers to render.
 `docs/architecture/rbac.md:106` gives `editor` ✅ for deleting an event, while `:98` and `:85` give
 `editor` ❌ for deleting a relationship and a person. The nesting is empirical, not guaranteed, and a
 hierarchy shortcut would hide that.
+
+**The server guard reads the same mapping (#186).** `capabilitiesOf(role)` in
+`features/auth/model/capabilities.ts` turns a membership role into the `CapabilitySet`, every key
+false for a role that is not one of the three. `useCapabilities()` and the guard both call it, so a
+screen and the route guarding it cannot disagree about a role.
 
 **The client reads it through `useCapabilities()` from `@/features/auth` (#185, ADR-061 § 4).**
 The hook (`features/auth/hooks/use-capabilities.ts`) returns the domain `CapabilitySet` for the
@@ -656,8 +706,8 @@ zustand keeps only `ui.store.ts`.
   `src/domain/session/access-state.ts`: signed out, pending approval, needs onboarding, needs clan
   selection, platform, or ready in an active clan. It replaces both copies of
   `resolveCurrentClanId`, which disagreed: the client's fell back to the profile's `clan_id` and
-  the server's did not. `activeClanOf` in the same file is the one clan resolution, and
-  `lib/server/auth-context.ts` calls it too until #186 replaces that file. `access-state.test.ts`
+  the server's did not. `activeClanOf` in the same file is the one clan resolution. Since #186
+  the server guard calls `accessStateOf` itself ("Routing, locales, auth gating"). `access-state.test.ts`
   has one case per row, and deleting any branch fails its row (run 2026-10-04).
 - **`landingPath(access, locale)`** (`model/landing.ts`) is the one table from a state to a route.
   Sign-in, onboarding, the blocked-state screens and the `(dashboard)` layout all route through it.
@@ -679,9 +729,10 @@ zustand keeps only `ui.store.ts`.
 - **The screens live in `features/auth/ui/`**: `LoginScreen`, `RegisterScreen`,
   `SelectClanScreen`, `PendingApprovalScreen`, `ClanSuspendedScreen`, `VerifyEmailScreen` and
   `SupabaseSetupNotice`. Their `app/` pages only route.
-- **Three interim adaptations, each replaced by a later issue.** The `(dashboard)` layout keeps a
+- **Three interim adaptations, each replaced by a later issue.** ~~The `(dashboard)` layout keeps a
   client redirect, driven by the access state, and writes a ready user's active clan back to the
-  cookie when the cookie names another (#186 makes it a server layout). The legacy capability hook
+  cookie when the cookie names another.~~ #186 made it a server layout that calls the guard; the
+  guard sends a cookie naming a clan the user is not in to the picker instead. The legacy capability hook
   read the role from the session and kept its four names, until #185 replaced it with the slice's
   own `useCapabilities()` (see "Clan capabilities"). The legacy
   `infrastructure/http/request-context.ts` reads the clan from the cookie only and the locale from
@@ -828,7 +879,7 @@ backend-only PR that changes response shapes cannot skip it.
 # docs/ops/seed-test-users.md
 docker compose up -d pgdb
 scripts/supabase_local.sh up
-make seed                                  # both halves of four test users
+make seed                                  # both halves of five test users
 
 # a backend that trusts the LOCAL stack, and whose CORS admits the e2e origin.
 # `docker compose up api` also works when the shell has no cloud Supabase values
@@ -847,7 +898,10 @@ export E2E_AUTH_API_ORIGIN=http://127.0.0.1:8073
 pnpm test:e2e:auth
 ```
 
-**Twelve tests, 2026-10-04**: two `auth-setup` logins and ten `auth-chromium` cases. #183 added
+**Eighteen tests as written on 2026-10-05 (#186)**: three `auth-setup` logins and fifteen
+`auth-chromium` cases. #186 added the super_admin's login and `guard.auth.spec.ts`'s five, and
+was written on a machine without Docker, so its pull request says whether they have been run.
+Before #186, **twelve tests, 2026-10-04**: two `auth-setup` logins and ten `auth-chromium` cases. #183 added
 `dashboard.auth.spec.ts`'s two. It was ten earlier that day, and nine on 2026-08-26, one of them a
 deliberate `test.fail()` over an open T-04 defect; #174 fixed the defect and replaced that case
 with two that read the fix (finding 3, below).
@@ -861,6 +915,11 @@ button, waits for the sign-in to land on `/vi/dashboard`, checks the `sb-…-aut
 once, because the dashboard ran away (finding 2). `e2e/auth/backoffice.auth.spec.ts` and
 `dashboard.auth.spec.ts` then load a state file per `test.describe`.
 
+**The seeded users** are `fixtures.ts`'s `SEEDED_USERS`: `admin` and `viewer` in `nguyen-phuc`,
+and since #186 `superAdmin`, `platform_role` `super_admin` with no membership. Its capture in
+`session.setup.ts` does not read where the sign-in lands, so a defect in `accessStateOf` fails a
+case in `guard.auth.spec.ts` instead of the setup every case depends on.
+
 **Nothing under `src/` participates.** That is the fence, and it is a mechanism rather than a
 promise:
 
@@ -873,7 +932,7 @@ promise:
    file under `src/` mentions `E2E_*`, `PLAYWRIGHT`, `storageState`, or `e2e/.auth`, or
    imports from `e2e/`. **Proved not vacuous on 2026-08-26**: planting
    `if (process.env.E2E_AUTH_STACK === '1') return { … }` at the top of
-   `getServerAuthContext` produced
+   `getServerAuthContext` (the legacy guard #186 deleted) produced
    `AssertionError: expected [ 'src/lib/server/auth-context.ts' ] to deeply equal []`,
    naming the file. Removed; the suite went back to 434 passing.
 3. **The credential is worthless elsewhere.** `backoffice.auth.spec.ts`'s last case replays
@@ -901,7 +960,7 @@ nothing when Docker is down is the "passed because it scanned nothing" failure
    sessions is the assertion that only a real session can produce. `page.request.get(path, {
 maxRedirects: 0 })` reads a server-side gate as a status and a `Location` without
    mounting anything, which costs no renders and cannot be confused by a client effect.
-3. **Give both Locations.** A viewer refused by `requireServerRole` gets
+3. **Give both Locations.** A viewer refused by the server guard for want of a capability gets
    `307 → /vi/dashboard`; a request with no session gets `307 → /vi/login`. If your two
    readings are the same string, you have a control that reads the same either way, which is no
    control at all.
@@ -909,9 +968,11 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
    re-evaluates the media query in place, and ADR-045 made the media query the only
    mechanism. One page load per case matters: see the rate limit below.
 5. **Budget the requests.** `/api/v1/auth/*` allows 20 requests per 60 seconds per IP
-   (`backend/app/main.py:221-226`, hardcoded). One load of a `(dashboard)` screen spends one
-   `GET /auth/me` since #183, because every consumer shares the session query; it was about
-   three per load, and then thousands, before. Keep a case to one navigation anyway.
+   (`backend/app/main.py:221-226`, hardcoded). One load of a `(dashboard)` screen spends two
+   `GET /auth/me` since #186: the server guard's, and the browser's one, which every consumer
+   shares since #183. Both come from `127.0.0.1` here. It was about three per load, and then
+   thousands, before #183. Keep a case to one navigation.
+   `dashboard.auth.spec.ts` counts the browser's alone, which is why it still reads 1.
 6. **The backend has to be current.** `GET /auth/me` sends `platform_role` since #181, and the
    session's schema requires it. A backend started before #181 merged answers without it, and every
    sign-in then fails on the login screen with the zod error naming `platform_role`. Seen
@@ -1101,9 +1162,9 @@ engine rather than computed from the stylesheet.
   feature should add to it. **Since #171 (2026-10-04) that is a gate, and the gate only shrinks**
   (ADR-060 § 4). `nothing-imports-legacy` forbids any module outside the set from importing one
   inside it. The imports that already existed are the baseline,
-  `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, 21 after #183 and 19
-  after #185, which `pnpm depcruise` reads through `--ignore-known`. None of the 19 starts in
-  `features/auth`, and none starts in a persons route.
+  `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, 21 after #183, 19
+  after #185 and 18 after #186, which `pnpm depcruise` reads through `--ignore-known`. None of the
+  18 starts in `features/auth`, and none starts in a persons route.
   - **When a slice deletes or re-points a legacy import, shrink the baseline in the same pull
     request:** run `pnpm depcruise:baseline` and commit the shorter file. Do not edit it by hand.
     `pnpm depcruise:ratchet origin/main` fails while the baseline still lists an import the tree no
@@ -1144,9 +1205,9 @@ engine rather than computed from the stylesheet.
     file and deletes it.
   - ~~Persons' own routes still import the legacy capability hook.~~ The auth slice re-pointed
     them at `@/features/auth` in #185 (2026-10-05), per ADR-060 § 3, and the baseline lost both
-    entries. `members/page.tsx` and `members/[id]/page.tsx` still call `getServerAuthContext`
-    from `lib/server/auth-context.ts`, which is outside the legacy set the baseline polices. #186
-    replaces it.
+    entries. ~~`members/page.tsx` and `members/[id]/page.tsx` still call `getServerAuthContext`
+    from `lib/server/auth-context.ts`.~~ #186 (2026-10-05) moved both onto the server guard's
+    context and deleted the file. Persons imports no auth legacy.
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
   The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of
@@ -1169,12 +1230,13 @@ engine rather than computed from the stylesheet.
   `features/auth` imports no legacy. What of auth's legacy is left, and who removes it (ADR-061 § 8):
   - ~~The capability hook in `lib/hooks/`~~: replaced by `useCapabilities()` in `features/auth`
     by #185 (2026-10-05), with the last two auth imports persons' routes held.
-  - `lib/server/auth-context.ts` and `lib/utils/with-role.ts`, the server guard. #186 replaces them;
-    #183 only swapped the server's clan resolution for the domain one.
+  - ~~`lib/server/auth-context.ts` and `lib/utils/with-role.ts`, the server guard~~: replaced by
+    `features/auth/server/guard.ts` and deleted by #186 (2026-10-05), with `requireRole`,
+    `requireServerRole`, `hasMinRole`, `hasMinServerRole` and the `/platform/metrics` probe.
   - ~~`lib/supabase/`~~: moved to `shared/supabase/` by #184 (2026-10-05). The grep for
     `@/lib/supabase` under `web/src` prints nothing.
-  - The auth types in `lib/types/api.ts` (`UserProfile`, `UserClanMembership` and the rest).
-    `lib/server/auth-context.ts` still reads `UserClanMembership`, so they go with #186.
+  - ~~The auth types in `lib/types/api.ts`~~ (`UserProfile`, `UserClanMembership`,
+    `UserClansResponse`, `ClanSwitchResponse`): deleted by #186 with their last reader.
   - `axios.ts` and `infrastructure/http/request-context.ts` are cross-cutting and leave with the last
     slice that imports them, not with auth.
 - **`VerifyEmailScreen` (`src/features/auth/ui/VerifyEmailScreen.tsx`) is reachable from a real

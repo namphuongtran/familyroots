@@ -139,8 +139,9 @@ services:
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       # ADR-056: the server-to-server value. `API_URL` carries no `NEXT_PUBLIC_`
-      # prefix, so Next.js never inlines it — `src/lib/server/auth-context.ts` reads
-      # `process.env.API_URL` live, at request time, inside this already-built image.
+      # prefix, so Next.js never inlines it — `apiFetch` on the server
+      # (`src/shared/http/api-client.ts`, since #186) reads `process.env.API_URL`
+      # live, at request time, inside this already-built image.
       # This is genuinely run time, unlike the two lines above: the compose-network
       # hostname `http://api:8000/api/v1` is correct here because this fetch runs
       # inside the `web` container, on the same `familyroots` network as `api`, never

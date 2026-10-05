@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch, type FetchLike } from './api-client'
 import { ApiError, NetworkError } from './errors'
 import type { RequestContext } from './request-context'
@@ -44,6 +44,33 @@ describe('apiFetch headers', () => {
     })
 
     expect(fetchImpl.mock.calls[0][0].headers.has('authorization')).toBe(false)
+  })
+})
+
+/**
+ * ADR-056. A server-side call runs where the browser's origin may not resolve: inside compose's
+ * `web` container, `localhost` is the container itself. So on the server `API_URL`, which Next.js
+ * never inlines, names the backend when it is set. This project runs in Node, where there is no
+ * `window`, which is the server's side of that check.
+ */
+describe('apiFetch base URL', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('on the server, sends to API_URL, read when the request is sent', async () => {
+    vi.stubEnv('API_URL', 'http://api:8000/api/v1/')
+    const fetchImpl = vi.fn<FetchLike>(async () => jsonResponse({ data: {} }))
+    await apiFetch('/auth/me', { context, fetchImpl })
+
+    expect(fetchImpl.mock.calls[0][0].url).toBe('http://api:8000/api/v1/auth/me')
+  })
+
+  it('without API_URL, sends to the origin the browser uses', async () => {
+    vi.stubEnv('API_URL', '')
+    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'http://127.0.0.1:8073')
+    const fetchImpl = vi.fn<FetchLike>(async () => jsonResponse({ data: {} }))
+    await apiFetch('/auth/me', { context, fetchImpl })
+
+    expect(fetchImpl.mock.calls[0][0].url).toBe('http://127.0.0.1:8073/api/v1/auth/me')
   })
 })
 

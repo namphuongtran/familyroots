@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest'
  *
  * **That is a property of the tree today, and a property has to be kept.** The cheap way
  * to break it is the obvious one: a later agent, wanting a faster suite, adds
- * `if (process.env.E2E_AUTH_STACK) return fakeSession` inside `getServerAuthContext` and
+ * `if (process.env.E2E_AUTH_STACK) return fakeSession` inside the server guard's session read
+ * (`readRequestSession`, `src/features/auth/server/guard.ts`; `getServerAuthContext` until #186) and
  * every case here still passes, faster. This file is what fails then. It is deliberately a
  * grep and not a type: the defect it catches is the *existence* of a new code path, and a
  * type cannot see one that does not exist yet.

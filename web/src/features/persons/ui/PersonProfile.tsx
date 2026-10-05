@@ -9,8 +9,8 @@ interface PersonProfileProps {
   person: Person
   /** Editor or admin — gates the "Bổ sung thông tin" link on a sparse record. */
   canEdit: boolean
-  /** Admin only — gates the audit line and the soft-delete banner's full detail. */
-  isAdmin: boolean
+  /** `viewClanAuditLog`, admin only — gates the "updated" audit line. */
+  canViewAuditLog: boolean
 }
 
 interface Field {
@@ -56,7 +56,7 @@ function Fields({ fields }: { fields: Field[] }) {
  * is one of the two omitted sections above. A single centred column at every
  * width is what is actually built; see this component's own render below.
  */
-export async function PersonProfile({ person, canEdit, isAdmin }: PersonProfileProps) {
+export async function PersonProfile({ person, canEdit, canViewAuditLog }: PersonProfileProps) {
   const t = await getTranslations('member')
   const locale = await getLocale()
   const unknown = t('unknown_date')
@@ -230,7 +230,7 @@ export async function PersonProfile({ person, canEdit, isAdmin }: PersonProfileP
         </>
       )}
 
-      {isAdmin && (
+      {canViewAuditLog && (
         <p className="text-muted-foreground text-xs">{t('updated_line', { date: updatedLabel })}</p>
       )}
     </div>

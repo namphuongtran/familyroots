@@ -145,15 +145,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/lib/server/auth-context.ts",
-    "to": "src/lib/types/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/lib/utils/kinship.ts",
     "to": "src/lib/types/relationship.ts",
     "rule": {

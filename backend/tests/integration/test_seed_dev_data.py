@@ -9,7 +9,7 @@ the real constraints — and drive the Supabase half through a stub.
 
 They deliberately do **not** talk to the Supabase stack. The stack is one shared container
 set on a developer machine, the fixture ids are constants, and two suites running at once
-would create and delete the same four ``auth.users`` rows underneath each other. That is
+would create and delete the same five ``auth.users`` rows underneath each other. That is
 the ``TEST_PG_DB_NAME`` trap (ADR-016) in another costume, and there is no
 per-worktree name to give it. So the GoTrue half is verified by hand instead, and
 ``docs/ops/seed-test-users.md`` § "Verifying it end to end" holds the procedure and the
@@ -66,7 +66,7 @@ class StubGoTrue:
                 "email_confirmed_at": "2026-08-22T00:00:00Z",
                 "user_metadata": {"full_name": u.display_name},
             }
-            for u in seeder.USERS
+            for u in seeder.IDENTITIES
         }
 
     def get_user(self, user_id: uuid.UUID) -> dict[str, Any] | None:
@@ -131,7 +131,26 @@ def test_apply_writes_the_whole_fixture_and_nothing_else(conn, seeded):
     or left ``is_approved`` false, fails here — the counts it reported would not.
     """
     assert _rows_as_tuples(conn) == _fixture_tuples()
-    assert seeded == {"clans": 2, "user_profiles": 4, "user_clan_roles": 4}
+    assert seeded == {"clans": 2, "user_profiles": 5, "user_clan_roles": 4}
+
+
+def test_the_platform_user_is_a_super_admin_in_no_clan(conn, seeded):
+    """The web's ``platform`` access state, which issue #186's e2e cases sign in as.
+
+    Read back from the database: the profile says ``super_admin`` and no membership row
+    exists, approved or not. Either half wrong and the web routes this user as something
+    else, a member of a clan or a user who needs onboarding.
+    """
+    platform_user = seeder.PLATFORM_USERS[0]
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT platform_role FROM user_profiles WHERE id = %s", (str(platform_user.id),)
+        )
+        assert cur.fetchall() == [("super_admin",)]
+        cur.execute(
+            "SELECT count(*) FROM user_clan_roles WHERE user_id = %s", (str(platform_user.id),)
+        )
+        assert cur.fetchone() == (0,)
 
 
 def test_the_fixture_covers_admin_editor_viewer_and_a_second_clan(conn, seeded):
@@ -284,6 +303,53 @@ def test_a_deactivated_profile_is_named_rather_than_read_as_a_role_problem(conn,
     assert "account_deactivated" in problems[0]
 
 
+def test_a_platform_user_who_lost_super_admin_is_named_and_repaired(conn, seeded):
+    """With ``platform_role = 'user'`` the super admin is a user with no clan, whom the web
+    sends to onboarding. ``verify`` names the column, and ``apply`` rewrites that one row."""
+    platform_user = seeder.PLATFORM_USERS[0]
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE user_profiles SET platform_role = 'user' WHERE id = %s",
+            (str(platform_user.id),),
+        )
+    conn.commit()
+
+    problems = seeder.verify(conn, StubGoTrue(), "http://supabase.localhost:54321")
+
+    assert len(problems) == 1, problems
+    assert platform_user.email in problems[0]
+    assert "platform_role" in problems[0] and "super_admin" in problems[0]
+
+    written = seeder.apply_app_database(conn)
+    assert written == {"clans": 0, "user_profiles": 1, "user_clan_roles": 0}
+    assert seeder.verify(conn, StubGoTrue(), "http://supabase.localhost:54321") == []
+
+
+def test_a_platform_user_with_a_membership_is_named(conn, seeded):
+    """A membership makes the super admin a member of that clan to the web, and nothing then
+    exercises the platform-only path. ``apply`` never writes one, so ``verify`` must say
+    which row to delete."""
+    platform_user = seeder.PLATFORM_USERS[0]
+    with conn.cursor() as cur:
+        cur.execute(
+            seeder.SQL_UPSERT_USER_CLAN_ROLE,
+            {
+                "id": "66666666-6666-4666-8666-666666666666",
+                "clan_id": str(seeder.CLAN_A.id),
+                "user_id": str(platform_user.id),
+                "role": "viewer",
+                "approved_by": str(seeder.clan_admin_id(seeder.CLAN_A)),
+            },
+        )
+    conn.commit()
+
+    problems = seeder.verify(conn, StubGoTrue(), "http://supabase.localhost:54321")
+
+    assert len(problems) == 1, problems
+    assert platform_user.email in problems[0]
+    assert "UNEXPECTED" in problems[0] and "user_clan_roles" in problems[0]
+
+
 def test_an_email_registered_under_another_id_stops_apply_before_it_writes(conn, seeded):
     """The one drift ``apply`` cannot repair, so it must refuse rather than half-run.
 
@@ -338,7 +404,7 @@ def test_every_fixture_email_survives_the_api_s_own_email_validator():
     """
     from app.schemas.auth import LoginRequest
 
-    for user in seeder.USERS:
+    for user in seeder.IDENTITIES:
         LoginRequest(email=user.email, password="dev-password-s073")
 
 

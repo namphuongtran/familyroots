@@ -5,10 +5,11 @@ import { SEEDED_USERS } from './fixtures'
 /**
  * the authenticated e2e harness. The first authenticated screen this repository has ever read in a browser.
  *
- * **Why `/vi/backoffice/dashboard`.** Its layout is one line of gate —
- * `await requireRole(['admin', 'super_admin'], locale)`
- * (`src/app/[locale]/backoffice/layout.tsx:27`) — which is `requireServerRole`, the function
- * the authenticated e2e harness names in its Sources as the reason nothing was reachable. The screen is also the one
+ * **Why `/vi/backoffice/dashboard`.** Its layout is one line of gate. It was
+ * `await requireRole(['admin', 'super_admin'], locale)`, which is `requireServerRole`, the
+ * function the authenticated e2e harness names in its Sources as the reason nothing was
+ * reachable. Since #186 it is `await guardClanRoute(locale, 'viewPendingUsers')`
+ * (`src/app/[locale]/backoffice/layout.tsx`). The screen is also the one
  * **ADR-046 is about**: `BackofficeSidebar`'s aside moved off a hand-built `bg-gray-950` onto
  * the `muted` token, and the `FR` mark kept `primary` on it. ADR-046 recorded contrast ratios
  * computed from the stylesheet and says in its own text that ADR-046 could not read the rail in
@@ -52,7 +53,7 @@ const NARROW = { width: 320, height: 640 }
 test.describe('the backoffice dashboard, as an admin', () => {
   test.use({ storageState: SEEDED_USERS.admin.storageState })
 
-  test('renders behind requireServerRole, with its rail', async ({ page }) => {
+  test('renders behind the server guard, with its rail', async ({ page }) => {
     const response = await page.goto(BACKOFFICE_PATH)
 
     expect(response?.status()).toBeLessThan(400)
@@ -353,7 +354,9 @@ test.describe('the role gate answers two different refusals', () => {
   test.describe('to a viewer, who has a real session', () => {
     test.use({ storageState: SEEDED_USERS.viewer.storageState })
 
-    test('requireServerRole sends them to the dashboard', async ({ page }) => {
+    test('the guard sends them to the dashboard, for want of viewPendingUsers', async ({
+      page,
+    }) => {
       const response = await page.request.get(BACKOFFICE_PATH, { maxRedirects: 0 })
 
       expect(response.status()).toBe(307)

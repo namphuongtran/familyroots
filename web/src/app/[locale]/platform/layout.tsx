@@ -1,5 +1,9 @@
-import { requireRole } from '@/lib/utils/with-role'
+import { guardPlatformRoute } from '@/features/auth/index.server'
 
+/**
+ * Admits a super_admin, read from `platform_role` on `GET /auth/me`, and sends anyone else where
+ * their access state lands, the dashboard for a clan member (#186, ADR-061 § 5).
+ */
 export default async function PlatformLayout({
   children,
   params,
@@ -8,8 +12,7 @@ export default async function PlatformLayout({
   params: Promise<{ locale: string }>
 }) {
   const { locale } = await params
-  // Server-side guard: platform section is super_admin only
-  await requireRole('super_admin', locale)
+  await guardPlatformRoute(locale)
 
   return (
     <div className="space-y-4">

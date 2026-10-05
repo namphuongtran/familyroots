@@ -5,10 +5,6 @@ export type {
   ApiError,
   TreeApiResponse,
   TreeAncestorsResponse,
-  ClanSwitchResponse,
-  UserProfile,
-  UserClanMembership,
-  UserClansResponse,
 } from './api'
 // `./member` declares `PersonSummary` only. See that file's header comment.
 export type { PersonSummary } from './member'

@@ -29,6 +29,18 @@ pass it, and the two `use-*-request-context.ts` copies are deleted. `lib/supabas
 `shared/supabase/`. § 8's "two concurrent 401s cause one refresh" is
 `web/src/shared/http/use-client-request-context.test.tsx`.
 
+2026-10-05: § 3-5 are built by #186. `web/src/features/auth/server/guard.ts` exports
+`guardClanRoute(locale, capability?)` and `guardPlatformRoute(locale)` through a second public
+entry, `features/auth/index.server.ts`, because `index.ts` is imported by client components and the
+guard is `server-only`. The decision table is pure, in `features/auth/model/route-guard.ts`. The
+`(dashboard)` layout is a server layout; `admin/users` and `admin/clan` each guard in their own
+layout, by `viewPendingUsers` and `editClanSettings`. `lib/server/auth-context.ts`,
+`lib/utils/with-role.ts` and the auth types in `lib/types/api.ts` are deleted, and with them the
+`/platform/metrics` probe. Two things the issue did not name: a cookie naming a clan the user is
+not in goes to the clan picker, which replaces the client layout's cookie write-back; and "no
+probe" is read in `guard.test.ts`, which records every request the guard sends, not in an e2e
+network log, which cannot see a request the Next server makes.
+
 ## Context
 
 ### The spec's auth slice, and what happened instead

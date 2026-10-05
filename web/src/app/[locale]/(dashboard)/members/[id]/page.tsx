@@ -2,8 +2,7 @@ import { getTranslations } from 'next-intl/server'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { getPerson, PersonProfile } from '@/features/persons'
-import { getServerAuthContext } from '@/lib/server/auth-context'
-import { getServerRequestContext } from '@/shared/http/context.server'
+import { guardClanRoute } from '@/features/auth/index.server'
 import { ApiError } from '@/shared/http/errors'
 
 /**
@@ -20,24 +19,19 @@ import { ApiError } from '@/shared/http/errors'
  * "not found" content directly (still a 200) is what lets the message name
  * the clan at all. Every other error rethrows, for `error.tsx` to catch
  * (`T-17`'s retry).
+ *
+ * **The guard's context makes the request** (#186): its token, and the active clan the guard
+ * resolved as `X-Current-Clan-Id`. The capabilities and the clan's name come from the same call.
  */
 export default async function MemberDetailPage({
   params,
 }: {
   params: Promise<{ id: string; locale: string }>
 }) {
-  const { id } = await params
+  const { id, locale } = await params
   const t = await getTranslations('member')
-  const [authContext, context] = await Promise.all([
-    getServerAuthContext(),
-    getServerRequestContext(),
-  ])
-  const canEdit =
-    authContext?.currentClanRole === 'editor' || authContext?.currentClanRole === 'admin'
-  const isAdmin = authContext?.currentClanRole === 'admin'
-  const clanName = authContext?.clanMemberships.find(
-    (membership) => membership.clan_id === authContext.currentClanId,
-  )?.clan_name
+  const { capabilities, activeClan, context } = await guardClanRoute(locale)
+  const clanName = activeClan.clanName
 
   let person
   try {
@@ -68,7 +62,11 @@ export default async function MemberDetailPage({
         <h1 className="text-foreground font-serif text-xl">{t('profile_title')}</h1>
       </div>
 
-      <PersonProfile person={person} canEdit={canEdit} isAdmin={isAdmin} />
+      <PersonProfile
+        person={person}
+        canEdit={capabilities.editPerson}
+        canViewAuditLog={capabilities.viewClanAuditLog}
+      />
     </div>
   )
 }
