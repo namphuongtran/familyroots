@@ -33,13 +33,19 @@ Request/response expectations:
   `POST /onboard`. See "Registering with no clan" below.
 - `clan_code` (register + onboard, `clan_action=join`) names the clan to join.
   It is the clan's **slug**, not its UUID, and it must match the same
-  `^[a-z0-9]+(-[a-z0-9]+)*$` pattern, max 100 chars; anything else is a 422
+  `^[a-z0-9]+(?:-[a-z0-9]+)*$` pattern, **2 to 100 chars**; anything else is a 422
   `validation_error` naming `body.clan_code`. A well-formed code that no clan
   carries is a 404 `clan_not_found`. See the deprecation window below.
 - `clan_slug` (register + onboard, `clan_action=create`) must match
-  `^[a-z0-9]+(-[a-z0-9]+)*$` — lowercase ASCII alphanumerics and single
-  hyphens, max 100 chars; anything else is a 422. Clients slugify the clan
-  name before submitting (the slug appears in URLs and export filenames).
+  `^[a-z0-9]+(?:-[a-z0-9]+)*$`, `_SLUG_PATTERN` verbatim: lowercase ASCII alphanumerics and single
+  hyphens, **2 to 100 chars**; anything else is a 422 `validation_error` naming
+  `body.clan_slug`. Clients slugify the clan name before submitting (the slug
+  appears in URLs and export filenames).
+- **The two-character minimum is the database's** (#190). `clans.slug` has never
+  held a shorter code, and since migration 040 its CHECK enforces this same
+  shape. Before the API carried the minimum, a one-character `clan_slug` on
+  `POST /register` answered 500 for a fresh email and 201 for an existing one;
+  now it is the same 422 for both, before the identity provider is called.
 - `POST /register` is **non-enumerating (ADR-021)**: it returns the identical
   201 body whether or not the email already has an account. Clan-input
   validation (`clan_id_required_for_join`, `clan_code_and_id_both_given`,
@@ -95,7 +101,7 @@ this path and will be deleted, along with the 422 below.
 | both | 422 `auth.clan_code_and_id_both_given`. Never silently reconciled |
 | neither | 422 `auth.clan_id_required_for_join`, unchanged |
 | a code no clan carries | 404 `clan_not_found` |
-| a code failing the slug pattern | 422 `validation_error`, `detail.fields` contains `body.clan_code` |
+| a code failing the slug pattern or shorter than 2 chars | 422 `validation_error`, `detail.fields` contains `body.clan_code` |
 
 **Why a window and not a clean break.** When the backend half landed, the web register form
 still sent `clan_id` on join, and that form was a **separate seed** in a

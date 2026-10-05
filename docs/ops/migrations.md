@@ -55,7 +55,7 @@ Single linear chain:
 `032_rls_clan_invitations` → `033_rls_identity_claims` →
 `034_rls_audit_notification` → `035_rls_clan_settings` →
 `036_rls_user_clan_roles` → `037_drop_allow_public_tree` → `038_drop_privacy_level` →
-`039_drop_clan_settings`.
+`039_drop_clan_settings` → `040_clan_slug_one_shape`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -159,6 +159,20 @@ empty, which is measured rather than assumed, so the migration re-checks it at r
 raises instead of deleting data. No API shape changes: no endpoint ever read or wrote the
 table and no contract ever documented it.
 
+`040_clan_slug_one_shape` replaces the `ck_clans_clans_slug_format` CHECK on `clans.slug`
+with the one clan-code shape the API admits (#190); reversible. Until `039` the CHECK from
+`001` and the API's `_SLUG_PATTERN` disagreed both ways: the CHECK refused a one-character
+code the API admitted, which made a one-character create code a 500, and it admitted a
+doubled hyphen the API refuses. The new CHECK is `char_length(slug) >= 2` plus
+`_SLUG_PATTERN` verbatim, under the same name. It is forward-compatible with the running
+app, because no request that succeeds today can carry a slug it refuses. **`upgrade()`
+rewrites no slug**: like `015`, it first lists every row that breaks the new shape and, if
+there is one, fails naming each slug, so the database stays at `039`. Postgres's own
+validation of the new CHECK would fail too, but without naming the row. `downgrade()`
+restores `001`'s CHECK text exactly, and cannot fail on data, because every slug the new
+shape admits, the old one admits too. Pinned by
+`backend/tests/integration/test_clan_slug_shape.py`.
+
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
@@ -166,7 +180,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `039_drop_clan_settings`; verify with `cd backend && uv run alembic heads`.
+Head = `040_clan_slug_one_shape`; verify with `cd backend && uv run alembic heads`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

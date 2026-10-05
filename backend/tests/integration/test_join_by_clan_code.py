@@ -240,6 +240,7 @@ async def test_an_unknown_code_creates_no_identity_and_no_membership(
         "nguyen--huu",  # doubled hyphen
         "nguyễn-hữu",  # non-ASCII
         "",  # empty
+        "a",  # one character: the CHECK has refused it since 001, so no clan carries it
     ],
 )
 def test_a_code_failing_the_slug_pattern_never_reaches_the_lookup(
@@ -269,6 +270,32 @@ def test_onboard_rejects_a_badly_shaped_code_at_the_door(client: TestClient) -> 
     error = resp.json()["error"]
     assert error["code"] == "validation_error", resp.text
     assert "body.clan_code" in error["detail"]["fields"], resp.text
+
+
+@pytest.mark.parametrize(
+    ("body", "field"),
+    [
+        ({"clan_action": "join", "clan_code": "a"}, "body.clan_code"),
+        ({"clan_action": "create", "clan_name": "Họ A", "clan_slug": "a"}, "body.clan_slug"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_onboard_refuses_a_one_character_code_at_the_door(
+    client: TestClient,
+    db: AsyncSession,
+    onboarding_user: dict[str, Any],
+    body: dict[str, Any],
+    field: str,
+) -> None:
+    """#190: before the fix, create answered 500 (the clan insert broke
+    ``ck_clans_clans_slug_format``) and join answered 404. Both are now the door's 422,
+    and nothing is written."""
+    resp = client.post("/api/v1/auth/onboard", headers={"Authorization": "Bearer x"}, json=body)
+    assert resp.status_code == 422, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "validation_error", resp.text
+    assert field in error["detail"]["fields"], resp.text
+    assert await _memberships_of(db, onboarding_user["email"]) == []
 
 
 # ── The deprecation window this seed decided, per docs/contracts/rest-auth-api.md

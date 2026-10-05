@@ -3,6 +3,7 @@ email already has an account; existing accounts get a recovery-email nudge."""
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from collections.abc import AsyncGenerator, Iterator
 from typing import Any
@@ -301,6 +302,62 @@ def test_taken_slug_same_status_both_paths(
     assert identity_fake.create_user_calls_for(seeded_existing_email) == 0
     assert identity_fake.password_reset_calls_for(fresh_email) == 0
     assert identity_fake.password_reset_calls_for(seeded_existing_email) == 0
+
+
+def test_one_character_clan_slug_same_422_both_paths(
+    client: TestClient,
+    identity_fake: FakeIdentityProvider,
+    seeded_existing_email: str,
+) -> None:
+    """#190: a one-character create code is refused at the door, on both paths.
+
+    The CHECK ``ck_clans_clans_slug_format`` has refused a one-character slug since
+    migration 001, while the API pattern accepted it. So the fresh-email path ran
+    ``create_user``, broke the CHECK on the clan insert and answered 500, and the
+    existing-email path returned 201 before any insert: 500 against 201, the ADR-021
+    oracle. The fixed reading is 422 against 422 with identical bodies, and the
+    identity provider is never consulted on either path.
+    """
+    fresh_email = f"fresh-{uuid.uuid4().hex[:8]}@example.com"
+    fresh_body = _fresh_body(email=fresh_email, clan_slug="a")
+    existing_body = {**fresh_body, "email": seeded_existing_email}
+
+    fresh_resp = client.post("/api/v1/auth/register", json=fresh_body)
+    existing_resp = client.post("/api/v1/auth/register", json=existing_body)
+
+    assert (fresh_resp.status_code, existing_resp.status_code) == (422, 422), (
+        fresh_resp.text,
+        existing_resp.text,
+    )
+    assert fresh_resp.json() == existing_resp.json()
+    error = fresh_resp.json()["error"]
+    assert error["code"] == "validation_error", fresh_resp.text
+    assert "body.clan_slug" in error["detail"]["fields"], fresh_resp.text
+
+    assert identity_fake.create_user_calls_for(fresh_email) == 0
+    assert identity_fake.password_reset_calls_for(seeded_existing_email) == 0
+
+
+@pytest.mark.asyncio
+async def test_two_character_clan_slug_still_creates_the_clan(
+    client: TestClient, identity_fake: FakeIdentityProvider, db_session: AsyncSession
+) -> None:
+    """#190: the minimum is two, not more. A two-character code is the shortest the
+    database has ever stored, so it must still found a clan, row and all."""
+    # Two characters drawn from neither ``a`` nor ``0``: test_clan_slug_shape.py
+    # inserts every short string over ``a``, ``0``, ``-`` and ``A`` into this same
+    # database and must find each two-character one free, whichever runs first.
+    slug = "".join(secrets.choice("bcdefghijklmnopqrstuvwxyz123456789") for _ in range(2))
+    body = _fresh_body(clan_slug=slug)
+
+    resp = client.post("/api/v1/auth/register", json=body)
+
+    assert resp.status_code == 201, resp.text
+    assert identity_fake.create_user_calls_for(body["email"]) == 1
+    row = (
+        await db_session.execute(sa.text("SELECT slug FROM clans WHERE slug = :s"), {"s": slug})
+    ).first()
+    assert row is not None
 
 
 def test_missing_clan_id_same_status_both_paths(

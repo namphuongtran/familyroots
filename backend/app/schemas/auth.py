@@ -1,7 +1,7 @@
 """Pydantic v2 schemas for Auth requests and responses."""
 
 import uuid
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
@@ -10,6 +10,15 @@ from app.domain.auth.platform_role import PlatformRole
 # Slugs land in URLs and in the export Content-Disposition header (latin-1
 # only), so restrict them at the door: lowercase ASCII alphanumerics and
 # single hyphens, no leading/trailing hyphen.
+#
+# And at least two characters, the ``min_length`` in ``_ClanCode`` below, because
+# the database has never held a shorter code: ``ck_clans_clans_slug_format``
+# refused one from migration 001 on, and since migration 040 it enforces this
+# whole shape (#190). Without the minimum, a one-character create code reached
+# ``create_user`` and then broke the CHECK, so a fresh email got a 500 where an
+# existing one got a 201 -- the ADR-021 oracle. The minimum stays a length beside
+# the pattern rather than folded into it, so this text remains the pattern
+# ADR-057, the contract, the web and the CHECK all quote.
 _SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
 # ``clan_code`` (join) and ``clan_slug`` (create) are the same shape and the same
@@ -17,6 +26,10 @@ _SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 # one, join names an existing one. They stay two fields because their failure modes
 # are opposites -- ``auth.clan_slug_taken`` is a create error and ``clan_not_found``
 # is a join error -- and one field would have to answer both.
+#
+# That one shape is declared once, here, and all four fields on the two request
+# bodies below carry it, so the join field and the create field cannot drift apart.
+_ClanCode = Annotated[str, Field(min_length=2, max_length=100, pattern=_SLUG_PATTERN)]
 
 
 # The four fields that name a clan on this surface. Named once so the
@@ -36,13 +49,13 @@ class RegisterRequest(BaseModel):
     clan_action: Literal["join", "create"] | None = None
     # The join identifier (ADR-057 section 2). A human-readable clan code, which is
     # the clan's slug.
-    clan_code: str | None = Field(None, max_length=100, pattern=_SLUG_PATTERN)
+    clan_code: _ClanCode | None = None
     # DEPRECATED, accepted for one release beside ``clan_code`` -- see the
     # deprecation window in docs/contracts/rest-auth-api.md. Sending both is a
     # 422 ``auth.clan_code_and_id_both_given``, never a silent reconciliation.
     clan_id: uuid.UUID | None = None
     clan_name: str | None = Field(None, max_length=255)
-    clan_slug: str | None = Field(None, max_length=100, pattern=_SLUG_PATTERN)
+    clan_slug: _ClanCode | None = None
 
     @model_validator(mode="after")
     def _clan_fields_need_a_clan_action(self) -> Self:
@@ -78,11 +91,11 @@ class AuthenticatedOnboardingRequest(BaseModel):
     # non-optional. A clanless onboard would be a no-op that cannot answer in its
     # own response shape.
     clan_action: Literal["join", "create"]
-    clan_code: str | None = Field(None, max_length=100, pattern=_SLUG_PATTERN)
+    clan_code: _ClanCode | None = None
     # DEPRECATED for one release, exactly as on ``RegisterRequest`` above.
     clan_id: uuid.UUID | None = None
     clan_name: str | None = Field(None, max_length=255)
-    clan_slug: str | None = Field(None, max_length=100, pattern=_SLUG_PATTERN)
+    clan_slug: _ClanCode | None = None
 
 
 class RegisterResponse(BaseModel):

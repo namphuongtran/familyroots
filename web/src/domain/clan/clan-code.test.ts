@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   CLAN_CODE_MAX_LENGTH,
+  CLAN_CODE_MIN_LENGTH,
   CLAN_CODE_PATTERN_SOURCE,
   isValidClanCode,
   suggestAlternativeClanCode,
@@ -20,20 +21,24 @@ import {
 /** The 29 letters of the Vietnamese alphabet, in dictionary order, lower case. */
 const VIETNAMESE_ALPHABET = 'aăâbcdđeêghiklmnoôơpqrstuưvxy'
 
-/** Every vowel that carries tone marks, with its five tones after the plain form. */
-const TONE_ROWS: ReadonlyArray<readonly [string, string]> = [
-  ['a', 'aàáảãạ'],
-  ['ă', 'ăằắẳẵặ'],
-  ['â', 'âầấẩẫậ'],
-  ['e', 'eèéẻẽẹ'],
-  ['ê', 'êềếểễệ'],
-  ['i', 'iìíỉĩị'],
-  ['o', 'oòóỏõọ'],
-  ['ô', 'ôồốổỗộ'],
-  ['ơ', 'ơờớởỡợ'],
-  ['u', 'uùúủũụ'],
-  ['ư', 'ưừứửữự'],
-  ['y', 'yỳýỷỹỵ'],
+/**
+ * Every vowel that carries tone marks, the ASCII letter it becomes, and its five tones
+ * after the plain form. The letter is written out rather than taken from
+ * `suggestClanCode(base)`, which returns `''` for a single character (#190).
+ */
+const TONE_ROWS: ReadonlyArray<readonly [string, string, string]> = [
+  ['a', 'a', 'aàáảãạ'],
+  ['ă', 'a', 'ăằắẳẵặ'],
+  ['â', 'a', 'âầấẩẫậ'],
+  ['e', 'e', 'eèéẻẽẹ'],
+  ['ê', 'e', 'êềếểễệ'],
+  ['i', 'i', 'iìíỉĩị'],
+  ['o', 'o', 'oòóỏõọ'],
+  ['ô', 'o', 'ôồốổỗộ'],
+  ['ơ', 'o', 'ơờớởỡợ'],
+  ['u', 'u', 'uùúủũụ'],
+  ['ư', 'u', 'ưừứửữự'],
+  ['y', 'y', 'yỳýỷỹỵ'],
 ]
 
 describe('suggestClanCode transliterates a Vietnamese clan name', () => {
@@ -67,8 +72,8 @@ describe('suggestClanCode transliterates a Vietnamese clan name', () => {
     expect([...slug]).toHaveLength(29)
   })
 
-  it.each(TONE_ROWS)('collapses every tone of %s onto one base letter', (base, row) => {
-    const expected = suggestClanCode(base).repeat([...row].length)
+  it.each(TONE_ROWS)('collapses every tone of %s onto one base letter', (_base, letter, row) => {
+    const expected = letter.repeat([...row].length)
     expect(suggestClanCode(row)).toBe(expected)
     expect([...suggestClanCode(row)]).toHaveLength([...row].length)
   })
@@ -125,19 +130,38 @@ describe('suggestClanCode produces a code the backend will accept, or nothing at
     expect(suggestClanCode('')).toBe('')
     expect(suggestClanCode('   ')).toBe('')
   })
+
+  it('returns an empty string rather than a one-character code the backend refuses', () => {
+    // #190: the backend's minimum is two characters, so a name that transliterates to
+    // one letter has no code to offer. "Ô" used to come back as "o", which the register
+    // form would have submitted and the backend refused.
+    expect(suggestClanCode('Ô')).toBe('')
+    expect(suggestClanCode('Lý 家族')).toBe('ly')
+  })
 })
 
 describe('isValidClanCode agrees with the backend pattern', () => {
-  it.each(['tran-gia', 'le', 'nguyen-huu-thanh-oai', 'a1', '2026'])('accepts "%s"', (code) => {
-    expect(isValidClanCode(code)).toBe(true)
-  })
-
-  it.each(['', '-le', 'le-', 'Tran-Gia', 'tran gia', 'tran--gia', 'trần', 'a'.repeat(101)])(
-    'rejects "%s"',
+  it.each(['tran-gia', 'le', 'ab', 'nguyen-huu-thanh-oai', 'a1', '2026'])(
+    'accepts "%s"',
     (code) => {
-      expect(isValidClanCode(code)).toBe(false)
+      expect(isValidClanCode(code)).toBe(true)
     },
   )
+
+  it.each([
+    '',
+    'a',
+    '0',
+    '-le',
+    'le-',
+    'Tran-Gia',
+    'tran gia',
+    'tran--gia',
+    'trần',
+    'a'.repeat(101),
+  ])('rejects "%s"', (code) => {
+    expect(isValidClanCode(code)).toBe(false)
+  })
 })
 
 describe('suggestAlternativeClanCode counts up', () => {
@@ -180,12 +204,19 @@ describe('the pattern is the backend pattern, not a second copy of the same idea
     expect(declaration![1]).toBe(CLAN_CODE_PATTERN_SOURCE)
   })
 
-  it('reads the same max_length the backend declares for clan_slug', () => {
+  it('reads the same length bounds the backend declares for a clan code', () => {
+    // `_ClanCode` is the one declaration the four backend clan-code fields share. This
+    // reads its bounds only. That each field carries it is shown by the backend's own
+    // integration tests, which send a one-character code to each and read the 422.
     const schemaPath = join(__dirname, '../../../../backend/app/schemas/auth.py')
     const source = readFileSync(schemaPath, 'utf-8')
-    const declaration = /clan_slug: str \| None = Field\(None, max_length=(\d+),/.exec(source)
+    const declaration =
+      /^_ClanCode = Annotated\[str, Field\(min_length=(\d+), max_length=(\d+), pattern=_SLUG_PATTERN\)\]$/m.exec(
+        source,
+      )
 
-    expect(declaration, `no clan_slug Field found in ${schemaPath}`).not.toBeNull()
-    expect(Number(declaration![1])).toBe(CLAN_CODE_MAX_LENGTH)
+    expect(declaration, `no _ClanCode declaration found in ${schemaPath}`).not.toBeNull()
+    expect(Number(declaration![1])).toBe(CLAN_CODE_MIN_LENGTH)
+    expect(Number(declaration![2])).toBe(CLAN_CODE_MAX_LENGTH)
   })
 })

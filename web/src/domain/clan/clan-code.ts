@@ -14,13 +14,20 @@
 
 /**
  * Byte-identical to the backend's `_SLUG_PATTERN`, declared at
- * `backend/app/schemas/auth.py:11`. ADR-057 says the pattern is reused, not re-written,
+ * `backend/app/schemas/auth.py:22`. ADR-057 says the pattern is reused, not re-written,
  * and TypeScript cannot import a Python string — so `clan-code.test.ts` reads that file
  * and asserts the two sources are the same text. That is the reuse, made checkable.
  */
 export const CLAN_CODE_PATTERN_SOURCE = '^[a-z0-9]+(?:-[a-z0-9]+)*$'
 
-/** `clan_slug` is `Field(None, max_length=100, ...)` — `backend/app/schemas/auth.py:33,42`. */
+/**
+ * The bounds of `_ClanCode`, the one declaration the backend's four clan-code fields
+ * share, at `backend/app/schemas/auth.py:32`. `clan-code.test.ts` reads both numbers there.
+ *
+ * The minimum is the database's: `clans.slug` has never held a one-character code, so
+ * the backend refuses one at the door (#190).
+ */
+export const CLAN_CODE_MIN_LENGTH = 2
 export const CLAN_CODE_MAX_LENGTH = 100
 
 /** The error code a taken code arrives as. `backend/app/application/auth/handlers.py:171,270`. */
@@ -112,6 +119,8 @@ const TRAILING_COUNTER = /^(.+)-(\d+)$/
  * one, which is reachable because `zh` is a shipped locale. An empty suggestion is the
  * honest answer: the field stays empty and the person types their own code, which is
  * better than offering a code built from the few characters that happened to survive.
+ * The same holds when a single letter survives, as `Ô` does: the backend refuses a
+ * one-character code, so offering `o` would only hand the person an error.
  */
 export function suggestClanCode(clanName: string): string {
   let mapped = clanName
@@ -119,23 +128,23 @@ export function suggestClanCode(clanName: string): string {
     mapped = mapped.split(letter).join(replacement)
   }
 
-  return (
-    mapped
-      .normalize('NFD')
-      .replace(COMBINING_MARKS, '')
-      .toLowerCase()
-      .replace(NOT_SLUG_SAFE, '-')
-      .replace(LEADING_OR_TRAILING_HYPHENS, '')
-      .slice(0, CLAN_CODE_MAX_LENGTH)
-      // The slice can land mid-separator, and a trailing hyphen fails the pattern.
-      .replace(LEADING_OR_TRAILING_HYPHENS, '')
-  )
+  const code = mapped
+    .normalize('NFD')
+    .replace(COMBINING_MARKS, '')
+    .toLowerCase()
+    .replace(NOT_SLUG_SAFE, '-')
+    .replace(LEADING_OR_TRAILING_HYPHENS, '')
+    .slice(0, CLAN_CODE_MAX_LENGTH)
+    // The slice can land mid-separator, and a trailing hyphen fails the pattern.
+    .replace(LEADING_OR_TRAILING_HYPHENS, '')
+
+  return isValidClanCode(code) ? code : ''
 }
 
 /** Whether a code is one the backend will accept. */
 export function isValidClanCode(code: string): boolean {
   return (
-    code.length > 0 &&
+    code.length >= CLAN_CODE_MIN_LENGTH &&
     code.length <= CLAN_CODE_MAX_LENGTH &&
     new RegExp(CLAN_CODE_PATTERN_SOURCE).test(code)
   )
