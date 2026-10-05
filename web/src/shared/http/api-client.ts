@@ -25,7 +25,16 @@ const DEFAULT_TIMEOUT_MS = 30_000
  */
 export type FetchLike = (request: Request, init?: RequestInit) => Promise<Response>
 
+/**
+ * ADR-056: on the server, `API_URL` names the backend when it is set. It carries no
+ * `NEXT_PUBLIC_` prefix, so Next.js never inlines it, and it is read on every request: compose's
+ * `web` container sets it to the network-internal `http://api:8000/api/v1`, where the browser's
+ * `localhost` would be the container itself. Unset, as on Vercel, the server shares the browser's
+ * origin. The browser never reads it.
+ */
 function apiBaseUrl(): string {
+  const serverBase = typeof window === 'undefined' ? process.env.API_URL : undefined
+  if (serverBase) return serverBase.replace(/\/+$/, '')
   const origin = process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'
   return `${origin.replace(/\/+$/, '')}/api/v1`
 }

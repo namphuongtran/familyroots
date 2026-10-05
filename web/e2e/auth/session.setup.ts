@@ -9,25 +9,30 @@ import { SEEDED_PASSWORD, SEEDED_USERS, type SeededUser } from './fixtures'
  * chose the full Supabase CLI stack on 2026-08-22 (the authenticated e2e harness's own text), and the two rejected
  * options are rejected here too. Minting a JWT in the test would exercise none of
  * `LoginPage` → `useAuthActions.signIn` → `@supabase/ssr`'s cookie writer →
- * `middleware.ts`'s session check → `requireServerRole`'s call to `GET /me/clans`, which is
- * the chain no test had ever executed. A stub at `requireServerRole` would put a
- * session-shaped hole in shipped code, which the authenticated e2e harness forbids in as many words.
+ * `middleware.ts`'s session check → the server guard's `GET /auth/me` and `GET /me/clans`
+ * (`features/auth/server/guard.ts`, #186; `requireServerRole` until then), which is the chain
+ * no test had ever executed. A stub at the guard would put a session-shaped hole in shipped
+ * code, which the authenticated e2e harness forbids in as many words.
  *
  * **Each setup ends on a reading, not on a file write.** A login that succeeds at Supabase
  * and then reaches nothing would otherwise leave a storage-state file that looks fine and a
  * suite full of redirects to `/vi/login`. The admin's last act is rendering the gated
  * screen; the viewer's is being refused it *by role* rather than for want of a session,
- * which is a different HTTP answer and is checked as one.
+ * which is a different HTTP answer and is checked as one. The super_admin's is the platform
+ * screen, which the guard admits only on `platform_role` read from `GET /auth/me`.
  */
 
 const BACKOFFICE_PATH = '/vi/backoffice/dashboard'
 
+/** `messages/vi.json`, `platform.clans_title`. */
+const PLATFORM_CLANS_TITLE = 'Tất cả dòng họ'
+
 /**
- * `middleware.ts` sends a request with no session to `/{locale}/login`, and
- * `requireServerRole` sends an authenticated user with too low a role to
- * `/{locale}/dashboard`. Those two Locations are how a "refused" reading is told apart from
- * a "no session at all" reading — the distinction `.claude/rules/testing.md` demands when it
- * says the failing reading must differ from the passing one.
+ * `middleware.ts` sends a request with no session to `/{locale}/login`, and the server guard
+ * sends an authenticated member without the page's capability to `/{locale}/dashboard`. Those
+ * two Locations are how a "refused" reading is told apart from a "no session at all" reading —
+ * the distinction `.claude/rules/testing.md` demands when it says the failing reading must
+ * differ from the passing one.
  */
 const DASHBOARD_LOCATION = /\/vi\/dashboard$/
 
@@ -43,23 +48,29 @@ async function signIn(page: import('@playwright/test').Page, user: SeededUser): 
   await page.locator('form button[type="submit"]').click()
 
   /**
-   * Waiting for where the sign-in lands, which is the dashboard for both seeded users: each holds
-   * one approved membership in `nguyen-phuc`.
+   * Waiting for the sign-in to leave the form, which it does only after Supabase has written the
+   * cookie and the session has been read. Where it lands is each setup's own reading below, not
+   * this helper's: the super_admin's landing goes through `accessStateOf`, and #186's negative
+   * control breaks that function on purpose, which must fail a case in `guard.auth.spec.ts`
+   * rather than this setup.
    *
    * Until #183 this polled for the Supabase cookie and left at once, because `/vi/dashboard` ran
    * away: 9037 `GET /auth/me` in twelve seconds, measured 2026-10-04, until the backend's
    * 20-per-60-second limiter on `/api/v1/auth/*` (`backend/app/main.py:221-226`) answered 429.
-   * The session is one query now, so the setup can wait for the dashboard like a member would.
    * `dashboard.auth.spec.ts` counts the requests.
    */
-  await expect(page).toHaveURL(/\/vi\/dashboard$/, { timeout: 30_000 })
+  await expect(page).not.toHaveURL(/\/vi\/login$/, { timeout: 30_000 })
   const cookies = await page.context().cookies()
   expect(cookies.some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'))).toBe(true)
 }
 
+/** Each member holds one approved membership, in `nguyen-phuc`, so a sign-in lands here. */
+const MEMBER_LANDING = /\/vi\/dashboard$/
+
 setup('capture a real admin session, ending on the gated screen', async ({ page }) => {
   const user = SEEDED_USERS.admin
   await signIn(page, user)
+  await expect(page).toHaveURL(MEMBER_LANDING)
 
   await page.goto(BACKOFFICE_PATH)
 
@@ -74,14 +85,31 @@ setup('capture a real admin session, ending on the gated screen', async ({ page 
 setup('capture a real viewer session, refused the gated screen by role', async ({ page }) => {
   const user = SEEDED_USERS.viewer
   await signIn(page, user)
+  await expect(page).toHaveURL(MEMBER_LANDING)
 
   // No navigation: `page.request` shares this context's cookies and runs no page JavaScript,
-  // so the role gate is read without mounting anything. `requireServerRole` answers a
-  // logged-in viewer with a redirect to the dashboard — proof both that the session is real
-  // and that the gate saw a role it refused.
+  // so the role gate is read without mounting anything. The guard answers a logged-in viewer,
+  // who lacks `viewPendingUsers`, with a redirect to the dashboard — proof both that the
+  // session is real and that the gate saw a role it refused.
   const refused = await page.request.get(BACKOFFICE_PATH, { maxRedirects: 0 })
   expect(refused.status()).toBe(307)
   expect(refused.headers()['location']).toMatch(DASHBOARD_LOCATION)
+
+  await page.context().storageState({ path: user.storageState })
+})
+
+setup('capture a real super_admin session, with no clan, ending on platform/', async ({ page }) => {
+  const user = SEEDED_USERS.superAdmin
+  await signIn(page, user)
+
+  // The platform layout's guard admits the request only if `GET /auth/me` said
+  // `platform_role: "super_admin"`, and sends anyone else away. The guard reads the profile, not
+  // the access state, so where the sign-in itself landed is left to `guard.auth.spec.ts`.
+  await page.goto('/vi/platform/clans')
+  await expect(page).toHaveURL(/\/vi\/platform\/clans$/)
+  await expect(page.getByRole('heading', { name: PLATFORM_CLANS_TITLE })).toBeVisible({
+    timeout: 15_000,
+  })
 
   await page.context().storageState({ path: user.storageState })
 })

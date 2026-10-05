@@ -92,9 +92,10 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # ADR-056: `API_URL` (no `NEXT_PUBLIC_` prefix) is the server-to-server backend
-# origin — read live by `src/lib/server/auth-context.ts` via `process.env.API_URL`, never
-# baked into this image. Set it per environment through `docker run -e` or compose's
-# `environment:`; unset, the server falls back to whatever `NEXT_PUBLIC_API_URL` got
-# baked with, which is also correct on a deployment shape with one shared public origin.
+# base — read live by `apiFetch` on the server (`src/shared/http/api-client.ts`, since #186)
+# via `process.env.API_URL`, never baked into this image. Set it per environment through
+# `docker run -e` or compose's `environment:`; unset, the server falls back to the origin
+# `NEXT_PUBLIC_API_ORIGIN` got baked with, the browser's, which is also correct on a
+# deployment shape with one shared public origin.
 
 CMD ["node", "server.js"]

@@ -2,7 +2,7 @@ import { getTranslations } from 'next-intl/server'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { PersonsList } from '@/features/persons'
-import { getServerAuthContext } from '@/lib/server/auth-context'
+import { guardClanRoute } from '@/features/auth/index.server'
 
 /**
  * Spec §7.5, "Danh sách thành viên". The shell stays a Server
@@ -28,12 +28,16 @@ import { getServerAuthContext } from '@/lib/server/auth-context'
  * codebase has not established anywhere yet — inventing one here would be
  * exactly the kind of write-UX decision this seed does not own (create and
  * edit are the persons form's).
+ *
+ * **The "add" link reads `createPerson` off the guard's capabilities** (#186). The `(dashboard)`
+ * layout has already admitted the request, and the guard reads the session once per request, so
+ * this call costs no second `GET /auth/me`.
  */
-export default async function MembersPage() {
+export default async function MembersPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
   const t = await getTranslations('members')
-  const authContext = await getServerAuthContext()
-  const canCreateMembers =
-    authContext?.currentClanRole === 'editor' || authContext?.currentClanRole === 'admin'
+  const { capabilities } = await guardClanRoute(locale)
+  const canCreateMembers = capabilities.createPerson
 
   return (
     <div className="space-y-4">

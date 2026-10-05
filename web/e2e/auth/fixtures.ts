@@ -19,7 +19,7 @@
 export const AUTH_STACK_ENABLED = process.env.E2E_AUTH_STACK === '1'
 
 /**
- * The four users `make seed` creates (`docs/ops/seed-test-users.md`). The
+ * The five users `make seed` creates (`docs/ops/seed-test-users.md`). The
  * password is written down in that public document on purpose: the seeder refuses to run
  * against anything but a local stack.
  */
@@ -27,32 +27,44 @@ export const SEEDED_PASSWORD = 'dev-password-s073'
 
 export interface SeededUser {
   readonly email: string
-  /** The role `GET /me/clans` reports for this user in `clanSlug` below. */
-  readonly role: 'admin' | 'editor' | 'viewer'
-  readonly clanSlug: string
+  /** The role `GET /me/clans` reports for this user in `clanSlug` below. Null: no membership. */
+  readonly role: 'admin' | 'editor' | 'viewer' | null
+  readonly clanSlug: string | null
+  /** `platform_role` on `GET /auth/me`. */
+  readonly platformRole: 'user' | 'super_admin'
   /** Where `session.setup.ts` writes this user's captured cookies. */
   readonly storageState: string
 }
 
 /**
- * Two of `make seed`'s four users, not all four. `admin` and `viewer` are the pair that differ
+ * Three of `make seed`'s five users, not all five. `admin` and `viewer` are the pair that differ
  * on every role-gated element on the members screen, so a case that reads one and not the
- * other is measuring the session's role rather than the markup. `editor` adds nothing the
- * admin reading does not already cover, and `outsider` belongs to the second clan, which
- * is a cross-clan isolation subject and not this seed's.
+ * other is measuring the session's role rather than the markup. `superAdmin` holds no
+ * membership at all and `platform_role` `super_admin` (#186), the one user whose access state is
+ * `platform`. `editor` adds nothing the admin reading does not already cover, and `outsider`
+ * belongs to the second clan, which is a cross-clan isolation subject and not this harness's.
  */
 export const SEEDED_USERS = {
   admin: {
     email: 'admin@familyroots.example.com',
     role: 'admin',
     clanSlug: 'nguyen-phuc',
+    platformRole: 'user',
     storageState: 'e2e/.auth/admin.json',
   },
   viewer: {
     email: 'viewer@familyroots.example.com',
     role: 'viewer',
     clanSlug: 'nguyen-phuc',
+    platformRole: 'user',
     storageState: 'e2e/.auth/viewer.json',
+  },
+  superAdmin: {
+    email: 'superadmin@familyroots.example.com',
+    role: null,
+    clanSlug: null,
+    platformRole: 'super_admin',
+    storageState: 'e2e/.auth/super-admin.json',
   },
 } as const satisfies Record<string, SeededUser>
 
@@ -102,13 +114,13 @@ export function authStackEnv(): Record<string, string> {
   return {
     NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
-    // Three names for one backend, because three call sites read three different ones and
-    // all of them are on the members screen's path. `NEXT_PUBLIC_API_ORIGIN` is the spine's
-    // (`src/shared/http/api-client.ts:29`, origin only — it appends `/api/v1` itself);
+    // Three names for one backend, because three reads take three different ones and all
+    // of them are on the members screen's path. `NEXT_PUBLIC_API_ORIGIN` is the spine's in the
+    // browser (`src/shared/http/api-client.ts`, origin only — it appends `/api/v1` itself);
     // `NEXT_PUBLIC_API_URL` is the legacy axios client's (`src/lib/api/axios.ts:6`, the full
-    // base); `API_URL` is the server-side read ADR-056 added
-    // (`src/lib/server/auth-context.ts:40`). Browser and dev server are both on the host
-    // here, so one origin satisfies all three.
+    // base); `API_URL` is the spine's on the server, the read ADR-056 added (the same file, the
+    // full base), which the server guard's session read takes. Browser and dev server are both
+    // on the host here, so one origin satisfies all three.
     NEXT_PUBLIC_API_ORIGIN: origin,
     NEXT_PUBLIC_API_URL: `${origin}/api/v1`,
     API_URL: `${origin}/api/v1`,

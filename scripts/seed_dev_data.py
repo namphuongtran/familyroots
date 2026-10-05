@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Seed the local development stack with a test clan, its users and their roles.
+"""Seed the local development stack with a test clan, its users and their roles, and a
+platform super admin who belongs to no clan.
 
 A test user exists in **two databases at once** and this script is what keeps the two
 halves in step:
@@ -93,6 +94,17 @@ class UserSpec:
     role: str
 
 
+@dataclass(frozen=True)
+class PlatformUserSpec:
+    """A user who acts on the platform rather than in a clan: ``platform_role =
+    'super_admin'`` and no membership anywhere, which is the web's ``platform`` access
+    state (issue #186)."""
+
+    id: uuid.UUID
+    email: str
+    display_name: str
+
+
 CLAN_A = ClanSpec(
     id=uuid.UUID("aaaaaaaa-0000-4000-8000-000000000001"),
     slug="nguyen-phuc",
@@ -143,6 +155,22 @@ USERS: tuple[UserSpec, ...] = (
     ),
 )
 
+# A super admin with NO membership, on purpose. With a membership the web would route them
+# as a member of that clan, and the platform-only path, where `GET /auth/me`'s
+# `platform_role` is the only thing that says where they belong, would have no user to
+# test it with. `scripts/bootstrap_super_admin.py` is the production path for this role
+# and refuses to run once any super admin exists, so it cannot seed one.
+PLATFORM_USERS: tuple[PlatformUserSpec, ...] = (
+    PlatformUserSpec(
+        id=uuid.UUID("55555555-5555-4555-8555-555555555555"),
+        email=f"superadmin@{EMAIL_DOMAIN}",
+        display_name="Quản trị nền tảng",
+    ),
+)
+
+# Every identity the Supabase half holds: the clan users, then the platform users.
+IDENTITIES: tuple[UserSpec | PlatformUserSpec, ...] = (*USERS, *PLATFORM_USERS)
+
 # ── SQL. Every statement this script runs against the application database ────
 #
 # Listed as named constants so that the set is enumerable by reading this block, and so a
@@ -178,16 +206,18 @@ INSERT INTO user_profiles
     (id, email, display_name, language, timezone, is_active, platform_role,
      created_at, updated_at)
 VALUES
-    (%(id)s, %(email)s, %(display_name)s, 'vi', 'Asia/Ho_Chi_Minh', TRUE, 'user',
+    (%(id)s, %(email)s, %(display_name)s, 'vi', 'Asia/Ho_Chi_Minh', TRUE, %(platform_role)s,
      NOW(), NOW())
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email,
     display_name = EXCLUDED.display_name,
     is_active = TRUE,
+    platform_role = EXCLUDED.platform_role,
     updated_at = NOW()
 WHERE user_profiles.email IS DISTINCT FROM EXCLUDED.email
    OR user_profiles.display_name IS DISTINCT FROM EXCLUDED.display_name
    OR user_profiles.is_active IS DISTINCT FROM TRUE
+   OR user_profiles.platform_role IS DISTINCT FROM EXCLUDED.platform_role
 """
 
 # `approved_by` is NOT NULL-able in practice: ck_user_clan_roles_..._approval_consistency
@@ -368,7 +398,7 @@ class GoTrue:
                 return found
         return None
 
-    def upsert_user(self, user: UserSpec) -> str:
+    def upsert_user(self, user: UserSpec | PlatformUserSpec) -> str:
         """Create, repair, or leave alone the identity at its fixed id.
 
         Returns ``created`` | ``repaired`` | ``unchanged``. An identity that already
@@ -448,6 +478,7 @@ def apply_app_database(conn: psycopg.Connection[Any]) -> dict[str, int]:
                     "id": str(user.id),
                     "email": user.email,
                     "display_name": user.display_name,
+                    "platform_role": "user",
                 },
             )
             written["user_profiles"] += cur.rowcount
@@ -462,13 +493,24 @@ def apply_app_database(conn: psycopg.Connection[Any]) -> dict[str, int]:
                 },
             )
             written["user_clan_roles"] += cur.rowcount
+        for platform_user in PLATFORM_USERS:
+            cur.execute(
+                SQL_UPSERT_USER_PROFILE,
+                {
+                    "id": str(platform_user.id),
+                    "email": platform_user.email,
+                    "display_name": platform_user.display_name,
+                    "platform_role": "super_admin",
+                },
+            )
+            written["user_profiles"] += cur.rowcount
     conn.commit()
     return written
 
 
 def read_app_database(conn: psycopg.Connection[Any]) -> dict[str, Any]:
-    ids = [str(u.id) for u in USERS]
-    emails = [u.email for u in USERS]
+    ids = [str(u.id) for u in IDENTITIES]
+    emails = [u.email for u in IDENTITIES]
     with conn.cursor() as cur:
         cur.execute(SQL_SELECT_CLANS, {"ids": [str(c.id) for c in CLANS]})
         clans = [
@@ -519,6 +561,12 @@ _CONSEQUENCE = (
     "                 That is NOT a permissions bug. It is the missing row named above."
 )
 
+_PLATFORM_CONSEQUENCE = (
+    "this user CAN log in, and `GET /auth/me` then cannot report\n"
+    "                 platform_role 'super_admin', so the web routes them as a user with\n"
+    "                 no clan, to onboarding, and no platform route admits them."
+)
+
 
 def verify(conn: psycopg.Connection[Any], gotrue: GoTrue, supabase_url: str) -> list[str]:
     """Return a list of human-readable problems. Empty means the halves are in step."""
@@ -545,9 +593,10 @@ def verify(conn: psycopg.Connection[Any], gotrue: GoTrue, supabase_url: str) -> 
     profiles_by_email = {p["email"]: p for p in state["user_profiles"]}
     roles_by_user = {r["user_id"]: r for r in state["user_clan_roles"]}
 
-    for user in USERS:
+    for user in IDENTITIES:
         identity = gotrue.get_user(user.id)
         head = f"{user.email} (id {user.id})"
+        consequence = _CONSEQUENCE if isinstance(user, UserSpec) else _PLATFORM_CONSEQUENCE
 
         if identity is None:
             stray = gotrue.find_by_email(user.email)
@@ -598,7 +647,7 @@ def verify(conn: psycopg.Connection[Any], gotrue: GoTrue, supabase_url: str) -> 
                 if collision is not None
                 else "    fix        : re-run `scripts/seed_dev_data.py apply`"
             )
-            problems.append(f"{head}\n{detail}    consequence: {_CONSEQUENCE}\n{fix}")
+            problems.append(f"{head}\n{detail}    consequence: {consequence}\n{fix}")
         elif not profile["is_active"]:
             problems.append(
                 f"{head}\n"
@@ -607,8 +656,29 @@ def verify(conn: psycopg.Connection[Any], gotrue: GoTrue, supabase_url: str) -> 
                 f"                 answers 403 account_deactivated "
                 f"(app/core/security.py)."
             )
+        elif isinstance(user, PlatformUserSpec) and profile["platform_role"] != "super_admin":
+            problems.append(
+                f"{head}\n"
+                f"    profile    : PRESENT but platform_role = {profile['platform_role']!r}, "
+                f"expected 'super_admin'.\n"
+                f"    consequence: {consequence}\n"
+                f"    fix        : re-run `scripts/seed_dev_data.py apply`"
+            )
 
         role = roles_by_user.get(str(user.id))
+        if isinstance(user, PlatformUserSpec):
+            # The point of this user is that they belong to no clan. With a membership the
+            # web routes them as a member of it, and the platform-only path goes untested.
+            if role is not None:
+                problems.append(
+                    f"{head}\n"
+                    f"    membership : UNEXPECTED. this super admin must belong to no clan, and\n"
+                    f"                 holds role {role['role']!r} in clan {role['clan_id']}.\n"
+                    f"    consequence: the web routes them as a member of that clan, so\n"
+                    f"                 nothing exercises the `platform` access state.\n"
+                    f"    fix        : delete that `user_clan_roles` row"
+                )
+            continue
         if role is None:
             problems.append(
                 f"{head}\n"
@@ -644,13 +714,19 @@ def verify(conn: psycopg.Connection[Any], gotrue: GoTrue, supabase_url: str) -> 
 
 def summary() -> str:
     lines = ["", "Seeded (password for every user: " + TEST_PASSWORD + ")", ""]
-    lines.append(f"  {'email':<32} {'clan':<14} {'role':<8} id")
+    lines.append(f"  {'email':<36} {'clan':<14} {'role':<8} id")
     for user in USERS:
-        lines.append(f"  {user.email:<32} {user.clan.slug:<14} {user.role:<8} {user.id}")
+        lines.append(f"  {user.email:<36} {user.clan.slug:<14} {user.role:<8} {user.id}")
+    for platform_user in PLATFORM_USERS:
+        no_clan, no_role = "(no clan)", "(none)"
+        lines.append(f"  {platform_user.email:<36} {no_clan:<14} {no_role:<8} {platform_user.id}")
     lines.append("")
     lines.append(f"  {CLAN_A.slug} = {CLAN_A.id}   (X-Current-Clan-Id for the three role users)")
     lines.append(
         f"  {CLAN_B.slug} = {CLAN_B.id}   (the second side; only {USERS[3].email} is in it)"
+    )
+    lines.append(
+        f"  {PLATFORM_USERS[0].email} is platform_role 'super_admin' and in no clan"
     )
     return "\n".join(lines)
 
@@ -665,7 +741,7 @@ def assert_no_email_drift(gotrue: GoTrue) -> None:
     2026-08-22 by planting exactly that.
     """
     drifted: list[str] = []
-    for user in USERS:
+    for user in IDENTITIES:
         if gotrue.get_user(user.id) is not None:
             continue
         stray = gotrue.find_by_email(user.email)
@@ -692,7 +768,7 @@ def assert_no_email_drift(gotrue: GoTrue) -> None:
 def cmd_apply(conn: psycopg.Connection[Any], gotrue: GoTrue, supabase_url: str) -> int:
     assert_schema(conn)
     assert_no_email_drift(gotrue)
-    for user in USERS:
+    for user in IDENTITIES:
         action = gotrue.upsert_user(user)
         print(f"seed_dev_data: auth.users  {action:<7} {user.email}")
     written = apply_app_database(conn)
@@ -718,7 +794,8 @@ def cmd_verify(
     if not problems:
         if not quiet_ok:
             print(
-                f"seed_dev_data: both halves agree — {len(USERS)} users across {len(CLANS)} clans."
+                f"seed_dev_data: both halves agree — {len(USERS)} users across {len(CLANS)} clans, "
+                f"and {len(PLATFORM_USERS)} platform user in none."
             )
         return 0
     print("", file=sys.stderr)
@@ -742,7 +819,7 @@ def cmd_verify(
 
 def cmd_dump(conn: psycopg.Connection[Any], gotrue: GoTrue) -> int:
     identities = []
-    for user in USERS:
+    for user in IDENTITIES:
         row = gotrue.get_user(user.id)
         identities.append(
             {

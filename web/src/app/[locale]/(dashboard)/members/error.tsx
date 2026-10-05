@@ -5,9 +5,10 @@ import { PersonsErrorState } from '@/features/persons'
 
 /**
  * Next's route-segment error boundary (`error.tsx` must be a Client
- * Component). Catches whatever `page.tsx` throws — today that is only
- * `getServerAuthContext()`'s own fetch, since `PersonsList` handles its own
- * query error in place rather than throwing. `T-17`: `reset()` gives this a
+ * Component). Catches whatever `page.tsx` throws, and today that is nothing it
+ * reaches: `PersonsList` handles its own query error in place, and the page's
+ * one fetch, the guard's session read (`guardClanRoute`, #186), is shared with
+ * the `(dashboard)` layout, whose failure lands in `app/[locale]/error.tsx`. `T-17`: `reset()` gives this a
  * retry rather than a dead end.
  *
  * `error.message` is deliberately not shown: in production Next.js replaces

@@ -6,6 +6,14 @@ Accepted (2026-08-22). It was opened by the Supabase-variable fix while that cha
 Supabase build-time variables and correctly declined to fix this one in the same change, because
 unlike those two it has no single correct value.
 
+2026-10-05: #186 deleted `web/src/lib/server/auth-context.ts`, the one reader of `API_URL`, and
+moved the read into `apiFetch` (`web/src/shared/http/api-client.ts`, `apiBaseUrl`). On the server,
+`API_URL` names the backend when it is set, read on every request as this ADR decided. Unset, the
+server falls back to the spine's `NEXT_PUBLIC_API_ORIGIN`, the origin the browser uses, rather than
+to `NEXT_PUBLIC_API_URL`. Every server-side spine call takes it now: the server guard's session
+read and `members/[id]`'s `getPerson`, which until then sent to the browser's origin from inside
+the container. `api-client.test.ts`, "apiFetch base URL", holds both readings.
+
 Every measurement below was taken on **2026-08-22** in
 `.claude/worktrees/web`, from commit `3db8f96` (branch `seed/s-076-adr-056-api-url`). Docker
 29.7.2, Compose v5.4.0, `node:22-alpine`, Next.js 16 (`output: 'standalone'`).

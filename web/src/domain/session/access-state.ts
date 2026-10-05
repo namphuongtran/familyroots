@@ -3,8 +3,9 @@
  *
  * One pure function, so the browser and the server cannot disagree. Before #183 the active clan
  * was resolved twice: the client copy (`application/auth/use-cases/auth-context.ts`) fell back
- * to the profile's `clan_id`, and the server copy (`lib/server/auth-context.ts`) did not. Both
- * call `activeClanOf` below now, and it takes no profile at all.
+ * to the profile's `clan_id`, and the legacy server guard's copy did not. `useSession` and the
+ * server guard (`features/auth/server/guard.ts`, #186) both call `accessStateOf` now, and
+ * `activeClanOf` takes no profile at all.
  *
  * Plain TypeScript: `domain-is-pure` and `domain-imports-only-domain`
  * (`web/.dependency-cruiser.cjs`) fail the build if this file reaches for React, a store, the

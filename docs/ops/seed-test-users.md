@@ -1,8 +1,9 @@
 # Seeding test users into both databases
 
-**What it is for.** One command that produces a clan, an admin, an editor, a viewer, and a
-user outside that clan, so that a test can log in through the real flow and reach a real
-authenticated screen. Added on 2026-08-22.
+**What it is for.** One command that produces a clan, an admin, an editor, a viewer, a
+user outside that clan, and a platform super admin in no clan at all, so that a test can log
+in through the real flow and reach a real authenticated screen. Added on 2026-08-22; the
+super admin joined on 2026-10-05 (#186).
 
 **Read [`local-supabase.md`](local-supabase.md) first.** This document assumes the local
 Supabase stack is up and that you know why `SUPABASE_URL` must be `supabase.localhost`.
@@ -64,14 +65,15 @@ credentials — but **whatever you have already exported wins**, so
 
 ## What gets seeded
 
-Two clans and four users. Every password is `dev-password-s073`.
+Two clans and five users. Every password is `dev-password-s073`.
 
-| Email | Clan | Role |
-|---|---|---|
-| `admin@familyroots.example.com` | `nguyen-phuc` | admin |
-| `editor@familyroots.example.com` | `nguyen-phuc` | editor |
-| `viewer@familyroots.example.com` | `nguyen-phuc` | viewer |
-| `outsider@familyroots.example.com` | `tran-gia` | admin |
+| Email | Clan | Role | `platform_role` |
+|---|---|---|---|
+| `admin@familyroots.example.com` | `nguyen-phuc` | admin | `user` |
+| `editor@familyroots.example.com` | `nguyen-phuc` | editor | `user` |
+| `viewer@familyroots.example.com` | `nguyen-phuc` | viewer | `user` |
+| `outsider@familyroots.example.com` | `tran-gia` | admin | `user` |
+| `superadmin@familyroots.example.com` | none | none | `super_admin` |
 
 ```
 nguyen-phuc = aaaaaaaa-0000-4000-8000-000000000001
@@ -80,7 +82,7 @@ tran-gia    = bbbbbbbb-0000-4000-8000-000000000002
 
 **`outsider@` is the point of the second clan.** Clan isolation cannot be tested from
 inside one clan: a "clan B cannot see this" assertion needs a caller who is genuinely
-outside clan A. The four users are in exactly one clan each, and the two member sets are
+outside clan A. The four clan users are in exactly one clan each, and the two member sets are
 disjoint — pinned at the database layer by
 `backend/tests/integration/test_seed_dev_data.py::test_the_two_clans_have_disjoint_member_sets`.
 
@@ -89,6 +91,17 @@ disjoint — pinned at the database layer by
 `X-Current-Clan-Id` (`backend/app/core/security.py`), which every e2e test would then have
 to work around. Add such a user when a test needs the clan switcher, and give it its own
 email rather than changing one of these four.
+
+**`superadmin@` belongs to no clan, on purpose (#186).** The web routes a super admin with no
+approved membership by `platform_role` alone, to `/{locale}/platform/clans`, and a super admin
+who holds a membership as a member of that clan. So a membership would leave the platform-only
+path with no user to test it. `verify` names a membership row for this user as `UNEXPECTED`,
+and names a `platform_role` other than `super_admin`; `apply` repairs the second and never
+writes the first. `apply` also writes `platform_role = 'user'` for the four clan users, so a
+super admin promotion made on one of them by hand is reset like any other drift.
+`scripts/bootstrap_super_admin.py` is the production path for the role, and
+it refuses to run once any super admin exists, so it cannot seed this one. The web's
+authenticated e2e harness signs in as this user (`web/e2e/auth/fixtures.ts`, `superAdmin`).
 
 **Nothing else is seeded.** No persons, marriages, parent-child links, documents or events:
 a role check needs none of them, and they are out of scope here. `clan_memberships` is
@@ -128,7 +141,7 @@ the real request DTO, not by matching the domain string.
 ## What each user can reach, measured
 
 Measured 2026-08-22 against a backend on `:8073` with `RLS_ENABLED=true`, on a stack
-seeded from two empty databases. Every user sent `X-Current-Clan-Id` for their own clan.
+seeded from two empty databases. `superadmin@` did not exist then and is not in the table. Every user sent `X-Current-Clan-Id` for their own clan.
 Every login returned `200` with the right clan and role in `data.user`.
 
 | | admin | editor | viewer | outsider (clan B) |
@@ -285,7 +298,7 @@ public file.
 `backend/tests/integration/test_seed_dev_data.py` exercises the application-database half
 against a real migrated Postgres and drives the identity half through a stub. The stack is
 one shared container set with fixed fixture ids, so two suites running at once would create
-and delete the same four `auth.users` rows underneath each other — the `TEST_PG_DB_NAME`
+and delete the same five `auth.users` rows underneath each other — the `TEST_PG_DB_NAME`
 trap in another costume, with no per-worktree name available to fix it.
 
 So **the GoTrue half is verified by hand**, and this is the procedure:
@@ -294,7 +307,7 @@ So **the GoTrue half is verified by hand**, and this is the procedure:
 scripts/supabase_local.sh destroy && scripts/supabase_local.sh up   # auth.users empty
 docker exec familyroots-pgdb psql -U postgres -d postgres \
   -c 'DROP DATABASE IF EXISTS family_roots WITH (FORCE)' -c 'CREATE DATABASE family_roots'
-make seed                      # expect: four "created", then a summary table
+make seed                      # expect: five "created", then a summary table
 make seed-verify               # expect: "both halves agree"
 # then log in as each user and read what comes back
 ```
