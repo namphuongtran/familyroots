@@ -11,10 +11,12 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.v1.invitations import admin_invitations_router, user_invitations_router
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import ensure_user_profile, get_current_clan_id, get_current_user
 from app.infrastructure.dependencies import (
@@ -51,7 +53,6 @@ class _FakeCreateHandler:
             "role": cmd.role,
             "token": "a" * 40,
             "expires_at": datetime.now(UTC),
-            "accept_path": "/api/v1/invitations/aaaa/accept",
         }
 
 
@@ -89,7 +90,8 @@ def _user_client(handler: _FakeAcceptHandler) -> TestClient:
     return TestClient(app)
 
 
-def test_create_invitation_envelope() -> None:
+def test_create_invitation_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "INVITE_LINK_ORIGIN", "https://app.example.test")
     clan_id = uuid.uuid4()
     handler = _FakeCreateHandler()
     resp = _admin_client(handler, clan_id).post(
@@ -99,7 +101,11 @@ def test_create_invitation_envelope() -> None:
     body = resp.json()
     assert set(body.keys()) == {"data"}
     assert body["data"]["token"] == "a" * 40
-    assert body["data"]["accept_path"] == "/api/v1/invitations/aaaa/accept"
+    # The route composes the link (ADR-062). No LanguageMiddleware in this app, so the
+    # locale is `current_locale`'s default. The locale rule is read over the full stack by
+    # `tests/integration/test_invitation_invite_url.py`.
+    assert body["data"]["invite_url"] == f"https://app.example.test/vi/invitations/{'a' * 40}"
+    assert "accept_path" not in body["data"]
     assert body["data"]["email"] == "a@x.com"
     assert body["data"]["role"] == "editor"
 

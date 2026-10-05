@@ -44,6 +44,11 @@ services:
       #   ["https://app.familyroots.example"]. Boot fails on wildcard/localhost.
       - key: CORS_ORIGINS
         sync: false
+      # INVITE_LINK_ORIGIN: the web app's production origin, e.g.
+      #   https://app.familyroots.example. Every invitation link is built on it
+      #   (ADR-062). Boot fails on empty/localhost. NOT the API origin.
+      - key: INVITE_LINK_ORIGIN
+        sync: false
       # Supabase project URL + keys — the production validator requires all three
       # (auth JWKS + sign-in + register/storage). Service-role key is highly
       # sensitive (bypasses RLS project-wide) — dashboard only, never committed.

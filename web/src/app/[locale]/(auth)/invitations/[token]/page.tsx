@@ -5,9 +5,9 @@ import { InvitationAcceptScreen } from '@/features/invitations'
  * The browser route an invitation link lands on: `/{locale}/invitations/{token}`.
  *
  * That is the shape the ADR-057 decision picked for the link an admin shares — a
- * browser URL on the web app's own origin, not the API path. See
- * `web/.env.example`'s `NEXT_PUBLIC_INVITE_LINK_ORIGIN` entry for the origin half
- * of it, and the finding recorded there about `accept_path`.
+ * browser URL on the web app's own origin, not the API path. The backend composes
+ * it on its `INVITE_LINK_ORIGIN` setting and hands it to the admin as `invite_url`
+ * (ADR-062), so nothing in `web/` builds this link.
  *
  * A Server Component that renders one Client Component, and nothing else. It has to
  * be a server file to declare `metadata` below, and there is nothing for it to

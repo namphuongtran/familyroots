@@ -1724,12 +1724,13 @@ họ. Dữ liệu gia phả không bị xóa."*
 `POST/GET/DELETE /clans/{clan_id}/invitations`. Admin only.
 
 **Create.** Sheet/dialog: `Email` + `Vai trò` segmented (`Người xem` default, per the
-API). On 201 the response carries the raw `token` and `accept_path`, so success is a
-**one-time link reveal**, not a toast:
+API). On 201 the response carries the raw `token` and `invite_url`, the browser link the
+backend composes (ADR-062), so success is a **one-time link reveal**, not a toast. The screen
+shows `invite_url` as it is and composes nothing:
 
 > **Đã tạo lời mời cho hai.nguyen@gmail.com**
 > Gửi liên kết này cho người được mời. Liên kết có hiệu lực **7 ngày**.
-> `https://…/invitations/{token}/accept`   [Sao chép liên kết]
+> `https://…/vi/invitations/{token}`   [Sao chép liên kết]
 > Chỉ người đăng nhập bằng đúng địa chỉ email trên mới dùng được liên kết này.
 
 The token is a secret: revealed once, never rendered in the list, never in a screenshot-

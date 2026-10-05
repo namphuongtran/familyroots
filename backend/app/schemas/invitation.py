@@ -38,7 +38,9 @@ class InvitationCreatedResponse(BaseModel):
     role: str
     token: str
     expires_at: datetime
-    accept_path: str  # e.g. "/api/v1/invitations/{token}/accept" — admin shares this
+    # The browser link the admin shares: `<INVITE_LINK_ORIGIN>/<locale>/invitations/<token>`,
+    # a page of the web app, in the locale the request was served in (ADR-062).
+    invite_url: str
 
 
 class InvitationAcceptedResponse(BaseModel):

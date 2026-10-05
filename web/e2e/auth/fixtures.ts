@@ -83,6 +83,39 @@ export const SEEDED_USERS = {
  * recorded in `docs/ops/local-supabase.md`, "The two settings that are load bearing".
  */
 export function authStackEnv(): Record<string, string> {
+  const { supabaseUrl, supabaseAnonKey, apiOrigin: origin } = authStackInputs()
+
+  return {
+    NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
+    // Three names for one backend, because three reads take three different ones and all
+    // of them are on the members screen's path. `NEXT_PUBLIC_API_ORIGIN` is the spine's in the
+    // browser (`src/shared/http/api-client.ts`, origin only: it appends `/api/v1` itself);
+    // `NEXT_PUBLIC_API_URL` is the legacy axios client's (`src/lib/api/axios.ts:6`, the full
+    // base); `API_URL` is the spine's on the server, the read ADR-056 added (the same file, the
+    // full base), which the server guard's session read takes. Browser and dev server are both
+    // on the host here, so one origin satisfies all three.
+    NEXT_PUBLIC_API_ORIGIN: origin,
+    NEXT_PUBLIC_API_URL: `${origin}/api/v1`,
+    API_URL: `${origin}/api/v1`,
+    // The same variable `next.config.ts` reads for the banner spec's banner server. Its name says
+    // SECOND; what it means is "not the primary", and each extra `next dev` must pass its
+    // own value or Next.js refuses to start on the shared `.next` lock.
+    PLAYWRIGHT_SECOND_DIST_DIR: '.next-auth-e2e',
+  }
+}
+
+/**
+ * The three shell inputs, read once and checked by name. `authStackEnv()` hands them to the dev
+ * server, and a spec that calls the backend or GoTrue directly reads them here rather than
+ * reading `process.env` itself, so the check and the trailing-slash rule live in one place.
+ */
+export function authStackInputs(): {
+  readonly supabaseUrl: string
+  readonly supabaseAnonKey: string
+  /** The backend origin, with no trailing slash. */
+  readonly apiOrigin: string
+} {
   const missing: string[] = []
 
   const required = (name: string): string => {
@@ -109,24 +142,5 @@ export function authStackEnv(): Record<string, string> {
     )
   }
 
-  const origin = apiOrigin.replace(/\/+$/, '')
-
-  return {
-    NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
-    // Three names for one backend, because three reads take three different ones and all
-    // of them are on the members screen's path. `NEXT_PUBLIC_API_ORIGIN` is the spine's in the
-    // browser (`src/shared/http/api-client.ts`, origin only — it appends `/api/v1` itself);
-    // `NEXT_PUBLIC_API_URL` is the legacy axios client's (`src/lib/api/axios.ts:6`, the full
-    // base); `API_URL` is the spine's on the server, the read ADR-056 added (the same file, the
-    // full base), which the server guard's session read takes. Browser and dev server are both
-    // on the host here, so one origin satisfies all three.
-    NEXT_PUBLIC_API_ORIGIN: origin,
-    NEXT_PUBLIC_API_URL: `${origin}/api/v1`,
-    API_URL: `${origin}/api/v1`,
-    // The same variable `next.config.ts` reads for the banner spec's banner server. Its name says
-    // SECOND; what it means is "not the primary", and each extra `next dev` must pass its
-    // own value or Next.js refuses to start on the shared `.next` lock.
-    PLAYWRIGHT_SECOND_DIST_DIR: '.next-auth-e2e',
-  }
+  return { supabaseUrl, supabaseAnonKey, apiOrigin: apiOrigin.replace(/\/+$/, '') }
 }

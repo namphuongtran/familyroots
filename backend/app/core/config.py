@@ -25,6 +25,11 @@ MIN_METRICS_TOKEN_LENGTH = 32
 MIN_METRICS_TOKEN_DISTINCT_CHARS = 8
 
 
+def names_loopback(value: str) -> bool:
+    """Whether *value* names this machine, which no deployed service or person can reach."""
+    return "localhost" in value or "127.0.0.1" in value
+
+
 def metrics_token_weakness(token: str) -> str | None:
     """Return why *token* is unusable as a ``METRICS_TOKEN``, or ``None`` if it clears
     the floor.
@@ -156,6 +161,11 @@ class Settings(BaseSettings):
     # Invitations
     INVITATION_TTL_DAYS: int = 7
 
+    # Origin of the WEB app the invitation link an admin shares is built on (ADR-062):
+    # `<INVITE_LINK_ORIGIN>/<locale>/invitations/<token>`. Not the API origin: the link is
+    # opened in a browser, and the API answers that path with a 404 (ADR-057 § 3).
+    INVITE_LINK_ORIGIN: str = "http://localhost:3000"
+
     # Document retention (ADR-019): soft-deleted documents are recoverable for this
     # many days after deleted_at, after which the daily purge job removes the blob
     # and row permanently.
@@ -222,7 +232,7 @@ class Settings(BaseSettings):
                 raise ValueError("ALLOWED_HOSTS must be set explicitly in production")
             # A localhost DSN in production almost certainly means DATABASE_URL was
             # never wired — fail fast rather than boot against a non-existent local DB.
-            if "localhost" in self.DATABASE_URL or "127.0.0.1" in self.DATABASE_URL:
+            if names_loopback(self.DATABASE_URL):
                 raise ValueError(
                     "DATABASE_URL must point at the production database, not localhost"
                 )
@@ -232,6 +242,13 @@ class Settings(BaseSettings):
                 "localhost" in origin for origin in self.CORS_ORIGINS
             ):
                 raise ValueError("CORS_ORIGINS must be explicit production origins")
+            # Every invitation link is shared with a person outside this deployment, so an
+            # empty or loopback origin hands each of them a link that opens nothing.
+            if not self.INVITE_LINK_ORIGIN or names_loopback(self.INVITE_LINK_ORIGIN):
+                raise ValueError(
+                    "INVITE_LINK_ORIGIN must be the web app's production origin, "
+                    "not empty or localhost (ADR-062)"
+                )
             # Auth cannot work without the Supabase project URL + keys; fail fast at
             # boot instead of 401/503-ing every request (a missing key previously
             # surfaced only as per-request failures that were hard to diagnose).

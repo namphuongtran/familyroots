@@ -81,8 +81,19 @@ Response shapes (see [Response envelope](README.md#response-envelope)):
 
 `POST /clans/{clan_id}/invitations` (201):
 ```json
-{ "data": { "id": "...", "email": "...", "role": "...", "token": "...", "expires_at": "...", "accept_path": "..." } }
+{ "data": { "id": "...", "email": "...", "role": "...", "token": "...", "expires_at": "...", "invite_url": "https://app.example.com/vi/invitations/..." } }
 ```
+
+- **`invite_url` is the link the admin shares**, and it is a page of the **web** app, not
+  this API: `<INVITE_LINK_ORIGIN>/<locale>/invitations/<token>`
+  ([ADR-062](../decisions/062-the-backend-composes-the-invitation-link.md)).
+  - `<token>` is the same value as `token` in this body.
+  - `<locale>` is the locale this request was served in: the first two letters of
+    `Accept-Language` when they name a supported locale (`vi`, `en`, `zh`, `fr`), else `vi`.
+  - `INVITE_LINK_ORIGIN` is a backend setting, so web and mobile hand an admin the same
+    link. A client does not compose its own.
+- Opening `invite_url` in a browser is a `GET` of that page. The page then sends
+  `POST /invitations/{token}/accept` when the person accepts.
 
 `GET /clans/{clan_id}/invitations` — plain array under `data` (no `meta` — not
 cursor-paginated). Fields: `id`, `clan_id`, `email`, `role`, `status`, `expires_at`,
@@ -105,6 +116,13 @@ Error envelope: standard `{ "error": { "code", "message", "detail" } }`.
 - Non-breaking: add optional invitation metadata, add optional query params.
 - Breaking: change the token scheme, the email-match rule, the role-grant semantics,
   or the error envelope.
+- **`accept_path` was removed from the 201 body on 2026-10-05 (#191, ADR-062), replaced by
+  `invite_url`.** It was `/api/v1/invitations/<token>/accept`, a path that answers `POST`
+  only, so the value an admin was told to share opened an error in a browser. Removing a
+  field is breaking by the rule above, and it broke nothing, because the field had no
+  reader. Measured 2026-10-04: no code in `web/src` or `mobile/lib` read `accept_path` (two
+  comments and the generated type named it) or called the create route at all. The admin
+  invitation screen that will read `invite_url` (spec § 7.10c) was not built yet.
 - Deriving `status` changed no field name and no type. It changed the **value**
   a timed-out row reports, from `pending` to `expired` — which is the defect it fixed,
   and matches what a client was already told to compute for itself. A client that

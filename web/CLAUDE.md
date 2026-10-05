@@ -887,7 +887,8 @@ make seed                                  # both halves of five test users
 cd backend && DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/family_roots \
   SUPABASE_URL=http://supabase.localhost:54321 \
   SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=...  \
-  CORS_ORIGINS='["http://127.0.0.1:3102"]' APP_SECRET_KEY=e2e-local-secret \
+  CORS_ORIGINS='["http://127.0.0.1:3102"]' INVITE_LINK_ORIGIN=http://127.0.0.1:3102 \
+  APP_SECRET_KEY=e2e-local-secret \
   uv run uvicorn app.main:app --host 127.0.0.1 --port 8073
 
 # then, in web/
@@ -898,6 +899,14 @@ export E2E_AUTH_API_ORIGIN=http://127.0.0.1:8073
 pnpm test:e2e:auth
 ```
 
+**Twenty-one tests as written on 2026-10-05 (#191)**: three `auth-setup` logins and eighteen
+`auth-chromium` cases. #191 added `invitation-link.auth.spec.ts`'s three, which call the backend
+directly and so need it started with `INVITE_LINK_ORIGIN` as above. Two traps the first full run
+on a machine with Docker hit that day, neither from #191's cases. **A cold `next dev` compiles a
+route in about 18 seconds**, so the three setup logins, which each wait 30, timed out on a fresh
+server; a second run, reusing the warm `:3102` server outside CI, passed them. **The full run
+spends the 20-per-minute bucket**: the server guard's `GET /auth/me` met a 429 (`Quá nhiều yêu
+cầu`) and `guard.auth.spec.ts`'s super_admin case read `500` where it expects `307`.
 **Eighteen tests as written on 2026-10-05 (#186)**: three `auth-setup` logins and fifteen
 `auth-chromium` cases. #186 added the super_admin's login and `guard.auth.spec.ts`'s five, and
 was written on a machine without Docker, so its pull request says whether they have been run.

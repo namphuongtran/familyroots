@@ -2617,8 +2617,8 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
-            /** Accept Path */
-            accept_path: string;
+            /** Invite Url */
+            invite_url: string;
         };
         /** InvitationResponse */
         InvitationResponse: {

@@ -158,7 +158,7 @@ async def test_create_rejects_duplicate_pending():
 
 
 @pytest.mark.asyncio
-async def test_create_returns_token_and_path():
+async def test_create_returns_token():
     repo = _FakeRepo()
     handler = InvitationCommandHandler(repo, _FakeUow())  # type: ignore[arg-type]
     out = await handler.create(
@@ -166,7 +166,6 @@ async def test_create_returns_token_and_path():
     )
     assert out["token"]
     assert len(out["token"]) >= 32
-    assert out["accept_path"] == f"/api/v1/invitations/{out['token']}/accept"
     assert out["email"] == "a@x.com"  # normalized
     assert len(repo.added_invitations) == 1
 
