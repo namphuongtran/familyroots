@@ -167,6 +167,9 @@ slug. **Nothing new has to reach the database.**
 > text above is still the one every layer quotes. **The database enforces the same shape**:
 > migration `040_clan_slug_one_shape` replaced the CHECK with `char_length(slug) >= 2` and
 > `_SLUG_PATTERN` verbatim. That reuses the pattern a second time, and it does not re-write it.
+> "**Nothing new has to reach the database**" above still holds for what it was written about, the
+> lookup: the join still resolves through `get_clan_by_slug`. The migration changes the CHECK on
+> the column, not the read path.
 > The web's `isValidClanCode` and `suggestClanCode` in `web/src/domain/clan/clan-code.ts` follow.
 
 **Whether `clan_id` is removed at once or accepted alongside the code for one release is not decided

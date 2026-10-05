@@ -33,11 +33,11 @@ Request/response expectations:
   `POST /onboard`. See "Registering with no clan" below.
 - `clan_code` (register + onboard, `clan_action=join`) names the clan to join.
   It is the clan's **slug**, not its UUID, and it must match the same
-  `^[a-z0-9]+(-[a-z0-9]+)*$` pattern, **2 to 100 chars**; anything else is a 422
+  `^[a-z0-9]+(?:-[a-z0-9]+)*$` pattern, **2 to 100 chars**; anything else is a 422
   `validation_error` naming `body.clan_code`. A well-formed code that no clan
   carries is a 404 `clan_not_found`. See the deprecation window below.
 - `clan_slug` (register + onboard, `clan_action=create`) must match
-  `^[a-z0-9]+(-[a-z0-9]+)*$` — lowercase ASCII alphanumerics and single
+  `^[a-z0-9]+(?:-[a-z0-9]+)*$`, `_SLUG_PATTERN` verbatim: lowercase ASCII alphanumerics and single
   hyphens, **2 to 100 chars**; anything else is a 422 `validation_error` naming
   `body.clan_slug`. Clients slugify the clan name before submitting (the slug
   appears in URLs and export filenames).

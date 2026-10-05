@@ -113,7 +113,8 @@ def test_the_check_and_the_api_agree_on_every_short_string(sync_engine: sa.Engin
 
     assert disagreements == []
     # Both answers occur, so an agreement on "refuse everything" cannot pass.
-    assert {s for s in strings if database[s] is None} >= {"ab", "a-b", "a0a0"}
+    assert {s for s in strings if database[s] is None} >= {"aa", "a-0", "a0a0"}
+    assert {s for s in strings if database[s] is not None} >= {"", "a", "a--a", "-a", "aA"}
     assert all(v == _REFUSED for v in database.values() if v is not None)
 
 

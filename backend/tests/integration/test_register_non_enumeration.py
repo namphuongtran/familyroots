@@ -3,6 +3,7 @@ email already has an account; existing accounts get a recovery-email nudge."""
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from collections.abc import AsyncGenerator, Iterator
 from typing import Any
@@ -343,9 +344,10 @@ async def test_two_character_clan_slug_still_creates_the_clan(
 ) -> None:
     """#190: the minimum is two, not more. A two-character code is the shortest the
     database has ever stored, so it must still found a clan, row and all."""
-    # Two characters, one of 1,296; no other test in this database stores a
-    # two-character slug, so it cannot collide with another module's clan.
-    slug = uuid.uuid4().hex[:2]
+    # Two characters drawn from neither ``a`` nor ``0``: test_clan_slug_shape.py
+    # inserts every short string over ``a``, ``0``, ``-`` and ``A`` into this same
+    # database and must find each two-character one free, whichever runs first.
+    slug = "".join(secrets.choice("bcdefghijklmnopqrstuvwxyz123456789") for _ in range(2))
     body = _fresh_body(clan_slug=slug)
 
     resp = client.post("/api/v1/auth/register", json=body)

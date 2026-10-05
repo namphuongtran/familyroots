@@ -205,8 +205,9 @@ describe('the pattern is the backend pattern, not a second copy of the same idea
   })
 
   it('reads the same length bounds the backend declares for a clan code', () => {
-    // `_ClanCode` is the one declaration all four backend clan-code fields share, so
-    // reading it here reads the bounds of `clan_code` and `clan_slug` on both routes.
+    // `_ClanCode` is the one declaration the four backend clan-code fields share. This
+    // reads its bounds only. That each field carries it is shown by the backend's own
+    // integration tests, which send a one-character code to each and read the 422.
     const schemaPath = join(__dirname, '../../../../backend/app/schemas/auth.py')
     const source = readFileSync(schemaPath, 'utf-8')
     const declaration =

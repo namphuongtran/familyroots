@@ -22,7 +22,7 @@ export const CLAN_CODE_PATTERN_SOURCE = '^[a-z0-9]+(?:-[a-z0-9]+)*$'
 
 /**
  * The bounds of `_ClanCode`, the one declaration the backend's four clan-code fields
- * share — `backend/app/schemas/auth.py:32`. `clan-code.test.ts` reads both numbers there.
+ * share, at `backend/app/schemas/auth.py:32`. `clan-code.test.ts` reads both numbers there.
  *
  * The minimum is the database's: `clans.slug` has never held a one-character code, so
  * the backend refuses one at the door (#190).
@@ -138,7 +138,7 @@ export function suggestClanCode(clanName: string): string {
     // The slice can land mid-separator, and a trailing hyphen fails the pattern.
     .replace(LEADING_OR_TRAILING_HYPHENS, '')
 
-  return code.length < CLAN_CODE_MIN_LENGTH ? '' : code
+  return isValidClanCode(code) ? code : ''
 }
 
 /** Whether a code is one the backend will accept. */
