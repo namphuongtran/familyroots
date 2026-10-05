@@ -62,7 +62,6 @@ class InvitationCommandHandler:
             "role": inv.role,
             "token": inv.token,
             "expires_at": expires_at,
-            "accept_path": f"/api/v1/invitations/{token}/accept",
         }
 
     async def accept(self, cmd: AcceptInvitation) -> dict[str, Any]:

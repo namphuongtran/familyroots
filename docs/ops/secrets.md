@@ -12,7 +12,7 @@ Render / GitHub Actions / Vercel. Config lives in `app/core/config.py`
 | `DATABASE_URL` | Render `fromDatabase` (the managed Postgres connection string) |
 | `RENDER_DEPLOY_HOOK` | GitHub Actions secret (backend deploy trigger) |
 | `VERCEL_TOKEN` | GitHub Actions secret (web deploy) |
-| `CORS_ORIGINS`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SENTRY_DSN` | Declared `sync: false` in `render.yaml` — **set the value in the Render dashboard** (never committed). First four are boot-required; `SENTRY_DSN` optional. See [go-live checklist](#go-live-env-checklist). |
+| `CORS_ORIGINS`, `INVITE_LINK_ORIGIN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SENTRY_DSN` | Declared `sync: false` in `render.yaml`: **set the value in the Render dashboard** (never committed). First five are boot-required; `SENTRY_DSN` optional. `INVITE_LINK_ORIGIN` is not a secret, but it differs per deployment. See [go-live checklist](#go-live-env-checklist). |
 | Firebase FCM creds | Optional (push only) — add the service-account JSON as a Render **Secret File**, point `FIREBASE_CREDENTIALS_PATH` at it |
 | `PROD_DATABASE_URL` | GitHub Actions secret (repo settings) — production Postgres DSN, read-only use by `db-backup.yml` to run `pg_dump`; **not yet set** (go-live item, see [backup-restore.md](backup-restore.md#go-live-checklist)) |
 | `SUPABASE_URL` *(GitHub Actions)* | GitHub Actions secret (repo settings) — Supabase project URL, used by `db-backup.yml` / `scripts/db_backup.sh` and `scripts/restore_drill.sh --latest` to reach the Storage REST API; **not yet set** |
@@ -27,7 +27,7 @@ Render / GitHub Actions / Vercel. Config lives in `app/core/config.py`
 When `APP_ENV=production`, the app **refuses to boot** if any of these is wrong:
 placeholder `APP_SECRET_KEY`; `APP_DEBUG=true` (also gates `/docs`+`/redoc`);
 wildcard `ALLOWED_HOSTS`; a localhost `DATABASE_URL`; wildcard/localhost
-`CORS_ORIGINS`; missing `SUPABASE_URL` / `SUPABASE_ANON_KEY` /
+`CORS_ORIGINS`; an empty or localhost `INVITE_LINK_ORIGIN`; missing `SUPABASE_URL` / `SUPABASE_ANON_KEY` /
 `SUPABASE_SERVICE_ROLE_KEY`; or unset `RATE_LIMIT_TRUST_FORWARDED_FOR`. The full
 field-by-field table is in [configuration.md](configuration.md). `render.yaml`
 satisfies every one of these (committed values + `sync: false` dashboard vars).
@@ -38,6 +38,8 @@ The blueprint declares everything; the only manual step is filling the
 
 - [ ] `CORS_ORIGINS` → JSON list of the web app's production origin(s), e.g.
   `["https://app.example.com"]` (must be valid JSON; no wildcard/localhost).
+- [ ] `INVITE_LINK_ORIGIN` → the web app's production origin, e.g. `https://app.example.com`
+  (not the API origin; no localhost). Every invitation link is built on it (ADR-062).
 - [ ] `SUPABASE_URL` → `https://<project>.supabase.co`.
 - [ ] `SUPABASE_ANON_KEY` → Supabase anon/publishable key.
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` → Supabase service-role key (project-wide admin — treat as top secret).

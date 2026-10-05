@@ -38,6 +38,7 @@ _PROD_BASE: dict[str, Any] = {
     "ALLOWED_HOSTS": ["api.example.com"],
     "DATABASE_URL": "postgresql+psycopg://u:p@db.example.com:5432/x",
     "CORS_ORIGINS": ["https://app.example.com"],
+    "INVITE_LINK_ORIGIN": "https://app.example.com",
     "SUPABASE_URL": "https://proj.supabase.co",
     "SUPABASE_ANON_KEY": "sb_publishable_x",
     "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_x",

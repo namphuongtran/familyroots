@@ -31,6 +31,7 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `PASSWORD_RESET_REDIRECT_URL` | `""` | Recovery-email landing page | **Deleted by #202**: ADR-063 § 4 takes the link's origin from the Site URL. Until then: empty → Supabase Site URL fallback. Also falls back to the Site URL when Supabase does not allow it: it must share the Site URL's host or be listed under Redirect URLs ([supabase-hosted-project.md](supabase-hosted-project.md) § 3) |
 | `EMAIL_VERIFY_REDIRECT_URL` | `""` | Signup-confirmation landing page | **Deleted by #202**, as above. Until then: empty → Supabase Site URL fallback. The same allow-list rule applies as for `PASSWORD_RESET_REDIRECT_URL` |
 | `INVITATION_TTL_DAYS` | `7` | Invitation link lifetime | — |
+| `INVITE_LINK_ORIGIN` | `http://localhost:3000` | Origin of the **web** app that `invite_url` in the create-invitation response is built on: `<origin>/<locale>/invitations/<token>` ([ADR-062](../decisions/062-the-backend-composes-the-invitation-link.md)). A trailing slash is tolerated. Not the API origin: the API answers that path with a 404 | **Boot fails** if empty or it names `localhost`/`127.0.0.1`. Declared `sync: false` in render.yaml: **the owner sets it in the Render dashboard before the deploy that carries #191**, or that deploy refuses to boot |
 | `DB_POOL_SIZE` | `10` | Async engine `pool_size` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
 | `DB_MAX_OVERFLOW` | `20` | Async engine `max_overflow` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
 
@@ -83,8 +84,8 @@ count** under the database provider's ceiling:
 - **Production safety** (`APP_ENV=production` only) — the app **refuses to boot** on:
   placeholder `APP_SECRET_KEY`; `APP_DEBUG=true`; wildcard `ALLOWED_HOSTS`; a
   localhost `DATABASE_URL`; wildcard-or-localhost `CORS_ORIGINS` (`"*"` is also
-  invalid with `allow_credentials=True`); missing `SUPABASE_URL`,
-  `SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY`.
+  invalid with `allow_credentials=True`); an empty or localhost `INVITE_LINK_ORIGIN`;
+  missing `SUPABASE_URL`, `SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## What render.yaml sets (`infra/render/render.yaml`)
 
@@ -101,7 +102,7 @@ secrets — tune per the headroom formula above before scaling instance count).
 **Declared `sync: false` — you set the value in the Render dashboard, never in git**
 (Render prompts on first apply and won't overwrite):
 `CORS_ORIGINS` (JSON list of the web origin(s), e.g. `["https://app.example.com"]`),
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SENTRY_DSN`
+`INVITE_LINK_ORIGIN` (the web origin, e.g. `https://app.example.com`), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SENTRY_DSN`
 (optional — leave blank to disable Sentry).
 
 **Firebase FCM** (`FIREBASE_CREDENTIALS_PATH`) is **optional for boot** — a missing
@@ -111,7 +112,9 @@ add the service-account JSON as a Render **Secret File** and point
 
 Verified: with the six committed vars + the four required dashboard vars set, the
 production validator boots; omitting any one of `CORS_ORIGINS` / the three Supabase
-vars / `RATE_LIMIT_TRUST_FORWARDED_FOR` makes it refuse to boot. The go-live
+vars / `RATE_LIMIT_TRUST_FORWARDED_FOR` makes it refuse to boot. Since #191 there are
+**five** required dashboard vars: left unset, `INVITE_LINK_ORIGIN` falls back to its
+localhost default and boot refuses, naming it (`tests/unit/test_config_validation.py`). The go-live
 dashboard checklist lives in [secrets.md](secrets.md#go-live-env-checklist).
 
 Notes:

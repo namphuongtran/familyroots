@@ -11,7 +11,9 @@ from app.application.invitation.commands import (
     RevokeInvitation,
 )
 from app.application.invitation.handlers import InvitationCommandHandler, InvitationQueryHandler
+from app.core.config import settings
 from app.core.exceptions import ForbiddenError
+from app.core.locale import current_locale
 from app.core.permissions import RequireClanRole
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
@@ -34,6 +36,22 @@ admin_invitations_router = APIRouter()
 user_invitations_router = APIRouter()
 
 
+def _invite_url(token: str) -> str:
+    """The browser link an admin shares, ``<INVITE_LINK_ORIGIN>/<locale>/invitations/<token>``.
+
+    ADR-062. It names a page of the web app, ``web/src/app/[locale]/(auth)/invitations/[token]``,
+    whose routes are all locale-prefixed (``web/src/i18n/routing.ts``). The locale is the one
+    ``LanguageMiddleware`` resolved for this request. Composed here and not in the handler,
+    because the locale is request context the application layer cannot read without a new
+    ``ignore_imports`` entry in the ratchet in ``backend/pyproject.toml``, and that ratchet says
+    config should be injected rather than imported. The handler's existing
+    ``app.core.config`` import is that debt, not a licence to add to it. The token is
+    ``secrets.token_urlsafe``, so it needs no escaping in a path.
+    """
+    origin = settings.INVITE_LINK_ORIGIN.rstrip("/")
+    return f"{origin}/{current_locale.get()}/invitations/{token}"
+
+
 @admin_invitations_router.post("", status_code=201, responses=created(InvitationCreatedResponse))
 async def create_invitation(
     clan_id: uuid.UUID,
@@ -52,6 +70,7 @@ async def create_invitation(
             actor=ActorInfo(user_id=user.id, role="admin"),
         )
     )
+    out["invite_url"] = _invite_url(out["token"])
     return {"data": InvitationCreatedResponse.model_validate(out).model_dump()}
 
 

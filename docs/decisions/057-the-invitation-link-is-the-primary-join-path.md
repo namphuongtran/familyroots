@@ -4,6 +4,9 @@
 
 Accepted (2026-08-26), opened by the maintainer from using the register screen.
 
+**Owed item 2 is discharged by [ADR-062](062-the-backend-composes-the-invitation-link.md)
+(2026-10-05, #191)**, which also names the origin variable `INVITE_LINK_ORIGIN`.
+
 The maintainer made the choice this ADR records. The three questions were put to them
 on 2026-08-26 and answered: the invitation link is primary, a typed clan code survives as a
 secondary path in the form of the slug, and what an admin shares is a browser URL.

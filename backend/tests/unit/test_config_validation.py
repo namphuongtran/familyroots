@@ -38,6 +38,7 @@ _PROD_SAFE = {
     "ALLOWED_HOSTS": ["example.com"],
     "DATABASE_URL": "postgresql+psycopg://u:p@db.prod.internal:5432/familyroots",
     "CORS_ORIGINS": ["https://app.example.com"],
+    "INVITE_LINK_ORIGIN": "https://app.example.com",
     # Auth config is required in production (fail fast instead of per-request 503s).
     "SUPABASE_URL": "https://proj.supabase.co",
     "SUPABASE_ANON_KEY": "sb_publishable_x",
@@ -60,6 +61,21 @@ def test_production_rejects_localhost_database_url():
 def test_production_rejects_localhost_cors_origin():
     with pytest.raises(ValidationError):
         _build(**{**_PROD_SAFE, "CORS_ORIGINS": ["http://localhost:3000"]})
+
+
+@pytest.mark.parametrize(
+    "origin", ["", "http://localhost:3000", "http://127.0.0.1:3102", "https://localhost"]
+)
+def test_production_rejects_an_invite_link_origin_no_relative_can_open(origin: str) -> None:
+    """ADR-062. The admin shares `<INVITE_LINK_ORIGIN>/<locale>/invitations/<token>` with a
+    relative, so an empty or loopback origin hands out a link that opens nothing. `match`
+    names the setting: the baseline constructs, so the refusal is this setting's."""
+    with pytest.raises(ValidationError, match="INVITE_LINK_ORIGIN"):
+        _build(**{**_PROD_SAFE, "INVITE_LINK_ORIGIN": origin})
+
+
+def test_production_boots_with_a_real_invite_link_origin() -> None:
+    _build(**{**_PROD_SAFE, "INVITE_LINK_ORIGIN": "https://app.example.test"})
 
 
 def test_production_requires_explicit_forwarded_for_decision():

@@ -21,11 +21,10 @@ export type InvitationsApiCallOptions = Pick<
 >
 
 /**
- * `POST /invitations/{token}/accept` — the path
- * `backend/app/application/invitation/handlers.py:65` returns to the admin as
- * `accept_path`, and the reason the invitation page exists: it answers `POST` only
- * (`docs/contracts/rest-invitations-api.md:64`), so a relative who pastes it into
- * a browser sends a `GET` and gets an error instead of an invitation.
+ * `POST /invitations/{token}/accept`, sent when the person accepts. It answers `POST`
+ * only (`docs/contracts/rest-invitations-api.md`), which is why the link an admin
+ * shares is the invitation page and not this path: the backend hands the admin
+ * `invite_url`, built on its `INVITE_LINK_ORIGIN` setting (ADR-062).
  *
  * No `X-Current-Clan-Id`, and that is not an omission this file makes: the invitee
  * is not a member of any clan yet, so there is no clan to select, and the header
