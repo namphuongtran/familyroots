@@ -903,7 +903,13 @@ reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting i
   attaches, whatever this says.
 - **Who holds a port:** `lsof -nP -iTCP:3100 -sTCP:LISTEN` prints the listening PID, then
   `lsof -a -p <pid> -d cwd` prints its working directory, which names the checkout. Read it for
-  every port a run uses before you trust a reading from it.
+  every port a run uses before you trust a reading from it. **On Linux with lsof 4.99.4 the first
+  command prints nothing while the port is held** (measured 2026-10-05). Next 16's listener is a
+  child named `next-server (v16.2.12)`, and that lsof skips any process whose name has a
+  parenthesis: a probe socket named `probe-srv (v1` was invisible to it and one named
+  `probe-srv-v1` was not. There, read the PID with `ss -ltnp 'sport = :3100'`, then
+  `readlink /proc/<pid>/cwd`, or `lsof -a -p <ppid> -d cwd` on its parent `next dev`
+  (`ps -o ppid= -p <pid>`).
 - **Do not broad-`pkill` a dev server you did not start.** `pkill -f "next dev"` kills every
   worktree's servers, another agent's mid-run included, and that run then fails with
   `ERR_CONNECTION_REFUSED` for a reason in neither checkout. Stop only the PID `lsof` resolved to
@@ -927,6 +933,26 @@ under `CI` the old config never attached either. Each case was seen to fail on 2
 its plant: the old `!process.env.CI` fails the first, the opt-in honoured under `CI` fails the
 third, reuse never on fails the second, a literal hermetic or banner port fails the cases that
 reach it, and no validation fails the last, on `TypeError: Invalid URL`.
+
+**The four readings with two worktrees, 2026-10-05.** A and B were worktrees of this repository.
+The plant was `lang="en"` for `lang={locale}` in `src/app/layout.tsx`, which fails `smoke.spec.ts`'s
+"declares Vietnamese" case with `Received: "en"`. Every port was attributed while specs ran, with
+the `ss` form above.
+
+| Reading                                                                  | B's result                                           | B's ports resolved to    |
+| ------------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------ |
+| 1. `main` in both, A planted and serving 3100/3101, B clean, nothing set | 104 passed, 2 failed, both `Received: "en"`          | A                        |
+| 2. this fix in both, the same servers, nothing set                       | `http://127.0.0.1:3100 is already used`, no spec ran | A (held), B started none |
+| 3. B `E2E_PORT_BASE=3200`, clean, A still planted                        | 106 passed                                           | B on 3200/3201           |
+| 3. the plant moved: A clean and serving, B planted, `E2E_PORT_BASE=3200` | both smoke cases `Received: "en"`                    | B on 3200/3201           |
+| 4. A planted, B clean, `E2E_REUSE_SERVER=1`, no base                     | 104 passed, 2 failed, both `Received: "en"`          | A, by request            |
+
+Two runs with B on 3200, the first try at reading 3 and the moved plant, also failed one case the
+plant does not touch: `invitation-accept.spec.ts`'s "no request the page makes carries the token in
+a Referer header", once in `chromium` and once in `mobile`, reading B's own
+`http://127.0.0.1:3200/vi/invitations/<token>`. Alone, on B's cold servers at 3200, it passed four
+of four. It is intermittent under a full run's load and not explained yet. Reading 3's pass above is
+the rerun.
 
 ## The authenticated e2e harness (2026-08-26)
 
