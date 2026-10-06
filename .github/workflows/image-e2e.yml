@@ -107,6 +107,14 @@ jobs:
       # list is the six containers docs/ops/local-supabase.md counts for CLI 2.115.0
       # (scripts/supabase_local.sh pins it). If the CLI is bumped and this list goes stale, `up`
       # pulls what is missing and the "Images the stack runs" check below warns.
+      #
+      # The Supabase images come from ECR Public, which allows an unauthenticated client one image
+      # pull per second, a quota AWS does not adjust ("Rate of unauthenticated image pulls",
+      # https://docs.aws.amazon.com/AmazonECR/latest/public/public-service-quotas.html). A hosted
+      # runner shares its address with other jobs. Six pulls started at once failed this step with
+      # `toomanyrequests: Rate exceeded` on every run from #193 to 2026-10-07, so the job never
+      # reached its tests. They are pulled one at a time now, each retried after a growing wait.
+      # `pgdb` comes from Docker Hub, another registry and another limit, so it still pulls alongside.
       - name: Pull runtime images
         env:
           SUPABASE_IMAGES: >-
@@ -117,10 +125,21 @@ jobs:
             public.ecr.aws/supabase/mailpit:v1.30.2
             public.ecr.aws/supabase/postgrest:v16.1
         run: |
-          pids=()
-          docker compose pull --quiet pgdb & pids+=($!)
-          for image in $SUPABASE_IMAGES; do docker pull --quiet "$image" & pids+=($!); done
-          for pid in "${pids[@]}"; do wait "$pid"; done
+          pull() {
+            local image=$1 attempt wait=5
+            for attempt in 1 2 3 4 5 6; do
+              docker pull --quiet "$image" && return 0
+              [ "$attempt" -eq 6 ] && break
+              echo "::warning::$image: pull $attempt of 6 refused, retrying in ${wait}s"
+              sleep "$wait"
+              wait=$((wait * 2))
+            done
+            echo "::error::$image did not pull in 6 attempts"
+            return 1
+          }
+          docker compose pull --quiet pgdb & pgdb_pid=$!
+          for image in $SUPABASE_IMAGES; do pull "$image"; done
+          wait "$pgdb_pid"
           echo "$SUPABASE_IMAGES" | tr ' ' '\n' > "$RUNNER_TEMP/prepulled-images.txt"
 
       - name: Setup pnpm

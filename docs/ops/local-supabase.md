@@ -100,8 +100,10 @@ with `familyroots-pgdb`, `familyroots-pgadmin` and three `kind` nodes already ru
 | `destroy` | 1 min 5.4 s |
 
 **On a cold GitHub-hosted runner** the figures are not in yet. The CI job ("The image e2e job in
-CI", below) logs each phase, the runner's size and its container count, and its first Actions run
-on #193's pull request is what fills this in. The table above is a warm Mac and does not predict them.
+CI", below) logs each phase, the runner's size and its container count. Its first Actions run on
+#193's pull request was meant to fill this in. It did not: every run from #193 to 2026-10-07 failed
+at the image pull, before any phase it times ("Pulling from ECR Public", below). The table above is a
+warm Mac and does not predict them.
 
 **Six containers**, counted 2026-08-22 with `docker ps --filter name=supabase`:
 
@@ -302,6 +304,35 @@ package. So the job does not use it.
 Nothing is uploaded, on success or failure. `web/e2e/.auth/` holds live sessions, and a Playwright
 report or trace carries the same cookies in its captured requests. The repository is public, so its
 artefacts are downloadable by any signed-in GitHub user.
+
+### Pulling from ECR Public
+
+**The job never got past its first real step until 2026-10-07.** All ten runs from #193's own pull
+request to `e77116b` failed in "Pull runtime images", each with `toomanyrequests: Rate exceeded`,
+so none reached the stack, the images or the suite. The step pulled the six Supabase images from
+`public.ecr.aws` all at once. ECR Public allows an unauthenticated client one image pull per second,
+and AWS does not raise that quota ("Rate of unauthenticated image pulls", [its service quotas
+page](https://docs.aws.amazon.com/AmazonECR/latest/public/public-service-quotas.html)). A hosted
+runner shares its address with other jobs, so the budget is not even the job's own.
+
+The step now pulls them one at a time, and retries a refused pull after 5, 10, 20, 40 and 80
+seconds. A sixth refusal fails the step with `::error::<image> did not pull in 6 attempts`, so a
+registry outage still reads as one. `pgdb` comes from Docker Hub and still pulls alongside.
+
+Read 2026-10-07 against a registry stand-in, which refuses an ECR pull that starts while another is
+in flight. The stand-in ran the step's own `run` block, taken out of the workflow file:
+
+| Step | Registry | Result |
+|---|---|---|
+| as on `main` | refuses bursts | exit 1, five of six images refused, as in CI |
+| one at a time | refuses bursts | exit 0, all six pulled, none refused |
+| one at a time | also refuses each image's first two attempts | exit 0, twelve warnings, waits of 5 and 10 s |
+| one at a time | refuses each image six times | exit 1 on the first image, after 155 s of waiting, naming it |
+
+What a stand-in cannot show is whether one pull at a time stays under a limit that a runner's
+neighbours also spend. The first green run in Actions is that reading. If the retries are seen
+spending minutes, authenticating to ECR Public is the next step. That needs an AWS identity the
+repository does not have.
 
 ### The backend's environment satisfies the production validator and does not relax it
 
