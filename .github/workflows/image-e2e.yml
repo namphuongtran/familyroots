@@ -281,6 +281,9 @@ jobs:
           E2E_AUTH_SUPABASE_URL: ${{ env.LOCAL_SUPABASE_URL }}
           E2E_AUTH_SUPABASE_ANON_KEY: ${{ env.LOCAL_SUPABASE_ANON_KEY }}
           E2E_AUTH_API_ORIGIN: http://127.0.0.1:${{ env.API_PORT }}
+          # Mailpit, the stack's mail catcher: invitee-registers.auth.spec.ts confirms its new
+          # address by the link mailed there (#196).
+          E2E_AUTH_MAIL_URL: http://127.0.0.1:54324
         run: |
           docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
           echo "containers running: $(docker ps --quiet | wc -l)"

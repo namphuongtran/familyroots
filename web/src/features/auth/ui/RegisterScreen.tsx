@@ -16,12 +16,20 @@ import { cn } from '@/lib/utils/cn'
 import { ApiError } from '@/shared/http/errors'
 import { useAuthActions } from '../hooks/use-auth-actions'
 import { useSession } from '../hooks/use-session'
+import { isInviteeRegister } from '../model/invitee-register'
 import { landingPath } from '../model/landing'
 import { SupabaseSetupNotice } from './SupabaseSetupNotice'
 
 /**
  * The register screen, and OAuth onboarding (`?mode=oauth`) on the same form.
  * `app/[locale]/(auth)/register/page.tsx` only routes here.
+ *
+ * **Reached from an invitation (`?from=invitation`, #196), the form asks for no clan.** It sends
+ * `email`, `password` and `full_name` and nothing else, the body ADR-058 § 1 made the invitee's:
+ * the membership arrives from accept, after the person confirms, signs in and opens the link
+ * again. The marker carries no part of the token; `../model/invitee-register` says why. Reached
+ * any other way, the join/create choice is unchanged. `RegisterScreen.invitee.test.tsx` reads the
+ * body each way.
  *
  * Its form keeps the `register-` ids #195 gave it, so every input is still named by its visible
  * label. `register/page.test.tsx` and `register/page.success.test.tsx` read that, and the second
@@ -62,6 +70,7 @@ export function RegisterScreen() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const isOAuthMode = searchParams.get('mode') === 'oauth' && Boolean(session)
+  const isInviteeMode = !isOAuthMode && isInviteeRegister(searchParams)
 
   // Prefill from the OAuth profile by deriving during render rather than pushing
   // state from an effect: that is what eslint's react-hooks/set-state-in-effect
@@ -117,7 +126,7 @@ export function RegisterScreen() {
     // validator for the same shape. No `pattern` attribute, because the browser's own
     // validation bubble is not localised and every string on this screen goes through
     // next-intl.
-    if (clanAction === 'join' && !isValidClanCode(joinCode)) {
+    if (!isInviteeMode && clanAction === 'join' && !isValidClanCode(joinCode)) {
       setClanCodeError('invalid')
       return
     }
@@ -133,14 +142,21 @@ export function RegisterScreen() {
           clan_slug: clanAction === 'create' ? clanSlug : undefined,
         })
       } else {
+        // An invitee names no clan, so the body has no clan key at all. ADR-058 § 2 refuses a
+        // clan field without `clan_action`, and `clan_action` without a clan is the join-code
+        // error, so a key too many here stops the invitee at this step.
         const result = await register({
           email,
           password,
           full_name: fullName,
-          clan_action: clanAction,
-          clan_code: clanAction === 'join' ? joinCode : undefined,
-          clan_name: clanAction === 'create' ? clanName : undefined,
-          clan_slug: clanAction === 'create' ? clanSlug : undefined,
+          ...(isInviteeMode
+            ? {}
+            : {
+                clan_action: clanAction,
+                clan_code: clanAction === 'join' ? joinCode : undefined,
+                clan_name: clanAction === 'create' ? clanName : undefined,
+                clan_slug: clanAction === 'create' ? clanSlug : undefined,
+              }),
         })
         setSuccess(result.message)
       }
@@ -174,6 +190,11 @@ export function RegisterScreen() {
           <div className="mb-3 text-4xl">OK</div>
           <h2 className="text-foreground mb-2 font-serif text-xl">{t('register_title')}</h2>
           <p className="text-muted-foreground text-sm">{success}</p>
+          {isInviteeMode && (
+            <p className="text-muted-foreground mt-2 text-sm">
+              {t('register_invitee_success_next')}
+            </p>
+          )}
           <Link
             href={`/${locale}/login`}
             className="text-primary mt-4 inline-flex text-sm hover:underline"
@@ -209,6 +230,9 @@ export function RegisterScreen() {
           </h2>
           {isOAuthMode && (
             <p className="text-muted-foreground text-sm">{t('oauth_onboarding_subtitle')}</p>
+          )}
+          {isInviteeMode && (
+            <p className="text-muted-foreground text-sm">{t('register_invitee_hint')}</p>
           )}
 
           {error && (
@@ -292,55 +316,62 @@ export function RegisterScreen() {
             </div>
           )}
 
-          <div className="space-y-2">
-            <p className="text-foreground block text-sm font-medium">{t('register_subtitle')}</p>
-            <label className="text-foreground flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="clanAction"
-                checked={clanAction === 'join'}
-                onChange={() => setClanAction('join')}
-              />
-              {t('join_clan')}
-            </label>
-            <label className="text-foreground flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="clanAction"
-                checked={clanAction === 'create'}
-                onChange={() => setClanAction('create')}
-              />
-              {t('create_clan')}
-            </label>
-          </div>
+          {!isInviteeMode && (
+            <>
+              <div className="space-y-2">
+                <p className="text-foreground block text-sm font-medium">
+                  {t('register_subtitle')}
+                </p>
+                <label className="text-foreground flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="clanAction"
+                    checked={clanAction === 'join'}
+                    onChange={() => setClanAction('join')}
+                  />
+                  {t('join_clan')}
+                </label>
+                <label className="text-foreground flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="clanAction"
+                    checked={clanAction === 'create'}
+                    onChange={() => setClanAction('create')}
+                  />
+                  {t('create_clan')}
+                </label>
+              </div>
 
-          {clanAction === 'join' ? (
-            <div>
-              <label htmlFor="clan-code" className="text-foreground mb-1 block text-sm font-medium">
-                {t('clan_slug')}
-              </label>
-              <input
-                id="clan-code"
-                required
-                value={clanCode}
-                onChange={(e) => setClanCode(e.target.value)}
-                maxLength={CLAN_CODE_MAX_LENGTH}
-                // A code is an identifier, not prose — same reason as the create field.
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                aria-invalid={clanCodeError ? true : undefined}
-                aria-describedby={
-                  clanCodeError ? 'clan-code-helper clan-code-error' : 'clan-code-helper'
-                }
-                className={cn(
-                  'focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden',
-                  // T-06: the border is the second channel, never the only one. The
-                  // message below carries the state in text, inside a `role="alert"`.
-                  clanCodeError ? 'border-destructive' : 'border-input',
-                )}
-              />
-              {/* **No `wrap-anywhere` here, and that is a measurement rather than an
+              {clanAction === 'join' ? (
+                <div>
+                  <label
+                    htmlFor="clan-code"
+                    className="text-foreground mb-1 block text-sm font-medium"
+                  >
+                    {t('clan_slug')}
+                  </label>
+                  <input
+                    id="clan-code"
+                    required
+                    value={clanCode}
+                    onChange={(e) => setClanCode(e.target.value)}
+                    maxLength={CLAN_CODE_MAX_LENGTH}
+                    // A code is an identifier, not prose — same reason as the create field.
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    aria-invalid={clanCodeError ? true : undefined}
+                    aria-describedby={
+                      clanCodeError ? 'clan-code-helper clan-code-error' : 'clan-code-helper'
+                    }
+                    className={cn(
+                      'focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden',
+                      // T-06: the border is the second channel, never the only one. The
+                      // message below carries the state in text, inside a `role="alert"`.
+                      clanCodeError ? 'border-destructive' : 'border-input',
+                    )}
+                  />
+                  {/* **No `wrap-anywhere` here, and that is a measurement rather than an
                   oversight.** `.claude/rules/tailwind.md` § 7 records the unbreakable-word
                   overflow three times (the text-scale spec's wordmark, the banner spec's Supabase banner, the clan-code spec's
                   suggestion button), so this field was built expecting to be the fourth
@@ -356,96 +387,100 @@ export function RegisterScreen() {
                   `e2e/register-join-code.spec.ts` keeps the T-04 reading regardless. If a
                   later change puts the code inside one of these messages, the class comes
                   back and the reading will then discriminate. */}
-              <p id="clan-code-helper" className="text-muted-foreground mt-1 text-xs">
-                {t('clan_slug_join_helper')}
-              </p>
-              {clanCodeError && (
-                <p id="clan-code-error" role="alert" className="text-destructive mt-1 text-xs">
-                  {clanCodeError === 'not_found'
-                    ? t('clan_slug_not_found')
-                    : t('clan_slug_invalid')}
-                </p>
-              )}
-            </div>
-          ) : (
-            <>
-              <div>
-                <label
-                  htmlFor="clan-name"
-                  className="text-foreground mb-1 block text-sm font-medium"
-                >
-                  {t('clan_name')}
-                </label>
-                <input
-                  id="clan-name"
-                  required
-                  value={clanName}
-                  onChange={(e) => setClanName(e.target.value)}
-                  className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="clan-slug"
-                  className="text-foreground mb-1 block text-sm font-medium"
-                >
-                  {t('clan_slug')}
-                </label>
-                <input
-                  id="clan-slug"
-                  required
-                  value={clanSlug}
-                  onChange={(e) => setClanSlug(e.target.value)}
-                  maxLength={CLAN_CODE_MAX_LENGTH}
-                  // A code is an identifier, not prose: a phone keyboard must not
-                  // capitalise it and a spell-checker must not underline it.
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  aria-invalid={clanSlugTaken ? true : undefined}
-                  aria-describedby={
-                    clanSlugTaken ? 'clan-slug-helper clan-slug-error' : 'clan-slug-helper'
-                  }
-                  className={cn(
-                    'focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden',
-                    // T-06: the border colour is a second channel, never the only one —
-                    // the message and the `role="alert"` below carry the state in text.
-                    // Tailwind 4.3.3 ships no `aria-invalid:` variant (0 hits in
-                    // `node_modules/tailwindcss/dist/lib.js`, checked 2026-08-26), so the
-                    // branch is here rather than in a class.
-                    clanSlugTaken ? 'border-destructive' : 'border-input',
+                  <p id="clan-code-helper" className="text-muted-foreground mt-1 text-xs">
+                    {t('clan_slug_join_helper')}
+                  </p>
+                  {clanCodeError && (
+                    <p id="clan-code-error" role="alert" className="text-destructive mt-1 text-xs">
+                      {clanCodeError === 'not_found'
+                        ? t('clan_slug_not_found')
+                        : t('clan_slug_invalid')}
+                    </p>
                   )}
-                />
-                <p id="clan-slug-helper" className="text-muted-foreground mt-1 text-xs">
-                  {t('clan_slug_helper')}
-                </p>
-                {clanSlugTaken && (
-                  <div id="clan-slug-error" role="alert" className="mt-1 space-y-1">
-                    {/* `wrap-anywhere` rather than the default: a clan code can be up to
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label
+                      htmlFor="clan-name"
+                      className="text-foreground mb-1 block text-sm font-medium"
+                    >
+                      {t('clan_name')}
+                    </label>
+                    <input
+                      id="clan-name"
+                      required
+                      value={clanName}
+                      onChange={(e) => setClanName(e.target.value)}
+                      className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="clan-slug"
+                      className="text-foreground mb-1 block text-sm font-medium"
+                    >
+                      {t('clan_slug')}
+                    </label>
+                    <input
+                      id="clan-slug"
+                      required
+                      value={clanSlug}
+                      onChange={(e) => setClanSlug(e.target.value)}
+                      maxLength={CLAN_CODE_MAX_LENGTH}
+                      // A code is an identifier, not prose: a phone keyboard must not
+                      // capitalise it and a spell-checker must not underline it.
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      aria-invalid={clanSlugTaken ? true : undefined}
+                      aria-describedby={
+                        clanSlugTaken ? 'clan-slug-helper clan-slug-error' : 'clan-slug-helper'
+                      }
+                      className={cn(
+                        'focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden',
+                        // T-06: the border colour is a second channel, never the only one —
+                        // the message and the `role="alert"` below carry the state in text.
+                        // Tailwind 4.3.3 ships no `aria-invalid:` variant (0 hits in
+                        // `node_modules/tailwindcss/dist/lib.js`, checked 2026-08-26), so the
+                        // branch is here rather than in a class.
+                        clanSlugTaken ? 'border-destructive' : 'border-input',
+                      )}
+                    />
+                    <p id="clan-slug-helper" className="text-muted-foreground mt-1 text-xs">
+                      {t('clan_slug_helper')}
+                    </p>
+                    {clanSlugTaken && (
+                      <div id="clan-slug-error" role="alert" className="mt-1 space-y-1">
+                        {/* `wrap-anywhere` rather than the default: a clan code can be up to
                         100 characters with no hyphen in it, which is one unbreakable word
                         and so a horizontal page scroll at 320px and 200% text scale
                         (T-04, the trap `.claude/rules/tailwind.md` § 7 records twice).
                         `overflow-wrap: anywhere` breaks inside the word only when the word
                         does not fit, so the prose around it still wraps normally. */}
-                    <p className="text-destructive text-xs wrap-anywhere">
-                      {clanSlugTaken.message}
-                    </p>
-                    {clanSlugTaken.suggestion && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setClanSlug(clanSlugTaken.suggestion)
-                          setClanSlugTaken(null)
-                        }}
-                        // min-h-11 is T-03's 44px touch target; the label wraps inside it.
-                        className="border-input text-foreground hover:bg-muted inline-flex min-h-11 w-full items-center justify-center rounded-md border px-3 py-2 text-xs font-medium wrap-anywhere transition-colors"
-                      >
-                        {t('clan_slug_use_suggestion', { suggestion: clanSlugTaken.suggestion })}
-                      </button>
+                        <p className="text-destructive text-xs wrap-anywhere">
+                          {clanSlugTaken.message}
+                        </p>
+                        {clanSlugTaken.suggestion && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClanSlug(clanSlugTaken.suggestion)
+                              setClanSlugTaken(null)
+                            }}
+                            // min-h-11 is T-03's 44px touch target; the label wraps inside it.
+                            className="border-input text-foreground hover:bg-muted inline-flex min-h-11 w-full items-center justify-center rounded-md border px-3 py-2 text-xs font-medium wrap-anywhere transition-colors"
+                          >
+                            {t('clan_slug_use_suggestion', {
+                              suggestion: clanSlugTaken.suggestion,
+                            })}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </>
           )}
 

@@ -197,7 +197,10 @@ authenticated caller — `Auth | Yes` at
 person holds a token, has no clan code to type and no clan to found, and so had no way to
 create the account that accept then requires them to hold. ADR-057 recorded that finding;
 this closes it. The order a client should implement is: **register (no clan) → verify
-email → login → accept**.
+email → login → accept**. The web implements it since #196: the invitation page's signed-out state links to
+`/{locale}/register?from=invitation`, and the form reached that way sends `email`, `password`
+and `full_name` only. The marker carries no part of the token, and the person opens the
+invitation link again after signing in.
 
 **What a clanless account looks like at login.** `POST /login` returns the ordinary
 envelope with the membership fields empty:
