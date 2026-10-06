@@ -227,7 +227,8 @@
     "clan_suspended_heading_with_name": "Dòng họ {clanName} đang tạm ngưng",
     "clan_suspended_heading_no_name": "Dòng họ này đang tạm ngưng",
     "clan_suspended_body": "Dòng họ này đã bị tạm ngưng hoạt động trên hệ thống. Xin liên hệ quản trị dòng họ hoặc bộ phận hỗ trợ để biết thêm chi tiết.",
-    "clan_suspended_switch_button": "Chuyển sang dòng họ khác"
+    "clan_suspended_switch_button": "Chuyển sang dòng họ khác",
+    "select_clan_subtitle": "Chọn dòng họ bạn muốn làm việc. Lựa chọn này quyết định quyền hạn của bạn và mọi dữ liệu thuộc dòng họ."
   },
   "dashboard": {
     "welcome": "Chào mừng",
@@ -408,7 +409,8 @@
     "nav_tree": "Cây gia phả",
     "rail_label": "Quản trị",
     "menu_open": "Mở menu điều hướng",
-    "menu_title": "Điều hướng quản trị"
+    "menu_title": "Điều hướng quản trị",
+    "stat_tree_completeness": "Độ hoàn thiện gia phả"
   },
   "common": {
     "loading": "Đang tải...",
@@ -466,5 +468,9 @@
     "retry_button": "Thử lại",
     "sign_in_button": "Đăng nhập",
     "continue_button": "Chọn dòng họ"
+  },
+  "metadata": {
+    "tagline": "Gia phả Việt Nam",
+    "description": "Nền tảng quản lý gia phả dòng họ Việt Nam"
   }
 }

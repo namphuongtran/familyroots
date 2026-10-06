@@ -21,8 +21,14 @@ const NARROW_VIEWPORT = { width: 320, height: 640 }
 /** 200% of the 16px default root size. */
 const DOUBLED_ROOT_FONT_SIZE = '32px'
 
-/** The two routes reachable without a Supabase session. */
-const PUBLIC_PAGES = ['/vi/login', '/vi/register']
+/**
+ * The two routes reachable without a Supabase session, and the login page once more under a
+ * second locale. `/en/login` is there for the wordmark (#197): the product name is one literal
+ * in every locale, so it reads `FamilyRoots` under `en` as under `vi`. Negative control,
+ * 2026-10-06, with the wordmark planted as `t('login_title')`: the `/en/login` wordmark case read
+ * `Sign In` against `FamilyRoots`.
+ */
+const PUBLIC_PAGES = ['/vi/login', '/vi/register', '/en/login']
 
 async function loadAtDoubledTextScale(
   page: import('@playwright/test').Page,

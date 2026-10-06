@@ -165,7 +165,8 @@
     "clan_suspended_heading_with_name": "{clanName} 已被暂停",
     "clan_suspended_heading_no_name": "该家族已被暂停",
     "clan_suspended_body": "该家族在平台上已被暂停。请联系家族管理员或平台支持团队了解详情。",
-    "clan_suspended_switch_button": "切换到其他家族"
+    "clan_suspended_switch_button": "切换到其他家族",
+    "select_clan_subtitle": "选择您要使用的家族。这将决定您的权限以及该家族的全部数据。"
   },
   "dashboard": {
     "welcome": "欢迎",
@@ -408,7 +409,8 @@
     "nav_tree": "家谱",
     "rail_label": "后台",
     "menu_open": "打开导航菜单",
-    "menu_title": "后台导航"
+    "menu_title": "后台导航",
+    "stat_tree_completeness": "家谱完整度"
   },
   "common": {
     "loading": "加载中...",
@@ -466,5 +468,9 @@
     "retry_button": "重试",
     "sign_in_button": "登录",
     "continue_button": "选择家族"
+  },
+  "metadata": {
+    "tagline": "越南家谱",
+    "description": "越南宗族家谱管理平台"
   }
 }

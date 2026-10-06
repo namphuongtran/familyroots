@@ -52,6 +52,7 @@ export function LoginScreen() {
         {/* Logo / Brand */}
         <div className="text-center">
           {/*
+            Not copy: the product name, one literal in every locale, never a message key.
             `<wbr />` is load-bearing, not a typo: `FamilyRoots` is one unbreakable
             word, so at 320dp and 200% text scale it overflowed the `max-w-sm`
             column and scrolled the whole page sideways (T-04). A break

@@ -13,36 +13,44 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return { title: t('dashboard_title') }
 }
 
+/**
+ * Each label is a full key path, because three of the four reuse a key that already says the same
+ * thing in all four locales (#197): the platform metrics' `Total Members`, the admin users page's
+ * `Pending Approval`, and the clan dashboard's `Documents`. Only `Tree Completeness` is new.
+ *
+ * Not copy: every `value` and `change` here is mock data, not words anyone wrote for a reader.
+ * They leave when the stats are wired, so they are not translated.
+ */
 const mockStats = [
   {
-    label: 'Total Members',
+    labelKey: 'platform.total_members',
     value: '248',
     icon: Users,
     change: '+12 this month',
     positive: true,
   },
   {
-    label: 'Pending Approvals',
+    labelKey: 'admin.pending_approval',
     value: '7',
     icon: Clock,
     change: '3 new today',
     positive: false,
   },
   {
-    label: 'Documents',
+    labelKey: 'dashboard.documents',
     value: '134',
     icon: FileText,
     change: '+5 this week',
     positive: true,
   },
   {
-    label: 'Tree Completeness',
+    labelKey: 'Backoffice.stat_tree_completeness',
     value: '73%',
     icon: TrendingUp,
     change: '+2% since last month',
     positive: true,
   },
-]
+] as const
 
 export default async function BackofficeDashboardPage({
   params,
@@ -51,10 +59,12 @@ export default async function BackofficeDashboardPage({
 }) {
   const { locale } = await params
   const t = await getTranslations({ locale, namespace: 'Backoffice' })
+  const tAll = await getTranslations({ locale })
 
   // #175: `px-4` below `sm`, not `p-8`, because T-04 needs the room. At 320 px and a 32px root
   // a stacked stat card's text column is 110 px under `p-8` and 158 px under spec § 2.4's
-  // `space-5`, and the widest unbreakable label word, `Completeness`, is 164 px. `px-4` gives 174.
+  // `space-5`, and the widest unbreakable label word, English's `Completeness`, is 164 px. `px-4`
+  // gives 174.
   return (
     <div className="px-4 py-8 sm:px-8">
       {/* Header */}
@@ -69,22 +79,24 @@ export default async function BackofficeDashboardPage({
           const Icon = stat.icon
           return (
             <li
-              key={stat.label}
+              key={stat.labelKey}
               className="border-border bg-card overflow-hidden rounded-xl border shadow-xs"
             >
               <div className="p-5">
                 {/*
                   #175: the text sits beside the icon only while its column keeps
-                  `basis-24`, 6rem, which clears the widest label word (`Completeness`,
-                  5.1rem). Below that it wraps under the icon. Beside it at 320 px and
-                  200% text, the column was 0 px wide and every value was clipped.
+                  `basis-24`, 6rem, which clears the widest label word (English's
+                  `Completeness`, 5.1rem). Below that it wraps under the icon. Beside it at
+                  320 px and 200% text, the column was 0 px wide and every value was clipped.
                 */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                   <div className="bg-accent rounded-lg p-3">
                     <Icon className="text-accent-foreground h-5 w-5" />
                   </div>
                   <div className="min-w-0 grow basis-24">
-                    <p className="text-muted-foreground text-xs font-medium">{stat.label}</p>
+                    <p className="text-muted-foreground text-xs font-medium">
+                      {tAll(stat.labelKey)}
+                    </p>
                     <p className="text-foreground mt-0.5 text-2xl font-semibold">{stat.value}</p>
                   </div>
                 </div>

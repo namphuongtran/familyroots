@@ -118,3 +118,24 @@ describe('Sidebar active clan label', () => {
     expect(screen.getByText(expected(enMessages.common.clan))).toBeInTheDocument()
   })
 })
+
+/**
+ * #197: the product name is one literal in every locale, `FamilyRoots`, as on the login and
+ * register wordmarks and the backoffice rail. This slot alone said `Gia Phả`, so a Vietnamese
+ * reader met two names for one product. The slot is the toggle's row, and the toggle carries no
+ * text of its own, so the row's text is the name.
+ *
+ * Negative control, 2026-10-06, with the slot still holding `Gia Phả`: the vi case failed with
+ * `expected 'Gia Phả' to be 'FamilyRoots'`. The en case failed the same way, because the literal
+ * read the same under every locale.
+ */
+describe('Sidebar logo slot', () => {
+  it.each([
+    ['vi', viMessages],
+    ['en', enMessages],
+  ] as const)('reads FamilyRoots under the %s locale', (locale, messages) => {
+    const toggle = renderSidebar(locale, messages, true)
+
+    expect(toggle.parentElement?.textContent).toBe('FamilyRoots')
+  })
+})

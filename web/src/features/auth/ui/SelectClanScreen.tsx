@@ -28,6 +28,11 @@ const NO_MEMBERSHIPS: readonly Membership[] = []
  */
 export function SelectClanScreen() {
   const t = useTranslations('auth')
+  // Two reused keys, each already saying the same thing in all four locales (#197). The heading
+  // is the words of the invitation link that opens this screen, and the button is the person
+  // form's `Continue`.
+  const tInvitation = useTranslations('invitation')
+  const tMemberForm = useTranslations('member_form')
   const locale = useLocale()
   const router = useRouter()
   const { session, access, activeClan } = useSession()
@@ -86,11 +91,8 @@ export function SelectClanScreen() {
     <div className="bg-background min-h-screen px-4 py-12">
       <div className="border-border bg-card mx-auto max-w-xl rounded-3xl border p-8 shadow-xs">
         <div className="space-y-2">
-          <h1 className="text-foreground font-serif text-3xl">Choose your clan</h1>
-          <p className="text-muted-foreground text-sm">
-            Select the clan context you want to work in. This controls permissions and all
-            clan-scoped data.
-          </p>
+          <h1 className="text-foreground font-serif text-3xl">{tInvitation('continue_button')}</h1>
+          <p className="text-muted-foreground text-sm">{t('select_clan_subtitle')}</p>
         </div>
 
         <div className="mt-6 space-y-3">
@@ -152,7 +154,7 @@ export function SelectClanScreen() {
             }}
             className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
-            {isSubmitting ? t('loading') : 'Continue'}
+            {isSubmitting ? t('loading') : tMemberForm('continue_label')}
           </button>
         </div>
       </div>
