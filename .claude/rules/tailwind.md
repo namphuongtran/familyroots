@@ -520,8 +520,18 @@ the case in `web/e2e/auth/backoffice.auth.spec.ts`:
 | `p-8` only | `Approvals` 111, `Documents` 130 and `Completeness` 164, each in 110 |
 | badge `absolute top-4 right-4` | badge x 215 to 255, y 2651 to 2691, meets the title box, x 73 to 247, y 2659 to 2739 |
 
+**Since #197 the case no longer fails under the `p-8` control.** Every label in the table above
+is an English word, because until #197 the stat labels were English literals under every locale,
+`/vi` included. They go through next-intl now, so `/vi` renders `Tổng số thành viên`, `Chờ phê
+duyệt`, `Tài liệu` and `Độ hoàn thiện gia phả`. Measured 2026-10-06 with `p-8` planted: the case
+passed. English's `Completeness` still needs the 174 px that `px-4` gives, and no case reads `en`.
+A reading under `en` costs one more navigation from the 20-per-minute `GET /auth/me` budget the
+full auth run already overspends, so it is a decision for the harness, not a line to add. The
+other three controls read values and the badge, which no translation moved. They were not re-run.
+
 **Not fixed, and outside T-04's 320 px.** At 640 px and 200% the grid goes to two columns and
-`Tree Completeness` clips again, 164 against 154, in both locales. At 1280 px and 200%, four
+`Tree Completeness` clips again, 164 against 154, in both locales, measured while both rendered the
+English labels. At 1280 px and 200%, four
 columns beside the rail leave each card's text 44 px, and every line in the cards but `7` clips.
 The `sm:` and `lg:` column counts are viewport breakpoints, and they do not grow with text. An
 intrinsic grid, such as `auto-fill` over a `minmax` in rem, would grow with it. That changes the
@@ -533,7 +543,8 @@ as a `FamilyRoots` wordmark and `BackofficeSidebar.tsx:33` as the other. Read on
 `Sidebar.tsx:65` holds `Gia Phả`, not `FamilyRoots`, and `grep -rn FamilyRoots src/` finds no match
 in that file at all; the backoffice mark is on line 35. Nothing in the fix rested on either number,
 which is precisely why nobody would have caught them. Grep for the string before you trust a cited
-line here.
+line here. Since #197 that slot does read `FamilyRoots`, a fourth wordmark, but it is `truncate`
+inside the `(dashboard)` rail, which no text-scale case reads.
 
 **Fixed, and the trap for next time it is touched.** `web/src/app/layout.tsx`
 used to hardcode `<html lang="en">`, and `web/src/app/[locale]/layout.tsx` rendered a `<div>`

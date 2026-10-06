@@ -1,14 +1,28 @@
 import { NextIntlClientProvider } from 'next-intl'
-import { getMessages } from 'next-intl/server'
+import { getMessages, getTranslations } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { Providers } from '@/components/providers'
 import { routing, type Locale } from '@/i18n/routing'
 import { WebVitalsReporter } from '@/shared/telemetry/web-vitals'
 
-export const metadata: Metadata = {
-  title: 'FamilyRoots – Gia phả Việt Nam',
-  description: 'Nền tảng quản lý gia phả dòng họ Việt Nam',
+/**
+ * The document title and description, in the route's locale (#197). They were one static
+ * Vietnamese pair, so every reader's tab and search snippet read Vietnamese. A page that sets its
+ * own title, such as `backoffice/dashboard/page.tsx`, still overrides this one.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}): Promise<Metadata> {
+  const { locale } = await params
+  const t = await getTranslations({ locale, namespace: 'metadata' })
+  return {
+    // Not copy: the product name, one literal in every locale. Only the tagline is translated.
+    title: `FamilyRoots – ${t('tagline')}`,
+    description: t('description'),
+  }
 }
 
 export function generateStaticParams() {

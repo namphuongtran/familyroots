@@ -4,8 +4,11 @@ import { useAuthActions } from '@/features/auth/hooks/use-auth-actions'
 import { useSession } from '@/features/auth/hooks/use-session'
 import { ApiError } from '@/shared/http/errors'
 import SelectClanPage from './page'
-import { renderWithProviders } from '@/shared/testing/render'
+import { expected, renderWithProviders } from '@/shared/testing/render'
 import messages from '../../../../messages/vi.json'
+
+/** The submit button, as a `vi` reader hears it since #197 routed it through next-intl. */
+const CONTINUE = expected(messages.member_form.continue_label)
 
 /**
  * `selectClan` goes through `apiFetch` since #183, so a refusal is the `ApiError`
@@ -56,7 +59,7 @@ describe('select-clan page routes a real clan_suspended rejection to the blocked
         .closest('label')!
         .querySelector('input')!,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }))
 
     await waitFor(() => expect(selectClan).toHaveBeenCalledWith('clan-a'))
     await waitFor(() =>
@@ -90,7 +93,7 @@ describe('select-clan page routes a real clan_suspended rejection to the blocked
 
     renderWithProviders(<SelectClanPage />, { messages })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }))
 
     await waitFor(() => expect(screen.getByText('boom')).toBeInTheDocument())
     expect(pushMock).not.toHaveBeenCalledWith(expect.stringContaining('clan-suspended'))

@@ -53,9 +53,11 @@ function Brand() {
         placed on a ground outside the token system fails in one theme or
         the other, because the ink moves and the ground cannot).
       */}
+      {/* Not copy: the product name's monogram, one literal in every locale. */}
       <span className="text-primary font-serif text-lg font-bold">FR</span>
       <div className="min-w-0 leading-tight">
         <p className="text-foreground text-xs">{t('rail_label')}</p>
+        {/* Not copy: the product name, one literal in every locale, never a message key. */}
         {/* `<wbr />` is load-bearing — see the note on the login page (T-04). */}
         <p className="text-xs font-semibold">
           Family

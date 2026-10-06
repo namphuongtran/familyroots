@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
+import { CircleCheck } from 'lucide-react'
 import {
   CLAN_CODE_MAX_LENGTH,
   CLAN_CODE_TAKEN_ERROR_CODE,
@@ -187,7 +188,8 @@ export function RegisterScreen() {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center px-4">
         <div className="border-border bg-card w-full max-w-sm rounded-2xl border p-8 text-center shadow-xs">
-          <div className="mb-3 text-4xl">OK</div>
+          {/* Decorative: the heading below says what happened, so a reader hears it first. */}
+          <CircleCheck className="text-success mx-auto mb-3 h-12 w-12" aria-hidden="true" />
           <h2 className="text-foreground mb-2 font-serif text-xl">{t('register_title')}</h2>
           <p className="text-muted-foreground text-sm">{success}</p>
           {isInviteeMode && (
@@ -210,6 +212,7 @@ export function RegisterScreen() {
     <div className="bg-background flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
+          {/* Not copy: the product name, one literal in every locale, never a message key. */}
           {/* `<wbr />` is load-bearing — see the note on the login page (T-04). */}
           <h1 className="text-primary font-serif text-3xl">
             Family

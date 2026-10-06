@@ -165,7 +165,8 @@
     "clan_suspended_heading_with_name": "{clanName} est suspendu",
     "clan_suspended_heading_no_name": "Ce clan est suspendu",
     "clan_suspended_body": "Ce clan a été suspendu sur la plateforme. Contactez l'administrateur du clan ou le support de la plateforme pour plus de détails.",
-    "clan_suspended_switch_button": "Changer de clan"
+    "clan_suspended_switch_button": "Changer de clan",
+    "select_clan_subtitle": "Choisissez le clan dans lequel vous souhaitez travailler. Ce choix détermine vos autorisations et toutes les données du clan."
   },
   "dashboard": {
     "welcome": "Bienvenue",
@@ -408,7 +409,8 @@
     "nav_tree": "Arbre généalogique",
     "rail_label": "Back-office",
     "menu_open": "Ouvrir le menu de navigation",
-    "menu_title": "Navigation du back-office"
+    "menu_title": "Navigation du back-office",
+    "stat_tree_completeness": "Complétude de l'arbre"
   },
   "common": {
     "loading": "Chargement...",
@@ -466,5 +468,9 @@
     "retry_button": "Réessayer",
     "sign_in_button": "Se connecter",
     "continue_button": "Choisir un clan"
+  },
+  "metadata": {
+    "tagline": "Généalogie vietnamienne",
+    "description": "Plateforme de gestion des généalogies de clans vietnamiens"
   }
 }

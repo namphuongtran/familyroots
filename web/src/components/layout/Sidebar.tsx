@@ -63,8 +63,11 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="border-cream-200 flex h-16 items-center border-b px-3">
+        {/* Not copy: the product name, one literal in every locale, as on the other wordmarks. */}
         {sidebarOpen && (
-          <span className="text-primary ml-1 truncate font-serif text-lg font-bold">Gia Phả</span>
+          <span className="text-primary ml-1 truncate font-serif text-lg font-bold">
+            FamilyRoots
+          </span>
         )}
         <button
           onClick={toggleSidebar}

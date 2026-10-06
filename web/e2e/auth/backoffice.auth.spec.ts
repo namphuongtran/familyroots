@@ -151,6 +151,9 @@ test.describe('the backoffice dashboard, as an admin', () => {
      * **This case reads `vi` only.** A
      * badge kept beside the title passes it, and fails in `en`: `approvals` inks 24 px past a
      * 110 px title, to the badge's edge. `.claude/rules/tailwind.md` § 7 has that measurement.
+     * **Since #197 `p-8` alone passes it too.** The labels it clipped were English literals on
+     * `/vi`; `/vi` renders Vietnamese labels now, and with `p-8` planted on 2026-10-06 the case
+     * passed. No case reads English's `Completeness`, the word `px-4` exists for.
      */
     test('the page passes T-04: no scroll, no clipped text, no badge on a title', async ({
       page,

@@ -601,14 +601,28 @@ carries no clan.
   wording may move to the existing key's. #194's three such moves: the header's placeholder option
   reads `invitation.continue_button`, so English went from "Select clan" to "Choose a clan"; the
   platform clan list's loading line reads `common.loading`, "Đang tải…" to "Đang tải..."; and its
-  status reads `platform.inactive`, "Tạm ngưng" to "Không hoạt động".
-- **Four classes are not copy**, and may stay literal in source:
+  status reads `platform.inactive`, "Tạm ngưng" to "Không hoạt động". #197's two: the
+  select-clan heading reads `invitation.continue_button`, the words of the link that opens that
+  screen, so English went from "Choose your clan" to "Choose a clan"; and the backoffice
+  dashboard's pending stat reads `admin.pending_approval`, "Pending Approvals" to "Pending
+  Approval". Its other two reused labels, `platform.total_members` and `dashboard.documents`,
+  kept their wording.
+- **Five classes are not copy**, and may stay literal in source:
   1. Numerals and example values. `placeholder="1750"` reads the same in every locale.
   2. Language endonyms. `LocaleSwitcher.tsx`'s `Tiếng Việt`, `English`, `中文` and `Français`: each
      language names itself, so a reader finds their own whatever the current locale is.
   3. Punctuation and emoji glyphs: `:`, `*`, `(`, `)`, `_`, `👑`. A glyph is no language's word,
      so it reads the same to every reader.
   4. Developer-facing error text that is never rendered, such as a thrown `Error`'s message.
+  5. The product name, `FamilyRoots`, and the backoffice rail's `FR` monogram (#197). A name is
+     not translated: every locale file already uses it untranslated inside its own prose, such as
+     vi `oauth_onboarding_title`, "Hoàn tất thiết lập FamilyRoots", so a key for it would hold the
+     same word four times. It is never a message key. Its sites are the login and register
+     wordmarks, the backoffice rail, the `(dashboard)` rail's logo slot, and the document title
+     in `app/[locale]/layout.tsx`, which translates only the tagline after it. The one source that
+     localises the name is mobile's `appName` (vi "Gia Phả"), which no Dart code reads; mobile
+     has its own catalogue and rule. `e2e/text-scale.spec.ts` reads the wordmark as
+     `FamilyRoots` under `vi` and `en`.
 - **A not-copy word carries a one-line comment at its site**, naming its class and the reason:
   `// Not copy: an example year, a numeral that reads the same in all four locales.` A glyph or
   an error string needs none, because its class shows on the line. The comment is how the next
@@ -634,6 +648,13 @@ carries no clan.
   `features/auth/ui/`, and `backoffice/dashboard/page.tsx`'s mock stats), or `app/layout.tsx:36-37`,
   the root `metadata`, which #197 leaves alone because every routed page's `[locale]` metadata
   overrides it and no person reads it.
+
+  Re-taken on 2026-10-06 after #197, (d) under `LC_ALL=C`: 14, 2, 2 and 9. (a) is the product
+  name's eight text nodes across five commented sites, and the six glyphs. (b) is the two numerals.
+  (c) is two `className` ternaries. (d) is the three Latin-script endonyms, the root `metadata`'s
+  two lines, and `backoffice/dashboard/page.tsx`'s four `change` strings. Those are mock values
+  under one not-copy comment, not a class: they leave when the stats are wired. Under a UTF-8
+  locale (d) prints 10, the tenth being `中文`.
 
 - **`react/jsx-no-literals` is not in the gate.** It sees JSX text only, so it misses every ternary
   and object property above. A partial guard is a change to the gate and needs its own decision.
