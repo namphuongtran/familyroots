@@ -44,3 +44,16 @@ export function renderWithProviders(
 
   return { ...render(ui, { wrapper: Wrapper }), queryClient }
 }
+
+/**
+ * A value read from a real locale file, checked before a test asserts on it. A key missing from
+ * the file reads as `undefined`, and `toHaveAccessibleName(undefined)` asserts only "has some
+ * name", which a hardcoded literal passes. Fail on the missing key instead of weakening the test.
+ * `Sidebar.test.tsx` held the first copy; #194 moved it here when eleven more files needed it.
+ */
+export function expected(value: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('the locale file is missing this key')
+  }
+  return value
+}

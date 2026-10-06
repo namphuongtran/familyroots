@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import { guardPlatformRoute } from '@/features/auth/index.server'
 
 /**
@@ -13,6 +14,7 @@ export default async function PlatformLayout({
 }) {
   const { locale } = await params
   await guardPlatformRoute(locale)
+  const t = await getTranslations({ locale, namespace: 'platform' })
 
   return (
     <div className="space-y-4">
@@ -25,13 +27,7 @@ export default async function PlatformLayout({
         inventing a second "notice" family.
       */}
       <div className="bg-accent border-accent-foreground/30 text-accent-foreground rounded-xl border px-4 py-2 text-xs font-medium">
-        {/*
-          This string is hardcoded English, not routed through next-intl —
-          a pre-existing gap ADR-055 found and left alone: this seed decides
-          colour, not copy, and touching `web/messages/*.json` is fenced to
-          other agents this batch.
-        */}
-        Platform Admin – Super-administrator access only
+        {t('area_notice')}
       </div>
       {children}
     </div>

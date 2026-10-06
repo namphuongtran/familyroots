@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import type { AbstractIntlMessages } from 'next-intl'
-import { renderWithProviders } from '@/shared/testing/render'
+import { useSession, type Membership } from '@/features/auth'
+import { expected, renderWithProviders } from '@/shared/testing/render'
 import { useUIStore } from '@/store/ui.store'
 import { Sidebar } from './Sidebar'
 import enMessages from '../../../messages/en.json'
@@ -30,6 +31,7 @@ import viMessages from '../../../messages/vi.json'
  * which is the defect stated as a reading rather than as a description.
  */
 
+vi.mock('@/features/auth', () => ({ useSession: vi.fn() }))
 vi.mock('next/navigation', () => ({ usePathname: () => '/en/dashboard' }))
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -37,14 +39,26 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-/** A missing key would make `toHaveAccessibleName(undefined)` assert only "has some name", which
- * the pre-fix Vietnamese literal passes. Fail on the missing key instead of weakening the test. */
-function expected(value: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error('the locale file is missing this key')
-  }
-  return value
+const ACTIVE_CLAN: Membership = {
+  clanId: 'aaaaaaaa-0000-4000-8000-000000000001',
+  clanName: 'Nguyễn Phúc',
+  clanSlug: 'nguyen-phuc',
+  role: 'viewer',
 }
+
+/** Signed out, or a member acting in `activeClan`. The toggle cases read neither. */
+function sessionWith(activeClan: Membership | null) {
+  vi.mocked(useSession).mockReturnValue({
+    session: null,
+    access: null,
+    activeClan,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
+}
+
+beforeEach(() => sessionWith(null))
 
 function renderSidebar(locale: string, messages: AbstractIntlMessages, open: boolean) {
   useUIStore.setState({ sidebarOpen: open })
@@ -85,5 +99,22 @@ describe('Sidebar collapse toggle', () => {
       zhMessages.common.collapse,
     ]
     expect(new Set(collapse).size).toBe(collapse.length)
+  })
+})
+
+/**
+ * #194: the label above the active clan's name was the literal `Dòng họ`, so every English,
+ * Chinese and French reader saw Vietnamese there. It shares one key with the header's two `Clan`
+ * labels, because all three say the same word.
+ *
+ * Negative control, 2026-10-06, with the key in all four locale files and the component still
+ * holding the literal: the en case failed with `Unable to find an element with the text: Clan`.
+ */
+describe('Sidebar active clan label', () => {
+  it('labels the active clan in English under the en locale', () => {
+    sessionWith(ACTIVE_CLAN)
+    renderWithProviders(<Sidebar />, { locale: 'en', messages: enMessages })
+
+    expect(screen.getByText(expected(enMessages.common.clan))).toBeInTheDocument()
   })
 })

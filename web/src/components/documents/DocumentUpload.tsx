@@ -52,11 +52,7 @@ export function DocumentUpload({ personId, onSuccess }: DocumentUploadProps) {
   }
 
   if (!capabilities.uploadDocument) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        You do not have permission to upload documents.
-      </p>
-    )
+    return <p className="text-muted-foreground text-sm">{t('no_upload_permission')}</p>
   }
 
   return (

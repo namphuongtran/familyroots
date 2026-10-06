@@ -83,7 +83,7 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
               className="border-border bg-card text-muted-foreground hover:bg-muted mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ExternalLink className="h-3 w-3" />
-              <span>{openingId === doc.id ? 'Opening...' : 'Open'}</span>
+              <span>{openingId === doc.id ? t('opening') : t('open')}</span>
             </button>
           </div>
 

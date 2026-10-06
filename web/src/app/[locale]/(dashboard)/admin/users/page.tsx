@@ -48,7 +48,9 @@ export default function AdminUsersPage() {
             <div>
               <p className="text-foreground text-sm font-medium">{user.user_id}</p>
               <p className="text-muted-foreground text-xs">
-                {user.person_id ? `Person: ${user.person_id}` : 'No linked person'}
+                {user.person_id
+                  ? t('linked_person', { id: user.person_id })
+                  : t('no_linked_person')}
               </p>
             </div>
             <RoleSelector

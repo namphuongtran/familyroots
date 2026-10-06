@@ -1,10 +1,12 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { EventCard } from './EventCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEvents } from '@/lib/hooks/useEvents'
 
 export function EventListClient() {
+  const t = useTranslations('events')
   const { data, isLoading } = useEvents()
   const events = data?.pages.flatMap((p) => p.data) ?? []
 
@@ -19,7 +21,7 @@ export function EventListClient() {
   }
 
   if (events.length === 0) {
-    return <p className="text-muted-foreground text-sm">Chưa có sự kiện nào.</p>
+    return <p className="text-muted-foreground text-sm">{t('no_events')}</p>
   }
 
   return (

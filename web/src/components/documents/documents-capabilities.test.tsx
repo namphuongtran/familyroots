@@ -8,7 +8,7 @@ import type { components } from '@/generated/api-types'
 import { clearClanCookie, writeClanCookie } from '@/shared/http/context.client'
 import { createClientOrNull } from '@/shared/supabase/client'
 import { envelope, pageEnvelope, server } from '@/shared/testing/msw'
-import { renderWithProviders } from '@/shared/testing/render'
+import { expected, renderWithProviders } from '@/shared/testing/render'
 import { fakeSupabaseClient } from '@/shared/testing/supabase'
 import viMessages from '../../../messages/vi.json'
 import { DocumentGallery } from './DocumentGallery'
@@ -40,7 +40,7 @@ const CLAN_A = 'aaaaaaaa-0000-4000-8000-000000000001'
 const DOCUMENT_TITLE = 'Gia phả chép tay 1925'
 
 const UPLOAD_HINT = 'Kéo thả tệp vào đây'
-const NO_UPLOAD = 'You do not have permission to upload documents.'
+const NO_UPLOAD = expected(viMessages.documents.no_upload_permission)
 
 function profile(): components['schemas']['UserProfile'] {
   return {

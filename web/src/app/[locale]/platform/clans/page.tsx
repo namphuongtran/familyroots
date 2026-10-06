@@ -6,6 +6,7 @@ import { formatDate } from '@/lib/utils/date'
 
 export default function PlatformClansPage() {
   const t = useTranslations('platform')
+  const tCommon = useTranslations('common')
   const { data, isLoading } = usePlatformClans()
 
   return (
@@ -13,7 +14,7 @@ export default function PlatformClansPage() {
       <h1 className="text-foreground font-serif text-2xl">{t('clans_title')}</h1>
 
       {isLoading ? (
-        <p className="text-muted-foreground text-sm">Đang tải…</p>
+        <p className="text-muted-foreground text-sm">{tCommon('loading')}</p>
       ) : (
         <div className="divide-border border-border bg-card divide-y rounded-2xl border shadow-xs">
           {(data ?? []).map((clan) => (
@@ -29,14 +30,14 @@ export default function PlatformClansPage() {
                 {/*
                   ADR-055: `is_active` is a real two-state status, unlike the
                   stat tiles above, and its text already carries the state
-                  too ("Hoạt động" / "Tạm ngưng"), so this is decoration on
+                  too (`platform.active` / `platform.inactive`), so this is decoration on
                   top of information rather than the only channel. `bg-green-
                   100 text-green-700` had no dark value; `success` does.
                 */}
                 <span
                   className={`rounded px-1.5 py-0.5 text-[10px] ${clan.is_active ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}
                 >
-                  {clan.is_active ? 'Hoạt động' : 'Tạm ngưng'}
+                  {clan.is_active ? t('active') : t('inactive')}
                 </span>
               </div>
             </div>

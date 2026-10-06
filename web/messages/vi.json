@@ -111,6 +111,7 @@
     "upcoming": "Sự kiện sắp tới",
     "no_events_on_day": "Không có sự kiện nào trong ngày này",
     "day_events_count": "{count, plural, =1 {1 sự kiện} other {# sự kiện}}",
+    "no_events": "Chưa có sự kiện nào.",
     "type": {
       "death_anniversary": "Ngày giỗ",
       "birthday": "Sinh nhật",
@@ -145,7 +146,10 @@
     "uploading": "Đang tải lên...",
     "upload": "Tải lên",
     "title": "Tiêu đề",
-    "no_documents": "Chưa có tài liệu nào"
+    "no_documents": "Chưa có tài liệu nào",
+    "open": "Mở",
+    "opening": "Đang mở...",
+    "no_upload_permission": "Bạn không có quyền tải lên tài liệu."
   },
   "auth": {
     "login": "Đăng nhập",
@@ -365,7 +369,10 @@
     "founding_year": "Năm thành lập",
     "origin_location": "Nguồn gốc",
     "save_changes": "Lưu thay đổi",
-    "saving": "Đang lưu..."
+    "saving": "Đang lưu...",
+    "area_notice": "Khu vực quản trị – chỉ quản trị viên dòng họ mới có quyền truy cập",
+    "linked_person": "Người liên kết: {id}",
+    "no_linked_person": "Chưa liên kết với người nào"
   },
   "platform": {
     "clans": "Các dòng họ",
@@ -380,7 +387,8 @@
     "active": "Hoạt động",
     "inactive": "Không hoạt động",
     "deactivate": "Vô hiệu hóa",
-    "audit_log": "Nhật ký kiểm tra"
+    "audit_log": "Nhật ký kiểm tra",
+    "area_notice": "Quản trị nền tảng – chỉ dành cho quản trị viên cấp cao"
   },
   "Backoffice": {
     "dashboard_title": "Bảng điều khiển",
@@ -422,7 +430,9 @@
     "load_more": "Tải thêm",
     "no_data": "Không có dữ liệu",
     "collapse": "Thu gọn",
-    "expand": "Mở rộng"
+    "expand": "Mở rộng",
+    "clan": "Dòng họ",
+    "select_language": "Chọn ngôn ngữ"
   },
   "invitation": {
     "heading": "Lời mời tham gia dòng họ",

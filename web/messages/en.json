@@ -111,6 +111,7 @@
     "upcoming": "Upcoming Events",
     "no_events_on_day": "No events on this day",
     "day_events_count": "{count, plural, =1 {1 event} other {# events}}",
+    "no_events": "No events yet.",
     "type": {
       "death_anniversary": "Death Anniversary",
       "birthday": "Birthday",
@@ -145,7 +146,10 @@
     "uploading": "Uploading...",
     "upload": "Upload",
     "title": "Title",
-    "no_documents": "No documents yet"
+    "no_documents": "No documents yet",
+    "open": "Open",
+    "opening": "Opening...",
+    "no_upload_permission": "You do not have permission to upload documents."
   },
   "auth": {
     "login": "Sign In",
@@ -365,7 +369,10 @@
     "founding_year": "Founding Year",
     "origin_location": "Origin Location",
     "save_changes": "Save Changes",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "area_notice": "Administration area – clan administrators only",
+    "linked_person": "Person: {id}",
+    "no_linked_person": "No linked person"
   },
   "platform": {
     "clans": "Clans",
@@ -380,7 +387,8 @@
     "active": "Active",
     "inactive": "Inactive",
     "deactivate": "Deactivate",
-    "audit_log": "Audit Log"
+    "audit_log": "Audit Log",
+    "area_notice": "Platform Admin – Super-administrator access only"
   },
   "Backoffice": {
     "dashboard_title": "Backoffice Dashboard",
@@ -422,7 +430,9 @@
     "load_more": "Load More",
     "no_data": "No data available",
     "collapse": "Collapse",
-    "expand": "Expand"
+    "expand": "Expand",
+    "clan": "Clan",
+    "select_language": "Select language"
   },
   "invitation": {
     "heading": "You have been invited to a clan",
