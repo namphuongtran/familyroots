@@ -205,6 +205,7 @@
     "upcoming": "Événements à venir",
     "no_events_on_day": "Aucun événement ce jour-là",
     "day_events_count": "{count, plural, =1 {1 événement} other {# événements}}",
+    "no_events": "Aucun événement pour le moment.",
     "type": {
       "death_anniversary": "Anniversaire de décès",
       "birthday": "Anniversaire",
@@ -239,7 +240,10 @@
     "uploading": "Téléversement...",
     "upload": "Téléverser",
     "title": "Titre",
-    "no_documents": "Aucun document"
+    "no_documents": "Aucun document",
+    "open": "Ouvrir",
+    "opening": "Ouverture...",
+    "no_upload_permission": "Vous n'avez pas la permission de téléverser des documents."
   },
   "member_form": {
     "full_name": "Nom complet",
@@ -340,7 +344,10 @@
     "founding_year": "Année de fondation",
     "origin_location": "Lieu d'origine",
     "save_changes": "Enregistrer les modifications",
-    "saving": "Enregistrement..."
+    "saving": "Enregistrement...",
+    "area_notice": "Espace d'administration – réservé aux administrateurs du clan",
+    "linked_person": "Personne : {id}",
+    "no_linked_person": "Aucune personne liée"
   },
   "platform": {
     "clans": "Clans",
@@ -355,7 +362,8 @@
     "active": "Actif",
     "inactive": "Inactif",
     "deactivate": "Désactiver",
-    "audit_log": "Journal d'audit"
+    "audit_log": "Journal d'audit",
+    "area_notice": "Administration de la plateforme – accès réservé aux super-administrateurs"
   },
   "tree": {
     "title": "Arbre généalogique",
@@ -422,7 +430,9 @@
     "load_more": "Charger plus",
     "no_data": "Aucune donnée",
     "collapse": "Replier",
-    "expand": "Déplier"
+    "expand": "Déplier",
+    "clan": "Clan",
+    "select_language": "Choisir la langue"
   },
   "invitation": {
     "heading": "Invitation à rejoindre un clan",

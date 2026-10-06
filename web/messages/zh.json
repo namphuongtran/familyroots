@@ -205,6 +205,7 @@
     "upcoming": "即将到来的事件",
     "no_events_on_day": "当天没有事件",
     "day_events_count": "{count, plural, =1 {1 个事件} other {# 个事件}}",
+    "no_events": "暂无事件。",
     "type": {
       "death_anniversary": "忌日",
       "birthday": "生日",
@@ -239,7 +240,10 @@
     "uploading": "上传中...",
     "upload": "上传",
     "title": "标题",
-    "no_documents": "暂无文档"
+    "no_documents": "暂无文档",
+    "open": "打开",
+    "opening": "正在打开...",
+    "no_upload_permission": "您无权上传文档。"
   },
   "member_form": {
     "full_name": "姓名",
@@ -340,7 +344,10 @@
     "founding_year": "创立年份",
     "origin_location": "起源地",
     "save_changes": "保存更改",
-    "saving": "保存中..."
+    "saving": "保存中...",
+    "area_notice": "管理区域 – 仅限家族管理员访问",
+    "linked_person": "关联人物：{id}",
+    "no_linked_person": "未关联人物"
   },
   "platform": {
     "clans": "家族",
@@ -355,7 +362,8 @@
     "active": "活跃",
     "inactive": "停用",
     "deactivate": "停用",
-    "audit_log": "审计日志"
+    "audit_log": "审计日志",
+    "area_notice": "平台管理 – 仅限超级管理员访问"
   },
   "tree": {
     "title": "家谱树",
@@ -422,7 +430,9 @@
     "load_more": "加载更多",
     "no_data": "暂无数据",
     "collapse": "收起",
-    "expand": "展开"
+    "expand": "展开",
+    "clan": "家族",
+    "select_language": "选择语言"
   },
   "invitation": {
     "heading": "家族邀请",

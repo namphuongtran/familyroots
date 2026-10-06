@@ -1,9 +1,11 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useUIStore } from '@/store/ui.store'
 import { cn } from '@/lib/utils/cn'
 
+// Not copy: endonyms. Each language names itself, so a reader finds their own in any locale.
 const LOCALES = [
   { code: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
   { code: 'en', label: 'English', flag: '🇬🇧' },
@@ -14,6 +16,7 @@ const LOCALES = [
 type LocaleCode = (typeof LOCALES)[number]['code']
 
 export function LocaleSwitcher() {
+  const t = useTranslations('common')
   const router = useRouter()
   const pathname = usePathname()
   const { locale, setLocale } = useUIStore()
@@ -36,7 +39,7 @@ export function LocaleSwitcher() {
         'hover:border-primary focus:ring-ring bg-card text-foreground focus:ring-1 focus:ring-offset-2 focus:outline-hidden',
         'cursor-pointer',
       )}
-      aria-label="Select language"
+      aria-label={t('select_language')}
     >
       {LOCALES.map((l) => (
         <option key={l.code} value={l.code}>

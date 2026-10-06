@@ -7,6 +7,7 @@ import type { ClanSettings } from '@/lib/types'
 
 export default function AdminClanPage() {
   const t = useTranslations('admin')
+  const tCommon = useTranslations('common')
   const { data: clan, isLoading } = useClanSettings()
   const updateMutation = useClanSettingsMutation()
 
@@ -26,7 +27,7 @@ export default function AdminClanPage() {
         onSubmit={handleSubmit((data) => updateMutation.mutateAsync(data))}
         className="border-border bg-card space-y-4 rounded-2xl border p-6 shadow-xs"
       >
-        {isLoading && <p className="text-muted-foreground text-sm">Loading...</p>}
+        {isLoading && <p className="text-muted-foreground text-sm">{tCommon('loading')}</p>}
         <div>
           <label className="text-foreground mb-1 block text-sm font-medium">{t('clan_name')}</label>
           <input

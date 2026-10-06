@@ -31,7 +31,9 @@ export function Header({ title }: HeaderProps) {
       <div className="flex items-center gap-3">
         {clanMemberships.length > 0 && (
           <label className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
-            <span className="text-muted-foreground text-xs tracking-wide uppercase">Clan</span>
+            <span className="text-muted-foreground text-xs tracking-wide uppercase">
+              {t('common.clan')}
+            </span>
             <select
               value={activeClanId ?? ''}
               disabled={isSwitching || clanMemberships.length === 1}
@@ -48,7 +50,7 @@ export function Header({ title }: HeaderProps) {
               }}
               className="border-input bg-card text-foreground rounded-md border px-2 py-1 text-sm disabled:cursor-default disabled:opacity-70"
             >
-              {needsClanSelection && <option value="">Select clan</option>}
+              {needsClanSelection && <option value="">{t('invitation.continue_button')}</option>}
               {clanMemberships.map((membership) => (
                 <option key={membership.clanId} value={membership.clanId}>
                   {membership.clanName}
@@ -90,7 +92,7 @@ export function Header({ title }: HeaderProps) {
                 {clanMemberships.length > 1 && (
                   <div className="border-cream-100 border-b px-3 py-2">
                     <p className="text-muted-foreground mb-1 text-[11px] tracking-wide uppercase">
-                      Clan
+                      {t('common.clan')}
                     </p>
                     <select
                       value={activeClanId ?? ''}

@@ -588,6 +588,67 @@ carries no clan.
 - `src/middleware.ts` runs the intl middleware first, strips the locale prefix, lets `PUBLIC_ROUTES` through, and for everything else creates a Supabase SSR client (`@supabase/ssr`) and redirects to `/<locale>/login` when there is no session. If Supabase env vars are missing the auth check is skipped — be aware in local dev.
 - **After the session check, `src/middleware.ts` gates `CLAN_SCOPED_SEGMENTS` (`dashboard`, `documents`, `events`, `members`, `tree`, `admin` — everything under the `(dashboard)` route group) on the `current_clan_id` cookie.** Missing and unparseable (not a UUID) are the same case, both read as "no clan selected" through `parseClanCookie` (`src/shared/http/request-context.ts`), and both redirect to `/<locale>/select-clan` rather than letting the route render and fire a clan-scoped `apiFetch` call with no `X-Current-Clan-Id`. `platform/*`, `backoffice/*`, and `select-clan` itself are deliberately not gated: `platform/*` is a cross-clan super-admin surface (`docs/architecture/multi-tenancy.md`), and gating the picker page would loop. `backoffice/*` is clan-scoped, and its guard asks for `viewPendingUsers` in the active clan (#186); with no cookie, a user holding one membership acts in it, and one holding several is sent to the picker by the guard rather than by the middleware. `middleware.ts`'s own comment still calls both cross-clan. See `web/src/middleware.test.ts`.
 
+### Every string goes through next-intl (#194)
+
+- **The rule.** Every string a person reads or hears goes through next-intl, with a real
+  translation in all four locale files, not a copy of the English. That covers visible text, an
+  `aria-label`, a `placeholder`, a `title`, an `alt`, and an `<option>`. A Vietnamese literal is the
+  direction no review catches: it reads correctly on `/vi/...` and shows Vietnamese to every
+  English, Chinese and French reader. `messages/message-key-parity.test.ts` holds the four key sets
+  equal. It cannot tell whether a component uses them.
+- **Reuse a key before adding one**, where an existing key says the same thing in all four locales.
+  A second key for one sentence is a second place for it to drift (S-092, `0d2cf15`). The visible
+  wording may move to the existing key's. #194's three such moves: the header's placeholder option
+  reads `invitation.continue_button`, so English went from "Select clan" to "Choose a clan"; the
+  platform clan list's loading line reads `common.loading`, "Đang tải…" to "Đang tải..."; and its
+  status reads `platform.inactive`, "Tạm ngưng" to "Không hoạt động".
+- **Four classes are not copy**, and may stay literal in source:
+  1. Numerals and example values. `placeholder="1750"` reads the same in every locale.
+  2. Language endonyms. `LocaleSwitcher.tsx`'s `Tiếng Việt`, `English`, `中文` and `Français`: each
+     language names itself, so a reader finds their own whatever the current locale is.
+  3. Punctuation and emoji glyphs: `:`, `*`, `(`, `)`, `_`, `👑`. A glyph is no language's word,
+     so it reads the same to every reader.
+  4. Developer-facing error text that is never rendered, such as a thrown `Error`'s message.
+- **A not-copy word carries a one-line comment at its site**, naming its class and the reason:
+  `// Not copy: an example year, a numeral that reads the same in all four locales.` A glyph or
+  an error string needs none, because its class shows on the line. The comment is how the next
+  count tells a considered line from a missed one.
+- **Re-take the count; do not reconstruct it.** From `web/`:
+
+  ```bash
+  # (a) JSX text
+  ./node_modules/.bin/eslint --no-cache --rule '{"react/jsx-no-literals": "error"}' 'src/**/*.tsx' --ignore-pattern '**/*.test.tsx'
+  # (b) literal attributes
+  grep -rnE '(aria-label|placeholder|title|alt)="[^"{]+"' src --include='*.tsx' | grep -v '\.test\.tsx:'
+  # (c) literal branches of a JSX ternary
+  grep -rnE "\? [^?]*: '[^']*[[:alpha:]][^']*'\}" src --include='*.tsx' | grep -v '\.test\.tsx:'
+  # (d) object properties
+  grep -rnE "\b(label|title|description|change)\s*:\s*'[^']*[[:alpha:]]" src --include='*.ts' --include='*.tsx' | grep -vE '\.test\.tsx?:|src/generated/'
+  ```
+
+  Each has a blind spot. (a) reports the line a text node starts on, which for text on a line of
+  its own is the line above the word. (c) also prints `className` ternaries. (d)'s `[[:alpha:]]`
+  does not match CJK in the C locale, so `中文` is found only by reading the file. On 2026-10-06,
+  after #194, the four printed 17, 2, 3 and 15 lines. Every hit was a commented site, a glyph, a
+  `className` ternary, a line #197 holds (the product name, the auth screens #183 moved into
+  `features/auth/ui/`, and `backoffice/dashboard/page.tsx`'s mock stats), or `app/layout.tsx:36-37`,
+  the root `metadata`, which #197 leaves alone because every routed page's `[locale]` metadata
+  overrides it and no person reads it.
+
+- **`react/jsx-no-literals` is not in the gate.** It sees JSX text only, so it misses every ternary
+  and object property above. A partial guard is a change to the gate and needs its own decision.
+- **Formatting is not covered by any of this.** `EventCalendar.tsx` passes `{ locale: vi }` to
+  date-fns, and `lib/utils/date.ts` defaults to `'vi'`, so month names are Vietnamese for every
+  reader. That is a formatting defect, not a literal, and none of the four commands finds it.
+- **How to test a swept string.** Render under a locale whose value is not the literal (`en` for a
+  Vietnamese literal, `vi` or `zh` for an English one), with the real locale file, and read what a
+  person gets: `getByText`, `getByRole(…, { name })`, or `toHaveAccessibleName` for an
+  `aria-label`, never the attribute. Wrap each expected value in `expected()` from
+  `src/shared/testing/render.tsx`, which throws on a missing key: `toHaveAccessibleName(undefined)`
+  degrades to "has some name", and the old literal passes that. For an async server component,
+  mock its guard, await the element it returns, and stand next-intl's `createTranslator` over the
+  real file in for `getTranslations` (`app/[locale]/platform/layout.test.tsx`).
+
 ### The `current_clan_id` cookie
 
 The cookie is the single source for the active clan: `context.server.ts` reads it through

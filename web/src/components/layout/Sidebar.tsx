@@ -78,7 +78,9 @@ export function Sidebar() {
       {/* Clan name */}
       {sidebarOpen && activeClan && (
         <div className="border-cream-200 border-b px-4 py-2">
-          <p className="text-muted-foreground text-xs tracking-wide uppercase">Dòng họ</p>
+          <p className="text-muted-foreground text-xs tracking-wide uppercase">
+            {t('common.clan')}
+          </p>
           <p className="text-primary truncate text-sm font-medium">{activeClan.clanName}</p>
         </div>
       )}

@@ -116,6 +116,7 @@ export function HistoricalDateField({ namePrefix, idBase }: HistoricalDateFieldP
               id={`${idBase}-year`}
               type="text"
               inputMode="numeric"
+              // Not copy: an example year, a numeral that reads the same in all four locales.
               placeholder="1750"
               {...register(`${namePrefix}.year`)}
               aria-invalid={group?.year ? true : undefined}
@@ -137,6 +138,7 @@ export function HistoricalDateField({ namePrefix, idBase }: HistoricalDateFieldP
                 id={`${idBase}-month`}
                 type="text"
                 inputMode="numeric"
+                // Not copy: an example month, a numeral that reads the same in all four locales.
                 placeholder="3"
                 {...register(`${namePrefix}.month`)}
                 aria-invalid={group?.month ? true : undefined}
