@@ -200,7 +200,9 @@ focus ring and needs no offset.
   `muted-foreground`, `bg-muted`, `border-input`, and every `*-destructive` class. Forms draw
   their own boundary with `border-gray-300` in **10** files, which measures 1.47:1 on white and
   fails WCAG 1.4.11. So the contrast fix still changed no pixel, and nothing yet moves the
-  forms.
+  forms. **Since moved, and kept moved.** Re-counted 2026-10-07: `border-input` in **14** files and
+  `border-gray-*` in none, after S-038 (`586fff0`). Since #199 a palette class is a lint error, so
+  the forms cannot drift back. See § 3.
 
 Rules that follow from this:
 
@@ -211,7 +213,8 @@ Rules that follow from this:
   rather than `text-gray-500`. Since 2026-08-21 this has a second and harder reason than contrast:
   a palette colour has no dark value, so `text-gray-500` is a screen that does not follow the
   theme. See § 3. On a form boundary use `border-input`; it is the only value in the file that
-  clears 3:1.
+  clears 3:1. Since #199 a default-palette class is a lint error, in the same
+  `no-restricted-syntax` block as `text-gold-*`.
 - A resolving token is not an approved colour. Check the value against spec § 2.1 before you
   build a screen on it. Since ADR-041, `primary`, `heritage`, `background`, and `ring` are
   decided, so read the ADR rather than the spec for those four: where the two differ, the ADR is
@@ -223,11 +226,12 @@ Rules that follow from this:
   colour spelled in oklab, which reads exactly like "the hover class did nothing". Wait for the
   transition, then read.
 
-## 3. Dark mode is built, on one mechanism, and most screens do not follow it yet
+## 3. Dark mode is built, on one mechanism, and the screens follow it
 
 **Rewritten 2026-08-21.** This section used to say dark mode was declared and not
-built. It is built. What is *not* done is the screens, and that distinction is the whole of this
-section.
+built. It is built. What was *not* done on that date was the screens, and that distinction was
+the whole of this section. **The screens are done since S-038 and ADR-055, and lint holds them
+(#199)**: see "The screens moved off the palette" below.
 
 **The mechanism is `prefers-color-scheme`, and it is the only one.** ADR-045 decided it.
 `globals.css` holds one unlayered `@media (prefers-color-scheme: dark)` block with a `:root` rule
@@ -249,11 +253,37 @@ query. Palette and variant now switch on one signal.
   error anywhere**. `web/e2e/dark-theme.spec.ts` is what catches it, because a stylesheet shows
   you both declarations and not which one won.
 
-**The palette is correct and the screens are not. Counted 2026-08-21 across `web/src`: 393
-hardcoded palette utilities in 41 files** — `text-gray-*` 187, `border-gray-*` 82, `bg-gray-*` 33,
-`divide-gray-*` 2, plus 89 in the red, amber, blue, green, purple, rose, pink, and orange
-families. A palette colour has no dark value, so none of them flips. **Moving
-them.** Do not report a dark screenshot full of light grey boxes as a new defect; it is this.
+**The screens moved off the palette, and a lint rule keeps them off (#199).** Counted
+2026-08-21 across `web/src`: 393 hardcoded palette utilities in 41 files, `text-gray-*` 187,
+`border-gray-*` 82, `bg-gray-*` 33, `divide-gray-*` 2, plus 89 in the red, amber, blue, green,
+purple, rose, pink, and orange families. A palette colour has no dark value, so none of them
+flipped. S-038 (`586fff0`) moved the gray, red and amber families onto semantic tokens, and
+ADR-055 decided the other eight per group. **Re-counted 2026-10-07: zero.** Every hit left is a
+comment recording what was removed, and those stay.
+
+- **`pnpm lint` fails on any default-palette class** in `web/src/**/*.{ts,tsx}`: in a
+  `className`, a `cn()` argument, or a template-literal segment, behind any variant or utility
+  prefix. The rule sits beside `text-gold-*`'s in `web/eslint.config.mjs`, and
+  `web/eslint.config.test.ts` reads what it catches by linting planted components.
+- **Its family list is read from the installed `tailwindcss/theme.css`**, 26 families at 4.3.3, so
+  a family a Tailwind upgrade adds is banned the day it is installed. `gold` and `cream` are this
+  project's own and stay legal.
+- **It cannot see a class assembled at runtime**, such as `` `bg-${tone}-50` ``. None existed on
+  2026-10-07. A dark screenshot with a light grey box in it is now a new defect, and that is the
+  first place to look.
+
+To re-take the count, from the repository root. `P` has the lint rule's shape, any utility
+prefix, so it counts what the rule bans. On 2026-10-07 it printed 24 hits in 10 files, every one
+in a comment. #199 measured with a fixed list of 16 prefixes, `(text|bg|border|…|shadow)-`, which
+cannot see `border-t-*`, `ring-offset-*` or `inset-shadow-*`. It printed 23, missing only
+`globals.css:413`, `var(--color-gray-200, …)`. ESLint reads neither comments nor CSS, so both
+counts mean no live class.
+
+```bash
+F=$(grep -oE -- '--color-[a-z]+-50:' web/node_modules/tailwindcss/theme.css | sed -E 's/--color-([a-z]+)-50:/\1/' | paste -sd'|' -)
+P="\\b([a-z]+-)+($F)-[0-9]{2,3}\\b"
+grep -rEoh "$P" web/src | wc -l; grep -rElE "$P" web/src | wc -l
+```
 
 **The dark hover fill names a literal hex where the light one names the token, and that asymmetry
 must not be "fixed".** Lightning CSS resolves a `var()` inside a `color-mix` against the top-level
