@@ -144,3 +144,22 @@ export function authStackInputs(): {
 
   return { supabaseUrl, supabaseAnonKey, apiOrigin: apiOrigin.replace(/\/+$/, '') }
 }
+
+/**
+ * The local stack's mail catcher, `E2E_AUTH_MAIL_URL`: Mailpit, `http://127.0.0.1:54324` under the
+ * pinned CLI (`docs/ops/local-supabase.md`). Only `invitee-registers.auth.spec.ts` reads it, to
+ * confirm an address by the link the stack mailed, the way a person would. Required and not
+ * defaulted, for the reason `authStackInputs` gives, and read here rather than there so that the
+ * other specs do not need it.
+ */
+export function mailCatcherOrigin(): string {
+  const value = process.env.E2E_AUTH_MAIL_URL
+  if (!value) {
+    throw new Error(
+      'E2E_AUTH_MAIL_URL is missing. invitee-registers.auth.spec.ts confirms the new address ' +
+        "through the local stack's mail catcher, Mailpit, at http://127.0.0.1:54324 under the " +
+        'pinned CLI. See web/CLAUDE.md, "The authenticated e2e harness".',
+    )
+  }
+  return value.replace(/\/+$/, '')
+}

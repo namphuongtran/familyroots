@@ -792,6 +792,11 @@ zustand keeps only `ui.store.ts`.
 - **The screens live in `features/auth/ui/`**: `LoginScreen`, `RegisterScreen`,
   `SelectClanScreen`, `PendingApprovalScreen`, `ClanSuspendedScreen`, `VerifyEmailScreen` and
   `SupabaseSetupNotice`. Their `app/` pages only route.
+- **`RegisterScreen` has an invitation mode (#196).** `/{locale}/register?from=invitation`, built by
+  `inviteeRegisterPath` and read by `isInviteeRegister` (`model/invitee-register.ts`), drops the
+  clan choice and sends `email`, `password` and `full_name` only, the body ADR-058 made the
+  invitee's. `InvitationAcceptScreen`'s signed-out state links there. The marker carries no part of
+  the token, which the page carries nowhere; its header holds the reasons.
 - **Three interim adaptations, each replaced by a later issue.** ~~The `(dashboard)` layout keeps a
   client redirect, driven by the access state, and writes a ready user's active clan back to the
   cookie when the cookie names another.~~ #186 made it a server layout that calls the guard; the
@@ -1019,7 +1024,16 @@ Two runs with B on 3200, the first try at reading 3a and reading 3b, also failed
 plant does not touch: `invitation-accept.spec.ts`'s "no request the page makes carries the token in
 a Referer header", once in `chromium` and once in `mobile`, reading B's own
 `http://127.0.0.1:3200/vi/invitations/<token>`. Alone, on B's cold servers at 3200, it passed four
-of four. It is intermittent under a full run's load and not explained yet. Reading 3a's pass above is
+of four. It is intermittent under a full run's load and not explained yet. **#196 found a candidate
+cause on 2026-10-06, measured on a navigation and not yet on this case.** `next dev`'s overlay
+loads its own font, `GET /__nextjs_font/geist-latin.woff2`, when its compile indicator appears, and
+Chromium sends that request with the page's full URL as `Referer` although the document's policy is
+`no-referrer`. A probe on `:3100` read it on the click from the invitation page to the register page,
+beside an RSC fetch and chunk loads that carried no `Referer`. A full run compiles routes for other
+specs while this one reads, and Turbopack's indicator may show then too. The route is dev-only: only
+`next dev`'s hot reloaders mount `getDevOverlayFontMiddleware`
+(`next/dist/server/dev/hot-reloader-turbopack.js`). Under `next start` the same click made 25
+requests, none to `/__nextjs_font/` and none with the token in its `Referer`. Reading 3a's pass above is
 the rerun. The gate's own `pnpm test:e2e` in the primary checkout, at the default ports with nothing
 else listening, failed once the same day: 86 passed and 20 failed, every one of them
 `invitation-accept.spec.ts`, every page Next's own 404. The spec passed ten of ten alone, and the
@@ -1057,6 +1071,7 @@ export E2E_AUTH_STACK=1
 export E2E_AUTH_SUPABASE_URL=http://supabase.localhost:54321   # NOT the 127.0.0.1 form
 export E2E_AUTH_SUPABASE_ANON_KEY="$(scripts/supabase_local.sh env | ...)"
 export E2E_AUTH_API_ORIGIN=http://127.0.0.1:8073
+export E2E_AUTH_MAIL_URL=http://127.0.0.1:54324                # Mailpit; the invitee walk (#196) reads it
 pnpm test:e2e:auth
 ```
 
@@ -1064,6 +1079,17 @@ pnpm test:e2e:auth
 values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
 
+**Twenty-two tests as written on 2026-10-06 (#196)**: three `auth-setup` logins and nineteen
+`auth-chromium` cases. #196 added `invitee-registers.auth.spec.ts`, one case in steps: a person
+with no account opens an invitation link, registers from it with no clan, confirms by the link the
+local stack mailed to Mailpit (`E2E_AUTH_MAIL_URL`, required by that spec alone), signs in, opens
+the link again, accepts, and reads `GET /me/clans`. The backend creates the identity unconfirmed,
+so `enable_confirmations = false` does not apply and GoTrue refuses the sign-in until the link is
+followed. Run alone on 2026-10-06 it passed in 15.7 s and spent 3 browser requests from the
+20-per-minute bucket. Two full runs that day read 19 passed and 3 failed, then 20 passed and 2
+failed, every failure a super_admin case in `guard.auth.spec.ts` on 429s from `GET /auth/me`. With
+the walk excluded the same three failed the same way, and `guard.auth.spec.ts` alone passed 8 of 8. Its token check sets aside one request by name, the dev overlay's font; see
+"Two worktrees, one machine".
 **Twenty-one tests as written on 2026-10-05 (#191)**: three `auth-setup` logins and eighteen
 `auth-chromium` cases. #191 added `invitation-link.auth.spec.ts`'s three, which call the backend
 directly and so need it started with `INVITE_LINK_ORIGIN` as above. Two traps the first full run
@@ -1151,6 +1177,9 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
    shares since #183. Both come from `127.0.0.1` here. It was about three per load, and then
    thousands, before #183. Keep a case to one navigation.
    `dashboard.auth.spec.ts` counts the browser's alone, which is why it still reads 1.
+   **One exception, a walk.** `invitee-registers.auth.spec.ts` (#196) is one person across four
+   pages, because each step needs the account the one before made. It counts what it spends and
+   attaches the count: 3 browser requests from the bucket on 2026-10-06.
 6. **The backend has to be current.** `GET /auth/me` sends `platform_role` since #181, and the
    session's schema requires it. A backend started before #181 merged answers without it, and every
    sign-in then fails on the login screen with the zod error naming `platform_role`. Seen

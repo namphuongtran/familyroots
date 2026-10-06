@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { envelope, errorEnvelope, server as mswServer } from '@/shared/testing/msw'
-import { renderWithProviders } from '@/shared/testing/render'
+import { expected, renderWithProviders } from '@/shared/testing/render'
 import { fakeSupabaseClient } from '@/shared/testing/supabase'
 import { CLAN_COOKIE } from '@/shared/http/request-context'
 import { InvitationAcceptScreen } from './InvitationAcceptScreen'
@@ -233,6 +233,28 @@ describe('the invitation page — the fifth outcome: there is no session', () =>
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Đăng nhập' })).toHaveAttribute('href', '/vi/login')
     expect(screen.queryByRole('button', { name: 'Tham gia dòng họ' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * #196: the second way on, for a visitor with no account. ADR-058 made the clanless register
+   * the invitee's, and until this the page linked only to sign-in, so a person with no account had
+   * no way to join.
+   *
+   * The link reaches the register form's invitation mode and holds no part of the token: the page
+   * decided in `d35decb` to carry the token nowhere, and the copy says to open this link again.
+   * `e2e/auth/invitee-registers.auth.spec.ts` follows the link in a browser and records every URL.
+   */
+  it('signed out: also offers to create an account, by a link that carries no part of the token', async () => {
+    signedOut()
+    render()
+
+    expect(
+      await screen.findByText(expected(messages.invitation.no_account_body)),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: expected(messages.auth.register_title) }),
+    ).toHaveAttribute('href', '/vi/register?from=invitation')
+    expect(screen.getAllByRole('link')).toHaveLength(2)
   })
 
   /**

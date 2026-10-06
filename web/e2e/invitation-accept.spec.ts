@@ -161,6 +161,24 @@ test.describe('the invitation page, in a browser', () => {
     await expect(page.getByRole('button', { name: 'Tham gia dòng họ' })).toHaveCount(0)
   })
 
+  /**
+   * #196: the second way on, for a visitor with no account. Followed here as far as the form, in
+   * the hermetic run, so the gate reads it: the walk through register, confirmation, sign-in and
+   * accept needs a backend and is `e2e/auth/invitee-registers.auth.spec.ts`.
+   */
+  test('signed out: create an account reaches the register form with no clan to choose', async ({
+    page,
+  }) => {
+    await page.goto(INVITATION_URL)
+
+    await page.getByRole('link', { name: 'Tạo tài khoản' }).click()
+    await page.waitForURL((url) => url.pathname === '/vi/register')
+
+    expect(page.url()).not.toContain(TOKEN)
+    await expect(page.getByLabel('Họ và tên')).toBeVisible()
+    await expect(page.getByRole('radio')).toHaveCount(0)
+  })
+
   test('accepted: the page says the invitee joined, and names the granted role', async ({
     page,
   }) => {

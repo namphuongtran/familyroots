@@ -16,6 +16,7 @@ export type { Membership, Session } from '@/domain/session/session'
 export type { AccessState } from '@/domain/session/access-state'
 
 export { landingPath } from './model/landing'
+export { inviteeRegisterPath } from './model/invitee-register'
 export { useSession } from './hooks/use-session'
 export { useCapabilities } from './hooks/use-capabilities'
 export { useAuthActions } from './hooks/use-auth-actions'

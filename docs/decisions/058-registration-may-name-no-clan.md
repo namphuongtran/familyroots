@@ -119,6 +119,16 @@ No shipped client can do this: `web/src/app/[locale]/(auth)/register/page.tsx:80
 (counted and recorded at `docs/contracts/rest-auth-api.md`). A blank code field is also
 still a 422, because `""` fails `_SLUG_PATTERN`.
 
+> **Amendment (2026-10-06, issue #196):** the web now sends the clanless body, on purpose and from
+> one entry only. The invitation page's signed-out state links to `/{locale}/register?from=invitation`,
+> and the register form reached that way (`web/src/features/auth/ui/RegisterScreen.tsx`, where #183
+> moved it) sends `email`, `password` and `full_name` and nothing else. Reached any other way it still
+> puts `clan_action` in every body. So the residual is no longer "no shipped client can do this": the
+> web does it from the marker and nowhere else, and `RegisterScreen.invitee.test.tsx` reads the body
+> both ways. The marker carries no part of the invitation token, so § 4 stands: the token stays out of
+> `POST /auth/register`. Owed item 1 below is done too: the generated `RegisterRequest` types
+> `clan_action` as optional, and the web's `RegisterInput` derives from it.
+
 ### 3. `POST /auth/onboard` keeps `clan_action` required
 
 `AuthenticatedOnboardingRequest` is **unchanged**. ADR-057's owed item named both schemas; this is a
@@ -237,14 +247,16 @@ walk and requires the typed name.
   simply unreachable by registration. Owed below.
 - **`web/src/generated/api-types.ts` is now stale** at `:1545` and `:3400`, both of which type
   `clan_action: 'join' | 'create'` as required. It is generated from the OpenAPI document and `web/`
-  was fenced to another agent, so it is not regenerated here. Owed below.
+  was fenced to another agent, so it is not regenerated here. Owed below. *(Done before 2026-10-06:
+  the generated `RegisterRequest` types `clan_action` as optional. See the amendment in § 2.)*
 - **The residual in § 2.** A client that drops `clan_action` and every clan field gets a clanless
   account where it used to get a 422.
 
 ### Owed, named rather than left to be found
 
-1. **Regenerate `web/src/generated/api-types.ts`** so `clan_action` is optional on the register
-   request. Belongs with the change that owns the web register form.
+1. ~~**Regenerate `web/src/generated/api-types.ts`** so `clan_action` is optional on the register
+   request. Belongs with the change that owns the web register form.~~ Done: read on 2026-10-06 by
+   #196, which owns that form. See the amendment in § 2.
 2. **`mobile` needs the onboarding branch.** `mobile/lib/app/router/app_router.dart:74` routes a
    zero-membership user to `/pending` and tells them their join request is being reviewed.
    `UserProfile.needsOnboarding` (`mobile/lib/domain/auth/user_profile.dart:29-30`) is the predicate,
