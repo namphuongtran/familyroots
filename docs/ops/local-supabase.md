@@ -340,7 +340,7 @@ repository does not have.
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots` | `pgdb` is a name on the compose network the container joins. Inside a container, `localhost` would not be the database anyway |
 | `ALLOWED_HOSTS` | `["127.0.0.1"]` | every request reaches the container through `127.0.0.1:8073` on the runner |
-| `CORS_ORIGINS` | `["http://127.0.0.1:3102"]` | the harness's auth origin. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
+| `CORS_ORIGINS` | `["http://127.0.0.1:3102","http://familyroots-web.test:3102"]` | the harness's auth origin, and the invite link's. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
 | `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Render sets `true` because its own proxy terminates TLS |
 | `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Render generates one too |
@@ -353,6 +353,14 @@ harness's `next dev` on `127.0.0.1:3102`. The job adds `127.0.0.1 familyroots-we
 runner's `/etc/hosts` and builds links on that name. `.test` is reserved by RFC 2606, so it resolves
 nowhere else. Do not "fix" this by loosening `names_loopback`. That refusal is what stops a production
 deployment from handing every invitee a link to `localhost`.
+
+**So `CORS_ORIGINS` lists that name too.** A page opened from the link has the origin
+`http://familyroots-web.test:3102`, and `invitee-registers.auth.spec.ts` (#196) registers from it.
+With only `127.0.0.1` listed, the browser's preflight was refused. The job's first run past the image
+pull (2026-10-07, run 37547827576) logged `"OPTIONS /api/v1/auth/register HTTP/1.1" 400 Bad Request`
+twice, and the walk timed out waiting for the registration message. On a laptop the recipe in
+`web/CLAUDE.md` sets `INVITE_LINK_ORIGIN` to the auth origin itself, so the two origins are one, which
+is why no local run saw it.
 
 **The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`.** Next 16's dev server
 refuses its `/_next/webpack-hmr` socket to a page on any host but `localhost`, `*.localhost` and the

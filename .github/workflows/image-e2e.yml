@@ -206,7 +206,7 @@ jobs:
           DATABASE_URL=postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots
           ALLOWED_HOSTS=["127.0.0.1"]
           RATE_LIMIT_TRUST_FORWARDED_FOR=false
-          CORS_ORIGINS=["$AUTH_BASE_URL"]
+          CORS_ORIGINS=["$AUTH_BASE_URL","http://$INVITE_LINK_HOST:${AUTH_BASE_URL##*:}"]
           INVITE_LINK_ORIGIN=http://$INVITE_LINK_HOST:${AUTH_BASE_URL##*:}
           SUPABASE_URL=$LOCAL_SUPABASE_URL
           SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY
