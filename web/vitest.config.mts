@@ -23,12 +23,16 @@ export default defineConfig({
           // playwright.config.test.ts: runs the real `playwright test` against stand-in servers to
           // read whether a run uses a dev server it did not start (#192). It sits beside the config
           // and outside e2e/, so Playwright's testDir never claims it.
+          // eslint.config.test.ts: lints planted components through the real eslint.config.mjs to
+          // read whether a Tailwind default-palette class fails lint (#199). It sits beside the
+          // config it reads, as playwright.config.test.ts does.
           include: [
             'src/**/*.test.ts',
             'messages/**/*.test.ts',
             'e2e/**/*.guard.test.ts',
             'scripts/**/*.test.ts',
             'playwright.config.test.ts',
+            'eslint.config.test.ts',
           ],
         },
       },

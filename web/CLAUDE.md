@@ -916,9 +916,10 @@ Four harnesses, one gate each:
 - `pnpm test:unit` — Vitest, node environment, `*.test.ts` under `src/`. Pure domain and
   `shared/http` logic: `HistoricalDate`, envelope unwrapping, the error taxonomy, request
   context, trace id generation, single-flight refresh, `apiFetch`, the logger. `vitest.config.mts`
-  adds four globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
-  `scripts/**`, which holds the legacy gate's test, and `playwright.config.test.ts`, which reads
-  whether an e2e run uses a server it did not start (#192).
+  adds five globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
+  `scripts/**`, which holds the legacy gate's test, `playwright.config.test.ts`, which reads
+  whether an e2e run uses a server it did not start (#192), and `eslint.config.test.ts`, which
+  reads whether a Tailwind default-palette class fails lint (#199).
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
   response shape.
