@@ -22,7 +22,7 @@
 | [018](018-vietnamese-lunar-calendar.md) | In-House Vietnamese Lunar Calendar Engine for Giỗ Recurrence | Accepted, shipped |
 | [019](019-document-soft-delete-purge.md) | Document Soft-Delete + Retention Purge | Accepted, shipped (supersedes ADR-006's documents row) |
 | [020](020-clan-export-formats.md) | Clan Export Formats — Lossless JSON Archive + GEDCOM Interop | Accepted, shipped |
-| [021](021-non-enumerating-auth-surfaces.md) | Non-Enumerating Auth Surfaces + Request-Meta Audit Enrichment + Invitation-Accept Rate Limit | Accepted, shipped |
+| [021](021-non-enumerating-auth-surfaces.md) | Non-Enumerating Auth Surfaces + Request-Meta Audit Enrichment + Invitation-Accept Rate Limit | Accepted, shipped. **Amended 2026-10-07 (#226)**: Decision 3's count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20, so production's budget is unchanged. Only the authenticated e2e harness's backend raises it, to 1000, because one full run spends 28 in a minute from `127.0.0.1`. Not refused under `APP_ENV=production`, since the image e2e job boots that way; raising it in a deployment needs an ADR |
 | [022](022-event-soft-delete-occ.md) | Events: Soft Delete + OCC + person FK SET NULL | Accepted, shipped |
 | [023](023-parent-child-db-backstop.md) | DB Backstop for Genealogy Graph Invariants (parent_child trigger) | Accepted, shipped |
 | [024](024-non-canonical-envelope-exceptions.md) | Non-Canonical Envelope Exceptions Typed As-Is (Normalize Pre-Frontend) | Normalized |

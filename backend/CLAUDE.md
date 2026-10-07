@@ -105,6 +105,7 @@ Never bypass these checks for convenience.
 ### App startup
 
 `app/main.py::create_app` wires: custom exception handlers (`AppError`, `DomainError` → structured envelopes via `app/core/exceptions.py`), CORS, `LanguageMiddleware` (Accept-Language → locale context for i18n), optional `SentryMiddleware`, `RequestMetaMiddleware` (captures client IP/User-Agent into a ContextVar for audit-log enrichment — see `app/core/request_meta.py`), `TraceContextMiddleware` (W3C `traceparent` correlation — see below), and a `RateLimitMiddleware` scoped to `/api/v1/auth` and `/api/v1/invitations` (20 req/min/IP, same bucket; ADR-021). Lifespan initializes Sentry, loads translations, inits Firebase Admin, starts APScheduler (used for anniversary notification jobs — see `NOTIFICATION_CRON_HOUR` in `Settings`), and disposes the async engine on shutdown.
+The rate limit's count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20; only the authenticated e2e harness's backend raises it (ADR-021's 2026-10-07 amendment, #226), and `tests/unit/test_auth_rate_limit_budget.py` reads where the 429 lands either way.
 
 Middleware order matters — Starlette wraps the **last-added** middleware **outermost**,
 so `create_app` registers in reverse of the desired execution order. Actual order

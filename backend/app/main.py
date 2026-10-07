@@ -221,7 +221,8 @@ def create_app() -> FastAPI:
     application.add_middleware(
         RateLimitMiddleware,
         path_prefixes=("/api/v1/auth", "/api/v1/invitations"),
-        max_requests=20,
+        # 20 unless set (ADR-021, amended 2026-10-07 by #226); only the e2e harness raises it.
+        max_requests=settings.RATE_LIMIT_AUTH_MAX_REQUESTS,
         window_seconds=60,
         trust_forwarded_for=settings.trust_forwarded_for,
     )

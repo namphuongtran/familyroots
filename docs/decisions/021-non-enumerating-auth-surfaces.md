@@ -2,6 +2,8 @@
 
 ## Status
 Accepted (2026-07-14 — shipped).
+Decision 3 amended 2026-10-07 by issue #226: the bucket's count is a setting whose default, and
+production's value, stays 20. See the dated amendment under Decision 3.
 
 ## Context
 The 2026-07-12 deep review left three gaps on the production-hardening backlog,
@@ -188,6 +190,44 @@ unauthenticated-adjacent surface this rate limit is protecting. Extending the
 limiter there would rate-limit legitimate admin workflows (e.g. bulk-inviting
 a clan) for no abuse-surface benefit, since the authenticated-admin gate
 already bounds who can call it.
+
+> **Amendment (2026-10-07, issue #226):** the bucket's count is now a setting,
+> `RATE_LIMIT_AUTH_MAX_REQUESTS` (`backend/app/core/config.py`), which `create_app` passes to
+> the limiter (`backend/app/main.py`). **Its default is 20, so production's budget is
+> unchanged**: 20 requests per 60 seconds per IP, one bucket for `/api/v1/auth` and
+> `/api/v1/invitations`, the same `Retry-After` semantics. Nothing a production deployment sets
+> today names the variable (`infra/render/render.yaml`), so every paragraph above that leans on
+> "20 req/min/IP" still holds as written. The window stays 60 seconds and is not a setting,
+> because nothing needs it to move.
+>
+> **Why.** The authenticated e2e harness (`pnpm test:e2e:auth`, `web/CLAUDE.md`) sends every
+> request from `127.0.0.1`, and since #186 a guarded page load spends two `GET /auth/me`.
+> Measured 2026-10-07 against a backend whose budget was out of reach, one full run of its 22
+> tests spent 28 requests from this bucket, all inside 54 seconds: 26 `GET /auth/me`, one
+> `POST /auth/register` and one `POST /invitations/{token}/accept`. At 20, the server guard's
+> read met a 429, the guard threw by design, and `guard.auth.spec.ts`'s super_admin case read
+> `500` where it expects `307`. The maintainer chose to make the count configurable and raise it
+> for the harness's backend only. Pacing the auth cases under 20 a minute, or capping what each
+> spec spends, were the alternatives, and both would make every new authenticated case answer
+> to a budget that exists to slow an attacker, not a test runner on loopback.
+>
+> **Who raises it.** Only the harness's backend. The recipe in `web/CLAUDE.md` and the `api.env`
+> that `.github/workflows/image-e2e.yml` writes both set `RATE_LIMIT_AUTH_MAX_REQUESTS=1000`.
+> That is more than 35 times what a full run spends in its busiest minute, so the suite can
+> grow without anyone counting requests, and it is still a limit: the dashboard runaway that
+> #183 removed sent 9037 `GET /auth/me` in twelve seconds, and 1000 a minute refuses most of
+> them.
+>
+> **What is validated, and what is not.** The value must be at least 1, at every boot, because
+> 0 would answer every sign-in with a 429. A raised value is **not** refused under
+> `APP_ENV=production`, on purpose: the image e2e job boots the backend image with
+> `APP_ENV=production`, as Render runs it, and sets the raised value, so that check would fail
+> the job. Nothing mechanical stops a production deployment from raising the budget, and a
+> variable set in the Render dashboard would not show in `render.yaml` either. **Raising it in a
+> deployment weakens the mitigations Decision 1 cites, so it is a decision for an ADR, not for
+> an environment variable.** Pinned by `backend/tests/unit/test_auth_rate_limit_budget.py`,
+> which sends requests through `create_app()` and reads the 21st in the window: 429 with
+> nothing set, admitted with the setting at 25, and the 26th then refused.
 
 ### 4. `engine.dispose()` on shutdown
 One-liner in `main.py`'s lifespan `finally` (after scheduler stop): the async

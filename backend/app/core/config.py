@@ -3,7 +3,7 @@
 from functools import lru_cache
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES
@@ -125,6 +125,14 @@ class Settings(BaseSettings):
     def trust_forwarded_for(self) -> bool:
         """Resolved XFF trust — the explicit value, or False when unset (dev)."""
         return bool(self.RATE_LIMIT_TRUST_FORWARDED_FOR)
+
+    # How many requests one client IP may send to /api/v1/auth and /api/v1/invitations, one
+    # shared bucket, in a 60-second window (ADR-021 Decision 3, amended 2026-10-07 by #226).
+    # 20 is production's budget, and no deployment sets this (infra/render/render.yaml). It
+    # is a setting so the authenticated e2e harness's backend can raise it: that suite sends
+    # every request from one address, and a full run spends more than 20 in a minute. At
+    # least 1, because 0 would answer every sign-in with a 429.
+    RATE_LIMIT_AUTH_MAX_REQUESTS: int = Field(default=20, ge=1)
 
     # Document upload — the platform-wide max upload size (MB), env-tunable without a
     # code change. Defaults to the document domain's built-in policy so there is a
