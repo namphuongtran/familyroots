@@ -86,7 +86,8 @@ test.describe('the backoffice dashboard, as an admin', () => {
     // made the media query the only mechanism — there is no class and no attribute to set —
     // so re-reading the same live elements is the honest test of the flip. It also keeps this
     // case to one page load, which matters: `/api/v1/auth/*` is limited to 20 requests per
-    // 60 seconds (`backend/app/main.py:221-226`) and one load of this screen spends several.
+    // 60 seconds by default (`RATE_LIMIT_AUTH_MAX_REQUESTS`; the harness's backend sets 1000,
+    // #226) and one load of this screen spends several.
     await page.emulateMedia({ colorScheme: 'dark' })
 
     // All three, on purpose. A ground that flips while an ink does not is the defect the dark-palette change
@@ -241,8 +242,8 @@ test.describe('the backoffice dashboard, as an admin', () => {
      *
      * Below `lg` the rail is now a drawer behind a top bar, so these two cases read what the
      * fix is for rather than what the page reports. Two cases, one navigation each, because
-     * `/api/v1/auth/*` allows 20 requests per 60 seconds and one load of this screen spends
-     * about three. The negative controls, each planted and reverted on 2026-10-04, are in the
+     * `/api/v1/auth/*` allows 20 requests per 60 seconds by default and one load of this screen
+     * spends about three. The negative controls, each planted and reverted on 2026-10-04, are in the
      * #174 pull request. Restoring `fixed w-60` + `ml-60` reads `main` width 0. An icon-only rail
      * reads width 176 and `scrollWidth` 190. The rail stacked above `main` puts the heading's
      * bottom at 968. Removing the `<wbr>` overflows the top bar, 325 against 320. Putting the

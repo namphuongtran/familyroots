@@ -86,7 +86,10 @@ Identity-provider failures map **truthfully**: infrastructure unavailability →
 
 In-memory sliding window, **20 req/min/IP, scoped to `/api/v1/auth` and
 `/api/v1/invitations`** (same bucket; fine for a single instance, Redis is the
-scale-out path). The scope was extended to cover `/invitations/{token}/accept`
+scale-out path). The count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20, which no
+production deployment sets; only the authenticated e2e harness's backend raises it, to
+1000, because that suite sends every request from one address (ADR-021, amended
+2026-10-07 by #226). The 60-second window is fixed. The scope was extended to cover `/invitations/{token}/accept`
 — the one token-bearing, unauthenticated-adjacent surface outside the
 limiter — in ADR-021 (2026-07-14); this is now **shipped**, not a backlog
 item. Admin invitation CRUD under `/clans/{clan_id}/invitations` is

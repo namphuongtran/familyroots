@@ -40,7 +40,7 @@ import { authStackInputs, SEEDED_PASSWORD, SEEDED_USERS } from './fixtures'
  * not built. The describe runs in one worker, so a run creates one invitation. It invites a fresh
  * address, because a reused one answers `invitation.pending_exists`, and revokes it afterwards so
  * the seeded clan does not collect pending rows. None of these requests is under `/api/v1/auth` or `/api/v1/invitations`, so
- * none spends the backend's 20-per-minute bucket.
+ * none spends the backend's `/api/v1/auth` bucket.
  */
 
 /** `messages/vi.json`, `invitation.sign_in_required_heading`. */

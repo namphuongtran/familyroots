@@ -343,6 +343,7 @@ repository does not have.
 | `CORS_ORIGINS` | `["http://127.0.0.1:3102","http://familyroots-web.test:3102"]` | the harness's auth origin, and the invite link's. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
 | `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Render sets `true` because its own proxy terminates TLS |
+| `RATE_LIMIT_AUTH_MAX_REQUESTS` | `1000` | the validator refuses only a value below 1, in every environment. **The one value here that production does not run**: Render sets nothing, so production keeps the default 20 (ADR-021, amended by #226). Every request reaches the container from one address, and a full run spends 28 from the bucket in under a minute (2026-10-07). See "The job inherited the harness's rate-limit collision" below |
 | `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Render generates one too |
 | `SUPABASE_URL` and both keys | this stack's, from `scripts/supabase_local.sh env` | `supabase.localhost`, for the reason in "The two settings that are load bearing" |
 
@@ -396,13 +397,20 @@ the container log held six `"GET /health HTTP/1.1" 400 Bad Request` lines from t
 same probe fails inside a production container too. Whether Render reads the image's `HEALTHCHECK` at
 all is not established here. Its blueprint names `healthCheckPath: /health` (`render.yaml:64`).
 
-### The job inherits the harness's rate-limit collision
+### The job inherited the harness's rate-limit collision, until #226
 
-`web/CLAUDE.md` already records that a full `pnpm test:e2e:auth` run spends the backend's
-20-requests-per-60-seconds bucket on `/api/v1/auth` (`backend/app/main.py:221-227`). The job runs the
-suite as written and does not change that limit, so it inherits the collision. Every request reaches
-the container from one address, the compose network's gateway, so they share one bucket, the same
-as `127.0.0.1` on a laptop. #226 tracks the collision. Two local rehearsals of the job on 2026-10-06
+**History.** Since #226 (2026-10-07) the job's `api.env` sets `RATE_LIMIT_AUTH_MAX_REQUESTS=1000`,
+the same value as the local recipe in `web/CLAUDE.md`, so the suite no longer meets the backend's
+bucket. Production still runs the default 20 (ADR-021, amended by #226). The two local rehearsals
+below are the reading that opened #226 for this job, and they were taken before the change, so
+they read the old limit. The first Actions run with both this change and #239's pull fix in it is
+the job's own reading.
+
+Until #226, `web/CLAUDE.md` recorded that a full `pnpm test:e2e:auth` run spends the backend's
+20-requests-per-60-seconds bucket on `/api/v1/auth`, which `backend/app/main.py` then hardcoded. The
+job ran the suite as written and did not change that limit, so it inherited the collision. Every
+request reaches the container from one address, the compose network's gateway, so they share one
+bucket, the same as `127.0.0.1` on a laptop. Two local rehearsals of the job on 2026-10-06
 at `f6f9409`, against the backend image, with the 429s counted by
 `docker logs <backend container> 2>&1 | grep -c ' 429 '` after each run:
 
@@ -412,4 +420,5 @@ at `f6f9409`, against the backend image, with the 429s counted by
 | 2, the default on a 4-vCPU runner | 19 passed, 2 flaky, each passing on its `CI` retry | 2 |
 
 A pass that leans on retries is a gate that will one day go red for a reason in no diff. The defect
-is in the suite's request budget or in the limit, not in this job, and it is not fixed here.
+was in the suite's request budget or in the limit, not in this job. #226 fixed it in the limit,
+for the harness's backend only, by making the count a setting and raising it in both recipes.

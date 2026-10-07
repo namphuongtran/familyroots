@@ -32,10 +32,12 @@ import { authStackInputs, mailCatcherOrigin, SEEDED_PASSWORD, SEEDED_USERS } fro
  * `Location` are read. When ADR-063's template (#203) reaches the local stack, the link lands on
  * `/{locale}/verify-email/confirm` (#200) and this step presses its button instead.
  *
- * **Budget.** `/api/v1/auth` and `/api/v1/invitations` share 20 requests per 60 seconds per IP
- * (`backend/app/main.py:221-226`). The walk counts what it spent and attaches the count; measured
- * on 2026-10-06, see the commit that added this file. The admin's requests go to `/api/v1/clans`
- * and `/api/v1/me`, which spend nothing.
+ * **Budget.** `/api/v1/auth` and `/api/v1/invitations` share one bucket per IP, 20 requests per
+ * 60 seconds unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS`. The harness's backend sets
+ * 1000 since #226, because a full run of this suite spends 28 in under a minute from one address
+ * (`web/CLAUDE.md`, "Budget the requests"). The walk counts what it spent and attaches the count;
+ * measured on 2026-10-06, see the commit that added this file. The admin's requests go to
+ * `/api/v1/clans` and `/api/v1/me`, which spend nothing.
  *
  * **What it leaves behind.** The invitation is accepted, so it is no longer pending. The new
  * user's membership is removed afterwards through the admin route, so the seeded clan does not
