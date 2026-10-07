@@ -135,15 +135,24 @@ function recordTheWalk(page: Page) {
   return { requests, documents }
 }
 
-function webOrigin(): string {
-  return new URL(test.info().project.use.baseURL ?? '').origin
+/**
+ * **The walk's web origin is the invite link's, not the project's `baseURL`.** The backend builds
+ * the link on `INVITE_LINK_ORIGIN`. On a laptop that is the harness's own origin, but the image e2e
+ * job (#193) cannot use a loopback value, so its links open on `http://familyroots-web.test:3102`,
+ * the same server under another name. A session cookie belongs to one host, so every page of the
+ * walk opens on the link's origin, and the token's home is read there too. Read against
+ * `baseURL`, the job's first run past its image pull (2026-10-07) named the invitation page's own
+ * URL as a leak, and a sign-in on `127.0.0.1` left the reopened link signed out.
+ */
+function walkOrigin(invitation: CreatedInvitation): string {
+  return new URL(invitation.invite_url).origin
 }
 
 /** Where the token is allowed: this page's own URL, and the accept request's path. */
-function isAllowedHome(url: string, token: string): boolean {
+function isAllowedHome(url: string, token: string, web: string): boolean {
   const { origin, pathname } = new URL(url)
   return (
-    (origin === webOrigin() && pathname === `/vi/invitations/${token}`) ||
+    (origin === web && pathname === `/vi/invitations/${token}`) ||
     (origin === authStackInputs().apiOrigin && pathname === `/api/v1/invitations/${token}/accept`)
   )
 }
@@ -161,28 +170,31 @@ function isAllowedHome(url: string, token: string): boolean {
  * reports what it set aside in the test's annotations, so a reader sees it, and sets aside nothing
  * else: a request to any other path is still named.
  */
-function isDevOverlayFont(url: string): boolean {
+function isDevOverlayFont(url: string, web: string): boolean {
   const { origin, pathname } = new URL(url)
-  return origin === webOrigin() && pathname === '/__nextjs_font/geist-latin.woff2'
+  return origin === web && pathname === '/__nextjs_font/geist-latin.woff2'
 }
 
 /** Every place the token showed up outside its two homes, each named. */
 function tokenOutsideItsHome(
   walk: ReturnType<typeof recordTheWalk>,
   token: string,
+  web: string,
 ): { found: string[]; setAside: string[] } {
   const found: string[] = []
   const setAside: string[] = []
   for (const { method, url, referer } of walk.requests) {
-    if (url.includes(token) && !isAllowedHome(url, token)) found.push(`request ${method} ${url}`)
+    if (url.includes(token) && !isAllowedHome(url, token, web)) {
+      found.push(`request ${method} ${url}`)
+    }
     if (referer?.includes(token)) {
       const entry = `Referer ${referer} on ${method} ${url}`
-      if (isDevOverlayFont(url)) setAside.push(entry)
+      if (isDevOverlayFont(url, web)) setAside.push(entry)
       else found.push(entry)
     }
   }
   for (const url of walk.documents) {
-    if (url.includes(token) && !isAllowedHome(url, token)) found.push(`document ${url}`)
+    if (url.includes(token) && !isAllowedHome(url, token, web)) found.push(`document ${url}`)
   }
   return { found, setAside }
 }
@@ -190,9 +202,10 @@ function tokenOutsideItsHome(
 function expectTokenInItsHome(
   walk: ReturnType<typeof recordTheWalk>,
   token: string,
+  web: string,
   through: string,
 ): void {
-  const { found, setAside } = tokenOutsideItsHome(walk, token)
+  const { found, setAside } = tokenOutsideItsHome(walk, token, web)
   if (setAside.length > 0) {
     test.info().annotations.push({
       type: `set aside through ${through}: the next dev overlay font`,
@@ -284,6 +297,7 @@ test.describe('a person with no account joins through an invitation link', () =>
     request,
   }) => {
     const token = invitation.token
+    const web = walkOrigin(invitation)
     const walk = recordTheWalk(page)
 
     await test.step('opens the invitation link with no session', async () => {
@@ -319,7 +333,7 @@ test.describe('a person with no account joins through an invitation link', () =>
     })
 
     await test.step('the token stayed in one place, through the success screen', async () => {
-      expectTokenInItsHome(walk, token, 'the success screen')
+      expectTokenInItsHome(walk, token, web, 'the success screen')
     })
 
     await test.step('confirms the address by the link the local stack mailed', async () => {
@@ -331,7 +345,7 @@ test.describe('a person with no account joins through an invitation link', () =>
     })
 
     await test.step('signs in at /vi/login', async () => {
-      await page.goto('/vi/login')
+      await page.goto(`${web}/vi/login`)
       await expect(page.getByLabel(COPY.email, { exact: true })).toBeEditable(FIRST_VISIT)
       await page.getByLabel(COPY.email, { exact: true }).fill(inviteeEmail)
       await page.getByLabel(COPY.password).fill(INVITEE_PASSWORD)
@@ -350,7 +364,7 @@ test.describe('a person with no account joins through an invitation link', () =>
     })
 
     await test.step('the token stayed in one place, through the accept', async () => {
-      expectTokenInItsHome(walk, token, 'the accept')
+      expectTokenInItsHome(walk, token, web, 'the accept')
       expect(walk.requests.map((r) => `${r.method} ${r.url}`)).toContain(
         `POST ${authStackInputs().apiOrigin}/api/v1/invitations/${token}/accept`,
       )
