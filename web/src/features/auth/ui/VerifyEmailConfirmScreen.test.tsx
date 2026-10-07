@@ -70,7 +70,9 @@ function otpExpired() {
 }
 
 /** Every `POST /auth/v1/verify` the page sends, with its body, answered by `respond`. */
-function countVerify(respond: () => Response = () => HttpResponse.json(verifiedSession())) {
+function countVerify(
+  respond: () => Response | Promise<Response> = () => HttpResponse.json(verifiedSession()),
+) {
   const bodies: unknown[] = []
   server.use(
     http.post(VERIFY, async ({ request }) => {
@@ -89,6 +91,11 @@ function landOn(query: string) {
 
 const LINK = `token_hash=${TOKEN_HASH}&type=email`
 
+/** Long enough for a mount effect's request to reach MSW, had the page sent one. */
+function settle() {
+  return new Promise((resolve) => setTimeout(resolve, 50))
+}
+
 /** A press resolves through a real fetch, so each case then waits for the state it ends in. */
 function pressConfirm(messages: typeof viMessages | typeof enMessages) {
   fireEvent.click(
@@ -103,7 +110,8 @@ beforeEach(() => {
 
 afterEach(async () => {
   // The browser client is one per page, and keeps the session in `document.cookie`, so a
-  // session one case saved would otherwise reach the next.
+  // session one case saved would otherwise reach the next. Signing out sends `/logout`.
+  server.use(http.post(`${SUPABASE}/auth/v1/logout`, () => new HttpResponse(null, { status: 204 })))
   await createClient().auth.signOut({ scope: 'local' })
   for (const cookie of document.cookie.split(';')) {
     const name = cookie.split('=')[0]?.trim()
@@ -122,8 +130,7 @@ describe('VerifyEmailConfirmScreen (spec §7.1c surface 2, ADR-063)', () => {
     expect(
       screen.getByRole('heading', { name: expected(viMessages.auth.verify_confirm_heading) }),
     ).toBeInTheDocument()
-    // Long enough for a mount effect's request to reach MSW, had the page sent one.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await settle()
     expect(bodies).toHaveLength(0)
 
     pressConfirm(viMessages)
@@ -140,14 +147,10 @@ describe('VerifyEmailConfirmScreen (spec §7.1c surface 2, ADR-063)', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve
     })
-    const bodies: unknown[] = []
-    server.use(
-      http.post(VERIFY, async ({ request }) => {
-        bodies.push(await request.json())
-        await held
-        return HttpResponse.json(verifiedSession())
-      }),
-    )
+    const bodies = countVerify(async () => {
+      await held
+      return HttpResponse.json(verifiedSession())
+    })
     landOn(LINK)
 
     renderWithProviders(<VerifyEmailConfirmScreen />, { messages: viMessages })
@@ -165,6 +168,33 @@ describe('VerifyEmailConfirmScreen (spec §7.1c surface 2, ADR-063)', () => {
       name: expected(viMessages.auth.verify_confirm_success_heading),
     })
     expect(bodies).toHaveLength(1)
+  })
+
+  it('spends the token once when the button is pressed twice before it is replaced', async () => {
+    // TanStack Query tells the component about a pending mutation on a later task, so the
+    // button is still there for a second click that lands first. A second verify of a spent
+    // token answers 403, and the screen would show expired after a real success.
+    let calls = 0
+    const bodies = countVerify(() => {
+      calls += 1
+      return calls === 1 ? HttpResponse.json(verifiedSession()) : otpExpired()
+    })
+    landOn(LINK)
+
+    renderWithProviders(<VerifyEmailConfirmScreen />, { messages: viMessages })
+    pressConfirm(viMessages)
+    pressConfirm(viMessages)
+
+    await screen.findByRole('heading', {
+      name: expected(viMessages.auth.verify_confirm_success_heading),
+    })
+    await settle()
+    expect(bodies).toHaveLength(1)
+    expect(
+      screen.getByRole('heading', {
+        name: expected(viMessages.auth.verify_confirm_success_heading),
+      }),
+    ).toBeInTheDocument()
   })
 
   it('keeps the session it was given, and goes on to the guarded entry', async () => {
@@ -228,7 +258,7 @@ describe('VerifyEmailConfirmScreen (spec §7.1c surface 2, ADR-063)', () => {
     expect(
       screen.queryByRole('button', { name: expected(viMessages.auth.verify_confirm_button) }),
     ).not.toBeInTheDocument()
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await settle()
     expect(bodies).toHaveLength(0)
   })
 

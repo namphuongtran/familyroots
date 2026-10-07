@@ -14,15 +14,14 @@
  * **Loading the page spends nothing** (ADR-063 § 2). An email scanner fetches the link, and it
  * does not press buttons, so only the press sends `POST /auth/v1/verify`.
  *
- * `success-container` is spec § 2.1's, added to `globals.css` by #200. Spec § 2.1's
- * `warning-container` does not exist there; `accent` is its stand-in, as on
- * `ClanSuspendedScreen`, whose header gives the reason.
+ * `success-container` and `warning-container` are spec § 2.1's, added to `globals.css` by #200.
  */
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { CircleAlert, CircleCheck, LoaderCircle, MailCheck } from 'lucide-react'
+import { cn } from '@/lib/utils/cn'
 import { useConfirmEmail } from '../hooks/use-confirm-email'
 import { confirmationTokenHash } from '../model/email-confirmation'
 
@@ -47,7 +46,7 @@ export function VerifyEmailConfirmScreen() {
   if (shown === 'success') {
     return (
       <Outcome
-        className="bg-success-container text-success-container-foreground"
+        tone="bg-success-container text-success-container-foreground"
         icon={<CircleCheck className="mx-auto h-12 w-12" aria-hidden="true" />}
         heading={t('verify_confirm_success_heading')}
         headingRef={outcomeHeading}
@@ -63,7 +62,7 @@ export function VerifyEmailConfirmScreen() {
   if (shown === 'expired') {
     return (
       <Outcome
-        className="bg-accent text-accent-foreground"
+        tone="bg-warning-container text-warning-container-foreground"
         icon={<CircleAlert className="mx-auto h-12 w-12" aria-hidden="true" />}
         heading={t('verify_confirm_expired_heading')}
         headingRef={outcomeHeading}
@@ -121,15 +120,17 @@ export function VerifyEmailConfirmScreen() {
   )
 }
 
+/** The success and expired states: a tinted panel, and the actions below it on the page ground. */
 function Outcome({
-  className,
+  tone,
   icon,
   heading,
   headingRef,
   body,
   children,
 }: {
-  className: string
+  /** The panel's ground and ink, a container token pair. */
+  tone: string
   icon: React.ReactNode
   heading: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
@@ -139,7 +140,7 @@ function Outcome({
   return (
     <div className="bg-background flex min-h-screen items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm space-y-6 text-center">
-        <div className={`space-y-4 rounded-2xl px-6 py-8 ${className}`}>
+        <div className={cn('space-y-4 rounded-2xl px-6 py-8', tone)}>
           {icon}
           <h1 ref={headingRef} tabIndex={-1} className="font-serif text-2xl focus:outline-hidden">
             {heading}

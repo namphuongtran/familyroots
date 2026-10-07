@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import type { components } from '../../src/generated/api-types'
 import { authStackInputs, SEEDED_PASSWORD, SEEDED_USERS } from './fixtures'
-import { mailedConfirmationLink } from './mail'
+import { mailedConfirmation } from './mail'
 
 /**
  * #196, ADR-058. A person with no account opens an invitation link, creates an account from it,
@@ -316,7 +316,7 @@ test.describe('a person with no account joins through an invitation link', () =>
     })
 
     await test.step('confirms the address by the link the local stack mailed', async () => {
-      const link = await mailedConfirmationLink(request, inviteeEmail)
+      const { link } = await mailedConfirmation(request, inviteeEmail)
       const followed = await request.get(link, { maxRedirects: 0 })
       expect(followed.status()).toBe(303)
       // GoTrue reports a failed verification in the redirect's fragment, `#error=…`.

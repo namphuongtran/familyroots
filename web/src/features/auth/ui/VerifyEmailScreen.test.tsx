@@ -87,15 +87,15 @@ describe('VerifyEmailScreen (spec §7.1c surface 1)', () => {
 
     renderWithProviders(<VerifyEmailScreen />, { messages })
 
-    expect(
-      screen.getByText(
-        'Email của bạn chưa được xác thực. Xin mở hộp thư và bấm vào liên kết xác thực để tiếp tục đăng nhập.',
-      ),
-    ).toBeInTheDocument()
-    const resend = screen.getByRole('button', { name: 'Gửi lại thư xác thực' })
+    expect(screen.getByText(expected(messages.auth.verify_email_body_no_email))).toBeInTheDocument()
+    const resend = screen.getByRole('button', {
+      name: expected(messages.auth.verify_email_resend_button),
+    })
     expect(resend).toBeDisabled()
     // T-17: still a way forward with no email known.
-    expect(screen.getByRole('link', { name: 'Về trang đăng nhập' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: expected(messages.auth.verify_email_back_to_login) }),
+    ).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText(expected(messages.auth.email)), {
       target: { value: '  lan@example.com ' },
@@ -104,7 +104,9 @@ describe('VerifyEmailScreen (spec §7.1c surface 1)', () => {
     fireEvent.click(resend)
 
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent('Đã gửi lại thư xác thực'),
+      expect(screen.getByRole('status')).toHaveTextContent(
+        expected(messages.auth.verify_email_resend_sent),
+      ),
     )
     expect(seenBody).toEqual({ email: 'lan@example.com' })
   })
@@ -119,6 +121,8 @@ describe('VerifyEmailScreen (spec §7.1c surface 1)', () => {
     renderWithProviders(<VerifyEmailScreen />, { messages })
 
     expect(screen.queryByLabelText(expected(messages.auth.email))).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Gửi lại thư xác thực' })).toBeEnabled()
+    expect(
+      screen.getByRole('button', { name: expected(messages.auth.verify_email_resend_button) }),
+    ).toBeEnabled()
   })
 })

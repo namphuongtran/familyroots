@@ -820,8 +820,8 @@ zustand keeps only `ui.store.ts`.
   shows the expired state. Success keeps the session Supabase answers with, and **Tiếp tục** goes
   to `/{locale}/dashboard`, the entry the server guard routes from. Expired links to
   `/{locale}/verify-email`, which since #200 asks for the address when the URL carries none.
-  `success-container` is new in `globals.css` for it; expired uses `accent`, the
-  `warning-container` stand-in `ClanSuspendedScreen` explains.
+  `success-container` and `warning-container` are new in `globals.css` for it, quoted from spec
+  § 2.1. `ClanSuspendedScreen` still uses `accent`, the older stand-in.
 - **A component test that needs the real Supabase browser client** stubs
   `NEXT_PUBLIC_SUPABASE_URL` and `_ANON_KEY` with `vi.stubEnv` and serves GoTrue through MSW, so
   what it counts is a request on the wire (`VerifyEmailConfirmScreen.test.tsx`). Two traps:

@@ -37,11 +37,3 @@ export async function mailedConfirmation(
   if (!link) throw new Error(`the mail to ${email} carried no confirmation link:\n${Text}`)
   return { subject: Subject, text: Text, link }
 }
-
-/** The link alone, for a walk that only follows it. */
-export async function mailedConfirmationLink(
-  request: APIRequestContext,
-  email: string,
-): Promise<string> {
-  return (await mailedConfirmation(request, email)).link
-}

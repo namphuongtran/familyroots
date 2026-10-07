@@ -8,8 +8,14 @@
  * Mutations do not retry here (`QueryClient`'s default), and a retry could only spend a token
  * twice. Any failure reads as expired: spec § 7.1c shows the expired state "rather than a raw
  * error", and the one failure Supabase names, `otp_expired`, means exactly that.
+ *
+ * **One press per page.** TanStack Query tells the component the mutation is pending on a later
+ * task, so the button is still on screen for a second click that lands first. That click would
+ * verify a spent token, and its 403 would replace a real success with the expired state. The ref
+ * holds the press synchronously. No state follows a verify in which a second press means anything.
  */
 
+import { useCallback, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { verifyEmailLink } from '../api/supabase-auth'
 
@@ -20,6 +26,15 @@ export function useConfirmEmail(): {
   confirm: (tokenHash: string) => void
 } {
   const { status, mutate } = useMutation({ mutationFn: verifyEmailLink })
+  const pressed = useRef(false)
+  const confirm = useCallback(
+    (tokenHash: string) => {
+      if (pressed.current) return
+      pressed.current = true
+      mutate(tokenHash)
+    },
+    [mutate],
+  )
 
   const state: ConfirmEmailState =
     status === 'pending'
@@ -30,5 +45,5 @@ export function useConfirmEmail(): {
           ? 'expired'
           : 'ready'
 
-  return { state, confirm: mutate }
+  return { state, confirm }
 }
