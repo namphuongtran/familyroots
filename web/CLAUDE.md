@@ -1108,6 +1108,15 @@ pnpm test:e2e:auth
 values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
 
+**Twenty-two tests, re-read 2026-10-07 (#226)**, with the recipe above, its backend at
+`RATE_LIMIT_AUTH_MAX_REQUESTS=1000`, and `.next`, `.next-auth-e2e` and `.next-banner-e2e` deleted
+before each run, so every route compiled cold. Two consecutive runs each read `22 passed`, with
+zero lines matching `grep -c ' 429 '` in the backend log. Each spent 28 requests from the bucket, 22 of them in the
+busiest minute. The setups took 27.8 s, 35.3 s and 36.8 s, then 27.8 s, 35.8 s and 36.8 s. The
+control is the same run with the backend at the default 20: `20 passed`, `2 failed`, and two
+`GET /api/v1/auth/me` lines answered `429 Too Many Requests`. The failures were
+`guard.auth.spec.ts`'s super_admin case, `Expected: 307` and `Received: 500`, and
+`dashboard.auth.spec.ts`'s `/vi/members` case at the 30 s test timeout.
 **Twenty-two tests as written on 2026-10-06 (#196)**: three `auth-setup` logins and nineteen
 `auth-chromium` cases. #196 added `invitee-registers.auth.spec.ts`, one case in steps: a person
 with no account opens an invitation link, registers from it with no clan, confirms by the link the
