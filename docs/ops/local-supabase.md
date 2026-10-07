@@ -100,8 +100,10 @@ with `familyroots-pgdb`, `familyroots-pgadmin` and three `kind` nodes already ru
 | `destroy` | 1 min 5.4 s |
 
 **On a cold GitHub-hosted runner** the figures are not in yet. The CI job ("The image e2e job in
-CI", below) logs each phase, the runner's size and its container count, and its first Actions run
-on #193's pull request is what fills this in. The table above is a warm Mac and does not predict them.
+CI", below) logs each phase, the runner's size and its container count. Its first Actions run on
+#193's pull request was meant to fill this in. It did not: every run from #193 to 2026-10-07 failed
+at the image pull, before any phase it times ("Pulling from ECR Public", below). The table above is a
+warm Mac and does not predict them.
 
 **Six containers**, counted 2026-08-22 with `docker ps --filter name=supabase`:
 
@@ -303,13 +305,42 @@ Nothing is uploaded, on success or failure. `web/e2e/.auth/` holds live sessions
 report or trace carries the same cookies in its captured requests. The repository is public, so its
 artefacts are downloadable by any signed-in GitHub user.
 
+### Pulling from ECR Public
+
+**The job never got past its first real step until 2026-10-07.** All ten runs from #193's own pull
+request to `e77116b` failed in "Pull runtime images", each with `toomanyrequests: Rate exceeded`,
+so none reached the stack, the images or the suite. The step pulled the six Supabase images from
+`public.ecr.aws` all at once. ECR Public allows an unauthenticated client one image pull per second,
+and AWS does not raise that quota ("Rate of unauthenticated image pulls", [its service quotas
+page](https://docs.aws.amazon.com/AmazonECR/latest/public/public-service-quotas.html)). A hosted
+runner shares its address with other jobs, so the budget is not even the job's own.
+
+The step now pulls them one at a time, and retries a refused pull after 5, 10, 20, 40 and 80
+seconds. A sixth refusal fails the step with `::error::<image> did not pull in 6 attempts`, so a
+registry outage still reads as one. `pgdb` comes from Docker Hub and still pulls alongside.
+
+Read 2026-10-07 against a registry stand-in, which refuses an ECR pull that starts while another is
+in flight. The stand-in ran the step's own `run` block, taken out of the workflow file:
+
+| Step | Registry | Result |
+|---|---|---|
+| as on `main` | refuses bursts | exit 1, five of six images refused, as in CI |
+| one at a time | refuses bursts | exit 0, all six pulled, none refused |
+| one at a time | also refuses each image's first two attempts | exit 0, twelve warnings, waits of 5 and 10 s |
+| one at a time | refuses each image six times | exit 1 on the first image, after 155 s of waiting, naming it |
+
+What a stand-in cannot show is whether one pull at a time stays under a limit that a runner's
+neighbours also spend. The first green run in Actions is that reading. If the retries are seen
+spending minutes, authenticating to ECR Public is the next step. That needs an AWS identity the
+repository does not have.
+
 ### The backend's environment satisfies the production validator and does not relax it
 
 | Variable | Value in the job | Why it passes |
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots` | `pgdb` is a name on the compose network the container joins. Inside a container, `localhost` would not be the database anyway |
 | `ALLOWED_HOSTS` | `["127.0.0.1"]` | every request reaches the container through `127.0.0.1:8073` on the runner |
-| `CORS_ORIGINS` | `["http://127.0.0.1:3102"]` | the harness's auth origin. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
+| `CORS_ORIGINS` | `["http://127.0.0.1:3102","http://familyroots-web.test:3102"]` | the harness's auth origin, and the invite link's. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
 | `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Render sets `true` because its own proxy terminates TLS |
 | `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Render generates one too |
@@ -322,6 +353,14 @@ harness's `next dev` on `127.0.0.1:3102`. The job adds `127.0.0.1 familyroots-we
 runner's `/etc/hosts` and builds links on that name. `.test` is reserved by RFC 2606, so it resolves
 nowhere else. Do not "fix" this by loosening `names_loopback`. That refusal is what stops a production
 deployment from handing every invitee a link to `localhost`.
+
+**So `CORS_ORIGINS` lists that name too.** A page opened from the link has the origin
+`http://familyroots-web.test:3102`, and `invitee-registers.auth.spec.ts` (#196) registers from it.
+With only `127.0.0.1` listed, the browser's preflight was refused. The job's first run past the image
+pull (2026-10-07, run 37547827576) logged `"OPTIONS /api/v1/auth/register HTTP/1.1" 400 Bad Request`
+twice, and the walk timed out waiting for the registration message. On a laptop the recipe in
+`web/CLAUDE.md` sets `INVITE_LINK_ORIGIN` to the auth origin itself, so the two origins are one, which
+is why no local run saw it.
 
 **The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`.** Next 16's dev server
 refuses its `/_next/webpack-hmr` socket to a page on any host but `localhost`, `*.localhost` and the
