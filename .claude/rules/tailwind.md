@@ -555,9 +555,10 @@ is an English word, because until #197 the stat labels were English literals und
 `/vi` included. They go through next-intl now, so `/vi` renders `Tổng số thành viên`, `Chờ phê
 duyệt`, `Tài liệu` and `Độ hoàn thiện gia phả`. Measured 2026-10-06 with `p-8` planted: the case
 passed. English's `Completeness` still needs the 174 px that `px-4` gives, and no case reads `en`.
-A reading under `en` costs one more navigation from the 20-per-minute `GET /auth/me` budget the
-full auth run already overspends, so it is a decision for the harness, not a line to add. The
-other three controls read values and the badge, which no translation moved. They were not re-run.
+A reading under `en` costs one more navigation. Until #226 that came out of a 20-per-minute
+`GET /auth/me` budget the full auth run already overspent. The harness's backend now allows 1000
+(`web/CLAUDE.md`, "Budget the requests"), so the budget no longer forbids it, and adding it is
+still a decision for the harness, not a line to slip in. The other three controls read values and the badge, which no translation moved. They were not re-run.
 
 **Not fixed, and outside T-04's 320 px.** At 640 px and 200% the grid goes to two columns and
 `Tree Completeness` clips again, 164 against 154, in both locales, measured while both rendered the

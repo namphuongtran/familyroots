@@ -178,6 +178,8 @@ jobs:
       # production validator (backend/app/core/config.py, `_enforce_production_safety`); none
       # relaxes it. The database host is `pgdb`, a name on the compose network.
       # RATE_LIMIT_TRUST_FORWARDED_FOR is false because nothing proxies this container.
+      # RATE_LIMIT_AUTH_MAX_REQUESTS is the one value production does not run: the suite sends
+      # every request from one address and spends more than the default 20 a minute (#226).
       - name: Migrate with the image, then seed both databases
         run: |
           cat > "$RUNNER_TEMP/api.env" <<EOF
@@ -186,6 +188,7 @@ jobs:
           APP_SECRET_KEY=$(openssl rand -hex 32)
           DATABASE_URL=postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots
           ALLOWED_HOSTS=["127.0.0.1"]
+          RATE_LIMIT_AUTH_MAX_REQUESTS=1000
           RATE_LIMIT_TRUST_FORWARDED_FOR=false
           CORS_ORIGINS=["$AUTH_BASE_URL"]
           INVITE_LINK_ORIGIN=http://$INVITE_LINK_HOST:${AUTH_BASE_URL##*:}

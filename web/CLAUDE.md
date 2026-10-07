@@ -1012,9 +1012,12 @@ reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting i
 - **Why CI never caught it.** Under `CI` the old setting was already false, so in CI the defect
   did not exist. It lived only on developer machines and agent worktrees, where nothing gates.
 - **What this does not make safe.** Two **authenticated** runs side by side still share one
-  Supabase stack, one seeded database, the backend `E2E_AUTH_API_ORIGIN` names, and that backend's
-  20-per-60-seconds limit on `/api/v1/auth` per IP. That collision fails loudly with 429s rather
-  than passing, and it is out of #192's scope: run `pnpm test:e2e:auth` one at a time.
+  Supabase stack, one seeded database, and the backend `E2E_AUTH_API_ORIGIN` names. Until #226
+  they also shared that backend's 20-per-60-seconds limit on `/api/v1/auth` per IP, which failed
+  them loudly with 429s. Started as the recipe below starts it, with
+  `RATE_LIMIT_AUTH_MAX_REQUESTS=1000`, one run spends 28 of that, so the limiter no longer
+  decides it. Two side by side were not run. The rest of the collision is out of #192's scope:
+  run `pnpm test:e2e:auth` one at a time.
 
 **`playwright.config.test.ts` holds it in the unit gate.** Two stand-in servers hold base and
 base+1, the way another worktree's `next dev` would, and record every path asked of them. Each case
@@ -1080,12 +1083,15 @@ make seed                                  # both halves of five test users
 # nor INVITE_LINK_ORIGIN, so it runs on config.py's http://localhost:3000 defaults, which
 # admit no auth origin (read at source 2026-10-05). The harness only needs some backend on
 # E2E_AUTH_API_ORIGIN that admits it.
+# RATE_LIMIT_AUTH_MAX_REQUESTS=1000 raises the /api/v1/auth bucket for this backend only,
+# because the whole suite comes from one address ("Budget the requests", step 5 below).
 AUTH_ORIGIN="http://127.0.0.1:$(( ${E2E_PORT_BASE:-3100} + 2 ))"
 cd backend && DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/family_roots \
   SUPABASE_URL=http://supabase.localhost:54321 \
   SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=...  \
   CORS_ORIGINS="[\"$AUTH_ORIGIN\"]" INVITE_LINK_ORIGIN="$AUTH_ORIGIN" \
   APP_SECRET_KEY=e2e-local-secret \
+  RATE_LIMIT_AUTH_MAX_REQUESTS=1000 \
   uv run uvicorn app.main:app --host 127.0.0.1 --port 8073
 
 # then, in web/
@@ -1122,8 +1128,9 @@ reuses a server only under `E2E_REUSE_SERVER=1`, and that variable reuses **ever
 uses, :3100 and :3101 included, which `backoffice.auth.spec.ts`'s replay reads. So before running
 with it, check that each port is free or held by your own checkout ("Who holds a port"). On
 2026-10-05 the setup logins passed cold without it. **The full run
-spends the 20-per-minute bucket**: the server guard's `GET /auth/me` met a 429 (`Quá nhiều yêu
-cầu`) and `guard.auth.spec.ts`'s super_admin case read `500` where it expects `307`.
+spent the 20-per-minute bucket**: the server guard's `GET /auth/me` met a 429 (`Quá nhiều yêu
+cầu`) and `guard.auth.spec.ts`'s super_admin case read `500` where it expects `307`. #226 raised
+the harness backend's bucket instead (step 5 of "How to add the next authenticated route").
 **Eighteen tests as written on 2026-10-05 (#186)**: three `auth-setup` logins and fifteen
 `auth-chromium` cases. #186 added the super_admin's login and `guard.auth.spec.ts`'s five, and
 was written on a machine without Docker, so its pull request says whether they have been run.
@@ -1193,11 +1200,20 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
 4. **Read colour schemes without reloading.** `page.emulateMedia({ colorScheme })`
    re-evaluates the media query in place, and ADR-045 made the media query the only
    mechanism. One page load per case matters: see the rate limit below.
-5. **Budget the requests.** `/api/v1/auth/*` allows 20 requests per 60 seconds per IP
-   (`backend/app/main.py:221-226`, hardcoded). One load of a `(dashboard)` screen spends two
-   `GET /auth/me` since #186: the server guard's, and the browser's one, which every consumer
-   shares since #183. Both come from `127.0.0.1` here. It was about three per load, and then
-   thousands, before #183. Keep a case to one navigation.
+5. **Budget the requests.** `/api/v1/auth/*` and `/api/v1/invitations/*` share one bucket,
+   20 requests per 60 seconds per IP unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS`
+   (ADR-021, amended by #226). Production sets nothing. **The harness's backend sets 1000**, in
+   the recipe above and in `image-e2e.yml`, because every request the suite sends comes from
+   `127.0.0.1` and a full run spends more than 20 in a minute: 28 requests in 54 s on a warm
+   server, and 28 in 88 s with 22 in the busiest minute on a cold one, measured 2026-10-07
+   (26 `GET /auth/me`, one register, one accept). At 20 the server guard's read meets a 429 and
+   `guard.auth.spec.ts` reads `500` for `307`. 1000 is more than 35 times a run's busiest
+   minute, so a new case does not have to count against it, and a backend started without it
+   fails that way again. It is still a limit, so a runaway like the one #183 removed still meets
+   it. One load of a `(dashboard)` screen spends two `GET /auth/me` since #186: the server
+   guard's, and the browser's one, which every consumer shares since #183. Both come from
+   `127.0.0.1` here. It was about three per load, and then thousands, before #183. Keep a case
+   to one navigation where it can be: the headroom is for the suite to grow, not to spend.
    `dashboard.auth.spec.ts` counts the browser's alone, which is why it still reads 1.
    **One exception, a walk.** `invitee-registers.auth.spec.ts` (#196) is one person across four
    pages, because each step needs the account the one before made. It counts what it spends and

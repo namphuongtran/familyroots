@@ -27,9 +27,11 @@ import { SEEDED_USERS } from './fixtures'
  * `src/features/auth/server/guard.test.ts` records every request the guard sends instead. It
  * failed with the probe put back, run 2026-10-05.
  *
- * One navigation per case: `/api/v1/auth/*` allows 20 requests per 60 seconds per IP, and since
- * #186 a guarded load spends two `GET /auth/me`, the guard's on the server and the session
- * query's in the browser, both from this machine's address. A `page.request` read spends one.
+ * One navigation per case: `/api/v1/auth/*` allows 20 requests per 60 seconds per IP by default,
+ * and since #186 a guarded load spends two `GET /auth/me`, the guard's on the server and the
+ * session query's in the browser, both from this machine's address. A `page.request` read spends
+ * one. The harness's backend raises the bucket to 1000 (#226, `web/CLAUDE.md` step 5); this
+ * file's super_admin case is the one that read `500` for `307` at 20.
  */
 
 const ADMIN_USERS = '/vi/admin/users'
