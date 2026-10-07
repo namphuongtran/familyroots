@@ -3,14 +3,19 @@
 /**
  * Spec §7.1c, surface 1 (`docs/superpowers/specs/2026-08-02-design-system-and-screens.md:882-898`):
  * the "blocked-at-login" screen for `403 email_not_verified` (`docs/contracts/error-codes.md`,
- * "Auth & session"). Surface 2 of §7.1c — the screen that lands from the email link itself — is
- * out of scope here: deep links from an email are not built.
+ * "Auth & session"). Surface 2 of §7.1c, the screen that lands from the email link itself, is
+ * `VerifyEmailConfirmScreen` (#200).
  *
  * **How a real sign-in reaches it (#183, ADR-061 § 7).** Sign-in is Supabase-direct, so the
  * backend's `403 email_not_verified` is never raised on the way here. Supabase refuses a password
  * sign-in for an unconfirmed account with its own error code, `email_not_confirmed`, and
  * `useAuthActions().signInWithEmail` routes that to `/{locale}/verify-email?email=…`. Before #183
  * nothing did, and the screen was reachable only by typing its URL.
+ *
+ * **Reached with no `?email=`, it asks for the address (#200).** Surface 2's expired state,
+ * `VerifyEmailConfirmScreen`, sends a person here to resend, and its `token_hash` names no
+ * address. Before #200 the resend was disabled with no address, which left that person only the
+ * way back to the login screen.
  */
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -28,7 +33,9 @@ export function VerifyEmailScreen() {
   const t = useTranslations('auth')
   const locale = useLocale()
   const searchParams = useSearchParams()
-  const email = searchParams.get('email')
+  const linkedEmail = searchParams.get('email') || null
+  const [typedEmail, setTypedEmail] = useState('')
+  const email = linkedEmail ?? (typedEmail.trim() || null)
 
   const [status, setStatus] = useState<ResendStatus>('idle')
   const [cooldown, setCooldown] = useState(0)
@@ -41,7 +48,8 @@ export function VerifyEmailScreen() {
     return () => clearInterval(id)
   }, [cooldown])
 
-  async function handleResend() {
+  async function handleResend(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     if (!email) return
     setStatus('sending')
     try {
@@ -72,7 +80,9 @@ export function VerifyEmailScreen() {
         <div className="space-y-2">
           <h1 className="text-foreground font-serif text-2xl">{t('verify_email_heading')}</h1>
           <p className="text-muted-foreground text-sm">
-            {email ? t('verify_email_body_with_email', { email }) : t('verify_email_body_no_email')}
+            {linkedEmail
+              ? t('verify_email_body_with_email', { email: linkedEmail })
+              : t('verify_email_body_no_email')}
           </p>
         </div>
 
@@ -87,18 +97,38 @@ export function VerifyEmailScreen() {
           </p>
         )}
 
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={!canResend}
-          className="bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring w-full rounded-full px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {status === 'sending'
-            ? t('verify_email_resend_sending')
-            : cooldown > 0
-              ? t('verify_email_resend_cooldown', { seconds: cooldown })
-              : t('verify_email_resend_button')}
-        </button>
+        <form onSubmit={handleResend} className="space-y-4">
+          {linkedEmail === null && (
+            <div className="text-left">
+              <label
+                htmlFor="verify-email-address"
+                className="text-foreground mb-1 block text-sm font-medium"
+              >
+                {t('email')}
+              </label>
+              <input
+                id="verify-email-address"
+                type="email"
+                autoComplete="email"
+                value={typedEmail}
+                onChange={(e) => setTypedEmail(e.target.value)}
+                className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={!canResend}
+            className="bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring w-full rounded-full px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {status === 'sending'
+              ? t('verify_email_resend_sending')
+              : cooldown > 0
+                ? t('verify_email_resend_cooldown', { seconds: cooldown })
+                : t('verify_email_resend_button')}
+          </button>
+        </form>
 
         {/* Spec §7.1c's ghost "Đổi địa chỉ email" points at "support/admin contact", and no
             such surface exists in this app yet — there is no self-service email-change flow

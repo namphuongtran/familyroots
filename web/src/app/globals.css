@@ -159,8 +159,14 @@
     own `border-destructive/30 bg-destructive/10 text-destructive` pattern, so
     no full four-token family was needed. Add the container pair the day a use
     actually needs a solid fill, not before.
+
+    That day was #200: the email-confirmation landing's success state is spec
+    § 7.1c's `success-container`, a solid fill. Both values are quoted from
+    § 2.1's status row, "Container `#D5E9DC`" and "On-container `#0C2A1B`".
   */
   --color-success: #2e6a4e;
+  --color-success-container: #d5e9dc;
+  --color-success-container-foreground: #0c2a1b;
 
   --color-popover: #ffffff;
   --color-popover-foreground: #1a1a1a;
@@ -390,8 +396,15 @@
     /*
       `success` is quoted from spec § 2.2's status line: "success #8FCFAA".
       ADR-055.
+
+      `success-container` is the same line's container, "#1B3A2A" (#200).
+      `success-container-foreground` is **derived**: § 2.2 publishes no dark
+      on-container, so it takes the token #8fcfaa as the ink, the order the dark
+      warning pair above already reads the line in.
     */
     --color-success: #8fcfaa;
+    --color-success-container: #1b3a2a;
+    --color-success-container-foreground: #8fcfaa;
   }
 }
 

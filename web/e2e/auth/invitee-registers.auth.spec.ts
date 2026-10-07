@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import type { components } from '../../src/generated/api-types'
-import { authStackInputs, mailCatcherOrigin, SEEDED_PASSWORD, SEEDED_USERS } from './fixtures'
+import { authStackInputs, SEEDED_PASSWORD, SEEDED_USERS } from './fixtures'
+import { mailedConfirmationLink } from './mail'
 
 /**
  * #196, ADR-058. A person with no account opens an invitation link, creates an account from it,
@@ -94,30 +95,6 @@ async function myClans(request: APIRequestContext, accessToken: string): Promise
   })
   expect(response.status(), await response.text()).toBe(200)
   return ((await response.json()) as { data: ClanMembership[] }).data
-}
-
-/** The confirmation link the local stack mailed to `email`, polled until it arrives. */
-async function confirmationLink(request: APIRequestContext, email: string): Promise<string> {
-  const mail = mailCatcherOrigin()
-  let id: string | undefined
-  await expect
-    .poll(
-      async () => {
-        const search = await request.get(`${mail}/api/v1/search`, {
-          params: { query: `to:"${email}"` },
-        })
-        const body = (await search.json()) as { messages: { ID: string }[] }
-        id = body.messages[0]?.ID
-        return id
-      },
-      { message: `no mail reached ${email} in Mailpit at ${mail}`, timeout: 30_000 },
-    )
-    .toBeTruthy()
-  const message = await request.get(`${mail}/api/v1/message/${id}`)
-  const { Text } = (await message.json()) as { Text: string }
-  const link = Text.match(/https?:\/\/[^\s)]+\/auth\/v1\/verify\?[^\s)]+/)?.[0]
-  if (!link) throw new Error(`the mail to ${email} carried no confirmation link:\n${Text}`)
-  return link
 }
 
 /** Everything the browser asked for, and every document it showed, from the first navigation on. */
@@ -339,7 +316,7 @@ test.describe('a person with no account joins through an invitation link', () =>
     })
 
     await test.step('confirms the address by the link the local stack mailed', async () => {
-      const link = await confirmationLink(request, inviteeEmail)
+      const link = await mailedConfirmationLink(request, inviteeEmail)
       const followed = await request.get(link, { maxRedirects: 0 })
       expect(followed.status()).toBe(303)
       // GoTrue reports a failed verification in the redirect's fragment, `#error=…`.

@@ -811,8 +811,24 @@ zustand keeps only `ui.store.ts`.
   the state is ready, `null` otherwise. `Header`, `Sidebar`, `SelectClanScreen` and
   `useCapabilities` read it rather than each testing `access.kind`.
 - **The screens live in `features/auth/ui/`**: `LoginScreen`, `RegisterScreen`,
-  `SelectClanScreen`, `PendingApprovalScreen`, `ClanSuspendedScreen`, `VerifyEmailScreen` and
-  `SupabaseSetupNotice`. Their `app/` pages only route.
+  `SelectClanScreen`, `PendingApprovalScreen`, `ClanSuspendedScreen`, `VerifyEmailScreen`,
+  `VerifyEmailConfirmScreen` and `SupabaseSetupNotice`. Their `app/` pages only route.
+- **The sign-up confirmation lands on `/{locale}/verify-email/confirm` (#200, ADR-063).** It reads
+  `token_hash` and `type=email` (`model/email-confirmation.ts`) and spends the hash only on the
+  press of **Xác nhận email**, through `useConfirmEmail()`, a mutation, because a query would run
+  on mount and an email scanner's fetch would spend it. Any failure, and a link it cannot spend,
+  shows the expired state. Success keeps the session Supabase answers with, and **Tiếp tục** goes
+  to `/{locale}/dashboard`, the entry the server guard routes from. Expired links to
+  `/{locale}/verify-email`, which since #200 asks for the address when the URL carries none.
+  `success-container` is new in `globals.css` for it; expired uses `accent`, the
+  `warning-container` stand-in `ClanSuspendedScreen` explains.
+- **A component test that needs the real Supabase browser client** stubs
+  `NEXT_PUBLIC_SUPABASE_URL` and `_ANON_KEY` with `vi.stubEnv` and serves GoTrue through MSW, so
+  what it counts is a request on the wire (`VerifyEmailConfirmScreen.test.tsx`). Two traps:
+  `createBrowserClient` returns one client per page under jsdom, and it keeps the session in
+  `document.cookie`, so a session one case saves reaches the next. Sign out and clear the cookies
+  after each case. The other auth tests use `shared/testing/supabase.ts`'s fake instead, which
+  counts method calls, not requests.
 - **`RegisterScreen` has an invitation mode (#196).** `/{locale}/register?from=invitation`, built by
   `inviteeRegisterPath` and read by `isInviteeRegister` (`model/invitee-register.ts`), drops the
   clan choice and sends `email`, `password` and `full_name` only, the body ADR-058 made the
@@ -1108,6 +1124,15 @@ pnpm test:e2e:auth
 values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
 
+**Twenty-three tests, 2026-10-07 (#200)**: three `auth-setup` logins and twenty `auth-chromium`
+cases, one run reading `23 passed` with no `429` in the backend log. #200 added
+`verify-email-confirm.auth.spec.ts`, one walk: register through `POST /auth/register`, read the
+confirmation from Mailpit, open `/vi/verify-email/confirm` with the hash, count no
+`POST /auth/v1/verify` on load and one on the press, then `GET /auth/me` with the access token
+read from the browser's `sb-…-auth-token` cookie, and the same link pressed again reads expired.
+Until #202's template reaches the local stack, the mail is GoTrue's default, and its link's
+`token` is the token hash, 56 hex characters. It spends one register and one `GET /auth/me`.
+Both walks now read Mailpit through `e2e/auth/mail.ts`.
 **Twenty-two tests, re-read 2026-10-07 (#226)**, with the recipe above, its backend at
 `RATE_LIMIT_AUTH_MAX_REQUESTS=1000`, and `.next`, `.next-auth-e2e` and `.next-banner-e2e` deleted
 before each run, so every route compiled cold. Two consecutive runs each read `22 passed`, with
