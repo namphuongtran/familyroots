@@ -36,6 +36,19 @@ const PLATFORM_CLANS_TITLE = 'Tất cả dòng họ'
  */
 const DASHBOARD_LOCATION = /\/vi\/dashboard$/
 
+/**
+ * **A setup is the first visit to every route it reads, and a run starts its own server.** On a
+ * cold `next dev` the first request to a route compiles it. With no `.next-auth-e2e` cache, read
+ * 2026-10-07 (#226): `GET /vi/login` in 19.7 s, `/vi/dashboard` in 15.9 s, `/vi/platform/clans`
+ * in 16.2 s, the three setups compiling at once. Each setup reads two or three such routes, so
+ * Playwright's default 30 s for the whole test failed two of the three that day, on a server no
+ * one had warmed. Each first reading waits `FIRST_VISIT`, the invitee walk's figure, and the
+ * test as a whole three of them. A warm route answers in about a second, so neither bound is
+ * reached on a warm server, and a sign-in that truly fails still fails, on the same reading.
+ */
+const FIRST_VISIT = { timeout: 45_000 }
+setup.describe.configure({ timeout: 3 * FIRST_VISIT.timeout })
+
 async function signIn(page: import('@playwright/test').Page, user: SeededUser): Promise<void> {
   await page.goto('/vi/login')
 
@@ -56,10 +69,10 @@ async function signIn(page: import('@playwright/test').Page, user: SeededUser): 
    *
    * Until #183 this polled for the Supabase cookie and left at once, because `/vi/dashboard` ran
    * away: 9037 `GET /auth/me` in twelve seconds, measured 2026-10-04, until the backend's
-   * 20-per-60-second limiter on `/api/v1/auth/*` (`backend/app/main.py:221-226`) answered 429.
-   * `dashboard.auth.spec.ts` counts the requests.
+   * 20-per-60-second limiter on `/api/v1/auth/*` answered 429. `dashboard.auth.spec.ts` counts
+   * the requests.
    */
-  await expect(page).not.toHaveURL(/\/vi\/login$/, { timeout: 30_000 })
+  await expect(page).not.toHaveURL(/\/vi\/login$/, FIRST_VISIT)
   const cookies = await page.context().cookies()
   expect(cookies.some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'))).toBe(true)
 }
@@ -77,7 +90,7 @@ setup('capture a real admin session, ending on the gated screen', async ({ page 
   // `page.goto` resolves on a redirect too, so the URL is read as well as the heading: a
   // bounce to `/vi/login` or `/vi/dashboard` would otherwise leave a green setup.
   await expect(page).toHaveURL(new RegExp(`${BACKOFFICE_PATH}$`))
-  await expect(page.locator('main h1')).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('main h1')).toBeVisible(FIRST_VISIT)
 
   await page.context().storageState({ path: user.storageState })
 })
@@ -91,7 +104,7 @@ setup('capture a real viewer session, refused the gated screen by role', async (
   // so the role gate is read without mounting anything. The guard answers a logged-in viewer,
   // who lacks `viewPendingUsers`, with a redirect to the dashboard — proof both that the
   // session is real and that the gate saw a role it refused.
-  const refused = await page.request.get(BACKOFFICE_PATH, { maxRedirects: 0 })
+  const refused = await page.request.get(BACKOFFICE_PATH, { maxRedirects: 0, ...FIRST_VISIT })
   expect(refused.status()).toBe(307)
   expect(refused.headers()['location']).toMatch(DASHBOARD_LOCATION)
 
@@ -107,9 +120,7 @@ setup('capture a real super_admin session, with no clan, ending on platform/', a
   // the access state, so where the sign-in itself landed is left to `guard.auth.spec.ts`.
   await page.goto('/vi/platform/clans')
   await expect(page).toHaveURL(/\/vi\/platform\/clans$/)
-  await expect(page.getByRole('heading', { name: PLATFORM_CLANS_TITLE })).toBeVisible({
-    timeout: 15_000,
-  })
+  await expect(page.getByRole('heading', { name: PLATFORM_CLANS_TITLE })).toBeVisible(FIRST_VISIT)
 
   await page.context().storageState({ path: user.storageState })
 })

@@ -993,7 +993,8 @@ reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting i
   two hashes can collide, and the auth origin has to be predictable for `CORS_ORIGINS`.
 - **`E2E_REUSE_SERVER=1` attaches**, to whatever already answers on each URL, as-is and with
   whatever env it was started with. It covers all three ports at once, so a server you meant to
-  reuse, such as a warm `:3102` (the authenticated harness's cold-compile trap, below), brings
+  reuse, such as a warm `:3102` (the authenticated harness's cold-compile trap, below, which the
+  setups no longer need since #226), brings
   whatever else answers on :3100 and :3101 with it. Check every port before you set it. Under `CI`
   a run never attaches, whatever this says.
 - **Who holds a port:** `lsof -nP -iTCP:3100 -sTCP:LISTEN` prints the listening PID, then
@@ -1127,10 +1128,16 @@ server; a second run, reusing the warm `:3102` server outside CI, passed them. S
 reuses a server only under `E2E_REUSE_SERVER=1`, and that variable reuses **every** port the run
 uses, :3100 and :3101 included, which `backoffice.auth.spec.ts`'s replay reads. So before running
 with it, check that each port is free or held by your own checkout ("Who holds a port"). On
-2026-10-05 the setup logins passed cold without it. **The full run
+2026-10-05 the setup logins passed cold without it. **#226 fixed the cold setups, 2026-10-07.**
+Re-measured with no `.next-auth-e2e` cache, the first `GET /vi/login` took 19.7 s,
+`/vi/dashboard` 15.9 s and `/vi/platform/clans` 16.2 s, and in three runs, each on a server
+Playwright had just started, the admin's and the viewer's setups failed at the 30 s test timeout.
+Each setup reads two or three routes for the first time, so each such reading now waits 45 s,
+the invitee walk's `FIRST_VISIT`, and the test 135 s (`session.setup.ts`). With no cache at all
+the three then took 26.5 s, 35.4 s and 36.2 s, and the run passed. **The full run
 spent the 20-per-minute bucket**: the server guard's `GET /auth/me` met a 429 (`Quá nhiều yêu
-cầu`) and `guard.auth.spec.ts`'s super_admin case read `500` where it expects `307`. #226 raised
-the harness backend's bucket instead (step 5 of "How to add the next authenticated route").
+cầu`) and `guard.auth.spec.ts`'s super_admin case read `500` where it expects `307`. Since #226
+the harness's backend allows 1000 (step 5 of "How to add the next authenticated route").
 **Eighteen tests as written on 2026-10-05 (#186)**: three `auth-setup` logins and fifteen
 `auth-chromium` cases. #186 added the super_admin's login and `guard.auth.spec.ts`'s five, and
 was written on a machine without Docker, so its pull request says whether they have been run.
