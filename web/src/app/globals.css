@@ -159,8 +159,20 @@
     own `border-destructive/30 bg-destructive/10 text-destructive` pattern, so
     no full four-token family was needed. Add the container pair the day a use
     actually needs a solid fill, not before.
+
+    That day was #200: the email-confirmation landing's success state is spec
+    § 7.1c's `success-container`, a solid fill. Both values are quoted from
+    § 2.1's status row, "Container `#D5E9DC`" and "On-container `#0C2A1B`".
+    Its expired state is § 7.1c's `warning-container`, quoted from the next
+    row, `#F8E6C6` and `#3A2400`. Only the container pairs: no use draws the
+    bare `warning` token yet. `accent` stays the stand-in that older screens
+    such as `ClanSuspendedScreen` use; moving them is their own change.
   */
   --color-success: #2e6a4e;
+  --color-success-container: #d5e9dc;
+  --color-success-container-foreground: #0c2a1b;
+  --color-warning-container: #f8e6c6;
+  --color-warning-container-foreground: #3a2400;
 
   --color-popover: #ffffff;
   --color-popover-foreground: #1a1a1a;
@@ -390,8 +402,19 @@
     /*
       `success` is quoted from spec § 2.2's status line: "success #8FCFAA".
       ADR-055.
+
+      `success-container` is the same line's container, "#1B3A2A" (#200).
+      `success-container-foreground` is **derived**: § 2.2 publishes no dark
+      on-container, so it takes the token #8fcfaa as the ink, the order the dark
+      warning pair above already reads the line in. `warning-container` is read
+      the same way from "warning #E8B563 / #3E2A06", so in dark it is the same
+      pair as `accent`.
     */
     --color-success: #8fcfaa;
+    --color-success-container: #1b3a2a;
+    --color-success-container-foreground: #8fcfaa;
+    --color-warning-container: #3e2a06;
+    --color-warning-container-foreground: #e8b563;
   }
 }
 

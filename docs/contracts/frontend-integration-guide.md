@@ -280,11 +280,15 @@ project's **Site URL**. A URL is allowed when it has the Site URL's scheme and h
 `internal/utilities/request.go:106-113`). The live values are recorded in
 [ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md).
 
-**Decided, not yet built (2026-10-04).** [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
+**Decided 2026-10-04, half built.** [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
 chose the `token_hash` row. The default link has a third trap: an email scanner that
-fetches it spends the token before the person clicks. The landing pages are #200 and
-#201. The templates move into the repository in #202, and the owner pushes them in #203.
-**Until #203, the hosted emails still carry the default link, and no page reads it.**
+fetches it spends the token before the person clicks. The confirmation landing,
+`/{locale}/verify-email/confirm`, is built (#200, 2026-10-07,
+`web/src/features/auth/ui/VerifyEmailConfirmScreen.tsx`): loading it sends nothing, a press
+sends one `POST /auth/v1/verify`, success keeps the session, and any failure shows the
+expired state. The reset pages are #201. The templates move into the repository in #202,
+and the owner pushes them in #203. **Until #203, the hosted emails still carry the default
+link, so no hosted email reaches the confirmation page yet.**
 
 ---
 

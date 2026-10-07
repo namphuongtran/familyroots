@@ -15,6 +15,9 @@
  * `docs/contracts/frontend-integration-guide.md` §1.2 documents no filter on `clans.is_active` —
  * but the "some other entry exists" check below is correct either way).
  *
+ * **#200 added `warning-container` to `globals.css`**, so the paragraph below is history: this
+ * screen still uses the `accent` stand-in, and moving it onto the spec token is its own change.
+ *
  * Spec §2.1's `warning-container`/`on-warning-container` tokens do not exist in
  * `globals.css`'s `@theme` (only `primary`, `heritage`, and the seventeen shadcn-style names do
  * — see `web/CLAUDE.md`, "Dependency rules" is silent on this, `.claude/rules/tailwind.md` §2

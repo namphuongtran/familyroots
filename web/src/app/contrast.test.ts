@@ -207,6 +207,9 @@ const CASES: readonly Case[] = [
   { text: 'secondary-foreground', on: 'secondary', floor: AA_NORMAL_TEXT },
   { text: 'destructive-foreground', on: 'destructive', floor: AA_NORMAL_TEXT },
   { text: 'accent-foreground', on: 'accent', floor: AA_NORMAL_TEXT },
+  // The confirmation landing's success and expired panels (#200).
+  { text: 'success-container-foreground', on: 'success-container', floor: AA_NORMAL_TEXT },
+  { text: 'warning-container-foreground', on: 'warning-container', floor: AA_NORMAL_TEXT },
 
   // Boundaries a user needs to find the control. WCAG 1.4.11, so 3:1.
   ...everyGround('input', NON_TEXT_BOUNDARY),

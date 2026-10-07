@@ -42,6 +42,20 @@ export async function signInWithOAuth(provider: OAuthProvider, locale: string): 
   if (error) throw error
 }
 
+/**
+ * Spends a sign-up confirmation link's `token_hash` (ADR-063 § 1). Supabase answers with a
+ * session, which the browser client saves, so the person is signed in when this resolves
+ * (§ 3). A spent, expired or unknown hash comes back as `{ error }`, `otp_expired`, and is
+ * thrown as it came.
+ *
+ * Only a press may call this, never a page load (§ 2): an email scanner fetches the link, and a
+ * fetch must not spend it.
+ */
+export async function verifyEmailLink(tokenHash: string): Promise<void> {
+  const { error } = await requireClient().auth.verifyOtp({ type: 'email', token_hash: tokenHash })
+  if (error) throw error
+}
+
 export async function signOut(): Promise<void> {
   await createClientOrNull()?.auth.signOut()
 }

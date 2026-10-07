@@ -111,7 +111,9 @@ variant of the seventeen names. So do the primary family `bg-primary`,
 `text-primary-foreground`, `bg-primary-container`, `text-primary-container-foreground` and
 their `hover:` twins `bg-primary-hover` and `bg-primary-container-hover`; the heritage family
 `bg-heritage`, `text-heritage-foreground`, `bg-heritage-container`,
-`text-heritage-container-foreground`; `cream-50` to `cream-400`, `gold-100` to `gold-900`,
+`text-heritage-container-foreground`; the status tokens `text-success` (ADR-055), and
+`bg-success-container`, `text-success-container-foreground`, `bg-warning-container` and
+`text-warning-container-foreground` (#200, quoted from spec § 2.1 and § 2.2); `cream-50` to `cream-400`, `gold-100` to `gold-900`,
 `font-serif`, `font-sans`, `font-mono`, `rounded-sm`, `rounded-md`, `rounded-lg`, and the three
 `animate-*` values. Note that § 5 forbids `rounded-sm` on design grounds even though it resolves.
 
@@ -162,7 +164,7 @@ Four things to know before you touch these:
   No token holds `#8a6a16` today, so there is still no legal way to draw gold text.
 
 **`web/src/app/contrast.test.ts` holds all of it in the unit gate.** It parses the hex values out of
-`globals.css` and computes 30 pairs, so a value that drops below AA fails `pnpm test:unit`. Move the
+`globals.css` and computes 35 pairs per scheme (re-counted 2026-10-07, #200), so a value that drops below AA fails `pnpm test:unit`. Move the
 token, never the threshold. It throws rather than skipping when a token is renamed, because a pair
 table that silently resolves to nothing passes every assertion.
 
