@@ -56,6 +56,30 @@ export async function verifyEmailLink(tokenHash: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Spends a password-reset link's `token_hash` (ADR-063 § 1). Supabase answers with a session,
+ * which the browser client saves, so `updatePassword` can run next. A spent, expired or unknown
+ * hash comes back as `{ error }` and is thrown as it came.
+ *
+ * Only a submit may call this, never a page load (§ 2), for `verifyEmailLink`'s reason.
+ */
+export async function verifyRecoveryLink(tokenHash: string): Promise<void> {
+  const { error } = await requireClient().auth.verifyOtp({
+    type: 'recovery',
+    token_hash: tokenHash,
+  })
+  if (error) throw error
+}
+
+/**
+ * Sets the signed-in person's password: `PUT /auth/v1/user`, on the session the browser client
+ * holds. A refusal, such as `weak_password`, is thrown as it came.
+ */
+export async function updatePassword(password: string): Promise<void> {
+  const { error } = await requireClient().auth.updateUser({ password })
+  if (error) throw error
+}
+
 export async function signOut(): Promise<void> {
   await createClientOrNull()?.auth.signOut()
 }

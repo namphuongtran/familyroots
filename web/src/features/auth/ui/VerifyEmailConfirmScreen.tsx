@@ -21,18 +21,16 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { CircleAlert, CircleCheck, LoaderCircle, MailCheck } from 'lucide-react'
-import { cn } from '@/lib/utils/cn'
 import { useConfirmEmail } from '../hooks/use-confirm-email'
-import { confirmationTokenHash } from '../model/email-confirmation'
-
-const PRIMARY_ACTION =
-  'bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring inline-flex w-full justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden'
+import { emailLinkTokenHash } from '../model/email-link'
+import { PRIMARY_ACTION, SECONDARY_LINK } from './auth-action-classes'
+import { AuthOutcome } from './AuthOutcome'
 
 export function VerifyEmailConfirmScreen() {
   const t = useTranslations('auth')
   const tMemberForm = useTranslations('member_form')
   const locale = useLocale()
-  const tokenHash = confirmationTokenHash(useSearchParams())
+  const tokenHash = emailLinkTokenHash(useSearchParams(), 'email')
   const { state, confirm } = useConfirmEmail()
   const shown = tokenHash === null ? 'expired' : state
 
@@ -45,7 +43,7 @@ export function VerifyEmailConfirmScreen() {
 
   if (shown === 'success') {
     return (
-      <Outcome
+      <AuthOutcome
         tone="bg-success-container text-success-container-foreground"
         icon={<CircleCheck className="mx-auto h-12 w-12" aria-hidden="true" />}
         heading={t('verify_confirm_success_heading')}
@@ -55,13 +53,13 @@ export function VerifyEmailConfirmScreen() {
         <Link href={`/${locale}/dashboard`} className={PRIMARY_ACTION}>
           {tMemberForm('continue_label')}
         </Link>
-      </Outcome>
+      </AuthOutcome>
     )
   }
 
   if (shown === 'expired') {
     return (
-      <Outcome
+      <AuthOutcome
         tone="bg-warning-container text-warning-container-foreground"
         icon={<CircleAlert className="mx-auto h-12 w-12" aria-hidden="true" />}
         heading={t('verify_confirm_expired_heading')}
@@ -71,13 +69,10 @@ export function VerifyEmailConfirmScreen() {
         <Link href={`/${locale}/verify-email`} className={PRIMARY_ACTION}>
           {t('verify_email_resend_button')}
         </Link>
-        <Link
-          href={`/${locale}/login`}
-          className="text-primary inline-flex text-sm hover:underline"
-        >
+        <Link href={`/${locale}/login`} className={SECONDARY_LINK}>
           {t('verify_email_back_to_login')}
         </Link>
-      </Outcome>
+      </AuthOutcome>
     )
   }
 
@@ -115,39 +110,6 @@ export function VerifyEmailConfirmScreen() {
             {t('verify_confirm_button')}
           </button>
         )}
-      </div>
-    </div>
-  )
-}
-
-/** The success and expired states: a tinted panel, and the actions below it on the page ground. */
-function Outcome({
-  tone,
-  icon,
-  heading,
-  headingRef,
-  body,
-  children,
-}: {
-  /** The panel's ground and ink, a container token pair. */
-  tone: string
-  icon: React.ReactNode
-  heading: string
-  headingRef: React.RefObject<HTMLHeadingElement | null>
-  body: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="bg-background flex min-h-screen items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm space-y-6 text-center">
-        <div className={cn('space-y-4 rounded-2xl px-6 py-8', tone)}>
-          {icon}
-          <h1 ref={headingRef} tabIndex={-1} className="font-serif text-2xl focus:outline-hidden">
-            {heading}
-          </h1>
-          <p className="text-sm">{body}</p>
-        </div>
-        <div className="flex flex-col items-center gap-3">{children}</div>
       </div>
     </div>
   )

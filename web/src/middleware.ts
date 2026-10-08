@@ -25,6 +25,11 @@ const PUBLIC_ROUTES = [
   '/pending-approval',
   '/verify-email',
   '/clan-suspended',
+  // `/forgot-password` and `/reset-password` (#201) are public for the invitation route's reason
+  // below, not the race above: the visitor has forgotten their password, so has no session, and
+  // a redirect to login would drop the reset link's `token_hash` from the URL.
+  '/forgot-password',
+  '/reset-password',
   // `/invitations/{token}` joined the list with the invitation page, and it is the one entry
   // here that is public for a different reason from all the others. Every route
   // above is public because a session check can race a sign-in that just happened.

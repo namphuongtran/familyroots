@@ -812,19 +812,35 @@ zustand keeps only `ui.store.ts`.
   `useCapabilities` read it rather than each testing `access.kind`.
 - **The screens live in `features/auth/ui/`**: `LoginScreen`, `RegisterScreen`,
   `SelectClanScreen`, `PendingApprovalScreen`, `ClanSuspendedScreen`, `VerifyEmailScreen`,
-  `VerifyEmailConfirmScreen` and `SupabaseSetupNotice`. Their `app/` pages only route.
+  `VerifyEmailConfirmScreen`, `ForgotPasswordScreen`, `ResetPasswordScreen` and
+  `SupabaseSetupNotice`. Their `app/` pages only route. `AuthWordmark` and `AuthOutcome` are
+  shared parts, not screens: the sign-in wordmark, and the tinted success or expired panel of an
+  email-link landing. `auth-action-classes.ts` holds the primary pill and the secondary link,
+  which keeps T-03's 44px target.
 - **The sign-up confirmation lands on `/{locale}/verify-email/confirm` (#200, ADR-063).** It reads
-  `token_hash` and `type=email` (`model/email-confirmation.ts`) and spends the hash only on the
-  press of **Xác nhận email**, through `useConfirmEmail()`, a mutation, because a query would run
+  `token_hash` and `type=email` (`model/email-link.ts`, since #201 one reader for both links)
+  and spends the hash only on the press of **Xác nhận email**, through `useConfirmEmail()`, a mutation, because a query would run
   on mount and an email scanner's fetch would spend it. Any failure, and a link it cannot spend,
   shows the expired state. Success keeps the session Supabase answers with, and **Tiếp tục** goes
   to `/{locale}/dashboard`, the entry the server guard routes from. Expired links to
   `/{locale}/verify-email`, which since #200 asks for the address when the URL carries none.
   `success-container` and `warning-container` are new in `globals.css` for it, quoted from spec
   § 2.1. `ClanSuspendedScreen` still uses `accent`, the older stand-in.
+- **Forgot and reset password (#201, ADR-063).** The sign-in screen links **Quên mật khẩu?** to
+  `/{locale}/forgot-password`, which sends `POST /auth/forgot-password` and shows one message of
+  its own for every 200 (ADR-021), and the rate-limit message on a 429. `/{locale}/reset-password`
+  reads `token_hash` and `type=recovery` (`model/email-link.ts`) and shows the
+  new-password form at once. `useResetPassword()` spends the hash on the first submit only:
+  `verifyOtp`, then `updateUser`. A refused password (`weak_password`, `same_password`) stays on
+  the form, and the next submit calls `updateUser` alone, on the session the verify saved; a
+  second verify would answer 403 and read as expired. A refused verify, and a link the page cannot
+  spend, show the expired state, which links to `/forgot-password`. Success keeps the session,
+  and **Tiếp tục** goes to `/{locale}/dashboard`. Both routes are in `PUBLIC_ROUTES`, because the
+  person has no session and a redirect to login would drop the hash.
 - **A component test that needs the real Supabase browser client** stubs
   `NEXT_PUBLIC_SUPABASE_URL` and `_ANON_KEY` with `vi.stubEnv` and serves GoTrue through MSW, so
-  what it counts is a request on the wire (`VerifyEmailConfirmScreen.test.tsx`). Two traps:
+  what it counts is a request on the wire (`VerifyEmailConfirmScreen.test.tsx`,
+  `ResetPasswordScreen.test.tsx`, which also reads the order). Two traps:
   `createBrowserClient` returns one client per page under jsdom, and it keeps the session in
   `document.cookie`, so a session one case saves reaches the next. Sign out and clear the cookies
   after each case. The other auth tests use `shared/testing/supabase.ts`'s fake instead, which
@@ -1124,6 +1140,28 @@ pnpm test:e2e:auth
 values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
 
+**Twenty-four tests, 2026-10-08 (#201)**: three `auth-setup` logins and twenty-one
+`auth-chromium` cases. #201 added `reset-password.auth.spec.ts`, one walk as `editor@`, the one
+seeded member no setup signs in as: from `/vi/login`'s **Quên mật khẩu?** to
+`/vi/forgot-password`, the recovery mail read from Mailpit (`mail.ts`'s `newMail`, which skips the
+mail earlier runs left in a seeded inbox), `/vi/reset-password` with the hash counting no GoTrue
+request on load and `verify` then `update` on the submit, `GET /auth/me` with the kept session,
+then a local sign-out, the old password refused (400 from the password grant), the new one landing
+on `/vi/dashboard`, and the same link submitted again reading expired. A `finally` puts the seeded
+password back through GoTrue whatever failed, because `make seed` cannot repair a password. Four
+full runs, none with a `429`, two of them failing one case each in a spec whose path #201 does not
+change, and each case passing alone right after:
+
+| Run (UTC)        | Reading             | The one failure                                                                                                      |
+| ---------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-07 23:44 | 23 passed, 1 failed | `guard.auth.spec.ts`'s super_admin "opening the dashboard": its 5 s `toHaveURL` read `/vi/select-clan`; alone 8 of 8 |
+| 2026-10-07 23:51 | 24 passed           |                                                                                                                      |
+| 2026-10-08 12:13 | 23 passed, 1 failed | `verify-email-confirm.auth.spec.ts`: `waitForLoadState('networkidle')` never settled in 180 s; alone 4 of 4, 8.2 s   |
+| 2026-10-08 12:21 | 24 passed           |                                                                                                                      |
+
+Both read as timing on a cold dev server running three workers, not as a defect, and neither is
+explained yet. The second is the one to watch: a page that never goes network-idle stalls any walk
+that waits for it, `reset-password.auth.spec.ts` included.
 **Twenty-three tests, 2026-10-07 (#200)**: three `auth-setup` logins and twenty `auth-chromium`
 cases, one run reading `23 passed` with no `429` in the backend log. #200 added
 `verify-email-confirm.auth.spec.ts`, one walk: register through `POST /auth/register`, read the

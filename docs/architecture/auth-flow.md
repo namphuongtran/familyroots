@@ -72,7 +72,9 @@ never a JWT claim or env match. Bootstrap via `scripts/bootstrap_super_admin.py`
 - Password-reset **completion is client-side** (Supabase `verify_otp` + `update_user`);
   the backend has no reset-password endpoint by design. Both email links land as a
   `token_hash` on a web page of ours, spent only by a user action (ADR-063, built by
-  #200 to #203).
+  #200 to #203). The web pages are built: `/{locale}/verify-email/confirm` (#200), and
+  `/{locale}/forgot-password` with `/{locale}/reset-password` (#201). The templates that link
+  them are #202 and #203.
 - Ops prerequisite: Supabase dashboard "Confirm email" ON + SMTP configured.
 
 ## Error semantics

@@ -280,15 +280,17 @@ project's **Site URL**. A URL is allowed when it has the Site URL's scheme and h
 `internal/utilities/request.go:106-113`). The live values are recorded in
 [ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md).
 
-**Decided 2026-10-04, half built.** [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
+**Decided 2026-10-04; both landings built.** [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
 chose the `token_hash` row. The default link has a third trap: an email scanner that
 fetches it spends the token before the person clicks. The confirmation landing,
 `/{locale}/verify-email/confirm`, is built (#200, 2026-10-07,
 `web/src/features/auth/ui/VerifyEmailConfirmScreen.tsx`): loading it sends nothing, a press
 sends one `POST /auth/v1/verify`, success keeps the session, and any failure shows the
-expired state. The reset pages are #201. The templates move into the repository in #202,
-and the owner pushes them in #203. **Until #203, the hosted emails still carry the default
-link, so no hosted email reaches the confirmation page yet.**
+expired state. The reset landing, `/{locale}/reset-password`, is built (#201, 2026-10-08,
+`web/src/features/auth/ui/ResetPasswordScreen.tsx`), with `/{locale}/forgot-password` and the
+sign-in screen's link to it; § 4 has its sequence. The templates move into the repository in
+#202, and the owner pushes them in #203. **Until #203, the hosted emails still carry the
+default link, so no hosted email reaches either page yet.**
 
 ---
 
@@ -298,12 +300,14 @@ Code: `app/api/v1/auth.py` (`forgot_password`),
 `supabase_identity_provider.py` (`send_password_reset`), `rest-auth-api.md`.
 
 1. `POST /api/v1/auth/forgot-password` `{"email"}` — always 200 with the same message
-   (non-enumerating; provider failures are swallowed). Sends a Supabase recovery
+   (non-enumerating; provider failures are swallowed). The web sends it from
+   `/{locale}/forgot-password`, linked as **Quên mật khẩu?** from the sign-in screen, and shows
+   one message of its own for every 200; a 429 `rate_limited` shows the rate-limit message. Sends a Supabase recovery
    email with `redirect_to = PASSWORD_RESET_REDIRECT_URL` when configured (else the
    Supabase Site URL).
 2. The email link lands in one of the two shapes in §3.1, with `type=recovery`. With
    the default template it is a URL fragment that carries a session. ADR-063 decides
-   the `token_hash` shape, landing on `/{locale}/reset-password` (#201).
+   the `token_hash` shape, landing on `/{locale}/reset-password`, built by #201.
 3. The client completes the reset **entirely via the Supabase SDK**. The backend has
    no reset-password endpoint, by design. It establishes the session from the link,
    then sets the password. Under ADR-063 § 2, both calls run on the form's one submit,
@@ -319,7 +323,14 @@ await supabase.auth.updateUser({ password: newPassword })
 ```
 
 4. Keep the session and go on to the server guard's entry (ADR-063 § 3). This
-   replaces "route to login".
+   replaces "route to login". On the web, **Tiếp tục** goes to `/{locale}/dashboard`.
+
+**What the web page does (#201).** The new-password form shows at once, and loading it sends
+nothing. A missing `token_hash`, a `type` other than `recovery`, or a refused verify shows the
+expired state, which links to `/{locale}/forgot-password`. GoTrue refuses a new password with
+`422 weak_password` (below its minimum length) or `422 same_password`; the page names each on
+the form, and the next submit sends `PUT /auth/v1/user` only, on the session the first verify
+saved.
 
 ---
 

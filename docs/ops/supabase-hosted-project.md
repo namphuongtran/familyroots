@@ -146,9 +146,9 @@ and host (any port, for a loopback host), or when it is listed under Redirect UR
 
 Both the **Confirm signup** and **Reset Password** templates must link `{{ .ConfirmationURL }}`
 until #203 pushes the repository's templates. [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
-decided on 2026-10-04 that both will link a `token_hash` page of ours. Pushing that earlier would
-leave resets unfinishable, because the reset pages (#201) do not exist yet. The confirmation page
-(#200) does since 2026-10-07. Until then, these are the Supabase default bodies:
+decided on 2026-10-04 that both will link a `token_hash` page of ours. Both pages exist now: the
+confirmation page (#200) since 2026-10-07 and the reset pages (#201) since 2026-10-08. The
+templates still wait on #202 and #203. Until then, these are the Supabase default bodies:
 
 ```html
 <h2>Confirm your signup</h2>

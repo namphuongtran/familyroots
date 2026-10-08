@@ -74,6 +74,15 @@ export async function updateProfile(
   unwrapData(body, (raw) => messageDataDtoSchema.parse(raw))
 }
 
+/**
+ * Asks for a recovery email. The 200's message is read and dropped: it is the same for every
+ * address, and the screen shows its own.
+ */
+export async function forgotPassword(email: string, options: AuthApiCallOptions): Promise<void> {
+  const body = await api.forgotPassword(email, options)
+  unwrapData(body, (raw) => messageDataDtoSchema.parse(raw))
+}
+
 export async function resendVerification(
   email: string,
   options: AuthApiCallOptions,

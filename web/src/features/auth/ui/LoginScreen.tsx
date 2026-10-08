@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useLocale, useTranslations } from 'next-intl'
 import { useAuthActions } from '../hooks/use-auth-actions'
+import { SECONDARY_LINK } from './auth-action-classes'
+import { AuthWordmark } from './AuthWordmark'
 import { SupabaseSetupNotice } from './SupabaseSetupNotice'
 
 /**
@@ -49,23 +51,7 @@ export function LoginScreen() {
   return (
     <div className="bg-background flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
-        {/* Logo / Brand */}
-        <div className="text-center">
-          {/*
-            Not copy: the product name, one literal in every locale, never a message key.
-            `<wbr />` is load-bearing, not a typo: `FamilyRoots` is one unbreakable
-            word, so at 320dp and 200% text scale it overflowed the `max-w-sm`
-            column and scrolled the whole page sideways (T-04). A break
-            opportunity is used only when the line does not fit, so the mark stays
-            on one line at every normal size, and the text content stays one word.
-          */}
-          <h1 className="text-primary font-serif text-3xl">
-            Family
-            <wbr />
-            Roots
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">{t('login_subtitle')}</p>
-        </div>
+        <AuthWordmark subtitle={t('login_subtitle')} />
 
         <SupabaseSetupNotice />
 
@@ -127,6 +113,13 @@ export function LoginScreen() {
               onChange={(e) => setPassword(e.target.value)}
               className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
+            {/* Spec § 7.1a: a ghost text action, right-aligned under the password field, with
+                T-03's 44px target. */}
+            <div className="flex justify-end">
+              <Link href={`/${locale}/forgot-password`} className={SECONDARY_LINK}>
+                {t('forgot_password_link')}
+              </Link>
+            </div>
           </div>
 
           <button

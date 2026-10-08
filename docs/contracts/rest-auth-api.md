@@ -78,9 +78,10 @@ Request/response expectations:
   web page `/{locale}/reset-password` with a `token_hash`/`type=recovery`, and one
   submit there calls the Supabase SDK `verify_otp({type:'recovery', token_hash})`
   then `update_user({password})` (ADR-063; mobile users finish there too). The
-  backend has no `reset-password` endpoint by design. **Decided, not yet built**:
-  until #201 and #203 land, the hosted email still carries Supabase's default link
-  ([frontend-integration-guide.md](frontend-integration-guide.md) § 3.1).
+  backend has no `reset-password` endpoint by design. The web pages are built (#201,
+  `/{locale}/forgot-password` and `/{locale}/reset-password`), but until #203 lands the
+  hosted email still carries Supabase's default link
+  ([frontend-integration-guide.md](frontend-integration-guide.md) § 3.1 and § 4).
 
 ### The join identifier: `clan_code` now, `clan_id` for one more release
 

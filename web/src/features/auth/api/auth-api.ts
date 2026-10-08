@@ -46,6 +46,11 @@ export function onboard(body: OnboardInput, options: AuthApiCallOptions): Promis
   return apiFetch('/auth/onboard', { ...options, method: 'POST', body })
 }
 
+/** `POST /auth/forgot-password`: 200 always, non-enumerating (ADR-021). */
+export function forgotPassword(email: string, options: AuthApiCallOptions): Promise<unknown> {
+  return apiFetch('/auth/forgot-password', { ...options, method: 'POST', body: { email } })
+}
+
 /** `POST /auth/resend-verification`: 200 always, non-enumerating. */
 export function resendVerification(email: string, options: AuthApiCallOptions): Promise<unknown> {
   return apiFetch('/auth/resend-verification', { ...options, method: 'POST', body: { email } })
