@@ -150,3 +150,34 @@ describe('the invitation route is public, so the token survives the first reques
     expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
   })
 })
+
+/**
+ * #201. A person who has forgotten their password has no session, so both pages must reach them.
+ * `/reset-password` must keep its query too: redirected to `/{locale}/login`, the `token_hash`
+ * the email carried would be gone.
+ */
+describe('the password-reset routes are public', () => {
+  const TOKEN_HASH = 'f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b'
+
+  beforeEach(() => {
+    currentSession = null
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key')
+  })
+
+  it.each(['/forgot-password', `/reset-password?token_hash=${TOKEN_HASH}&type=recovery`])(
+    'lets a signed-out visitor reach %s on every locale',
+    async (path) => {
+      for (const locale of ['vi', 'en', 'zh', 'fr']) {
+        const response = await middleware(requestFor(`/${locale}${path}`))
+        expect(response.headers.get('location'), locale).toBeNull()
+      }
+    },
+  )
+
+  it('and a non-public route in the same run still redirects, so the check is real', async () => {
+    const response = await middleware(requestFor('/vi/members'))
+
+    expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
+  })
+})

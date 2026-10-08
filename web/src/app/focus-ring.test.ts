@@ -29,7 +29,13 @@ const sourceFiles = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
     if (entry.isDirectory()) return sourceFiles(path)
-    return entry.name.endsWith('.tsx') ? [path] : []
+    // `.ts` too since #201, whose shared button classes live in `auth-action-classes.ts`, a module
+    // with no JSX. A `.tsx`-only walk passed over it. Not `.test.ts`: this file is one, and it
+    // names the class in its own prose and filter.
+    const isSource =
+      entry.name.endsWith('.tsx') ||
+      (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
+    return isSource ? [path] : []
   })
 
 const focusRingLines = sourceFiles(SRC).flatMap((path) =>

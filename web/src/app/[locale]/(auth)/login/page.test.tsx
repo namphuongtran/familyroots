@@ -2,8 +2,9 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import LoginPage from './page'
-import { renderWithProviders } from '@/shared/testing/render'
+import { expected, renderWithProviders } from '@/shared/testing/render'
 import messages from '../../../../../messages/vi.json'
+import enMessages from '../../../../../messages/en.json'
 
 /**
  * the login-label fix. The end state is "every input on the sign-in screen has an accessible name
@@ -58,5 +59,19 @@ describe('the sign-in form labels name their inputs', () => {
     await user.click(screen.getByText(messages.auth.password))
 
     expect(screen.getByLabelText(messages.auth.password)).toHaveFocus()
+  })
+})
+
+/** #201: the sign-in screen is where a person who has forgotten their password starts. */
+describe('the sign-in screen links to the forgot-password page', () => {
+  it.each([
+    ['vi', messages],
+    ['en', enMessages],
+  ] as const)('in %s, under the URL’s locale', (locale, localeMessages) => {
+    renderWithProviders(<LoginPage />, { locale, messages: localeMessages })
+
+    expect(
+      screen.getByRole('link', { name: expected(localeMessages.auth.forgot_password_link) }),
+    ).toHaveAttribute('href', `/${locale}/forgot-password`)
   })
 })

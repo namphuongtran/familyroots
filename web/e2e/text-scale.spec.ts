@@ -22,13 +22,20 @@ const NARROW_VIEWPORT = { width: 320, height: 640 }
 const DOUBLED_ROOT_FONT_SIZE = '32px'
 
 /**
- * The two routes reachable without a Supabase session, and the login page once more under a
+ * The form routes reachable without a Supabase session, and the login page once more under a
  * second locale. `/en/login` is there for the wordmark (#197): the product name is one literal
  * in every locale, so it reads `FamilyRoots` under `en` as under `vi`. Negative control,
  * 2026-10-06, with the wordmark planted as `t('login_title')`: the `/en/login` wordmark case read
- * `Sign In` against `FamilyRoots`.
+ * `Sign In` against `FamilyRoots`. #201 added the forgot and reset pages, which carry the same
+ * wordmark; the reset page shows its form only for a link it can spend, so it gets one.
  */
-const PUBLIC_PAGES = ['/vi/login', '/vi/register', '/en/login']
+const PUBLIC_PAGES = [
+  '/vi/login',
+  '/vi/register',
+  '/en/login',
+  '/vi/forgot-password',
+  '/vi/reset-password?token_hash=f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b&type=recovery',
+]
 
 async function loadAtDoubledTextScale(
   page: import('@playwright/test').Page,

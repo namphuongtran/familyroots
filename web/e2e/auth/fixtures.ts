@@ -147,9 +147,9 @@ export function authStackInputs(): {
 
 /**
  * The local stack's mail catcher, `E2E_AUTH_MAIL_URL`: Mailpit, `http://127.0.0.1:54324` under the
- * pinned CLI (`docs/ops/local-supabase.md`). Only `invitee-registers.auth.spec.ts` (#196) and
- * `verify-email-confirm.auth.spec.ts` (#200) read it, through `mail.ts`, to confirm an address by
- * the link the stack mailed, the way a person would. Required and not
+ * pinned CLI (`docs/ops/local-supabase.md`). Only `invitee-registers.auth.spec.ts` (#196),
+ * `verify-email-confirm.auth.spec.ts` (#200) and `reset-password.auth.spec.ts` (#201) read it,
+ * through `mail.ts`, to follow the link the stack mailed, the way a person would. Required and not
  * defaulted, for the reason `authStackInputs` gives, and read here rather than there so that the
  * other specs do not need it.
  */
@@ -157,8 +157,8 @@ export function mailCatcherOrigin(): string {
   const value = process.env.E2E_AUTH_MAIL_URL
   if (!value) {
     throw new Error(
-      'E2E_AUTH_MAIL_URL is missing. invitee-registers.auth.spec.ts and ' +
-        'verify-email-confirm.auth.spec.ts confirm a new address ' +
+      'E2E_AUTH_MAIL_URL is missing. invitee-registers.auth.spec.ts, ' +
+        'verify-email-confirm.auth.spec.ts and reset-password.auth.spec.ts follow a mailed link ' +
         "through the local stack's mail catcher, Mailpit, at http://127.0.0.1:54324 under the " +
         'pinned CLI. See web/CLAUDE.md, "The authenticated e2e harness".',
     )
