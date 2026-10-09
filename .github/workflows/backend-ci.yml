@@ -10,9 +10,14 @@ on:
       # and scripts/ SQL, both the .sql files a shell script feeds to psql and
       # the statements a shell script runs inline through psql -c. Without
       # these filters a pull request that only touches those paths runs no gate at all.
+      # supabase/ since #202: test_auth_email_templates.py reads the two auth email
+      # templates and both configs that carry them, and the hosted-only one,
+      # supabase/supabase/config.toml, is where docs/ops/supabase-hosted-project.md
+      # trap 4 bites. image-e2e reads the local config, never that one.
       - "docs/ops/migrations.md"
       - "infra/**"
       - "scripts/**"
+      - "supabase/**"
   pull_request:
     branches: [main, develop]
     paths:
@@ -20,6 +25,7 @@ on:
       - "docs/ops/migrations.md"
       - "infra/**"
       - "scripts/**"
+      - "supabase/**"
 
 defaults:
   run:

@@ -1,19 +1,26 @@
 import { expect, test, type Page } from '@playwright/test'
 import { authStackInputs } from './fixtures'
-import { mailedConfirmation } from './mail'
+import {
+  mailedConfirmation,
+  onOrigin,
+  readsVietnameseFirst,
+  tokenHashLink,
+  type Headings,
+} from './mail'
 import { browserAccessToken } from './session-cookie'
 
 /**
  * #200, ADR-063. A person confirms a new address on `/vi/verify-email/confirm`, and the session
  * the confirmation hands back is one the backend accepts.
  *
- * **The link is built here, from what the local stack mailed.** Until the template issue (#202)
- * reaches the local stack, its confirmation mail is Supabase's default: one link to GoTrue's own
- * `/auth/v1/verify?token=…&type=signup&redirect_to=…`. That `token` is the token hash, the value
- * `{{ .TokenHash }}` will carry, because GoTrue builds the default link from the hash it stores
- * (56 hex characters, a SHA-224). So this walk reads `token` off that link and opens
- * `/vi/verify-email/confirm?token_hash=<it>&type=email`. A successful verify is what proves the
- * value was right; a wrong one reads as the expired state, and the success step fails.
+ * **The link is the one the local stack mailed** (#202). The stack renders
+ * `supabase/templates/confirmation.html`, which links
+ * `{{ .SiteURL }}/verify-email/confirm?token_hash={{ .TokenHash }}&type=email` (ADR-063 § 1). The
+ * walk checks that shape, then opens the link with the harness's origin in place of the Site URL's
+ * and the path and query unchanged. The path carries no locale, so the middleware's redirect to
+ * `/vi/verify-email/confirm` has to keep the query, and the walk reads that it did. A successful
+ * verify is what proves the hash right; a wrong one reads as the expired state, and the success
+ * step fails. The mail must also read Vietnamese first (§ 7).
  *
  * **What the local stack sent is attached** to each run as an annotation, with the hash replaced.
  * `supabase/config.toml` sets `enable_confirmations = false`, but the backend creates the identity
@@ -43,6 +50,9 @@ const COPY = {
   resend: 'Gửi lại thư xác thực',
 } as const
 
+/** `supabase/templates/confirmation.html`: its Vietnamese heading, then its English one. */
+const MAIL: Headings = { vi: 'Xác nhận địa chỉ email', en: 'Confirm your email address' }
+
 const PASSWORD = 'confirm-password-200'
 
 /** A cold `next dev` compiles a route on its first visit (web/CLAUDE.md, "The authenticated e2e harness"). */
@@ -67,10 +77,12 @@ test.describe('a person confirms a new address on /vi/verify-email/confirm', () 
   test('loading spends nothing, a press confirms and keeps the session, a second press reads expired', async ({
     page,
     request,
+    baseURL,
   }) => {
     const email = `confirm-200-${crypto.randomUUID()}@familyroots.example.com`
     const verifies = countVerify(page)
-    let confirmPath = ''
+    let confirmLink = ''
+    let tokenQuery = ''
 
     await test.step('registers through POST /auth/register', async () => {
       const response = await request.post(`${authStackInputs().apiOrigin}/api/v1/auth/register`, {
@@ -79,23 +91,25 @@ test.describe('a person confirms a new address on /vi/verify-email/confirm', () 
       expect(response.status(), await response.text()).toBe(201)
     })
 
-    await test.step('derives the token hash from the mail the local stack sent', async () => {
+    await test.step('takes the link from the mail the local stack sent', async () => {
       const mail = await mailedConfirmation(request, email)
-      const link = new URL(mail.link)
-      const tokenHash = link.searchParams.get('token') ?? ''
-      expect(tokenHash, `the default link's token is the hash: ${mail.link}`).toMatch(
-        /^[0-9a-f]{56}$/,
-      )
+      const { tokenHash, search } = tokenHashLink(mail, '/verify-email/confirm', 'email')
+      expect(readsVietnameseFirst(mail, MAIL), 'the mail reads Vietnamese first').toBe(true)
       test.info().annotations.push({
         type: 'what the local stack sent',
         description: `subject "${mail.subject}"; ${mail.text.replaceAll(tokenHash, '<token_hash>')}`,
       })
-      confirmPath = `/vi/verify-email/confirm?token_hash=${tokenHash}&type=email`
+      // The harness's origin stands in for the Site URL's, where nothing listens (`mail.ts`).
+      confirmLink = onOrigin(mail.link, baseURL)
+      tokenQuery = search
     })
 
     await test.step('loading the page spends nothing', async () => {
-      await page.goto(confirmPath)
+      await page.goto(confirmLink)
       await expect(page.getByRole('heading', { name: COPY.ready })).toBeVisible(FIRST_VISIT)
+      // The link carries no locale; the reader's is Vietnamese, and the query survived the redirect.
+      expect(new URL(page.url()).pathname).toBe('/vi/verify-email/confirm')
+      expect(new URL(page.url()).search).toBe(tokenQuery)
       // Hydrated, so a press reaches the handler, and long enough for a mount effect to send.
       await page.waitForLoadState('networkidle')
       expect(verifies()).toBe(0)
@@ -118,7 +132,7 @@ test.describe('a person confirms a new address on /vi/verify-email/confirm', () 
     })
 
     await test.step('the same link, pressed again, reads expired', async () => {
-      await page.goto(confirmPath)
+      await page.goto(confirmLink)
       await expect(page.getByRole('heading', { name: COPY.ready })).toBeVisible()
       await page.waitForLoadState('networkidle')
       await page.getByRole('button', { name: COPY.confirm }).click()

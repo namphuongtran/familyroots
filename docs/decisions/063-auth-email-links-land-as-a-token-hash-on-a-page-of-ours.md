@@ -10,6 +10,9 @@ option below in a grilling session on 2026-10-04.
 described the old shape or deferred to #178, listed under Related. Documentation only, so no gate
 applies. The code is in three build issues and one owner step, #200 to #203, listed in § 8.
 
+**Amended 2026-10-09 by #202**, in Context, about which CLI releases a push from a minimal config
+is safe with. No decision changed.
+
 Repository readings were taken on **2026-10-04** at commit `300c58b` on `main`. Supabase readings
 are **source readings, not measurements**, at the versions named beside each. Nothing in this ADR
 was observed against the hosted project. Treat line numbers as hints and quoted text as the claim.
@@ -79,6 +82,11 @@ In CLI 2.119.0 they carry only subjects (supabase/cli@v2.119.0,
   properties the file declares** (`push.command.ts:44`: "Properties the file does not declare are
   left unchanged"). The older Go CLI always built `site_url` and others into the body
   (`apps/cli-go/pkg/config/auth.go:408-443`), so this holds for the TypeScript CLI only.
+  **Amended 2026-10-09 (#202): it does not hold for every TypeScript release.** Measured against a
+  stand-in Management API, CLI 2.115.0 ignored `--workdir` on `config push` and sent 46 auth
+  properties from a file that declares two templates, each undeclared one at its default. 2.120.0
+  sent the four the file declares. The decision in § 6 stands, with the push pinned to 2.120.0;
+  `docs/ops/supabase-hosted-project.md` § 4a holds the readings.
 
 So a template kept in the repository can be pushed without touching other settings, and read back.
 
@@ -219,6 +227,8 @@ Harder:
   "What this ADR deliberately does not decide" pointed here. § 3 above hands off to its server guard.
 - `docs/contracts/frontend-integration-guide.md` § 3, § 3.1 and § 4, `docs/contracts/rest-auth-api.md`,
   `docs/architecture/auth-flow.md`: now describe this shape as decided and not yet built.
+  **Since #202 (2026-10-09)** they describe it as built: both pages, and the templates in
+  `supabase/templates/`, which the local stack sends. Only the hosted push, #203, is left.
 - `docs/ops/supabase-hosted-project.md` § 4 and traps 3 and 4: corrected about reading and pushing
   template bodies.
 - Spec `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` § 7.1c: the landing's states

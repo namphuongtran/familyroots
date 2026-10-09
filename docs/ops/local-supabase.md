@@ -233,7 +233,19 @@ project.** It would overwrite the hosted Site URL and auth settings with the loc
   `SUPABASE_URL` or keys into a shell that then runs `scripts/supabase_local.sh`. The CI job keeps them
   under `LOCAL_SUPABASE_*` names for this reason.
 - **GoTrue logs a `GOTRUE_MAILER_EXTERNAL_HOSTS` warning on every request.** It is because the Host
-  header is `supabase.localhost`. Harmless: email links are built from `external_url`.
+  header is `supabase.localhost`. Harmless: the two auth emails build their links from the Site URL
+  (`supabase/templates/`, #202), and the others from `external_url`.
+- **The two auth emails are the repository's templates, and an edit needs a restart to reach
+  Mailpit.** Measured 2026-10-09 (#202). `supabase/config.toml` `[auth.email.template.*]` makes the
+  CLI bind-mount each file into `supabase_kong_familyroots` and point GoTrue at it
+  (`GOTRUE_MAILER_TEMPLATES_RECOVERY=http://supabase_kong_familyroots:8088/email/recovery.html`).
+  Three consequences. **GoTrue keeps the body it fetched**: an edit written in place reached kong at
+  once, and the next mail still carried the old body until `docker restart supabase_auth_familyroots`.
+  **An edit that replaces the file never reaches kong**: `sed -i` gave the file a new inode, and kong
+  went on serving the old one, as does any editor that saves by replacing the file. **A new or removed template table
+  is an environment change**, set when the container is created. So after any template change, run
+  `scripts/supabase_local.sh down` then `up`. [supabase-hosted-project.md](supabase-hosted-project.md)
+  § 4 has the bodies and how the hosted project gets them.
 
 ---
 

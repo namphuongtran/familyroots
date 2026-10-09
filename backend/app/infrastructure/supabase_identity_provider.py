@@ -14,7 +14,6 @@ from typing import Any
 
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
-from app.core.config import settings
 from app.core.locale import SUPPORTED_LOCALES
 from app.domain.auth.identity_provider import (
     AuthenticatedIdentity,
@@ -160,28 +159,20 @@ class SupabaseIdentityProvider:
                     raise classified from exc
                 raise IdentityError(str(exc)) from exc
 
+    # Neither email passes a redirect (ADR-063 § 4). The templates in supabase/templates/
+    # build their link from {{ .SiteURL }} and ignore {{ .RedirectTo }}, so the Site URL is
+    # the one place that names each environment's landing origin.
+
     async def send_password_reset(self, *, email: str) -> None:
         # Anon client (no service role needed); off-loaded — the SDK call is blocking.
-        # Pass redirect_to only when configured; otherwise Supabase uses the project
-        # Site URL. Completion is client-side (verify_otp recovery + update_user).
-        opts: dict[str, Any] = {}
-        if settings.PASSWORD_RESET_REDIRECT_URL:
-            opts["redirect_to"] = settings.PASSWORD_RESET_REDIRECT_URL
-        # The SDK types `options` as its `Options` TypedDict but accepts a plain dict
-        # at runtime (same pattern as update_user_by_id above).
-        await asyncio.to_thread(
-            get_anon_client().auth.reset_password_email,
-            email,
-            opts,  # type: ignore[arg-type]
-        )
+        # Completion is client-side, on /{locale}/reset-password (verify_otp recovery +
+        # update_user).
+        await asyncio.to_thread(get_anon_client().auth.reset_password_email, email)
 
     async def send_verification_email(self, *, email: str) -> None:
         # Anon client; off-loaded (blocking SDK). `resend` type=signup re-sends the
-        # confirmation email for an unconfirmed account. redirect only when configured.
-        options: dict[str, Any] = {}
-        if settings.EMAIL_VERIFY_REDIRECT_URL:
-            options["email_redirect_to"] = settings.EMAIL_VERIFY_REDIRECT_URL
+        # confirmation email for an unconfirmed account.
         await asyncio.to_thread(
             get_anon_client().auth.resend,
-            {"type": "signup", "email": email, "options": options},  # type: ignore[typeddict-item]
+            {"type": "signup", "email": email},
         )

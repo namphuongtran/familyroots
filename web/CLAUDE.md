@@ -1140,6 +1140,23 @@ pnpm test:e2e:auth
 values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
 
+**Twenty-four tests, re-read 2026-10-09 (#202): the walks take their link from the mail.** The
+local stack now renders `supabase/templates/` (ADR-063 § 1), so the confirmation mail links
+`http://127.0.0.1:3000/verify-email/confirm?token_hash=…&type=email` and the recovery mail
+`http://127.0.0.1:3000/reset-password?token_hash=…&type=recovery`. `e2e/auth/mail.ts` reads the one
+`href` from the mail's HTML; `onOrigin` puts the harness's origin in place of the Site URL's, where
+nothing listens, and keeps the path and query. The path carries no locale, so each walk also reads
+that next-intl's redirect landed on `/vi/…` with the query unchanged, and that the body reads
+Vietnamese first. `invitee-registers.auth.spec.ts` presses **Xác nhận email** in a second browser
+context instead of requesting GoTrue's `/verify`, then signs in on its own page as before. Readings:
+the three walks, 6 passed with their setups; then a full run, 24 passed, no `429` in the backend
+log. **Control**: with `{{ .Token }}` planted for `{{ .TokenHash }}` in the confirmation template
+and `type=email` for `type=recovery` in the recovery one, the confirmation walk failed on
+`Received string: "181257"` against `/^[0-9a-f]{56}$/` and the reset walk on `Expected: "recovery"`,
+`Received: "email"`. A template edit reaches the stack's mail only after a restart
+(`docs/ops/local-supabase.md`, "Things that will surprise you"); the plant needed
+`docker restart supabase_auth_familyroots`.
+
 **Twenty-four tests, 2026-10-08 (#201)**: three `auth-setup` logins and twenty-one
 `auth-chromium` cases. #201 added `reset-password.auth.spec.ts`, one walk as `editor@`, the one
 seeded member no setup signs in as: from `/vi/login`'s **Quên mật khẩu?** to
@@ -1168,8 +1185,9 @@ cases, one run reading `23 passed` with no `429` in the backend log. #200 added
 confirmation from Mailpit, open `/vi/verify-email/confirm` with the hash, count no
 `POST /auth/v1/verify` on load and one on the press, then `GET /auth/me` with the access token
 read from the browser's `sb-…-auth-token` cookie, and the same link pressed again reads expired.
-Until #202's template reaches the local stack, the mail is GoTrue's default, and its link's
-`token` is the token hash, 56 hex characters. It spends one register and one `GET /auth/me`.
+The mail was GoTrue's default then, so the walk built the link from its `token`, the token hash,
+56 hex characters. Since #202 it takes the link from the mail (see the #202 entry above). It
+spends one register and one `GET /auth/me`.
 Both walks now read Mailpit through `e2e/auth/mail.ts`.
 **Twenty-two tests, re-read 2026-10-07 (#226)**, with the recipe above, its backend at
 `RATE_LIMIT_AUTH_MAX_REQUESTS=1000`, and `.next`, `.next-auth-e2e` and `.next-banner-e2e` deleted

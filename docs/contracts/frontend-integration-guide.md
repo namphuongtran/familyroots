@@ -182,8 +182,8 @@ implement the reactive single-flight strategy above itself.
 ## 3. Email-verification landing flow
 
 Code: `app/infrastructure/supabase_identity_provider.py`
-(`create_user`, `send_verification_email`), `app/core/config.py`, ADR-015,
-ADR-021, `docs/architecture/auth-flow.md`.
+(`create_user`, `send_verification_email`), `supabase/templates/confirmation.html`, ADR-015,
+ADR-021, ADR-063, `docs/architecture/auth-flow.md`.
 
 ### 3.0 Register is non-enumerating (ADR-021, 2026-07-14)
 
@@ -228,12 +228,9 @@ What the backend does for the underlying email delivery (verified):
 
 - `POST /auth/register` creates the Supabase user **unconfirmed**
   (`email_confirm: False`) and then sends the verification email best-effort via the
-  anon client: `auth.resend({"type": "signup", "email": ...,
-  "options": {"email_redirect_to": EMAIL_VERIFY_REDIRECT_URL}})`.
-  `email_redirect_to` is only passed when `EMAIL_VERIFY_REDIRECT_URL` is configured;
-  when empty, **Supabase falls back to the project's Site URL**. ADR-063 § 4 deletes
-  this setting and its reset twin, because the decided template ignores `{{ .RedirectTo }}`.
-  #202 removes them.
+  anon client: `auth.resend({"type": "signup", "email": ...})`. **No redirect is passed**,
+  on this email or the recovery one (ADR-063 § 4, since #202). The template builds its
+  link from the project's **Site URL** and ignores `{{ .RedirectTo }}` (§ 3.1).
 - `POST /auth/resend-verification` `{"email"}` sends the same email; always 200 with
   the same message (non-enumerating).
 - Logging in before verifying → **403 `email_not_verified`** (not 401) — show a
@@ -247,7 +244,7 @@ one is in the project's email templates.
 
 **1. A `?code=` landing is impossible for these emails.** The backend sends every
 auth email itself, through `auth.resend` (type `signup`) and `auth.reset_password_email`
-(`backend/app/infrastructure/supabase_identity_provider.py:162-187`). The pinned
+(`backend/app/infrastructure/supabase_identity_provider.py:162-177`). The pinned
 `supabase_auth` 2.31.0 sends **no `code_challenge`** on either call. Only its OAuth
 helper adds one, even though `ClientOptions.flow_type` defaults to `"pkce"`. Supabase
 Auth chooses the flow from that challenge (`supabase/auth`
@@ -261,8 +258,8 @@ landing. An email link that reaches it carries no `code`, so it redirects to
 
 | Template link | The link opens | The client lands with | The client finishes with |
 |---|---|---|---|
-| `{{ .ConfirmationURL }}`, **the Supabase default, and what the hosted project carries until #203** | `https://<ref>.supabase.co/auth/v1/verify?token=…&type=signup\|recovery&redirect_to=…`. Supabase verifies it on the click | `<redirect_to>#access_token=…&refresh_token=…&expires_in=…&token_type=bearer&type=signup\|recovery`, a **URL fragment**. A failure arrives as `#error=…&error_code=…&error_description=…` | **signup**: nothing. The address is already confirmed on the click, so route to login. **recovery**: read the fragment in browser code, set the session, then `updateUser({ password })` |
-| a custom link built from `{{ .TokenHash }}`, **the shape ADR-063 decides** | our own page, directly: `{{ .SiteURL }}/verify-email/confirm?token_hash=…&type=email` or `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery` | `?token_hash=…&type=email\|recovery` | `verifyOtp({ type, token_hash })`, **only on a user action**, never on load (ADR-063 § 2) |
+| `{{ .ConfirmationURL }}`, **the Supabase default, and what the hosted project carries until #203 pushes the repository's templates** | `https://<ref>.supabase.co/auth/v1/verify?token=…&type=signup\|recovery&redirect_to=…`. Supabase verifies it on the click | `<redirect_to>#access_token=…&refresh_token=…&expires_in=…&token_type=bearer&type=signup\|recovery`, a **URL fragment**. A failure arrives as `#error=…&error_code=…&error_description=…` | **signup**: nothing. The address is already confirmed on the click, so route to login. **recovery**: read the fragment in browser code, set the session, then `updateUser({ password })` |
+| a custom link built from `{{ .TokenHash }}`, **the shape ADR-063 decides, in `supabase/templates/` since #202 and on the local stack** | our own page, directly: `{{ .SiteURL }}/verify-email/confirm?token_hash=…&type=email` or `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery` | `?token_hash=…&type=email\|recovery` | `verifyOtp({ type, token_hash })`, **only on a user action**, never on load (ADR-063 § 2) |
 
 **Two traps in the default shape:**
 - A fragment never reaches a server. A Next.js route handler or server component
@@ -273,12 +270,12 @@ landing. An email link that reaches it carries no `code`, so it redirects to
   (`GoTrueClient.js:3250-3254` in the installed package). A recovery screen on the
   default template must parse the fragment and call `setSession` itself.
 
-**Where `redirect_to` lands.** It is `EMAIL_VERIFY_REDIRECT_URL` (or
-`PASSWORD_RESET_REDIRECT_URL`) only when Supabase allows that URL. Otherwise it is the
-project's **Site URL**. A URL is allowed when it has the Site URL's scheme and host
-(any port, for a loopback host), or when it is listed under Redirect URLs (`supabase/auth`
-`internal/utilities/request.go:106-113`). The live values are recorded in
-[ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md).
+**Where the link's origin comes from: the Site URL, on both shapes.** The backend
+passes no redirect (#202), so the default link's `redirect_to` is the project's **Site
+URL**, and the `token_hash` link is built on `{{ .SiteURL }}` itself. The link path
+carries no locale: next-intl's middleware redirects `/verify-email/confirm?…` and
+`/reset-password?…` to the reader's locale and keeps the query (ADR-063 § 4). The live
+Site URL is recorded in [ops/supabase-hosted-project.md](../ops/supabase-hosted-project.md) § 3.
 
 **Decided 2026-10-04; both landings built.** [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
 chose the `token_hash` row. The default link has a third trap: an email scanner that
@@ -288,37 +285,44 @@ fetches it spends the token before the person clicks. The confirmation landing,
 sends one `POST /auth/v1/verify`, success keeps the session, and any failure shows the
 expired state. The reset landing, `/{locale}/reset-password`, is built (#201, 2026-10-08,
 `web/src/features/auth/ui/ResetPasswordScreen.tsx`), with `/{locale}/forgot-password` and the
-sign-in screen's link to it; § 4 has its sequence. The templates move into the repository in
-#202, and the owner pushes them in #203. **Until #203, the hosted emails still carry the
-default link, so no hosted email reaches either page yet.**
+sign-in screen's link to it; § 4 has its sequence. **The templates are in the repository
+since #202** (2026-10-09): `supabase/templates/confirmation.html` and
+`supabase/templates/recovery.html`, Vietnamese first. The local stack sends them, so on a
+laptop or in the image e2e job the mail lands as `http://127.0.0.1:3000/verify-email/confirm?token_hash=…&type=email`
+or `http://127.0.0.1:3000/reset-password?token_hash=…&type=recovery`, and the e2e walks open
+that link with only the origin swapped for the harness's. **The owner pushes them to the
+hosted project in #203. Until then the hosted emails still carry the default link, so no
+hosted email reaches either page yet.**
 
 ---
 
 ## 4. Password-reset landing flow
 
 Code: `app/api/v1/auth.py` (`forgot_password`),
-`supabase_identity_provider.py` (`send_password_reset`), `rest-auth-api.md`.
+`supabase_identity_provider.py` (`send_password_reset`), `supabase/templates/recovery.html`,
+`rest-auth-api.md`.
 
 1. `POST /api/v1/auth/forgot-password` `{"email"}` — always 200 with the same message
    (non-enumerating; provider failures are swallowed). The web sends it from
    `/{locale}/forgot-password`, linked as **Quên mật khẩu?** from the sign-in screen, and shows
    one message of its own for every 200; a 429 `rate_limited` shows the rate-limit message. Sends a Supabase recovery
-   email with `redirect_to = PASSWORD_RESET_REDIRECT_URL` when configured (else the
-   Supabase Site URL).
-2. The email link lands in one of the two shapes in §3.1, with `type=recovery`. With
-   the default template it is a URL fragment that carries a session. ADR-063 decides
-   the `token_hash` shape, landing on `/{locale}/reset-password`, built by #201.
+   email with no redirect (#202). Its link's origin is the Supabase Site URL.
+2. The email link lands in one of the two shapes in §3.1, with `type=recovery`. The
+   repository's template (#202) links `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery`,
+   which the middleware sends to `/{locale}/reset-password` (#201). The local stack sends
+   it now; the hosted project sends it once #203 pushes it. Until then a hosted email
+   carries the default template's URL fragment, which carries a session.
 3. The client completes the reset **entirely via the Supabase SDK**. The backend has
    no reset-password endpoint, by design. It establishes the session from the link,
    then sets the password. Under ADR-063 § 2, both calls run on the form's one submit,
    never on page load, and a retry after a failed `updateUser` calls `updateUser` only:
 
 ```ts
-// default template: the session is in the fragment (see §3.1 for why the PKCE browser
-// client cannot pick it up by itself)
-await supabase.auth.setSession({ access_token, refresh_token })
-// custom {{ .TokenHash }} template instead:
-// await supabase.auth.verifyOtp({ type: 'recovery', token_hash })
+// the repository's template (#202): the hash is in the query, `?token_hash=…&type=recovery`
+await supabase.auth.verifyOtp({ type: 'recovery', token_hash })
+// a hosted email sent before #203 carries the default template's fragment instead (see §3.1
+// for why the PKCE browser client cannot pick it up by itself):
+// await supabase.auth.setSession({ access_token, refresh_token })
 await supabase.auth.updateUser({ password: newPassword })
 ```
 

@@ -1,6 +1,13 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import { authStackInputs, SEEDED_PASSWORD } from './fixtures'
-import { mailIdsFor, newMail } from './mail'
+import {
+  mailIdsFor,
+  newMail,
+  onOrigin,
+  readsVietnameseFirst,
+  tokenHashLink,
+  type Headings,
+} from './mail'
 import { browserAccessToken } from './session-cookie'
 
 /**
@@ -12,13 +19,14 @@ import { browserAccessToken } from './session-cookie'
  * that stops before it restores the password breaks no other spec. `make seed` would not repair
  * it: the seeder cannot read a password back (`docs/ops/seed-test-users.md`).
  *
- * **The link is built here, from what the local stack mailed.** Until the template issue (#202)
- * reaches the local stack, its recovery mail is Supabase's default: one link to GoTrue's own
- * `/auth/v1/verify?token=…&type=recovery&redirect_to=…`. As for the confirmation mail (#200), that
- * `token` is the token hash `{{ .TokenHash }}` will carry, 56 hex characters, so the walk reads it
- * off the link and opens `/vi/reset-password?token_hash=<it>&type=recovery`. A successful verify
- * is what proves the value right. The seeded inbox keeps earlier runs' mail, so the walk reads the
- * one mail that arrived after its own request.
+ * **The link is the one the local stack mailed** (#202). The stack renders
+ * `supabase/templates/recovery.html`, which links
+ * `{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery` (ADR-063 § 1). The walk
+ * checks that shape and that the mail reads Vietnamese first, then opens the link with the
+ * harness's origin in place of the Site URL's, the path and query unchanged. The middleware sends
+ * the locale-less path to `/vi/reset-password` with the query kept. A successful verify is what
+ * proves the hash right. The seeded inbox keeps earlier runs' mail, so the walk reads the one mail
+ * that arrived after its own request.
  *
  * **Signing out is local**: the walk clears the browser's cookies, which is where `@supabase/ssr`
  * keeps the session and what `signOut({ scope: 'local' })` removes. No screen the walk reaches
@@ -51,6 +59,9 @@ const COPY = {
 } as const
 
 const EDITOR = 'editor@familyroots.example.com'
+
+/** `supabase/templates/recovery.html`: its Vietnamese heading, then its English one. */
+const MAIL: Headings = { vi: 'Đặt lại mật khẩu', en: 'Reset your password' }
 
 /** A cold `next dev` compiles a route on its first visit (web/CLAUDE.md, "The authenticated e2e harness"). */
 const FIRST_VISIT = { timeout: 45_000 }
@@ -108,10 +119,12 @@ test.describe('a member resets a forgotten password through /vi/forgot-password'
   test('the reset spends its token on the submit, and only the new password signs in', async ({
     page,
     request,
+    baseURL,
   }) => {
     const newPassword = `reset-201-${crypto.randomUUID()}`
     const goTrue = recordGoTrue(page)
-    let resetPath = ''
+    let resetLink = ''
+    let tokenQuery = ''
 
     try {
       await test.step('asks for a reset from the sign-in screen', async () => {
@@ -130,24 +143,25 @@ test.describe('a member resets a forgotten password through /vi/forgot-password'
         await expect(page.getByRole('status')).toHaveText(COPY.forgotSent)
 
         const mail = await newMail(request, EDITOR, seen)
-        const link = new URL(mail.link)
-        expect(link.searchParams.get('type'), mail.link).toBe('recovery')
-        const tokenHash = link.searchParams.get('token') ?? ''
-        expect(tokenHash, `the default link's token is the hash: ${mail.link}`).toMatch(
-          /^[0-9a-f]{56}$/,
-        )
+        const { tokenHash, search } = tokenHashLink(mail, '/reset-password', 'recovery')
+        expect(readsVietnameseFirst(mail, MAIL), 'the mail reads Vietnamese first').toBe(true)
         test.info().annotations.push({
           type: 'what the local stack sent',
           description: `subject "${mail.subject}"; ${mail.text.replaceAll(tokenHash, '<token_hash>')}`,
         })
-        resetPath = `/vi/reset-password?token_hash=${tokenHash}&type=recovery`
+        // The harness's origin stands in for the Site URL's, where nothing listens (`mail.ts`).
+        resetLink = onOrigin(mail.link, baseURL)
+        tokenQuery = search
       })
 
       await test.step('loading the reset page spends nothing', async () => {
-        await page.goto(resetPath)
+        await page.goto(resetLink)
         await expect(page.getByRole('heading', { name: COPY.resetHeading })).toBeVisible(
           FIRST_VISIT,
         )
+        // The link carries no locale; the reader's is Vietnamese, and the query survived the redirect.
+        expect(new URL(page.url()).pathname).toBe('/vi/reset-password')
+        expect(new URL(page.url()).search).toBe(tokenQuery)
         // Hydrated, so a submit reaches the handler, and long enough for a mount effect to send.
         await page.waitForLoadState('networkidle')
         expect(goTrue()).toEqual([])
@@ -182,7 +196,7 @@ test.describe('a member resets a forgotten password through /vi/forgot-password'
       })
 
       await test.step('the same link, submitted again, reads expired', async () => {
-        await page.goto(resetPath)
+        await page.goto(resetLink)
         await expect(page.getByRole('heading', { name: COPY.resetHeading })).toBeVisible()
         await page.waitForLoadState('networkidle')
         await page.getByLabel(COPY.newPassword).fill(`${newPassword}-again`)
