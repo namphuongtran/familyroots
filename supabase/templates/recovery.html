@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Đặt lại mật khẩu · Reset your password</title>
+  </head>
+  <body style="margin: 0; padding: 24px 16px; background: #fbf8f1; color: #1a1a1a; font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.5;">
+    <div lang="vi" style="max-width: 560px; margin: 0 auto;">
+      <h1 style="margin: 0 0 16px; font-size: 22px;">Đặt lại mật khẩu</h1>
+      <p style="margin: 0 0 16px;">Có người vừa yêu cầu đặt lại mật khẩu, hoặc thử đăng ký lại, cho tài khoản FamilyRoots dùng địa chỉ email này. Bấm nút bên dưới để đặt mật khẩu mới.</p>
+      <p style="margin: 0 0 24px;"><a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery" style="display: inline-block; padding: 12px 24px; border-radius: 999px; background: #3e5c38; color: #ffffff; font-weight: bold; text-decoration: none;">Đặt mật khẩu mới</a></p>
+      <p style="margin: 0; color: #6e6653;">Nếu đó không phải là bạn, hãy bỏ qua thư này. Mật khẩu hiện tại của bạn vẫn giữ nguyên.</p>
+    </div>
+    <hr style="max-width: 560px; margin: 32px auto; border: 0; border-top: 1px solid #e5e7eb;" />
+    <div lang="en" style="max-width: 560px; margin: 0 auto;">
+      <h2 style="margin: 0 0 16px; font-size: 22px;">Reset your password</h2>
+      <p style="margin: 0 0 16px;">Someone has just asked to reset the password of, or tried to sign up again for, the FamilyRoots account with this email address. Press the button below to set a new password.</p>
+      <p style="margin: 0 0 24px;"><a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery" style="display: inline-block; padding: 12px 24px; border-radius: 999px; background: #3e5c38; color: #ffffff; font-weight: bold; text-decoration: none;">Set a new password</a></p>
+      <p style="margin: 0; color: #6e6653;">If that was not you, you can ignore this email. Your current password stays the same.</p>
+    </div>
+  </body>
+</html>

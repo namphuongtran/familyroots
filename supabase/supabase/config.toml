@@ -1,0 +1,37 @@
+# HOSTED PROJECT ONLY. The two auth email templates of ADR-063, and nothing else.
+#
+# This file exists so that a push to the hosted Supabase project writes the Confirm signup and
+# Reset Password templates and no other property. Its workdir is the repository's `supabase/`
+# directory, the one that holds this `supabase/` folder. Run from the repository root, with the
+# CLI pinned:
+#
+#   npx --yes supabase@2.120.0 config push --workdir supabase --project-ref <ref>
+#   python3 scripts/read_back_auth_email_templates.py --project-ref <ref>
+#
+# docs/ops/supabase-hosted-project.md § 4 holds the procedure and the readings.
+#
+# Never push supabase/config.toml to the hosted project: that file configures the LOCAL stack, and
+# a push writes every property it declares (docs/ops/supabase-hosted-project.md § 5, trap 4).
+#
+# The CLI version decides what a push from THIS file writes. Measured 2026-10-09 against a stand-in
+# Management API that recorded every request:
+#   - 2.120.0 sent one PATCH of four properties, the two subjects and the two bodies, and said that
+#     undeclared properties are left unchanged.
+#   - 2.115.0, the version scripts/supabase_local.sh pins for the local stack, ignored `--workdir` and
+#     read ./supabase/config.toml from the current directory, the LOCAL file. Run from inside this
+#     workdir, it still sent 46 properties, its defaults for everything undeclared: `site_url`,
+#     `mailer_autoconfirm`, `mailer_otp_length` and the TOTP flags among them.
+# So never push with 2.115.0, and read the CLI's list of changes before answering its prompt.
+#
+# Declare nothing else here. Each `content_path` is relative to the workdir, and 2.120.0 refuses one
+# that resolves outside it, so the bodies are named as ./templates/, the same files the local stack's
+# `supabase/config.toml` reads as ./supabase/templates/. Keep the two subjects equal to the ones
+# declared there.
+
+[auth.email.template.confirmation]
+subject = "Xác nhận địa chỉ email FamilyRoots · Confirm your FamilyRoots email address"
+content_path = "./templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Đặt lại mật khẩu FamilyRoots · Reset your FamilyRoots password"
+content_path = "./templates/recovery.html"

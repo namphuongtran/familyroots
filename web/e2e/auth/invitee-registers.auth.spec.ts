@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import type { components } from '../../src/generated/api-types'
 import { authStackInputs, SEEDED_PASSWORD, SEEDED_USERS } from './fixtures'
-import { mailedConfirmation } from './mail'
+import { mailedConfirmation, onOrigin } from './mail'
 
 /**
  * #196, ADR-058. A person with no account opens an invitation link, creates an account from it,
@@ -27,11 +27,14 @@ import { mailedConfirmation } from './mail'
  * (`email_confirm: False`, `supabase_identity_provider.py`), so `enable_confirmations = false` in
  * `supabase/config.toml` does not apply, and GoTrue refuses the password grant with
  * `email_not_confirmed` until the link is followed. The local stack mails that link to Mailpit
- * (`E2E_AUTH_MAIL_URL`). Under the stack's default template the link is GoTrue's own `/verify`,
- * which confirms on the request and redirects to `site_url`, `http://127.0.0.1:3000`, where
- * nothing listens. So the link is requested rather than opened in the page, and its `303` and
- * `Location` are read. When ADR-063's template (#203) reaches the local stack, the link lands on
- * `/{locale}/verify-email/confirm` (#200) and this step presses its button instead.
+ * (`E2E_AUTH_MAIL_URL`). Since #202 it is ADR-063's `{{ .SiteURL }}/verify-email/confirm?token_hash=…`,
+ * and the Site URL, `http://127.0.0.1:3000`, has nothing listening. So the walk opens the link on
+ * its own origin with the path and query unchanged (`mail.ts`, `onOrigin`) and presses
+ * **Xác nhận email** there (#200). It does so in a second browser context, the way a person opens
+ * a mail in another tab or on another device: the confirmation keeps a session of its own
+ * (ADR-063 § 3), and the walk still signs in on its own page next, as it did before #202. The
+ * second page's URLs carry the token hash, never the invitation token, so the token checks below
+ * are unchanged.
  *
  * **Budget.** `/api/v1/auth` and `/api/v1/invitations` share one bucket per IP, 20 requests per
  * 60 seconds unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS`. The harness's backend sets
@@ -58,6 +61,9 @@ const COPY = {
   signIn: 'Đăng nhập',
   accept: 'Tham gia dòng họ',
   accepted: 'Bạn đã tham gia dòng họ',
+  confirmReady: 'Xác nhận địa chỉ email',
+  confirmEmail: 'Xác nhận email',
+  confirmed: 'Xác thực thành công',
 } as const
 
 /** `backend/app/i18n/vi.json`, `auth.registration_received`: the 201 body the success screen shows. */
@@ -274,6 +280,7 @@ test.describe('a person with no account joins through an invitation link', () =>
   test('registers with no clan, confirms, signs in, opens the link again and holds the invited role', async ({
     page,
     request,
+    browser,
   }) => {
     const token = invitation.token
     const web = walkOrigin(invitation)
@@ -317,10 +324,20 @@ test.describe('a person with no account joins through an invitation link', () =>
 
     await test.step('confirms the address by the link the local stack mailed', async () => {
       const { link } = await mailedConfirmation(request, inviteeEmail)
-      const followed = await request.get(link, { maxRedirects: 0 })
-      expect(followed.status()).toBe(303)
-      // GoTrue reports a failed verification in the redirect's fragment, `#error=…`.
-      expect(followed.headers()['location']).not.toContain('error')
+      const mailbox = await browser.newContext({ locale: 'vi-VN' })
+      try {
+        const opened = await mailbox.newPage()
+        await opened.goto(onOrigin(link, web))
+        await expect(opened.getByRole('heading', { name: COPY.confirmReady })).toBeVisible(
+          FIRST_VISIT,
+        )
+        // Hydrated, so the press reaches its handler (`verify-email-confirm.auth.spec.ts`).
+        await opened.waitForLoadState('networkidle')
+        await opened.getByRole('button', { name: COPY.confirmEmail }).click()
+        await expect(opened.getByRole('heading', { name: COPY.confirmed })).toBeVisible()
+      } finally {
+        await mailbox.close()
+      }
     })
 
     await test.step('signs in at /vi/login', async () => {

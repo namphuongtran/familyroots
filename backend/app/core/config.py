@@ -158,14 +158,6 @@ class Settings(BaseSettings):
     SCHEDULER_TIMEZONE: str = "Asia/Ho_Chi_Minh"
     NOTIFICATION_CRON_HOUR: int = 7
 
-    # Password reset — the web/mobile page the recovery email links to; empty →
-    # Supabase falls back to the project's Site URL.
-    PASSWORD_RESET_REDIRECT_URL: str = ""
-
-    # Email verification — the web/mobile page the signup confirmation email links
-    # to; empty → Supabase falls back to the project's Site URL.
-    EMAIL_VERIFY_REDIRECT_URL: str = ""
-
     # Invitations
     INVITATION_TTL_DAYS: int = 7
 

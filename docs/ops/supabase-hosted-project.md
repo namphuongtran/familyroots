@@ -134,21 +134,50 @@ and host (any port, for a loopback host), or when it is listed under Redirect UR
 (`supabase/auth` `internal/utilities/request.go:106-113`). With the values above:
 
 - **Local web on `localhost:3000` works as is.** That covers Google's
-  `http://localhost:3000/api/auth/callback`, and the email links, which fall back to the Site URL
-  while `EMAIL_VERIFY_REDIRECT_URL` and `PASSWORD_RESET_REDIRECT_URL` are empty.
+  `http://localhost:3000/api/auth/callback`. It covers the email links too. Since #202 the backend
+  passes no redirect on either email, so the default template's `redirect_to` is the Site URL, and
+  the repository's templates (§ 4) build their link from `{{ .SiteURL }}` itself.
 - **A deployed web origin or a mobile deep link does not work yet.** Every redirect to one falls back
   to `http://localhost:3000`. Add the origin under Redirect URLs, and change the Site URL, when the
-  web app is first deployed.
+  web app is first deployed. Once #203 has pushed the templates, the Site URL is also the origin of
+  every auth email link, so a wrong one breaks them all (ADR-063, Consequences).
 
 ---
 
 ## 4. Email templates
 
-Both the **Confirm signup** and **Reset Password** templates must link `{{ .ConfirmationURL }}`
-until #203 pushes the repository's templates. [ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md)
-decided on 2026-10-04 that both will link a `token_hash` page of ours. Both pages exist now: the
-confirmation page (#200) since 2026-10-07 and the reset pages (#201) since 2026-10-08. The
-templates still wait on #202 and #203. Until then, these are the Supabase default bodies:
+**Where the bodies live: in the repository, since #202 (2026-10-09).**
+`supabase/templates/confirmation.html` is the **Confirm signup** body and
+`supabase/templates/recovery.html` the **Reset Password** body. Each links the URL of
+[ADR-063](../decisions/063-auth-email-links-land-as-a-token-hash-on-a-page-of-ours.md) § 1 and
+reads Vietnamese first, English below (§ 7):
+
+| Template | Link |
+|---|---|
+| Confirm signup | `{{ .SiteURL }}/verify-email/confirm?token_hash={{ .TokenHash }}&type=email` |
+| Reset Password | `{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery` |
+
+Two configs carry the same two files:
+
+- `supabase/config.toml` declares `[auth.email.template.confirmation]` and
+  `[auth.email.template.recovery]`, so the **local stack's** Mailpit renders the same bodies. A
+  template change reaches it only on a restart, `scripts/supabase_local.sh down` then `up`
+  ([local-supabase.md](local-supabase.md), "Things that will surprise you", has why).
+- `supabase/supabase/config.toml` declares **those two tables and nothing else**. Its workdir is
+  the repository's `supabase/` directory. It is the only config a push to this project may come
+  from (trap 4).
+
+Each `content_path` is relative to the workdir, the directory that holds `supabase/`, so the two
+files name different strings for the same body: `./supabase/templates/…` locally, `./templates/…`
+in the hosted one. CLI 2.120.0 refuses a `content_path` that resolves outside the workdir, which is
+why the hosted config sits inside `supabase/` rather than beside it.
+`backend/tests/unit/test_auth_email_templates.py` resolves both, and checks each link and the
+language order.
+
+**What the hosted project holds until #203.** The push below is an owner step, so until #203 both
+hosted templates are still Supabase's default bodies, and no hosted email reaches the two pages
+yet. Both pages exist: the confirmation page (#200) since 2026-10-07 and the reset pages (#201)
+since 2026-10-08. The defaults, as read on 2026-10-04:
 
 ```html
 <h2>Confirm your signup</h2>
@@ -164,19 +193,77 @@ templates still wait on #202 and #203. Until then, these are the Supabase defaul
 <p><a href="{{ .ConfirmationURL }}">Reset Password</a></p>
 ```
 
-Where they live: Dashboard → Authentication → Emails → Templates
-(`https://supabase.com/dashboard/project/bftqrkgbulwtbptnpfca/auth/templates`). What each shape
-lands as on the client, and why `?code=` never happens, is in
+What each shape lands as on the client, and why `?code=` never happens, is in
 [frontend-integration-guide.md § 3.1](../contracts/frontend-integration-guide.md).
 
-**How to check the templates by outcome.** No command in this repository can read a template
-body (see trap 3). So read the email itself:
+### 4a. Push the templates (#203, owner step)
+
+From the repository root, with the CLI pinned in the command. **Not with a global `supabase`, and
+never with 2.115.0**, the version `scripts/supabase_local.sh` pins for the local stack:
+
+```bash
+npx --yes supabase@2.120.0 login
+npx --yes supabase@2.120.0 config push --workdir supabase --project-ref bftqrkgbulwtbptnpfca
+#   expect four changes listed, then the prompt:
+#     auth.email.template.confirmation.subject  [update]
+#     auth.email.template.recovery.subject      [update]
+#     auth.email.template.confirmation.content  [content]
+#     auth.email.template.recovery.content      [content]
+#   answer y only if those four are the whole list
+```
+
+Then read them back (§ 4b).
+
+**What a push from that config sends, by CLI version.** Measured 2026-10-09 (#202) against a
+stand-in for `api.supabase.com`: a local HTTP server, named to the CLI through a `--profile` file's
+`api_url`, that answered the CLI's reads and recorded every request. Nothing reached Supabase.
+
+| CLI | Run | What it sent |
+|---|---|---|
+| 2.120.0 | from the repository root, `--workdir supabase` | one `PATCH /v1/projects/{ref}/config/auth` with **four** properties: `mailer_subjects_confirmation`, `mailer_subjects_recovery`, `mailer_templates_confirmation_content`, `mailer_templates_recovery_content`. Both bodies equal the files byte for byte. It printed "10 remote properties are not declared in supabase/config.toml and were left unchanged" |
+| 2.120.0 | the same, answering `n` at the prompt | three `GET`s and no write |
+| 2.115.0 | from the repository root, `--workdir` naming the hosted config's directory | **ignored `--workdir`** and read `./supabase/config.toml`, the local stack's file: 46 properties, `rate_limit_otp` 300 from its `sign_in_sign_ups`, then went on to Storage |
+| 2.115.0 | from inside the hosted config's own directory | 46 properties, every undeclared one at the CLI's default: `site_url` `http://127.0.0.1:3000`, `uri_allow_list`, `mailer_autoconfirm` true, `mailer_otp_length` 6, `mfa_totp_enroll_enabled` false and the rest |
+
+So 2.115.0 would turn **Confirm email** off, change the OTP length, turn TOTP off and point every
+link at `127.0.0.1`, whichever directory it ran from. ADR-063's Context read
+"Properties the file does not declare are left unchanged" at the source of 2.119.0. It does not
+hold for 2.115.0, which is also the TypeScript CLI. 2.119.0 itself was not run.
+
+### 4b. Read them back, after every push
+
+`scripts/read_back_auth_email_templates.py` reads
+`GET https://api.supabase.com/v1/projects/bftqrkgbulwtbptnpfca/config/auth` and compares
+`mailer_templates_confirmation_content` and `mailer_templates_recovery_content` with the two files,
+**byte for byte**. It needs a personal access token with `auth:read` (Dashboard → Account →
+Access Tokens), so it is not a CI job. Standard library only:
+
+```bash
+export SUPABASE_ACCESS_TOKEN=sbp_...
+python3 scripts/read_back_auth_email_templates.py --project-ref bftqrkgbulwtbptnpfca
+#   expect "match confirmation" and "match recovery", exit 0
+```
+
+| Exit | Meaning |
+|---|---|
+| 0 | both hosted bodies equal their files |
+| 1 | at least one differs. Each one is named on a `DIFFERS <name>:` line, with the first differing byte |
+| 2 | nothing was compared: no token, a malformed ref, or an unreadable response |
+
+`--response <file>` compares a response saved earlier instead, with no token.
+`backend/tests/unit/test_read_back_auth_email_templates.py` runs it that way.
+
+### 4c. Check the email by outcome
+
+The read-back proves what the project holds. The email proves what a person receives:
 
 1. Dashboard → Authentication → Users → an account whose mailbox you own → **Send password
    recovery**.
-2. In the email, copy the link **without opening it**. It must begin with
-   `https://bftqrkgbulwtbptnpfca.supabase.co/auth/v1/verify?token=` and carry `type=recovery` and
-   `redirect_to=http://localhost:3000`.
+2. In the email, copy the link **without opening it**. After #203 it must begin with
+   `http://localhost:3000/reset-password?token_hash=` (the Site URL of § 3) and carry
+   `type=recovery`. Before #203 it begins with
+   `https://bftqrkgbulwtbptnpfca.supabase.co/auth/v1/verify?token=` and carries `type=recovery`
+   and `redirect_to=http://localhost:3000`.
 3. A link that does anything else (`...`, a missing token, another host) is a broken template.
 
 ---
@@ -197,17 +284,23 @@ body (see trap 3). So read the email itself:
    `GET https://api.supabase.com/v1/projects/bftqrkgbulwtbptnpfca/config/auth` returns
    `mailer_templates_confirmation_content` and `mailer_templates_recovery_content` to a personal
    access token with `auth:read`. That is a source reading of the API's OpenAPI schema, under
-   ADR-063, and it has not yet been run against this project. #202 builds the read-back on it.
+   ADR-063. #202 built the read-back on it, `scripts/read_back_auth_email_templates.py` (§ 4b). It
+   has not yet been run against this project. #203 runs it.
 4. **Never run `supabase config push` from `supabase/config.toml` against this project.** That file
    configures the local stack, and a push writes every property it declares. Its Site URL, redirect
-   list and confirmation setting would overwrite the hosted values. To change one hosted property,
-   push from a throwaway directory whose `supabase/config.toml` declares only that property, after
-   `supabase config diff --workdir <dir>` shows exactly the change you mean. Undeclared properties are
-   left alone. Template bodies cannot be previewed this way (trap 3). **A push does send a declared
-   body**, read from `content_path`. Both facts were read at the source of CLI 2.119.0, which is
-   TypeScript (ADR-063, Context). The older Go CLI always sent `site_url` and others, so check
-   `supabase --version` before relying on either. #202 checks in a config that declares only the two
-   templates.
+   list and confirmation setting would overwrite the hosted values. **And the CLI version decides
+   whether undeclared properties are left alone.** Measured 2026-10-09 (#202, § 4a): CLI 2.120.0
+   sends only what the file declares, and says so. CLI 2.115.0, also the TypeScript CLI, ignores
+   `--workdir` on `config push`, reads `./supabase/config.toml` from the current directory, and
+   sends its default for every property the file does not declare. The older Go CLI always sent
+   `site_url` and others too. ADR-063's Context had read the 2.119.0 source and generalised it to
+   every TypeScript release; 2.115.0 shows it does not generalise. So to change one hosted
+   property, push from a directory whose `supabase/config.toml` declares only that property, with
+   the version pinned (`npx --yes supabase@2.120.0`), and answer the prompt only after its list of
+   changes shows exactly the change you mean. Template bodies show there only as `[content]`, not
+   as text (trap 3). **A push does send a declared body**, read from `content_path`, byte for byte.
+   The config that declares only the two templates is `supabase/supabase/config.toml`, pushed with
+   `--workdir supabase`.
 5. **`NXDOMAIN` on the project host does not mean the project is gone.** Earlier on 2026-10-04 the
    host did not resolve. After the owner opened the dashboard, it resolved, and
    `supabase projects list` reported `ACTIVE_HEALTHY`. Look in the dashboard before concluding

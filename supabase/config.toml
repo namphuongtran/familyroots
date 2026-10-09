@@ -266,6 +266,20 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# ADR-063 § 1, 6 and 7: the two auth emails the backend sends link a `token_hash` page of ours,
+# Vietnamese first, English below. These two tables give the local stack's Mailpit the same bodies
+# the hosted project gets. The hosted project gets them from supabase/supabase/config.toml, pushed
+# with `--workdir supabase`, never from this file (docs/ops/supabase-hosted-project.md § 4 and
+# trap 4). Keep the two subjects equal to the ones declared there. A `content_path` is relative to
+# the directory that holds `supabase/`, measured with CLI 2.115.0 on 2026-10-08.
+[auth.email.template.confirmation]
+subject = "Xác nhận địa chỉ email FamilyRoots · Confirm your FamilyRoots email address"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Đặt lại mật khẩu FamilyRoots · Reset your FamilyRoots password"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
