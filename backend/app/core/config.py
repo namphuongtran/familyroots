@@ -97,8 +97,13 @@ class Settings(BaseSettings):
     # visible to a cache after this window — short by default for that reason.
     AVATAR_CACHE_CONTROL_SECONDS: int = 300
 
-    # Firebase FCM
+    # Firebase FCM. The service account comes from FIREBASE_CREDENTIALS_JSON when it is set:
+    # the key file's whole content, inline (ADR-065), because a Vercel Function has no file
+    # mount for a path to name. Otherwise it comes from the file at FIREBASE_CREDENTIALS_PATH.
+    # When neither yields a valid service account, pushes are disabled with a warning at
+    # boot, and the app still serves.
     FIREBASE_CREDENTIALS_PATH: str = "./firebase-credentials.json"
+    FIREBASE_CREDENTIALS_JSON: str = ""
 
     # Sentry
     SENTRY_DSN: str = ""

@@ -162,8 +162,13 @@ of precision.
   calling flow.
 - **Invalid-token pruning**: `messaging.UnregisteredError` stages a `DELETE` of that
   `user_fcm_tokens` row; the scheduler's per-event commit persists it.
-- Firebase Admin is initialized once at startup from `FIREBASE_CREDENTIALS_PATH`;
-  missing/invalid credentials log a warning and pushes silently fail (dev-friendly).
+- Firebase Admin is initialized once at startup, from the inline
+  `FIREBASE_CREDENTIALS_JSON` when it is set (ADR-065: a Vercel Function has no file to
+  point at), and from the file at `FIREBASE_CREDENTIALS_PATH` otherwise.
+  Missing or invalid credentials log a warning and pushes silently fail (dev-friendly).
+  The warning never quotes the inline value (`tests/unit/test_firebase_credentials_source.py`).
+  On Vercel, a cold instance initializes Firebase in its own lifespan, so the
+  cron-triggered anniversary run has it.
 
 ## `notification_log` lifecycle
 
@@ -212,6 +217,7 @@ It is also why the job must stay one of the sanctioned out-of-band writers descr
 | `NOTIFICATION_CRON_HOUR` | `7` | Hour-of-day in the platform zone (both `anniversary_notifications` and `document_purge` key off it). APScheduler only. Vercel Cron's schedule lives in the deploy configuration |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Validated as IANA name at boot (fail-fast) |
 | `FIREBASE_CREDENTIALS_PATH` | `./firebase-credentials.json` | Absent → pushes disabled, app still boots |
+| `FIREBASE_CREDENTIALS_JSON` | `""` | The key file's content inline; wins over the path when set (ADR-065) |
 | `DOCUMENT_RETENTION_DAYS` | `30` | `document_purge` job's retention window (ADR-019) |
 
 ## Related
