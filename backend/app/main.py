@@ -250,7 +250,7 @@ def create_app() -> FastAPI:
         # Browsers hide non-safelisted response headers from JS unless named here.
         expose_headers=["traceparent"],
     )
-    application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+    application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
     # RED metrics into an app-owned registry (not the process-global default) so
     # building several apps in one test session cannot raise Duplicated timeseries.
     # instrument() is itself an add_middleware call, so it lives here, last:

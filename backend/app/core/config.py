@@ -117,6 +117,24 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
     ALLOWED_HOSTS: list[str] = ["*"]
+    # Vercel's system variable: this deployment's own generated hostname, such as
+    # ``familyroots-9xtnrccz1-namtp.vercel.app``, without a scheme. Vercel Cron calls that
+    # host, not the production alias in ALLOWED_HOSTS, so without it TrustedHostMiddleware
+    # answered both cron routes 400 (#265, measured 2026-10-10). ``trusted_hosts`` adds it.
+    VERCEL_URL: str = ""
+
+    @property
+    def trusted_hosts(self) -> list[str]:
+        """ALLOWED_HOSTS, plus this deployment's own Vercel hostname when one is set.
+
+        Only an explicit list is extended. ``["*"]`` already admits every host, and the
+        production validator refuses it. The hostname names this deployment alone, because
+        Vercel routes a request by its Host, so admitting it admits no other deployment."""
+        host = self.VERCEL_URL.strip().removeprefix("https://").removeprefix("http://")
+        host = host.rstrip("/")
+        if not host or self.ALLOWED_HOSTS == ["*"] or host in self.ALLOWED_HOSTS:
+            return self.ALLOWED_HOSTS
+        return [*self.ALLOWED_HOSTS, host]
 
     # Rate limiting — only trust X-Forwarded-For when behind a trusted proxy/LB.
     # None means "not decided": fine in dev (resolves False), rejected in
