@@ -338,9 +338,11 @@ Vercel bundle.
 5. The backend image, with its own `CMD`, `APP_ENV=production` and no source mount. The step waits for
    `GET /health` to answer 200 with `"migrations":"current"`. If the process exits first, the step
    fails and quotes the container's `RuntimeError:` line.
-6. The web image, read once in Chromium. `/vi/login` must render the login form and no
+6. The backend image's own `HEALTHCHECK`, as Docker reports it. The step fails unless it reads
+   `healthy` (#230, below).
+7. The web image, read once in Chromium. `/vi/login` must render the login form and no
    missing-Supabase banner. Then the container is removed, because the harness does not use it.
-7. `pnpm test:e2e:auth`, on `next dev` as on a laptop, against the backend container.
+8. `pnpm test:e2e:auth`, on `next dev` as on a laptop, against the backend container.
 
 Nothing is uploaded, on success or failure. `web/e2e/.auth/` holds live sessions, and a Playwright
 report or trace carries the same cookies in its captured requests. The repository is public, so its
@@ -426,18 +428,55 @@ job, before the entry existed: the heading it waits for never appeared, on the f
 (`isSecureContext` false, no `crypto.subtle`), and the third row shows that is not the cause. Why a
 refused HMR socket leaves the session read pending was not established.
 
-### The image's own `HEALTHCHECK` reports unhealthy here, and the job does not read it
+### The image's own `HEALTHCHECK` reports healthy here, and the job reads it (#230)
 
-`backend/Dockerfile`'s `HEALTHCHECK` requests `http://localhost:8000/health`. `ALLOWED_HOSTS` does not
-list `localhost`, so `TrustedHostMiddleware` answers 400 and Docker marks the container unhealthy.
-Read on this repository's Linux dev machine on 2026-10-06, with the image booted as the job boots it:
-the container log held six `"GET /health HTTP/1.1" 400 Bad Request` lines from the probe beside two
-200s from the runner, and `docker inspect` read `unhealthy failing-streak=7`. The job reads
-`GET /health` from the runner, through the host the backend admits. Render's blueprint set
-`ALLOWED_HOSTS` to `["familyroots-api.onrender.com"]`, which did not list `localhost` either, so the
-same probe would have failed inside a production container too. **Since #252 no production
-container exists.** Vercel runs the backend from source with its own Python runtime, so the image's
-`HEALTHCHECK` matters only to compose and to this job. #230 tracks the probe itself.
+`backend/Dockerfile`'s `HEALTHCHECK` runs `python -m app.healthcheck` (`backend/app/healthcheck.py`).
+It sends `GET /health` to `127.0.0.1:8000` under a `Host` taken from the container's own
+`ALLOWED_HOSTS`, read through the same `Settings` the app builds: the first entry, a name under the
+domain when that entry is a `*.domain` wildcard, and `localhost` for the development default `["*"]`.
+`TrustedHostMiddleware`, its place in the stack and `ALLOWED_HOSTS` are unchanged, and no path is
+exempted from the host check. The probe exits 1 on anything but a 200, and `/health` reads the
+database, so a database that is unreachable or behind still reads unhealthy.
+
+**Why it changed.** Until #230 the probe requested `http://localhost:8000/health`. This job's
+`ALLOWED_HOSTS` is `["127.0.0.1"]`, which does not list `localhost`, so `TrustedHostMiddleware`
+answered 400 and Docker marked a healthy container unhealthy. Read on this repository's Linux dev
+machine on 2026-10-06 at `f6f9409`, with the image booted as the job boots it: six
+`"GET /health HTTP/1.1" 400 Bad Request` lines from the probe beside two 200s from the runner, and
+`docker inspect` read `unhealthy failing-streak=7`. Render's `["familyroots-api.onrender.com"]` did
+not list `localhost` either, and no production list does.
+
+**Read on 2026-10-10**, on the macOS dev machine with Docker 29.8.2, on #230's branch based on
+`3169076`. Each container was booted under `APP_ENV=production` beside a throwaway Postgres, migrated
+by the image's own `alembic upgrade head`, and read once it had left `starting` and one more
+`--interval` had passed:
+
+| Container | `ALLOWED_HOSTS` | Docker's reading | The probe's last line, from `.State.Health.Log` | `GET /health` in the container log |
+|---|---|---|---|---|
+| the image | `["127.0.0.1"]` | `healthy failing-streak=0` | `GET /health (Host: 127.0.0.1) -> 200` | 4 × `200 OK` |
+| the image | `["*.familyroots.example","api.familyroots.example"]` | `healthy failing-streak=0` | `GET /health (Host: healthcheck.familyroots.example) -> 200` | 4 × `200 OK` |
+| control 1: the old probe put back | `["127.0.0.1"]` | `unhealthy failing-streak=4` | `urllib.error.HTTPError: HTTP Error 400: Bad Request` | 6 × `400 Bad Request` |
+| control 2: the image, its `CMD` replaced by `sleep 600` | `["127.0.0.1"]` | `unhealthy failing-streak=4` | `ConnectionRefusedError(111, 'Connection refused')` | none |
+
+Control 2 is the one that shows the probe can still fail. Without it, a probe that reported healthy
+because of the host it sends would read the same as one that measures `/health`.
+
+**Starlette admits the wildcard pattern itself as a Host**, because it matches `*.domain` by suffix,
+so sending `*.familyroots.example` literally would also pass the middleware. `*` admits `*` too. The
+probe sends a name instead, and `backend/tests/unit/test_image_healthcheck.py` reads the Host the
+server received, not only the status. That test runs the probe against a real uvicorn behind
+`TrustedHostMiddleware` for each `ALLOWED_HOSTS` shape the validator admits.
+
+**Compose's `api` service runs the same probe.** It sets only the timings, and Docker keeps an
+image's test when a container sets none. A container compose created read
+`"Test":["CMD","python","-m","app.healthcheck"]` with compose's 15 s interval, and, run against a
+throwaway database under compose's `APP_ENV: development`, `healthy failing-streak=0` with the probe
+sending `Host: localhost`.
+
+**The job reads it**, in the step after the boot. It waits for Docker to leave `starting` and fails
+unless the status is `healthy`. 150 s covers a failing probe: 15 s of `--start-period`, then three
+30 s `--interval`s. **Since #252 no production container exists.** Vercel runs the backend from source
+with its own Python runtime, so the image's `HEALTHCHECK` matters only to compose and to this job.
 
 ### The job inherited the harness's rate-limit collision, until #226
 

@@ -70,8 +70,11 @@ COPY --chown=appuser:appuser migrations/ ./migrations/
 
 EXPOSE 8000
 
+# app/healthcheck.py sends GET /health under a Host taken from this container's own
+# ALLOWED_HOSTS. A bare `localhost` request gets TrustedHostMiddleware's 400 under any
+# production list, which marked a healthy container unhealthy (#230).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+    CMD ["python", "-m", "app.healthcheck"]
 
 USER appuser
 

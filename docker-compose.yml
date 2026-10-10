@@ -47,8 +47,10 @@ services:
     depends_on:
       pgdb:
         condition: service_healthy
+    # No `test:` on purpose: the probe is the image's own HEALTHCHECK (backend/Dockerfile,
+    # app/healthcheck.py), and Docker keeps an image's test when the container sets only the
+    # timings. A copy here went stale once already (#230).
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
       timeout: 5s
       retries: 5
