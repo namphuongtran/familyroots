@@ -1029,6 +1029,33 @@ CREATE INDEX ix_clan_invitations_clan_email ON clan_invitations(clan_id, email);
 
 ---
 
+## Roles and grants
+
+On 2026-10-10 the maintainer decided that the application database lives in the Supabase project,
+beside Supabase's own roles ([ADR-066](../decisions/066-the-application-database-lives-in-the-supabase-project.md),
+#251). Nothing was live yet. The table says what each role holds in `public` and which migration
+sets it. `backend/tests/integration/test_supabase_shaped_database.py` checks the membership row
+and the `anon` and `authenticated` row by running statements as those roles. Nothing tests
+`service_role`.
+
+| Role | Used by | Holds in `public` | Set by |
+|---|---|---|---|
+| The login, the user in `DATABASE_URL`. On Supabase that is `postgres`: not a superuser, `CREATEROLE`, `BYPASSRLS` | Alembic, and every system session: the scheduler, the purge, `get_system_db` | Owns every table, so RLS (`ENABLE`d, not `FORCE`d) never applies to it | |
+| `familyroots_app`, `NOLOGIN NOBYPASSRLS` | Every request transaction, by `SET LOCAL ROLE` (`app/core/rls.py`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on tables, `EXECUTE` on functions, `USAGE, SELECT` on sequences, now and as default privileges | `002`, `026` |
+| The login's membership in `familyroots_app` | The `SET LOCAL ROLE` above | `SET`, without `INHERIT`. The login grants it to itself unless it could already set the role, as a superuser can | `041` |
+| `anon`, `authenticated`, which exist on Supabase only | The Data API (PostgREST), for a request without a session and with one | **Nothing.** No table, sequence or routine privilege, and none in the login's default privileges, so a later migration's objects stay closed too | `042` |
+| `service_role`, Supabase only | The service-role key, which only the backend holds | Untouched by this chain | |
+| `PUBLIC` | Every role, including the three above | `USAGE` on the schema, and Postgres's default `EXECUTE` on functions. Every function is `SECURITY INVOKER`, so a call reads its tables as the caller | |
+
+**No policy names a role.** Every `CREATE POLICY` in the chain applies to `PUBLIC`. So `anon`
+meets the same policies `familyroots_app` does, and three of them do not read `app.clan_id`:
+`user_clan_roles_sel`, `user_clan_roles_ins` and `audit_logs_ins`. `user_profiles` and
+`user_fcm_tokens` carry no RLS at all (ADR-059). The grants in the `anon` row are therefore what
+keep the Data API off the application's tables. Removing `public` from the project's exposed
+schemas is the second lock, set in the dashboard (ADR-066 § 4).
+
+---
+
 ## RLS Policies
 
 > **Correction (2026-08-22): the SQL below never shipped, and the

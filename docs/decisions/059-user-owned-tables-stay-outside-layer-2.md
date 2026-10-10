@@ -20,6 +20,31 @@ grilling session on 2026-10-04.
 > for a MATCH FULL key and its MATCH SIMPLE twin. The sentences below that call the clause prose,
 > or owed to #169, describe the state before this amendment.
 
+> **Amendment (2026-10-10, issue #251): § 5's second event fired, and
+> [ADR-066](066-the-application-database-lives-in-the-supabase-project.md) answers it.** On
+> 2026-10-10 the maintainer moved the application database into the Supabase project. So the § Context
+> paragraph "The production application database is not the Supabase database" describes the state
+> before this amendment.
+>
+> **The answer is a grant, not a policy.** Migration `042` revokes everything `anon` and
+> `authenticated` hold in `public`, on tables, sequences and routines, and in the login's default
+> privileges. Removing `public` from the Data API's exposed schemas is the second lock.
+>
+> **§ 3's posture and § 4's accepted risk stand unchanged for the request role**: both tables stay
+> outside layer 2, and `familyroots_app` can still read every row. The Data API, which § 5 feared,
+> holds nothing on them. § 5's first event, `app.user_id`, is untouched and still reopens this.
+>
+> **§ 5 item 2 understated the exposure.** It said the clan-keyed tables would fail closed and these
+> two would not. No policy in the chain names a role, so every policy applies to `anon`. Three of
+> them do not read `app.clan_id`: `user_clan_roles_sel`, `user_clan_roles_ins` and `audit_logs_ins`.
+> Measured on a fresh `supabase/postgres:17.6.1.084` with the chain stopped before `042`, `anon` with
+> no clan GUC did two things:
+>
+> - it read `user_profiles.email`;
+> - it inserted an approved `admin` row into `user_clan_roles`.
+>
+> After `042`, both answer `permission denied for table`. ADR-066 § Context has the readings.
+
 **This ADR ships no runtime code.** The diff is this file, its index row, a glossary, and citation
 edits in three places that named this decision as owed: the two reason strings in
 `_NOT_CLAN_OWNED_TABLES`, `docs/architecture/multi-tenancy.md`, and `docs/ops/local-supabase.md`.

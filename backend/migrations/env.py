@@ -17,7 +17,12 @@ from app.models.base import Base
 config = context.config
 # Settings normalizes DATABASE_URL to postgresql+psycopg://, so engine_from_config
 # here uses the sync side of the same psycopg v3 driver the app uses for async.
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Config is a ConfigParser with interpolation, so every "%" is doubled on the way in.
+# A password with "@", ":" or "/" arrives percent-encoded (the Supabase pooler URL has
+# one), and an undoubled "%40" fails here with "invalid interpolation syntax", printing
+# the whole URL, password included. get_main_option and get_section undo the doubling.
+# Pinned by tests/integration/test_migrations_env_encoded_url.py (#251).
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 if config.config_file_name is not None:
     # disable_existing_loggers=False: the default (True) sets .disabled on every
