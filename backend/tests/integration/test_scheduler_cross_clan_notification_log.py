@@ -8,10 +8,14 @@ is one process serving every clan on the platform: one advisory lock, one query 
 dedup `SELECT` would return nothing and the `INSERT` would be rejected — and the failure would
 not look like a failure. Every clan but one would simply stop receiving giỗ reminders.
 
-It does not apply, for a reason that has to stay true rather than be assumed: the job binds
-its `AsyncSession` to a bare `engine.connect()` (`app/services/scheduler.py:90, 102`), which is
-**not** an `RlsSession`, so the `after_begin` seam never fires, no `SET LOCAL ROLE` is issued,
-and the connection keeps the `DATABASE_URL` login role, which bypasses RLS.
+It does not apply, for a reason that has to stay true rather than be assumed: the job builds
+its work session as a plain `AsyncSession(bind=engine)` in `send_anniversary_notifications`
+(`app/services/scheduler.py`, ADR-065's lock topology; it was bound to a bare
+`engine.connect()` before). That is **not** an `RlsSession`, so the `after_begin` seam never
+fires, no `SET LOCAL ROLE` is issued, and the connection keeps the `DATABASE_URL` login role,
+which bypasses RLS. The job constructs that session itself rather than taking it from
+`AsyncSessionLocal`, which this test replaces, so the test still exercises the job's own
+session class.
 
 The test therefore asserts three things in one run, and the third is what makes the first two
 mean something:

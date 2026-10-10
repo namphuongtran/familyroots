@@ -53,8 +53,9 @@ count** under the database provider's ceiling:
   Corrected 2026-10-10 (#250): this section used to add `N_background_jobs = 2`
   on top, saying each job's `engine.connect()` sat "outside the pooled
   sessionmaker". It does not. `engine.connect()` checks out of the very pool
-  `make_engine` built (`app/core/database.py`), as every request session does
-  (the lock topology is in
+  `make_engine` built (`app/core/database.py`), as every request session does.
+  Since ADR-065 each job holds **two** of them while it runs: its lock connection
+  and its work session (see
   [notifications-scheduler.md](../architecture/notifications-scheduler.md)). So
   a job in progress takes headroom away from requests, but it cannot push an
   instance past `DB_POOL_SIZE + DB_MAX_OVERFLOW`.

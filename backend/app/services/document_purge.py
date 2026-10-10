@@ -29,7 +29,8 @@ loses cleanly once the claim commits (the row is gone; the restore call then
 restored it.
 
 Per-item isolation: one failure never stops the sweep. Advisory-locked on its
-own key so multi-replica deployments run it once.
+own key, transaction-scoped (ADR-065), so concurrent runs (replicas, or a Vercel
+Cron delivery that arrives twice) do the sweep once.
 """
 
 import logging
@@ -56,11 +57,12 @@ async def purge_expired_documents(now: datetime | None = None) -> None:
     ``now`` is injectable only for deterministic tests; production always leaves it
     None so the cutoff is the real current instant.
 
-    Lock topology mirrors send_anniversary_notifications (C2): the advisory lock
-    lives on ONE dedicated connection held for the whole job; the working session
-    is bound to that same connection so mid-job commits can't release it back to
-    the pool and strand the lock. The finally block rolls back before unlocking so
-    a failed job can't mask its own error with InFailedSqlTransaction.
+    Lock topology is send_anniversary_notifications's (ADR-065), which carries the full
+    rationale: ``pg_try_advisory_xact_lock`` in one transaction on a dedicated lock
+    connection, held open for the whole job, while the work runs on a separate system
+    session bound to the engine. The per-item commits below therefore cannot release or
+    strand the lock, and the lock ends when the lock transaction does, whether that is
+    success, error, or the process dying.
     """
     from app.core.database import engine
 
@@ -69,20 +71,17 @@ async def purge_expired_documents(now: datetime | None = None) -> None:
     cutoff = now - timedelta(days=settings.DOCUMENT_RETENTION_DAYS)
     storage = SupabaseStorageAdapter()
 
-    async with engine.connect() as conn:
-        acquired = await conn.execute(
-            text("SELECT pg_try_advisory_lock(:k)"), {"k": _PURGE_LOCK_KEY}
+    async with engine.connect() as lock_conn:
+        # Autobegins THE lock transaction, which the finally below ends.
+        acquired = await lock_conn.execute(
+            text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": _PURGE_LOCK_KEY}
         )
         if not acquired.scalar():
-            logger.info("Document purge lock held elsewhere — skipping")
-            await conn.rollback()
+            logger.info("Document purge lock held by another run — skipping")
+            await lock_conn.rollback()
             return
-        # End the autobegun transaction the lock SELECT opened (the
-        # session-level advisory lock survives commit). See send_anniversary_notifications
-        # for the full rationale.
-        await conn.commit()
 
-        db = AsyncSession(bind=conn, expire_on_commit=False)
+        db = AsyncSession(bind=engine, expire_on_commit=False)
         try:
             rows = (
                 (
@@ -131,10 +130,8 @@ async def purge_expired_documents(now: datetime | None = None) -> None:
                     await db.rollback()
                     continue
         finally:
-            # Roll back any open/aborted transaction BEFORE unlocking: the
-            # session-level advisory lock survives rollback, and unlocking on
-            # an aborted tx would raise and mask the job's real error.
-            await db.rollback()
+            # End the work session first, then the lock transaction, which releases the
+            # lock. In that order the next run cannot take the lock while this run still
+            # has a transaction open.
             await db.close()
-            await conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _PURGE_LOCK_KEY})
-            await conn.commit()
+            await lock_conn.rollback()

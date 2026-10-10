@@ -27,18 +27,46 @@ with concurrent runs of themselves.
   cannot split the occurrence math from the "N days away" gate. This is one **global**
   platform zone; per-clan timezones are out of scope.
 
-## Multi-replica safety — Postgres advisory lock
+## Multi-replica safety — a transaction-scoped advisory lock
 
-Every replica runs the scheduler, so each job elects a single runner via its
-own advisory lock (see the table above for lock keys):
+Every replica running the scheduler races for each job. So does every Vercel Cron
+delivery, which may arrive twice. Each job therefore elects a single runner through
+its own advisory lock (see the table above for the keys). Since
+[ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md) (2026-10-10) that
+lock is **transaction-scoped**:
 
-- `pg_try_advisory_lock` on a **dedicated connection held for the whole job**. If not
-  acquired → log and skip the run.
-- The working `AsyncSession` is **bound to that same connection**, so mid-job commits
-  can't return the connection to the pool and strand the session-level lock.
-- The `finally` block **rolls back before unlocking**: the advisory lock survives
-  rollback, and unlocking on an aborted transaction would raise
-  `InFailedSqlTransaction` and mask the job's real error.
+- `pg_try_advisory_xact_lock` runs in **one transaction on a dedicated lock
+  connection**, and that transaction stays open, doing nothing else, for the whole
+  job. If the lock is not acquired, the job logs it and skips the run.
+- The work runs on a **separate system session**, a plain `AsyncSession(bind=engine)`.
+  Its per-item commits and rollbacks therefore happen on another connection, and can
+  neither release the lock early nor strand it.
+- **The lock ends when the lock transaction ends.** On success or on error, the
+  `finally` block closes the work session first and then rolls the lock transaction
+  back. If the process dies, its connection drops, the server ends the transaction,
+  and the lock goes with it. The lock connection runs nothing after the lock, so its
+  rollback cannot meet `InFailedSqlTransaction` and mask the job's own error.
+- While a job runs it holds **two** connections: the lock connection and its work
+  session's.
+- **Why not the session-level lock this replaced** (the C2 topology,
+  seam-review-2026-07-04). `pg_try_advisory_lock` was taken in one transaction,
+  committed, and unlocked in a later transaction. Behind a transaction pooler
+  (Supavisor on `:6543`, which is how the backend reaches Postgres from Vercel
+  Functions) only a transaction stays on one server connection. The unlock could
+  run on a different server connection and miss. The lock then stayed on a server
+  connection that outlives the client, and every later run skipped without raising.
+  Clans would simply have stopped getting giỗ reminders.
+- **One precondition.** The lock transaction sits idle in transaction for the job's
+  whole run. A server-side `idle_in_transaction_session_timeout` shorter than the job
+  would end it early, freeing the lock mid-run, and the final rollback would then
+  raise on the dead connection. Keep any such timeout longer than a job takes. Vercel
+  ends a function at 300 s on Hobby.
+
+`backend/tests/integration/test_job_lock_survives_a_pooler.py` reads both outcomes
+against real Postgres, for both jobs. First, a concurrent second run skips. Second, a
+later run on a **second engine** takes the lock and does the work, while the first
+engine's connections, like a pooler's server connections, live on. Restoring the
+session-level lock with its unlock on another connection fails the second test.
 
 This topology is shared verbatim by `document_purge`
 (`app/services/document_purge.py`) — see
@@ -121,10 +149,10 @@ enabled with the ordinary clan-isolation policy,
 
 **That does not narrow this job, and the reason is worth holding onto.** The policy applies
 only to sessions that ran `SET LOCAL ROLE familyroots_app`, which is the `after_begin` seam on
-`RlsSession` (`backend/app/core/rls.py:63-65`). This job binds its `AsyncSession` to a bare
-`engine.connect()` (`backend/app/services/scheduler.py:90, 102`) — a plain connection, not an
-`RlsSession` — so no seam fires, the connection keeps the `DATABASE_URL` login role, and RLS
-does not apply. One run still scans every clan's events and writes a row per due event
+`RlsSession` (`backend/app/core/rls.py:63-65`). This job builds its work session as a plain
+`AsyncSession(bind=engine)` (`backend/app/services/scheduler.py:116`; until ADR-065 it was
+bound to a bare `engine.connect()`), which is not an `RlsSession`. So no seam fires, the
+connection keeps the `DATABASE_URL` login role, and RLS does not apply. One run still scans every clan's events and writes a row per due event
 whatever clan it belongs to.
 
 **The failure this would cause is silent, so it is tested rather than argued.** If the seam
