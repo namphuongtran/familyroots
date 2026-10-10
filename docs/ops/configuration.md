@@ -33,6 +33,7 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `INVITE_LINK_ORIGIN` | `http://localhost:3000` | Origin of the **web** app that `invite_url` in the create-invitation response is built on: `<origin>/<locale>/invitations/<token>` ([ADR-062](../decisions/062-the-backend-composes-the-invitation-link.md)). A trailing slash is tolerated. Not the API origin: the API answers that path with a 404 | **Boot fails** if empty or it names `localhost`/`127.0.0.1`. Declared `sync: false` in render.yaml: **the owner sets it in the Render dashboard before the deploy that carries #191**, or that deploy refuses to boot |
 | `DB_POOL_SIZE` | `10` | Async engine `pool_size` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
 | `DB_MAX_OVERFLOW` | `20` | Async engine `max_overflow` ([ADR-028](../decisions/028-no-external-io-holding-db-connection.md)) | Tune with headroom math below |
+| `DB_EXTERNAL_POOLER` | `false` | `DATABASE_URL` points at a **transaction pooler**: Supabase's Supavisor on `:6543`, which is how the backend reaches Postgres from Vercel Functions ([ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md)). `true` builds the engine with `NullPool` and passes `prepare_threshold=None` to psycopg, and `DB_POOL_SIZE`/`DB_MAX_OVERFLOW` are then ignored. `false` keeps the sized QueuePool exactly as ADR-028 built it | `true` wherever `DATABASE_URL` names a transaction pooler, so on Vercel (set by the deploy issue, #252). Leave `false` for a direct Postgres or Docker's `pgdb`. Nothing validates the pairing, so a pooler URL with `false` boots and then fails per request with `DuplicatePreparedStatement` |
 
 ## DB connection pool headroom (ADR-028)
 
@@ -45,26 +46,31 @@ Sizing them safely means keeping the platform's **total possible connection
 count** under the database provider's ceiling:
 
 ```
-(DB_POOL_SIZE + DB_MAX_OVERFLOW + N_background_jobs) × instances ≤ provider connection ceiling
+(DB_POOL_SIZE + DB_MAX_OVERFLOW) × instances ≤ provider connection ceiling
 ```
 
-- `N_background_jobs = 2` — the in-process scheduler's `anniversary_notifications`
-  and `document_purge` jobs (`app/services/scheduler.py`,
-  `app/services/document_purge.py`) each open their **own** dedicated
-  `engine.connect()` outside the pooled sessionmaker (see
-  [notifications-scheduler.md](../architecture/notifications-scheduler.md) — the
-  advisory-lock topology requires a connection dedicated to the job, not one
-  borrowed from a request's session), so they add to the per-instance
-  connection count on top of the pool.
+- **The background jobs draw from the same pool; they do not add to it.**
+  Corrected 2026-10-10 (#250): this section used to add `N_background_jobs = 2`
+  on top, saying each job's `engine.connect()` sat "outside the pooled
+  sessionmaker". It does not. `engine.connect()` checks out of the very pool
+  `make_engine` built (`app/core/database.py`), as every request session does
+  (the lock topology is in
+  [notifications-scheduler.md](../architecture/notifications-scheduler.md)). So
+  a job in progress takes headroom away from requests, but it cannot push an
+  instance past `DB_POOL_SIZE + DB_MAX_OVERFLOW`.
 - `instances` — the number of running app replicas (Render service instance
   count).
 - Supabase's **small-tier direct-connection ceiling is roughly 60**. With the
-  defaults (`10 + 20 = 30` per instance) and 2 background-job connections, two
-  instances already reach `(30 + 2) × 2 = 64` — over that ceiling. Lower
-  `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`, or point at Supabase's transaction-mode
-  pooler (pgbouncer, see the note in `app/core/database.py` about
-  `prepare_threshold`) for higher effective headroom, before scaling instance
-  count on the small tier.
+  defaults (`10 + 20 = 30` per instance), two instances already reach `60`, the
+  whole ceiling. Lower `DB_POOL_SIZE`/`DB_MAX_OVERFLOW` before scaling instance
+  count on the small tier, or move behind Supabase's transaction pooler with
+  `DB_EXTERNAL_POOLER=true`.
+- **Behind a transaction pooler (`DB_EXTERNAL_POOLER=true`, ADR-065) this
+  formula does not apply.** The engine uses `NullPool`, so an instance holds
+  a connection only while a request or a job is using it, and the pooler
+  multiplexes those client connections onto its own server pool. The limit
+  that matters there is the pooler's client-connection limit, and the number
+  of instances Vercel runs at once, not `DB_POOL_SIZE`.
 - This formula caps the **connection budget**; it does not by itself prevent a
   connection from being held idle-in-transaction across slow external I/O —
   that's the separate hygiene rule in [ADR-028](../decisions/028-no-external-io-holding-db-connection.md)

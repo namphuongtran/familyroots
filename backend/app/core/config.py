@@ -176,6 +176,22 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
 
+    # DATABASE_URL points at an external TRANSACTION pooler (ADR-065): Supabase's Supavisor
+    # on :6543, which is how the backend reaches Postgres from Vercel Functions. True changes
+    # two things in make_engine (app/core/database.py), and the pooler needs both:
+    #   - NullPool. The pooler is the pool. A serverless instance is frozen between requests
+    #     and may never thaw, so connections it parked in a QueuePool of its own would sit
+    #     open against the pooler's client limit. DB_POOL_SIZE / DB_MAX_OVERFLOW are ignored.
+    #   - connect_args={"prepare_threshold": None}. psycopg 3 prepares a statement on the
+    #     server once it has run it five times on one connection. A transaction pooler hands
+    #     each transaction whichever server connection is free, so the statement is missing
+    #     where it is next used, or already exists where it is next prepared
+    #     (DuplicatePreparedStatement). None switches server-side preparing off.
+    # False, the default, leaves the engine exactly as ADR-028 built it, for a direct
+    # Postgres or Docker's pgdb. Every session-level setting the app makes is already
+    # transaction-local (SET LOCAL ROLE, set_config(..., true)), so nothing else changes.
+    DB_EXTERNAL_POOLER: bool = False
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:
