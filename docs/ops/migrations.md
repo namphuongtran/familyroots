@@ -93,7 +93,8 @@ Single linear chain:
 `032_rls_clan_invitations` → `033_rls_identity_claims` →
 `034_rls_audit_notification` → `035_rls_clan_settings` →
 `036_rls_user_clan_roles` → `037_drop_allow_public_tree` → `038_drop_privacy_level` →
-`039_drop_clan_settings` → `040_clan_slug_one_shape`.
+`039_drop_clan_settings` → `040_clan_slug_one_shape` →
+`041_grant_app_role_to_login` → `042_close_data_api_on_public`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -211,6 +212,35 @@ restores `001`'s CHECK text exactly, and cannot fail on data, because every slug
 shape admits, the old one admits too. Pinned by
 `backend/tests/integration/test_clan_slug_shape.py`.
 
+`041_grant_app_role_to_login` lets the migrating login enter `familyroots_app` (#251,
+[ADR-066](../decisions/066-the-application-database-lives-in-the-supabase-project.md)).
+Reversible. On Postgres 16+, a role's non-superuser creator holds it `WITH ADMIN TRUE, INHERIT FALSE,
+SET FALSE`, so Supabase's `postgres`, which is not a superuser, could create the role in `002` and
+then not `SET LOCAL ROLE` to it. Every request transaction would fail, and the production RLS boot
+gate would refuse to start. `upgrade()` does nothing where the login can already set the role, which
+covers every superuser and so CI and compose. Otherwise it self-grants `WITH INHERIT FALSE, SET
+TRUE`, and it fails naming the login if the login can neither set the role nor grant it.
+`downgrade()` revokes only that self-grant. **Role membership is cluster-wide**, so two databases
+migrated by one non-superuser login in one cluster share the grant. It changes who may become
+`familyroots_app`, not what `familyroots_app` may do. **It names every role and never writes
+`CURRENT_USER`**: on `supabase/postgres:17.6.1.084`, `GRANT <role> TO CURRENT_USER` and
+`REVOKE <role> FROM CURRENT_USER` each crash the backend with signal 11 inside Supabase's
+`supautils`, and Postgres then restarts the whole cluster. This was measured on 2026-10-10 against the
+local stack and a private container of the same image. Plain Postgres accepts both forms, so CI
+cannot catch it.
+
+`042_close_data_api_on_public` revokes everything `anon` and `authenticated` hold in `public`, on
+tables, sequences and routines, and in the login's default privileges, both per-schema and global
+(#251, ADR-066). It does nothing where those roles do not exist, which covers CI, compose and plain
+Postgres. **`downgrade()` is a deliberate no-op**: a rollback must not re-open the Supabase Data API
+onto the application's tables. Measured on 2026-10-10 on a fresh `supabase/postgres:17.6.1.084`,
+whose out-of-the-box defaults grant `anon` ALL on new tables, with the chain stopped at `041`:
+`anon`, with no clan GUC, read `user_profiles.email` and inserted an approved `admin` row into
+`user_clan_roles`. Every policy in
+the chain applies to `PUBLIC`, and `user_clan_roles_ins` is `WITH CHECK (true)` by decision. After
+`042`, both statements answer `permission denied for table`. Pinned by
+`backend/tests/integration/test_supabase_shaped_database.py`.
+
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
@@ -218,7 +248,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `040_clan_slug_one_shape`; verify with `cd backend && uv run alembic heads`.
+Head = `042_close_data_api_on_public`; verify with `cd backend && uv run alembic heads`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 
