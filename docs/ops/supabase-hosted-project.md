@@ -1,21 +1,40 @@
 # The hosted Supabase project
 
-The hosted Supabase project serves **auth and storage only**. The application database is Render's
-`familyroots-db` (`infra/render/render.yaml:17-20`), not this project. This file records how the
-project was set up, what it held when it was read, and how to check it again. The local stack is a
-separate thing, covered in [local-supabase.md](local-supabase.md).
+**Since 2026-10-10 the hosted project is `xkmutzxdhdigyfisfrwd`, and it holds the application
+database as well as auth and storage** (#251, #252, ADR-066). Until then the application database
+was Render's `familyroots-db`, and a different project, `bftqrkgbulwtbptnpfca` in Tokyo, served
+auth and storage only. Render is retired, and nothing was live, so no data moved. This file records
+how a project is set up, what it held when it was read, and how to check it again. The local stack
+is a separate thing, covered in [local-supabase.md](local-supabase.md).
 
-Everything below was read or done on **2026-10-04**, with Supabase CLI 2.119.0, under issue #163.
-Re-run a command before trusting its reading.
+| | Current project | Retired project |
+|---|---|---|
+| Ref | `xkmutzxdhdigyfisfrwd` (`https://xkmutzxdhdigyfisfrwd.supabase.co`) | `bftqrkgbulwtbptnpfca` (`https://bftqrkgbulwtbptnpfca.supabase.co`) |
+| Region | `ap-southeast-1` (Singapore), beside the Vercel functions in `sin1` | `ap-northeast-1` (Tokyo) |
+| Postgres | 17. `supabase projects list` on 2026-10-10 read `"version":"17.11.0.003"`, `"postgres_engine":"17"` | 17 |
+| Holds | the application database (`public`, migrated by Alembic from CI, [migrations.md](migrations.md)), auth, and storage | auth and storage only |
+| Pointed at by | the backend's `SUPABASE_URL` and `DATABASE_URL`, the web's `NEXT_PUBLIC_SUPABASE_URL`, and the backup secrets ([deployment.md](deployment.md), "Go-live checklist") | `web/.env.local` on the maintainer's machine, as read 2026-10-04 |
 
-| | |
-|---|---|
-| Name | Family Roots Project |
-| Ref | `bftqrkgbulwtbptnpfca` (`https://bftqrkgbulwtbptnpfca.supabase.co`) |
-| Region | `ap-northeast-1` |
-| Postgres | 17 |
-| `public` schema | 0 tables, counted from `pg_class`. Expected, because the app tables live on Render |
-| Pointed at by | `web/.env.local`, plus the backend's `SUPABASE_URL` (values in [secrets.md](secrets.md)) |
+**Which sections were read on which project.** § 2, § 3 and the traps in § 5 were read or done on
+**2026-10-04**, on the **retired** project, with Supabase CLI 2.119.0, under issue #163. Keep them
+as the record of what a fresh project looked like and as the procedure. None of them has been
+repeated on `xkmutzxdhdigyfisfrwd`. Every owner step for the current project is listed once, in
+[deployment.md](deployment.md), "Go-live checklist", A. Re-run a command before trusting its
+reading.
+
+**What the current project needs that the retired one did not**, because it now holds the
+application tables:
+
+- **`public` must not be served by the Data API.** Supabase grants `anon` and `authenticated`
+  access to new tables in `public` by default, and the anon key ships in the web bundle. Migration
+  `042_close_data_api_on_public` revokes those grants, and the dashboard step that removes `public`
+  from the exposed schemas is the second lock (ADR-066).
+- **The migrating login must be able to `SET ROLE familyroots_app`.** Supabase's `postgres` is
+  not a superuser. Migration `041_grant_app_role_to_login` makes it a member (ADR-066), so the
+  app's `DATABASE_URL` and CI's `MIGRATION_DATABASE_URL` use that same login.
+- **Two connection strings, two poolers.** The app connects through Supavisor's transaction
+  pooler on `:6543` with `DB_EXTERNAL_POOLER=true` (#250). CI migrates through the session pooler on
+  `:5432` ([migrations.md](migrations.md), "How migrations reach production").
 
 ---
 
@@ -23,19 +42,25 @@ Re-run a command before trusting its reading.
 
 ```bash
 supabase login                                        # once per machine; the token goes to the OS keychain
-supabase link --project-ref bftqrkgbulwtbptnpfca      # writes supabase/.temp/, which supabase/.gitignore ignores
+supabase link --project-ref xkmutzxdhdigyfisfrwd      # writes supabase/.temp/, which supabase/.gitignore ignores
 supabase projects list                                # must show the project as ACTIVE_HEALTHY
 ```
+
+On 2026-10-04 this section linked the retired `bftqrkgbulwtbptnpfca`. A machine linked then is
+still linked to it, so run `supabase link` again before any `--linked` command.
 
 `supabase db query --linked "<sql>"` runs SQL through the Management API with a temporary login
 role. It needs no database password. It is the reliable way to read `storage.*` and `auth.*` state.
 
 ---
 
-## 2. Buckets: done 2026-10-04
+## 2. Buckets: done 2026-10-04 on the retired project, not yet on the current one
 
 The backend needs two buckets, declared in `supabase/config.toml` `[storage.buckets.*]`. That is the
-same declaration the local stack uses.
+same declaration the local stack uses. **On `xkmutzxdhdigyfisfrwd` the seed has not been run.** It
+is an owner step ([deployment.md](deployment.md), "Go-live checklist", A). The `supabase` commands
+below run unchanged once § 1 links the current project. The two `curl` lines name the retired
+host, so put `xkmutzxdhdigyfisfrwd` in its place. The readings below are the retired project's.
 
 **What was there.** `select count(*) from storage.buckets` returned **0**. The private
 `family-roots-files` was missing as well as the avatars bucket. Until that day, set-avatar returned 503
@@ -114,10 +139,14 @@ When the hosted run is done, replace this section's heading with the date and th
 
 ---
 
-## 3. Auth settings: read 2026-10-04
+## 3. Auth settings: read 2026-10-04 on the retired project
 
 Read with `supabase config diff --project-ref bftqrkgbulwtbptnpfca`, which changes nothing. The
-"local" column is `supabase/config.toml`, the **local stack's** file.
+"local" column is `supabase/config.toml`, the **local stack's** file. **The current project has not
+been read.** Read it the same way with `--project-ref xkmutzxdhdigyfisfrwd` and record it here. Its
+Site URL and Redirect URLs are set at go-live to the web's production origin
+([deployment.md](deployment.md), "Go-live checklist", A), so the "Hosted" column below is not what
+production will run.
 
 | Setting | Hosted | Local file |
 |---|---|---|
@@ -198,12 +227,15 @@ What each shape lands as on the client, and why `?code=` never happens, is in
 
 ### 4a. Push the templates (#203, owner step)
 
+#203's body was written on 2026-10-04 and names the retired `bftqrkgbulwtbptnpfca`. Push to the
+current project, `xkmutzxdhdigyfisfrwd`, as below.
+
 From the repository root, with the CLI pinned in the command. **Not with a global `supabase`, and
 never with 2.115.0**, the version `scripts/supabase_local.sh` pins for the local stack:
 
 ```bash
 npx --yes supabase@2.120.0 login
-npx --yes supabase@2.120.0 config push --workdir supabase --project-ref bftqrkgbulwtbptnpfca
+npx --yes supabase@2.120.0 config push --workdir supabase --project-ref xkmutzxdhdigyfisfrwd
 #   expect four changes listed, then the prompt:
 #     auth.email.template.confirmation.subject  [update]
 #     auth.email.template.recovery.subject      [update]
@@ -233,14 +265,14 @@ hold for 2.115.0, which is also the TypeScript CLI. 2.119.0 itself was not run.
 ### 4b. Read them back, after every push
 
 `scripts/read_back_auth_email_templates.py` reads
-`GET https://api.supabase.com/v1/projects/bftqrkgbulwtbptnpfca/config/auth` and compares
+`GET https://api.supabase.com/v1/projects/<ref>/config/auth` and compares
 `mailer_templates_confirmation_content` and `mailer_templates_recovery_content` with the two files,
 **byte for byte**. It needs a personal access token with `auth:read` (Dashboard → Account →
 Access Tokens), so it is not a CI job. Standard library only:
 
 ```bash
 export SUPABASE_ACCESS_TOKEN=sbp_...
-python3 scripts/read_back_auth_email_templates.py --project-ref bftqrkgbulwtbptnpfca
+python3 scripts/read_back_auth_email_templates.py --project-ref xkmutzxdhdigyfisfrwd
 #   expect "match confirmation" and "match recovery", exit 0
 ```
 
@@ -260,10 +292,10 @@ The read-back proves what the project holds. The email proves what a person rece
 1. Dashboard → Authentication → Users → an account whose mailbox you own → **Send password
    recovery**.
 2. In the email, copy the link **without opening it**. After #203 it must begin with
-   `http://localhost:3000/reset-password?token_hash=` (the Site URL of § 3) and carry
-   `type=recovery`. Before #203 it begins with
-   `https://bftqrkgbulwtbptnpfca.supabase.co/auth/v1/verify?token=` and carries `type=recovery`
-   and `redirect_to=http://localhost:3000`.
+   `<Site URL>/reset-password?token_hash=` and carry `type=recovery`. The Site URL is
+   `https://<web-host>` once go-live has set it, and the project's default until then. Before
+   #203 it begins with `https://xkmutzxdhdigyfisfrwd.supabase.co/auth/v1/verify?token=` and
+   carries `type=recovery` and a `redirect_to` naming the Site URL.
 3. A link that does anything else (`...`, a missing token, another host) is a broken template.
 
 ---

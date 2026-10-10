@@ -177,23 +177,32 @@ jobs:
     needs: [build-and-test, e2e, api-types-fresh]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     defaults:
       run:
         working-directory: web
+    # The secrets reach only the two steps that read them, never `pnpm install`.
     steps:
       - uses: actions/checkout@v4
 
-      # Deploy secrets are an owner go-live action. Until VERCEL_TOKEN exists,
-      # skip with a warning instead of failing the run (an empty --token= made
-      # every merge to main go red). Once the secret is added, deploys resume
-      # automatically on the next push.
-      - name: Check deploy token
+      # Deploy secrets are an owner go-live action (docs/ops/deployment.md, "Go-live
+      # checklist"). Until all three exist, skip with a warning instead of failing the
+      # run (an empty --token= made every merge to main go red). The warning names what
+      # is missing. Once they are added, deploys resume automatically on the next push.
+      # VERCEL_ORG_ID and VERCEL_PROJECT_ID name familyroots-web. With the token alone
+      # the CLI would try to link or create a project instead (#252).
+      - name: Check deploy configuration
         id: gate
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_WEB_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "::warning::VERCEL_TOKEN secret not configured — skipping Vercel deploy (owner go-live action)"
+          missing=""
+          [ -n "$VERCEL_TOKEN" ] || missing="$missing VERCEL_TOKEN"
+          [ -n "$VERCEL_ORG_ID" ] || missing="$missing VERCEL_ORG_ID"
+          [ -n "$VERCEL_WEB_PROJECT_ID" ] || missing="$missing VERCEL_WEB_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "::warning::Web deploy not configured (missing secrets:$missing) — skipping Vercel deploy (owner go-live action)"
             echo "configured=false" >> "$GITHUB_OUTPUT"
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
@@ -217,6 +226,13 @@ jobs:
         if: steps.gate.outputs.configured == 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Deploy to Vercel
+      # No --yes, for the reason backend-ci.yml's deploy step gives: with the ids wrong,
+      # this should fail rather than set up a project. The CLI is pinned so a deploy does
+      # not change tool between two runs; backend-ci.yml pins the same version.
+      - name: Deploy to Vercel (familyroots-web)
         if: steps.gate.outputs.configured == 'true'
-        run: pnpm dlx vercel deploy --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+        run: pnpm dlx vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN"

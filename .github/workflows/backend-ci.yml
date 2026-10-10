@@ -81,28 +81,119 @@ jobs:
           flags: backend
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # Migrate, deploy, then read /health (#252). Render ran the migration as its
+  # preDeployCommand; Vercel runs nothing before a deployment goes live, so this job does.
+  # docs/ops/deployment.md, "Pipeline", has the order and why each step is where it is.
   deploy:
     needs: lint-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    # Override the workflow-level `working-directory: backend` default: this job
-    # only hits a webhook URL and does NOT check out the repo, so the `backend`
-    # subdir does not exist on the runner — inheriting it made bash fail to start
-    # ("No such file or directory"). The workspace root always exists.
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
-    env:
-      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+    timeout-minutes: 20
+    # Two pushes to main close together must not migrate one database at once: Alembic
+    # takes no lock of its own. Queue the second run; never cancel one mid-migration.
+    concurrency:
+      group: backend-production-deploy
+      cancel-in-progress: false
+    # Each secret is passed only to the step that needs it, so neither `uv sync` nor the
+    # migration ever sees the Vercel token.
     steps:
-      # Deploy secrets are an owner go-live action (docs/ops/configuration.md).
-      # Until they exist, skip with a warning instead of failing the run — a
-      # red main on unconfigured infra hides real test regressions. Once the
-      # secret is added, deploys trigger automatically on the next push.
-      - name: Trigger Render deploy (skips until RENDER_DEPLOY_HOOK is configured)
+      - uses: actions/checkout@v4
+
+      # Deploy secrets are an owner go-live action (docs/ops/deployment.md, "Go-live
+      # checklist"). Until every one exists, skip with a warning instead of failing the
+      # run: a red main on unconfigured infra hides real test regressions. A partial set
+      # skips too, and the warning names what is missing, so the job never migrates a
+      # database it then does not deploy against, or deploys code it then does not read.
+      - name: Check deploy configuration
+        id: gate
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_API_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "::warning::RENDER_DEPLOY_HOOK secret not configured — skipping Render deploy (owner go-live action)"
-            exit 0
+          missing=""
+          [ -n "$MIGRATION_DATABASE_URL" ] || missing="$missing secret:MIGRATION_DATABASE_URL"
+          [ -n "$VERCEL_TOKEN" ] || missing="$missing secret:VERCEL_TOKEN"
+          [ -n "$VERCEL_ORG_ID" ] || missing="$missing secret:VERCEL_ORG_ID"
+          [ -n "$VERCEL_API_PROJECT_ID" ] || missing="$missing secret:VERCEL_API_PROJECT_ID"
+          [ -n "$API_ORIGIN" ] || missing="$missing variable:API_ORIGIN"
+          if [ -n "$missing" ]; then
+            echo "::warning::Backend deploy not configured (missing:$missing) — skipping migrate, Vercel deploy and health read (owner go-live action)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
-          curl -f -s -S "$RENDER_DEPLOY_HOOK"
+
+      - name: Install uv
+        if: steps.gate.outputs.configured == 'true'
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        if: steps.gate.outputs.configured == 'true'
+        run: uv python install
+
+      - name: Install runtime dependencies
+        if: steps.gate.outputs.configured == 'true'
+        run: uv sync --frozen --no-dev
+
+      # MIGRATION_DATABASE_URL is Supavisor's SESSION pooler on :5432, not the transaction
+      # pooler the app uses on :6543. The direct host is IPv6-only without the IPv4 add-on,
+      # and GitHub Actions has no IPv6. Settings needs DATABASE_URL and nothing else here:
+      # APP_ENV is unset, so it reads "development" and the production validator does not
+      # run. migrations/env.py takes the URL from settings.DATABASE_URL.
+      - name: Migrate the production database
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          uv run --no-sync alembic upgrade head
+          uv run --no-sync alembic current
+
+      - name: Set up Node.js
+        if: steps.gate.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # VERCEL_ORG_ID and VERCEL_PROJECT_ID name the project, so the CLI needs no
+      # .vercel/project.json. No --yes: that flag answers project set-up questions with
+      # defaults. With the ids wrong, this step should fail, not create a project. Vercel
+      # builds from the upload, and backend/.vercelignore decides what is uploaded.
+      - name: Deploy to Vercel (familyroots-api)
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
+        run: |
+          url="$(npx --yes vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN")"
+          echo "Deployment: $url"
+          echo "Deployed $url to production." >> "$GITHUB_STEP_SUMMARY"
+
+      # Read after the fact. The deployment is already production when this runs. A red
+      # step means production is serving it, so roll back (docs/ops/deployment.md,
+      # "Rollback"). Read through the production host: Standard Protection guards the
+      # deployment's own URL, and ALLOWED_HOSTS admits only the production host. The first
+      # request cold-starts an instance, whose lifespan refuses to boot unless the database
+      # is at head. curl retries 5xx and refused connections; a 503 "behind" is retried
+      # the same way and then fails here.
+      - name: Read /health on the production host
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+        run: |
+          url="${API_ORIGIN%/}/health"
+          response="$(curl -sS --retry 5 --retry-delay 10 --retry-all-errors --max-time 60 \
+            -w '\n%{http_code}' "$url" || true)"
+          status="${response##*$'\n'}"
+          body="${response%$'\n'*}"
+          echo "GET $url -> $status $body"
+          migrations="$(printf '%s' "$body" | jq -r '.migrations // empty' 2>/dev/null || true)"
+          if [ "$migrations" != "current" ]; then
+            echo "::error::GET $url answered $status with migrations=${migrations:-absent}. Production already serves this deployment: roll back (docs/ops/deployment.md, Rollback)"
+            exit 1
+          fi

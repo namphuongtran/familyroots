@@ -11,14 +11,52 @@ There is **one** DB driver. `Settings.DATABASE_URL` normalizes any form
 `postgresql+psycopg://`; the async app and sync Alembic share the same URL
 (`env.py` reuses `settings.DATABASE_URL`). Do not reintroduce asyncpg/psycopg2.
 
-## How migrations run in production (critical)
-`infra/render/render.yaml` sets `preDeployCommand: alembic upgrade head`. This runs
-**before each deploy goes live and BLOCKS the deploy if it fails**. Consequences:
+## How migrations reach production (critical)
+**Since #252 (2026-10-10), CI runs them.** Render's `preDeployCommand` did until then, and
+`infra/render/render.yaml` was deleted with Render. Vercel runs nothing before a deployment goes
+live, so `backend-ci.yml`'s `deploy` job runs `alembic upgrade head` as its first step, on every
+push to `main` that passes `lint-and-test`. Then it deploys, then it reads `/health`
+([deployment.md](deployment.md), "The backend deploy job, step by step"). **A failed migration
+fails the job before anything is deployed.** Consequences:
 - A bad migration fails the release instead of shipping a schema-mismatched app.
 - **Always test a migration against a prod-like DB before merging to `main`** (merge
-  to `main` = production deploy + migration).
-- Keep migrations forward-compatible with the currently-running app during the
-  pre-deploy window where possible.
+  to `main` = production migration + deploy). The production database is Postgres 17
+  (Supabase project `xkmutzxdhdigyfisfrwd`). `backend-ci.yml`'s service container and
+  local `pgdb` ran Postgres 18 when this was written (read at `c39ad2e`).
+- **Keep every migration compatible with the code already live.** The old deployment
+  serves against the new schema until the new one is promoted. On Vercel this window also
+  costs cold starts: the boot gate below demands exact equality, so a cold start of the old
+  deployment raises until the new one is live ([deployment.md](deployment.md), "The window this
+  order leaves").
+- **A code rollback across a migration needs the schema downgraded first**, for the same
+  reason ([deployment.md](deployment.md), "Rollback").
+
+**Which connection, and why.** The job sets `DATABASE_URL` from the `MIGRATION_DATABASE_URL`
+secret, and sets nothing else. `migrations/env.py` reads `settings.DATABASE_URL`, and with
+`APP_ENV` unset `Settings` reads `development`, so the production validator does not run.
+The secret holds Supavisor's **session** pooler on port 5432,
+`postgresql://postgres.xkmutzxdhdigyfisfrwd:<password>@<pooler-host>:5432/postgres`:
+
+- **Not the direct host.** Supabase's direct connection is "on IPv6, or on IPv4 if the
+  project has the IPv4 add-on", and Supabase lists GitHub Actions among the networks with
+  no IPv6 support (Supabase docs, "Connect to your database" and the IPv4/IPv6 compatibility
+  guide, read 2026-10-10). The session pooler is IPv4 on every plan.
+- **Not the transaction pooler** on 6543, which the app uses with `DB_EXTERNAL_POOLER=true`.
+  "Transaction mode does not support prepared statements." A migration is one long session
+  with role and DDL statements, and the session pooler keeps one server connection for it.
+- **The login is the app's own `postgres`.** Migration `041_grant_app_role_to_login` makes
+  the migrating login a member of `familyroots_app`, so the app's `DATABASE_URL` must use the
+  same login (ADR-066).
+
+**The password must not need URL encoding.** `env.py` passes the URL to Alembic's
+`config.set_main_option`, and Alembic's config parser reads `%` as interpolation. Measured
+2026-10-10 with Alembic 1.18.5, the version `backend/uv.lock` pins:
+`postgresql+psycopg://postgres.ref:p%40ss@…` raised
+`ValueError: invalid interpolation syntax … at position 35`, and an alphanumeric password was
+accepted. Use a password with letters and digits only.
+
+**Running one by hand** (a downgrade before a rollback, or a rerun): from `backend/`,
+`DATABASE_URL='<the session-pooler string>' uv run alembic <command>`. Nothing else is needed.
 
 ## Authoring
 ```bash

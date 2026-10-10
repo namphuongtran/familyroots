@@ -1,0 +1,5 @@
+# `vercel link`, run in backend/, writes .vercel/project.json (#252). web/.gitignore
+# carries the same line. The `.env.local` that `vercel link` also writes is already
+# ignored by the root .gitignore (`.env.local`). Do not add `.env*` here: it would
+# ignore the tracked .env.example.
+.vercel

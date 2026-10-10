@@ -9,30 +9,50 @@ bearing in a way the CLI's own comments do not explain, and both are recorded be
 
 ---
 
-## The topology: two databases, on purpose
+## The topology: one database in production, two locally
 
-Production runs **two separate databases**, and the local stack mirrors that rather than merging
-them:
+**Since 2026-10-10, production runs one database** (#251, ADR-066). The Supabase project
+`xkmutzxdhdigyfisfrwd` holds the application tables in `public`, beside Supabase's own `auth` and
+`storage` schemas. Until then production ran two separate databases: Render's Postgres for the
+application, and a Supabase project for auth and storage only. This section used to say the local
+stack mirrored that on purpose. **The local stack still runs two, so it no longer mirrors
+production:**
 
-| | Application database | Supabase database |
+| | Application tables (`public`) | Auth and Storage (`auth.*`, `storage.*`) |
 |---|---|---|
-| Production | Render-managed Postgres, `infra/render/render.yaml:17-20,67-73` | the Supabase project, which supplies only `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (`render.yaml:50-54`) |
-| Local | `pgdb` in `docker-compose.yml`, port 5432 | `supabase_db_familyroots`, port 54322 |
-| Owns | every application table | `auth.*` and Storage |
-| Migrated by | Alembic | the Supabase CLI |
+| Production | Supabase project `xkmutzxdhdigyfisfrwd`, Postgres 17 ([supabase-hosted-project.md](supabase-hosted-project.md)) | the same database |
+| Local | `pgdb` in `docker-compose.yml`, port 5432, Postgres 18 | `supabase_db_familyroots`, port 54322 |
+| Migrated by | Alembic. In production, from CI ([migrations.md](migrations.md), "How migrations reach production") | Supabase |
 
-**Neither migrates the other.** No Alembic revision may reach into the Supabase database, and
-nothing in `supabase/` may create an application table. A user therefore exists in two places at
-once, joined by the JWT `sub` claim. **Getting those two halves in step is
+**What the local split does not show.** Three differences, each of which a migration has to
+survive in production and never meets on `pgdb`:
+
+- **Supabase's API roles.** `pgdb` has no `anon` or `authenticated` role, so migration
+  `042_close_data_api_on_public`'s revokes do nothing there, and no Data API can reach it anyway. In
+  production both exist, and the anon key ships in the web bundle (ADR-066).
+- **A login that is not a superuser.** `pgdb`'s `postgres` is a superuser. Supabase's is not, which
+  is why migration `041_grant_app_role_to_login` exists (ADR-066).
+- **The Postgres major version**, 18 locally and in CI, 17 in production.
+
+#251 runs the chain against this stack's own database, `supabase_db_familyroots`, to check the
+first two. The day-to-day local setup is unchanged.
+
+**Neither side migrates the other's schemas.** No Alembic revision may reach into `auth` or
+`storage`, and nothing in `supabase/` may create an application table. A user therefore exists in
+two places at once, joined by the JWT `sub` claim. That holds in production too. `auth.users` and
+`public.user_profiles` now share a database, but no migration references `auth`, because the chain
+must also apply to a plain Postgres with no `auth` schema. **Getting those two halves in step is
 [`seed-test-users.md`](seed-test-users.md)**, landed on 2026-08-22, not this
 document. `make seed` is the one command; `make seed-verify` is what tells you which half is
 missing.
 
-**Merging the two databases reopens ADR-059.** `user_profiles` and `user_fcm_tokens` carry no
-row-level security by decision, because the application database is not exposed through the
-Supabase Data API. Move the application tables into the Supabase project and those two tables'
-grants become the only thing between the Data API and every user's email and push token. Read
-[ADR-059](../decisions/059-user-owned-tables-stay-outside-layer-2.md) § 5 before doing it.
+**Merging the databases reopened ADR-059, and ADR-066 answers it.** `user_profiles` and
+`user_fcm_tokens` carry no row-level security by decision, because the application database was not
+exposed through the Supabase Data API. With the application tables in the Supabase project, two
+locks keep it that way: migration `042` revokes `anon`'s and `authenticated`'s privileges on
+`public`, and a dashboard step removes `public` from the Data API's exposed schemas
+([deployment.md](deployment.md), "Go-live checklist", A). Read
+[ADR-059](../decisions/059-user-owned-tables-stay-outside-layer-2.md) § 5 and ADR-066.
 
 ---
 
@@ -298,14 +318,23 @@ refused every production boot while every test stayed green, because every test 
 caught it either. It runs `APP_ENV: development` and bind-mounts `./backend/app` over the installed
 package. So the job does not use it.
 
+**Since #252 production does not run this image.** Vercel builds the backend from `backend/` with
+its own Python runtime, so the job no longer reads the artefact production runs. It still reads a
+production-mode boot of the installed package, which no source-tree test does. The production
+reading is the deploy job's `GET /health` ([deployment.md](deployment.md), "The backend deploy job,
+step by step"): `"migrations":"current"` there is what shows the `migrations` package reached the
+Vercel bundle.
+
 ### What it runs, in order
 
 1. `pgdb` from `docker-compose.yml`, and this stack through `scripts/supabase_local.sh up`.
-2. `docker build backend`, the context and Dockerfile `infra/render/render.yaml` names.
+2. `docker build backend`, the context and Dockerfile Render's blueprint named until #252 retired it.
 3. `docker build web`, with its three `NEXT_PUBLIC_*` build arguments set to this stack's URL, its
    anon key, and the backend container's port on the runner.
-4. The backend image's own `alembic upgrade head` against `pgdb`, the way `render.yaml`'s
-   `preDeployCommand` runs it. Then `make seed`. Its own `alembic upgrade head` finds nothing to do.
+4. The backend image's own `alembic upgrade head` against `pgdb`, the way Render's
+   `preDeployCommand` ran it. Production now migrates from `backend-ci.yml`'s deploy job instead
+   ([migrations.md](migrations.md)). Then `make seed`. Its own `alembic upgrade head` finds nothing
+   to do.
 5. The backend image, with its own `CMD`, `APP_ENV=production` and no source mount. The step waits for
    `GET /health` to answer 200 with `"migrations":"current"`. If the process exits first, the step
    fails and quotes the container's `RuntimeError:` line.
@@ -354,9 +383,9 @@ repository does not have.
 | `ALLOWED_HOSTS` | `["127.0.0.1"]` | every request reaches the container through `127.0.0.1:8073` on the runner |
 | `CORS_ORIGINS` | `["http://127.0.0.1:3102","http://familyroots-web.test:3102"]` | the harness's auth origin, and the invite link's. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
 | `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
-| `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Render sets `true` because its own proxy terminates TLS |
-| `RATE_LIMIT_AUTH_MAX_REQUESTS` | `1000` | the validator refuses only a value below 1, in every environment. **The one value here that production does not run**: Render sets nothing, so production keeps the default 20 (ADR-021, amended by #226). Every request reaches the container from one address, and a full run spends 28 from the bucket in under a minute (2026-10-07). See "The job inherited the harness's rate-limit collision" below |
-| `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Render generates one too |
+| `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Production sets `true`, because Vercel overwrites `X-Forwarded-For` with the client's address ([deployment.md](deployment.md), "Go-live checklist", C) |
+| `RATE_LIMIT_AUTH_MAX_REQUESTS` | `1000` | the validator refuses only a value below 1, in every environment. **The one value here that production does not run**: production sets nothing, so it keeps the default 20 (ADR-021, amended by #226). Every request reaches the container from one address, and a full run spends 28 from the bucket in under a minute (2026-10-07). See "The job inherited the harness's rate-limit collision" below |
+| `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Production's is set by hand in Vercel |
 | `SUPABASE_URL` and both keys | this stack's, from `scripts/supabase_local.sh env` | `supabase.localhost`, for the reason in "The two settings that are load bearing" |
 
 **`INVITE_LINK_ORIGIN` is a name, because the validator refuses the harness's origin.** Since #191 the
@@ -404,10 +433,11 @@ list `localhost`, so `TrustedHostMiddleware` answers 400 and Docker marks the co
 Read on this repository's Linux dev machine on 2026-10-06, with the image booted as the job boots it:
 the container log held six `"GET /health HTTP/1.1" 400 Bad Request` lines from the probe beside two
 200s from the runner, and `docker inspect` read `unhealthy failing-streak=7`. The job reads
-`GET /health` from the runner, through the host the backend admits. `render.yaml` sets
-`ALLOWED_HOSTS` to `["familyroots-api.onrender.com"]`, which does not list `localhost` either, so the
-same probe fails inside a production container too. Whether Render reads the image's `HEALTHCHECK` at
-all is not established here. Its blueprint names `healthCheckPath: /health` (`render.yaml:64`).
+`GET /health` from the runner, through the host the backend admits. Render's blueprint set
+`ALLOWED_HOSTS` to `["familyroots-api.onrender.com"]`, which did not list `localhost` either, so the
+same probe would have failed inside a production container too. **Since #252 no production
+container exists.** Vercel runs the backend from source with its own Python runtime, so the image's
+`HEALTHCHECK` matters only to compose and to this job. #230 tracks the probe itself.
 
 ### The job inherited the harness's rate-limit collision, until #226
 

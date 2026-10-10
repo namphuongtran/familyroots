@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "fastapi",
+  "regions": ["sin1"],
+  "git": {
+    "deploymentEnabled": false
+  },
+  "functions": {
+    "app/main.py": {
+      "maxDuration": 300,
+      "excludeFiles": "tests/**"
+    }
+  },
+  "crons": [
+    {
+      "path": "/internal/cron/anniversary-notifications",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/internal/cron/document-purge",
+      "schedule": "30 0 * * *"
+    }
+  ]
+}
