@@ -1082,20 +1082,24 @@ Two runs with B on 3200, the first try at reading 3a and reading 3b, also failed
 plant does not touch: `invitation-accept.spec.ts`'s "no request the page makes carries the token in
 a Referer header", once in `chromium` and once in `mobile`, reading B's own
 `http://127.0.0.1:3200/vi/invitations/<token>`. Alone, on B's cold servers at 3200, it passed four
-of four. It is intermittent under a full run's load and not explained yet. **#196 found a candidate
-cause on 2026-10-06, measured on a navigation and not yet on this case.** `next dev`'s overlay
-loads its own font, `GET /__nextjs_font/geist-latin.woff2`, when its compile indicator appears, and
-Chromium sends that request with the page's full URL as `Referer` although the document's policy is
-`no-referrer`. A probe on `:3100` read it on the click from the invitation page to the register page,
-beside an RSC fetch and chunk loads that carried no `Referer`. A full run compiles routes for other
-specs while this one reads, and Turbopack's indicator may show then too. The route is dev-only: only
-`next dev`'s hot reloaders mount `getDevOverlayFontMiddleware`
-(`next/dist/server/dev/hot-reloader-turbopack.js`). Under `next start` the same click made 25
-requests, none to `/__nextjs_font/` and none with the token in its `Referer`. Reading 3a's pass above is
-the rerun. The gate's own `pnpm test:e2e` in the primary checkout, at the default ports with nothing
-else listening, failed once the same day: 86 passed and 20 failed, every one of them
-`invitation-accept.spec.ts`, every page Next's own 404. The spec passed ten of ten alone, and the
-full suite rerun reported 106 passed. Also not explained. With nothing listening, the old and new
+of four. Reading 3a's pass above is the rerun. **#225 named the request on 2026-10-10: it is
+`next dev`'s overlay font, and the cause is a Chromium behaviour, not the header.** With the case
+logging every request, all five leaks seen were `GET /__nextjs_font/geist-latin.woff2 [font]`, from
+a document served 200 with `Referrer-Policy: no-referrer`: 2 of 60 with the case alone, and 3 of
+220 for the whole spec under load. The overlay injects an inline `<style>` holding an `@font-face`
+for that URL. In Chromium 151 a font loaded from an inline stylesheet ignores the document's
+`no-referrer`: it sends the full URL to the same origin and only the origin anywhere else, while an
+`<img>` and a `fetch()` on the same page send none. Only `next dev`'s hot reloaders mount
+`getDevOverlayFontMiddleware` (`next/dist/server/dev/hot-reloader-turbopack.js`), and against
+`next start` the case passed 60 of 60 with no `__nextjs_font` request at all. So the case sets aside
+exactly that path on the page's origin and names every other token-bearing request, and the rule
+this leaves is in `next.config.ts` beside the header: any inline `@font-face` on the invitation
+route, inlined CSS included, leaks the token to the same origin. `invitee-registers.auth.spec.ts`
+sets the same request aside; #196 met it there on a navigation on 2026-10-06. The gate's own
+`pnpm test:e2e` in the primary checkout, at the default ports with nothing else listening, failed
+once on 2026-10-05: 86 passed and 20 failed, every one of them `invitation-accept.spec.ts`, every
+page Next's own 404. The spec passed ten of ten alone, and the full suite rerun reported 106
+passed. That one is not explained yet, and #228 owns it. With nothing listening, the old and new
 configs start the same servers, so neither failure reads on this change.
 
 ## The authenticated e2e harness (2026-08-26)
