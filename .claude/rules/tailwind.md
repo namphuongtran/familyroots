@@ -531,15 +531,18 @@ The layout came from measuring, not from the spec:
   gives 174 px.
 - **The badge leaves the title's line.** The row is `flex-wrap-reverse`, the same pattern as the
   drawer header above. Keeping the badge beside the title and reserving its room passed the
-  e2e case, which reads `vi` only. It failed in `en`. At 320 px and 200%, `approvals` is 134 px
-  in a 110 px title, so it inked to x 207, the badge's own left edge.
+  e2e case while it read `vi`, and failed in `en`. At 320 px and 200%, `approvals` was 134 px
+  in a 110 px title on 2026-10-04, so it inked to x 207, the badge's own left edge. Since #236
+  the case reads `en` and that plant fails it. Read again on 2026-10-10, `approvals` is 133 and
+  inks to x 206, 1 px short of the badge, so the plant fails on the clipped title, not on an
+  overlap.
 
 **A seventh trap: a transition moves the boxes after the scale changes.** The quick-action cards
 carry `transition-all`. When the root font size doubles, their `p-5` animates from 20 px to 40 px,
 so a box read right after `addStyleTag` and `document.fonts.ready` is caught mid-flight. The
-approvals title read x 91 to 229. Its padding lands it at 105 to 215. The `beforeEach` in
-`backoffice.auth.spec.ts` now awaits every `CSSTransition` before reading. Do the same in any
-case that changes the scale and then reads a box.
+approvals title read x 91 to 229. Its padding lands it at 105 to 215. `openAtTextScale` in
+`backoffice.auth.spec.ts`, a `beforeEach` until #236, now awaits every `CSSTransition` before
+reading. Do the same in any case that changes the scale and then reads a box.
 
 Measured 2026-10-04 at 320×640 with a 32px root. Each control was planted and reverted against
 the case in `web/e2e/auth/backoffice.auth.spec.ts`:
@@ -552,15 +555,36 @@ the case in `web/e2e/auth/backoffice.auth.spec.ts`:
 | `p-8` only | `Approvals` 111, `Documents` 130 and `Completeness` 164, each in 110 |
 | badge `absolute top-4 right-4` | badge x 215 to 255, y 2651 to 2691, meets the title box, x 73 to 247, y 2659 to 2739 |
 
-**Since #197 the case no longer fails under the `p-8` control.** Every label in the table above
-is an English word, because until #197 the stat labels were English literals under every locale,
-`/vi` included. They go through next-intl now, so `/vi` renders `Tổng số thành viên`, `Chờ phê
-duyệt`, `Tài liệu` and `Độ hoàn thiện gia phả`. Measured 2026-10-06 with `p-8` planted: the case
-passed. English's `Completeness` still needs the 174 px that `px-4` gives, and no case reads `en`.
-A reading under `en` costs one more navigation. Until #226 that came out of a 20-per-minute
-`GET /auth/me` budget the full auth run already overspent. The harness's backend now allows 1000
-(`web/CLAUDE.md`, "Budget the requests"), so the budget no longer forbids it, and adding it is
-still a decision for the harness, not a line to slip in. The other three controls read values and the badge, which no translation moved. They were not re-run.
+**Since #236 the case reads `/en`, and each width control fails it again.** The table above was
+read while the stat labels were English literals under every locale, `/vi` included. #197 routed
+them through next-intl, so `/vi` rendered Vietnamese, whose widest card word is 79 px against
+card boxes of 110 px and more (its `h1`'s, `khiển`, is 125 in 256), and with `p-8` planted on
+2026-10-06 the case passed. Of the
+four locales only `en` fails under all three width controls (#236 holds the widest word per shape
+and locale), and it costs the same one navigation, so the case moved there and an auth run spends
+no more. Measured 2026-10-10 at 320×640 with a 32px root on `/en/backoffice/dashboard`, each
+control planted and reverted:
+
+| Plant | Reading |
+|---|---|
+| none | every stat and quick-action line fits its 174 px box, and the `h1` its 256 |
+| `p-8` for `px-4 py-8 sm:px-8` | `Documents` 131, `Tree Completeness` 164, `Add member` 115, `Review approvals` 133, and two descriptions at 145 and 146, each in 110; a stat card spills, 204 against 190 |
+| `px-5`, spec § 2.4's `space-5` | `Tree Completeness` 164 in 158 |
+| badge beside the title, no `flex-wrap-reverse` | `Review approvals` 133 in 110: `approvals` inks to x 206 past a title box ending at 183, beside a badge from x 207 |
+| `wrap-break-word` removed from the `h1` | `Backoffice Dashboard` 258 in 256 |
+
+**Reading `en` clipped a line no case had measured, the `h1`.** English's `Dashboard` is 258 px at
+`text-2xl font-bold` and a 32px root, 2 px wider than the `px-4` column. The `h1` now carries
+`wrap-break-word` (`overflow-wrap: break-word`; Tailwind 4.3.3 keeps `break-words` only as a
+hidden alias for it). It breaks inside a word only when that word cannot fit its line, so at
+320 px and 200% an `en` reader sees `Backoffice`, `Dashboar`, `d`, and nothing changes wherever
+every word fits, which there is every locale but `en`. Three alternatives were not taken. Smaller
+type: spec § 2.3 sets a page title at `display-md`, 32 px, larger than today's 24, and the size
+belongs to spec § 7's redesign. Trap 2's `<wbr>`, or a soft hyphen: the break would live inside
+`en.json`'s copy, placed for one locale at one size, where trap 2 places it in a product name
+that never changes. `hyphens-auto`: it needs an English hyphenation dictionary in the browser,
+and where there is none the word clips as before. The describe's two other cases, the content
+column and the drawer, still read `/vi`, where their #174 controls were measured.
 
 **Not fixed, and outside T-04's 320 px.** At 640 px and 200% the grid goes to two columns and
 `Tree Completeness` clips again, 164 against 154, in both locales, measured while both rendered the

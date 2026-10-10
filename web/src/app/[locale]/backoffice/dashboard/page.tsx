@@ -69,7 +69,16 @@ export default async function BackofficeDashboardPage({
     <div className="px-4 py-8 sm:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-foreground text-2xl font-bold">{t('dashboard_title')}</h1>
+        {/*
+          #236: `wrap-break-word`, because English's `Dashboard` is one word of 258 px at
+          320 px and 200% text, in this column's 256. It breaks inside a word only where that
+          word cannot fit, so it reads `Dashboar` then `d` there and changes nothing wherever
+          every word fits. The size stays: spec § 2.3 puts a page title at `display-md`,
+          larger still, and that is spec § 7's redesign.
+        */}
+        <h1 className="text-foreground text-2xl font-bold wrap-break-word">
+          {t('dashboard_title')}
+        </h1>
         <p className="text-muted-foreground mt-1 text-sm">{t('dashboard_subtitle')}</p>
       </div>
 

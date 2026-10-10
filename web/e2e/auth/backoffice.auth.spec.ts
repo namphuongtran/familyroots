@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { BASE_URL } from '../../playwright.config'
 import { SEEDED_USERS } from './fixtures'
 
@@ -38,9 +38,13 @@ const TOKEN = {
 }
 
 const BACKOFFICE_PATH = '/vi/backoffice/dashboard'
+/** The same route under `en`, the locale whose words are widest in T-04's boxes (#236). */
+const BACKOFFICE_PATH_EN = '/en/backoffice/dashboard'
 
 /** `messages/vi.json`, `Backoffice.dashboard_title`. */
 const DASHBOARD_TITLE = 'Bảng điều khiển'
+/** `messages/en.json`, `Backoffice.dashboard_title`. */
+const DASHBOARD_TITLE_EN = 'Backoffice Dashboard'
 /** `messages/vi.json`, the four `Backoffice.nav_*` keys, in `NAV_ITEMS` order. */
 const RAIL_LABELS = ['Tổng quan', 'Thành viên', 'Dòng họ', 'Cây gia phả']
 /** `messages/vi.json`, `Backoffice.menu_open`: the top bar's menu button below `lg`. */
@@ -109,9 +113,11 @@ test.describe('the backoffice dashboard, as an admin', () => {
     // T-04, design spec § 5. Doubling the root font size is how rem-based type reacts to
     // browser text zoom, which Playwright cannot set directly; `e2e/text-scale.spec.ts` uses
     // the same lever and explains why the style goes in a tag rather than on `<html>`.
-    test.beforeEach(async ({ page }) => {
+    // A helper rather than a `beforeEach`, because the cases do not read one locale: each
+    // names its path, and each still spends one navigation.
+    async function openAtTextScale(page: Page, path: string) {
       await page.setViewportSize(NARROW)
-      await page.goto(BACKOFFICE_PATH)
+      await page.goto(path)
       await page.addStyleTag({ content: ':root { font-size: 32px; }' })
       await page.evaluate(() => document.fonts.ready)
       // Then let every transition the new size started land. The quick-action cards carry
@@ -127,13 +133,13 @@ test.describe('the backoffice dashboard, as an admin', () => {
             .map((animation) => animation.finished.catch(() => undefined)),
         ),
       )
-    })
+    }
 
     /**
      * T-04's three clauses, as far as this page can break them: no horizontal scroll, no clipped
      * line of text in `main`, and no badge on its title, the one element that was ever placed
      * over another. One case and one navigation, because the page-level scroll reading already
-     * paid for this load and the auth budget below has no room for another.
+     * paid for this load, and `web/CLAUDE.md` ("Budget the requests") keeps a case to one.
      *
      * **#175, the two defects the scroll reading passed over.** Measured 2026-10-04 at 320×640
      * with `:root { font-size: 32px }`, before the fix: the icon box and `gap-4` filled the
@@ -149,17 +155,32 @@ test.describe('the backoffice dashboard, as an admin', () => {
      * the old row alone reads every label and value at 54; `p-8` alone clips `Approvals`,
      * `Documents` and `Completeness` at 110 against 111, 130 and 164; and the absolute badge
      * reads x 215 to 255, y 2651 to 2691, across a title box from x 73 to 247, y 2659 to 2739.
-     * **This case reads `vi` only.** A
-     * badge kept beside the title passes it, and fails in `en`: `approvals` inks 24 px past a
-     * 110 px title, to the badge's edge. `.claude/rules/tailwind.md` § 7 has that measurement.
-     * **Since #197 `p-8` alone passes it too.** The labels it clipped were English literals on
-     * `/vi`; `/vi` renders Vietnamese labels now, and with `p-8` planted on 2026-10-06 the case
-     * passed. No case reads English's `Completeness`, the word `px-4` exists for.
+     *
+     * **This case reads `en` (#236), the one locale that fails under every control below.** The
+     * labels those 2026-10-04 controls clipped were English literals under every locale. #197
+     * translated them, so `/vi` rendered Vietnamese, whose widest card word is 79 px against
+     * card boxes of 110 and more (its `h1`'s, `khiển`, is 125 in 256), and with `p-8` planted on
+     * 2026-10-06 the case passed. `/en` costs
+     * the same one navigation. Measured 2026-10-10 on `/en`: every stat and quick-action line
+     * fits its 174 px box and the `h1` its 256. The negative controls, each planted and reverted
+     * that day: `p-8` in place of `px-4 py-8 sm:px-8` clips `Documents`, `Tree Completeness`,
+     * `Add member` and `Review approvals` at 110 against 131, 164, 115 and 133, both long
+     * descriptions at 110 against 145 and 146, and spills a stat card, 204 against 190. Spec
+     * § 2.4's `space-5` gutter, `px-5`, clips `Tree Completeness` at 158 against 164. And the
+     * badge kept beside the title, the row without `flex-wrap-reverse`, clips `Review approvals`
+     * at 110 against 133: `approvals` inks to x 206 past a title box ending at 183, beside a
+     * badge from x 207. `.claude/rules/tailwind.md` § 7 has the table.
+     *
+     * **Reading `en` found one more clipped line, the `h1`.** `Dashboard` is 258 px in the 256 px
+     * column, so with only the path moved to `en` the case read `Backoffice Dashboard` at
+     * `clientWidth` 256 against `scrollWidth` 258. The `h1` carries `wrap-break-word` for it, so
+     * it reads `Dashboar` then `d`, and with that removed the case fails on the same reading.
      */
     test('the page passes T-04: no scroll, no clipped text, no badge on a title', async ({
       page,
     }) => {
-      await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE)
+      await openAtTextScale(page, BACKOFFICE_PATH_EN)
+      await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE_EN)
 
       const reading = await page.evaluate(() => {
         const edges = (r: DOMRect) => ({
@@ -241,19 +262,20 @@ test.describe('the backoffice dashboard, as an admin', () => {
      * ```
      *
      * Below `lg` the rail is now a drawer behind a top bar, so these two cases read what the
-     * fix is for rather than what the page reports. Two cases, one navigation each, because
-     * `/api/v1/auth/*` allows 20 requests per 60 seconds by default and one load of this screen
-     * spends about three. The negative controls, each planted and reverted on 2026-10-04, are in the
-     * #174 pull request. Restoring `fixed w-60` + `ml-60` reads `main` width 0. An icon-only rail
-     * reads width 176 and `scrollWidth` 190. The rail stacked above `main` puts the heading's
-     * bottom at 968. Removing the `<wbr>` overflows the top bar, 325 against 320. Putting the
-     * drawer's brand and close button back on one line inks the wordmark across the button, and
-     * doing that with the `<wbr>` and `min-w-0` gone too, the prototype's arrangement, overflows
-     * the drawer, 341 against 272.
+     * fix is for rather than what the page reports. **They read `/vi`**, where every reading and
+     * control below was taken; #236 moved only the case above to `en`. Two cases, one navigation
+     * each, per `web/CLAUDE.md`'s "Budget the requests". The negative controls, each planted and
+     * reverted on 2026-10-04, are in the #174 pull request. Restoring `fixed w-60` + `ml-60`
+     * reads `main` width 0. An icon-only rail reads width 176 and `scrollWidth` 190. The rail
+     * stacked above `main` puts the heading's bottom at 968. Removing the `<wbr>` overflows the
+     * top bar, 325 against 320. Putting the drawer's brand and close button back on one line inks
+     * the wordmark across the button, and doing that with the `<wbr>` and `min-w-0` gone too, the
+     * prototype's arrangement, overflows the drawer, 341 against 272.
      */
     test('the content column fills the screen, and its heading is in the first viewport', async ({
       page,
     }) => {
+      await openAtTextScale(page, BACKOFFICE_PATH)
       await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE)
 
       const reading = await page.evaluate(() => {
@@ -285,6 +307,8 @@ test.describe('the backoffice dashboard, as an admin', () => {
     })
 
     test('the rail is one tap away, in a drawer that fits', async ({ page }) => {
+      // `/vi`, like the case above: the drawer's readings and #174's controls were taken there.
+      await openAtTextScale(page, BACKOFFICE_PATH)
       // Let the page's own requests finish before counting what the tap costs.
       await page.waitForLoadState('networkidle')
       const hydrations: string[] = []
