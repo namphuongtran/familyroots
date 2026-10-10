@@ -13,8 +13,9 @@ engineer owns triage and may escalate to the maintainer for SEV-1.
 
 ## First 15 minutes
 1. Confirm scope via `/health` (DB) and Sentry (error rate, the `internal_error` code).
-2. Identify the trigger: a deploy/migration (most likely — `main` → prod is direct,
-   no staging) or external (Supabase/Render outage).
+2. Identify the trigger: a release/migration (most likely — a published release is the only path
+   to prod, with no staging; `gh release list --limit 2` names the last two) or external
+   (Supabase/Render outage).
 3. If a recent deploy is implicated → **roll back** (`deployment.md`). If a migration
    shipped, assess reversibility before `alembic downgrade`.
 4. For a suspected isolation/auth breach (SEV-1): stop further writes if practical,

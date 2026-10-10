@@ -64,6 +64,7 @@ Supabase project, and so do the nightly dumps (see [../ops/backup-restore.md](..
 ```mermaid
 graph TB
   push([push or pull request]):::person
+  release([published release vX.Y.Z]):::person
   cron([schedule · 00:15 ICT]):::person
   gha[GitHub Actions]:::host
 
@@ -73,14 +74,16 @@ graph TB
   i1[infra-ci.yml<br/>pulumi preview on PR, up on main]:::comp
   p1[pr-checks.yml<br/>gitleaks, no committed .env, PR title]:::comp
   d1[db-backup.yml<br/>pg_dump, gzip, backups bucket, rotation]:::comp
+  r1[release.yml<br/>v* tag on main · both gates on the tag]:::comp
+  approve{production environment<br/>maintainer approves}:::dec
 
   mig{alembic upgrade head<br/>MIGRATION_DATABASE_URL · session pooler}:::dec
   stop[Job fails · nothing deployed]:::bad
   bdeploy[vercel deploy --prod<br/>familyroots-api]:::comp
   health{GET API_ORIGIN/health<br/>migrations = current}:::dec
   red[Job fails · roll back]:::bad
+  vdeploy[vercel deploy --prod<br/>familyroots-web]:::comp
   live[Live in production]:::good
-  vdeploy[vercel deploy --prod<br/>familyroots-web]:::good
   manual[No deploy step · manual release]:::v2
   noop[Resources are stubs · effectively a no-op]:::v2
 
@@ -91,13 +94,15 @@ graph TB
   gha --> m1
   gha --> i1
   gha --> p1
-  b1 -->|main and green| mig
+  release --> r1
+  r1 -->|b1 and w1 green| approve
+  approve -->|approved| mig
   mig -->|fails| stop
   mig -->|passes| bdeploy
   bdeploy --> health
   health -->|no| red
-  health -->|yes| live
-  w1 -->|main and green| vdeploy
+  health -->|yes| vdeploy
+  vdeploy --> live
   m1 -.-> manual
   i1 -.-> noop
 
@@ -110,8 +115,11 @@ graph TB
   classDef v2 fill:#7b4fa0,stroke:#54356f,color:#ffffff,stroke-dasharray:5 4
 ```
 
-**There is no staging gate — `main` merges reach production.** `develop` runs CI only. Every
-deploy step skips with a warning until its secrets exist.
+**A merge to `main` deploys nothing** (ADR-067). Production moves only when a release `vX.Y.Z` is
+published and the maintainer approves the run. `release.yml` calls `backend-ci.yml` and
+`web-ci.yml` on the tagged commit, then deploys the API, reads its health, and deploys the web
+last. A missing deploy secret fails the release. There is no staging environment. `develop` runs
+CI only.
 
 **The health read comes after the deployment is already live.** Vercel promotes a deployment when
 its build is ready, without requesting it first. So a failed read means production already serves

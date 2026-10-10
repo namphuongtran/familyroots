@@ -30,29 +30,66 @@ and **Node.js Version** `24.x`. The preset is why each `vercel.json` names its f
 
 ## Pipeline (as implemented in `.github/workflows/`)
 
+**A merge to `main` deploys nothing. Production moves only when a GitHub Release `vX.Y.Z` is
+published and the maintainer approves the run** (ADR-067, #267). See "Cutting a release" below.
+
 | Component | Trigger | Mechanism |
 |-----------|---------|-----------|
-| backend | push to `main` (after `lint-and-test` passes) | the `deploy` job (`backend-ci.yml`) runs three steps in order. (1) `alembic upgrade head` against `MIGRATION_DATABASE_URL`. (2) `npx vercel@63.1.0 deploy --prod` from `backend/`, with `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` (from the `VERCEL_API_PROJECT_ID` secret). (3) `GET $API_ORIGIN/health`, which fails the job unless `migrations` is `current`. If any of its four secrets or the `API_ORIGIN` variable is unset, it prints a `::warning::` naming each missing one, runs none of the three steps, and stays green |
-| web | push to `main` (after `build-and-test`, `e2e` and `api-types-fresh` pass) | `pnpm dlx vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN"` from `web/`, with `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` (from the `VERCEL_WEB_PROJECT_ID` secret) (`web-ci.yml`). With any of the three secrets missing it skips with a `::warning::` naming them |
+| release: backend + web | **a published GitHub Release** (not a pre-release), or `workflow_dispatch` on a `v*` tag | `release.yml` runs four jobs. (1) `verify-ref` refuses a branch, a tag not named `v[0-9]*`, or a commit not on `main`. (2) `backend-gate` and `web-gate` call `backend-ci.yml` and `web-ci.yml` on the tagged commit, in parallel and in full. (3) `deploy` waits for approval in the `production` environment, then runs: `alembic upgrade head` against `MIGRATION_DATABASE_URL`; `npx vercel@63.1.0 deploy --prod` from `backend/`; `GET $API_ORIGIN/health`, which fails the job unless `migrations` is `current`; `pnpm dlx vercel@63.1.0 deploy --prod` from `web/`. A missing secret or the missing `API_ORIGIN` variable **fails** the run before anything is migrated |
+| backend CI | push and pull request to `[main, develop]`, and `workflow_call` from `release.yml` | `lint-and-test` (`backend-ci.yml`). **No deploy job** since #267 |
+| web CI | push and pull request to `main`, and `workflow_call` from `release.yml` | `build-and-test`, `e2e`, `api-types-fresh` (`web-ci.yml`). **No deploy job** since #267 |
 | mobile | push to `[main, develop]` | Flutter build + test (`mobile-ci.yml`); **no deploy step** |
 | infra | push to `[main, develop]` | `pulumi preview` on PR / `pulumi up` on `main` (`infra-ci.yml`) — currently a **no-op** because the Pulumi resources are stubs |
 | repo hygiene | pull request to `[main, develop]`, never push | gitleaks secret scan + no-committed-`.env` gate (`pr-checks.yml`) |
-| images + authenticated e2e | pull request and push to `main` | builds `backend/Dockerfile` and `web/Dockerfile`, boots the backend image under `APP_ENV=production` and runs `pnpm test:e2e:auth` against it (`image-e2e.yml`, #193). A check, not a deploy: neither deploy job waits for it, and branch protection does not require it (`main` has no protection and no rulesets, read 2026-10-06). Production does not run this image. See [local-supabase.md](local-supabase.md), "The image e2e job in CI" |
+| images + authenticated e2e | pull request and push to `main` | builds `backend/Dockerfile` and `web/Dockerfile`, boots the backend image under `APP_ENV=production` and runs `pnpm test:e2e:auth` against it (`image-e2e.yml`, #193). A check, not a deploy: `release.yml` does not call it, and branch protection does not require it (`main` has no protection and no rulesets, read 2026-10-06). Production does not run this image. See [local-supabase.md](local-supabase.md), "The image e2e job in CI" |
 | db-backup | **schedule** (`cron "15 17 * * *"` = 00:15 Asia/Ho_Chi_Minh) + `workflow_dispatch` — not push | `pg_dump` → gzip → upload to Supabase Storage `backups` bucket + rotation (`db-backup.yml`); skips green with a `::notice::` if the 3 backup secrets aren't set — see [backup-restore.md](backup-restore.md) |
 
 The workflows do not share one trigger. `backend-ci.yml`, `mobile-ci.yml` and
 `infra-ci.yml` run on push and pull request to `[main, develop]`.
 `web-ci.yml` and `image-e2e.yml` run on `main` only. `pr-checks.yml` runs on pull requests
-only. Every workflow but `pr-checks.yml` and `db-backup` filters on paths, so a change
-outside a workflow's `paths:` runs none of its jobs. `db-backup` is schedule/dispatch-only
-and never runs on push. The backend and web deploys are separate workflows, and neither waits
-for the other.
+only. Every workflow but `pr-checks.yml`, `db-backup` and `release.yml` filters on paths, so a
+change outside a workflow's `paths:` runs none of its jobs on push. Path filters do not apply
+to `workflow_call`, so a release always runs both gates in full. `db-backup` is
+schedule/dispatch-only and never runs on push. The backend and web deploy in one job, the web
+after the backend's health read.
 
-**There is no staging gate today — `main` → production directly.** `develop` runs
-CI (lint/test) but does not deploy. A dev → staging → prod promotion path is not yet
-implemented; treat `main` as production. Preview deployments are not set up (#252, out of scope).
+**There is no staging environment.** `main` is always releasable, not production: a merge runs
+CI and nothing else, and production is the last published release. `develop` runs CI
+(lint/test) but does not deploy. A staging environment, with a second Supabase project, is
+deferred to its own issue (ADR-067). Preview deployments are not set up (#252, out of scope).
 
-## The backend deploy job, step by step
+## Cutting a release
+
+1. **Check that `main` is green**, and read what the release carries:
+   - `gh release list --limit 1` gives the last tag.
+   - `git log --oneline <last tag>..origin/main` lists the changes.
+   - `git diff --stat <last tag>..origin/main -- backend/migrations/versions` lists the
+     migrations it will apply.
+2. **Publish:** `gh release create vX.Y.Z --target main --generate-notes`. The notes list the
+   merged pull requests. **One SemVer tag covers backend and web.** Both packages read `0.1.0`,
+   so the first release is `v0.2.0`. The tag is the version, and no package file is bumped.
+   A pre-release (`--prerelease`) does not deploy.
+3. **Approve.** The run waits in Actions → Release → "Review deployments" until the gates pass
+   and the maintainer approves `production`.
+4. **Read the run.** The job summary names the release and the API deployment URL. The health
+   step's log carries `x-vercel-id`, which must read `sin1`.
+
+**Re-run a release** without a new tag: `gh workflow run release.yml --ref vX.Y.Z`. A dispatch on
+a branch is refused by `verify-ref` and by the environment's tag policy.
+
+**A hotfix** is a pull request to `main`, then a patch release (`vX.Y.Z+1`). Nothing ships from
+a branch, so a fix waits for its release like any other change.
+
+**A backend release must not remove what the live web still reads.** The two deploys are a few
+minutes apart, not atomic. Remove or rename a field the web uses in two releases: the first moves
+the web off it, the second removes it (ADR-067 § 5).
+
+## The release workflow, step by step
+
+`release.yml`'s `deploy` job runs only after `verify-ref`, `backend-gate` and `web-gate` pass and
+the `production` environment is approved. Its first step fails the run, naming each missing
+value, if any of `MIGRATION_DATABASE_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
+`VERCEL_API_PROJECT_ID`, `VERCEL_WEB_PROJECT_ID` or the `API_ORIGIN` variable is unset.
 
 **1. Migrate.** `uv sync --frozen --no-dev`, then `uv run --no-sync alembic upgrade head` and
 `alembic current`, with `DATABASE_URL` set from `MIGRATION_DATABASE_URL` and nothing else.
@@ -73,20 +110,27 @@ lifespan raises is still production, and every cold start of it fails.
 - **Deployment Protection.** Under Standard Protection, the scope Vercel recommends, every URL
   but a production domain asks for a Vercel login ("Deployment Protection on Vercel", read
   2026-10-10). That includes the deployment's own generated URL, which step 2 prints.
-- **`ALLOWED_HOSTS`.** It names the production host only, so `TrustedHostMiddleware` answers any
-  other host with 400.
+- **`ALLOWED_HOSTS`.** It names the production host. Since #265 the app also admits the
+  deployment's own `VERCEL_URL`, and `TrustedHostMiddleware` answers any other host with 400.
 
-curl retries a refused connection and a 5xx five times, ten seconds apart, which covers a cold
-start. Then the job fails unless the body's `migrations` is `current`. **A red step here means
-production already serves the new deployment.** Roll it back (§ Rollback).
+The step makes six attempts, ten seconds apart, each into a fresh file (#263), which covers a
+cold start. It passes on the first `200` whose body's `migrations` is `current`. **A red step
+here means production already serves the new API deployment.** Roll it back (§ Rollback). A red
+step also stops the job, so the web is not deployed.
 
-**Concurrency.** The job is in the `backend-production-deploy` concurrency group with
-`cancel-in-progress: false`. Two pushes close together queue, rather than running two migrations
-against one database at once. Alembic takes no lock of its own.
+**4. Deploy the web.** `pnpm install --frozen-lockfile`, then `pnpm dlx vercel@63.1.0 deploy
+--prod` from `web/`, with `VERCEL_PROJECT_ID` from the `VERCEL_WEB_PROJECT_ID` secret. It runs
+last, so the API the new web build calls is already live and has answered `current`.
 
-**Each secret reaches only its step.** The migration step sees `DATABASE_URL`. The deploy step
-sees the three Vercel values. The health step sees `API_ORIGIN`. `uv sync` and `setup-node` see
-none of them.
+**Concurrency.** The job is in the `production-release` concurrency group with
+`cancel-in-progress: false`. Two releases close together queue, rather than running two
+migrations against one database at once. Alembic takes no lock of its own. GitHub keeps at most
+one run waiting per group, so a third release replaces the second while it waits.
+
+**Each secret reaches only its step.** The migration step sees `DATABASE_URL`. Each deploy step
+sees the three Vercel values for its project. The health step sees `API_ORIGIN`. `uv sync`,
+`pnpm install` and `setup-node` see none of them. With the secrets moved into the `production`
+environment ("Go-live checklist", B), only an approved run of this job can read them.
 
 **The window this order leaves, read from source and not yet measured.** `migration_status`
 (`backend/app/core/readiness.py:64-79`, read at `c39ad2e`) returns `current` only when
@@ -94,8 +138,9 @@ none of them.
 2's deployment becomes production, the old deployment is still production, and the database is
 already ahead of it. A warm instance of it keeps serving, because its lifespan ran before the migration.
 A **cold start** of it in that window raises at the boot gate, and that request fails. This happens
-only on a push that carries a migration, and the window lasts as long as step 2's upload and
-build. Render's container was long-running, so it had no such window. A shorter one is possible:
+only on a release that carries a migration, and the window lasts as long as step 2's upload and
+build. Since #267 a release that batches several merged migrations opens one window, not one per
+merge. Render's container was long-running, so it had no such window. A shorter one is possible:
 deploy first with `vercel deploy --prod --skip-domain`, migrate, then `vercel promote` the
 deployment (`vercel deploy` reference, read 2026-10-10). #252's issue body set the order used here,
 so that change is left to a follow-up.
@@ -108,7 +153,7 @@ so that change is left to a follow-up.
 |---|---|---|
 | `framework` | `fastapi` | The project's preset reads `Other` (above). The file names the framework, so the build does not depend on a dashboard field. Vercel's schema lists `fastapi` among its values |
 | `regions` | `["sin1"]` | Singapore, next to the Supabase project in `ap-southeast-1`. Hobby allows one region |
-| `git.deploymentEnabled` | `false` | CI deploys through the CLI, after the migration. A Git-triggered build would deploy every push without migrating |
+| `git.deploymentEnabled` | `false` | `release.yml` deploys through the CLI, after the migration and the approval. A Git-triggered build would deploy every push without migrating |
 | `functions["app/main.py"].maxDuration` | `300` | The Hobby maximum. The key is the entrypoint file (`app/main.py`, which exports `app`) |
 | `functions["app/main.py"].excludeFiles` | `tests/**` | Python functions bundle every file the build can reach, with no tree-shaking ("Using the Python Runtime", read 2026-10-10). The bundle limit is 500 MB |
 | `crons` | `/internal/cron/anniversary-notifications` at `0 0 * * *`, `/internal/cron/document-purge` at `30 0 * * *` | The two jobs APScheduler ran in-process. Production sets `SCHEDULER_ENABLED=false` (#250, ADR-065) |
@@ -150,7 +195,7 @@ that `vercel link` also writes is already ignored by the root `.gitignore`.
 
 ### `web/vercel.json`
 - `"framework": "nextjs"`, for the same reason as the backend's: the project's preset reads `Other`.
-- `"git": {"deploymentEnabled": false}`: CI deploys after its gates pass.
+- `"git": {"deploymentEnabled": false}`: `release.yml` deploys after the gates pass and the release is approved.
 - `"regions": ["sin1"]` (Singapore), so the web app's functions run next to the API's functions
   and the database. Every server render that calls the backend goes through
   `apiFetch` (`web/src/shared/http/api-client.ts`), so the distance between the two
@@ -164,7 +209,7 @@ that `vercel link` also writes is already ignored by the root `.gitignore`.
 - `regions` does not move `src/middleware.ts`. Vercel deploys Routing Middleware to
   every region whatever this setting says.
 - The deploy job runs `vercel deploy` with `working-directory: web`
-  (`web-ci.yml`), which is why the file lives in `web/` and not at the repository
+  (`release.yml`), which is why the file lives in `web/` and not at the repository
   root. The same holds for `backend/`. Both projects' Root Directory must therefore stay `.`.
 - **What proves it is a live reading, not the file.** Vercel's schema types
   `regions` only as an array of strings, so a typo such as `sni1` still validates.
@@ -184,7 +229,9 @@ that `vercel link` also writes is already ignored by the root `.gitignore`.
   region name or a wrong cron path.
 - **Workflows.** `actionlint` 1.7.12, with ShellCheck 0.11.0, reports 0 errors on `backend-ci.yml`
   and `web-ci.yml`. Planted in a copy, a step condition naming a step id that does not exist and an
-  unquoted `$url` are both reported.
+  unquoted `$url` are both reported. Re-run on 2026-10-10 for #267 with `release.yml`: 0 errors,
+  and with `workflow_call:` removed from a copy of `backend-ci.yml` it reports
+  `"workflow_call" event trigger is not found` (ADR-067, "Verification").
 - **`vercel build` was not run** (Reading 2 of #252). It needs the directory linked to
   `familyroots-api`, and linking was left to the owner. When it runs, it must report
   `app/main.py:app` on Python 3.14 and a function under 500 MB. `backend/.python-version` reads
@@ -192,7 +239,7 @@ that `vercel link` also writes is already ignored by the root `.gitignore`.
   does not support. On 3.12, `requires-python = ">=3.14"` would then fail the install loudly.
 
 ## Migrations relative to deploy
-The deploy job's first step runs `alembic upgrade head` and **blocks the deploy on failure**,
+The release's `deploy` job runs `alembic upgrade head` as its first step and **blocks the deploy on failure**,
 the same contract Render's `preDeployCommand` gave. See [migrations.md](migrations.md),
 "How migrations reach production".
 
@@ -203,10 +250,11 @@ the same contract Render's `preDeployCommand` gave. See [migrations.md](migratio
   `DATABASE_URL` set to the session-pooler string. Then roll back the code with
   **Instant Rollback** in the dashboard, or `vercel rollback`. Destructive migrations may not
   reverse cleanly. Prefer a forward fix.
-- **Hobby rolls back to the immediately previous deployment only** ("Performing an Instant
+- **Hobby rolls back to the immediately previous deployment only**, which since #267 is the
+  previous release ("Performing an Instant
   Rollback", read 2026-10-10). After a rollback, Vercel **turns off auto-assignment of production
-  domains**. The next CI `vercel deploy --prod` then builds, but does not go live, and the health
-  read checks the rolled-back deployment instead. To undo that, promote a deployment:
+  domains**. The next release's `vercel deploy --prod` then builds, but does not go live, and the
+  health read checks the rolled-back deployment instead. To undo that, promote a deployment:
   `vercel promote <deployment-url>`, or **Undo Rollback** in the dashboard.
 - A rollback restores the earlier deployment's build. Environment variables changed since then
   are not applied to it. Its crons replace the current ones.
@@ -260,25 +308,39 @@ Every variable is set for the **Production** environment only. Preview deploymen
   the retired project's ref.
 
 ### B. GitHub repository settings
-Secrets (Settings → Secrets and variables → Actions → Secrets):
+- [ ] **Create the `production` environment before the first release** (Settings → Environments →
+  New environment). Add the maintainer as **Required reviewer**. Under **Deployment branches and
+  tags**, choose "Selected branches and tags" and add the **tag** rule `v*`. **GitHub creates an
+  environment a job names on first use, with no protection rules**, so a release published before
+  this step deploys without waiting for approval. The same with `gh`:
+  `gh api -X PUT repos/namphuongtran/familyroots/environments/production --input -` with
+  `{"reviewers":[{"type":"User","id":<your user id>}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}`,
+  then `gh api -X POST repos/namphuongtran/familyroots/environments/production/deployment-branch-policies -f name='v*' -f type=tag`.
+  Read it back: `gh api repos/namphuongtran/familyroots/environments/production`.
+- [ ] **Move the five deploy secrets and `API_ORIGIN` into the environment** (Settings →
+  Environments → `production`), then delete the repository-level copies. An environment secret
+  reaches only a job that names the environment, so only an approved release can read them. The
+  three `db-backup.yml` secrets stay at repository level.
+
+Secrets (the first five in the `production` environment, the last three at repository level):
 
 | Secret | Value | Read by |
 |---|---|---|
-| `MIGRATION_DATABASE_URL` | Supavisor **session** pooler, port **5432**: `postgresql://postgres.xkmutzxdhdigyfisfrwd:<password>@<pooler-host>:5432/postgres`. Copy the host from Dashboard → Connect → Session pooler | `backend-ci.yml` deploy, step 1 |
-| `VERCEL_TOKEN` | a Vercel access token for team `namtp` | both deploy jobs |
-| `VERCEL_ORG_ID` | `team_POAVczQHAZ0182nbj5oQrQ0E` | both deploy jobs |
-| `VERCEL_API_PROJECT_ID` | `prj_bvR27jsrEOWsD2q1vGeKxwkLAY3Z` | `backend-ci.yml` |
-| `VERCEL_WEB_PROJECT_ID` | `prj_TD73V51MFvGHzOYTeclsYVqaEfXT` | `web-ci.yml` |
+| `MIGRATION_DATABASE_URL` | Supavisor **session** pooler, port **5432**: `postgresql://postgres.xkmutzxdhdigyfisfrwd:<password>@<pooler-host>:5432/postgres`. Copy the host from Dashboard → Connect → Session pooler | `release.yml` deploy, step 1 |
+| `VERCEL_TOKEN` | a Vercel access token for team `namtp` | `release.yml`, both deploy steps |
+| `VERCEL_ORG_ID` | `team_POAVczQHAZ0182nbj5oQrQ0E` | `release.yml`, both deploy steps |
+| `VERCEL_API_PROJECT_ID` | `prj_bvR27jsrEOWsD2q1vGeKxwkLAY3Z` | `release.yml`, API deploy step |
+| `VERCEL_WEB_PROJECT_ID` | `prj_TD73V51MFvGHzOYTeclsYVqaEfXT` | `release.yml`, web deploy step |
 | `PROD_DATABASE_URL` | the same session-pooler string as `MIGRATION_DATABASE_URL` | `db-backup.yml` |
 | `SUPABASE_URL` | `https://xkmutzxdhdigyfisfrwd.supabase.co` | `db-backup.yml` |
 | `SUPABASE_SERVICE_ROLE_KEY` | the project's service-role key | `db-backup.yml` |
 
-Variable (Settings → Secrets and variables → Actions → **Variables**). It is not a secret, and the
-job prints it:
+Variable (in the `production` environment, under **Environment variables**). It is not a secret,
+and the job prints it:
 
 | Variable | Value | Read by |
 |---|---|---|
-| `API_ORIGIN` | `https://<api-host>`, no path | `backend-ci.yml` deploy, step 3 |
+| `API_ORIGIN` | `https://<api-host>`, no path | `release.yml` deploy, step 3 |
 
 - [ ] Delete `RENDER_DEPLOY_HOOK` if it was ever set. Nothing reads it now.
 
@@ -338,7 +400,7 @@ project-wide admin key.
 ### F. First deploy: the readings to take, in order
 Do A to E first. A backend deploy with its variables unset fails its own health read.
 
-1. [ ] **The migration log.** In the first `backend-ci` deploy run, `alembic upgrade head` applies
+1. [ ] **The migration log.** In the first deploy run, `alembic upgrade head` applies
    `001` to `042` to the empty database, and `alembic current` prints
    `042_close_data_api_on_public (head)`.
 2. [ ] **Reading 2 of #252**, if it was not taken before: `vercel build` in a `backend/` linked to
@@ -357,7 +419,10 @@ Do A to E first. A backend deploy with its variables unset fails its own health 
 
 ## Known risks
 - Pulumi resources are not fully implemented (`infra/` drift risk).
-- No staging environment — changes reach production on merge to `main`.
+- No staging environment. A release is the first time merged code meets the production
+  database and the hosted Supabase project. The gates run against local Postgres 18, not
+  Postgres 17 behind Supavisor (ADR-067 defers staging).
+- **Merged work waits for a release.** A fix is not live until someone publishes one.
 - **The boot gate no longer guards production.** On Vercel a deployment whose lifespan raises is
   production anyway, and the health read in step 3 is the first thing to notice (§ step 2).
 - **A deploy that carries a migration leaves a cold-start window** in which the old deployment

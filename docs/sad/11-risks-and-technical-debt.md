@@ -5,7 +5,7 @@
 ```mermaid
 graph TB
   subgraph high[High]
-    h1[R1 No staging · main reaches production]:::bad
+    h1[R1 No staging · a release meets prod first]:::bad
     h2[R2 In-process event dispatcher is not durable]:::bad
     h3[R3 Web clients still bound to pre-envelope shapes]:::bad
   end
@@ -34,7 +34,7 @@ graph TB
 
 | # | Risk / debt | Impact | Current mitigation | Next move |
 |---|---|---|---|---|
-| R1 | **No staging gate** — merge to `main` deploys | A bad merge is a production incident | Full CI gate + migration-blocking pre-deploy + rollback path | Add a staging env / promotion flow |
+| R1 | **No staging environment** — a release is the first time merged code meets the production database and hosted Supabase | A bad release is a production incident | Since ADR-067 a merge deploys nothing: a published `vX.Y.Z` re-runs both gates on the tag, waits for the maintainer's approval, migrates, deploys the API, reads its health, then deploys the web. Rollback reaches the previous release | Add a staging env and promote on a release (deferred by ADR-067) |
 | R2 | **In-process events** (ADR-004/005 deferred) | Handler failure rolls back the write; no cross-service integration | Deliberate: audit atomicity chosen over decoupling (ADR-014) | Build the Redis bus only when a second consumer exists |
 | R3 | **Web pre-envelope clients** — `lib/api/auth.ts`, parts of `infrastructure/**`, member/tree types expect unwrapped bodies, `next_cursor`, scalar dates, `*_approx` | Runtime breakage as endpoints are adopted | The recurrence mechanism now exists: generated types (`src/generated/api-types.ts`) plus a CI `api-types-fresh` gate that fails the build if they drift from the backend's OpenAPI schema, triggered by either `web/**` or `backend/app/**` changes. The legacy clients themselves are still unmigrated | Feature slice PRs migrate each screen onto the spine (`shared/http`) and delete the matching legacy client |
 | R4 | **Mobile still on mocks** — `api_client.dart`, `auth_interceptor.dart`, Firebase/Sentry/Hive init are TODO | Mobile has no real backend path yet | UI-first workflow is deliberate; DI flip is one line | Wire Dio interceptor with the 3 contract headers + 401 refresh |
