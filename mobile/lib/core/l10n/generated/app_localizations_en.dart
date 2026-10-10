@@ -229,6 +229,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorUnexpected => 'Something went wrong';
 
   @override
+  String get errorInvalidCredentials => 'Invalid email or password';
+
+  @override
   String errorTraceId(String traceId) {
     return 'Error id: $traceId';
   }

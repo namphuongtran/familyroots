@@ -35,45 +35,48 @@ Future<void> main() async {
     supabaseUrl: _supabaseUrl,
     supabasePublishableKey: _supabaseKey,
     sentryDsn: _sentryDsn,
-    appBuilder: () => ProviderScope(
-      overrides: [
-        apiBaseUrlProvider.overrideWithValue(_apiBaseUrl),
-        prefsStoreProvider.overrideWithValue(prefs),
-        cacheStoreProvider.overrideWithValue(cache),
-        authRouteStateProvider.overrideWithValue(authRouteState),
+    appBuilder: () {
+      // One auth client for sign-in, the bearer token and the refresh, so
+      // the session every request reads is the session sign-in created
+      // (ADR-064). Built here because bootstrap calls this only after
+      // `Supabase.initialize`.
+      final auth = SupabaseAuth(Supabase.instance.client.auth);
+      return ProviderScope(
+        overrides: [
+          apiBaseUrlProvider.overrideWithValue(_apiBaseUrl),
+          prefsStoreProvider.overrideWithValue(prefs),
+          cacheStoreProvider.overrideWithValue(cache),
+          authRouteStateProvider.overrideWithValue(authRouteState),
 
-        // The Dio seams. Each reads live state at request time, which is why
-        // they are closures rather than values.
-        accessTokenProvider.overrideWithValue(
-          () => Supabase.instance.client.auth.currentSession?.accessToken,
-        ),
-        currentClanIdProvider.overrideWithValue(prefs.readClanId),
-        currentLocaleProvider.overrideWithValue(
-          () => prefs.readLocale() ?? 'vi',
-        ),
-        tokenRefresherProvider.overrideWithValue(
-          TokenRefresher(() async {
-            final res = await Supabase.instance.client.auth.refreshSession();
-            return res.session?.accessToken;
-          }),
-        ),
-        // Needs the container, so it cannot be a plain value.
-        onSignOutProvider.overrideWith(
-          (ref) =>
-              () => ref.read(sessionControllerProvider.notifier).signOut(),
-        ),
+          // The Dio seams. Each reads live state at request time, which is
+          // why they are closures rather than values.
+          accessTokenProvider.overrideWithValue(() => auth.accessToken),
+          currentClanIdProvider.overrideWithValue(prefs.readClanId),
+          currentLocaleProvider.overrideWithValue(
+            () => prefs.readLocale() ?? 'vi',
+          ),
+          tokenRefresherProvider.overrideWithValue(
+            TokenRefresher(auth.refresh),
+          ),
+          supabaseAuthProvider.overrideWithValue(auth),
+          // Needs the container, so it cannot be a plain value.
+          onSignOutProvider.overrideWith(
+            (ref) =>
+                () => ref.read(sessionControllerProvider.notifier).signOut(),
+          ),
 
-        // Repositories are built from apiClientProvider, which is built from
-        // dioProvider. Overriding the base URL above is enough to redirect the
-        // whole stack.
-        authRepositoryProvider.overrideWith(
-          (ref) => AuthRepository(ref.watch(apiClientProvider)),
-        ),
-        clanRepositoryProvider.overrideWith(
-          (ref) => ClanRepository(ref.watch(apiClientProvider)),
-        ),
-      ],
-      child: const FamilyRootsApp(),
-    ),
+          // Repositories are built from apiClientProvider, which is built
+          // from dioProvider. Overriding the base URL above is enough to
+          // redirect the whole stack.
+          authRepositoryProvider.overrideWith(
+            (ref) => AuthRepository(ref.watch(apiClientProvider)),
+          ),
+          clanRepositoryProvider.overrideWith(
+            (ref) => ClanRepository(ref.watch(apiClientProvider)),
+          ),
+        ],
+        child: const FamilyRootsApp(),
+      );
+    },
   );
 }

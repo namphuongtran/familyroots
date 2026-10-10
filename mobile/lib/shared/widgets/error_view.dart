@@ -23,6 +23,14 @@ class ErrorView extends StatelessWidget {
     final (String text, String? traceId) = switch (error) {
       // Already localised server-side — display it, never parse it.
       ApiException(:final message, :final traceId) => (message, traceId),
+      // GoTrue's message is English whatever the locale, so the copy is
+      // ours, chosen by code. Its words are the backend's
+      // `auth.invalid_credentials`, which this replaced (ADR-064).
+      SupabaseAuthException(code: 'invalid_credentials') => (
+        l10n.errorInvalidCredentials,
+        null,
+      ),
+      SupabaseAuthException() => (l10n.errorUnexpected, null),
       NetworkException() => (l10n.errorOffline, null),
       TimeoutException() => (l10n.errorTimeout, null),
       MalformedResponseException() => (l10n.errorUnexpected, null),

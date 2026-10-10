@@ -27,30 +27,3 @@ UserProfile userProfileFromJson(Object? json) {
     personId: personId is String ? PersonId(personId) : null,
   );
 }
-
-class LoginResult {
-  const LoginResult({
-    required this.accessToken,
-    required this.refreshToken,
-    required this.expiresIn,
-    required this.user,
-  });
-
-  final String accessToken;
-  final String refreshToken;
-  final int expiresIn;
-
-  /// `has_pending_membership` HERE IS ALWAYS FALSE — the login handler never
-  /// computes it. Call GET /auth/me and route on that value instead.
-  final UserProfile user;
-}
-
-LoginResult loginResultFromJson(Object? json) {
-  final m = json! as Map<String, Object?>;
-  return LoginResult(
-    accessToken: m['access_token']! as String,
-    refreshToken: m['refresh_token']! as String,
-    expiresIn: m['expires_in'] as int? ?? 3600,
-    user: userProfileFromJson(m['user']),
-  );
-}

@@ -430,7 +430,7 @@ packages:
     source: hosted
     version: "17.3.0"
   gotrue:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: gotrue
       sha256: "360bba9606e58d5acc59a033ab64ae3cf571a6868f7a7267cb8e9a204b7bf1b2"
@@ -462,7 +462,7 @@ packages:
     source: hosted
     version: "2.0.2"
   http:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/l10n/generated/app_localizations.dart';
+import '../core/network/api_exception.dart';
 import '../core/theme/app_theme.dart';
 import '../domain/auth/user_profile.dart';
 import '../features/auth/auth.dart';
@@ -35,6 +36,7 @@ class _FamilyRootsAppState extends ConsumerState<FamilyRootsApp> {
       final profile = next.value;
       _authRouteState.set(
         signedIn: profile != null,
+        emailVerified: !_awaitsVerification(next.error),
         // The whole three-way answer, not `isApproved` flattened to a bool: a
         // clanless user and a pending user need different copy on the same
         // route (spec § 7.2a). No profile means signed out, so the
@@ -64,4 +66,17 @@ class _FamilyRootsAppState extends ConsumerState<FamilyRootsApp> {
       locale: Locale(ref.watch(prefsStoreProvider).readLocale() ?? 'vi'),
     );
   }
+}
+
+/// Whether a failed sign-in was refused for an unconfirmed address. Routed by
+/// [policyActionFor] like any other code, so Supabase's `email_not_confirmed`
+/// and the backend's `email_not_verified` land on the same screen.
+bool _awaitsVerification(Object? error) {
+  final code = switch (error) {
+    SupabaseAuthException(:final code) => code,
+    ApiException(:final code) => code,
+    _ => null,
+  };
+  return code != null &&
+      policyActionFor(code) == PolicyAction.resendVerification;
 }

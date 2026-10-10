@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/network/api_exception.dart';
 import '../../domain/auth/user_profile.dart';
 import '../../domain/clan/clan_membership.dart';
 import '../../features/auth/auth.dart';
@@ -105,9 +106,14 @@ class VerifyEmailRoute extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Riverpod 3.2.1 exposes the nullable accessor as `value`, not
-    // `valueOrNull` — the latter does not exist on AsyncValue in this version.
-    final email = ref.watch(sessionControllerProvider).value?.email;
+    final session = ref.watch(sessionControllerProvider);
+    // A refused sign-in has no profile, so the address comes from the
+    // refusal (ADR-064). Riverpod 3.2.1 exposes the nullable accessor as
+    // `value`, not `valueOrNull`, which does not exist on AsyncValue here.
+    final email = switch (session.error) {
+      SupabaseAuthException(:final email?) => email,
+      _ => session.value?.email,
+    };
     return KeyedSubtree(
       key: RouteKeys.verifyEmail,
       child: VerifyEmailPage(email: email),

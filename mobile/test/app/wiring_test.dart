@@ -33,6 +33,7 @@ void main() {
     expect(c.read(dioProvider), isA<Dio>());
     expect(c.read(apiClientProvider), isA<ApiClient>());
     expect(c.read(authRepositoryProvider), isA<AuthRepository>());
+    expect(c.read(supabaseAuthProvider), isA<SupabaseAuth>());
     expect(c.read(clanRepositoryProvider), isA<ClanRepository>());
     expect(c.read(cacheStoreProvider), isA<CacheStore>());
     expect(c.read(onSignOutProvider), isA<void Function()>());

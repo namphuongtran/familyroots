@@ -1,6 +1,9 @@
 # Mobile Rebuild — Architecture Design
 
-**Status:** approved 2026-08-02
+**Status:** approved 2026-08-02. **Amended 2026-10-10 by
+[ADR-064](../../decisions/064-mobile-signs-in-through-supabase.md)** (#204): mobile signs in
+and out through Supabase, not `POST /auth/login`. § 4.2's `email_not_verified` row and § 4.3
+carry the change.
 **Sub-project:** D (mobile), brought forward ahead of B
 **Supersedes:** the scaffold under `mobile/` created 2026-03-07
 
@@ -197,7 +200,7 @@ into a routing decision. UI branches on `code`, never on `message`:
 | Code / status | Action |
 |---|---|
 | 401 | single-flight refresh, retry once; on failure sign out and route to login |
-| 403 `email_not_verified` | resend-verification screen |
+| 403 `email_not_verified`; Supabase's 400 `email_not_confirmed` | resend-verification screen. Since ADR-064 the second is the one a sign-in meets: Supabase refuses the password sign-in itself, so there is no session |
 | 403 `account_deactivated` | blocked-account screen; sign out |
 | 403 `clan_suspended` | clan-blocked screen, offer clan switch |
 | 403 `no_approved_clan_membership` | pending-approval or onboarding |
@@ -215,15 +218,23 @@ fallback table exists only for the offline case.
 
 - The Supabase session is stored through a custom `LocalStorage` backed by
   `flutter_secure_storage` (D6) — iOS Keychain, Android Keystore.
-- After login the client calls `GET /auth/me`, because the login response's
-  `has_pending_membership` is always `false` (documented backend gap).
+- Sign-in is Supabase's password sign-in, through the same client that stores
+  the session (D6) and refreshes it (D8). Sign-out is Supabase's too, with
+  scope `global`. The backend's `POST /auth/login` and `POST /auth/logout` are
+  not called (ADR-064, which amended this bullet on 2026-10-10).
+- After sign-in the client calls `GET /auth/me` for the profile. If that call
+  fails, such as with 403 `account_deactivated`, the Supabase session is signed
+  out, so nothing half-signed-in stays in secure storage. That cleanup revokes
+  this device's session only, scope `local`.
 - Clan resolution follows `frontend-integration-guide.md` §1.2: `GET /me/clans`;
   one clan → select it; several → clan picker. The selection is persisted locally
   (it is not a secret, so ordinary preferences) and sent as a header on every
   clan-scoped request thereafter, including for single-clan users.
 - `go_router` guards, driven by a `refreshListenable` on session state:
-  unauthenticated → login; unverified → verification; no approved membership →
-  pending/onboarding; no clan selected with several available → picker.
+  unverified → verification; unauthenticated → login; no approved membership →
+  pending/onboarding; no clan selected with several available → picker. The
+  unverified check comes first because Supabase's refusal leaves no session
+  (ADR-064).
 
 ### 4.4 Domain rules the client must not reinvent
 

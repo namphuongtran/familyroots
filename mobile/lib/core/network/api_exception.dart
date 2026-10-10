@@ -1,5 +1,6 @@
 /// The client-side error taxonomy. Every failure that reaches a notifier is
-/// one of these four; nothing above `core/network` sees a `DioException`.
+/// one of these five; nothing above `core/network` sees a `DioException`, and
+/// nothing above `features/auth/data` sees gotrue's `AuthException`.
 sealed class AppException implements Exception {
   const AppException();
 }
@@ -31,6 +32,33 @@ final class ApiException extends AppException {
 
   @override
   String toString() => 'ApiException($status $code): $message';
+}
+
+/// Supabase Auth answered a request with an error (ADR-064): a refused
+/// password sign-in, or a 5xx.
+///
+/// It carries GoTrue's `code`, never its message. GoTrue writes English
+/// whatever the locale, so unlike [ApiException.message] there is nothing here
+/// to display. The UI picks its copy by [code].
+final class SupabaseAuthException extends AppException {
+  const SupabaseAuthException({
+    required this.code,
+    required this.status,
+    this.email,
+  });
+
+  /// GoTrue's error code, such as `invalid_credentials` or
+  /// `email_not_confirmed`. Null when GoTrue sent none, as on a 5xx.
+  final String? code;
+  final int? status;
+
+  /// The address a refused sign-in was for, null for a refused refresh. A
+  /// refused sign-in has no profile to read it from, and `/verify-email`
+  /// needs it to offer a resend.
+  final String? email;
+
+  @override
+  String toString() => 'SupabaseAuthException($status $code)';
 }
 
 /// Transport, DNS, offline.
@@ -84,7 +112,11 @@ PolicyAction policyActionFor(String code, {int? status}) {
     // Without this case it fell through to the `status == 401` default below.
     case 'auth.invalid_credentials':
       return PolicyAction.none;
+    // One state, two names: the backend raised the first from
+    // POST /auth/login, and Supabase raises the second from the password
+    // sign-in mobile calls since ADR-064.
     case 'email_not_verified':
+    case 'email_not_confirmed':
       return PolicyAction.resendVerification;
     case 'account_deactivated':
       return PolicyAction.blockedAccount;

@@ -11,9 +11,10 @@ import 'message_page.dart';
 class VerifyEmailPage extends ConsumerWidget {
   const VerifyEmailPage({super.key, this.email});
 
-  /// Null when we do not know the address — a 403 `email_not_verified` at login
-  /// means there is no session to read it from. Resend is then unavailable
-  /// rather than sent to a guess; "open your email" still applies.
+  /// Null when we do not know the address. A sign-in Supabase refused with
+  /// `email_not_confirmed` carries it; a 403 `email_not_verified` from
+  /// `GET /auth/me` does not. Resend is then unavailable rather than sent to
+  /// a guess; "open your email" still applies.
   final String? email;
 
   @override

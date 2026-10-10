@@ -42,6 +42,8 @@ const _domainForbiddenPackages = <String>[
   'package:riverpod_annotation/',
   'package:supabase_flutter/',
   'package:supabase/',
+  // supabase_flutter's auth client, a direct dependency since ADR-064.
+  'package:gotrue/',
   'package:json_annotation/',
 ];
 
@@ -144,6 +146,17 @@ export 'package:family_roots_mobile/domain/shared/page.dart';
         'package:collection/collection.dart',
       ),
       isNull,
+    );
+  });
+
+  test('violationFor flags a domain file importing the Supabase auth '
+      'client', () {
+    expect(
+      violationFor(
+        'domain/auth/user_profile.dart',
+        'package:gotrue/gotrue.dart',
+      ),
+      isNotNull,
     );
   });
 

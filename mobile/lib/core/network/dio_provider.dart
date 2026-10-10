@@ -40,7 +40,11 @@ final cacheStoreProvider = Provider<CacheStore>(
 
 /// The single Dio instance, with the five interceptors in the mandated order.
 /// Refresh goes last so the header interceptors have already run on the retry.
-final dioProvider = Provider<Dio>((ref) {
+final dioProvider = Provider<Dio>(buildDio);
+
+/// [dioProvider]'s body, public so a test can keep every interceptor and swap
+/// only the transport underneath (`test/support/main_container.dart`).
+Dio buildDio(Ref ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: ref.watch(apiBaseUrlProvider),
@@ -62,7 +66,7 @@ final dioProvider = Provider<Dio>((ref) {
   ]);
 
   return dio;
-});
+}
 
 final apiClientProvider = Provider<ApiClient>(
   (ref) => ApiClient(ref.watch(dioProvider)),
