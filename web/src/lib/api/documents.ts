@@ -11,7 +11,9 @@ import type {
 // own 413. That response never reaches the API, so it carries no error envelope (ADR-065).
 // Production's server limit, MAX_UPLOAD_SIZE_MB, is 4 for that reason, and a larger file
 // is refused here, before any byte is sent. Lifting this needs direct-to-Storage uploads.
-const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024 // 4 MB
+// DocumentUpload reads the same number, so the screen and the transport cannot disagree.
+export const MAX_UPLOAD_MB = 4
+const MAX_FILE_SIZE_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 export const documentsApi = {
   list: async (params?: {

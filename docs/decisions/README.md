@@ -74,7 +74,7 @@ quote below records why 049 was allocated twice and is kept. **057 was written o
 what a person types to join a clan and what an admin shares, and **058 the same day**, for the gap
 that ADR opened. **059, 060 and 061 were written on 2026-10-04**, each resolving a decision ticket on
 the map in issue #158, and **063 the same day**, resolving #178 on that map. **064 was written on
-2026-10-10**, with the code it records, resolving #204. The next free number is **065**. **Allocate a number in the issue that will write
+2026-10-10**, with the code it records, resolving #204. **065 and 066 were allocated the same day**, in #250 and #251, for the move to Vercel and Supabase. The next free number is **067**. **Allocate a number in the issue that will write
 the ADR**, so that four agents picking work at once cannot pick the same number. **This index is
 the authority on which numbers are taken.** When a file and this table disagree, this table wins,
 and the check below is what finds the difference.

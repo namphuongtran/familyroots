@@ -4,11 +4,14 @@ import { useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Upload, X, FileText } from 'lucide-react'
 import { useCapabilities } from '@/features/auth'
+import { MAX_UPLOAD_MB } from '@/lib/api/documents'
 import { useDocumentMutations } from '@/lib/hooks/useDocuments'
 import { cn } from '@/lib/utils/cn'
 
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.doc,.docx'
-const MAX_MB = 20
+// The transport's limit (ADR-065). This screen read 20 here while the transport refused
+// anything over 4, and that rejection was never caught, so a 4-20 MB file showed nothing.
+const MAX_MB = MAX_UPLOAD_MB
 
 interface DocumentUploadProps {
   personId?: string
