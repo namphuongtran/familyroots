@@ -135,6 +135,29 @@ function refused(code: string, status: number) {
   }
 }
 
+/**
+ * **The one request the Referer case sets aside, by name, and why (#225).** `next dev`'s overlay
+ * mounts an inline `<style>` holding `@font-face { src: url(/__nextjs_font/geist-latin.woff2) }`
+ * (`next/dist/compiled/next-devtools`, from `dev-overlay/font/font-styles.tsx`, Next 16.2.12), and
+ * a font from an inline stylesheet ignores the document's `no-referrer` in Chromium 151. Only
+ * `next dev`'s hot reloaders mount `getDevOverlayFontMiddleware`
+ * (`next/dist/server/dev/hot-reloader-turbopack.js`), so a production build neither serves the
+ * font nor renders the overlay that asks for it. Read against `next build && next start` on
+ * 2026-10-10: the case passed 60 of 60, no `__nextjs_font` request was made at all, and the
+ * production HTML held neither `__nextjs_font` nor `next-devtools`.
+ *
+ * **Exactly this path, on the page's own origin.** Another `/__nextjs_font/*` file, a font on any
+ * other path, or this path on another origin still fails the case. It is the same shape as
+ * `e2e/auth/invitee-registers.auth.spec.ts`'s `isDevOverlayFont`, which met the same request on a
+ * navigation (#196).
+ */
+const DEV_OVERLAY_FONT_PATH = '/__nextjs_font/geist-latin.woff2'
+
+function isDevOverlayFont(url: string, pageOrigin: string): boolean {
+  const { origin, pathname } = new URL(url)
+  return origin === pageOrigin && pathname === DEV_OVERLAY_FONT_PATH
+}
+
 async function stubAccept(page: Page, response: Parameters<Route['fulfill']>[0]): Promise<void> {
   await page.route(ACCEPT_ROUTE, (route) => route.fulfill(response))
 }
@@ -276,13 +299,36 @@ test.describe('the token is treated as a credential', () => {
    * has no referrer policy yet when those fetches start. An HTTP response header
    * applies from the first byte; the meta tag does not. The meta tag is still what
    * covers the navigation case in the test above.
+   *
+   * **A font loaded from an inline `<style>` ignores the document's `no-referrer`
+   * (#225).** Measured 2026-10-10 in Chromium 151, against `next start`: an
+   * `@font-face` in an inline stylesheet, script-inserted or parser-inserted, sent
+   * the page's full URL, token included, as `Referer` to the same origin, and only
+   * the origin to any other. An `<img>` and a `fetch()` on the same page sent none.
+   * So the header is correct, and any inline `@font-face` on this route, inlined
+   * CSS included, would leak the token to this origin. `next dev`'s overlay is one:
+   * it injects such a `<style>` for {@link DEV_OVERLAY_FONT_PATH}, and this case
+   * failed 2 of 60 on that request alone before the exclusion below. Each leak is
+   * recorded with the request that sent it, so a failure names the request.
    */
-  test('no request the page makes carries the token in a Referer header', async ({ page }) => {
+  test('no request the page makes carries the token in a Referer header', async ({
+    page,
+  }, testInfo) => {
     await signIn(page)
-    const referers: string[] = []
+    const leaks: string[] = []
+    let sawAcceptPost = false
     page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/accept')) sawAcceptPost = true
       const referer = request.headers()['referer']
-      if (referer) referers.push(referer)
+      if (!referer?.includes(TOKEN)) return
+      const entry = `${request.method()} ${request.url()} [${request.resourceType()}] <- ${referer}`
+      // A Referer carrying the token is the invitation page's own URL, so its
+      // origin is the page's.
+      if (isDevOverlayFont(request.url(), new URL(referer).origin)) {
+        testInfo.annotations.push({ type: 'set aside: next dev overlay font', description: entry })
+        return
+      }
+      leaks.push(entry)
     })
     await stubAccept(page, accepted())
 
@@ -291,8 +337,11 @@ test.describe('the token is treated as a credential', () => {
     await expect(page.getByRole('heading', { name: 'Bạn đã tham gia dòng họ' })).toBeVisible()
 
     // Every subresource this page loads (the app's own chunks, the fonts, the
-    // accept POST) is covered: the assertion is over the whole collected set.
-    expect(referers.join('\n')).not.toContain(TOKEN)
+    // accept POST) is covered: the assertion is over every request seen.
+    expect(leaks, 'each line is METHOD URL [resource type] <- Referer').toEqual([])
+    // The control: the listener heard the page's own accept POST, so an empty list
+    // is about the Referers, not about a listener that heard nothing.
+    expect(sawAcceptPost).toBe(true)
   })
 
   test('nothing the page writes to the console carries the token', async ({ page }) => {

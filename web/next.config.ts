@@ -48,6 +48,18 @@ const nextConfig: NextConfig = {
    * An HTTP response header applies from the document's first byte, so it covers
    * those too. Both are kept: the header is the mechanism, the meta tag is what
    * still holds if a proxy or a static export strips the header.
+   *
+   * **Neither covers a font loaded from an inline stylesheet (#225).** Measured
+   * 2026-10-10 in Chromium 151 against `next start`, with this header and the meta
+   * tag both in place: an `@font-face` inside an inline `<style>`, script-inserted
+   * or parser-inserted, sent the page's full URL, token included, as `Referer` to
+   * the same origin, and only the origin to any other. An `<img>` and a `fetch()`
+   * on the same page sent none. So any inline `@font-face` on this route leaks the
+   * token to this origin, and that includes CSS that Next.js or a plugin inlines
+   * into the document. Load fonts here from a stylesheet file, as `next/font` does
+   * today. `next dev`'s overlay is the one inline `@font-face` this route has, and
+   * only under `next dev`; `e2e/invitation-accept.spec.ts` sets that request aside
+   * by name.
    */
   async headers() {
     return [
