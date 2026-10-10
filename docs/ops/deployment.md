@@ -125,10 +125,13 @@ so that change is left to a follow-up.
   dedup are what make a second delivery harmless (ADR-065).
 - **Each request carries `Authorization: Bearer $CRON_SECRET`.** The endpoints answer anything else
   with the same bare 404 as `/internal/metrics` (#250).
-- **The request goes to "your project's production deployment URL"**, for which the docs' example
-  is `https://*.vercel.app/api/cron`. They do not say which of a project's hosts it uses. If it is
-  not the host `ALLOWED_HOSTS` names, `TrustedHostMiddleware` answers 400 and the job never runs.
-  The first cron run's log line is the reading that settles it (Go-live checklist, F).
+- **The request goes to the production deployment's own generated host, not to the alias.**
+  Measured 2026-10-10 (#265): `vercel crons run /internal/cron/document-purge` reached
+  `familyroots-9xtnrccz1-namtp.vercel.app`, and `TrustedHostMiddleware` answered `400`, because
+  `ALLOWED_HOSTS` names `familyroots-api.vercel.app`. Vercel gives the function that host as the
+  system variable `VERCEL_URL`. Since #265 `Settings.trusted_hosts` adds it to `ALLOWED_HOSTS`, so
+  `ALLOWED_HOSTS` still names only the production alias. This works only while the project keeps
+  "Automatically expose System Environment Variables" on, which is Vercel's default.
 - **A path is not checked at build time.** For a path that does not exist, "Vercel still executes
   your cron job" and logs a 404. So a planted wrong path is no negative control for a build. The
   live control is the first scheduled run, read in the function logs.
@@ -344,9 +347,9 @@ Do A to E first. A backend deploy with its variables unset fails its own health 
 4. [ ] **Regions.** `x-vercel-id` reads `sin1` on `https://<web-host>/vi/login` and on
    `https://<api-host>/health` (§ "web/vercel.json").
 5. [ ] **The crons.** Trigger each once with `vercel crons` or the dashboard's Cron Jobs page, or
-   wait for 00:00 UTC. Then read the function logs for both paths. Each must show `200`. A `400`
-   means the cron's host is not in `ALLOWED_HOSTS`. A `404` means `CRON_SECRET` differs between
-   Vercel and the app, or the route did not ship.
+   wait for 00:00 UTC. Then read the function logs for both paths. Each must show `204`. A `400`
+   means the cron's host was refused: check that `VERCEL_URL` reaches the function (#265). A `404`
+   means `CRON_SECRET` differs between Vercel and the app, or the route did not ship.
 6. [ ] **Auth end to end.** Sign up on `https://<web-host>`. The confirmation email's link must begin
    with `https://<web-host>/verify-email/confirm?token_hash=`.
 7. [ ] **Backups.** Run `db-backup` once by hand ([backup-restore.md](backup-restore.md), "Go-live

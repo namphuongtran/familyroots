@@ -18,6 +18,19 @@ recording them. **#251** is the Supabase side: role membership for `familyroots_
 the Data API, and Postgres 17 compatibility. **#252** is the deploy: `vercel.json`, the cron
 schedule, the environment values, CI, and retiring `render.yaml`.
 
+**Amended 2026-10-10 (#265): Vercel Cron calls the deployment's own host, so the host check
+admits it.** The first manual cron run (`vercel crons run /internal/cron/document-purge`) reached
+`familyroots-9xtnrccz1-namtp.vercel.app`, the production deployment's generated URL, and the
+function log read `400`. `TrustedHostMiddleware` refused it, because `ALLOWED_HOSTS` names the
+alias `familyroots-api.vercel.app`, so neither job would ever have run.
+
+`Settings.trusted_hosts` now adds Vercel's system variable `VERCEL_URL`, this deployment's own
+hostname, to an explicit `ALLOWED_HOSTS`, and `create_app` passes that list to the middleware.
+- **No other deployment is admitted.** Vercel routes by `Host`, so the name reaches only this
+  deployment.
+- **The deployment URL stays protected.** Vercel's deployment protection guards it for browsers.
+- **No path is exempted from the host check**, which keeps #230's rule.
+
 ## Context
 
 ### What Vercel provides, read 2026-10-10
