@@ -17,21 +17,31 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
 
 from app.core.config import Settings, settings
 from app.core.rls import register_rls_session_events, set_request_clan_id
 
-# NOTE: if DATABASE_URL is ever pointed at a transaction-mode connection pooler
-# (e.g. Supabase's pgbouncer on :6543), psycopg v3's automatic server-side
-# prepared statements break with DuplicatePreparedStatement. In that case add
-# connect_args={"prepare_threshold": None}. A direct Postgres (current Render
-# setup) does not need it.
-
 
 def make_engine(settings: Settings) -> AsyncEngine:
-    """Build the async engine, sourcing pool size/overflow from Settings
-    (ADR-028/H5) so they are env-tunable. Defaults (10/20) match the
-    previous hardcoded values, so out-of-box behavior is unchanged."""
+    """Build the async engine in one of two shapes, chosen by ``DB_EXTERNAL_POOLER``.
+
+    - **False** (default; a direct Postgres or Docker's ``pgdb``): a QueuePool whose size and
+      overflow come from ``DB_POOL_SIZE``/``DB_MAX_OVERFLOW`` (ADR-028/H5), defaults 10/20.
+    - **True** (behind a transaction pooler — Supabase's Supavisor on :6543, from Vercel
+      Functions; ADR-065): ``NullPool``, because the pooler is the pool, and
+      ``prepare_threshold=None``, because psycopg 3's automatic server-side prepared
+      statements break when consecutive transactions land on different server connections.
+      The pool-size settings do not apply. ``Settings.DB_EXTERNAL_POOLER`` carries the full
+      reasoning.
+    """
+    if settings.DB_EXTERNAL_POOLER:
+        return create_async_engine(
+            settings.DATABASE_URL,
+            poolclass=NullPool,
+            connect_args={"prepare_threshold": None},
+            echo=settings.APP_DEBUG,
+        )
     return create_async_engine(
         settings.DATABASE_URL,
         pool_size=settings.DB_POOL_SIZE,

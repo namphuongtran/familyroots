@@ -89,8 +89,9 @@ async def test_anniversary_dedup_skips_already_sent():
     mock_db.rollback = AsyncMock()
     mock_db.close = AsyncMock()
 
-    # Lock topology (C2): the job acquires the advisory lock on a dedicated
-    # connection (``engine.connect()``), then binds a session to it.
+    # Lock topology (ADR-065): the job takes a transaction-scoped advisory lock on a
+    # dedicated connection (``engine.connect()``) and does its work on a separate
+    # ``AsyncSession`` bound to the engine.
     lock_result = MagicMock()
     lock_result.scalar.return_value = True  # lock acquired
     mock_conn = AsyncMock()
@@ -113,6 +114,7 @@ async def test_anniversary_dedup_skips_already_sent():
 async def test_firebase_init_handles_missing_credentials():
     """init_firebase does not raise when credentials file is missing."""
     with patch("app.services.notification.settings") as mock_settings:
+        mock_settings.FIREBASE_CREDENTIALS_JSON = ""  # unset, so the path is used (ADR-065)
         mock_settings.FIREBASE_CREDENTIALS_PATH = "/nonexistent/path.json"
         from app.services.notification import init_firebase
 

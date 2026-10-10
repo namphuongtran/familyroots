@@ -4,6 +4,10 @@
 Accepted (2026-07-14 — shipped).
 Decision 3 amended 2026-10-07 by issue #226: the bucket's count is a setting whose default, and
 production's value, stays 20. See the dated amendment under Decision 3.
+Decisions 3 and 4 amended 2026-10-10 by [ADR-065](065-the-backend-runs-on-vercel-functions.md)
+(#250), for the backend on Vercel Functions. The bucket is per instance there, and the shutdown
+stops APScheduler only where it runs. The same 404 rule now also guards the two
+`/internal/cron/*` routes. See the dated amendments under each decision.
 
 ## Context
 The 2026-07-12 deep review left three gaps on the production-hardening backlog,
@@ -229,11 +233,33 @@ already bounds who can call it.
 > which sends requests through `create_app()` and reads the 21st in the window: 429 with
 > nothing set, admitted with the setting at 25, and the 26th then refused.
 
+> **Amendment (2026-10-10, ADR-065, #250):** on Vercel Functions **the bucket is per
+> instance**. `RateLimitMiddleware` keeps its counters in process memory, Vercel runs as many
+> instances at once as the traffic needs, and a cold instance starts with an empty bucket. So
+> "20 requests per 60 seconds per IP" holds per instance, and a client whose requests land on
+> several instances gets that many buckets. ADR-040 already accepted the same trade for the
+> metrics throttle across replicas. ADR-065 § 7 accepts it here for now. Replacing the limiter
+> with a shared store is a follow-up. Until it lands, the mitigations Decision 1 cites rest on a
+> looser limit than "20 per minute per IP" says.
+>
+> **The non-enumerating 404 extends to two new routes.** `GET /internal/cron/anniversary-notifications`
+> and `GET /internal/cron/document-purge` (`backend/app/api/cron.py`) answer every refusal with
+> the same 404 a path that does not exist gets, as `/internal/metrics` does: no header, a wrong
+> secret, or an empty or weak `CRON_SECRET`. `backend/tests/unit/test_cron_endpoints.py`
+> compares the refusal byte for byte with an unknown path's.
+
 ### 4. `engine.dispose()` on shutdown
 One-liner in `main.py`'s lifespan `finally` (after scheduler stop): the async
 engine is disposed so pooled connections close cleanly on SIGTERM instead of
 being dropped by the OS. Logged (not raised) on failure so a dispose error
 never blocks the rest of teardown.
+
+> **Amendment (2026-10-10, ADR-065, #250):** the scheduler is stopped only when
+> `SCHEDULER_ENABLED` is true, the same condition under which the lifespan started it. On Vercel
+> Functions it is false, and stopping a scheduler that never started would log an exception at
+> every instance's shutdown. `engine.dispose()` still runs. Behind Supavisor
+> (`DB_EXTERNAL_POOLER=true`) the engine is a `NullPool`, so there is nothing pooled to close, and
+> Vercel gives shutdown at most 500 ms. Pinned by `backend/tests/unit/test_lifespan_scheduler_switch.py`.
 
 ## Consequences
 Easier: the clan-input branch oracle and the status-code-on-duplicate-email

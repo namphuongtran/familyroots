@@ -7,7 +7,13 @@ import type {
   CursorPage,
 } from '@/lib/types'
 
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+// The backend runs on Vercel Functions, which refuse a request body over 4.5 MB with their
+// own 413. That response never reaches the API, so it carries no error envelope (ADR-065).
+// Production's server limit, MAX_UPLOAD_SIZE_MB, is 4 for that reason, and a larger file
+// is refused here, before any byte is sent. Lifting this needs direct-to-Storage uploads.
+// DocumentUpload reads the same number, so the screen and the transport cannot disagree.
+export const MAX_UPLOAD_MB = 4
+const MAX_FILE_SIZE_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 export const documentsApi = {
   list: async (params?: {
@@ -30,7 +36,7 @@ export const documentsApi = {
 
   upload: async (file: File, meta: DocumentUploadMeta): Promise<DocumentResponse> => {
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      throw new Error(`File size exceeds the 50 MB limit`)
+      throw new Error(`File size exceeds the 4 MB limit`)
     }
 
     const formData = new FormData()

@@ -1,6 +1,7 @@
 """FCM push notification sender service."""
 
 import asyncio as asyncio
+import json
 import logging
 import uuid
 from typing import Any
@@ -22,12 +23,34 @@ _firebase_app: firebase_admin.App | None = None
 _FCM_BATCH_LIMIT = 500
 
 
+def _service_account_source() -> dict[str, Any] | str:
+    """What to build the Firebase credentials from: the inline ``FIREBASE_CREDENTIALS_JSON``
+    when it is set, else the file at ``FIREBASE_CREDENTIALS_PATH`` (ADR-065).
+
+    The inline value is a secret, so nothing derived from it may reach the warning
+    ``init_firebase`` logs. ``json.loads`` reports a position, never the text. A value that
+    parses but is not an object is refused here rather than handed on, because
+    ``credentials.Certificate`` treats a str as a path, which surfaces in a
+    ``FileNotFoundError``, and echoes any other non-dict in its ``ValueError``. Either way it
+    would log the secret itself.
+    """
+    inline = settings.FIREBASE_CREDENTIALS_JSON
+    if not inline:
+        return settings.FIREBASE_CREDENTIALS_PATH
+    parsed = json.loads(inline)
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"FIREBASE_CREDENTIALS_JSON must be a JSON object, got a {type(parsed).__name__}"
+        )
+    return parsed
+
+
 def init_firebase() -> None:
     """Initialize the Firebase Admin SDK once at application startup."""
     global _firebase_app
     if not _firebase_app:
         try:
-            cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
+            cred = credentials.Certificate(_service_account_source())
             _firebase_app = firebase_admin.initialize_app(cred)
         except (FileNotFoundError, ValueError) as e:
             logger.warning("Firebase init skipped: %s", e)

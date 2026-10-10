@@ -45,6 +45,15 @@ across all routers):
 - **`GET /internal/metrics` is exempt** — Prometheus exposition (`text/plain`), not a
   data endpoint. Disabled by default; returns 404 unless enabled and correctly
   tokened (ADR-033).
+- **`GET /internal/cron/anniversary-notifications` and `GET /internal/cron/document-purge`
+  need no exemption: they never send a 2xx body** (ADR-065, 2026-10-10). They are
+  Vercel Cron's triggers for the two scheduled jobs, so they are an operations surface
+  and not client contract. They are not under `/api/v1`, and they are hidden from
+  OpenAPI. Each runs its job only for `Authorization: Bearer <CRON_SECRET>` and answers
+  **204 with no body**. Every refusal is the same `404 not_found` envelope that a path
+  which does not exist gets: no header, a wrong secret, or a `CRON_SECRET` that is
+  unset or below the `METRICS_TOKEN` floor. A job that fails answers the standard 500
+  envelope. Code: `backend/app/api/cron.py`.
 - **Error envelope** (unchanged, already standard): every non-2xx JSON body is
   ```json
   { "error": { "code": "...", "message": "...", "detail": { ... } } }

@@ -97,8 +97,13 @@ class Settings(BaseSettings):
     # visible to a cache after this window — short by default for that reason.
     AVATAR_CACHE_CONTROL_SECONDS: int = 300
 
-    # Firebase FCM
+    # Firebase FCM. The service account comes from FIREBASE_CREDENTIALS_JSON when it is set:
+    # the key file's whole content, inline (ADR-065), because a Vercel Function has no file
+    # mount for a path to name. Otherwise it comes from the file at FIREBASE_CREDENTIALS_PATH.
+    # When neither yields a valid service account, pushes are disabled with a warning at
+    # boot, and the app still serves.
     FIREBASE_CREDENTIALS_PATH: str = "./firebase-credentials.json"
+    FIREBASE_CREDENTIALS_JSON: str = ""
 
     # Sentry
     SENTRY_DSN: str = ""
@@ -158,6 +163,22 @@ class Settings(BaseSettings):
     SCHEDULER_TIMEZONE: str = "Asia/Ho_Chi_Minh"
     NOTIFICATION_CRON_HOUR: int = 7
 
+    # Which of the two trigger paths runs the scheduled jobs (ADR-065). True, the default,
+    # is for a long-running process (local, Docker): the lifespan starts the in-process
+    # APScheduler at boot and stops it at shutdown. False is for Vercel Functions, where an
+    # instance is frozen between requests and an in-process timer never fires: the lifespan
+    # leaves APScheduler alone, and Vercel Cron calls GET /internal/cron/* instead.
+    SCHEDULER_ENABLED: bool = True
+
+    # The secret Vercel Cron sends as `Authorization: Bearer <CRON_SECRET>` to
+    # GET /internal/cron/anniversary-notifications and /internal/cron/document-purge
+    # (ADR-065). Empty, the default, leaves both routes answering 404 to everything. It must
+    # clear the same floor as METRICS_TOKEN (metrics_token_weakness, ADR-040). Production
+    # refuses to boot with SCHEDULER_ENABLED=false unless it does, because the routes are
+    # then the jobs' only trigger. The handler re-checks the floor too, so a weak secret
+    # serves nothing in any environment. Generate one with `openssl rand -hex 32`.
+    CRON_SECRET: str = ""
+
     # Invitations
     INVITATION_TTL_DAYS: int = 7
 
@@ -175,6 +196,22 @@ class Settings(BaseSettings):
     # without a code change. Defaults match the previous hardcoded values.
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
+
+    # DATABASE_URL points at an external TRANSACTION pooler (ADR-065): Supabase's Supavisor
+    # on :6543, which is how the backend reaches Postgres from Vercel Functions. True changes
+    # two things in make_engine (app/core/database.py), and the pooler needs both:
+    #   - NullPool. The pooler is the pool. A serverless instance is frozen between requests
+    #     and may never thaw, so connections it parked in a QueuePool of its own would sit
+    #     open against the pooler's client limit. DB_POOL_SIZE / DB_MAX_OVERFLOW are ignored.
+    #   - connect_args={"prepare_threshold": None}. psycopg 3 prepares a statement on the
+    #     server once it has run it five times on one connection. A transaction pooler hands
+    #     each transaction whichever server connection is free, so the statement is missing
+    #     where it is next used, or already exists where it is next prepared
+    #     (DuplicatePreparedStatement). None switches server-side preparing off.
+    # False, the default, leaves the engine exactly as ADR-028 built it, for a direct
+    # Postgres or Docker's pgdb. Every session-level setting the app makes is already
+    # transaction-local (SET LOCAL ROLE, set_config(..., true)), so nothing else changes.
+    DB_EXTERNAL_POOLER: bool = False
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
@@ -265,6 +302,19 @@ class Settings(BaseSettings):
                     "RATE_LIMIT_TRUST_FORWARDED_FOR must be set explicitly in production: "
                     "true behind a trusted proxy/LB (Render), false when directly exposed"
                 )
+            # With the in-process scheduler off, the /internal/cron/* routes are the only
+            # thing that ever runs the giỗ reminders and the retention purge (ADR-065), and
+            # CRON_SECRET is what opens them. An empty secret would leave both jobs never
+            # running and nothing raising; a weak one would guard them with a guessable
+            # value. Either way, fail the deploy instead.
+            if not self.SCHEDULER_ENABLED:
+                weakness = metrics_token_weakness(self.CRON_SECRET)
+                if weakness:
+                    raise ValueError(
+                        "CRON_SECRET is unusable while SCHEDULER_ENABLED is false in "
+                        f"production: {weakness}. Vercel Cron is then the only trigger of "
+                        "the scheduled jobs. Generate one with `openssl rand -hex 32`."
+                    )
         return self
 
 

@@ -1,14 +1,49 @@
 # Notifications & Scheduler
 
-How anniversary push notifications work: an in-process APScheduler cron finds
-upcoming recurring events (both solar and lunar) and broadcasts FCM pushes to
-approved clan members. The same scheduler process also runs the document
-retention purge job (ADR-019).
+How anniversary push notifications work: a daily job finds upcoming recurring
+events (both solar and lunar) and broadcasts FCM pushes to approved clan members.
+A second daily job runs the document retention purge (ADR-019). Each job is
+triggered by one of two paths (see below).
+
+## Two trigger paths, one live per deployment (ADR-065)
+
+The jobs are two plain async functions, `send_anniversary_notifications`
+(`backend/app/services/scheduler.py`) and `purge_expired_documents`
+(`backend/app/services/document_purge.py`). `SCHEDULER_ENABLED` picks what calls them:
+
+| `SCHEDULER_ENABLED` | Where | What calls the jobs |
+|---|---|---|
+| `true` (default) | a long-running process: local, Docker | the in-process APScheduler, started and stopped by the FastAPI lifespan (`app/main.py`), at the cron triggers in the table below |
+| `false` | Vercel Functions, where an instance is frozen between requests and an in-process timer never fires | **Vercel Cron**, by `GET /internal/cron/anniversary-notifications` and `GET /internal/cron/document-purge` (`backend/app/api/cron.py`) |
+
+The cron routes run a job only for `Authorization: Bearer <CRON_SECRET>`, compared in
+constant time. Every refusal is the same 404 a path that does not exist gets, the
+`/internal/metrics` rule of ADR-021 and ADR-040. Success is 204 with no body, and a
+job that fails answers 500. Production refuses to boot with `SCHEDULER_ENABLED=false`
+unless `CRON_SECRET` clears the `metrics_token_weakness` floor
+([ops/configuration.md](../ops/configuration.md)).
+
+**What changes under Vercel Cron**, all read from Vercel's docs on 2026-10-10:
+
+- **The schedule is UTC and lives in the deploy configuration** (#252), not in
+  `NOTIFICATION_CRON_HOUR`, which only APScheduler reads. The jobs still compute
+  "today" in `SCHEDULER_TIMEZONE`, so the clock of the date math is unchanged.
+- **On Hobby a run fires anywhere within the scheduled hour.**
+- **A run may be delivered twice.** A concurrent duplicate skips on the advisory lock
+  (below). A later one is a no-op: the anniversary job dedups on
+  `notification_log.sent_on`, and the purge finds nothing left to purge.
+- **A failed run is not retried.** The anniversary job sends only on the day an event is
+  exactly `notify_days_before` away, so a missed or failed day is not caught up the next
+  day. That was already true under APScheduler: a run missed by more than its
+  `misfire_grace_time` of 3600 s, for example because no process was up at the hour,
+  was skipped as well.
+
+Neither path is a durable queue: no separate worker, no Redis.
 
 ## Scheduler topology
 
-`backend/app/services/scheduler.py` runs an **in-process `AsyncIOScheduler`** started in
-the FastAPI lifespan (`app/main.py`) — no separate worker, no Redis, no durable queue.
+When `SCHEDULER_ENABLED` is true, `backend/app/services/scheduler.py` runs an
+**in-process `AsyncIOScheduler`** started in the FastAPI lifespan (`app/main.py`).
 
 | Job | Trigger | Lock key | Purpose |
 |---|---|---|---|
@@ -27,18 +62,46 @@ with concurrent runs of themselves.
   cannot split the occurrence math from the "N days away" gate. This is one **global**
   platform zone; per-clan timezones are out of scope.
 
-## Multi-replica safety — Postgres advisory lock
+## Multi-replica safety — a transaction-scoped advisory lock
 
-Every replica runs the scheduler, so each job elects a single runner via its
-own advisory lock (see the table above for lock keys):
+Every replica running the scheduler races for each job. So does every Vercel Cron
+delivery, which may arrive twice. Each job therefore elects a single runner through
+its own advisory lock (see the table above for the keys). Since
+[ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md) (2026-10-10) that
+lock is **transaction-scoped**:
 
-- `pg_try_advisory_lock` on a **dedicated connection held for the whole job**. If not
-  acquired → log and skip the run.
-- The working `AsyncSession` is **bound to that same connection**, so mid-job commits
-  can't return the connection to the pool and strand the session-level lock.
-- The `finally` block **rolls back before unlocking**: the advisory lock survives
-  rollback, and unlocking on an aborted transaction would raise
-  `InFailedSqlTransaction` and mask the job's real error.
+- `pg_try_advisory_xact_lock` runs in **one transaction on a dedicated lock
+  connection**, and that transaction stays open, doing nothing else, for the whole
+  job. If the lock is not acquired, the job logs it and skips the run.
+- The work runs on a **separate system session**, a plain `AsyncSession(bind=engine)`.
+  Its per-item commits and rollbacks therefore happen on another connection, and can
+  neither release the lock early nor strand it.
+- **The lock ends when the lock transaction ends.** On success or on error, the
+  `finally` block closes the work session first and then rolls the lock transaction
+  back. If the process dies, its connection drops, the server ends the transaction,
+  and the lock goes with it. The lock connection runs nothing after the lock, so its
+  rollback cannot meet `InFailedSqlTransaction` and mask the job's own error.
+- While a job runs it holds **two** connections: the lock connection and its work
+  session's.
+- **Why not the session-level lock this replaced** (the C2 topology,
+  seam-review-2026-07-04). `pg_try_advisory_lock` was taken in one transaction,
+  committed, and unlocked in a later transaction. Behind a transaction pooler
+  (Supavisor on `:6543`, which is how the backend reaches Postgres from Vercel
+  Functions) only a transaction stays on one server connection. The unlock could
+  run on a different server connection and miss. The lock then stayed on a server
+  connection that outlives the client, and every later run skipped without raising.
+  Clans would simply have stopped getting giỗ reminders.
+- **One precondition.** The lock transaction sits idle in transaction for the job's
+  whole run. A server-side `idle_in_transaction_session_timeout` shorter than the job
+  would end it early, freeing the lock mid-run, and the final rollback would then
+  raise on the dead connection. Keep any such timeout longer than a job takes. Vercel
+  ends a function at 300 s on Hobby.
+
+`backend/tests/integration/test_job_lock_survives_a_pooler.py` reads both outcomes
+against real Postgres, for both jobs. First, a concurrent second run skips. Second, a
+later run on a **second engine** takes the lock and does the work, while the first
+engine's connections, like a pooler's server connections, live on. Restoring the
+session-level lock with its unlock on another connection fails the second test.
 
 This topology is shared verbatim by `document_purge`
 (`app/services/document_purge.py`) — see
@@ -99,8 +162,13 @@ of precision.
   calling flow.
 - **Invalid-token pruning**: `messaging.UnregisteredError` stages a `DELETE` of that
   `user_fcm_tokens` row; the scheduler's per-event commit persists it.
-- Firebase Admin is initialized once at startup from `FIREBASE_CREDENTIALS_PATH`;
-  missing/invalid credentials log a warning and pushes silently fail (dev-friendly).
+- Firebase Admin is initialized once at startup, from the inline
+  `FIREBASE_CREDENTIALS_JSON` when it is set (ADR-065: a Vercel Function has no file to
+  point at), and from the file at `FIREBASE_CREDENTIALS_PATH` otherwise.
+  Missing or invalid credentials log a warning and pushes silently fail (dev-friendly).
+  The warning never quotes the inline value (`tests/unit/test_firebase_credentials_source.py`).
+  On Vercel, a cold instance initializes Firebase in its own lifespan, so the
+  cron-triggered anniversary run has it.
 
 ## `notification_log` lifecycle
 
@@ -121,10 +189,10 @@ enabled with the ordinary clan-isolation policy,
 
 **That does not narrow this job, and the reason is worth holding onto.** The policy applies
 only to sessions that ran `SET LOCAL ROLE familyroots_app`, which is the `after_begin` seam on
-`RlsSession` (`backend/app/core/rls.py:63-65`). This job binds its `AsyncSession` to a bare
-`engine.connect()` (`backend/app/services/scheduler.py:90, 102`) — a plain connection, not an
-`RlsSession` — so no seam fires, the connection keeps the `DATABASE_URL` login role, and RLS
-does not apply. One run still scans every clan's events and writes a row per due event
+`RlsSession` (`backend/app/core/rls.py:63-65`). This job builds its work session as a plain
+`AsyncSession(bind=engine)` (`backend/app/services/scheduler.py:116`; until ADR-065 it was
+bound to a bare `engine.connect()`), which is not an `RlsSession`. So no seam fires, the
+connection keeps the `DATABASE_URL` login role, and RLS does not apply. One run still scans every clan's events and writes a row per due event
 whatever clan it belongs to.
 
 **The failure this would cause is silent, so it is tested rather than argued.** If the seam
@@ -144,9 +212,12 @@ It is also why the job must stay one of the sanctioned out-of-band writers descr
 
 | Setting | Default | Notes |
 |---|---|---|
-| `NOTIFICATION_CRON_HOUR` | `7` | Hour-of-day in the platform zone (both `anniversary_notifications` and `document_purge` key off it) |
+| `SCHEDULER_ENABLED` | `true` | `true`: the lifespan runs APScheduler. `false`: it does not, and Vercel Cron calls `/internal/cron/*` (ADR-065) |
+| `CRON_SECRET` | `""` | Bearer secret for `/internal/cron/*`. Empty or below the `METRICS_TOKEN` floor: both routes 404. Production with `SCHEDULER_ENABLED=false` refuses to boot without a strong one |
+| `NOTIFICATION_CRON_HOUR` | `7` | Hour-of-day in the platform zone (both `anniversary_notifications` and `document_purge` key off it). APScheduler only. Vercel Cron's schedule lives in the deploy configuration |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Validated as IANA name at boot (fail-fast) |
 | `FIREBASE_CREDENTIALS_PATH` | `./firebase-credentials.json` | Absent → pushes disabled, app still boots |
+| `FIREBASE_CREDENTIALS_JSON` | `""` | The key file's content inline; wins over the path when set (ADR-065) |
 | `DOCUMENT_RETENTION_DAYS` | `30` | `document_purge` job's retention window (ADR-019) |
 
 ## Related

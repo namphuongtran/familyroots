@@ -169,3 +169,48 @@ def test_the_error_names_the_setting_and_the_remedy():
     message = str(exc.value)
     assert "METRICS_TOKEN" in message
     assert "openssl rand -hex 32" in message
+
+
+# ─── CRON_SECRET with the in-process scheduler off (ADR-065) ──────────────────
+
+# Assembled for the same reason as _STRONG_METRICS_TOKEN above.
+_STRONG_CRON_SECRET = "not-a-real-secret-" + "0123456789abcdef" * 2
+
+
+@pytest.mark.parametrize(
+    "secret",
+    ["", "short-secret", _STRONG_CRON_SECRET[:31], "a" * 64],
+    ids=["empty", "short", "one-below-the-floor", "degenerate"],
+)
+def test_production_without_the_scheduler_refuses_a_weak_cron_secret(secret: str) -> None:
+    """With SCHEDULER_ENABLED=false the /internal/cron/* routes are the only trigger of the
+    giỗ reminders and the purge. An empty secret leaves both jobs never running and nothing
+    raising; a weak one guards them with a guessable value. `match` names the setting, so
+    the refusal is this rule's and not another production check's: the baseline boots."""
+    with pytest.raises(ValidationError, match="CRON_SECRET"):
+        _build(**{**_PROD_SAFE, "SCHEDULER_ENABLED": False, "CRON_SECRET": secret})
+
+
+def test_production_without_the_scheduler_boots_with_a_strong_cron_secret() -> None:
+    s = _build(**{**_PROD_SAFE, "SCHEDULER_ENABLED": False, "CRON_SECRET": _STRONG_CRON_SECRET})
+    assert s.SCHEDULER_ENABLED is False
+
+
+def test_production_with_the_scheduler_does_not_require_a_cron_secret() -> None:
+    """The control: a long-running deployment keeps APScheduler and needs no cron route."""
+    s = _build(**_PROD_SAFE)
+    assert s.SCHEDULER_ENABLED is True
+    assert s.CRON_SECRET == ""
+
+
+def test_development_without_the_scheduler_does_not_police_the_cron_secret() -> None:
+    """Outside production nothing depends on the routes. The handler still refuses a weak
+    secret at request time (tests/unit/test_cron_endpoints.py)."""
+    s = _build(APP_ENV="development", SCHEDULER_ENABLED=False, CRON_SECRET="")
+    assert s.SCHEDULER_ENABLED is False
+
+
+def test_the_cron_secret_error_names_the_remedy() -> None:
+    with pytest.raises(ValidationError) as exc:
+        _build(**{**_PROD_SAFE, "SCHEDULER_ENABLED": False})
+    assert "openssl rand -hex 32" in str(exc.value)

@@ -72,11 +72,27 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
     be dedup-protected (it would re-send); supporting backfill needs a dedicated
     ``notified_on date`` column keyed to ``today``, out of scope here.
 
-    Lock topology (C2, seam-review-2026-07-04): the advisory lock lives on ONE
-    dedicated connection held for the whole job; the working session is bound
-    to that same connection, so mid-job commits can't release it back to the
-    pool and strand the lock. The finally block rolls back before unlocking so
-    a failed job can't mask its own error with InFailedSqlTransaction.
+    Lock topology (ADR-065, replacing C2 of seam-review-2026-07-04): the advisory lock is
+    TRANSACTION-scoped. ``pg_try_advisory_xact_lock`` runs in one transaction on a
+    dedicated lock connection, and that transaction stays open, doing nothing else, for
+    the whole job. The work runs on a separate system session bound to the engine, not to
+    the lock connection, so its per-event commits and rollbacks happen on another
+    connection and can neither release the lock nor strand it. The lock ends exactly when
+    the lock transaction ends: the rollback in ``finally`` on success or on error, or the
+    server ending the transaction when the process dies and its connection drops. A
+    second run that starts meanwhile cannot take the lock, and skips.
+
+    Why not the session-level lock this replaced: behind a transaction pooler (Supavisor
+    on :6543, how Vercel Functions reach Postgres) a transaction stays on one server
+    connection, and nothing longer does. A lock taken in one transaction and unlocked in a
+    later one can be unlocked on a different server connection, which misses, so the lock
+    stays on a server connection that outlives the client, and every later run skips
+    without raising. The lock connection runs no statement after the lock, so its
+    rollback cannot meet InFailedSqlTransaction and mask the job's own error.
+
+    The work session is a plain ``AsyncSession``, not an ``RlsSession``, so no RLS seam
+    fires on it, and one run crosses every clan (ADR-043 § 2;
+    ``tests/integration/test_scheduler_cross_clan_notification_log.py``).
     """
     from app.core.database import engine
     from app.infrastructure.persistence.sql_dates import next_anniversary_sql
@@ -87,19 +103,17 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
     this_year = next_anniversary_sql("EXTRACT(YEAR FROM :today ::date)")
     next_year = next_anniversary_sql("EXTRACT(YEAR FROM :today ::date) + 1")
 
-    async with engine.connect() as conn:
-        acquired = await conn.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": _JOB_LOCK_KEY})
+    async with engine.connect() as lock_conn:
+        # Autobegins THE lock transaction, which the finally below ends.
+        acquired = await lock_conn.execute(
+            text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": _JOB_LOCK_KEY}
+        )
         if not acquired.scalar():
-            logger.info("Anniversary job lock held by another instance — skipping this run")
-            await conn.rollback()
+            logger.info("Anniversary job lock held by another run — skipping this run")
+            await lock_conn.rollback()
             return
-        # End the autobegun transaction the lock SELECT opened (the
-        # session-level advisory lock survives commit). Otherwise the bound
-        # session below would JOIN that transaction via savepoints and its
-        # commits would not be durable until the connection commits.
-        await conn.commit()
 
-        db = AsyncSession(bind=conn, expire_on_commit=False)
+        db = AsyncSession(bind=engine, expire_on_commit=False)
         try:
             result = await db.execute(
                 text(f"""
@@ -224,10 +238,8 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     await db.rollback()
                     continue
         finally:
-            # Roll back any open/aborted transaction BEFORE unlocking: the
-            # session-level advisory lock survives rollback, and unlocking on
-            # an aborted tx would raise and mask the job's real error.
-            await db.rollback()
+            # End the work session first, then the lock transaction, which releases the
+            # lock. In that order the next run cannot take the lock while this run still
+            # has a transaction open.
             await db.close()
-            await conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _JOB_LOCK_KEY})
-            await conn.commit()
+            await lock_conn.rollback()
