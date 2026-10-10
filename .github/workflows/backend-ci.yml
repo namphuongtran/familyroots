@@ -185,15 +185,26 @@ jobs:
         if: steps.gate.outputs.configured == 'true'
         env:
           API_ORIGIN: ${{ vars.API_ORIGIN }}
+        # One attempt per loop, each into a fresh file. `curl --retry` writes every
+        # attempt's body to the same stdout, so on 2026-10-10 (#263) a first attempt's
+        # Vercel error page sat in front of a healthy second answer, jq could not parse
+        # the pair, and the step failed a production that was serving 200 "current".
+        # The first attempt had reached the previous deployment, whose boot gate refused
+        # the newly migrated database (#255).
         run: |
           url="${API_ORIGIN%/}/health"
-          response="$(curl -sS --retry 5 --retry-delay 10 --retry-all-errors --max-time 60 \
-            -w '\n%{http_code}' "$url" || true)"
-          status="${response##*$'\n'}"
-          body="${response%$'\n'*}"
-          echo "GET $url -> $status $body"
-          migrations="$(printf '%s' "$body" | jq -r '.migrations // empty' 2>/dev/null || true)"
-          if [ "$migrations" != "current" ]; then
-            echo "::error::GET $url answered $status with migrations=${migrations:-absent}. Production already serves this deployment: roll back (docs/ops/deployment.md, Rollback)"
-            exit 1
-          fi
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -sS --max-time 60 -o "$body" -D "$headers" -w '%{http_code}' "$url" || true)"
+            migrations="$(jq -r '.migrations // empty' "$body" 2>/dev/null || true)"
+            served_by="$(grep -i '^x-vercel-id:' "$headers" | tr -d '\r' | cut -d' ' -f2)"
+            echo "attempt $attempt: GET $url -> ${status:-no answer}, migrations=${migrations:-absent}, x-vercel-id=${served_by:-none}"
+            if [ "$status" = "200" ] && [ "$migrations" = "current" ]; then
+              exit 0
+            fi
+            [ "$attempt" = 6 ] || sleep 10
+          done
+          echo "Last body:"; head -c 2000 "$body"; echo
+          echo "::error::GET $url answered ${status:-nothing} with migrations=${migrations:-absent} after 6 attempts. Production already serves this deployment: roll back (docs/ops/deployment.md, Rollback)"
+          exit 1
