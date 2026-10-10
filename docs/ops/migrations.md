@@ -94,7 +94,8 @@ Single linear chain:
 `034_rls_audit_notification` → `035_rls_clan_settings` →
 `036_rls_user_clan_roles` → `037_drop_allow_public_tree` → `038_drop_privacy_level` →
 `039_drop_clan_settings` → `040_clan_slug_one_shape` →
-`041_grant_app_role_to_login` → `042_close_data_api_on_public`.
+`041_grant_app_role_to_login` → `042_close_data_api_on_public` →
+`043_rls_off_outside_layer_2`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -241,6 +242,21 @@ the chain applies to `PUBLIC`, and `user_clan_roles_ins` is `WITH CHECK (true)` 
 `042`, both statements answer `permission denied for table`. Pinned by
 `backend/tests/integration/test_supabase_shaped_database.py`.
 
+`043_rls_off_outside_layer_2` turns RLS off on `alembic_version`, `clans`, `user_profiles` and
+`user_fcm_tokens` (#261, ADR-066's 2026-10-10 amendment). **The hosted Supabase project ships an
+event trigger, `ensure_rls`, that turns RLS on for every table created in `public`.** It turned
+RLS on for these four, which the chain leaves outside layer 2, and gave them no policy. So on
+Supabase the request role saw no row in any of them. The first Vercel deploy's `/health` read
+`migrations: behind` while `alembic current` printed head. Where RLS is already off, the revision
+changes nothing. **`downgrade()` is a deliberate no-op**, because the prior state differs by
+environment.
+
+**A new table in `public` must decide its own RLS in the migration that creates it.** Either
+enable RLS and add its policies, or turn RLS off explicitly. Leaving it unset gets RLS with no
+policy on Supabase, where `ensure_rls` turns it on, and no RLS everywhere else.
+`test_every_table_has_the_rls_state_plain_postgres_gives_it` runs the chain under a copy of the
+trigger and fails, naming the table, when the two disagree.
+
 `024_kinship_exclude_divorced` replaces the `find_relationship_path` function so its
 spouse edge skips `status = 'divorced'` marriages (M8); no schema change, reversible
 (downgrade re-installs migration 019's unfiltered body verbatim).
@@ -248,7 +264,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `042_close_data_api_on_public`; verify with `cd backend && uv run alembic heads`.
+Head = `043_rls_off_outside_layer_2`; verify with `cd backend && uv run alembic heads`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 
