@@ -15,6 +15,26 @@ containers of the same image. **The hosted project was not read.** This change
 was fenced off it, so the hosted project's default privileges, extensions and dashboard are known here
 only from the issue's own reading. Cite this ADR by section. Treat its line numbers as hints.
 
+**Amended 2026-10-10 (#261): the hosted project turns RLS on for every new table, so `043`
+turns it back off on the four the chain leaves outside layer 2.** This is the first reading taken
+on the hosted project itself, with `supabase db query --linked`. The project ships an event
+trigger, `ensure_rls` (`ddl_command_end`, `public.rls_auto_enable`, SECURITY DEFINER), which runs
+`alter table … enable row level security` on every `CREATE TABLE` in `public`.
+
+- **Four tables ended up with RLS on and zero policies:** `alembic_version`, `clans`,
+  `user_profiles` and `user_fcm_tokens`.
+- **The request role saw no row in any of them.** The first deploy's `/health` answered
+  `migrations: behind` at head, and login and every clan screen would have read nothing.
+- **This ADR's image readings could not have shown it.** The local stack's image has no such
+  trigger, and neither does plain Postgres.
+
+`043_rls_off_outside_layer_2` turns RLS off on the four. With `042` in place, their grants keep
+`anon` and `authenticated` out, which is the protection ADR-059 § 5 asked for. **From here on, every
+migration that creates a table in `public` decides its RLS explicitly**, because on Supabase a
+table left unset arrives with RLS on and no policy. `test_supabase_shaped_database.py` now installs a
+copy of the trigger before the chain runs. It fails, naming the table, when any table's RLS state
+differs from plain Postgres. `docs/ops/migrations.md` carries the rule.
+
 ## Context
 
 ### The move

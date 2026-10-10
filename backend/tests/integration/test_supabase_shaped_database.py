@@ -18,6 +18,10 @@ the real chain as that shape's login, then reads what each role can do:
   they also hold Supabase's legacy default ``GRANT ALL`` on tables, sequences and
   functions, which is the worst case. That default is parametrized. ``per_schema`` is the
   form Supabase uses, and ``global`` is the form a per-schema revoke cannot undo.
+- **The ``ensure_rls`` event trigger** (#261), copied from the hosted project on
+  2026-10-10. It turns RLS on for every table created in ``public``, ``alembic_version``
+  included, so the chain runs under it from its first statement. 043 is what turns RLS back
+  off on the four tables the chain leaves outside layer 2.
 
 **Every verdict reads an outcome**: a statement run as a role, and the error or rows it
 produced (``.claude/rules/testing.md``, "A test pins an outcome, not a setting"). The
@@ -51,6 +55,7 @@ from sqlalchemy.ext.asyncio import (
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.core.database import RlsSession
+from app.core.readiness import migration_status
 from app.core.rls import set_request_clan_id
 from app.models.base import Base
 from tests.integration.conftest import ADMIN_URL, TEST_DB_NAME
@@ -75,6 +80,41 @@ _RELKIND_NOUN = {
 # One literal per argument type the app's routines take. A routine taking any other type
 # fails the routine test by name, which is the prompt to add a row here.
 _SAMPLE_ARGUMENT = {"uuid": "gen_random_uuid()", "integer": "3", "text": "'Nguyễn'"}
+# The hosted project's ``ensure_rls`` event trigger, read with ``supabase db query --linked``
+# on 2026-10-10 (``pg_get_functiondef('rls_auto_enable'::regproc)``). Its RAISE LOG lines
+# are dropped; the statement it runs is unchanged. It is created by the superuser, as
+# ``supabase_admin`` creates it there, so SECURITY DEFINER can alter the login's tables.
+_ENSURE_RLS = """
+CREATE OR REPLACE FUNCTION public.rls_auto_enable()
+ RETURNS event_trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE
+  cmd record;
+  tbl name;
+BEGIN
+  FOR cmd IN
+    SELECT *
+    FROM pg_event_trigger_ddl_commands()
+    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+      AND object_type IN ('table','partitioned table')
+  LOOP
+     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') THEN
+      BEGIN
+        SELECT c.relname INTO tbl FROM pg_catalog.pg_class c WHERE c.oid = cmd.objid;
+        EXECUTE format('alter table if exists %I.%I enable row level security',
+                       cmd.schema_name, tbl);
+      EXCEPTION
+        WHEN OTHERS THEN NULL;
+      END;
+     END IF;
+  END LOOP;
+END;
+$function$;
+CREATE EVENT TRIGGER ensure_rls ON ddl_command_end EXECUTE FUNCTION public.rls_auto_enable();
+"""
 
 
 @dataclass(frozen=True)
@@ -220,6 +260,9 @@ def _supabase_shaped_database(shape: str) -> Iterator[SupabaseShapedDb]:
                         f"GRANT ALL ON {kind} TO anon, authenticated"
                     )
                 )
+
+        with _autocommit(admin_url) as admin:
+            admin.execute(sa.text(_ENSURE_RLS))
 
         _alembic_ok(login_url_str, "upgrade", "head")
 
@@ -590,3 +633,98 @@ def test_a_table_and_a_sequence_created_after_042_are_refused_too(
         "INSERT": "42501: permission denied for table fr_after_042",
         "nextval": "42501: permission denied for sequence fr_after_042_seq",
     }
+
+
+# ---------------------------------------------------------------------------------------
+# 043: what the chain leaves outside layer 2 stays readable by the request role (#261)
+# ---------------------------------------------------------------------------------------
+
+
+async def test_the_request_role_reads_and_writes_what_the_chain_leaves_outside_layer_2(
+    supabase_db: SupabaseShapedDb, login_engine: AsyncEngine
+) -> None:
+    """The reads the deployed API failed on 2026-10-10, through the app's own seam.
+
+    ``/health`` runs ``migration_status`` on the request session, and the auth path reads
+    ``user_profiles`` and ``clans`` there with no clan selected. Under ``ensure_rls`` and
+    without 043, each of these tables has RLS on and no policy, so the request role sees
+    nothing: ``behind``, and zero rows.
+    """
+    seeded = _seed_user_rows(supabase_db.login_url)
+    request_session = async_sessionmaker(
+        login_engine, sync_session_class=RlsSession, expire_on_commit=False
+    )
+    new_user = uuid.uuid4()
+    async with request_session() as session:
+        who = await session.scalar(sa.text("SELECT current_user"))
+        seen = {
+            "migrations": await migration_status(session),
+            "clans": await session.scalar(
+                sa.text("SELECT count(*) FROM clans WHERE id = :c"), {"c": seeded["clan_id"]}
+            ),
+            "user_profiles": await session.scalar(
+                sa.text("SELECT count(*) FROM user_profiles WHERE id = :u"),
+                {"u": seeded["user_id"]},
+            ),
+            "user_fcm_tokens": await session.scalar(
+                sa.text("SELECT count(*) FROM user_fcm_tokens WHERE user_id = :u"),
+                {"u": seeded["user_id"]},
+            ),
+        }
+        # ensure_user_profile's write, on the same session, read back. A refusal is
+        # recorded rather than raised, so a failure shows the reads above beside it.
+        try:
+            async with session.begin_nested():
+                await session.execute(
+                    sa.text("INSERT INTO user_profiles (id, email) VALUES (:u, :e)"),
+                    {"u": new_user, "e": f"{new_user.hex}@example.test"},
+                )
+            seen["user_profiles written"] = await session.scalar(
+                sa.text("SELECT count(*) FROM user_profiles WHERE id = :u"), {"u": new_user}
+            )
+        except sa.exc.DBAPIError as exc:
+            seen["user_profiles written"] = getattr(exc.orig, "sqlstate", "?")
+        await session.rollback()
+
+    assert who == _APP_ROLE  # the reads above really ran as the request role
+    assert seen == {
+        "migrations": "current",
+        "clans": 1,
+        "user_profiles": 1,
+        "user_fcm_tokens": 1,
+        "user_profiles written": 1,
+    }
+
+
+def _rls_by_table(url: str) -> dict[str, bool]:
+    with _autocommit(url) as conn:
+        rows = conn.execute(
+            sa.text(
+                "SELECT c.relname, c.relrowsecurity FROM pg_class c "
+                "WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')"
+            )
+        ).all()
+    return {str(name): bool(rls) for name, rls in rows}
+
+
+def test_every_table_has_the_rls_state_plain_postgres_gives_it(
+    supabase_db: SupabaseShapedDb, migrated_db_url: str
+) -> None:
+    """The chain decides each table's RLS, not the environment.
+
+    The suite's own database ran the same chain with no event trigger. Here ``ensure_rls``
+    turned RLS on for every table as it was created. Any table whose state differs was
+    left to the trigger, and on Supabase that table denies the request role every row.
+    The fix is in the migration that creates the table: enable RLS with its policies, or
+    turn it off, as 043 does for the four ADR-059 and the auth path leave outside layer 2.
+    """
+    plain = _rls_by_table(migrated_db_url)
+    shaped = _rls_by_table(supabase_db.admin_url)
+
+    assert set(Base.metadata.tables) | {"alembic_version"} <= set(shaped)
+    differs = {
+        name: {"plain": plain.get(name), "supabase": shaped[name]}
+        for name in sorted(shaped)
+        if plain.get(name) != shaped[name]
+    }
+    assert differs == {}
