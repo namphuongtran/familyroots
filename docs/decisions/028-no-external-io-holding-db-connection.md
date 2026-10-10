@@ -2,6 +2,9 @@
 
 ## Status
 Accepted, shipped (2026-07-18, review finding H5).
+Amended 2026-10-10 by [ADR-065](065-the-backend-runs-on-vercel-functions.md) (#250): the
+env-tunable pool is one of two engine shapes now, and behind a transaction pooler it is not
+built at all. See the dated amendment at the end of "Decision".
 
 ## Context
 
@@ -65,6 +68,24 @@ needs to write.
   unchanged from the old hardcoded values — so pool sizing can be tuned per
   environment (instance count, provider connection ceiling) without a code
   change or redeploy-from-source.
+
+> **Amendment (2026-10-10, ADR-065, #250):** `make_engine` builds one of two engines, chosen by
+> `Settings.DB_EXTERNAL_POOLER`. With `false`, the default, it builds the pool above exactly as
+> before. With `true`, which is the backend on Vercel Functions behind Supavisor's transaction
+> pooler on `:6543`, it builds a `NullPool` with `connect_args={"prepare_threshold": None}`.
+> `DB_POOL_SIZE` and `DB_MAX_OVERFLOW` are then ignored, because the pooler is the pool, and a
+> frozen serverless instance must not park connections against its client limit. The NOTE this
+> decision left in `app/core/database.py`, about adding `prepare_threshold` if `DATABASE_URL`
+> ever named a transaction pooler, is replaced by the setting.
+>
+> **The rule this ADR is named for is unchanged, and matters more there.** Under `NullPool` a
+> released connection is closed, not returned, so a handler that holds one through external I/O
+> holds a pooler client slot and a server connection for the whole call.
+>
+> **Correction to "Context".** It says the background jobs each take "their own dedicated
+> `engine.connect()`" on top of the pool. `engine.connect()` checks out of the same pool. Since
+> ADR-065 each job holds two of the pool's connections while it runs: its lock connection and its
+> work session. `docs/ops/configuration.md`'s headroom formula is corrected the same way.
 
 ## Consequences
 
