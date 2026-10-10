@@ -27,7 +27,9 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `RATE_LIMIT_AUTH_MAX_REQUESTS` | `20` | Requests one client IP may send to `/api/v1/auth` and `/api/v1/invitations`, one shared bucket, per 60-second window ([ADR-021](../decisions/021-non-enumerating-auth-surfaces.md) Decision 3, amended by #226). The window is fixed. **Boot fails** below 1, in any environment, because 0 refuses every sign-in | **Leave unset**: production's budget is 20, and raising it weakens the mitigations ADR-021 cites, so it needs an ADR. Not refused under `production`, because the image e2e job boots that way with it raised. Only the authenticated e2e harness's backend sets it, to `1000` (`web/CLAUDE.md`, `image-e2e.yml`) |
 | `MAX_UPLOAD_SIZE_MB` | `50` (derived from domain policy) | Platform-wide upload cap; `max_upload_bytes` property is what handlers use | Tune as needed |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Single platform clock for the cron **and** its date math | **Boot fails** on a non-IANA name (any env) |
-| `NOTIFICATION_CRON_HOUR` | `7` | Daily anniversary-job hour in the platform zone (the `document_purge` job also keys off this hour, at `minute=30`) | — |
+| `NOTIFICATION_CRON_HOUR` | `7` | Daily anniversary-job hour in the platform zone (the `document_purge` job also keys off this hour, at `minute=30`). Read by APScheduler only; under Vercel Cron the schedule lives in the deploy configuration, in UTC | — |
+| `SCHEDULER_ENABLED` | `true` | Which trigger path runs the two scheduled jobs ([ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md), [notifications-scheduler.md](../architecture/notifications-scheduler.md)). `true`: the lifespan starts and stops the in-process APScheduler. `false`: it does not, and Vercel Cron calls `GET /internal/cron/anniversary-notifications` and `GET /internal/cron/document-purge` | `false` on Vercel Functions, where a frozen instance's timer never fires (set by the deploy issue, #252). `true` for a long-running process. **Boot fails** in production with `false` unless `CRON_SECRET` is strong |
+| `CRON_SECRET` | `""` | The bearer secret Vercel Cron sends as `Authorization: Bearer <CRON_SECRET>` to the two `/internal/cron/*` routes, compared in constant time. Empty, or below the `METRICS_TOKEN` floor (≥32 characters, ≥8 distinct, ADR-040): both routes answer 404 to everything, in any environment | **Boot fails** in production with `SCHEDULER_ENABLED=false` unless it clears the floor. Generate with `openssl rand -hex 32`. Vercel sends the project's `CRON_SECRET` environment variable, so the backend and Vercel Cron read one value |
 | `DOCUMENT_RETENTION_DAYS` | `30` | Days a soft-deleted document's row+blob survive before the daily `document_purge` job permanently removes them ([ADR-019](../decisions/019-document-soft-delete-purge.md)) | Tune per data-retention policy |
 | `INVITATION_TTL_DAYS` | `7` | Invitation link lifetime | — |
 | `INVITE_LINK_ORIGIN` | `http://localhost:3000` | Origin of the **web** app that `invite_url` in the create-invitation response is built on: `<origin>/<locale>/invitations/<token>` ([ADR-062](../decisions/062-the-backend-composes-the-invitation-link.md)). A trailing slash is tolerated. Not the API origin: the API answers that path with a 404 | **Boot fails** if empty or it names `localhost`/`127.0.0.1`. Declared `sync: false` in render.yaml: **the owner sets it in the Render dashboard before the deploy that carries #191**, or that deploy refuses to boot |
@@ -91,7 +93,10 @@ count** under the database provider's ceiling:
   placeholder `APP_SECRET_KEY`; `APP_DEBUG=true`; wildcard `ALLOWED_HOSTS`; a
   localhost `DATABASE_URL`; wildcard-or-localhost `CORS_ORIGINS` (`"*"` is also
   invalid with `allow_credentials=True`); an empty or localhost `INVITE_LINK_ORIGIN`;
-  missing `SUPABASE_URL`, `SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY`.
+  missing `SUPABASE_URL`, `SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY`; and,
+  with `SCHEDULER_ENABLED=false`, a `CRON_SECRET` that is empty or below the
+  `metrics_token_weakness` floor (ADR-065), because the cron routes are then the only
+  trigger of the scheduled jobs.
 
 ## What render.yaml sets (`infra/render/render.yaml`)
 

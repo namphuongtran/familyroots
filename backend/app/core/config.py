@@ -158,6 +158,22 @@ class Settings(BaseSettings):
     SCHEDULER_TIMEZONE: str = "Asia/Ho_Chi_Minh"
     NOTIFICATION_CRON_HOUR: int = 7
 
+    # Which of the two trigger paths runs the scheduled jobs (ADR-065). True, the default,
+    # is for a long-running process (local, Docker): the lifespan starts the in-process
+    # APScheduler at boot and stops it at shutdown. False is for Vercel Functions, where an
+    # instance is frozen between requests and an in-process timer never fires: the lifespan
+    # leaves APScheduler alone, and Vercel Cron calls GET /internal/cron/* instead.
+    SCHEDULER_ENABLED: bool = True
+
+    # The secret Vercel Cron sends as `Authorization: Bearer <CRON_SECRET>` to
+    # GET /internal/cron/anniversary-notifications and /internal/cron/document-purge
+    # (ADR-065). Empty, the default, leaves both routes answering 404 to everything. It must
+    # clear the same floor as METRICS_TOKEN (metrics_token_weakness, ADR-040). Production
+    # refuses to boot with SCHEDULER_ENABLED=false unless it does, because the routes are
+    # then the jobs' only trigger. The handler re-checks the floor too, so a weak secret
+    # serves nothing in any environment. Generate one with `openssl rand -hex 32`.
+    CRON_SECRET: str = ""
+
     # Invitations
     INVITATION_TTL_DAYS: int = 7
 
@@ -281,6 +297,19 @@ class Settings(BaseSettings):
                     "RATE_LIMIT_TRUST_FORWARDED_FOR must be set explicitly in production: "
                     "true behind a trusted proxy/LB (Render), false when directly exposed"
                 )
+            # With the in-process scheduler off, the /internal/cron/* routes are the only
+            # thing that ever runs the giỗ reminders and the retention purge (ADR-065), and
+            # CRON_SECRET is what opens them. An empty secret would leave both jobs never
+            # running and nothing raising; a weak one would guard them with a guessable
+            # value. Either way, fail the deploy instead.
+            if not self.SCHEDULER_ENABLED:
+                weakness = metrics_token_weakness(self.CRON_SECRET)
+                if weakness:
+                    raise ValueError(
+                        "CRON_SECRET is unusable while SCHEDULER_ENABLED is false in "
+                        f"production: {weakness}. Vercel Cron is then the only trigger of "
+                        "the scheduled jobs. Generate one with `openssl rand -hex 32`."
+                    )
         return self
 
 

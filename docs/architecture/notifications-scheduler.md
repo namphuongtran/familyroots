@@ -1,14 +1,49 @@
 # Notifications & Scheduler
 
-How anniversary push notifications work: an in-process APScheduler cron finds
-upcoming recurring events (both solar and lunar) and broadcasts FCM pushes to
-approved clan members. The same scheduler process also runs the document
-retention purge job (ADR-019).
+How anniversary push notifications work: a daily job finds upcoming recurring
+events (both solar and lunar) and broadcasts FCM pushes to approved clan members.
+A second daily job runs the document retention purge (ADR-019). Each job is
+triggered by one of two paths (see below).
+
+## Two trigger paths, one live per deployment (ADR-065)
+
+The jobs are two plain async functions, `send_anniversary_notifications`
+(`backend/app/services/scheduler.py`) and `purge_expired_documents`
+(`backend/app/services/document_purge.py`). `SCHEDULER_ENABLED` picks what calls them:
+
+| `SCHEDULER_ENABLED` | Where | What calls the jobs |
+|---|---|---|
+| `true` (default) | a long-running process: local, Docker | the in-process APScheduler, started and stopped by the FastAPI lifespan (`app/main.py`), at the cron triggers in the table below |
+| `false` | Vercel Functions, where an instance is frozen between requests and an in-process timer never fires | **Vercel Cron**, by `GET /internal/cron/anniversary-notifications` and `GET /internal/cron/document-purge` (`backend/app/api/cron.py`) |
+
+The cron routes run a job only for `Authorization: Bearer <CRON_SECRET>`, compared in
+constant time. Every refusal is the same 404 a path that does not exist gets, the
+`/internal/metrics` rule of ADR-021 and ADR-040. Success is 204 with no body, and a
+job that fails answers 500. Production refuses to boot with `SCHEDULER_ENABLED=false`
+unless `CRON_SECRET` clears the `metrics_token_weakness` floor
+([ops/configuration.md](../ops/configuration.md)).
+
+**What changes under Vercel Cron**, all read from Vercel's docs on 2026-10-10:
+
+- **The schedule is UTC and lives in the deploy configuration** (#252), not in
+  `NOTIFICATION_CRON_HOUR`, which only APScheduler reads. The jobs still compute
+  "today" in `SCHEDULER_TIMEZONE`, so the clock of the date math is unchanged.
+- **On Hobby a run fires anywhere within the scheduled hour.**
+- **A run may be delivered twice.** A concurrent duplicate skips on the advisory lock
+  (below). A later one is a no-op: the anniversary job dedups on
+  `notification_log.sent_on`, and the purge finds nothing left to purge.
+- **A failed run is not retried.** The anniversary job sends only on the day an event is
+  exactly `notify_days_before` away, so a missed or failed day is not caught up the next
+  day. That was already true under APScheduler: a run missed by more than its
+  `misfire_grace_time` of 3600 s, for example because no process was up at the hour,
+  was skipped as well.
+
+Neither path is a durable queue: no separate worker, no Redis.
 
 ## Scheduler topology
 
-`backend/app/services/scheduler.py` runs an **in-process `AsyncIOScheduler`** started in
-the FastAPI lifespan (`app/main.py`) — no separate worker, no Redis, no durable queue.
+When `SCHEDULER_ENABLED` is true, `backend/app/services/scheduler.py` runs an
+**in-process `AsyncIOScheduler`** started in the FastAPI lifespan (`app/main.py`).
 
 | Job | Trigger | Lock key | Purpose |
 |---|---|---|---|
@@ -172,7 +207,9 @@ It is also why the job must stay one of the sanctioned out-of-band writers descr
 
 | Setting | Default | Notes |
 |---|---|---|
-| `NOTIFICATION_CRON_HOUR` | `7` | Hour-of-day in the platform zone (both `anniversary_notifications` and `document_purge` key off it) |
+| `SCHEDULER_ENABLED` | `true` | `true`: the lifespan runs APScheduler. `false`: it does not, and Vercel Cron calls `/internal/cron/*` (ADR-065) |
+| `CRON_SECRET` | `""` | Bearer secret for `/internal/cron/*`. Empty or below the `METRICS_TOKEN` floor: both routes 404. Production with `SCHEDULER_ENABLED=false` refuses to boot without a strong one |
+| `NOTIFICATION_CRON_HOUR` | `7` | Hour-of-day in the platform zone (both `anniversary_notifications` and `document_purge` key off it). APScheduler only. Vercel Cron's schedule lives in the deploy configuration |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Validated as IANA name at boot (fail-fast) |
 | `FIREBASE_CREDENTIALS_PATH` | `./firebase-credentials.json` | Absent → pushes disabled, app still boots |
 | `DOCUMENT_RETENTION_DAYS` | `30` | `document_purge` job's retention window (ADR-019) |

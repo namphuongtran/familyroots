@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.api.cron import ANNIVERSARY_NOTIFICATIONS_PATH, DOCUMENT_PURGE_PATH, cron_router
 from app.api.v1.router import api_v1_router
 from app.core.config import metrics_token_weakness, settings
 from app.core.database import AsyncRequestSessionLocal, AsyncSessionLocal, get_db
@@ -68,6 +69,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     a failure in one is logged but does not abort boot or skip the others, and
     shutdown runs in a finally block so teardown can't be skipped. The API can
     serve requests even if a non-critical side-channel (push, scheduling) is down.
+
+    The in-process APScheduler starts and stops only when ``SCHEDULER_ENABLED`` is true
+    (ADR-065). On Vercel Functions it is false, an instance is frozen between requests so
+    the timer would never fire, and Vercel Cron triggers the same jobs through
+    ``/internal/cron/*`` (``app/api/cron.py``) instead.
     """
     configure_logging()
 
@@ -88,7 +94,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     _safe("translations", load_translations)
     _safe("firebase", init_firebase)
-    _safe("scheduler", start_scheduler)
+    if settings.SCHEDULER_ENABLED:
+        _safe("scheduler", start_scheduler)
 
     # Auth config sanity (production fails fast in Settings; in dev we warn loudly
     # so a missing key shows up at boot, not as per-request 401/503s).
@@ -149,7 +156,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        _safe("scheduler-stop", stop_scheduler)
+        if settings.SCHEDULER_ENABLED:
+            _safe("scheduler-stop", stop_scheduler)
         try:
             from app.core.database import engine
 
@@ -249,7 +257,8 @@ def create_app() -> FastAPI:
     # truly outermost — metrics time the whole stack, including TrustedHost rejections.
     # excluded_handlers are re.search patterns against the route template (or, when
     # unmatched, the raw path), so anchor them — a bare "/health" would also swallow
-    # something like /healthz-probe.
+    # something like /healthz-probe. The two cron routes (ADR-065) are excluded for the
+    # reason /internal/metrics is: they are operations surfaces, not traffic.
     metrics_registry = CollectorRegistry()
     application.state.metrics_registry = metrics_registry
     # Per-app so building several apps in one test session keeps separate budgets,
@@ -259,7 +268,12 @@ def create_app() -> FastAPI:
     )
     Instrumentator(
         registry=metrics_registry,
-        excluded_handlers=["^/health$", "^/internal/metrics$"],
+        excluded_handlers=[
+            "^/health$",
+            "^/internal/metrics$",
+            f"^{ANNIVERSARY_NOTIFICATIONS_PATH}$",
+            f"^{DOCUMENT_PURGE_PATH}$",
+        ],
     ).instrument(application)
     # outermost
 
@@ -271,6 +285,9 @@ def create_app() -> FastAPI:
 
     # Include API v1 routes
     application.include_router(api_v1_router, prefix="/api/v1")
+    # Vercel Cron's triggers for the scheduled jobs (ADR-065): outside /api/v1 because they
+    # are operations surfaces like /internal/metrics, not client contract.
+    application.include_router(cron_router)
 
     @application.get("/internal/metrics", include_in_schema=False)
     async def internal_metrics(request: Request) -> Response:
