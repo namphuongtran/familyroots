@@ -56,12 +56,18 @@ def probe(host: str, port: int) -> int:
     return 0 if response.status == 200 else 1
 
 
-def main() -> int:
-    host = probe_host(get_settings().trusted_hosts)
+def admitted_host() -> str | None:
+    """A Host this app admits, from ``Settings.trusted_hosts``: the list ``create_app`` hands
+    ``TrustedHostMiddleware``, read from this process's environment."""
+    return probe_host(get_settings().trusted_hosts)
+
+
+def main(port: int = PORT) -> int:
+    host = admitted_host()
     if host is None:
         print("ALLOWED_HOSTS is empty, so TrustedHostMiddleware admits no request to /health")
         return 1
-    return probe(host, PORT)
+    return probe(host, port)
 
 
 if __name__ == "__main__":

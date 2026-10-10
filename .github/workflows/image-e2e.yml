@@ -260,7 +260,9 @@ jobs:
       # configuration (#230). The step above reads /health from the runner. This reads the probe
       # inside the container, which must find a Host that ALLOWED_HOSTS admits. Docker reports
       # `starting` until the first probe passes, or until --retries failures land after
-      # --start-period: 15 s + 3 x 30 s in backend/Dockerfile, so 150 s covers a failing probe.
+      # --start-period. With backend/Dockerfile's timings that is about 125 s at worst: failures
+      # inside the 15 s start period do not count, and each of the three that do starts 30 s
+      # after the previous probe ended, which can take its full 5 s timeout. 150 s covers it.
       - name: Read the backend image's own HEALTHCHECK
         run: |
           deadline=$((SECONDS + 150))

@@ -453,9 +453,9 @@ by the image's own `alembic upgrade head`, and read once it had left `starting` 
 
 | Container | `ALLOWED_HOSTS` | Docker's reading | The probe's last line, from `.State.Health.Log` | `GET /health` in the container log |
 |---|---|---|---|---|
-| the image | `["127.0.0.1"]` | `healthy failing-streak=0` | `GET /health (Host: 127.0.0.1) -> 200` | 4 × `200 OK` |
-| the image | `["*.familyroots.example","api.familyroots.example"]` | `healthy failing-streak=0` | `GET /health (Host: healthcheck.familyroots.example) -> 200` | 4 × `200 OK` |
-| control 1: the old probe put back | `["127.0.0.1"]` | `unhealthy failing-streak=4` | `urllib.error.HTTPError: HTTP Error 400: Bad Request` | 6 × `400 Bad Request` |
+| the image | `["127.0.0.1"]` | `healthy failing-streak=0` | `GET /health (Host: 127.0.0.1) -> 200` | 5 × `200 OK` |
+| the image | `["*.familyroots.example","api.familyroots.example"]` | `healthy failing-streak=0` | `GET /health (Host: healthcheck.familyroots.example) -> 200` | 5 × `200 OK` |
+| control 1: the old probe put back | `["127.0.0.1"]` | `unhealthy failing-streak=4` | `urllib.error.HTTPError: HTTP Error 400: Bad Request` | 7 × `400 Bad Request` |
 | control 2: the image, its `CMD` replaced by `sleep 600` | `["127.0.0.1"]` | `unhealthy failing-streak=4` | `ConnectionRefusedError(111, 'Connection refused')` | none |
 
 Control 2 is the one that shows the probe can still fail. Without it, a probe that reported healthy
@@ -465,7 +465,9 @@ because of the host it sends would read the same as one that measures `/health`.
 so sending `*.familyroots.example` literally would also pass the middleware. `*` admits `*` too. The
 probe sends a name instead, and `backend/tests/unit/test_image_healthcheck.py` reads the Host the
 server received, not only the status. That test runs the probe against a real uvicorn behind
-`TrustedHostMiddleware` for each `ALLOWED_HOSTS` shape the validator admits.
+`TrustedHostMiddleware` for each `ALLOWED_HOSTS` shape the validator admits, and reads `create_app`'s
+own answer to the Host the probe takes from its settings, so the probe cannot drift from the list
+the app hands its middleware.
 
 **Compose's `api` service runs the same probe.** It sets only the timings, and Docker keeps an
 image's test when a container sets none. A container compose created read
@@ -474,8 +476,10 @@ throwaway database under compose's `APP_ENV: development`, `healthy failing-stre
 sending `Host: localhost`.
 
 **The job reads it**, in the step after the boot. It waits for Docker to leave `starting` and fails
-unless the status is `healthy`. 150 s covers a failing probe: 15 s of `--start-period`, then three
-30 s `--interval`s. **Since #252 no production container exists.** Vercel runs the backend from source
+unless the status is `healthy`. 150 s covers a failing probe, which reads `unhealthy` about 125 s
+after the container starts at worst: failures inside the 15 s `--start-period` do not count, and
+each of the three that do starts 30 s after the previous probe ended, which can take its full 5 s
+`--timeout`. **Since #252 no production container exists.** Vercel runs the backend from source
 with its own Python runtime, so the image's `HEALTHCHECK` matters only to compose and to this job.
 
 ### The job inherited the harness's rate-limit collision, until #226
