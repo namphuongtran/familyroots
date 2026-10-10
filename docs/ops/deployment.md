@@ -43,6 +43,30 @@ implemented; treat `main` as production.
   injected `fromDatabase`, `ALLOWED_HOSTS` set to the JSON list
   `["familyroots-api.onrender.com"]` (the prod config fail-fast rejects a wildcard).
 
+## Vercel function region (`web/vercel.json`)
+- `"regions": ["sin1"]` (Singapore), so the web app's functions run next to the
+  Render backend. Every server render that calls the backend goes through
+  `apiFetch` (`web/src/shared/http/api-client.ts`), so the distance between the two
+  regions is paid on every such request, in both directions.
+- Without the file, Vercel runs functions in `iad1` (Washington, D.C.). That is its
+  default for new projects ("Configuring regions for Vercel Functions", Vercel docs,
+  read 2026-10-10).
+- The Hobby plan allows a single function region, so this list must stay at one
+  entry until the project moves to Pro. A deployment that names more regions than
+  the plan allows fails before the build.
+- `regions` does not move `src/middleware.ts`. Vercel deploys Routing Middleware to
+  every region whatever this setting says.
+- The deploy job runs `vercel deploy` with `working-directory: web`
+  (`web-ci.yml`), which is why the file lives in `web/` and not at the repository
+  root.
+- **What proves it is a live reading, not the file.** Vercel's schema types
+  `regions` only as an array of strings, so a typo such as `sni1` still validates.
+  Request a dynamic page on the production deployment
+  (`curl -sI https://<prod-host>/vi/login | grep -i x-vercel-id`). The
+  `x-vercel-id` header lists the regions the request passed through, including the
+  one the function ran in, and that region must be `sin1`. A deployment without the
+  file reads `iad1` in the same position.
+
 ## Migrations relative to deploy
 `preDeployCommand: alembic upgrade head` runs **before** each deploy goes live and
 **blocks the deploy on failure** — a bad migration fails the release rather than
@@ -59,6 +83,12 @@ shipping a schema-mismatched app. See `migrations.md`.
 - `render.yaml` still has a TODO: wire production env vars before go-live —
   `SUPABASE_URL`/keys, `CORS_ORIGINS`, `SENTRY_DSN`, Firebase credentials
   (see `.env.example`). The config fail-fast refuses to boot on an unsafe config.
+- On the first production web deploy, read `x-vercel-id` as § "Vercel function
+  region" describes and confirm the function ran in `sin1`. The reading has not been
+  taken: `VERCEL_TOKEN` is unset, so the `deploy` job skips (`web-ci` run
+  37929309837, 2026-10-09). The region can also be set in the project's dashboard
+  settings and by `vercel deploy --regions`, so read the header rather than trusting
+  the file alone.
 
 ## Known risks
 - Pulumi resources are not fully implemented (`infra/` drift risk).
