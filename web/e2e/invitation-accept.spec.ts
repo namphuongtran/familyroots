@@ -146,8 +146,8 @@ function refused(code: string, status: number) {
  * 2026-10-10: the case passed 60 of 60, no `__nextjs_font` request was made at all, and the
  * production HTML held neither `__nextjs_font` nor `next-devtools`.
  *
- * **Exactly this path, on the page's own origin.** Another `/__nextjs_font/*` file, a font on any
- * other path, or this path on another origin still fails the case. It is the same shape as
+ * **Exactly this path, on the page's own origin.** Another `/__nextjs_font/*` file or a font on any
+ * other path still fails the case; #225's third control read both. It is the same shape as
  * `e2e/auth/invitee-registers.auth.spec.ts`'s `isDevOverlayFont`, which met the same request on a
  * navigation (#196).
  */
@@ -313,8 +313,10 @@ test.describe('the token is treated as a credential', () => {
    */
   test('no request the page makes carries the token in a Referer header', async ({
     page,
+    baseURL,
   }, testInfo) => {
     await signIn(page)
+    const pageOrigin = new URL(INVITATION_URL, baseURL).origin
     const leaks: string[] = []
     let sawAcceptPost = false
     page.on('request', (request) => {
@@ -322,10 +324,11 @@ test.describe('the token is treated as a credential', () => {
       const referer = request.headers()['referer']
       if (!referer?.includes(TOKEN)) return
       const entry = `${request.method()} ${request.url()} [${request.resourceType()}] <- ${referer}`
-      // A Referer carrying the token is the invitation page's own URL, so its
-      // origin is the page's.
-      if (isDevOverlayFont(request.url(), new URL(referer).origin)) {
-        testInfo.annotations.push({ type: 'set aside: next dev overlay font', description: entry })
+      if (isDevOverlayFont(request.url(), pageOrigin)) {
+        testInfo.annotations.push({
+          type: 'set aside: next dev overlay font',
+          description: entry.replaceAll(TOKEN, '<token>'),
+        })
         return
       }
       leaks.push(entry)

@@ -664,6 +664,11 @@ Two more facts worth knowing before you change the files:
   carries 341 KB of font. Subsetting to woff2 would cut most of it and is owed
   work, not a drive-by change: a derived file cannot be hash-compared to the mobile
   original, so the drift test above needs a different mechanism first.
+- **No `@font-face` in an inline `<style>` on the invitation route, inlined CSS included.** In
+  Chromium 151 a font loaded from an inline stylesheet ignores the document's `no-referrer` and
+  sends the page's full URL, token included, as `Referer` to the same origin (#225, measured
+  2026-10-10). `next/font` keeps its rules in the linked `.css` file, which is safe. The
+  measurement sits beside the `Referrer-Policy` header in `web/next.config.ts`.
 - `web/src/app/fonts/` also holds `GeistVF.woff` and `GeistMonoVF.woff`. No file references
   them. They are leftovers from the project template. Do not wire them up.
 - Vietnamese coverage is not a worry with these two files. Checked 2026-08-13 with
