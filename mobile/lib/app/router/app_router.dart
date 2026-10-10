@@ -61,7 +61,8 @@ class AuthRouteState extends ChangeNotifier {
   }
 }
 
-const _publicRoutes = <String>{Routes.login, Routes.verifyEmail};
+/// Where a signed-in, verified user is sent away from.
+const _entryRoutes = <String>{Routes.login, Routes.verifyEmail};
 
 GoRouter buildRouter(AuthRouteState auth) {
   return GoRouter(
@@ -69,11 +70,16 @@ GoRouter buildRouter(AuthRouteState auth) {
     refreshListenable: auth,
     redirect: (BuildContext context, GoRouterState state) {
       final loc = state.matchedLocation;
-      if (!auth.signedIn) {
-        return _publicRoutes.contains(loc) ? null : Routes.login;
-      }
+      // Before the session check, because this state has no session:
+      // Supabase refuses the sign-in itself (`email_not_confirmed`, ADR-064).
+      // After it, as until #204, the route was unreachable.
       if (!auth.emailVerified) {
         return loc == Routes.verifyEmail ? null : Routes.verifyEmail;
+      }
+      // Only /login. A signed-out person on /verify-email has just signed
+      // out from it, and must leave.
+      if (!auth.signedIn) {
+        return loc == Routes.login ? null : Routes.login;
       }
       // One route for both non-approved states, per spec § 7.2a: the
       // no-membership case is the "onboarding variant of this screen", so what
@@ -84,7 +90,7 @@ GoRouter buildRouter(AuthRouteState auth) {
       if (auth.needsClanPick) {
         return loc == Routes.clanPicker ? null : Routes.clanPicker;
       }
-      if (_publicRoutes.contains(loc)) return Routes.clans;
+      if (_entryRoutes.contains(loc)) return Routes.clans;
       return null;
     },
     // `(_, _)` is two bare underscores: flutter_lints 6 flags `(_, __)` as

@@ -476,6 +476,12 @@ abstract class AppLocalizations {
   /// **'Đã xảy ra lỗi không mong muốn'**
   String get errorUnexpected;
 
+  /// No description provided for @errorInvalidCredentials.
+  ///
+  /// In vi, this message translates to:
+  /// **'Email hoặc mật khẩu không đúng'**
+  String get errorInvalidCredentials;
+
   /// No description provided for @errorTraceId.
   ///
   /// In vi, this message translates to:

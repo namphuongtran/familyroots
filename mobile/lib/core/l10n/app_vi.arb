@@ -115,6 +115,7 @@
   "errorOffline": "Không có kết nối mạng",
   "errorTimeout": "Máy chủ phản hồi quá chậm",
   "errorUnexpected": "Đã xảy ra lỗi không mong muốn",
+  "errorInvalidCredentials": "Email hoặc mật khẩu không đúng",
   "errorTraceId": "Mã lỗi: {traceId}",
   "@errorTraceId": {
     "placeholders": { "traceId": { "type": "String" } }

@@ -23,6 +23,14 @@ Code: `app/api/v1/auth.py`, `app/application/auth/handlers.py`, `app/api/v1/me.p
 
 ### 1.1 Login
 
+**Neither first-party client calls this endpoint.** The web (ADR-061 § 7) and, since
+2026-10-10, mobile ([ADR-064](../decisions/064-mobile-signs-in-through-supabase.md), #204)
+sign in through Supabase's password sign-in, in the SDK client that then holds, stores and
+refreshes the session, and then call `GET /auth/me` for the profile. A refused sign-in arrives
+as GoTrue's own code: `invalid_credentials`, or `email_not_confirmed`, which both clients route
+to their verify-email screen in place of this endpoint's 403 `email_not_verified`. The
+endpoint stays, for a client without the Supabase SDK. What follows describes it.
+
 `POST /api/v1/auth/login` `{"email", "password"}` →
 
 ```json
@@ -150,6 +158,10 @@ Reactive, single-flight: on a 401 from any API call, run **one** shared refresh
 (`POST /auth/refresh`), queue concurrent 401s behind it, retry the failed request once
 with the new token; if the refresh itself fails, sign out and route to login. Never
 refresh in a loop.
+
+Mobile runs this strategy over the Supabase SDK's `refreshSession()`, not
+`POST /auth/refresh` (mobile spec D8), and signs out through the SDK's `signOut` with scope
+`global`, not `POST /auth/logout` (ADR-064).
 
 ### What web actually does today (`axios.ts`)
 
@@ -488,8 +500,9 @@ Code: `app/api/v1/auth.py`, `app/schemas/auth.py` (`FCMTokenRequest`),
   - after every successful login (and app start if a token exists),
   - on FCM token **rotation** (`onTokenRefresh` in Firebase Messaging) — register the
     new token,
-  - `DELETE` the current token **before** `POST /auth/logout`, while the Bearer token
-    is still valid.
+  - `DELETE` the current token **before** signing out, while the Bearer token is still
+    valid. For mobile that is before the Supabase sign-out, since it no longer calls
+    `POST /auth/logout` (ADR-064).
 
 Full push behavior (payloads, types, pruning) is not yet documented in this tree —
 check `app/services/` for the current notification dispatch code if you need it.

@@ -3,8 +3,13 @@
 library;
 
 export 'application/session_controller.dart'
-    show SessionController, sessionControllerProvider, authRepositoryProvider;
+    show
+        SessionController,
+        sessionControllerProvider,
+        authRepositoryProvider,
+        supabaseAuthProvider;
 export 'data/auth_repository.dart' show AuthRepository;
+export 'data/supabase_auth.dart' show SupabaseAuth;
 export 'presentation/blocked_page.dart' show BlockedPage, BlockedReason;
 export 'presentation/login_page.dart' show LoginPage;
 export 'presentation/pending_approval_page.dart' show PendingApprovalPage;

@@ -21,6 +21,7 @@ import 'package:family_roots_mobile/app/router/routes.dart';
 import 'package:family_roots_mobile/features/auth/auth.dart';
 import 'package:family_roots_mobile/features/clan/clan.dart';
 
+import '../support/fake_gotrue.dart';
 import '../support/load_app_fonts.dart';
 import '../support/main_container.dart';
 import '../support/sequence_adapter.dart';
@@ -35,29 +36,6 @@ const _viOnboardingBody =
     'Bạn chưa thuộc dòng họ nào và cũng chưa gửi yêu cầu tham gia nào. '
     'Ứng dụng này chưa có bước tham gia hoặc tạo dòng họ, nên bạn chưa thể '
     'đi tiếp từ đây.';
-
-/// Shape copied from `docs/contracts/rest-auth-api.md` §`POST /login`. The
-/// nested `user` is discarded by [SessionController], which re-reads the
-/// profile from `GET /auth/me`; only the tokens matter here.
-const _login = <String, Object?>{
-  'data': <String, Object?>{
-    'access_token': 'eyJhbGciOi...',
-    'refresh_token': 'v1.Mr7...',
-    'expires_in': 3600,
-    'user': <String, Object?>{
-      'id': 'u1',
-      'email': 'minh@example.com',
-      'full_name': 'Nguyễn Văn Minh',
-      'clan_id': null,
-      'clan_name': null,
-      'role': null,
-      'is_approved': false,
-      'has_pending_membership': false,
-      'person_id': null,
-      'preferred_locale': 'vi',
-    },
-  },
-};
 
 /// `GET /auth/me` — the profile object directly under `data`
 /// (`docs/contracts/rest-auth-api.md`, `GET /me`).
@@ -98,6 +76,11 @@ const _oneClan = <String, Object?>{
 /// Assembles the real app over the real router and signs a user in, so the
 /// reading below is the destination the app produced for that profile — not a
 /// destination the test set by hand.
+///
+/// Sign-in goes to Supabase (`FakeGoTrue`), and both backend answers demand
+/// the token it issued (`Canned.bearer`). Until #204 `/auth/me` answered 200
+/// whatever the headers were, and the Dio under it had no interceptors, so
+/// every case here passed while the app sent no token at all.
 Future<SequenceAdapter> _signIn(
   WidgetTester tester, {
   required Map<String, Object?> me,
@@ -105,9 +88,8 @@ Future<SequenceAdapter> _signIn(
   bool loadClanList = false,
 }) async {
   final adapter = SequenceAdapter(<Canned>[
-    const Canned(200, _login),
-    Canned(200, me),
-    Canned(200, clans),
+    Canned(200, me, bearer: FakeGoTrue.accessToken),
+    Canned(200, clans, bearer: FakeGoTrue.accessToken),
   ]);
   final container = await mainContainer(adapter: adapter);
   addTearDown(container.dispose);
@@ -174,15 +156,15 @@ void main() {
     // order, so the order is pinned: a future extra call fails loudly here
     // rather than silently handing one endpoint another endpoint's body.
     //
-    // Only the two calls sign-in itself makes are pinned. Measured
+    // Only the one backend call sign-in itself makes is pinned; its first
+    // half goes to Supabase, not here (#204). Measured
     // 2026-08-27: `GET /me/clans` is *not* reached in these tests, because
     // `clanPickRequiredProvider` fires it back inside the fake-async zone,
     // where the request never turns over. That is a property of the test host,
     // not of the routing decision under test, so asserting either way about it
     // would be asserting something about `flutter test` rather than about the
     // app.
-    expect(adapter.received.map((r) => r.path).take(2).toList(), <String>[
-      '/auth/login',
+    expect(adapter.received.map((r) => r.path).take(1).toList(), <String>[
       '/auth/me',
     ]);
   });

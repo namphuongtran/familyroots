@@ -16,6 +16,17 @@ void main() {
       );
     });
 
+    test('Supabase\'s email_not_confirmed routes where the backend\'s '
+        'email_not_verified does', () {
+      // Two names for one state: the backend raised the second from
+      // POST /auth/login, Supabase raises the first from its own password
+      // sign-in, which is the one mobile calls since #204.
+      expect(
+        policyActionFor('email_not_confirmed', status: 400),
+        PolicyAction.resendVerification,
+      );
+    });
+
     test('403 codes route, they never refresh or sign out', () {
       expect(
         policyActionFor('email_not_verified'),

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:family_roots_mobile/core/network/api_client.dart';
 import 'package:family_roots_mobile/core/network/api_exception.dart';
-import 'package:family_roots_mobile/domain/clan/clan_membership.dart';
 import 'package:family_roots_mobile/features/auth/data/auth_repository.dart';
 
 import '../../support/sequence_adapter.dart';
@@ -13,41 +12,7 @@ ApiClient _client(SequenceAdapter a) => ApiClient(
   Dio(BaseOptions(baseUrl: 'https://api.test/api/v1'))..httpClientAdapter = a,
 );
 
-const _login = <String, Object?>{
-  'data': <String, Object?>{
-    'access_token': 'eyJhbGciOi...',
-    'refresh_token': 'v1.Mr7...',
-    'expires_in': 3600,
-    'user': <String, Object?>{
-      'id': '99999999-9999-9999-9999-999999999999',
-      'email': 'minh@example.com',
-      'full_name': 'Nguyễn Văn Minh',
-      'clan_id': '11111111-1111-1111-1111-111111111111',
-      'clan_name': 'Họ Nguyễn Phúc',
-      'role': 'admin',
-      'is_approved': true,
-      'has_pending_membership': false,
-      'person_id': '33333333-3333-3333-3333-333333333333',
-      'preferred_locale': 'vi',
-    },
-  },
-};
-
 void main() {
-  test('POST /login maps tokens and the nested user', () async {
-    final a = SequenceAdapter(<Canned>[const Canned(200, _login)]);
-    final res = await AuthRepository(
-      _client(a),
-    ).login(email: 'minh@example.com', password: 'secret');
-
-    expect(res.accessToken, 'eyJhbGciOi...');
-    expect(res.refreshToken, 'v1.Mr7...');
-    expect(res.expiresIn, 3600);
-    expect(res.user.email, 'minh@example.com');
-    expect(res.user.role, ClanRole.admin);
-    expect(res.user.personId!.value, '33333333-3333-3333-3333-333333333333');
-  });
-
   test('GET /auth/me carries the real has_pending_membership', () async {
     final a = SequenceAdapter(<Canned>[
       const Canned(200, <String, Object?>{
@@ -99,29 +64,6 @@ void main() {
     expect(me.needsPendingScreen, isFalse);
   });
 
-  test('login with an unverified email surfaces email_not_verified', () async {
-    final a = SequenceAdapter(<Canned>[
-      const Canned(403, <String, Object?>{
-        'error': <String, Object?>{
-          'code': 'email_not_verified',
-          'message': 'Email chưa được xác thực',
-          'detail': <String, Object?>{},
-        },
-      }),
-    ]);
-    try {
-      await AuthRepository(_client(a)).login(email: 'a@b.c', password: 'x');
-      fail('expected ApiException');
-    } on ApiException catch (e) {
-      expect(e.code, 'email_not_verified');
-      expect(e.status, 403);
-      expect(
-        policyActionFor(e.code, status: e.status),
-        PolicyAction.resendVerification,
-      );
-    }
-  });
-
   test('rate limiting surfaces retry_after', () async {
     final a = SequenceAdapter(<Canned>[
       const Canned(429, <String, Object?>{
@@ -133,7 +75,9 @@ void main() {
       }),
     ]);
     try {
-      await AuthRepository(_client(a)).login(email: 'a@b.c', password: 'x');
+      // `/auth/*` shares one rate-limit bucket (ADR-021). This rode on login
+      // until #204 moved sign-in to Supabase.
+      await AuthRepository(_client(a)).resendVerification('a@b.c');
       fail('expected ApiException');
     } on ApiException catch (e) {
       expect(e.retryAfter, 42);

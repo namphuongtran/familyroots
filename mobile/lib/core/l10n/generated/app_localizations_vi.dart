@@ -228,6 +228,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get errorUnexpected => 'Đã xảy ra lỗi không mong muốn';
 
   @override
+  String get errorInvalidCredentials => 'Email hoặc mật khẩu không đúng';
+
+  @override
   String errorTraceId(String traceId) {
     return 'Mã lỗi: $traceId';
   }

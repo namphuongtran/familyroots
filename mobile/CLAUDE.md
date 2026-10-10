@@ -50,8 +50,8 @@ ignored". Do not add it back.
 
 ```bash
 flutter pub get                                    # install deps
-flutter test                                       # full suite (134 tests)
-flutter test --exclude-tags golden                 # what CI runs (132)
+flutter test                                       # full suite (156 tests, 2026-10-10)
+flutter test --exclude-tags golden                 # what CI runs (154)
 flutter test test/core/network/api_client_test.dart   # single file
 flutter test --plain-name "describes the case"     # single test by name
 flutter test --update-goldens test/goldens/        # re-baseline goldens (macOS only)
@@ -151,7 +151,13 @@ capability) and their slices; the shape above does not change.
   `core/network` may see a `DioException` or a `{"data": …}` wrapper.
 - **Auth**: `supabase_flutter`. Session at rest goes to Keychain/Keystore via
   `SecureSessionStore`; the PKCE code verifier gets its own `SecurePkceStore`,
-  because the default leaves it in SharedPreferences plaintext.
+  because the default leaves it in SharedPreferences plaintext. **Sign-in and
+  sign-out are Supabase's, never the backend's** (ADR-064): one `SupabaseAuth`
+  (`features/auth/data/supabase_auth.dart`) is what `main.dart` wires into
+  sign-in, `accessTokenProvider` and `tokenRefresherProvider` alike, so the
+  token a request carries is the session sign-in created. It is the one place
+  gotrue's `AuthException` is caught; above it, a refusal is a
+  `SupabaseAuthException` carrying GoTrue's code, and the copy is ours.
 - **Local storage**: `sqflite` read cache (`CacheStore`) + `shared_preferences`
   for non-secrets (selected clan, locale). No Hive.
 - **Observability**: `sentry_flutter`; W3C `traceparent` on every request
@@ -339,6 +345,29 @@ a test needs a *sequence* of responses. http_mock_adapter 0.6.1 fixes the status
 code at registration, `replyCallback` varies only the body, and duplicate
 registrations do not queue (the matcher keeps the **last** match), so it cannot
 express "401 then 200".
+
+**A sign-in test reads the bearer token on the wire, and three things used to
+hide its absence (#204, ADR-064).** Sign-in discarded its tokens from `ed7d3ef` (2026-08-03) to #204
+while every sign-in test passed, because `mainContainer(adapter:)` swapped in a
+bare `Dio` with no interceptors, stubbed the token to `() => null`, and the
+canned `/auth/me` answered 200 whatever the headers were. Now:
+
+- `mainContainer` builds a real `GoTrueClient` over `FakeGoTrue`'s transport
+  (`test/support/fake_gotrue.dart`, `package:http`'s `MockClient`) and wires it
+  as `main.dart` wires the real one. `FakeGoTrue` answers with the
+  `x-supabase-api-version` header; without it gotrue reads the error code from
+  the old `error_code` field and a refusal arrives with no code. It sets
+  `autoRefreshToken: false`, because gotrue's refresh ticker outlives a widget
+  test, which then fails on a pending timer.
+- `mainContainer(adapter:)` keeps all five interceptors and swaps only the
+  transport, through `buildDio`, the body `dioProvider` names.
+- `Canned(…, bearer: FakeGoTrue.accessToken)` answers 401 as
+  `get_current_user` does unless the request carries that token. Use it for
+  any authenticated endpoint a sign-in test cans. Measured 2026-10-10: with no
+  sign-in and the membership suite's canned answers ungated, it passed 4 of 4;
+  gated, it fails 4 of 4. One of those four, the approved case, fails only
+  after `pumpAndSettle`'s ten-minute timeout, because `/clans` keeps its spinner
+  up. Run a control on that file with time to spare.
 
 **Goldens are excluded from CI** (`flutter test --exclude-tags golden`). Golden
 images are host-renderer sensitive and the baselines in `test/goldens/goldens/`

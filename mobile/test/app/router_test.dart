@@ -103,6 +103,30 @@ void main() {
     expect(find.byKey(RouteKeys.verifyEmail), findsOneWidget);
   });
 
+  testWidgets('an unconfirmed address is held on /verify-email with no '
+      'session, and clearing it leaves for /login', (tester) async {
+    // Supabase refuses the sign-in itself (`email_not_confirmed`), so this
+    // state arrives signed out. Checked before the session, it is reachable;
+    // checked after, as it was until #204, it never was.
+    final auth = AuthRouteState()
+      ..signedIn = false
+      ..emailVerified = false;
+    final router = buildRouter(auth);
+    await tester.pumpWidget(await _app(router));
+    await tester.pumpAndSettle();
+    expect(find.byKey(RouteKeys.verifyEmail), findsOneWidget);
+
+    router.go(Routes.login);
+    await tester.pumpAndSettle();
+    expect(find.byKey(RouteKeys.verifyEmail), findsOneWidget);
+
+    // Signing out clears it. /verify-email is not a page a signed-out person
+    // may stay on, or sign-out from it would go nowhere.
+    auth.set(emailVerified: true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(RouteKeys.login), findsOneWidget);
+  });
+
   // Both non-approved states share this route by design (spec § 7.2a). Which
   // copy each one gets is asserted in membership_route_test.dart, from a real
   // profile, because that is the half this router flag cannot express.
