@@ -1458,6 +1458,11 @@ title's box nor any line of the title as inked. `.claude/rules/tailwind.md` § 7
 chosen, the readings, the negative controls, and two traps: a transition that moves the boxes after
 the scale changes, and a fix that passed in `vi` and failed in `en`.
 
+**Wider than 320 px, the same page's grids clipped at 200%. Fixed by #212 (2026-10-10).** The
+case now resizes in place through seven widths, 320 to 1440 px, and reads T-04's clauses at each,
+then removes the style tag and reads the same widths at 100%. It is still one case on one load.
+`.claude/rules/tailwind.md` § 6 has the grid rule and § 7 the readings and controls.
+
 **Two smaller findings the harness reported and did not fix. Both are fixed now, and this
 paragraph is corrected rather than deleted so the finding keeps its history.**
 

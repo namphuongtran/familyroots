@@ -53,6 +53,63 @@ const MENU_OPEN = 'Mở menu điều hướng'
 const CLOSE = 'Đóng'
 /** T-04's viewport: 320 px wide, and tall enough to be a phone. */
 const NARROW = { width: 320, height: 640 }
+/**
+ * #212: the widths the T-04 case resizes through, in place. T-04 names only 320, but the
+ * dashboard's grids broke from 640 up, and worst at 1024, where the `lg` rail at a 32px root
+ * leaves `main` 496 px. 375 is a phone, and the 100% reading names it.
+ */
+const WIDTHS = [320, 375, 640, 768, 1024, 1280, 1440]
+/** The one width where the 100% stat text may stack under its icon, as it did before #212. */
+const STACK_ALLOWED_AT = 1024
+
+/**
+ * One reading of the dashboard's boxes, run in the page by `page.evaluate`, so it closes over
+ * nothing. The stat grid is `main`'s one list. The quick-action grid is the approvals card's
+ * parent, found through the one link that carries a badge.
+ */
+function readDashboard() {
+  const edges = (r: DOMRect) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom })
+  const card = (el: Element) => ({
+    text: el.querySelector('h3, p')?.textContent ?? '',
+    box: edges(el.getBoundingClientRect()),
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  })
+  const grid = (el: Element) => ({
+    box: edges(el.getBoundingClientRect()),
+    cards: [...el.children].map((child) => edges(child.getBoundingClientRect())),
+  })
+  const main = document.querySelector('main')!
+  const stats = main.querySelector('ul')!
+  const action = main.querySelector('a[href$="/backoffice/approvals"]')!
+  const actions = action.parentElement!
+  const title = action.querySelector('h3')!
+  const range = document.createRange()
+  range.selectNodeContents(title)
+  return {
+    page: {
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    },
+    stats: [...stats.querySelectorAll(':scope > li')].map((li) => ({
+      ...card(li),
+      lines: li.querySelectorAll('p').length,
+      icon: edges(li.querySelector('svg')!.parentElement!.getBoundingClientRect()),
+      column: edges(li.querySelector('p')!.parentElement!.getBoundingClientRect()),
+    })),
+    actions: [...actions.children].map(card),
+    statGrid: grid(stats),
+    actionGrid: grid(actions),
+    lines: [...main.querySelectorAll('h1, h2, h3, p')].map((line) => ({
+      text: line.textContent,
+      clientWidth: line.clientWidth,
+      scrollWidth: line.scrollWidth,
+    })),
+    title: { text: title.textContent, box: edges(title.getBoundingClientRect()) },
+    inked: [...range.getClientRects()].map(edges),
+    badges: [...action.querySelectorAll('span')].map((b) => edges(b.getBoundingClientRect())),
+  }
+}
 
 test.describe('the backoffice dashboard, as an admin', () => {
   test.use({ storageState: SEEDED_USERS.admin.storageState })
@@ -114,17 +171,23 @@ test.describe('the backoffice dashboard, as an admin', () => {
     // browser text zoom, which Playwright cannot set directly; `e2e/text-scale.spec.ts` uses
     // the same lever and explains why the style goes in a tag rather than on `<html>`.
     // A helper rather than a `beforeEach`, because the cases do not read one locale: each
-    // names its path, and each still spends one navigation.
+    // names its path, and each still spends one navigation. It returns the style tag, so a case
+    // can remove it and read the same load at 100%.
     async function openAtTextScale(page: Page, path: string) {
       await page.setViewportSize(NARROW)
       await page.goto(path)
-      await page.addStyleTag({ content: ':root { font-size: 32px; }' })
+      const scale = await page.addStyleTag({ content: ':root { font-size: 32px; }' })
       await page.evaluate(() => document.fonts.ready)
-      // Then let every transition the new size started land. The quick-action cards carry
-      // `transition-all`, so their `p-5` animates from 20 to 40 px, and a box read before it
-      // lands is one the page never settles on (#175: the approvals title read x 91 to 229
-      // mid-transition, where its padding lands it at 105 to 215). A cancelled transition has
-      // nothing to wait for.
+      await settle(page)
+      return scale
+    }
+
+    // Let every transition a change started land. The quick-action cards carry
+    // `transition-all`, so when the scale changes their `p-5` animates between 20 and 40 px,
+    // and a box read before it lands is one the page never settles on (#175: the approvals
+    // title read x 91 to 229 mid-transition, where its padding lands it at 105 to 215). A
+    // resize is awaited the same way (#212). A cancelled transition has nothing to wait for.
+    async function settle(page: Page) {
       await page.evaluate(() =>
         Promise.all(
           document
@@ -133,6 +196,13 @@ test.describe('the backoffice dashboard, as an admin', () => {
             .map((animation) => animation.finished.catch(() => undefined)),
         ),
       )
+    }
+
+    /** Resize in place. `setViewportSize` does not navigate, so it costs no request. */
+    async function readAt(page: Page, width: number) {
+      await page.setViewportSize({ width, height: NARROW.height })
+      await settle(page)
+      return page.evaluate(readDashboard)
     }
 
     /**
@@ -175,79 +245,125 @@ test.describe('the backoffice dashboard, as an admin', () => {
      * column, so with only the path moved to `en` the case read `Backoffice Dashboard` at
      * `clientWidth` 256 against `scrollWidth` 258. The `h1` carries `wrap-break-word` for it, so
      * it reads `Dashboar` then `d`, and with that removed the case fails on the same reading.
+     *
+     * **#212, every width past T-04's 320.** The grids' column counts were viewport breakpoints,
+     * which do not grow with text. At 1024 px and 200%, where the `lg` rail leaves `main` 496 px,
+     * every stat line read `clientWidth` 0 and every quick-action line 19, and the quick actions
+     * scrolled the page, 1044 against 1024. The case now resizes
+     * in place through `WIDTHS` and asks every clause at each, then drops the style tag and asks
+     * two more at 100%: the stat text beside its icon, and no empty track beside a one-row grid.
+     * Resizing and dropping the tag do not navigate, so this is still one load. The negative
+     * controls, each planted and reverted on 2026-10-10, are in `.claude/rules/tailwind.md` § 7:
+     * each old grid, the minimums without `min(…, 100%)`, `auto-fill` for `auto-fit`, a `10rem`
+     * stat minimum, and stat cards pulled up into each other each fail a reading here.
      */
     test('the page passes T-04: no scroll, no clipped text, no badge on a title', async ({
       page,
     }) => {
-      await openAtTextScale(page, BACKOFFICE_PATH_EN)
+      const scaleTag = await openAtTextScale(page, BACKOFFICE_PATH_EN)
       await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE_EN)
 
-      const reading = await page.evaluate(() => {
-        const edges = (r: DOMRect) => ({
-          left: r.left,
-          right: r.right,
-          top: r.top,
-          bottom: r.bottom,
-        })
-        const main = document.querySelector('main')!
-        const action = main.querySelector('a[href$="/backoffice/approvals"]')!
-        const title = action.querySelector('h3')!
-        const range = document.createRange()
-        range.selectNodeContents(title)
-        return {
-          page: {
-            scrollWidth: document.documentElement.scrollWidth,
-            clientWidth: document.documentElement.clientWidth,
-          },
-          cards: [...main.querySelectorAll('ul > li')].map((card) => ({
-            scrollWidth: card.scrollWidth,
-            clientWidth: card.clientWidth,
-            lines: card.querySelectorAll('p').length,
-          })),
-          lines: [...main.querySelectorAll('h1, h2, h3, p')].map((line) => ({
-            text: line.textContent,
-            clientWidth: line.clientWidth,
-            scrollWidth: line.scrollWidth,
-          })),
-          title: { text: title.textContent, box: edges(title.getBoundingClientRect()) },
-          inked: [...range.getClientRects()].map(edges),
-          badges: [...action.querySelectorAll('span')].map((b) => edges(b.getBoundingClientRect())),
-        }
-      })
-      type Edges = (typeof reading.badges)[number]
+      type Edges = ReturnType<typeof readDashboard>['badges'][number]
       const meets = (a: Edges, b: Edges) =>
         a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 
-      // Kept, because `e2e/text-scale.spec.ts` asks exactly this of the two public pages and
-      // a reader will look for it here. **Do not read it as "the screen is usable."** It
-      // passed on this screen while every pixel of content sat outside the viewport (#174,
-      // measured below), and again while every stat value was clipped to nothing (#175, above).
-      // `.claude/rules/testing.md`'s token-fix instance is the same shape: a reading whose
-      // passing and failing values are indistinguishable.
-      expect.soft(reading.page.scrollWidth).toBe(reading.page.clientWidth)
+      // #212: T-04's clauses at every width, resized in place on the one load.
+      for (const width of WIDTHS) {
+        const reading = await readAt(page, width)
+        const at = `at ${width} px and 200% text`
 
-      // 1. Every heading and paragraph in `main` shows whole: each stat card's label, value and
-      //    trend line, and each quick action's title and description. A line with no width is
-      //    the stat defect, and a line wider than its box is clipped by `truncate` or by the
-      //    card. The stat counts first, so a selector that finds no card cannot pass vacuously.
-      expect(reading.cards).toHaveLength(4)
-      for (const card of reading.cards) expect(card.lines).toBeGreaterThanOrEqual(2)
-      const clipped = reading.lines.filter(
-        (line) => line.clientWidth === 0 || line.scrollWidth > line.clientWidth,
-      )
-      expect.soft(clipped).toEqual([])
-      const spilled = reading.cards.filter((card) => card.scrollWidth > card.clientWidth)
-      expect.soft(spilled).toEqual([])
+        // Kept, because `e2e/text-scale.spec.ts` asks exactly this of the two public pages and
+        // a reader will look for it here. **Do not read it as "the screen is usable."** It
+        // passed on this screen while every pixel of content sat outside the viewport (#174,
+        // measured below), and again while every stat value was clipped to nothing (#175, above).
+        // `.claude/rules/testing.md`'s token-fix instance is the same shape: a reading whose
+        // passing and failing values are indistinguishable. Here it does read something: the
+        // grid with no clamp to its container fails only this line (#212).
+        expect.soft(reading.page.scrollWidth, at).toBe(reading.page.clientWidth)
 
-      // 2. The badge clears its card's title: the title's box, and every line of the title as
-      //    inked, which can spill past that box.
-      expect(reading.badges).toHaveLength(1)
-      const [badge] = reading.badges
-      expect(reading.inked.length).toBeGreaterThan(0)
-      expect
-        .soft(meets(badge, reading.title.box), JSON.stringify({ badge, title: reading.title }))
-        .toBe(false)
-      expect.soft(reading.inked.filter((line) => meets(badge, line))).toEqual([])
+        // 1. Every heading and paragraph in `main` shows whole: each stat card's label, value and
+        //    trend line, and each quick action's title and description. A line with no width is
+        //    the stat defect, and a line wider than its box is clipped by `truncate` or by the
+        //    card. The card counts first, so a selector that finds no card cannot pass vacuously.
+        expect(reading.stats, at).toHaveLength(4)
+        expect(reading.actions, at).toHaveLength(3)
+        for (const card of reading.stats) expect(card.lines, at).toBeGreaterThanOrEqual(2)
+        const clipped = reading.lines.filter(
+          (line) => line.clientWidth === 0 || line.scrollWidth > line.clientWidth,
+        )
+        expect.soft(clipped, at).toEqual([])
+        const cards = [...reading.stats, ...reading.actions]
+        const spilled = cards
+          .filter((card) => card.scrollWidth > card.clientWidth)
+          .map(({ text, scrollWidth, clientWidth }) => ({ text, clientWidth, scrollWidth }))
+        expect.soft(spilled, at).toEqual([])
+
+        // 2. No card overlaps another, across both grids.
+        const overlapping = cards.flatMap((a, i) =>
+          cards.slice(i + 1).flatMap((b) => (meets(a.box, b.box) ? [[a.text, b.text]] : [])),
+        )
+        expect.soft(overlapping, at).toEqual([])
+
+        // 3. The badge clears its card's title: the title's box, and every line of the title as
+        //    inked, which can spill past that box.
+        expect(reading.badges, at).toHaveLength(1)
+        const [badge] = reading.badges
+        expect(reading.inked.length, at).toBeGreaterThan(0)
+        expect
+          .soft(
+            meets(badge, reading.title.box),
+            `${at}: ${JSON.stringify({ badge, ...reading.title })}`,
+          )
+          .toBe(false)
+        expect
+          .soft(
+            reading.inked.filter((line) => meets(badge, line)),
+            at,
+          )
+          .toEqual([])
+      }
+
+      // #212: the same load at 100% text, so the fix for 200% cannot cost the default size.
+      await scaleTag.evaluate((tag) => tag.parentNode!.removeChild(tag))
+      await settle(page)
+      let oneRow = 0
+      for (const width of WIDTHS) {
+        const reading = await readAt(page, width)
+        const at = `at ${width} px and 100% text`
+
+        // 4. Each stat card's text sits beside its icon: the text column starts above the icon
+        //    box's bottom. #175 let it stack at 1024 px, and it still may there.
+        if (width !== STACK_ALLOWED_AT) {
+          const stacked = reading.stats.filter((card) => card.column.top >= card.icon.bottom)
+          expect
+            .soft(
+              stacked.map((card) => card.text),
+              at,
+            )
+            .toEqual([])
+        }
+
+        // 5. A grid whose cards all sit on one row spans that row: no empty column track
+        //    beside them. Read off the cards' boxes against the grid's, so it is the space a
+        //    reader sees and not the template that leaves it.
+        for (const grid of [reading.statGrid, reading.actionGrid]) {
+          if (new Set(grid.cards.map((card) => Math.round(card.top))).size !== 1) continue
+          oneRow += 1
+          expect
+            .soft(
+              {
+                emptyLeft: Math.round(Math.min(...grid.cards.map((c) => c.left)) - grid.box.left),
+                emptyRight: Math.round(
+                  grid.box.right - Math.max(...grid.cards.map((c) => c.right)),
+                ),
+              },
+              `${at}, ${grid.cards.length} cards on one row`,
+            )
+            .toEqual({ emptyLeft: 0, emptyRight: 0 })
+        }
+      }
+      // Clause 5 is read only where a row holds every card, so it must have been read somewhere.
+      expect(oneRow).toBeGreaterThan(0)
     })
 
     /**

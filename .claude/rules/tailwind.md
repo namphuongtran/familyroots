@@ -375,11 +375,19 @@ Spec § 6 defines the web layout: content max-width 1200px, centred.
 | >= 1280 | sidebar 264px plus content; a detail screen may split into main `1fr` and aside 360px |
 
 - Design mobile first. Write the base classes for the narrow case, then add `md:` and `lg:`.
-- Responsive coverage is thin today: 18 `sm:`, 7 `md:`, 5 `lg:`, and no `xl:` or `2xl:` uses in
-  class strings across `web/src`, re-counted 2026-10-04 with comments and tests left out, after
-  #175 added the dashboard's `sm:px-8`. It said 4, 8 and 3 until earlier that day. Treat a new
-  screen as needing responsive work, not as inheriting it.
+- Responsive coverage is thin today: 16 `sm:`, 7 `md:`, 3 `lg:`, and no `xl:` or `2xl:` uses in
+  class strings across `web/src`, re-counted 2026-10-10 with comments and tests left out, after
+  #212 took the dashboard grids' two `sm:` and two `lg:` column counts out. It was 18, 7 and 5
+  from 2026-10-04, after #175 added the dashboard's `sm:px-8`. Before that day this line said 4,
+  8 and 3. Treat a new screen as needing responsive work, not as inheriting it.
   The backoffice shell (#174) is the one shell with a real `lg` branch.
+- **A grid of cards that hold text takes its column count from a rem minimum, not from a
+  breakpoint (#212).** A breakpoint is a viewport width and does not grow with text, so at 200%
+  the columns get narrower than the words they hold. The dashboard's form is
+  `grid-cols-[repeat(auto-fit,minmax(min(12.5rem,100%),1fr))]`. Keep the `min(…, 100%)`, or a
+  minimum wider than the column scrolls the page at 320 px. Use `auto-fit`, not `auto-fill`, or a
+  row with fewer cards than tracks leaves the spare tracks empty beside them. § 7 has the
+  readings and a control for each part.
 - Container queries are used nowhere in `web/src`. Tailwind v4 ships them. You may use
   `@container` for a component that must adapt to its own box, but do not convert existing
   breakpoint code to container queries as a drive-by change.
@@ -524,8 +532,10 @@ The layout came from measuring, not from the spec:
 - **Stat text wraps under its icon.** The row is `flex-wrap`, and the text column is
   `grow basis-24`. The text stays beside the icon only while the column keeps 6rem, which is
   wider than the widest label word. `Completeness` is 164 px at a 32px root, or 5.1rem. At 100%
-  text the cards still sit side by side at 320, 375, 640, 768, 1280 and 1440 px. At 1024 px they
-  stack, which gives the labels the room that `truncate` used to cut off.
+  text the cards still sat side by side at 320, 375, 640, 768, 1280 and 1440 px, and at 1024 px
+  they stacked, which gave the labels the room that `truncate` used to cut off. Since #212's grid
+  they sit side by side at 1024 px too, read 2026-10-10. No case requires it there: #212 allowed
+  either at 1024 px, and the case still skips that width.
 - **The page gutter is `px-4` below `sm`.** Once the text stacks, its column is 110 px under `p-8`
   and 158 px under spec § 2.4's mobile gutter, `space-5`. Neither holds `Completeness`. `px-4`
   gives 174 px.
@@ -586,13 +596,71 @@ that never changes. `hyphens-auto`: it needs an English hyphenation dictionary i
 and where there is none the word clips as before. The describe's two other cases, the content
 column and the drawer, still read `/vi`, where their #174 controls were measured.
 
-**Not fixed, and outside T-04's 320 px.** At 640 px and 200% the grid goes to two columns and
-`Tree Completeness` clips again, 164 against 154, in both locales, measured while both rendered the
-English labels. At 1280 px and 200%, four
-columns beside the rail leave each card's text 44 px, and every line in the cards but `7` clips.
-The `sm:` and `lg:` column counts are viewport breakpoints, and they do not grow with text. An
-intrinsic grid, such as `auto-fill` over a `minmax` in rem, would grow with it. That changes the
-dashboard's layout, so it belongs with spec § 7's redesign.
+**Wider than 320 px, both grids clipped at 200% text, and at 1024 px the page scrolled. Fixed by
+#212 (2026-10-10).** This paragraph used to say the fix belonged with spec § 7's redesign. Triage
+took it on its own, because no issue tracks that redesign. The column counts were viewport
+breakpoints, `sm:grid-cols-2 lg:grid-cols-4` for the stats and `sm:grid-cols-2 lg:grid-cols-3`
+for the quick actions, and a breakpoint does not grow with text. At 1024 px the `lg` rail is
+`16.5rem`, 528 px at a 32px root, which left `main` 496 px for four stat columns, and every stat
+line was 0 px wide. Each grid is now intrinsic, `grid-cols-[repeat(auto-fit,minmax(min(12.5rem,100%),1fr))]`
+for the stats and the same over `15rem` for the quick actions. Three parts of it each carry
+weight, and each has a control in the table further down:
+
+- **The minimum is in rem**, so it doubles with the text, and the column count falls where the
+  column width used to.
+- **`min(…, 100%)` clamps the minimum to the grid.** A bare `12.5rem` is 400 px at a 32px root,
+  wider than the 256 px `main` gives the grid at 320 px, so the track overflows and the page
+  scrolls.
+- **`auto-fit`, not `auto-fill`.** `auto-fill` keeps the tracks no card fills. At 1440 px and
+  100%, the four stat cards would sit on one row beside an empty fifth track. `auto-fit` collapses
+  it, and the cards take the whole row.
+
+The T-04 case now resizes in place through 320, 375, 640, 768, 1024, 1280 and 1440 px on its one
+load and reads every clause at each. Then it removes the style tag and reads two more at 100%:
+each stat's text sits beside its icon, except at 1024 px, where #212 allowed it to stack as #175
+had it, and a grid whose cards all sit on one row spans that row. `setViewportSize` does not
+navigate, so the case still spends one load. **The case reads `/en` only**, as #236 decided, so
+nothing pins `/vi`. The table is a throwaway probe's, run 2026-10-10 on both locales and deleted
+after, and it read the same in both. It records more than the case asserts: the column counts,
+the card widths and the 100% rows' fit are the probe's readings, not the case's.
+
+| Text | Width | `main` | Stats | Quick actions | Stat text |
+|---|---|---|---|---|---|
+| 200% | 320, 375 | 320, 375 | one column, cards 256 and 311 wide | one column | under its icon |
+| 200% | 640, 768 | 640, 768 | one column, 512 and 640 | one column | beside |
+| 200% | 1024 | 496 | one column, 368 | one column | under its icon |
+| 200% | 1280, 1440 | 752, 912 | one column, 624 and 784 | one column | beside |
+| 100% | 320, 375 | 320, 375 | one column | one column | beside |
+| 100% | 640 | 640 | two, then two | two, then one | beside |
+| 100% | 768, 1024 | 768, 760 | three, then one | two, then one | beside |
+| 100% | 1280, 1440 | 1016, 1176 | four on one row | three on one row | beside |
+
+At every row the probe read every line fitting its box and no page scroll. At 200%, on `/en`, the
+case asserts both, and that no card overlaps another and the badge clears its title. **One thing
+changed at 100% that no clause asks about.** At 768 and 1024 px the fourth stat card now sits alone on a second row,
+where the old grid showed two by two and four on one row. That is the uniform grid's shape, and
+spec § 7.3's redesign replaces it.
+
+Each control was planted and reverted against the case on 2026-10-10:
+
+| Plant | Reading on `/en` |
+|---|---|
+| stats back on `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` | at 640, `Tree Completeness` 154 against 164; at 1024, every stat line at `clientWidth` 0; at 1280, every stat line but `7` at 44; at 1440, six lines at 84 |
+| quick actions back on `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` | at 1024, every quick-action line 19 wide, and the page 1044 against 1024; at 1280, `Add member` 105 against 115 and `Review approvals` 105 against 134 |
+| both minimums without `min(…, 100%)` | every line fits, and the page scrolls: 512 against 320, 512 against 375, 1072 against 1024 |
+| `auto-fill` for `auto-fit`, both grids | at 1440 and 100%, 226 px empty beside the four stat cards and 282 px beside the three quick actions |
+| a `10rem` stat minimum | at 100%, every stat's text drops under its icon at 375, 640 and 768 |
+| `[&>*+*]:-mt-12` on the stats, each card after the first pulled 3rem up | at every width at 200%, each stat card overlaps the one above it, and no other clause fails |
+
+Two readings differ from the issue's by a pixel or two, read the same way on the layout before
+the fix. The issue had `Review approvals` at 133 and the page at 1046; this machine read 134 and
+1044. The page's 2 px is the long description's: 146 in the issue, 144 here.
+
+**The page scroll at 1024 came from the quick actions, not the stats.** #212 expected the old stat
+grid to scroll the page too. Planted alone, it scrolls nothing, because a stat card is
+`overflow-hidden` and clips what spills. A quick action is an `<a>` that clips nothing. The third
+card's text box starts at x 900 and is 19 px wide, and its description's widest word is 144 px,
+so it inks to x 1044. That is the page's whole 20 px.
 
 **The 2026-08-13 text-scale record named a third wordmark that does not exist, and its line number
 for the second one was one place off.** Its out-of-scope note cites `components/layout/Sidebar.tsx:65`

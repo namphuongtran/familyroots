@@ -82,8 +82,16 @@ export default async function BackofficeDashboardPage({
         <p className="text-muted-foreground mt-1 text-sm">{t('dashboard_subtitle')}</p>
       </div>
 
-      {/* Stats grid */}
-      <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {/*
+        Stats grid. #212: the text size sets the column count, not the viewport. The
+        `sm:grid-cols-2 lg:grid-cols-4` this replaces kept four columns at 1024 px and 200% text,
+        where the `lg` rail leaves `main` 496 px, so every stat line was 0 px wide. Each track is
+        at least 12.5rem, so it doubles with the text. `min(…, 100%)` keeps a track no wider
+        than the grid, or a 400 px minimum scrolls the page at 320 px. `auto-fit`, not
+        `auto-fill`, so four cards on one row take the whole row rather than leave a fifth,
+        empty track at 1440 px.
+      */}
+      <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(12.5rem,100%),1fr))] gap-5">
         {mockStats.map((stat) => {
           const Icon = stat.icon
           return (
@@ -132,7 +140,8 @@ export default async function BackofficeDashboardPage({
       {/* Quick actions */}
       <div className="mt-8">
         <h2 className="text-foreground mb-4 text-lg font-semibold">{t('quick_actions')}</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* #212: the stats grid's pattern, over a 15rem track for the longer titles. */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(15rem,100%),1fr))] gap-4">
           <QuickAction
             href={`/${locale}/backoffice/persons`}
             title={t('action_add_member')}
