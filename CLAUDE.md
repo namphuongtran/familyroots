@@ -62,13 +62,12 @@ Single-context. ADRs live in `docs/decisions/`. See `docs/agents/domain.md`.
 | mobile | Native UX and app interactions over backend contracts | Flutter, Dart, Riverpod 3, Dio | N/A |
 
 ## Shared Infrastructure
-- PostgreSQL (Supabase managed and local Docker)
-- Supabase Auth and Storage
+- Supabase project `xkmutzxdhdigyfisfrwd` (`ap-southeast-1`, Postgres 17): the application database, Auth and Storage, in one project (ADR-066)
+- Local PostgreSQL in Docker (`pgdb`), plus the local Supabase stack for Auth and Storage
+- Vercel team `namtp` (Hobby): `familyroots-api` from `backend/` and `familyroots-web` from `web/`, both in `sin1`; Vercel Cron runs the scheduled jobs (ADR-065)
+- GitHub Actions CI/CD: the backend deploy job migrates, deploys, then reads `/health` (docs/ops/deployment.md)
 - Firebase Cloud Messaging
 - Sentry monitoring
-- Render backend hosting blueprint
-- Vercel web deployment pipeline
-- GitHub Actions CI/CD workflows
 - Pulumi IaC skeleton (partially implemented)
 
 ## Required Reading Before Each Task
@@ -107,3 +106,5 @@ When code and docs disagree, the code is the truth — fix the doc in the same P
 - In-process event dispatcher lacks durable delivery guarantees.
 - Web testing harness appears less complete than backend/mobile test posture.
 - Some contract assumptions changed over time and require regular docs/contracts sync checks.
+- On Vercel the production boot gate no longer blocks a release: a deployment goes live when its build is ready, and the deploy job's `/health` read comes after. A failed read means roll back, and a code rollback across a migration needs `alembic downgrade` first (docs/ops/deployment.md).
+- The nightly dump now lives in the same Supabase project as the database it backs up, so it is no longer off-provider. The first production dump will also carry Supabase's own schemas, which the restore drill has never met (docs/ops/backup-restore.md).

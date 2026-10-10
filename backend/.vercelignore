@@ -1,0 +1,48 @@
+# What `vercel deploy`, run from backend/, must never upload (#252).
+# Same syntax as .gitignore. Everything not listed here is uploaded, and the Python
+# runtime bundles every file it can reach, so the list errs toward leaving things out.
+# Do NOT list migrations/ or alembic.ini: app/core/readiness.py reads the head revision
+# from the `migrations` package at run time, and the production boot gate refuses to
+# start without it (docs/ops/migrations.md, "Boot-time migration gate").
+
+# Local virtualenvs. Vercel installs from uv.lock itself.
+.venv/
+venv/
+
+# Caches and build output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Environment files. Production values live in the Vercel project, never in an upload.
+.env
+.env.*
+*.env
+
+# Credential files. Firebase reads FIREBASE_CREDENTIALS_JSON on Vercel, never a file.
+firebase-credentials.json
+*credentials*.json
+*-firebase-adminsdk-*.json
+*.pem
+*.key
+
+# Vercel CLI link state
+.vercel/
+
+# The image is for docker-compose.yml and image-e2e.yml. Vercel runs this project from
+# source with its Python runtime, and its schema also offers `"framework": "container"`
+# (read 2026-10-10), so the upload carries no Dockerfile for a detector to choose.
+Dockerfile
+.dockerignore
+
+# Editor and OS artefacts
+.DS_Store
+*.log

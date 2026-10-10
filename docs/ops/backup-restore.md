@@ -1,8 +1,8 @@
 # Backup & Restore
 
-> **ACTIVE since 2026-07-12.** Nightly off-provider database backups run from
-> GitHub Actions (`.github/workflows/db-backup.yml`) into a Supabase Storage
-> bucket, separate from the Render database itself. A restore has been drilled
+> **ACTIVE since 2026-07-12.** Nightly database backups run from GitHub Actions (`.github/workflows/db-backup.yml`)
+> into a Supabase Storage bucket, **since 2026-10-10 in the same Supabase project as the database, so no longer off-provider**
+> ([Since 2026-10-10: one project](#since-2026-10-10-one-project)). A restore has been drilled
 > for real against a local dev dump (see the drill log below, most recently
 > 2026-08-22) — this is no longer a "target" runbook, it documents what
 > actually ships. **A dump at chain head restored into a cluster that never held
@@ -744,12 +744,54 @@ docker compose down -v && docker compose up -d pgdb && \
 
 (Compose defaults: user `postgres`, db `family_roots` — see `docker-compose.yml`.)
 
+## Since 2026-10-10: one project
+
+Render is retired, and the application database moved into the Supabase project
+`xkmutzxdhdigyfisfrwd`, Postgres 17 ([supabase-hosted-project.md](supabase-hosted-project.md)).
+Nothing was live, so no dump existed to carry over. `db-backup.yml` and the
+scripts did not change (#252 kept `db-backup.yml` out of scope). What changed,
+and what is still open:
+
+- **`PROD_DATABASE_URL` holds Supavisor's session pooler** on `:5432`, the same
+  string as `MIGRATION_DATABASE_URL`. GitHub Actions has no IPv6, and the direct
+  host is IPv6-only without the add-on ([migrations.md](migrations.md), "How
+  migrations reach production"). `scripts/db_backup.sh:39` strips a `+driver`
+  suffix itself, so either URL form works.
+- **The client is newer than the server, which `pg_dump` supports.** The
+  workflow installs `postgresql-client-18`, and production is 17.
+- **The database and its backups now share one project.** Before, losing the
+  Render database left the dumps in Supabase. Now losing the Supabase project,
+  or the account, loses both. Whether the project's plan keeps backups of its
+  own, and for how long, has not been read. A second provider for the dumps is a
+  follow-up.
+- **The dump now carries Supabase's own schemas. Not measured.**
+  `scripts/db_backup.sh:40` runs `pg_dump` with no `--schema`, so a dump of the
+  Supabase database takes `auth`, `storage` and the other schemas Supabase
+  manages, not only `public`. `scripts/restore_drill.sh:130` restores with
+  `--exit-on-error` into a plain local Postgres, which has none of Supabase's
+  roles and extensions. Expect the first drill of a production dump to fail
+  there. Which schemas a backup should hold is open. `auth.users` is where every
+  account lives now, so a `public`-only dump would restore data no one can sign
+  in to. Read the first dump's table of contents
+  (`gunzip -c <dump.gz> | pg_restore -l`) before deciding.
+- **A restore into a Supabase project needs one more grant.** Migration
+  `041_grant_app_role_to_login` makes the migrating login a member of
+  `familyroots_app`, because Supabase's `postgres` is not a superuser (ADR-066).
+  A restore replays grants through `scripts/restore_bootstrap_role.sql`. Check
+  that it replays that membership too before relying on it there.
+
 ## Go-live checklist
 
-- [ ] Create a **private** Supabase Storage bucket named `backups` (production project).
-- [ ] Add three GitHub Actions secrets (repo settings): `PROD_DATABASE_URL`,
+- [ ] Create a **private** Supabase Storage bucket named `backups` in the
+  production project, `xkmutzxdhdigyfisfrwd`.
+- [ ] Add three GitHub Actions secrets (repo settings): `PROD_DATABASE_URL`
+  (Supavisor's session pooler, the same string as `MIGRATION_DATABASE_URL`),
   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — see
-  [secrets.md](secrets.md) for what each one is and where it comes from.
+  [secrets.md](secrets.md) for what each one is and where it comes from, and
+  [deployment.md](deployment.md), "Go-live checklist", B, for the values.
+- [ ] **Read the first dump's schema list before drilling it**
+  ([Since 2026-10-10: one project](#since-2026-10-10-one-project)), and decide
+  which schemas a backup holds.
 - [ ] **⚠️ `SUPABASE_SERVICE_ROLE_KEY` is a project-wide admin credential, not
   a bucket-scoped one** — it bypasses RLS on every table and grants full
   access to every Storage bucket (including the live `documents` bucket) plus
@@ -779,16 +821,22 @@ docker compose down -v && docker compose up -d pgdb && \
   status) after go-live to confirm real uploads are occurring — this is a
   silent no-backup risk if skipped.
 - [ ] Confirm the workflow's pg_dump major version ≥ the production Postgres
-  major (currently 18 — the workflow pins `postgresql-client-18`; re-pin when
-  the DB upgrades).
+  major. Production is 17 since 2026-10-10 (it was Render's 18), and the
+  workflow pins `postgresql-client-18`, so this holds. Re-pin when the database
+  passes 18.
 
 ## Still deferred (honest gaps)
 
-- **Render-plan PITR verification**: whether the Render Postgres `starter`
-  plan provides point-in-time recovery, and its actual retention window, has
-  not been verified with Render. The GitHub-Actions backup above is the
-  primary, verified recovery path; provider-side PITR would be a
-  defense-in-depth addition, not a replacement.
+- **Supabase-plan backup and PITR verification**: whether the plan of project
+  `xkmutzxdhdigyfisfrwd` keeps backups or offers point-in-time recovery, and the
+  retention window, has not been read. The GitHub-Actions backup above is the
+  primary recovery path; provider-side backups would be a defense-in-depth
+  addition, not a replacement, and they live with the same provider. (Until
+  2026-10-10 this item asked the same of Render's `starter` plan, and was never
+  answered.)
+- **No off-provider copy of the database.** Since 2026-10-10 the database and
+  the `backups` bucket are one Supabase project
+  ([Since 2026-10-10: one project](#since-2026-10-10-one-project)).
 - **Document-blob bucket mirroring**: document files already live in Supabase
   Storage (same provider as the DB backups), so a DB-only restore repoints at
   live blobs today — but there is no independent backup/mirror of the
