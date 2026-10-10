@@ -12,15 +12,18 @@ There is **one** DB driver. `Settings.DATABASE_URL` normalizes any form
 (`env.py` reuses `settings.DATABASE_URL`). Do not reintroduce asyncpg/psycopg2.
 
 ## How migrations reach production (critical)
-**Since #252 (2026-10-10), CI runs them.** Render's `preDeployCommand` did until then, and
-`infra/render/render.yaml` was deleted with Render. Vercel runs nothing before a deployment goes
-live, so `backend-ci.yml`'s `deploy` job runs `alembic upgrade head` as its first step, on every
-push to `main` that passes `lint-and-test`. Then it deploys, then it reads `/health`
-([deployment.md](deployment.md), "The backend deploy job, step by step"). **A failed migration
-fails the job before anything is deployed.** Consequences:
+**Since #252 (2026-10-10), CI runs them. Since #267 (ADR-067), only a published release does.**
+Render's `preDeployCommand` ran them until #252, and `infra/render/render.yaml` was deleted with
+Render. Vercel runs nothing before a deployment goes live. So `release.yml`'s `deploy` job runs
+`alembic upgrade head` as its first step, after the backend and web gates pass on the tagged
+commit and the maintainer approves the run. Then it deploys, then it reads `/health`
+([deployment.md](deployment.md), "The release workflow, step by step"). **A merge to `main`
+migrates nothing.** **A failed migration fails the job before anything is deployed.** Consequences:
 - A bad migration fails the release instead of shipping a schema-mismatched app.
-- **Always test a migration against a prod-like DB before merging to `main`** (merge
-  to `main` = production migration + deploy). The production database is Postgres 17
+- **A release applies every migration merged since the last release, in one run.** Read the
+  list before approving: `git diff --stat <last tag>..<new tag> -- backend/migrations/versions`.
+- **Always test a migration against a prod-like DB before merging to `main`.** The next release
+  will apply it to production. The production database is Postgres 17
   (Supabase project `xkmutzxdhdigyfisfrwd`). `backend-ci.yml`'s service container and
   local `pgdb` ran Postgres 18 when this was written (read at `c39ad2e`).
 - **Keep every migration compatible with the code already live.** The old deployment

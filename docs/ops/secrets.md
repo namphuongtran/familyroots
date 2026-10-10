@@ -20,10 +20,10 @@ Vercel (both apps) and GitHub Actions (migrations, deploys, backups). Config liv
 | Firebase FCM creds | Optional (push only). `FIREBASE_CREDENTIALS_JSON`, the service-account JSON inline, in Vercel `familyroots-api` env (#250). A function has no secret file to mount |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_API_ORIGIN`, `NEXT_PUBLIC_API_URL` | Vercel `familyroots-web` env. Inlined into the browser bundle at build time, so none of them is secret. The web project holds **no** service-role key |
 | `SENTRY_AUTH_TOKEN` | Vercel `familyroots-web` env, optional. Uploads source maps at build time |
-| `MIGRATION_DATABASE_URL` | GitHub Actions secret. Supavisor's **session** pooler (`:5432`), read only by `backend-ci.yml`'s deploy job to run `alembic upgrade head` ([migrations.md](migrations.md), "How migrations reach production") |
-| `VERCEL_TOKEN` | GitHub Actions secret. Both deploy jobs |
-| `VERCEL_ORG_ID`, `VERCEL_API_PROJECT_ID`, `VERCEL_WEB_PROJECT_ID` | GitHub Actions secrets. Not secret values (they are in [deployment.md](deployment.md)), but CI reads them from secrets |
-| `API_ORIGIN` | GitHub Actions **variable**, not a secret. The production API origin the deploy job reads `/health` from |
+| `MIGRATION_DATABASE_URL` | GitHub Actions secret, in the `production` environment. Supavisor's **session** pooler (`:5432`), read only by `release.yml`'s `deploy` job to run `alembic upgrade head` ([migrations.md](migrations.md), "How migrations reach production") |
+| `VERCEL_TOKEN` | GitHub Actions secret, in the `production` environment. Both deploy steps of `release.yml` |
+| `VERCEL_ORG_ID`, `VERCEL_API_PROJECT_ID`, `VERCEL_WEB_PROJECT_ID` | GitHub Actions secrets, in the `production` environment. Not secret values (they are in [deployment.md](deployment.md)), but CI reads them from secrets |
+| `API_ORIGIN` | GitHub Actions **variable**, not a secret, in the `production` environment. The production API origin `release.yml` reads `/health` from |
 | `PROD_DATABASE_URL` | GitHub Actions secret (repo settings) — production Postgres DSN, read-only use by `db-backup.yml` to run `pg_dump`. Since 2026-10-10 it is the same session-pooler string as `MIGRATION_DATABASE_URL`; **not yet set** (go-live item, see [backup-restore.md](backup-restore.md#go-live-checklist)) |
 | `SUPABASE_URL` *(GitHub Actions)* | GitHub Actions secret (repo settings) — Supabase project URL, used by `db-backup.yml` / `scripts/db_backup.sh` and `scripts/restore_drill.sh --latest` to reach the Storage REST API; **not yet set** |
 | `SUPABASE_SERVICE_ROLE_KEY` | GitHub Actions secret (repo settings) — Supabase service-role key, used by `db-backup.yml` / `scripts/restore_drill.sh` to upload/list/delete objects in the private `backups` bucket. **Not bucket-scoped**: this key is a **project-wide admin credential** — it bypasses RLS on every table and grants full read/write on every Storage bucket (including the live `documents` bucket) plus the Supabase auth admin API. **Since 2026-10-10 the application database lives in the same project**, so it also bypasses RLS on every application table. A leak from this workflow compromises the *entire* Supabase project, not just backups, and requires rotating all Supabase project keys, not just this secret. **Not yet set**. Prefer provisioning a scoped Storage-only credential (Supabase S3 access keys, restricted to the `backups` bucket) for the backup job when available, keeping the service-role key out of CI entirely — tracked as a go-live follow-up in [backup-restore.md](backup-restore.md#go-live-checklist). |
@@ -47,8 +47,8 @@ field-by-field table is in [configuration.md](configuration.md).
 
 **On Vercel, "refuses to boot" does not keep the old version serving.** Nothing requests a
 deployment before it goes live, so a production deployment with a missing variable is live and
-fails every cold start. The deploy job's `/health` read is the first thing to see it
-([deployment.md](deployment.md), "The backend deploy job, step by step"). Set every variable
+fails every cold start. The release's `/health` read is the first thing to see it
+([deployment.md](deployment.md), "The release workflow, step by step"). Set every variable
 before the first deploy.
 
 ## Go-live env checklist

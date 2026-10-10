@@ -321,7 +321,7 @@ package. So the job does not use it.
 **Since #252 production does not run this image.** Vercel builds the backend from `backend/` with
 its own Python runtime, so the job no longer reads the artefact production runs. It still reads a
 production-mode boot of the installed package, which no source-tree test does. The production
-reading is the deploy job's `GET /health` ([deployment.md](deployment.md), "The backend deploy job,
+reading is the release's `GET /health` ([deployment.md](deployment.md), "The release workflow,
 step by step"): `"migrations":"current"` there is what shows the `migrations` package reached the
 Vercel bundle.
 
@@ -332,7 +332,7 @@ Vercel bundle.
 3. `docker build web`, with its three `NEXT_PUBLIC_*` build arguments set to this stack's URL, its
    anon key, and the backend container's port on the runner.
 4. The backend image's own `alembic upgrade head` against `pgdb`, the way Render's
-   `preDeployCommand` ran it. Production now migrates from `backend-ci.yml`'s deploy job instead
+   `preDeployCommand` ran it. Production now migrates from `release.yml`'s `deploy` job instead
    ([migrations.md](migrations.md)). Then `make seed`. Its own `alembic upgrade head` finds nothing
    to do.
 5. The backend image, with its own `CMD`, `APP_ENV=production` and no source mount. The step waits for

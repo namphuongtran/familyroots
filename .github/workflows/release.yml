@@ -1,0 +1,199 @@
+name: Release
+
+# The only path to production (#267, ADR-067). A merge to main runs CI and deploys nothing.
+# Publishing a GitHub Release vX.Y.Z runs the backend and web gates on the tagged commit, waits
+# for approval in the `production` environment, then migrates, deploys the backend, reads
+# /health, and deploys the web, in that order. docs/ops/deployment.md, "Cutting a release".
+on:
+  release:
+    types: [published]
+  # Re-run a release: dispatch this workflow on the tag itself (`gh workflow run release.yml
+  # --ref vX.Y.Z`), never on a branch. The ref check and the environment's tag policy both
+  # refuse anything else.
+  workflow_dispatch:
+
+jobs:
+  verify-ref:
+    # A pre-release is a GitHub Release too, and publishing one must not reach production.
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The ancestry check reads origin/main, which a shallow checkout does not fetch.
+          fetch-depth: 0
+
+      # Only code that reached main through a pull request ships. A tag on a side branch, a
+      # tag not named v*, or a dispatch on a branch is refused here, before any gate runs.
+      - name: The ref is a v* tag on main
+        run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::Release runs only on a tag; this run is on $GITHUB_REF_TYPE '$GITHUB_REF_NAME'"
+            exit 1
+          fi
+          case "$GITHUB_REF_NAME" in
+            v[0-9]*) ;;
+            *)
+              echo "::error::Release tags are named vX.Y.Z; '$GITHUB_REF_NAME' is not"
+              exit 1
+              ;;
+          esac
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main"
+            exit 1
+          fi
+          echo "$GITHUB_REF_NAME ($GITHUB_SHA) is on main"
+
+  # Path filters do not apply to workflow_call, so both gates always run in full on the tag,
+  # whatever the release touched. main has no branch protection, so a green main is not given.
+  backend-gate:
+    needs: verify-ref
+    uses: ./.github/workflows/backend-ci.yml
+
+  web-gate:
+    needs: verify-ref
+    uses: ./.github/workflows/web-ci.yml
+
+  # One job, so one approval covers both deploys: each job that names an environment with a
+  # required reviewer waits for its own approval, and the web deploy must follow the backend's.
+  deploy:
+    needs: [backend-gate, web-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    # Two releases close together must not migrate one database at once: Alembic takes no
+    # lock of its own. Queue the second run; never cancel one mid-migration.
+    concurrency:
+      group: production-release
+      cancel-in-progress: false
+    # Each secret is passed only to the step that needs it, so neither `uv sync` nor the
+    # migration ever sees the Vercel token.
+    steps:
+      - uses: actions/checkout@v4
+
+      # A release is a deliberate act, so missing configuration fails it. CI used to skip
+      # green here, which kept main green before go-live; a release that deploys nothing
+      # must not look like one that shipped.
+      - name: Check deploy configuration
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_API_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
+          VERCEL_WEB_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+        run: |
+          missing=""
+          [ -n "$MIGRATION_DATABASE_URL" ] || missing="$missing secret:MIGRATION_DATABASE_URL"
+          [ -n "$VERCEL_TOKEN" ] || missing="$missing secret:VERCEL_TOKEN"
+          [ -n "$VERCEL_ORG_ID" ] || missing="$missing secret:VERCEL_ORG_ID"
+          [ -n "$VERCEL_API_PROJECT_ID" ] || missing="$missing secret:VERCEL_API_PROJECT_ID"
+          [ -n "$VERCEL_WEB_PROJECT_ID" ] || missing="$missing secret:VERCEL_WEB_PROJECT_ID"
+          [ -n "$API_ORIGIN" ] || missing="$missing variable:API_ORIGIN"
+          if [ -n "$missing" ]; then
+            echo "::error::Deploy not configured (missing:$missing). Nothing was migrated or deployed (docs/ops/deployment.md, Go-live checklist)"
+            exit 1
+          fi
+          echo "## Release $GITHUB_REF_NAME ($GITHUB_SHA)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        working-directory: backend
+        run: uv python install
+
+      - name: Install runtime dependencies
+        working-directory: backend
+        run: uv sync --frozen --no-dev
+
+      # MIGRATION_DATABASE_URL is Supavisor's SESSION pooler on :5432, not the transaction
+      # pooler the app uses on :6543. The direct host is IPv6-only without the IPv4 add-on,
+      # and GitHub Actions has no IPv6. Settings needs DATABASE_URL and nothing else here:
+      # APP_ENV is unset, so it reads "development" and the production validator does not
+      # run. migrations/env.py takes the URL from settings.DATABASE_URL.
+      - name: Migrate the production database
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          uv run --no-sync alembic upgrade head
+          uv run --no-sync alembic current
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # VERCEL_ORG_ID and VERCEL_PROJECT_ID name the project, so the CLI needs no
+      # .vercel/project.json. No --yes: that flag answers project set-up questions with
+      # defaults. With the ids wrong, this step should fail, not create a project. Vercel
+      # builds from the upload, and backend/.vercelignore decides what is uploaded.
+      - name: Deploy to Vercel (familyroots-api)
+        working-directory: backend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
+        run: |
+          url="$(npx --yes vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN")"
+          echo "Deployment: $url"
+          echo "- familyroots-api: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      # Read after the fact. The deployment is already production when this runs. A red
+      # step means production is serving it, so roll back (docs/ops/deployment.md,
+      # "Rollback"). Read through the production host: Standard Protection guards the
+      # deployment's own URL. The first request cold-starts an instance, whose lifespan
+      # refuses to boot unless the database is at head. A red step here also stops the web
+      # deploy below, so the web never goes live against an API that failed its read.
+      - name: Read /health on the production host
+        env:
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+        # One attempt per loop, each into a fresh file. `curl --retry` writes every
+        # attempt's body to the same stdout, so on 2026-10-10 (#263) a first attempt's
+        # Vercel error page sat in front of a healthy second answer, jq could not parse
+        # the pair, and the step failed a production that was serving 200 "current".
+        # The first attempt had reached the previous deployment, whose boot gate refused
+        # the newly migrated database (#255).
+        run: |
+          url="${API_ORIGIN%/}/health"
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -sS --max-time 60 -o "$body" -D "$headers" -w '%{http_code}' "$url" || true)"
+            migrations="$(jq -r '.migrations // empty' "$body" 2>/dev/null || true)"
+            served_by="$(grep -i '^x-vercel-id:' "$headers" | tr -d '\r' | cut -d' ' -f2)"
+            echo "attempt $attempt: GET $url -> ${status:-no answer}, migrations=${migrations:-absent}, x-vercel-id=${served_by:-none}"
+            if [ "$status" = "200" ] && [ "$migrations" = "current" ]; then
+              exit 0
+            fi
+            [ "$attempt" = 6 ] || sleep 10
+          done
+          echo "Last body:"; head -c 2000 "$body"; echo
+          echo "::error::GET $url answered ${status:-nothing} with migrations=${migrations:-absent} after 6 attempts. Production already serves this deployment: roll back (docs/ops/deployment.md, Rollback)"
+          exit 1
+
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # No --yes, for the reason the API deploy step gives. The CLI is pinned to the same
+      # version as that step, so a deploy does not change tool between two runs.
+      - name: Deploy to Vercel (familyroots-web)
+        working-directory: web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+        run: |
+          pnpm dlx vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN"
+          echo "- familyroots-web: deployed (URL in this step's log)" >> "$GITHUB_STEP_SUMMARY"

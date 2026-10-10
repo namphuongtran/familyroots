@@ -13,7 +13,7 @@
 | Supabase Storage, one bucket, path isolation `clans/{clan_id}/…` | No per-clan bucket |
 | Vercel (backend + web, functions in `sin1`) + one Supabase project (database, auth, storage; `ap-southeast-1`), all in Singapore, since 2026-10-10 (ADR-065, ADR-066) | Latency budget set by region. Render is retired |
 | Backend runs as Vercel Functions on Hobby: no long-running process, one region, 300 s per request, 4.5 MB request body, crons at most daily and anywhere in their hour | Scheduled jobs run from Vercel Cron, not in-process; DB through Supavisor's transaction pooler with `NullPool`; uploads capped at 4 MB (ADR-065) |
-| Production migrations run from CI (`backend-ci.yml` deploy job), before the deploy | A migration must stay compatible with the code already live ([../ops/migrations.md](../ops/migrations.md)) |
+| Production migrations run from CI (`release.yml` `deploy` job, on a published release), before the deploy | A migration must stay compatible with the code already live ([../ops/migrations.md](../ops/migrations.md)) |
 
 ## 2.2 Organizational / process
 
@@ -22,7 +22,8 @@
 - **Quality gate before "done"** (backend): `pytest -q` · `ruff check .` ·
   `ruff format --check .` · `mypy app/ tests/` · `lint-imports`.
 - Integration tests run against a **real Postgres**, never mocks (ADR-016).
-- `main` → production directly. **No staging gate.**
+- **Production ships on a published release `vX.Y.Z`, approved by the maintainer, not on a merge
+  to `main`** (ADR-067). **No staging environment.**
 
 ## 2.3 Conventions — hard rules
 

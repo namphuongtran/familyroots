@@ -14,6 +14,9 @@ on:
     paths:
       - "web/**"
       - "backend/app/**"
+  # release.yml runs this gate on the tagged commit before it deploys (#267). This workflow
+  # deploys nothing: a merge to main reaches production only through a release.
+  workflow_call:
 
 jobs:
   build-and-test:
@@ -172,67 +175,3 @@ jobs:
           pnpm gen:api "$RUNNER_TEMP/openapi.json"
           git diff --exit-code src/generated \
             || { echo "::error::src/generated is stale — run 'pnpm gen:api' and commit"; exit 1; }
-
-  deploy:
-    needs: [build-and-test, e2e, api-types-fresh]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    # The secrets reach only the two steps that read them, never `pnpm install`.
-    steps:
-      - uses: actions/checkout@v4
-
-      # Deploy secrets are an owner go-live action (docs/ops/deployment.md, "Go-live
-      # checklist"). Until all three exist, skip with a warning instead of failing the
-      # run (an empty --token= made every merge to main go red). The warning names what
-      # is missing. Once they are added, deploys resume automatically on the next push.
-      # VERCEL_ORG_ID and VERCEL_PROJECT_ID name familyroots-web. With the token alone
-      # the CLI would try to link or create a project instead (#252).
-      - name: Check deploy configuration
-        id: gate
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_WEB_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-        run: |
-          missing=""
-          [ -n "$VERCEL_TOKEN" ] || missing="$missing VERCEL_TOKEN"
-          [ -n "$VERCEL_ORG_ID" ] || missing="$missing VERCEL_ORG_ID"
-          [ -n "$VERCEL_WEB_PROJECT_ID" ] || missing="$missing VERCEL_WEB_PROJECT_ID"
-          if [ -n "$missing" ]; then
-            echo "::warning::Web deploy not configured (missing secrets:$missing) — skipping Vercel deploy (owner go-live action)"
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup pnpm
-        if: steps.gate.outputs.configured == 'true'
-        uses: pnpm/action-setup@v4
-        with:
-          package_json_file: web/package.json
-
-      - name: Setup Node.js
-        if: steps.gate.outputs.configured == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Install dependencies
-        if: steps.gate.outputs.configured == 'true'
-        run: pnpm install --frozen-lockfile
-
-      # No --yes, for the reason backend-ci.yml's deploy step gives: with the ids wrong,
-      # this should fail rather than set up a project. The CLI is pinned so a deploy does
-      # not change tool between two runs; backend-ci.yml pins the same version.
-      - name: Deploy to Vercel (familyroots-web)
-        if: steps.gate.outputs.configured == 'true'
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-        run: pnpm dlx vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN"
