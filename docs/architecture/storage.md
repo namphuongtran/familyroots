@@ -243,7 +243,8 @@ not a transient outage to retry (`storage_unavailable`) and not the caller's mis
 object (`storage_not_found`). Supabase reports a missing bucket as a 400/404 saying
 "Bucket not found", which the generic classifier would otherwise read as a missing
 *object*; `_classify_bucket` catches that first. **Every** call on a bucket goes
-through it — `upload`, `delete`, `get_presigned_url` and the `download` inside
+through it — `create_signed_upload`, `stat`, `move`, the staged-upload listing,
+`delete`, `get_presigned_url`, `get_presigned_urls` and the `download` inside
 `publish_public` on the private `SUPABASE_STORAGE_BUCKET`, as well as the avatars
 bucket (#177). Until #177 only the avatars bucket did, and the cost on the private
 one was not just a wrong 404: `delete` treats a missing object as success, so with a
@@ -252,6 +253,20 @@ in the real bucket for ever. A missing bucket now raises from `delete`, and the 
 keeps the row. Pinned by `test_missing_bucket_keeps_the_row` in
 `backend/tests/integration/test_document_purge_job.py`, which drives the real
 adapter with only the SDK client faked.
+
+**The batch sign reports a missing object differently, and the adapter evens it out
+(#271).** `get_presigned_urls` serves the clan export. It sends storage3's
+`create_signed_urls`, one `POST object/sign/{bucket}` per 1000 paths, because Storage
+refuses more than 1000 in one request, and an empty list too, each with a 400. The
+single sign answers a missing object with a 404 `not_found`. The batch answers it
+inside a 200, per item: `{"error": "Either the object does not exist or you do not
+have access to it", "signedURL": null}`. The adapter raises `StorageNotFoundError` for
+that item, so the export fails as a single presign would. A failure of the whole call
+is classified through `_classify_bucket` like any other. Measured on local storage-api
+v1.77.5 on 2026-10-11. On that version a sign against a bucket that does not exist does
+not say "Bucket not found" at all. The single sign answers 404 `Object not found` and
+the batch reports the per-item missing error, so both answer `404 storage_not_found`,
+not the 503 above.
 
 The blocking `storage3` SDK is offloaded with `asyncio.to_thread` so it never freezes
 the event loop.

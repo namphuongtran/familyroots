@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -116,6 +117,19 @@ class StoragePort(Protocol):
         self, storage_path: str, expires_in: int = DEFAULT_PRESIGN_TTL
     ) -> str:
         """Generate a time-limited presigned URL."""
+        ...
+
+    async def get_presigned_urls(
+        self, storage_paths: Sequence[str], expires_in: int = DEFAULT_PRESIGN_TTL
+    ) -> dict[str, str]:
+        """Presign many paths at once. Returns each path's URL, keyed by that path.
+
+        The number of provider calls is bounded by the provider's per-request limit,
+        never one per path. It fails as ``get_presigned_url`` fails for a path it
+        cannot sign: ``StorageNotFoundError`` for a missing object,
+        ``StorageUnavailableError`` for an outage or a URL the provider did not return,
+        ``StorageBucketNotConfiguredError`` for a missing bucket. No path, no call.
+        """
         ...
 
     async def publish_public(

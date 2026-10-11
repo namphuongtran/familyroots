@@ -11,7 +11,7 @@ Supabase Storage and can assert exactly when `delete` is (not) called.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
 import pytest
@@ -74,6 +74,12 @@ class FakeStorage:
 
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return f"https://signed.example/{storage_path}"
+
+    async def get_presigned_urls(
+        self, storage_paths: Sequence[str], expires_in: int = 3600
+    ) -> dict[str, str]:
+        # The export's batch presign (#271) — not exercised by this module.
+        raise AssertionError("get_presigned_urls called unexpectedly")
 
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
