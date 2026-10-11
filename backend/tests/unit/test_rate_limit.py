@@ -9,7 +9,7 @@ from app.core.rate_limit import RateLimitMiddleware
 def _mw(trust: bool) -> RateLimitMiddleware:
     return RateLimitMiddleware(
         app=lambda *a, **k: None,
-        path_prefixes=("/api/v1/auth",),
+        counted_paths=("/api/v1/auth/login",),
         max_requests=2,
         window_seconds=60,
         trust_forwarded_for=trust,

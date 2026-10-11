@@ -166,8 +166,10 @@ def client(
     # No context manager: lifespan (Sentry/Firebase/scheduler/migration check)
     # must stay out of scope — this suite tests the request path only.
     #
-    # Budget note: RateLimitMiddleware allows 20 req/min/IP on /api/v1/auth and
-    # this app instance is shared module-wide — currently ~15 auth-path requests.
+    # Budget note: RateLimitMiddleware allows 20 req/min/IP on the counted auth
+    # routes (`counted_paths` in app/main.py) and this app instance is shared
+    # module-wide — currently 10 counted requests (register, login, refresh).
+    # GET /auth/me and POST /auth/logout spend nothing since #280.
     # Hitting mysterious 429s after adding tests? You've spent the budget.
     yield TestClient(app)
     engine.sync_engine.dispose()

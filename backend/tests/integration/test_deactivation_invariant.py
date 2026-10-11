@@ -7,7 +7,8 @@ is the point: these tests exercise the chokepoint gate itself. A revert of the
 gate in ``get_current_user`` fails every 403 assertion here.
 
 Rate-limit budget: this module's app instance shares the 20 req/min/IP bucket on
-/api/v1/auth + /api/v1/invitations — keep total requests on those prefixes low.
+the counted auth routes (`counted_paths` in app/main.py) — keep total requests on
+those routes low. GET /auth/me spends nothing since #280.
 """
 
 import time

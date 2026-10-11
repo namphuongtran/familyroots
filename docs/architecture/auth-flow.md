@@ -88,9 +88,14 @@ Identity-provider failures map **truthfully**: infrastructure unavailability →
 
 ## Rate limiting
 
-In-memory sliding window, **20 req/min/IP, scoped to `/api/v1/auth` and
-`/api/v1/invitations`** (same bucket; fine for a single instance, Redis is the
-scale-out path). The count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20, which no
+In-memory sliding window, **20 req/min/IP, over exactly these paths, whatever the method**,
+all in one bucket: `/api/v1/auth/register`, `/onboard`, `/login`, `/refresh`,
+`/forgot-password`, `/resend-verification`, and `/api/v1/invitations/{token}/accept`. These
+are the routes where an account or a token can be guessed or probed. Every other route passes
+uncounted, including `GET`/`PATCH /auth/me`, `/auth/me/fcm-token` and `/auth/logout`: a wrong
+bearer token there is a 401 and a signed token cannot be guessed, and the web's server guard
+sends `GET /auth/me` with the web's address, not the user's (ADR-021, amended 2026-10-11 by
+#280). The bucket is per instance (fine for a single instance; a shared store is #257). The count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20, which no
 production deployment sets; only the authenticated e2e harness's backend raises it, to
 1000, because that suite sends every request from one address (ADR-021, amended
 2026-10-07 by #226). The 60-second window is fixed. The scope was extended to cover `/invitations/{token}/accept`

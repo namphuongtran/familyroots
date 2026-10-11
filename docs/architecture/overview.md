@@ -33,8 +33,9 @@ flowchart TD
 - Auth uses Supabase-issued bearer JWT validated by backend JWKS flow; registration
   requires email verification (403 `email_not_verified` until confirmed) — see
   [auth-flow.md](auth-flow.md).
-- `/api/v1/auth` and `/api/v1/invitations` routes are rate-limited (in-memory,
-  20 req/min/IP, same bucket — ADR-021).
+- The auth routes where an account or a token can be guessed (register, onboard, login,
+  refresh, forgot-password, resend-verification) and invitation accept are rate-limited
+  (in-memory, 20 req/min/IP, same bucket — ADR-021, amended by #280). `/auth/me` is not.
 - Clan context is selected via `X-Current-Clan-Id` and enforced in the
   application/repository layer (RLS is an inert pilot — see
   [multi-tenancy.md](multi-tenancy.md)).

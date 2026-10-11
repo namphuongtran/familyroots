@@ -1,9 +1,12 @@
-"""Where the `/api/v1/auth` + `/api/v1/invitations` bucket refuses a request (ADR-021, #226).
+"""Where the auth rate limit's bucket refuses a request (ADR-021, #226, #280).
 
-ADR-021 Decision 3 put both prefixes behind one limiter at 20 requests per 60 seconds per IP.
-Its amendment of 2026-10-07 (#226) reads the count from ``RATE_LIMIT_AUTH_MAX_REQUESTS`` so
-that the authenticated e2e harness's backend can raise it, while every deployment that sets
-nothing keeps 20. The window stays 60 seconds.
+ADR-021 Decision 3 put the auth and invitation-accept routes behind one limiter at 20 requests
+per 60 seconds per IP. Its amendment of 2026-10-07 (#226) reads the count from
+``RATE_LIMIT_AUTH_MAX_REQUESTS`` so that the authenticated e2e harness's backend can raise it,
+while every deployment that sets nothing keeps 20. The window stays 60 seconds. Its amendment
+of 2026-10-11 (#280) narrowed what the bucket counts from two path prefixes to the seven routes
+where an account or a token can be guessed. ``GET /auth/me`` left it, because the web's server
+guard sends that request with the web's address, not the user's.
 
 Every case here builds the app with ``create_app()``, sends real requests through its real
 middleware stack, and reads the status codes. None reads the middleware's constructor
@@ -11,14 +14,16 @@ arguments: those are the setting, and a test that asserts a setting cannot fail 
 reason anyone cares about (``.claude/rules/testing.md``, "A test pins an outcome, not a
 setting"). The reading that matters is which request in the window answers 429.
 
-The probe is ``GET /api/v1/auth/me`` with no token, the request the harness spends most,
-answered 401 by ``get_current_user`` before any session is used. ``get_db`` is replaced
-anyway, so no case can reach a database whatever the route does.
+The probe is ``POST /api/v1/auth/login`` with body ``{}``, a counted route that answers 422 at
+request validation, before the handler runs. Every other request here is refused before it
+would touch a session or the identity provider: a 401 for a missing bearer token, a 404 or 405
+from the router, a 422 from validation, or the limiter's own 429. ``get_db`` is replaced anyway,
+so no case can reach a database whatever the route does.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 
 import pytest
 from fastapi import FastAPI
@@ -33,7 +38,39 @@ from app.main import create_app
 pytestmark = pytest.mark.unit
 
 _SETTING = "RATE_LIMIT_AUTH_MAX_REQUESTS"
-_PROBE = "/api/v1/auth/me"
+
+Request = tuple[str, str]
+"""A method and a path."""
+
+_PROBE: Request = ("POST", "/api/v1/auth/login")
+
+# The routes where an account or a token can be guessed or probed, under the method each is
+# served with, and under a method none of them serves, because the count is by path.
+_COUNTED: list[Request] = [
+    ("POST", "/api/v1/auth/register"),
+    ("POST", "/api/v1/auth/onboard"),
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/refresh"),
+    ("POST", "/api/v1/auth/forgot-password"),
+    ("POST", "/api/v1/auth/resend-verification"),
+    ("POST", "/api/v1/invitations/any-token/accept"),
+    ("GET", "/api/v1/auth/login"),
+    ("PUT", "/api/v1/invitations/another-token/accept"),
+]
+
+# Signed-in profile routes, where a wrong bearer token is a 401 and a signed token cannot be
+# guessed, and paths under either old prefix that name no counted route.
+_UNCOUNTED: list[Request] = [
+    ("GET", "/api/v1/auth/me"),
+    ("PATCH", "/api/v1/auth/me"),
+    ("POST", "/api/v1/auth/me/fcm-token"),
+    ("DELETE", "/api/v1/auth/me/fcm-token"),
+    ("POST", "/api/v1/auth/logout"),
+    ("GET", "/api/v1/auth/no-such-route"),
+    ("POST", "/api/v1/auth/login/extra"),
+    ("POST", "/api/v1/invitations/any-token"),
+    ("POST", "/api/v1/invitations/any-token/accept/extra"),
+]
 
 
 async def _no_db() -> AsyncIterator[None]:
@@ -56,18 +93,20 @@ def _app(monkeypatch: pytest.MonkeyPatch, value: str | None) -> FastAPI:
     return application
 
 
-async def _statuses(application: FastAPI, count: int) -> list[int]:
-    """Send *count* probes from one client address, inside one window, and read each status."""
+async def _statuses(application: FastAPI, requests: Sequence[Request]) -> list[int]:
+    """Send *requests* in order from one client address, inside one window, and read each."""
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        return [(await client.get(_PROBE)).status_code for _ in range(count)]
+        return [
+            (await client.request(method, path, json={})).status_code for method, path in requests
+        ]
 
 
 async def test_with_nothing_set_the_21st_request_in_the_window_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Production's budget, unchanged by #226: twenty admitted, the twenty-first refused."""
-    statuses = await _statuses(_app(monkeypatch, None), 21)
+    statuses = await _statuses(_app(monkeypatch, None), [_PROBE] * 21)
 
     assert 429 not in statuses[:20], statuses
     assert statuses[20] == 429, statuses
@@ -81,11 +120,63 @@ async def test_raised_the_same_21st_request_is_admitted_and_the_new_boundary_hol
     The second half is what keeps "raised" from passing as "off": a limiter that stopped
     counting would admit the 26th too.
     """
-    statuses = await _statuses(_app(monkeypatch, "25"), 26)
+    statuses = await _statuses(_app(monkeypatch, "25"), [_PROBE] * 26)
 
     assert statuses[20] != 429, statuses
     assert 429 not in statuses[:25], statuses
     assert statuses[25] == 429, statuses
+
+
+async def test_with_the_budget_spent_on_login_auth_me_is_admitted_and_accept_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#280's reading. Twenty logins spend the bucket, and the next three requests read it.
+
+    The 21st login is refused. ``GET /auth/me`` with no token is answered by the route, 401,
+    because the bucket does not count it. Invitation accept is refused, because it shares the
+    bucket the logins spent.
+    """
+    statuses = await _statuses(
+        _app(monkeypatch, None),
+        [_PROBE] * 20
+        + [_PROBE, ("GET", "/api/v1/auth/me"), ("POST", "/api/v1/invitations/any-token/accept")],
+    )
+
+    assert statuses[:20] == [422] * 20, statuses
+    assert statuses[20:] == [429, 401, 429], statuses
+
+
+@pytest.mark.parametrize(("method", "path"), _COUNTED, ids=[f"{m} {p}" for m, p in _COUNTED])
+async def test_a_counted_request_spends_the_login_bucket_and_is_refused_by_it(
+    monkeypatch: pytest.MonkeyPatch, method: str, path: str
+) -> None:
+    """Twenty of it spend the budget, so the login after them is refused, and so is it."""
+    request = (method, path)
+    statuses = await _statuses(_app(monkeypatch, None), [request] * 20 + [_PROBE, request])
+
+    assert 429 not in statuses[:20], statuses
+    assert statuses[20:] == [429, 429], statuses
+
+
+@pytest.mark.parametrize(("method", "path"), _UNCOUNTED, ids=[f"{m} {p}" for m, p in _UNCOUNTED])
+async def test_an_uncounted_request_neither_spends_the_bucket_nor_is_refused_by_it(
+    monkeypatch: pytest.MonkeyPatch, method: str, path: str
+) -> None:
+    """Twenty of it, then twenty logins, then it again, then one more login.
+
+    The twenty logins are all admitted, so the twenty before them spent nothing. The request
+    after them is answered by the app, not the limiter, so a full bucket does not refuse it.
+    The last login is refused, which shows the bucket really was full when it was admitted.
+    """
+    request = (method, path)
+    statuses = await _statuses(
+        _app(monkeypatch, None), [request] * 20 + [_PROBE] * 20 + [request, _PROBE]
+    )
+
+    assert 429 not in statuses[:20], statuses
+    assert statuses[20:40] == [422] * 20, statuses
+    assert statuses[40] == statuses[0], statuses
+    assert statuses[41] == 429, statuses
 
 
 @pytest.mark.parametrize("value", ["0", "-5"])

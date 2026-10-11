@@ -26,10 +26,10 @@ the invitation's email-match rule.
 would reach the real engine.
 
 **Rate-limit budget.** `RateLimitMiddleware` holds `_hits` per instance
-(`app/core/rate_limit.py:52`), and the `client` fixture below is
+(`app/core/rate_limit.py:57`), and the `client` fixture below is
 function-scoped, so each test gets its own app and its own 20 req/min/IP
-bucket. The walk spends 7 on the `/api/v1/auth` + `/api/v1/invitations`
-prefixes; `POST /api/v1/clans/{clan_id}/invitations` matches neither prefix and
+bucket. The walk spends 7 on the counted routes (`counted_paths` in
+`app/main.py`); `POST /api/v1/clans/{clan_id}/invitations` is not one of them and
 is free. Re-count before adding requests.
 """
 

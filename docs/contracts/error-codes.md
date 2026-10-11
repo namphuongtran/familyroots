@@ -272,7 +272,7 @@ validation codes which are 422. Branch on the code, not the status.
 |---|---|---|---|---|
 | `validation_error` | 422 | FastAPI request-body/query validation failed (including a PATCH body missing the required `expected_version`) | `fields` (list of dotted locations) | Map to form fields |
 | `conflict` | 409 | Generic conflict; also the safety net for a DB unique-violation race (SQLSTATE 23505) | — | Refetch and retry |
-| `rate_limited` | 429 | Too many requests to `/api/v1/auth/*` (20/min per IP, sliding window) | `retry_after` (seconds) | Back off; see header note below |
+| `rate_limited` | 429 | Too many requests to the counted auth paths (20/min per IP, one shared bucket, sliding window); see "429 and Retry-After" for the list | `retry_after` (seconds) | Back off; see header note below |
 | `internal_error` | 500 | Unhandled server error (details logged server-side only) | — | Generic error state; safe to retry |
 | `database_unavailable` | 503 | Transient DB operational failure mid-request — dropped connection, pool exhaustion, DB restart/shutdown, or resource exhaustion (SQLAlchemy `OperationalError`). NOT our-bug DB errors (`ProgrammingError`/`DataError`), which stay `internal_error` 500 (ADR-032) | — | Retry-later banner; safe to retry with backoff |
 | `bad_request` | 400 | Bare 400 normalized into the envelope | `hint` (string, optional) | Generic |
@@ -285,7 +285,15 @@ validation codes which are 422. Branch on the code, not the status.
 
 ### 429 and Retry-After
 
-`rate_limited` responses (currently only on `/api/v1/auth/*`) always carry both a
+`rate_limited` responses come only from these paths, whatever the method, which share one
+bucket per IP (ADR-021 Decision 3, amended 2026-10-11 by #280):
+
+- `/api/v1/auth/register`, `/api/v1/auth/onboard`, `/api/v1/auth/login`,
+  `/api/v1/auth/refresh`, `/api/v1/auth/forgot-password`, `/api/v1/auth/resend-verification`
+- `/api/v1/invitations/{token}/accept`
+
+Every other route, including `GET`/`PATCH /api/v1/auth/me`, `/api/v1/auth/me/fcm-token` and
+`POST /api/v1/auth/logout`, never answers `rate_limited`. The responses always carry both a
 `Retry-After: <seconds>` response header and `detail.retry_after` (same value).
 Clients should wait that long before retrying; do not sign the user out.
 

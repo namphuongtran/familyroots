@@ -8,6 +8,9 @@ Decisions 3 and 4 amended 2026-10-10 by [ADR-065](065-the-backend-runs-on-vercel
 (#250), for the backend on Vercel Functions. The bucket is per instance there, and the shutdown
 stops APScheduler only where it runs. The same 404 rule now also guards the two
 `/internal/cron/*` routes. See the dated amendments under each decision.
+Decision 3 amended 2026-10-11 by issue #280: the bucket counts seven routes where an account or a
+token can be guessed, not two path prefixes, so `GET /auth/me` no longer spends it. See the dated
+amendment under Decision 3.
 
 ## Context
 The 2026-07-12 deep review left three gaps on the production-hardening backlog,
@@ -247,6 +250,54 @@ already bounds who can call it.
 > the same 404 a path that does not exist gets, as `/internal/metrics` does: no header, a wrong
 > secret, or an empty or weak `CRON_SECRET`. `backend/tests/unit/test_cron_endpoints.py`
 > compares the refusal byte for byte with an unknown path's.
+
+> **Amendment (2026-10-11, issue #280):** the bucket counts **requests to exactly these paths**,
+> whatever the method, instead of every path under `/api/v1/auth` and `/api/v1/invitations`:
+>
+> - `/api/v1/auth/register`, `/api/v1/auth/onboard`, `/api/v1/auth/login`,
+>   `/api/v1/auth/refresh`, `/api/v1/auth/forgot-password`, `/api/v1/auth/resend-verification`
+> - `/api/v1/invitations/{token}/accept`, where `{token}` is any one path segment, as in the
+>   router
+>
+> Every other request passes uncounted. That includes `GET` and `PATCH /api/v1/auth/me`,
+> `POST` and `DELETE /api/v1/auth/me/fcm-token`, `POST /api/v1/auth/logout`, and any other path
+> under either old prefix. `RateLimitMiddleware` takes the set as `counted_paths`, route templates
+> compiled the way Starlette compiles a route, and `create_app` passes the seven
+> (`backend/app/main.py`). The first paragraph of this decision, which describes
+> `path_prefixes` and a `startswith` match, no longer describes the code. The budget
+> (`RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20), the 60-second sliding window, the `rate_limited`
+> envelope and `Retry-After` are unchanged, and the seven still share one bucket per IP.
+>
+> **Why `/auth/me` left.** The web's server guard sends `GET /auth/me` from the web's own server
+> (`web/src/features/auth/server/guard.ts`), and the web's API client forwards no client IP
+> (`web/src/shared/http/api-client.ts`). So the guard's requests carry the web's address, not
+> the user's. Today the bucket is per instance (the 2026-10-10 amendment above), which hides
+> this. #257 will make the count shared across instances, and then every web user's guarded page
+> load would land in one bucket of 20 a minute. A guarded page load spends two `GET /auth/me`, so
+> that is about ten guarded page loads a minute across the whole site. The limit exists for the
+> routes where an account or a token can be guessed or probed. Signed-in profile routes do not
+> need it, because a wrong bearer token is a 401 and a signed token cannot be guessed. Logout and
+> the FCM-token routes left for the same reason. Admin invitation routes under
+> `/clans/{clan_id}/invitations` were never counted, as the second paragraph of this decision
+> says.
+>
+> **What did not change.** Decision 1's mitigations lean on the limit over register, login and
+> forgot-password, and all three are still counted. The authenticated e2e harness's backend
+> keeps `RATE_LIMIT_AUTH_MAX_REQUESTS=1000`. Most of what that run spent, 26 of 28 requests in
+> the 2026-10-07 measurement, was `GET /auth/me`, which no longer counts, but lowering the
+> harness's value is not part of this change.
+>
+> **What is given up.** The limit no longer stops a client that loops on `GET /auth/me`. Before
+> #183, `/vi/dashboard` sent 9037 of them in twelve seconds, and this bucket was what cut that
+> loop off. `web/e2e/auth/dashboard.auth.spec.ts`, which counts the `GET /auth/me` one dashboard
+> load sends, is what catches that class of defect now.
+>
+> Pinned by `backend/tests/unit/test_auth_rate_limit_budget.py`. Through `create_app()`, twenty
+> `POST /auth/login` spend the budget. The 21st answers 429, `GET /auth/me` with no token answers
+> 401, and `POST /invitations/{token}/accept` answers 429. Each counted path spends the login
+> bucket and is refused by it, and each uncounted one neither spends it nor is refused by it.
+> Negative controls, run 2026-10-11: with `/api/v1/auth/me` put back in the set, the `/auth/me`
+> case reads 429 for 401. With `/api/v1/auth/login` taken out, the 21st login is admitted.
 
 ### 4. `engine.dispose()` on shutdown
 One-liner in `main.py`'s lifespan `finally` (after scheduler stop): the async

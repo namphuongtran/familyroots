@@ -156,9 +156,9 @@ test.describe('the backoffice dashboard, as an admin', () => {
     // No reload. A colour-scheme change re-evaluates the media query in place, and ADR-045
     // made the media query the only mechanism — there is no class and no attribute to set —
     // so re-reading the same live elements is the honest test of the flip. It also keeps this
-    // case to one page load, which matters: `/api/v1/auth/*` is limited to 20 requests per
-    // 60 seconds by default (`RATE_LIMIT_AUTH_MAX_REQUESTS`; the harness's backend sets 1000,
-    // #226) and one load of this screen spends several.
+    // case to one page load. Until #280 that mattered for the budget: the backend's auth rate
+    // limit counted every `GET /auth/me`, and one load of this screen sends several. It no
+    // longer counts them (`web/CLAUDE.md`, "Budget the requests").
     await page.emulateMedia({ colorScheme: 'dark' })
 
     // All three, on purpose. A ground that flips while an ink does not is the defect the dark-palette change
