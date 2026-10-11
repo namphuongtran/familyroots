@@ -84,7 +84,7 @@ def _closed_port() -> int:
 
 # Every shape the production validator admits, plus the development default.
 _ALLOWED_HOSTS_SHAPES = {
-    "one exact host, the shape Render's blueprint set": ["familyroots-api.onrender.com"],
+    "one exact host, the shape production sets": ["familyroots-api.vercel.app"],
     "one exact address, as image-e2e.yml sets": ["127.0.0.1"],
     "several hosts": ["api.familyroots.example", "familyroots-api.vercel.app"],
     "a *.domain wildcard first": ["*.familyroots.example", "familyroots-api.vercel.app"],

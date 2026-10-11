@@ -6,15 +6,15 @@
 graph TB
   user([Clan member / super-admin]):::person
 
-  web[web · Vercel<br/>Next.js 16, React 19, TypeScript<br/>port 3000]:::host
   mob[mobile · App Store and Play<br/>Flutter, Dart, BLoC]:::host
 
-  subgraph render[Render - region singapore]
-    api[backend<br/>FastAPI, SQLAlchemy async<br/>port 8000 · DDD, CQRS, hexagonal]:::host
-    sched[scheduler · in-process<br/>APScheduler, giỗ anniversaries<br/>advisory-locked daily job]:::host
+  subgraph vercel[Vercel - functions in sin1]
+    web[web · familyroots-web<br/>Next.js 16, React 19, TypeScript]:::host
+    api[backend · familyroots-api<br/>FastAPI, SQLAlchemy async<br/>DDD, CQRS, hexagonal]:::host
+    sched[scheduler · Vercel Cron<br/>giỗ anniversaries, document purge<br/>advisory-locked daily jobs]:::host
   end
 
-  db[(database<br/>PostgreSQL 18<br/>single schema, RLS layer-2)]:::store
+  db[(database · Supabase<br/>PostgreSQL 17<br/>single schema, RLS layer-2)]:::store
   storage[(Supabase Storage<br/>family-roots-files)]:::ext
   auth[Supabase Auth]:::ext
   fcm[Firebase Cloud Messaging]:::ext
@@ -29,9 +29,9 @@ graph TB
   web -->|login and refresh| auth
   mob -->|login and refresh| auth
   api -->|verify against JWKS| auth
-  api -->|SQL over async pool| db
-  sched --> db
-  sched -->|push| fcm
+  api -->|SQL via transaction pooler| db
+  sched -->|GET /internal/cron/*| api
+  api -->|push| fcm
   api -->|upload and presign| storage
   api -->|errors and traces| sentry
   api -.->|publish| redis

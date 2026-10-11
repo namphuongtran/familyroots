@@ -43,7 +43,7 @@ _PROD_SAFE = {
     "SUPABASE_URL": "https://proj.supabase.co",
     "SUPABASE_ANON_KEY": "sb_publishable_x",
     "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_x",
-    # Production must decide XFF trust explicitly; Render (proxied) → true.
+    # Production must decide XFF trust explicitly; Vercel (proxied) → true.
     "RATE_LIMIT_TRUST_FORWARDED_FOR": True,
 }
 
@@ -97,7 +97,7 @@ def test_production_boots_with_a_real_invite_link_origin() -> None:
 
 
 def test_production_requires_explicit_forwarded_for_decision():
-    # Deployed behind a proxy (Render) with trust left unset, every client shares
+    # Deployed behind a proxy (Vercel) with trust left unset, every client shares
     # the proxy's rate bucket and audit IPs record the proxy — production must
     # make the XFF-trust decision explicitly, either way.
     prod = {k: v for k, v in _PROD_SAFE.items() if k != "RATE_LIMIT_TRUST_FORWARDED_FOR"}
@@ -146,8 +146,9 @@ _STRONG_METRICS_TOKEN = "not-a-real-token-" + "0123456789abcdef" * 2
 
 def test_metrics_enabled_rejects_a_short_token():
     """Refusing to boot is the primary guarantee. Settings are read once per process
-    (@lru_cache, no reload path), so the blast radius is a failed deploy — on Render
-    the previous release keeps serving — never a running instance dropped mid-flight.
+    (@lru_cache, no reload path), so the blast radius is a process that will not start
+    — on Vercel, every cold start of that deployment — never a running instance dropped
+    mid-flight.
     The alternative, booting and quietly serving route names and request volumes
     behind a guessable token, is strictly worse."""
     with pytest.raises(ValidationError):

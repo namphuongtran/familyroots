@@ -242,7 +242,7 @@ graph LR
   r5[4xx structured error envelope]:::good
   r6[409 conflict · OCC, ADR-017]:::good
   r7[Non-enumerating response<br/>plus 20 rpm per IP · ADR-021]:::good
-  r8[503 degraded · Render pulls the instance]:::good
+  r8[503 degraded · fails a release's health read]:::good
 
   f1 --> r1
   f2 --> r2

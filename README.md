@@ -43,7 +43,7 @@ FamilyRoots is in active development. The roadmap target is **one real Vietnames
 | **Backend API** | The most complete layer. 16 route groups under `/api/v1`, row-level security on every clan-owned table, 228 test files (101 unit, 122 integration against real PostgreSQL) |
 | **Web** | A working app, mid-migration to feature slices. `auth`, `persons` and `invitations` are migrated; tree, events, documents and admin still run on the earlier code |
 | **Mobile** | The M0 spine of a Riverpod 3 rebuild (ADR-034): sign-in, verification and clan selection. It compiles and CI builds an APK; it has not yet been walked on a real device |
-| **Infrastructure** | Six CI workflows and the Render blueprint are real. The Pulumi project is a scaffold of stubs |
+| **Infrastructure** | Eight CI workflows and the two `vercel.json` files are real. The Pulumi project is a scaffold of stubs |
 
 Work is tracked in [GitHub Issues](https://github.com/namphuongtran/familyroots/issues). The milestone order and the reason for each boundary are in [docs/roadmap.md](docs/roadmap.md).
 
@@ -126,9 +126,9 @@ flowchart LR
 | **Auth and storage** | Supabase Auth (JWT, email and password; Google and Apple OAuth on the web) and Supabase Storage |
 | **Notifications** | Firebase Cloud Messaging, scheduled by APScheduler |
 | **Observability** | Sentry on all three apps, a Prometheus metrics endpoint on the backend |
-| **Deploy** | Render (backend, Docker), Vercel (web) |
-| **CI/CD** | GitHub Actions: `backend-ci`, `web-ci`, `mobile-ci`, `pr-checks`, `infra-ci`, `db-backup` (nightly `pg_dump`) |
-| **Infrastructure as code** | Render blueprint; Pulumi (Python) scaffold |
+| **Deploy** | Vercel: the backend on Vercel Functions, and the web. A published GitHub Release deploys both (`release.yml`) |
+| **CI/CD** | GitHub Actions: `backend-ci`, `web-ci`, `mobile-ci`, `pr-checks`, `infra-ci`, `image-e2e`, `release`, `db-backup` (nightly `pg_dump`) |
+| **Infrastructure as code** | `backend/vercel.json` and `web/vercel.json`; Pulumi (Python) scaffold |
 | **Quality tooling** | ruff, mypy (strict), import-linter, pytest · ESLint, dependency-cruiser, Vitest, Testing Library, MSW, Playwright · dart format, flutter analyze, flutter test · gitleaks, pre-commit |
 | **Package managers** | uv (backend), pnpm 10 (web), pub (mobile) |
 
@@ -140,7 +140,7 @@ familyroots/
 ├── web/              # Next.js app: clan dashboard, admin, platform backoffice
 ├── mobile/           # Flutter app for Android and iOS
 ├── supabase/         # Local Supabase stack config (auth, Storage buckets)
-├── infra/            # Pulumi, Render blueprint, Supabase, Firebase and Sentry config
+├── infra/            # Pulumi, Supabase, Firebase and Sentry config
 ├── scripts/          # Seeding, backup and restore drill, super-admin bootstrap, local Supabase
 ├── docs/             # Architecture (arc42), contracts, ADRs, ops runbooks, guides
 ├── .github/          # CI workflows, PR template, issue template

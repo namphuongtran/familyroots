@@ -148,14 +148,16 @@ graph LR
 graph LR
   dev[alembic revision --autogenerate<br/>env.py imports all app.models]:::comp
   pr[review]:::comp
-  deploy[Render preDeployCommand<br/>alembic upgrade head]:::dec
-  block[deploy blocked]:::bad
-  live[release goes live]:::good
+  rel[published release vX.Y.Z<br/>approved in production]:::comp
+  deploy[release.yml deploy job<br/>alembic upgrade head]:::dec
+  block[release fails, nothing deployed]:::bad
+  live[API deploys, then the web]:::good
   cron[db-backup.yml · daily 00:15 ICT]:::comp
   dump[pg_dump, gzip, upload to backups bucket<br/>plus rotation]:::store
 
   dev --> pr
-  pr --> deploy
+  pr --> rel
+  rel --> deploy
   deploy -->|migration fails| block
   deploy -->|migration ok| live
   cron --> dump

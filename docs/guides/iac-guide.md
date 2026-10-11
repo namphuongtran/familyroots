@@ -8,14 +8,16 @@
 
 ## Overview
 
-FamilyRoots uses **Pulumi** (Python SDK) for managing cloud infrastructure and **Render** native config-as-code for backend deployment.
+FamilyRoots uses **Pulumi** (Python SDK) for managing cloud infrastructure. The backend and web
+deploy to **Vercel**, configured by `backend/vercel.json` and `web/vercel.json`; see
+[deployment.md](../ops/deployment.md).
 
 ## Prerequisites
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) package manager
 - [Pulumi CLI](https://www.pulumi.com/docs/install/)
-- Accounts: Render, Vercel, Supabase, Firebase, Sentry
+- Accounts: Vercel, Supabase, Firebase, Sentry
 
 ## Project Structure
 
@@ -34,8 +36,6 @@ infra/
 │       ├── supabase_project.py  # Database hosting
 │       ├── firebase_project.py  # Push notifications
 │       └── github_settings.py   # Repo settings
-├── render/
-│   └── render.yaml           # Backend deployment config
 ├── supabase/
 │   └── seed.sql              # Dev seed data (unimplemented scaffold)
 ├── firebase/
@@ -95,9 +95,14 @@ Each environment has its own stack config (`Pulumi.{env}.yaml`). Set secrets wit
 uv run pulumi config set --secret supabase-service-key "sk_..."
 ```
 
-## Render Deployment
+## Backend Deployment
 
-The backend is deployed via Render's Blueprint Spec (`render.yaml`). Changes pushed to `main` trigger auto-deploy when the deploy hook is configured.
+The backend runs on Vercel Functions as project `familyroots-api`
+([ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md)). A merge to `main` deploys
+nothing. Publishing a GitHub Release runs `release.yml`, which migrates, deploys the API, reads
+`/health`, then deploys the web
+([ADR-067](../decisions/067-production-ships-on-a-published-release.md),
+[deployment.md](../ops/deployment.md)).
 
 ## CI/CD Integration
 

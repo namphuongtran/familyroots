@@ -15,7 +15,7 @@ engineer owns triage and may escalate to the maintainer for SEV-1.
 1. Confirm scope via `/health` (DB) and Sentry (error rate, the `internal_error` code).
 2. Identify the trigger: a release/migration (most likely — a published release is the only path
    to prod, with no staging; `gh release list --limit 2` names the last two) or external
-   (Supabase/Render outage).
+   (Supabase/Vercel outage).
 3. If a recent deploy is implicated → **roll back** (`deployment.md`). If a migration
    shipped, assess reversibility before `alembic downgrade`.
 4. For a suspected isolation/auth breach (SEV-1): stop further writes if practical,
@@ -30,8 +30,9 @@ engineer owns triage and may escalate to the maintainer for SEV-1.
   write-path membership check is still a SEV-1, because the app layer remains the primary
   guarantee and two tables have no clan-keyed policy at all; the `test_tenant_isolation` /
   `test_cross_clan_writes` suites guard against it.
-- **Migration-blocked deploy** — the Render pre-deploy `alembic upgrade head` blocks
-  the release on failure (good), but leaves prod on the old version until fixed.
+- **Migration-blocked release** — `release.yml`'s `deploy` job runs `alembic upgrade head`
+  first and fails before anything is deployed (good), but leaves prod on the previous release
+  until fixed.
 - **Auth surface** — JWT/JWKS validation and the suspended-clan check gate every
   clan-scoped route.
 
