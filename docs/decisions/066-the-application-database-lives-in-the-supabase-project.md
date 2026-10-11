@@ -278,6 +278,9 @@ Harder:
   tables take the restoring role's default privileges, which on a project with the legacy defaults
   grant `anon` ALL. The scripts are guarded by `test_scripts_sql_is_sanctioned.py` and its two
   siblings, which constrain role DDL, so this belongs to whoever owns ADR-052.
+  **Paid 2026-10-11 by #283**, in
+  [ADR-052's amendment](052-restore-bootstraps-the-request-role.md#amendment-2026-10-11-283-a-restore-into-a-supabase-project):
+  the bootstrap now replays `041`, `042` and `043`, and may run as `postgres`.
 - **The § 4 dashboard step on the hosted project,** under the deploy issue.
 - **`supabase/config.toml` `[api] schemas`** still lists `public` for the local stack.
 - **Reading the hosted project's default privileges** in `public`, legacy or narrowed. `042` closes

@@ -16,10 +16,13 @@ database client is `scripts/restore_drill.sh:111`, which sets
     psql "$SCRATCH_DSN" -q -v ON_ERROR_STOP=1 -f "$BOOTSTRAP_SQL"
 
 **Nothing is wrong in `scripts/` today.** Measured 2026-08-22, `restore_bootstrap_role.sql`
-declares nine statements: one `CREATE ROLE` at `:38` and eight grant statements at
-`:44,45,46-47,50,51,52,53`. It declares no table and no policy. That is exactly what ADR-052
-decided it should declare. **The gap this guard closes is that nothing would notice if it
-changed.**
+declared nine statements, at line numbers it still had at `3ef0b68`: one `CREATE ROLE` at
+`:38` and eight grant statements at `:44,45,46-47,50,51,52,53`. It declared no table and no
+policy. That is exactly what ADR-052 decided it should declare. **The gap this guard closes is
+that nothing would notice if it changed.** Since 2026-10-11 (#283, ADR-052's amendment) it
+also replays migrations 041, 042 and 043 for a restore into a Supabase project: more grant
+statements, and four `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` statements, class `rls_off`.
+It still declares no table and no policy.
 
 ## The rule, and why it is shaped this way
 
@@ -31,9 +34,11 @@ A guard over `scripts/` **cannot simply forbid DDL**, because `restore_bootstrap
    path, so a file added at any depth under any name is caught.
 
 2. **A named file may declare only the DDL classes its decision sanctioned.**
-   `restore_bootstrap_role.sql` is sanctioned for `role` and `grant`, and for nothing else, so
-   a `CREATE TABLE` or a `CREATE POLICY` added inside it fails. **Being on the allow-list is
-   not a blank cheque.**
+   `restore_bootstrap_role.sql` is sanctioned for `role`, `grant` and `rls_off`, and for nothing
+   else, so a `CREATE TABLE`, a `CREATE POLICY`, a `DROP POLICY` or an `ENABLE ROW LEVEL
+   SECURITY` added inside it fails. **Being on the allow-list is not a blank cheque.** That is
+   why turning RLS off is a class of its own rather than a member of `policy`: sanctioning
+   `policy` for 043's four statements would also have sanctioned dropping any table's policy.
 
 3. **No file under a scripts root may confer a privilege that defeats the isolation model**,
    sanctioned or not: the role attributes `SUPERUSER`, `BYPASSRLS`, `CREATEROLE`, `CREATEDB`,
@@ -41,7 +46,7 @@ A guard over `scripts/` **cannot simply forbid DDL**, because `restore_bootstrap
    overridable** by `_SANCTIONED`, and it is the check that makes the allow-list safe at all.
    `ALTER ROLE familyroots_app BYPASSRLS` is class `role`, which check 2 sanctions in that
    file, and it would switch off row-level security for every request the application makes.
-   The file's own comment at `:34` states the decision this check enforces: "NOBYPASSRLS is
+   The file's own comment at `:52` states the decision this check enforces: "NOBYPASSRLS is
    the default, which is the point of it."
 
 ## The classifier defaults to deny, which is the whole design
@@ -69,9 +74,13 @@ list.
   files, and it is still blind to inline SQL on its own.
 - **It classifies by verb, not by meaning.** Widening `GRANT SELECT` to `GRANT ALL` stays
   class `grant` and passes. What catches that is the drill's own check 4, which drops to the
-  request role and counts rows two-sided (ADR-052 § 3), plus the instruction at
-  `restore_bootstrap_role.sql:22-23` that a migration changing the role's privileges must
-  change that file in the same pull request.
+  request role and counts rows two-sided (ADR-052 § 3), plus the instruction in
+  `restore_bootstrap_role.sql`'s header that a migration changing the role's privileges must
+  change that file in the same pull request. Likewise `ALTER TABLE persons DISABLE ROW LEVEL
+  SECURITY` is class `rls_off` and passes here, though it switches off clan isolation on that
+  table. What catches that is
+  `tests/integration/test_restore_bootstrap_on_supabase_shape.py`, which restores a dump, runs
+  the file, and fails on any table whose RLS state differs from the dump's.
 - **`_decision` is checked to exist and to name the file, not to sanction the classes.** The
   test below requires the cited ADR to contain the file's path, so the citation is
   load-bearing rather than a path that merely resolves. It does **not** and cannot check that
@@ -120,13 +129,16 @@ class _Sanction(NamedTuple):
 # fails check 1, which is intended: where the file sits decides what runs it.
 _SANCTIONED: dict[str, _Sanction] = {
     "scripts/restore_bootstrap_role.sql": _Sanction(
-        classes=frozenset({"role", "grant"}),
+        classes=frozenset({"role", "grant", "rls_off"}),
         decision="docs/decisions/052-restore-bootstraps-the-request-role.md",
         why=(
             "A Postgres role is a cluster object and a GRANT is a database object, so a "
             "single-database dump taken with --no-owner --no-privileges carries neither. "
-            "ADR-052 section 1 puts the role and its seven grants in this one file, run by "
-            "scripts/restore_drill.sh:149 after pg_restore. Role and grant DDL are the only "
+            "ADR-052 section 1 puts the role and its grants in this one file, run by "
+            "scripts/restore_drill.sh:149 after pg_restore. Its 2026-10-11 amendment (#283) "
+            "adds rls_off: a Supabase project's ensure_rls event trigger turns RLS on for "
+            "every table pg_restore creates, and the restored database already reads head, "
+            "so migration 043's RLS-off on four tables never runs again. These are the only "
             "classes the Alembic chain cannot carry across a restore, which is the whole "
             "reason this file is allowed to exist; every other class belongs in a migration."
         ),
@@ -153,8 +165,17 @@ _DDL_ANCHOR = re.compile(
 _LOOKAHEAD = 240
 
 _CLASSES: tuple[tuple[str, re.Pattern[str]], ...] = (
-    # `policy` is tried before `table`, because ALTER TABLE ... ROW LEVEL SECURITY is a policy
-    # statement wearing a table verb.
+    # `rls_off` is tried before `policy`, and both before `table`, because ALTER TABLE ... ROW
+    # LEVEL SECURITY is a policy statement wearing a table verb. Turning RLS off is split out
+    # so that a file can be sanctioned for it without being sanctioned for every policy
+    # statement: `restore_bootstrap_role.sql` replays migration 043, and nothing else.
+    (
+        "rls_off",
+        re.compile(
+            r"ALTER\s+TABLE\b[^;]{0,200}?\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b",
+            re.IGNORECASE,
+        ),
+    ),
     (
         "policy",
         re.compile(
@@ -207,7 +228,7 @@ def _strip_comments(sql: str) -> str:
     """Remove `--` line comments and `/* */` block comments.
 
     Without this, the header of `restore_bootstrap_role.sql` would trip every check: it
-    explains the grants it replays in prose and names `NOBYPASSRLS` at `:34`.
+    explains the grants it replays in prose and names `NOBYPASSRLS` at `:52`.
     """
     return _LINE_COMMENT.sub("", _BLOCK_COMMENT.sub("", sql))
 
@@ -217,7 +238,7 @@ def _classify(sql: str) -> list[tuple[str, str]]:
 
     The scan is over the whole comment-stripped text rather than over split statements, so a
     `CREATE ROLE` nested inside a `DO $$ ... $$` block — which is the exact shape
-    `restore_bootstrap_role.sql:35-41` uses — is classified rather than skipped.
+    `restore_bootstrap_role.sql:53-59` uses — is classified rather than skipped.
     """
     text = _strip_comments(sql)
     found: list[tuple[str, str]] = []
@@ -290,7 +311,7 @@ def test_no_sql_file_under_a_scripts_root_confers_an_escalating_privilege() -> N
             *offences,
             "No decision sanctions any of these, and _SANCTIONED cannot override this check. "
             "The request role is NOBYPASSRLS by design (ADR-052; "
-            "scripts/restore_bootstrap_role.sql:34) — RLS layer-2 (ADR-008) means nothing "
+            "scripts/restore_bootstrap_role.sql:52) — RLS layer-2 (ADR-008) means nothing "
             "against a role that bypasses it, and a grantee of PUBLIC hands the privilege to "
             "every role in the cluster including that one.",
         ]
@@ -308,17 +329,19 @@ def test_the_scripts_sweep_actually_reaches_files() -> None:
     )
 
 
-def test_the_classifier_reads_the_real_bootstrap_file_as_exactly_role_and_grant() -> None:
+def test_the_classifier_reads_the_real_bootstrap_file_as_exactly_role_grant_and_rls_off() -> None:
     """Anti-vacuity for the classifier itself, and the measurement this guard rests on.
 
     A scanner that matched nothing would satisfy checks 2 and 3 forever. Measured 2026-08-22:
-    nine statements, one `CREATE ROLE` at `:38` and eight grant statements.
+    nine statements, one `CREATE ROLE` and eight grant statements. Since #283, also one
+    `rls_off` statement for each of the four tables migration 043 names.
     """
     path = _REPO_ROOT / "scripts" / "restore_bootstrap_role.sql"
     assert path.is_file(), f"{path} is missing; ADR-052 requires the restore path to run it"
     found = _classify(path.read_text())
-    assert {name for name, _ in found} == {"role", "grant"}, found
+    assert {name for name, _ in found} == {"role", "grant", "rls_off"}, found
     assert sum(1 for name, _ in found if name == "role") == 1, found
+    assert sum(1 for name, _ in found if name == "rls_off") == 4, found
 
 
 def test_the_sanction_table_is_not_a_list_of_names_nobody_reads() -> None:
@@ -376,10 +399,13 @@ def test_every_sanction_cites_a_decision_that_exists_and_names_the_file(key: str
         ("policy", "DROP POLICY persons_ins ON public.persons;"),
         ("policy", "ALTER POLICY persons_sel ON public.persons USING (true);"),
         ("policy", "ALTER TABLE public.persons ENABLE ROW LEVEL SECURITY;"),
-        ("policy", "alter   table  public.events   disable   row   level   security ;"),
         ("policy", "ALTER TABLE public.persons FORCE ROW LEVEL SECURITY;"),
+        ("policy", "ALTER TABLE public.persons NO FORCE ROW LEVEL SECURITY;"),
+        # rls_off, split from policy so a file can be sanctioned for it alone
+        ("rls_off", "alter   table  public.events   disable   row   level   security ;"),
+        ("rls_off", "ALTER TABLE IF EXISTS public.clans DISABLE ROW LEVEL SECURITY;"),
         # Default deny. Every one of these is a statement nobody enumerated, and every one of
-        # them must fail a file sanctioned only for role and grant.
+        # them must fail a file sanctioned only for role, grant and rls_off.
         ("unknown", "CREATE INDEX ix_persons_clan ON public.persons (created_by_clan_id);"),
         ("unknown", "CREATE EXTENSION IF NOT EXISTS pgcrypto;"),
         ("unknown", "CREATE OR REPLACE FUNCTION f() RETURNS TABLE (x int) AS $$ $$ LANGUAGE sql;"),
@@ -429,7 +455,7 @@ def test_a_policy_statement_after_a_table_statement_is_not_swallowed_by_it() -> 
 
 
 def test_the_do_block_is_looked_inside_rather_than_treated_as_one_opaque_statement() -> None:
-    """`restore_bootstrap_role.sql:35-41` wraps its `CREATE ROLE` in PL/pgSQL.
+    """`restore_bootstrap_role.sql:53-59` wraps its `CREATE ROLE` in PL/pgSQL.
 
     A classifier that split on `;` and read the leading keyword would see `DO`, then `BEGIN`,
     and never reach the `CREATE`. A `CREATE POLICY` hidden the same way would pass check 2.

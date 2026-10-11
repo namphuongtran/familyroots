@@ -9,9 +9,9 @@
 # PGHOST:PGPORT (default localhost:5432, user/password default postgres/postgres),
 # dropping and recreating it first (idempotent — safe to re-run).
 # After the restore it runs scripts/restore_bootstrap_role.sql (ADR-052), which creates
-# the cluster-wide familyroots_app role and re-grants what migrations 002 and 026 grant.
-# A single-database dump carries neither, so without this step a restore into a new
-# cluster yields a database the application cannot use.
+# the cluster-wide familyroots_app role, re-grants what migrations 002 and 026 grant, and
+# replays 041-043 for a Supabase restore (no-ops here, as a superuser on plain Postgres).
+# A dump carries no role or grant, so without it a new cluster's restore is unusable.
 # Then verifies: (1) alembic_version vs `uv run alembic heads` (warn, not fail, if
 # behind — an old dump is still a valid backup); (2) row-count smoke report for the
 # core tables; (3) one get_family_tree_flat() call (skipped with a WARN if the

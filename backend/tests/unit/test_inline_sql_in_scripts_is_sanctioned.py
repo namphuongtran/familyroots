@@ -402,7 +402,7 @@ def test_no_script_runs_inline_sql_that_confers_an_escalating_privilege() -> Non
             *offences,
             "No decision sanctions any of these, and _SANCTIONED cannot override this check. "
             "The request role is NOBYPASSRLS by design (ADR-052; "
-            "scripts/restore_bootstrap_role.sql:34) — RLS layer-2 (ADR-008) means nothing "
+            "scripts/restore_bootstrap_role.sql:52) — RLS layer-2 (ADR-008) means nothing "
             "against a role that bypasses it, and a grantee of PUBLIC hands the privilege to "
             "every role in the cluster including that one.",
         ]
