@@ -1,60 +1,77 @@
 """Documents API routes — thin controller delegating to Document handlers."""
 
 import uuid
-from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, Query
 
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
+from app.application.document.upload import DocumentUploadHandler
 from app.core.config import settings
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
-from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
-from app.schemas.document import DocumentResponse
+from app.infrastructure.dependencies import (
+    get_document_command_handler,
+    get_document_query_handler,
+    get_document_upload_handler,
+)
+from app.schemas.document import (
+    DocumentCreateRequest,
+    DocumentResponse,
+    SignedUploadResponse,
+    SignUploadRequest,
+)
 from app.schemas.envelope import created, ok, ok_message, page
 from app.services.translator import t
 
 router = APIRouter()
 
 
-@router.post("", status_code=201, responses=created(DocumentResponse))
-async def upload_document(
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    document_type: str = Form(...),
-    person_id: uuid.UUID | None = Form(None),
-    description: str | None = Form(None),
-    taken_date: date | None = Form(None),
-    taken_place: str | None = Form(None),
-    current_user: dict[str, Any] = Depends(get_current_user),
+@router.post("/uploads", responses=ok(SignedUploadResponse))
+async def sign_document_upload(
+    body: SignUploadRequest,
     clan_id: uuid.UUID = Depends(get_current_clan_id),
-    cmd_handler: DocumentCommandHandler = Depends(get_document_command_handler),
+    upload_handler: DocumentUploadHandler = Depends(get_document_upload_handler),
     role: ClanRole = RequireEditor,
 ) -> dict[str, Any]:
-    """Upload a document/photo to storage and save metadata."""
-    # Read at most MAX+1 bytes: bounds the in-RAM copy so an oversized body isn't
-    # pulled into one huge `bytes` before the size check (the +1 still trips
-    # Document.create's file_too_large at the boundary). NOTE: this does NOT stop an
-    # unbounded upload from being spooled to a temp file first — the multipart parser
-    # already streams the full body to disk. A hard total-body-size limit belongs at
-    # the proxy / ASGI layer (see review doc M7); this only closes the RAM vector.
-    max_bytes = settings.max_upload_bytes
-    content = await file.read(max_bytes + 1)
-    result = await cmd_handler.upload(
-        file_content=content,
-        filename=file.filename,
-        content_type=file.content_type,
-        title=title,
-        document_type=document_type,
+    """Sign a direct-to-Storage upload of one file (ADR-068).
+
+    The file is checked against the declared name, type and size first, so a file
+    that breaks a rule is refused before any byte is sent. The client then uploads
+    the bytes to `upload_url` and confirms with `POST /documents`.
+    """
+    result = await upload_handler.sign(
+        clan_id=clan_id,
+        filename=body.filename,
+        content_type=body.content_type,
+        size_bytes=body.size_bytes,
+        max_file_size_bytes=settings.max_upload_bytes,
+    )
+    return {"data": result.model_dump()}
+
+
+@router.post("", status_code=201, responses=created(DocumentResponse))
+async def create_document(
+    body: DocumentCreateRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    upload_handler: DocumentUploadHandler = Depends(get_document_upload_handler),
+    role: ClanRole = RequireEditor,
+) -> dict[str, Any]:
+    """Confirm a staged upload as a document, checking what Storage really holds."""
+    result = await upload_handler.confirm(
         clan_id=clan_id,
         actor=ActorInfo.from_jwt(current_user, role.value),
-        person_id=person_id,
-        description=description,
-        taken_date=taken_date,
-        taken_place=taken_place,
-        max_file_size_bytes=max_bytes,
+        storage_path=body.storage_path,
+        title=body.title,
+        document_type=body.document_type,
+        original_filename=body.original_filename,
+        person_id=body.person_id,
+        description=body.description,
+        taken_date=body.taken_date,
+        taken_place=body.taken_place,
+        max_file_size_bytes=settings.max_upload_bytes,
     )
     return {"data": result.model_dump()}
 

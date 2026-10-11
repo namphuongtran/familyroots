@@ -12,21 +12,40 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Mapping
+from datetime import datetime
+from typing import Any
 from urllib.parse import quote
 
 from storage3.exceptions import StorageApiError
+from storage3.types import ListBucketFilesOptions
 
 from app.core.config import settings
 from app.domain.document.repository import (
     DEFAULT_PRESIGN_TTL,
+    SignedUpload,
     StorageBucketNotConfiguredError,
     StorageError,
     StorageNotFoundError,
     StorageUnavailableError,
+    StoredObject,
 )
+from app.domain.document.storage_paths import CLANS_ROOT, STAGING_FOLDER
 from app.infrastructure.supabase_client import get_service_client
 
 logger = logging.getLogger(__name__)
+
+# Storage's list endpoint pages its results; 100 is its default page size.
+_LIST_PAGE_SIZE = 100
+
+
+def _parse_storage_timestamp(value: object) -> datetime | None:
+    """Storage reports ``created_at`` as ISO 8601 with a ``Z`` suffix."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _classify_storage(exc: Exception) -> Exception:
@@ -98,23 +117,93 @@ def _public_object_url(bucket: str, path: str) -> str:
 
 
 class SupabaseStorageAdapter:
-    """Concrete storage adapter backed by Supabase Storage."""
+    """Concrete storage adapter backed by Supabase Storage.
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
+    Implements both ``StoragePort`` and ``StagedUploadStorage``. No method writes a
+    document's bytes: the browser uploads them to a signed URL (ADR-068).
+    """
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        # No upsert option: a signed path accepts one upload, and a second PUT to the
+        # same path is refused by Storage (409 KeyAlreadyExists, measured 2026-10-11).
         client = get_service_client()
         try:
-            await asyncio.to_thread(
-                client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload,
-                path=path,
-                file=content,
-                file_options={
-                    "content-type": content_type or "application/octet-stream",
-                    "upsert": "false",
-                },
+            result = await asyncio.to_thread(
+                client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).create_signed_upload_url,
+                path,
             )
         except Exception as e:
             raise _classify_bucket(e, settings.SUPABASE_STORAGE_BUCKET) from e
-        return path
+        return SignedUpload(upload_url=result["signed_url"], token=result["token"])
+
+    async def stat(self, path: str) -> StoredObject:
+        client = get_service_client()
+        try:
+            info = await asyncio.to_thread(
+                client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).info, path
+            )
+        except Exception as e:
+            raise _classify_bucket(e, settings.SUPABASE_STORAGE_BUCKET) from e
+        size = info.get("size")
+        if not isinstance(size, int):
+            # A success response with no size is a provider fault, like a signed URL
+            # with no URL in get_presigned_url below: 503, never a guessed size.
+            raise StorageUnavailableError(f"storage returned no size for {path!r}")
+        content_type = info.get("content_type")
+        return StoredObject(
+            size_bytes=size,
+            content_type=content_type if isinstance(content_type, str) else None,
+        )
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        client = get_service_client()
+        try:
+            await asyncio.to_thread(
+                client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).move, from_path, to_path
+            )
+        except Exception as e:
+            raise _classify_bucket(e, settings.SUPABASE_STORAGE_BUCKET) from e
+
+    async def list_staged_uploads_older_than(self, cutoff: datetime) -> list[str]:
+        """Every staged upload path created before ``cutoff``, across all clans.
+
+        Used only by the retention purge job's sweep (ADR-068). It lists each clan
+        folder's ``uploads/`` and nothing else, so it cannot return a confirmed
+        document's path. Storage pages its listings, so both levels are paged.
+        """
+        bucket = settings.SUPABASE_STORAGE_BUCKET
+        files_api = get_service_client().storage.from_(bucket)
+
+        async def list_all(prefix: str) -> list[dict[str, Any]]:
+            entries: list[dict[str, Any]] = []
+            offset = 0
+            while True:
+                options: ListBucketFilesOptions = {
+                    "limit": _LIST_PAGE_SIZE,
+                    "offset": offset,
+                    "sortBy": {"column": "name", "order": "asc"},
+                }
+                try:
+                    page = await asyncio.to_thread(files_api.list, prefix, options)
+                except Exception as e:
+                    raise _classify_bucket(e, bucket) from e
+                entries.extend(page)
+                if len(page) < _LIST_PAGE_SIZE:
+                    return entries
+                offset += _LIST_PAGE_SIZE
+
+        stale: list[str] = []
+        for clan_folder in await list_all(CLANS_ROOT):
+            if clan_folder.get("id") is not None:
+                continue  # a file directly under clans/, not a clan folder
+            staging = f"{CLANS_ROOT}/{clan_folder['name']}/{STAGING_FOLDER}"
+            for entry in await list_all(staging):
+                created_at = _parse_storage_timestamp(entry.get("created_at"))
+                if entry.get("id") is None or created_at is None:
+                    continue  # a sub-folder, or an entry Storage gave no time for
+                if created_at < cutoff:
+                    stale.append(f"{staging}/{entry['name']}")
+        return stale
 
     async def delete(self, storage_path: str) -> bool:
         # Contract (StoragePort.delete): True on success OR confirmed

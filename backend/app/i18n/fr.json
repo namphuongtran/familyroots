@@ -157,6 +157,8 @@
   "error.person.avatar_url_not_permanent": "Un avatar doit utiliser une URL publique permanente",
   "error.document.avatar_source_outside_clan": "Ce fichier n'appartient pas au clan actuel",
   "error.document.avatar_mime_type_not_allowed": "Seul un fichier image peut servir d'avatar",
+  "error.document.upload_path_invalid": "Ce chemin de téléversement n'a pas été attribué à ce clan",
+  "error.document.upload_not_found": "Le fichier téléversé est introuvable ; veuillez le téléverser à nouveau",
   "error.invitation.already_member": "Cet utilisateur est déjà membre du clan",
   "error.invitation.email_mismatch": "Cette invitation a été émise pour un autre e-mail",
   "error.invitation.expired": "Cette invitation a expiré",

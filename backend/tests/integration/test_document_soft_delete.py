@@ -22,7 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
+from app.domain.document.repository import SignedUpload, StorageNotFoundError, StoredObject
+from app.infrastructure.dependencies import (
+    get_document_command_handler,
+    get_document_query_handler,
+    get_document_upload_handler,
+)
 from app.main import create_app
 from app.services.translator import load_translations, t
 
@@ -45,12 +50,23 @@ class FakeStorage:
     was never touched by a soft-delete."""
 
     def __init__(self) -> None:
-        self.uploaded: list[str] = []
+        self.objects: dict[str, StoredObject] = {}
         self.deleted: list[str] = []
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
-        self.uploaded.append(path)
-        return path
+    def put(self, path: str, content: bytes, content_type: str) -> None:
+        """What the browser's PUT to the signed URL does (ADR-068)."""
+        self.objects[path] = StoredObject(size_bytes=len(content), content_type=content_type)
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        return SignedUpload(upload_url=f"https://storage.example/sign/{path}", token="t")
+
+    async def stat(self, path: str) -> StoredObject:
+        if path not in self.objects:
+            raise StorageNotFoundError(path)
+        return self.objects[path]
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        self.objects[to_path] = self.objects.pop(from_path)
 
     async def delete(self, storage_path: str) -> bool:
         self.deleted.append(storage_path)
@@ -146,6 +162,13 @@ async def client(
                 SqlAlchemyPersonRepository(uow),
             )
 
+    async def _make_upload_handler() -> AsyncGenerator[Any]:
+        from app.application.document.upload import DocumentUploadHandler
+
+        async with session_factory() as db:
+            uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+            yield DocumentUploadHandler(SqlAlchemyDocumentRepository(uow), fake_storage, uow)
+
     async def _make_query_handler() -> AsyncGenerator[Any]:
         from app.application.document.handlers import DocumentQueryHandler
 
@@ -157,6 +180,7 @@ async def client(
     app.dependency_overrides[get_current_user] = _override_current_user
     app.dependency_overrides[get_document_command_handler] = _make_cmd_handler
     app.dependency_overrides[get_document_query_handler] = _make_query_handler
+    app.dependency_overrides[get_document_upload_handler] = _make_upload_handler
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
@@ -180,12 +204,22 @@ def admin_headers(seeded: dict[str, Any]) -> dict[str, str]:
 
 
 @pytest.fixture()
-async def uploaded_document(client: AsyncClient, admin_headers: dict[str, str]) -> tuple[str, str]:
+async def uploaded_document(
+    client: AsyncClient, admin_headers: dict[str, str], fake_storage: FakeStorage
+) -> tuple[str, str]:
+    # Sign, PUT, confirm: the three steps the web client takes (ADR-068).
+    signed = await client.post(
+        "/api/v1/documents/uploads",
+        headers=admin_headers,
+        json={"filename": "test.png", "content_type": "image/png", "size_bytes": len(_PNG_BYTES)},
+    )
+    assert signed.status_code == 200, signed.text
+    staged = signed.json()["data"]["storage_path"]
+    fake_storage.put(staged, _PNG_BYTES, "image/png")
     resp = await client.post(
         "/api/v1/documents",
         headers=admin_headers,
-        data={"title": "Giấy khai sinh", "document_type": "photo"},
-        files={"file": ("test.png", _PNG_BYTES, "image/png")},
+        json={"storage_path": staged, "title": "Giấy khai sinh", "document_type": "photo"},
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()["data"]
@@ -227,7 +261,7 @@ async def test_delete_soft_deletes_and_keeps_blob(
     assert row.deleted_at is not None
     assert row.deleted_by == uuid.UUID(admin_headers["Authorization"].removeprefix("Bearer "))
     assert fake_storage.deleted == []  # blob untouched — survives until the purge job
-    assert storage_path in fake_storage.uploaded  # sanity: it really was uploaded
+    assert storage_path in fake_storage.objects  # the blob is still in the bucket
 
 
 async def test_restore_brings_document_back(

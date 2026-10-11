@@ -124,9 +124,17 @@ file_size_limit = "50MiB"
 # seeded (that is `make seed`'s territory).
 
 # Documents + event files. PRIVATE, read only through short-lived presigned URLs.
+# The browser uploads here directly to a signed URL (ADR-068), so allowed_mime_types is a second
+# wall: Storage refuses any other type at upload time. The rule is check_upload_file, which reads
+# ALLOWED_MIME_TYPES (backend/app/domain/document/entity.py) at signing and again at confirm.
+# tests/unit/test_files_bucket_mime_types.py fails if the two lists drift apart.
 [storage.buckets.family-roots-files]
 public = false
 file_size_limit = "50MiB"
+allowed_mime_types = [
+  "image/jpeg", "image/png", "image/webp", "image/heic",
+  "application/pdf", "audio/mpeg", "audio/wav", "video/mp4", "video/quicktime",
+]
 
 # Avatars. PUBLIC-READ on purpose (ADR-036). Anything here is fetchable by anyone with the URL,
 # unauthenticated, across clans. Never point SUPABASE_STORAGE_BUCKET at this one.

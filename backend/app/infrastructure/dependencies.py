@@ -28,6 +28,7 @@ from app.application.change_request.handlers import (
 )
 from app.application.clan.handlers import ClanCommandHandler, ClanQueryHandler
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
+from app.application.document.upload import DocumentUploadHandler
 from app.application.event.handlers import EventCommandHandler, EventQueryHandler
 from app.application.export.handlers import ExportQueryHandler
 from app.application.invitation.handlers import InvitationCommandHandler, InvitationQueryHandler
@@ -304,6 +305,11 @@ def get_document_command_handler(db: AsyncSession = Depends(get_db)) -> Document
 def get_document_query_handler(db: AsyncSession = Depends(get_db)) -> DocumentQueryHandler:
     repo = SqlAlchemyDocumentRepository(_repo_uow(db))
     return DocumentQueryHandler(repo, SupabaseStorageAdapter())
+
+
+def get_document_upload_handler(db: AsyncSession = Depends(get_db)) -> DocumentUploadHandler:
+    uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+    return DocumentUploadHandler(SqlAlchemyDocumentRepository(uow), SupabaseStorageAdapter(), uow)
 
 
 # ── Event handlers ──────────────────────────────────────────────

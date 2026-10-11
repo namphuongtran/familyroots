@@ -11,7 +11,7 @@ the duration of the network round-trip). A recorded `False` means the
 transaction had already been committed (or never begun) before the call, so
 no pooled connection was held.
 
-Both the command handler (`DocumentCommandHandler`) and the query handler
+Both the upload handler (`DocumentUploadHandler`, ADR-068) and the query handler
 (`ExportQueryHandler`) are built directly over a real `AsyncSession` — mirrors
 `test_clan_export_json.py`'s DI wiring, but constructed explicitly here (not
 via FastAPI `dependency_overrides`) so the storage double can inspect the
@@ -31,14 +31,14 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.application.document.handlers import DocumentCommandHandler
+from app.application.document.upload import DocumentUploadHandler
 from app.application.export.handlers import ExportQueryHandler
+from app.domain.document.repository import SignedUpload, StorageNotFoundError, StoredObject
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.export_query_port import SqlAlchemyExportQueryPort
-from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from app.services.clan_export import build_clan_export, to_json_bytes
 from app.services.gedcom_export import build_gedcom
@@ -56,14 +56,30 @@ class TxnRecordingStorage:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self.upload_in_txn: list[bool] = []
+        self.storage_call_in_txn: dict[str, list[bool]] = {}
         self.presign_in_txn: list[bool] = []
-        self.uploaded: list[str] = []
+        self.objects: dict[str, StoredObject] = {}
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
-        self.upload_in_txn.append(self._session.in_transaction())
-        self.uploaded.append(path)
-        return path
+    def _record(self, call: str) -> None:
+        self.storage_call_in_txn.setdefault(call, []).append(self._session.in_transaction())
+
+    def put(self, path: str) -> None:
+        """What the browser's PUT to the signed URL does (ADR-068). Not an API call."""
+        self.objects[path] = StoredObject(size_bytes=len(_PNG_BYTES), content_type="image/png")
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        self._record("sign")
+        return SignedUpload(upload_url=f"https://storage.example/sign/{path}", token="t")
+
+    async def stat(self, path: str) -> StoredObject:
+        self._record("stat")
+        if path not in self.objects:
+            raise StorageNotFoundError(path)
+        return self.objects[path]
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        self._record("move")
+        self.objects[to_path] = self.objects.pop(from_path)
 
     async def delete(self, storage_path: str) -> bool:
         return True
@@ -157,26 +173,56 @@ def _actor(admin_id: uuid.UUID) -> ActorInfo:
 # ── Upload: connection-hygiene ───────────────────────────────────────────────
 
 
-async def test_upload_holds_no_connection_during_blob_upload(
+def _upload_handler(session: AsyncSession, storage: TxnRecordingStorage) -> DocumentUploadHandler:
+    uow = SqlAlchemyUnitOfWork(session, create_event_dispatcher(session))
+    return DocumentUploadHandler(SqlAlchemyDocumentRepository(uow), storage, uow)
+
+
+async def _open_a_transaction(session: AsyncSession) -> None:
+    """The auth dependencies read the database on the request session before a route
+    runs, so a transaction is already open when the handler is called."""
+    await session.execute(sa.text("SELECT 1"))
+    assert session.in_transaction()
+
+
+async def test_sign_holds_no_connection_during_the_storage_call(
     session_factory: async_sessionmaker[AsyncSession],
     seeded: dict[str, uuid.UUID],
 ) -> None:
-    """H5: the storage blob upload is a multi-second external call. It must
-    not run while a pooled connection sits idle-in-transaction. RED today:
-    `person_in_clan` (a SELECT) autobegins the session's transaction, and
-    upload() runs before the commit that would end it, so upload_in_txn
-    records [True]."""
+    """H5 for signing: the signed-URL request is a network round trip, so the request
+    session's transaction must be over before it starts."""
     async with session_factory() as session:
-        dispatcher = create_event_dispatcher(session)
-        uow = SqlAlchemyUnitOfWork(session, dispatcher)
-        repo = SqlAlchemyDocumentRepository(uow)
         storage = TxnRecordingStorage(session)
-        handler = DocumentCommandHandler(repo, storage, uow, SqlAlchemyPersonRepository(uow))
-
-        await handler.upload(
-            file_content=_PNG_BYTES,
+        await _open_a_transaction(session)
+        await _upload_handler(session, storage).sign(
+            clan_id=seeded["clan_id"],
             filename="giapha.png",
             content_type="image/png",
+            size_bytes=len(_PNG_BYTES),
+        )
+
+    assert storage.storage_call_in_txn == {"sign": [False]}
+
+
+async def test_confirm_holds_no_connection_during_any_storage_call(
+    session_factory: async_sessionmaker[AsyncSession],
+    seeded: dict[str, uuid.UUID],
+) -> None:
+    """H5 for confirm: `person_in_clan` (a SELECT) autobegins the transaction, and the
+    stat and the move are network round trips that must not run inside it."""
+    async with session_factory() as session:
+        storage = TxnRecordingStorage(session)
+        handler = _upload_handler(session, storage)
+        signed = await handler.sign(
+            clan_id=seeded["clan_id"],
+            filename="giapha.png",
+            content_type="image/png",
+            size_bytes=len(_PNG_BYTES),
+        )
+        storage.put(signed.storage_path)
+
+        response = await handler.confirm(
+            storage_path=signed.storage_path,
             title="Gia phả",
             document_type="certificate",
             clan_id=seeded["clan_id"],
@@ -184,32 +230,43 @@ async def test_upload_holds_no_connection_during_blob_upload(
             person_id=seeded["live_person_id"],
         )
 
-    assert storage.upload_in_txn == [False]
-    # Presign happens after the commit — already released, likely already
-    # False today, but pinned here so a future regression is caught too.
+    assert storage.storage_call_in_txn == {"sign": [False], "stat": [False], "move": [False]}
+    # Presign happens after the commit — already released, but pinned so a future
+    # regression is caught too.
     assert storage.presign_in_txn == [False]
 
+    async with session_factory() as verify_session:
+        result = await verify_session.execute(
+            sa.text("SELECT title, is_deleted, storage_path FROM documents WHERE id = :id"),
+            {"id": response.id},
+        )
+        row = result.mappings().one()
+    assert row["title"] == "Gia phả"
+    assert row["is_deleted"] is False
+    assert row["storage_path"] == response.storage_path
+    assert response.storage_path in storage.objects
 
-async def test_upload_validates_before_uploading(
+
+async def test_confirm_validates_the_person_before_touching_storage(
     session_factory: async_sessionmaker[AsyncSession],
     seeded: dict[str, uuid.UUID],
 ) -> None:
-    """Correctness (expected to PASS today): a body-supplied person_id that
-    doesn't resolve to a live membership in the acting clan (here,
-    soft-deleted) must raise EntityNotFoundError('person_not_found') BEFORE
-    any blob is uploaded — no wasted/orphaned storage write."""
+    """A body-supplied person_id that doesn't resolve to a live membership in the acting
+    clan (here, soft-deleted) must raise person_not_found BEFORE any Storage call."""
     async with session_factory() as session:
-        dispatcher = create_event_dispatcher(session)
-        uow = SqlAlchemyUnitOfWork(session, dispatcher)
-        repo = SqlAlchemyDocumentRepository(uow)
         storage = TxnRecordingStorage(session)
-        handler = DocumentCommandHandler(repo, storage, uow, SqlAlchemyPersonRepository(uow))
+        handler = _upload_handler(session, storage)
+        signed = await handler.sign(
+            clan_id=seeded["clan_id"],
+            filename="giapha.png",
+            content_type="image/png",
+            size_bytes=len(_PNG_BYTES),
+        )
+        storage.put(signed.storage_path)
 
         with pytest.raises(EntityNotFoundError) as exc_info:
-            await handler.upload(
-                file_content=_PNG_BYTES,
-                filename="giapha.png",
-                content_type="image/png",
+            await handler.confirm(
+                storage_path=signed.storage_path,
                 title="Gia phả",
                 document_type="certificate",
                 clan_id=seeded["clan_id"],
@@ -218,45 +275,7 @@ async def test_upload_validates_before_uploading(
             )
 
     assert exc_info.value.code == "person_not_found"
-    assert storage.uploaded == []
-
-
-async def test_upload_happy_path_persists_and_returns_presigned(
-    session_factory: async_sessionmaker[AsyncSession],
-    seeded: dict[str, uuid.UUID],
-) -> None:
-    """Correctness (expected to PASS today): a live person_id uploads
-    successfully — the document row is committed and a presigned URL is
-    returned."""
-    async with session_factory() as session:
-        dispatcher = create_event_dispatcher(session)
-        uow = SqlAlchemyUnitOfWork(session, dispatcher)
-        repo = SqlAlchemyDocumentRepository(uow)
-        storage = TxnRecordingStorage(session)
-        handler = DocumentCommandHandler(repo, storage, uow, SqlAlchemyPersonRepository(uow))
-
-        response = await handler.upload(
-            file_content=_PNG_BYTES,
-            filename="giapha.png",
-            content_type="image/png",
-            title="Gia phả",
-            document_type="certificate",
-            clan_id=seeded["clan_id"],
-            actor=_actor(seeded["admin_id"]),
-            person_id=seeded["live_person_id"],
-        )
-
-    assert storage.uploaded == [response.storage_path]
-    assert response.presigned_url == f"https://signed.example/{response.storage_path}"
-
-    async with session_factory() as verify_session:
-        result = await verify_session.execute(
-            sa.text("SELECT title, is_deleted FROM documents WHERE id = :id"),
-            {"id": response.id},
-        )
-        row = result.mappings().one()
-    assert row["title"] == "Gia phả"
-    assert row["is_deleted"] is False
+    assert storage.storage_call_in_txn == {"sign": [False]}  # no stat, no move
 
 
 # ── Export: connection-hygiene ───────────────────────────────────────────────

@@ -161,6 +161,9 @@ def _install_purge(monkeypatch: pytest.MonkeyPatch, gate: _Gate) -> None:
             await gate.pass_through()
             return True
 
+        async def list_staged_uploads_older_than(self, cutoff: object) -> list[str]:
+            return []  # the staged-upload sweep (ADR-068) finds nothing here
+
     monkeypatch.setattr("app.services.document_purge.SupabaseStorageAdapter", _Storage)
 
 

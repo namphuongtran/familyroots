@@ -31,6 +31,12 @@ restored it.
 Per-item isolation: one failure never stops the sweep. Advisory-locked on its
 own key, transaction-scoped (ADR-065), so concurrent runs (replicas, or a Vercel
 Cron delivery that arrives twice) do the sweep once.
+
+The same run also sweeps staged uploads (ADR-068): a file the browser uploaded to
+``clans/{clan}/uploads/`` and nobody confirmed. Anything there older than
+STAGED_UPLOAD_MAX_AGE is deleted. Confirm moves a file out of that folder, so a
+confirmed document's blob is never listed. There is no row to claim: a staged file
+has none until confirm, and confirm cannot succeed once the file is gone.
 """
 
 import logging
@@ -49,6 +55,10 @@ logger = logging.getLogger(__name__)
 # Own advisory-lock key (distinct from the anniversary job's 728_115_001) so the
 # two jobs never contend with each other, only with concurrent runs of themselves.
 _PURGE_LOCK_KEY = 728_115_002
+
+# A signed upload URL lives two hours (SIGNED_UPLOAD_TTL); a day leaves a client that
+# uploaded late in that window plenty of time to confirm.
+STAGED_UPLOAD_MAX_AGE = timedelta(hours=24)
 
 
 async def purge_expired_documents(now: datetime | None = None) -> None:
@@ -129,9 +139,26 @@ async def purge_expired_documents(now: datetime | None = None) -> None:
                     )
                     await db.rollback()
                     continue
+            await _sweep_staged_uploads(storage, now - STAGED_UPLOAD_MAX_AGE)
         finally:
             # End the work session first, then the lock transaction, which releases the
             # lock. In that order the next run cannot take the lock while this run still
             # has a transaction open.
             await db.close()
             await lock_conn.rollback()
+
+
+async def _sweep_staged_uploads(storage: SupabaseStorageAdapter, cutoff: datetime) -> None:
+    """Delete every staged upload created before ``cutoff``. One failure never stops
+    the sweep, and a failed listing leaves everything for the next run."""
+    try:
+        stale = await storage.list_staged_uploads_older_than(cutoff)
+    except Exception:
+        logger.exception("Listing staged uploads failed — will retry next run")
+        return
+    for path in stale:
+        try:
+            await storage.delete(path)
+            logger.info("Swept unconfirmed staged upload %s", path)
+        except Exception:
+            logger.exception("Sweep failed for staged upload %s — will retry next run", path)

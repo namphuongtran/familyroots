@@ -136,6 +136,9 @@ async def test_the_purge_route_runs_the_real_job_only_for_the_secret(
             deleted.append(storage_path)
             return True
 
+        async def list_staged_uploads_older_than(self, cutoff: object) -> list[str]:
+            return []  # the staged-upload sweep (ADR-068) finds nothing here
+
     monkeypatch.setattr("app.services.document_purge.SupabaseStorageAdapter", _Storage)
 
     clan_id, doc_id, actor = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

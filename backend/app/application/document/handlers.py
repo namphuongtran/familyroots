@@ -1,24 +1,22 @@
 """Document use-case handlers.
 
-Orchestrate document upload, listing, deletion, and avatar management
-through domain entities, repository protocol, and storage port.
+Orchestrate document listing, deletion, restore, and avatar management
+through domain entities, repository protocol, and storage port. Upload lives in
+``upload.py``: the browser sends the bytes straight to Storage (ADR-068).
 No SQLAlchemy or Supabase imports — fully DIP-compliant.
 """
 
 from __future__ import annotations
 
-import logging
-import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.application.shared.audit import emit_audit_event
-from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES, Document
+from app.domain.document.entity import Document
 from app.domain.document.repository import (
     DEFAULT_PRESIGN_TTL,
     DocumentRepository,
-    StorageError,
     StoragePort,
 )
 from app.domain.person.repository import PersonRepository
@@ -26,24 +24,6 @@ from app.domain.shared.exceptions import BusinessRuleViolation, EntityNotFoundEr
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 from app.schemas.document import DocumentResponse, DocumentSummary
-
-logger = logging.getLogger(__name__)
-
-
-def _safe_extension(filename: str | None) -> str:
-    """Derive a storage-safe file extension from a client-supplied filename.
-
-    The extension is embedded in the storage key `clans/{clan_id}/documents/...`,
-    whose prefix is the storage tenancy boundary. A raw filename can contain
-    `/` or `..` (e.g. ``x.jpg/../../other-clan/evil``) and escape that prefix, so
-    we keep only lowercase alphanumerics from the last dot-segment. Falls back to
-    ``bin`` when there is no usable extension.
-    """
-    if not filename or "." not in filename:
-        return "bin"
-    raw = filename.rsplit(".", 1)[-1]
-    cleaned = re.sub(r"[^a-z0-9]", "", raw.lower())[:10]
-    return cleaned or "bin"
 
 
 def _presign_expiry(expires_in: int = DEFAULT_PRESIGN_TTL) -> datetime:
@@ -65,7 +45,7 @@ def _avatar_object_path(clan_id: uuid.UUID, person_id: uuid.UUID) -> str:
     boundary is identical in both buckets — a public bucket is the last place a path
     should stop being clan-scoped. Both ids come from server state (the authenticated
     clan header and the document's own person link), never from client input, so
-    there is nothing to sanitize the way ``_safe_extension`` must.
+    there is nothing to sanitize the way ``storage_paths.safe_extension`` must.
 
     Deliberately extension-less and stable per person: replacing someone's avatar
     upserts the same object, so the stored URL never changes and no orphan copies
@@ -92,97 +72,6 @@ class DocumentCommandHandler:
         # UPDATE from here) so the write still emits PersonUpdated and lands in the
         # same UoW transaction as the document change.
         self._person_repo = person_repo
-
-    async def upload(
-        self,
-        *,
-        file_content: bytes,
-        filename: str | None,
-        content_type: str | None,
-        title: str,
-        document_type: str,
-        clan_id: uuid.UUID,
-        actor: ActorInfo,
-        person_id: uuid.UUID | None = None,
-        description: str | None = None,
-        taken_date: Any = None,
-        taken_place: str | None = None,
-        max_file_size_bytes: int = DEFAULT_MAX_FILE_SIZE_BYTES,
-    ) -> DocumentResponse:
-        """Upload a document to storage and save metadata."""
-        # A body-supplied person_id must belong to the acting clan, so a document
-        # can't link (or be filed under) a person owned by another clan.
-        if person_id and not await self._repo.person_in_clan(person_id, clan_id):
-            raise EntityNotFoundError("person_not_found", {"person_id": str(person_id)})
-
-        # ADR-028: end the read transaction so the multi-second Supabase blob
-        # upload below holds NO pooled connection (H5). A None person_id skips
-        # the read above; rollback() is then a no-op. The read has nothing to
-        # persist, so rollback (not commit) is the cheap way to release.
-        await self._uow.rollback()
-
-        file_ext = _safe_extension(filename)
-        file_id = uuid.uuid4()
-        storage_path = f"clans/{clan_id}/documents/{file_id}.{file_ext}"
-
-        # Domain entity creation validates MIME, size, and type
-        doc = Document.create(
-            clan_id=clan_id,
-            actor=actor,
-            title=title,
-            document_type=document_type,
-            storage_path=storage_path,
-            mime_type=content_type,
-            file_size_bytes=len(file_content),
-            original_filename=filename,
-            person_id=person_id,
-            description=description,
-            taken_date=taken_date,
-            taken_place=taken_place,
-            max_file_size_bytes=max_file_size_bytes,
-        )
-
-        # Upload the blob first, then persist metadata. If persistence fails, the
-        # blob would be orphaned (a row-less object in the bucket), so compensate
-        # by deleting it before re-raising — leaving neither an orphan blob nor a
-        # dangling metadata row.
-        await self._storage.upload(storage_path, file_content, content_type)
-        try:
-            await self._repo.save(doc)
-            await self._uow.commit()
-        except Exception:
-            # Best-effort compensation — never let a cleanup failure mask the
-            # original persistence error (which is what the caller must see).
-            # storage.delete() now raises StorageError instead of returning
-            # False on failure (FIX 2, task 3 review) — catch it so
-            # compensation never raises.
-            try:
-                await self._storage.delete(storage_path)
-            except StorageError:
-                logger.warning("Orphaned blob after failed upload commit: %s", storage_path)
-            raise
-
-        presigned = await self._storage.get_presigned_url(doc.storage_path)
-        return DocumentResponse(
-            id=doc.id,
-            clan_id=doc.clan_id,
-            person_id=doc.person_id,
-            title=doc.title,
-            document_type=doc.document_type,
-            description=doc.description,
-            storage_path=doc.storage_path,
-            presigned_url=presigned,
-            presigned_url_expires_at=_presign_expiry(),
-            file_size_bytes=doc.file_size_bytes,
-            mime_type=doc.mime_type,
-            original_filename=doc.original_filename,
-            taken_date=doc.taken_date,
-            taken_place=doc.taken_place,
-            is_avatar=doc.is_avatar,
-            created_by=doc.created_by,
-            created_at=doc.created_at,
-            updated_at=doc.updated_at,
-        )
 
     async def delete(
         self,

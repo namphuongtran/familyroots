@@ -22,25 +22,36 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.application.branch.handlers import BranchCommandHandler
-from app.application.document.handlers import DocumentCommandHandler
+from app.application.document.upload import DocumentUploadHandler
 from app.application.event.handlers import EventCommandHandler
 from app.domain.branch.entity import Branch
+from app.domain.document.repository import SignedUpload, StorageNotFoundError, StoredObject
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRepository
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
-from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
 class _FakeStorage:
-    """Minimal StoragePort stand-in (no real Supabase calls)."""
+    """Minimal storage stand-in (no real Supabase calls)."""
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
-        return path
+    def __init__(self) -> None:
+        self.objects: dict[str, StoredObject] = {}
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        return SignedUpload(upload_url=f"https://storage.example/sign/{path}", token="t")
+
+    async def stat(self, path: str) -> StoredObject:
+        if path not in self.objects:
+            raise StorageNotFoundError(path)
+        return self.objects[path]
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        self.objects[to_path] = self.objects.pop(from_path)
 
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return f"https://example.test/{storage_path}"
@@ -145,17 +156,19 @@ async def test_document_upload_writes_audit_log(async_engine: AsyncEngine) -> No
     async with maker() as s:
         await _seed_clan(s, clan_id)
         uow = _uow(s)
-        handler = DocumentCommandHandler(
-            SqlAlchemyDocumentRepository(uow), _FakeStorage(), uow, SqlAlchemyPersonRepository(uow)
+        storage = _FakeStorage()
+        handler = DocumentUploadHandler(SqlAlchemyDocumentRepository(uow), storage, uow)
+        signed = await handler.sign(
+            clan_id=clan_id, filename="p.jpg", content_type="image/jpeg", size_bytes=1
         )
-        result: Any = await handler.upload(
-            file_content=b"x",
-            filename="p.jpg",
-            content_type="image/jpeg",
-            title="Photo",
-            document_type="photo",
+        # The browser's PUT to the signed URL (ADR-068).
+        storage.objects[signed.storage_path] = StoredObject(size_bytes=1, content_type="image/jpeg")
+        result: Any = await handler.confirm(
             clan_id=clan_id,
             actor=ActorInfo.from_jwt({"sub": str(actor)}, "editor"),
+            storage_path=signed.storage_path,
+            title="Photo",
+            document_type="photo",
         )
         assert result.id is not None
         assert await _audit_count(s, clan_id, "document") == 1

@@ -1,4 +1,6 @@
-"""upload sets a real future expiry; set_avatar publishes a permanent public URL.
+"""set_avatar publishes a permanent public URL.
+
+Upload's expiry tests moved with upload to ``test_document_upload_handler.py`` (ADR-068).
 
 ADR-036 changed set_avatar from "flip a flag, then mint a throwaway 30-day presigned
 URL" into the single writer of ``persons.avatar_url``. These tests pin the properties
@@ -11,7 +13,6 @@ that make that safe:
 """
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -41,9 +42,6 @@ class _FakeStorage:
         self.publish_returns = publish_returns
         self.presign_calls: list[str] = []
         self.published: list[tuple[str, str, str | None]] = []
-
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
-        return path
 
     async def delete(self, storage_path: str) -> bool:
         return True
@@ -172,26 +170,6 @@ async def _set_avatar(handler: DocumentCommandHandler, repo: _FakeDocumentRepo) 
         clan_id=repo.clan_id,
         actor=ActorInfo(user_id=repo.actor_id, role="editor"),
     )
-
-
-@pytest.mark.asyncio
-async def test_upload_expiry_is_now_plus_ttl(document_repo_fake: Any) -> None:
-    handler = _handler(document_repo_fake, _FakeStorage(), _FakeUoW())
-    resp = await handler.upload(
-        file_content=b"\xff\xd8\xff",  # minimal JPEG magic
-        filename="a.jpg",
-        content_type="image/jpeg",
-        title="t",
-        document_type="photo",
-        clan_id=document_repo_fake.clan_id,
-        actor=ActorInfo(user_id=document_repo_fake.actor_id, role="editor"),
-    )
-    # DocumentResponse.presigned_url_expires_at is typed `datetime | None`, so Pydantic
-    # has already coerced the handler's isoformat string into a tz-aware datetime —
-    # read it directly (do NOT call datetime.fromisoformat on it).
-    assert resp.presigned_url_expires_at is not None
-    delta = resp.presigned_url_expires_at - datetime.now(UTC)
-    assert DEFAULT_PRESIGN_TTL - 60 <= delta.total_seconds() <= DEFAULT_PRESIGN_TTL + 60
 
 
 @pytest.mark.asyncio
