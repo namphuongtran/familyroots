@@ -9,7 +9,7 @@ import { useDocumentMutations } from '@/lib/hooks/useDocuments'
 import { cn } from '@/lib/utils/cn'
 
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.doc,.docx'
-// The transport's limit (ADR-065). This screen read 20 here while the transport refused
+// The transport's limit (ADR-068). This screen once read 20 here while the transport refused
 // anything over 4, and that rejection was never caught, so a 4-20 MB file showed nothing.
 const MAX_MB = MAX_UPLOAD_MB
 
