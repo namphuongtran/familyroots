@@ -796,8 +796,9 @@ docker compose down -v && docker compose up -d pgdb && \
 Render is retired, and the application database moved into the Supabase project
 `xkmutzxdhdigyfisfrwd`, Postgres 17 ([supabase-hosted-project.md](supabase-hosted-project.md)).
 Nothing was live, so no dump existed to carry over. `db-backup.yml` and the
-scripts did not change (#252 kept `db-backup.yml` out of scope). What changed,
-and what is still open:
+scripts did not change then (#252 kept `db-backup.yml` out of scope). #282 changed
+both on 2026-10-11, in the client bullet below. What changed, and what is still
+open:
 
 - **`PROD_DATABASE_URL` holds Supavisor's session pooler** on `:5432`, the same
   string as `MIGRATION_DATABASE_URL`. GitHub Actions has no IPv6, and the direct
@@ -897,10 +898,8 @@ and what is still open:
   silent no-backup risk if skipped.
 - [x] Confirm the workflow's pg_dump major version ≥ the production Postgres
   major. **Read 2026-10-11, not assumed.** Run `38144882642` logged
-  `pg_dump (PostgreSQL) 18.6 (Ubuntu 18.6-1.pgdg24.04+2) at
-  /usr/lib/postgresql/18/bin/pg_dump`, and production is 17.11, the server
-  version run `38084208170`'s error names. That earlier run had the 18 client
-  installed and still ran 16.15, so pinning the package alone did not hold
+  `pg_dump (PostgreSQL) 18.6` against production's 17.11. Installing the package
+  alone had not held
   ([Since 2026-10-10: one project](#since-2026-10-10-one-project)). Re-pin both
   the package and the `PATH` directory in `db-backup.yml` when the database
   passes 18. Every run's first `==>` line names the version it used.

@@ -27,11 +27,11 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       # pg_dump refuses a server newer than itself, and production is 17. Installing the
-      # client is not enough: /usr/bin/pg_dump is Debian's pg_wrapper, which runs the
-      # version of the runner's one local cluster, 16/main, when no -h or PGHOST names a
-      # host. A connection-string argument names none, so the run of 2026-10-10 dumped
-      # with 16 and failed (#282). Putting 18's own bin directory first on PATH bypasses
-      # the wrapper. Re-pin when production passes 18.
+      # client is not enough: the run of 2026-10-10 had it and still dumped with 16 (#282).
+      # /usr/bin/pg_dump is Debian's pg_wrapper, which by its source runs the version of
+      # the one local cluster when no -h or PGHOST names a host, and the runner image
+      # installs a postgresql-16 server. Putting 18's own bin directory first on PATH
+      # bypasses the wrapper. Re-pin both 18s when production passes 18.
       - name: Install postgres client 18
         if: steps.gate.outputs.configured == 'true'
         run: |
