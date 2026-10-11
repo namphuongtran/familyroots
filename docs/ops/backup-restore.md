@@ -24,7 +24,9 @@
 - **Workflow**: `.github/workflows/db-backup.yml`, job `backup`.
 - **Schedule**: `cron: "15 17 * * *"` = **00:15 Asia/Ho_Chi_Minh** nightly, plus
   `workflow_dispatch` for on-demand runs (Actions tab → "db-backup" → "Run workflow").
-- **Steps**: install `postgresql-client` → `scripts/db_backup.sh` runs
+- **Steps**: install `postgresql-client-18` and put `/usr/lib/postgresql/18/bin`
+  first on `PATH` → `scripts/db_backup.sh` logs the `pg_dump` version and path it
+  runs, then runs
   `pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" | gzip` →
   upload to the Supabase Storage `backups` bucket via the Storage REST API →
   rotate.
@@ -794,16 +796,33 @@ docker compose down -v && docker compose up -d pgdb && \
 Render is retired, and the application database moved into the Supabase project
 `xkmutzxdhdigyfisfrwd`, Postgres 17 ([supabase-hosted-project.md](supabase-hosted-project.md)).
 Nothing was live, so no dump existed to carry over. `db-backup.yml` and the
-scripts did not change (#252 kept `db-backup.yml` out of scope). What changed,
-and what is still open:
+scripts did not change then (#252 kept `db-backup.yml` out of scope). #282 changed
+both on 2026-10-11, in the client bullet below. What changed, and what is still
+open:
 
 - **`PROD_DATABASE_URL` holds Supavisor's session pooler** on `:5432`, the same
   string as `MIGRATION_DATABASE_URL`. GitHub Actions has no IPv6, and the direct
   host is IPv6-only without the add-on ([migrations.md](migrations.md), "How
   migrations reach production"). `scripts/db_backup.sh:39` strips a `+driver`
   suffix itself, so either URL form works.
-- **The client is newer than the server, which `pg_dump` supports.** The
-  workflow installs `postgresql-client-18`, and production is 17.
+- **The dump runs `pg_dump` 18 against production's 17, read since 2026-10-11
+  (#282).** Installing `postgresql-client-18` was not enough. The first run with
+  real secrets, `38084208170` on 2026-10-10, logged `server version: 17.11;
+  pg_dump version: 16.15 (Ubuntu 16.15-1.pgdg24.04+2)`, aborted, and uploaded
+  nothing. On the runner `/usr/bin/pg_dump` is Debian's `pg_wrapper`. Given a
+  connection string and no `-h` or `PGHOST`, it runs the version of the one local
+  cluster, read at source in `pg_wrapper` and `PgCommon.pm`'s `user_cluster_map`
+  (`credativ/postgresql-common`). The runner image installs the `postgresql-16`
+  server package (`actions/runner-images`, `install-postgresql.sh`). The
+  runner's cluster list itself was not read. `db-backup.yml` now puts
+  `/usr/lib/postgresql/18/bin` first on `PATH`, which bypasses the wrapper, and
+  `scripts/db_backup.sh:36` logs the version and path it runs. Run
+  `38144882642`, dispatched 2026-10-11 from the fix branch, logged
+  `==> pg_dump (PostgreSQL) 18.6 (Ubuntu 18.6-1.pgdg24.04+2) at
+  /usr/lib/postgresql/18/bin/pg_dump` and
+  `==> uploaded backups/db/daily/familyroots-2026-10-11.dump.gz`.
+  `storage.objects` then held that object at 68,588 bytes, and its Sunday copy
+  under `db/weekly/`.
 - **The database and its backups now share one project.** Before, losing the
   Render database left the dumps in Supabase. Now losing the Supabase project,
   or the account, loses both. Whether the project's plan keeps backups of its
@@ -818,7 +837,9 @@ and what is still open:
   there. Which schemas a backup should hold is open. `auth.users` is where every
   account lives now, so a `public`-only dump would restore data no one can sign
   in to. Read the first dump's table of contents
-  (`gunzip -c <dump.gz> | pg_restore -l`) before deciding.
+  (`gunzip -c <dump.gz> | pg_restore -l`) before deciding. That dump exists
+  since 2026-10-11, `db/daily/familyroots-2026-10-11.dump.gz`, and its table
+  of contents has not been read (#285).
 - **A restore into a Supabase project replays `041`, `042` and `043`, since
   2026-10-11 (#283).** `scripts/restore_bootstrap_role.sql` lets `postgres` enter
   `familyroots_app`, takes from `anon` and `authenticated` everything the
@@ -832,13 +853,16 @@ and what is still open:
 
 ## Go-live checklist
 
-- [ ] Create a **private** Supabase Storage bucket named `backups` in the
-  production project, `xkmutzxdhdigyfisfrwd`.
-- [ ] Add three GitHub Actions secrets (repo settings): `PROD_DATABASE_URL`
+- [x] Create a **private** Supabase Storage bucket named `backups` in the
+  production project, `xkmutzxdhdigyfisfrwd`. Created `2026-10-10 11:53:29+00`
+  per `storage.buckets`, read 2026-10-11 (#282).
+- [x] Add three GitHub Actions secrets (repo settings): `PROD_DATABASE_URL`
   (Supavisor's session pooler, the same string as `MIGRATION_DATABASE_URL`),
   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — see
   [secrets.md](secrets.md) for what each one is and where it comes from, and
   [deployment.md](deployment.md), "Go-live checklist", B, for the values.
+  All three set 2026-10-10 between `11:59Z` and `12:09Z` per `gh secret list`.
+  Run `38144882642` dumped and uploaded with them.
 - [ ] **Read the first dump's schema list before drilling it**
   ([Since 2026-10-10: one project](#since-2026-10-10-one-project)), and decide
   which schemas a backup holds.
@@ -851,9 +875,11 @@ and what is still open:
   Storage-only credential (Supabase S3 access keys, restricted to the
   `backups` bucket) for the backup job when available, and keep the
   service-role key out of CI. See [secrets.md](secrets.md) for details.
-- [ ] Run `workflow_dispatch` once by hand and confirm the job goes green with
+- [x] Run `workflow_dispatch` once by hand and confirm the job goes green with
   an actual upload (not the `::notice::` skip line) and an object appears
-  under `backups/db/daily/`.
+  under `backups/db/daily/`. Run `38144882642`, 2026-10-11, from the #282 fix
+  branch: green, `==> uploaded backups/db/daily/familyroots-2026-10-11.dump.gz`,
+  and `storage.objects` holds it at 68,588 bytes.
 - [ ] Run `scripts/restore_drill.sh --latest` against that first real prod
   dump and confirm `DRILL: PASS`; record the result in the drill log above.
 - [ ] **Read the drill's `request role:` line and record it**, not only the
@@ -870,10 +896,13 @@ and what is still open:
   mean a backup happened. Someone must check the Actions log (not just the
   status) after go-live to confirm real uploads are occurring — this is a
   silent no-backup risk if skipped.
-- [ ] Confirm the workflow's pg_dump major version ≥ the production Postgres
-  major. Production is 17 since 2026-10-10 (it was Render's 18), and the
-  workflow pins `postgresql-client-18`, so this holds. Re-pin when the database
-  passes 18.
+- [x] Confirm the workflow's pg_dump major version ≥ the production Postgres
+  major. **Read 2026-10-11, not assumed.** Run `38144882642` logged
+  `pg_dump (PostgreSQL) 18.6` against production's 17.11. Installing the package
+  alone had not held
+  ([Since 2026-10-10: one project](#since-2026-10-10-one-project)). Re-pin both
+  the package and the `PATH` directory in `db-backup.yml` when the database
+  passes 18. Every run's first `==>` line names the version it used.
 
 ## Still deferred (honest gaps)
 

@@ -33,7 +33,7 @@ if [ -n "${BACKUP_TMPDIR:-}" ]; then
 fi
 DUMP_PATH="${TMPDIR_LOCAL}/${NAME}"
 
-echo "==> pg_dump (custom format) -> ${DUMP_PATH}"
+echo "==> $(pg_dump --version) at $(command -v pg_dump), custom format -> ${DUMP_PATH}"
 # Strip any SQLAlchemy-style +driver suffix (e.g. +psycopg, +asyncpg) if present;
 # pg_dump wants a plain postgresql:// scheme (equivalent of scheme.split("+", 1)[0]).
 CLEAN_URL="$(printf '%s' "$DATABASE_URL" | sed -E 's#^([a-z]+)\+[a-z0-9]+://#\1://#')"

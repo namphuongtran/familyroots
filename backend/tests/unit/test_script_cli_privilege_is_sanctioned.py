@@ -22,7 +22,8 @@ CLIs that are not `psql` are invisible. `createdb`, `dropdb`, and above all `cre
 The tree invokes exactly two of them: `pg_dump` at `scripts/db_backup.sh:40` and `pg_restore` at
 `scripts/restore_drill.sh:130`. There is no `createuser`, no `dropuser`, no `createdb` and no
 `dropdb` anywhere. **The gap was never a live defect; it was that the guards' shape had a hole
-their own error messages did not admit to.**
+their own error messages did not admit to.** Since 2026-10-11 (#282) `scripts/db_backup.sh:36` also
+runs `pg_dump --version`, to log which client the backup used. It connects to nothing.
 
 *(A note on that measurement, because it nearly went in wrong. `git grep -E` is POSIX ERE, where
 `\b` is not a word boundary. The first run of the command above used `\b(...)\b` and returned
@@ -104,11 +105,11 @@ until someone classifies it.
 
 **`pg_dump` is silent by decision, not by omission.** It reads; it neither escalates nor
 destroys, and the seed's end state names those two. `scripts/db_backup.sh:40` is the invocation
-that decision leaves silent, and `test_the_backup_script_is_silent_because_pg_dump_reads` pins
-it, so anyone who later gives `pg_dump` a class is told immediately that `db_backup.sh` then
-needs an entry. Exfiltration — `pg_dump` writing the whole database to a file, `pg_dumpall`
-writing role password hashes — is **not** this guard's subject. Say so rather than implying a
-silent CLI is a safe one.
+that decision leaves silent, with the `pg_dump --version` at `:36`, and
+`test_the_backup_script_is_silent_because_pg_dump_reads` pins it, so anyone who later gives
+`pg_dump` a class is told immediately that `db_backup.sh` then needs an entry. Exfiltration —
+`pg_dump` writing the whole database to a file, `pg_dumpall` writing role password hashes — is
+**not** this guard's subject. Say so rather than implying a silent CLI is a safe one.
 
 ## The escalating flags, read at source
 
