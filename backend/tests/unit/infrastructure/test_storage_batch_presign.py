@@ -7,6 +7,8 @@ with a 400. It reports a missing object per item, inside a 200:
 ``{"error": "Either the object does not exist or you do not have access to it",
 "path": ..., "signedURL": None}``. The single-path sign answers the same object
 with a 404 ``not_found``, which the adapter raises as ``StorageNotFoundError``.
+Both look up the object only, never the bucket (storage-api's ``signObjectUrl`` and
+``signObjectUrls``, read in the v1.77.5 container on 2026-10-11).
 """
 
 from __future__ import annotations
@@ -17,12 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 from storage3.exceptions import StorageApiError
 
-from app.domain.document.repository import (
-    StorageBucketNotConfiguredError,
-    StorageError,
-    StorageNotFoundError,
-    StorageUnavailableError,
-)
+from app.domain.document.repository import StorageNotFoundError, StorageUnavailableError
 
 pytestmark = pytest.mark.asyncio
 
@@ -35,6 +32,7 @@ class FakeFilesApi:
 
     def __init__(self, missing: frozenset[str] = frozenset()) -> None:
         self.missing = missing
+        self.missing_error = _MISSING
         self.batch_calls: list[list[str]] = []
         self.single_calls: list[str] = []
 
@@ -47,7 +45,7 @@ class FakeFilesApi:
         items: list[dict[str, Any]] = []
         for path in paths:
             if path in self.missing:
-                items.append({"error": _MISSING, "path": path, "signedURL": None})
+                items.append({"error": self.missing_error, "path": path, "signedURL": None})
             else:
                 url = f"https://storage.example/sign/{path}?ttl={expires_in}"
                 items.append({"error": None, "path": path, "signedURL": url})
@@ -94,40 +92,19 @@ async def test_no_paths_makes_no_call(monkeypatch: pytest.MonkeyPatch) -> None:
     assert files_api.batch_calls == []
 
 
-async def test_a_repeated_path_is_signed_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    files_api = FakeFilesApi()
-    _install(monkeypatch, files_api)
-
-    urls = await _sign(["a.png", "b.png", "a.png"])
-
-    assert files_api.batch_calls == [["a.png", "b.png"]]
-    assert set(urls) == {"a.png", "b.png"}
-
-
-async def test_an_item_storage_reports_missing_is_not_found(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("error", [_MISSING, "worded some other way"])
+async def test_an_item_storage_could_not_sign_is_not_found(
+    monkeypatch: pytest.MonkeyPatch, error: str
 ) -> None:
-    """The same outcome as the single-path sign of a missing object: a 404 type."""
-    _install(monkeypatch, FakeFilesApi(missing=frozenset({"b.png"})))
+    """The single sign answers a missing object with a 404 type, so the batch must
+    too. Storage sets an item's error only when its object lookup found no row, so
+    the adapter does not depend on the error's wording."""
+    files_api = FakeFilesApi(missing=frozenset({"b.png"}))
+    files_api.missing_error = error
+    _install(monkeypatch, files_api)
 
     with pytest.raises(StorageNotFoundError):
         await _sign(["a.png", "b.png", "c.png"])
-
-
-async def test_an_item_error_storage_has_never_sent_stays_loud(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """No HTTP handler maps a bare StorageError, so it surfaces as a 500, the way
-    ``_classify_storage`` leaves an unexpected 4xx."""
-    files_api = MagicMock()
-    files_api.create_signed_urls.return_value = [
-        {"error": "something new", "path": "a.png", "signedURL": None}
-    ]
-    _install(monkeypatch, files_api)
-
-    with pytest.raises(StorageError) as raised:
-        await _sign(["a.png"])
-    assert type(raised.value) is StorageError
 
 
 @pytest.mark.parametrize(
@@ -156,20 +133,28 @@ async def test_a_path_storage_returns_no_url_for_is_unavailable(
 
 
 @pytest.mark.parametrize(
-    "exc, expected",
+    "exc",
     [
-        (StorageApiError("boom", "internal_error", "500"), StorageUnavailableError),
-        (ConnectionError("dns failure"), StorageUnavailableError),
-        (StorageApiError("Bucket not found", "error", "400"), StorageBucketNotConfiguredError),
-        (StorageApiError("Object not found", "not_found", "404"), StorageNotFoundError),
+        pytest.param(StorageApiError("boom", "internal_error", "500"), id="provider-5xx"),
+        pytest.param(ConnectionError("dns failure"), id="transport"),
+        pytest.param(StorageApiError("Bucket not found", "error", "400"), id="bucket-not-found"),
+        pytest.param(StorageApiError("Object not found", "not_found", "404"), id="object-404"),
+        pytest.param(StorageApiError("Duplicate", "duplicate", "409"), id="unexpected-4xx"),
     ],
 )
-async def test_a_failed_call_is_classified_as_the_single_path_sign_is(
-    monkeypatch: pytest.MonkeyPatch, exc: Exception, expected: type[Exception]
+async def test_a_failed_call_raises_what_the_single_sign_raises(
+    monkeypatch: pytest.MonkeyPatch, exc: Exception
 ) -> None:
+    """The same SDK failure, through both signs: the batch must raise the same type."""
+    from app.infrastructure.storage.supabase_adapter import SupabaseStorageAdapter
+
     files_api = MagicMock()
+    files_api.create_signed_url.side_effect = exc
     files_api.create_signed_urls.side_effect = exc
     _install(monkeypatch, files_api)
 
-    with pytest.raises(expected):
+    with pytest.raises(Exception) as single:
+        await SupabaseStorageAdapter().get_presigned_url("a.png")
+    with pytest.raises(Exception) as batch:
         await _sign(["a.png"])
+    assert type(batch.value) is type(single.value)

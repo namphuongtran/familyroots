@@ -124,11 +124,11 @@ class StoragePort(Protocol):
     ) -> dict[str, str]:
         """Presign many paths at once. Returns each path's URL, keyed by that path.
 
-        The number of provider calls is bounded by the provider's per-request limit,
-        never one per path. It fails as ``get_presigned_url`` fails for a path it
-        cannot sign: ``StorageNotFoundError`` for a missing object,
-        ``StorageUnavailableError`` for an outage or a URL the provider did not return,
-        ``StorageBucketNotConfiguredError`` for a missing bucket. No path, no call.
+        One provider call per provider page of paths, never one per path, and none for
+        no paths. For the same storage state it raises what ``get_presigned_url``
+        raises for the first path it cannot sign: ``StorageNotFoundError`` for a
+        missing object, ``StorageUnavailableError`` for an outage or a URL the
+        provider did not return.
         """
         ...
 

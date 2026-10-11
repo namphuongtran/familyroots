@@ -119,8 +119,8 @@ class ExportQueryHandler:
     async def _presign_manifest(
         self, documents: list[dict[str, Any]], now: datetime
     ) -> list[dict[str, Any]]:
-        # One batch, not one Storage round trip per document, so the presign step's
-        # duration does not grow with the clan's document count (#271).
+        # One batch call, not one Storage round trip per document (#271). The adapter
+        # pages it by the provider's per-request limit.
         expires_at = (now + timedelta(seconds=DEFAULT_PRESIGN_TTL)).isoformat()
         urls = await self._storage.get_presigned_urls([doc["storage_path"] for doc in documents])
         return [

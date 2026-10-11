@@ -38,14 +38,9 @@ logger = logging.getLogger(__name__)
 _LIST_PAGE_SIZE = 100
 
 # Storage's batch sign refuses more than 1000 paths in one request, and an empty
-# list, each with a 400: "body/paths must NOT have more than 1000 items". Measured
-# on local storage-api v1.77.5 on 2026-10-11.
+# list, each with a 400: "body/paths must NOT have more than 1000 items". It is
+# storage-api's MAX_OBJECTS_PER_REQUEST; measured on local v1.77.5 on 2026-10-11.
 _SIGN_BATCH_SIZE = 1000
-
-# How the batch sign reports a missing object: per item, inside a 200. The
-# single-path sign answers the same object with a 404 `not_found`. A missing bucket
-# reads the same way on both (measured on storage-api v1.77.5, 2026-10-11).
-_SIGN_ITEM_MISSING = "does not exist"
 
 
 def _parse_storage_timestamp(value: object) -> datetime | None:
@@ -259,7 +254,7 @@ class SupabaseStorageAdapter:
     async def get_presigned_urls(
         self, storage_paths: Sequence[str], expires_in: int = DEFAULT_PRESIGN_TTL
     ) -> dict[str, str]:
-        paths = list(dict.fromkeys(storage_paths))
+        paths = list(storage_paths)
         if not paths:
             return {}  # a clan with no documents never needed a Storage client
         bucket = settings.SUPABASE_STORAGE_BUCKET
@@ -272,13 +267,11 @@ class SupabaseStorageAdapter:
             except Exception as e:
                 raise _classify_bucket(e, bucket) from e
             for item in items:
-                error = item["error"]
-                if error and _SIGN_ITEM_MISSING in error:
-                    raise StorageNotFoundError(f"{item['path']!r}: {error}")
-                if error:
-                    # Not a reply Storage has been seen to give. Unmapped, so it stays a
-                    # loud 500, as _classify_storage leaves an unexpected 4xx.
-                    raise StorageError(f"{item['path']!r}: {error}")
+                if item["error"]:
+                    # Storage sets an item's error only when its object lookup found no
+                    # row, the case the single sign answers with a 404 `not_found`
+                    # (storage-api v1.77.5, `signObjectUrls`, read 2026-10-11).
+                    raise StorageNotFoundError(f"{item['path']!r}: {item['error']}")
                 if item["signedURL"]:
                     signed[item["path"]] = item["signedURL"]
         for path in paths:

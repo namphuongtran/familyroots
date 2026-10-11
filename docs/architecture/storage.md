@@ -260,13 +260,15 @@ adapter with only the SDK client faked.
 refuses more than 1000 in one request, and an empty list too, each with a 400. The
 single sign answers a missing object with a 404 `not_found`. The batch answers it
 inside a 200, per item: `{"error": "Either the object does not exist or you do not
-have access to it", "signedURL": null}`. The adapter raises `StorageNotFoundError` for
-that item, so the export fails as a single presign would. A failure of the whole call
-is classified through `_classify_bucket` like any other. Measured on local storage-api
-v1.77.5 on 2026-10-11. On that version a sign against a bucket that does not exist does
-not say "Bucket not found" at all. The single sign answers 404 `Object not found` and
-the batch reports the per-item missing error, so both answer `404 storage_not_found`,
-not the 503 above.
+have access to it", "signedURL": null}`. Storage sets an item's error only when its
+object lookup found no row, so the adapter raises `StorageNotFoundError` for any item
+error, whatever its wording, and the export fails as a single presign would. A failure
+of the whole call is classified through `_classify_bucket` like any other. Measured on
+local storage-api v1.77.5 on 2026-10-11, and read in its `signObjectUrl` and
+`signObjectUrls`. **Neither sign checks the bucket**, only the object row. So a sign
+against a bucket that does not exist never says "Bucket not found": both answer
+`404 storage_not_found`, not the 503 above. `docs/contracts/rest-exports-api.md`
+("Minting each `download_url`…") still promises that 503 for the export (#271).
 
 The blocking `storage3` SDK is offloaded with `asyncio.to_thread` so it never freezes
 the event loop.
