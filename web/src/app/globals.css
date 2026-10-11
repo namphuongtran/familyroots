@@ -181,6 +181,15 @@
   --color-card-foreground: #1a1a1a;
 
   /*
+    `scrim` is spec § 2.1's row of the same name, "rgba(29,27,22,0.44)", behind
+    dialogs and sheets: the mandated `on-surface` ink #1d1b16 at 44 percent, never
+    #000000. It carries its own alpha, so `bg-scrim` takes no `/40` modifier. The
+    three dialog overlays and the document gallery's gradient take it (#238). They
+    were `bg-black/40` and `from-black/40`, which have no dark value.
+  */
+  --color-scrim: rgba(29, 27, 22, 0.44);
+
+  /*
     The two mandated typefaces, read through the variables that
     `web/src/app/layout.tsx` sets on the document element with
     `next/font/local`. `--font-serif` carries Plus Jakarta Sans, which is a sans
@@ -345,6 +354,12 @@
     --color-popover-foreground: #f1ebde;
     --color-muted: #24221a;
     --color-muted-foreground: #a99f89;
+
+    /*
+      `scrim` is quoted from § 2.2's row of the same name, "rgba(8,7,5,0.62)" (#238).
+      It is not derived from the light value; the spec gives both.
+    */
+    --color-scrim: rgba(8, 7, 5, 0.62);
 
     /*
       `border` stays decorative in dark for the same reason it does in light: the

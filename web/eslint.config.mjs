@@ -55,6 +55,41 @@ const PALETTE_HAS_NO_DARK_VALUE =
   'Use a semantic token: text-muted-foreground, not text-gray-500. For a hue with no token, ' +
   'see ADR-055. See .claude/rules/tailwind.md § 2 and § 3.'
 
+/*
+ * `white` and `black` are one value each, `--color-white: #fff` and `--color-black: #000`, with no
+ * `-50` step, so the families above never held them, and neither has a dark value: a `bg-white`
+ * header stayed white on a dark screen with every gate green (#238). This bans them beside the
+ * palette rule, under its own message, because each has a token to name instead.
+ *
+ * They are read from the same file, not typed: every `--color-<name>` whose name ends in no step,
+ * a hyphenated one included. At tailwindcss 4.3.3 that read `black` and `white` on 2026-10-11,
+ * and a theme file that yields none throws, for the reason the family list does. The shape is the
+ * palette rule's, any utility prefix and `var(--color-white)`, so `hover:bg-white`,
+ * `from-black/40` and `text-white!` are caught. `whitespace-*` is not: `white` is never preceded
+ * by a hyphen there, nor followed by a word boundary. `transparent`, `current` and `inherit` stay
+ * legal, because each follows its context, which already flips.
+ */
+const SINGLE_VALUE_COLOURS = [...TAILWIND_THEME.matchAll(/--color-([a-z]+(?:-[a-z]+)*):/g)].map(
+  ([, c]) => c,
+)
+if (SINGLE_VALUE_COLOURS.length === 0) {
+  throw new Error('eslint.config.mjs: tailwindcss/theme.css declared no single-value --color-*.')
+}
+const SINGLE_VALUE_CLASS_PATTERN = `\\b(?:[a-z]+-)+(?:${SINGLE_VALUE_COLOURS.join('|')})\\b`
+const SINGLE_VALUE_HAS_NO_DARK_VALUE =
+  'White and black have no dark value, so they stay the same in dark mode. Use a semantic ' +
+  'token: bg-card, not bg-white; bg-scrim, not bg-black/40; text-destructive-foreground on ' +
+  'bg-destructive, not text-white. See .claude/rules/tailwind.md § 2 and § 3.'
+
+/**
+ * Each ban matches a string literal and a template-literal segment alike, so a `className`, a
+ * `cn()` argument and a template literal are all caught, and a comment, which is neither, is not.
+ */
+const bannedInAnyString = (pattern, message) => [
+  { selector: `Literal[value=/${pattern}/]`, message },
+  { selector: `TemplateElement[value.raw=/${pattern}/]`, message },
+]
+
 const config = [
   /*
    * Playwright was given a second Next.js dist dir so the banner spec can
@@ -83,16 +118,9 @@ const config = [
     rules: {
       'no-restricted-syntax': [
         'error',
-        { selector: 'Literal[value=/text-gold-/]', message: GOLD_IS_NEVER_TEXT },
-        { selector: 'TemplateElement[value.raw=/text-gold-/]', message: GOLD_IS_NEVER_TEXT },
-        {
-          selector: `Literal[value=/${PALETTE_CLASS_PATTERN}/]`,
-          message: PALETTE_HAS_NO_DARK_VALUE,
-        },
-        {
-          selector: `TemplateElement[value.raw=/${PALETTE_CLASS_PATTERN}/]`,
-          message: PALETTE_HAS_NO_DARK_VALUE,
-        },
+        ...bannedInAnyString('text-gold-', GOLD_IS_NEVER_TEXT),
+        ...bannedInAnyString(PALETTE_CLASS_PATTERN, PALETTE_HAS_NO_DARK_VALUE),
+        ...bannedInAnyString(SINGLE_VALUE_CLASS_PATTERN, SINGLE_VALUE_HAS_NO_DARK_VALUE),
       ],
     },
   },
@@ -143,5 +171,5 @@ const config = [
   },
 ]
 
-export { GOLD_IS_NEVER_TEXT, PALETTE_HAS_NO_DARK_VALUE }
+export { GOLD_IS_NEVER_TEXT, PALETTE_HAS_NO_DARK_VALUE, SINGLE_VALUE_HAS_NO_DARK_VALUE }
 export default config

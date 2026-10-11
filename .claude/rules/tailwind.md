@@ -113,7 +113,9 @@ their `hover:` twins `bg-primary-hover` and `bg-primary-container-hover`; the he
 `bg-heritage`, `text-heritage-foreground`, `bg-heritage-container`,
 `text-heritage-container-foreground`; the status tokens `text-success` (ADR-055), and
 `bg-success-container`, `text-success-container-foreground`, `bg-warning-container` and
-`text-warning-container-foreground` (#200, quoted from spec § 2.1 and § 2.2); `cream-50` to `cream-400`, `gold-100` to `gold-900`,
+`text-warning-container-foreground` (#200, quoted from spec § 2.1 and § 2.2); `bg-scrim` and
+`from-scrim` (#238, spec § 2.1's `rgba(29,27,22,0.44)` and § 2.2's `rgba(8,7,5,0.62)`), behind
+every dialog and under the gallery's controls, carrying their own alpha, so no `/40`; `cream-50` to `cream-400`, `gold-100` to `gold-900`,
 `font-serif`, `font-sans`, `font-mono`, `rounded-sm`, `rounded-md`, `rounded-lg`, and the three
 `animate-*` values. Note that § 5 forbids `rounded-sm` on design grounds even though it resolves.
 
@@ -237,8 +239,9 @@ the whole of this section. **The screens are done since S-038 and ADR-055, and l
 
 **The mechanism is `prefers-color-scheme`, and it is the only one.** ADR-045 decided it.
 `globals.css` holds one unlayered `@media (prefers-color-scheme: dark)` block with a `:root` rule
-overriding twenty-five `--color-*` tokens: the seventeen semantic names, the `primary` family, and
-the `heritage` family. The `@custom-variant dark (&:is(.dark *))` that used to sit on line 3 is
+overriding thirty-three `--color-*` tokens, counted 2026-10-11 (#238): the seventeen semantic
+names, the `primary` family and its two hovers, the `heritage` family, the status tokens, and
+`scrim`. This said twenty-five until then, which was already seven short. The `@custom-variant dark (&:is(.dark *))` that used to sit on line 3 is
 **deleted**, so the Tailwind v4 default `dark:` variant applies, and the default is the media
 query. Palette and variant now switch on one signal.
 
@@ -273,6 +276,19 @@ comment recording what was removed, and those stay.
 - **It cannot see a class assembled at runtime**, such as `` `bg-${tone}-50` ``. None existed on
   2026-10-07. A dark screenshot with a light grey box in it is now a new defect, and that is the
   first place to look.
+- **`white` and `black` are banned too, since #238, by a sibling rule with its own message.**
+  Each is one value, `--color-white: #fff` and `--color-black: #000`, with no `-50` step, so the
+  family list never held them, and a `bg-white` header stayed white on a dark screen with every
+  gate green. The sibling reads every `--color-<name>` with no step from the same `theme.css`,
+  `black` and `white` at 4.3.3, and takes the palette rule's shape, so `hover:bg-white`,
+  `from-black/40` and `var(--color-white)` are caught. `whitespace-*` is not a colour and stays
+  legal. So do `transparent`, `current` and `inherit`, which follow a context that already flips.
+  The ten live sites moved on 2026-10-11: a surface to `bg-card`, a translucent chip to
+  `bg-card/70` or `bg-card/80`, the white icon on `bg-destructive` to
+  `text-destructive-foreground`, and the three dialog overlays and the gallery's gradient to
+  `scrim` (§ 2). `e2e/auth/backoffice.auth.spec.ts` reads the `(dashboard)` header and the
+  backoffice drawer's scrim under both schemes. With the old classes planted, the header read
+  `rgb(255, 255, 255)` in dark and the scrim `oklab(0 0 0 / 0.4)` in both.
 
 To re-take the count, from the repository root. `P` has the lint rule's shape, any utility
 prefix, so it counts what the rule bans. On 2026-10-07 it printed 24 hits in 10 files, every one
@@ -285,6 +301,18 @@ counts mean no live class.
 F=$(grep -oE -- '--color-[a-z]+-50:' web/node_modules/tailwindcss/theme.css | sed -E 's/--color-([a-z]+)-50:/\1/' | paste -sd'|' -)
 P="\\b([a-z]+-)+($F)-[0-9]{2,3}\\b"
 grep -rEoh "$P" web/src | wc -l; grep -rElE "$P" web/src | wc -l
+```
+
+The white and black count has the sibling rule's shape, and reads only what that rule lints: the
+`.ts` and `.tsx` files under `web/src`, tests left out. `globals.css` is not in it; its comments
+name the classes the scrim replaced. On 2026-10-11 it printed one hit, the comment at
+`app/[locale]/backoffice/dashboard/page.tsx:193`, against eleven on `main` the same day. **Use `-P`, not `-E`, with `git grep` on a Mac.**
+Apple Git 2.54 does not read `\b` in an extended pattern, so `git grep -nE` with this pattern
+printed nothing on the same tree, with ten live sites still in it. A count that prints nothing is
+a reading only once it has been seen to print something.
+
+```bash
+git grep -nP '\b([a-z]+-)+(white|black)\b' -- 'web/src/*.ts' 'web/src/*.tsx' | grep -vE '\.test\.tsx?:'
 ```
 
 **The dark hover fill names a literal hex where the light one names the token, and that asymmetry

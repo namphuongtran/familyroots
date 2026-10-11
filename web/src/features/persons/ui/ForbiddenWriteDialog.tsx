@@ -30,7 +30,7 @@ export function ForbiddenWriteDialog({ open, onCopyMine, onClose }: ForbiddenWri
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40" />
+        <Dialog.Overlay className="bg-scrim fixed inset-0" />
         <Dialog.Content className="bg-card fixed top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6">
           <Dialog.Title className="text-foreground font-serif text-lg">
             {t('forbidden_title')}

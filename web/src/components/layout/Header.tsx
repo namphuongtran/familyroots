@@ -25,7 +25,7 @@ export function Header({ title }: HeaderProps) {
   const [isSwitching, startTransition] = useTransition()
 
   return (
-    <header className="border-cream-200 flex h-16 shrink-0 items-center justify-between border-b bg-white px-6">
+    <header className="border-cream-200 bg-card flex h-16 shrink-0 items-center justify-between border-b px-6">
       <h1 className="text-foreground truncate font-serif text-lg font-semibold">{title ?? ''}</h1>
 
       <div className="flex items-center gap-3">
@@ -79,7 +79,7 @@ export function Header({ title }: HeaderProps) {
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div
                 className={cn(
-                  'border-cream-200 absolute top-full right-0 z-20 mt-1 w-48 rounded-lg border bg-white shadow-lg',
+                  'border-cream-200 bg-card absolute top-full right-0 z-20 mt-1 w-48 rounded-lg border shadow-lg',
                   'py-1',
                 )}
               >

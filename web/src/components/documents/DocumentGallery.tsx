@@ -88,21 +88,21 @@ export function DocumentGallery({ personId }: DocumentGalleryProps) {
           </div>
 
           {capabilities.deleteDocument && (
-            <div className="absolute inset-x-0 bottom-0 flex justify-end bg-linear-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="from-scrim absolute inset-x-0 bottom-0 flex justify-end bg-linear-to-t to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
               {confirmDeleteId === doc.id ? (
                 <button
                   onClick={() => {
                     deleteDocument.mutate(doc.id)
                     setConfirmDeleteId(null)
                   }}
-                  className="bg-destructive hover:bg-destructive/90 rounded-full p-1.5 text-white"
+                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-full p-1.5"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               ) : (
                 <button
                   onClick={() => setConfirmDeleteId(doc.id)}
-                  className="text-destructive rounded-full bg-white/80 p-1.5 hover:bg-white"
+                  className="text-destructive bg-card/80 hover:bg-card rounded-full p-1.5"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

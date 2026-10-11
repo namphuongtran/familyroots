@@ -263,9 +263,10 @@ const resolve = (token: string, value: string, vars: Map<string, string>): strin
  * ------------------------------------------------------------------------- */
 
 /**
- * Deliberately short. Every colour in `globals.css` is a hex literal or a
- * `color-mix()` of one, and the only bare words in the file are the `black` and
- * `white` the two hover mixes shift toward. Extending this list is cheap and a
+ * Deliberately short. Every colour in `globals.css` is a hex literal, a
+ * `color-mix()` of one, or the `scrim`'s `rgba()` of four numbers (#238), and the
+ * only bare words in the file are the `black` and `white` the two hover mixes
+ * shift toward. Extending this list is cheap and a
  * failure here says so by name, which is the right trade against a 148-entry
  * table nobody reads.
  */
