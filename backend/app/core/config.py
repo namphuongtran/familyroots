@@ -151,10 +151,11 @@ class Settings(BaseSettings):
 
     # How many requests one client IP may send to /api/v1/auth and /api/v1/invitations, one
     # shared bucket, in a 60-second window (ADR-021 Decision 3, amended 2026-10-07 by #226).
-    # 20 is production's budget, and production leaves it unset (docs/ops/deployment.md,
-    # "Go-live checklist" C). It is a setting so the authenticated e2e harness's backend can
-    # raise it: that suite sends every request from one address, and a full run spends more
-    # than 20 in a minute. At least 1, because 0 would answer every sign-in with a 429.
+    # 20 is production's budget, and the go-live checklist leaves it unset
+    # (docs/ops/deployment.md, "Go-live checklist" C). It is a setting so the authenticated
+    # e2e harness's backend can raise it: that suite sends every request from one address,
+    # and a full run spends more than 20 in a minute. At least 1, because 0 would answer
+    # every sign-in with a 429.
     RATE_LIMIT_AUTH_MAX_REQUESTS: int = Field(default=20, ge=1)
 
     # Document upload — the platform-wide max upload size (MB), env-tunable without a
@@ -236,8 +237,8 @@ class Settings(BaseSettings):
     def _normalize_database_url(cls, value: str) -> str:
         """Rewrite any supported URL form to the canonical psycopg v3 dialect.
 
-        Supabase's connection strings carry bare ``postgresql://``, and some hosts
-        still hand out ``postgres://``; older developer ``.env`` files may
+        Supabase's connection strings carry bare ``postgresql://``, and the older
+        ``postgres://`` alias is accepted too; older developer ``.env`` files may
         still carry ``+asyncpg`` or ``+psycopg2``. Normalizing here means the app
         engine (async) and Alembic (sync) always see one psycopg v3 URL.
         """

@@ -10,7 +10,7 @@ from app.core.config import Settings
     [
         # Supabase's connection strings carry bare postgresql://
         ("postgresql://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),
-        # Some hosts still hand out the postgres:// scheme
+        # The older postgres:// alias
         ("postgres://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),
         # Legacy developer .env files
         ("postgresql+asyncpg://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),

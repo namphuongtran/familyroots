@@ -129,16 +129,16 @@ the header for that case. → ADR-033.
   replica runs it; non-winning replicas no-op.
 
 ## Gaps / TODO
-- `SENTRY_DSN` is not yet set in the Vercel `familyroots-api` env (go-live item,
-  [deployment.md](deployment.md), "Go-live checklist" C) — until then production emits no
-  Sentry events.
+- `SENTRY_DSN` is a go-live item: [secrets.md](secrets.md), "Known gaps", lists every Vercel
+  variable as still outstanding ([deployment.md](deployment.md), "Go-live checklist" C). Until
+  it is set, production emits no Sentry events.
 - RED metrics now **exist** (`/internal/metrics`, opt-in) but nothing scrapes them:
   no Prometheus/Grafana deployment, no dashboards, and no alerting thresholds. Until a
   scraper exists, the endpoint is preparation only and Sentry remains the dashboard.
-- `METRICS_ENABLED` / `METRICS_TOKEN` are not set in the Vercel `familyroots-api` env,
-  so production serves 404 on `/internal/metrics`. When they are set, `METRICS_TOKEN`
-  must clear the ADR-040 floor or every cold start fails at boot — generate it with
-  `openssl rand -hex 32`.
+- The go-live checklist leaves `METRICS_ENABLED` unset ([deployment.md](deployment.md),
+  "Go-live checklist" C), so production serves 404 on `/internal/metrics`. When it is
+  set, `METRICS_TOKEN` must clear the ADR-040 floor or every cold start fails at boot —
+  generate it with `openssl rand -hex 32`.
 - `METRICS_TOKEN`'s floor is a **length** floor, not an entropy measurement (ADR-040).
   A 32-character hand-composed token passes and may be weak. There is no fix from
   inside the process; the mitigation is to generate the value.

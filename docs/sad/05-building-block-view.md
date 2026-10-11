@@ -8,10 +8,10 @@ graph TB
 
   mob[mobile · App Store and Play<br/>Flutter, Dart, BLoC]:::host
 
-  subgraph vercel[Vercel - functions in sin1]
+  subgraph vercel[Vercel - team namtp, functions in sin1]
     web[web · familyroots-web<br/>Next.js 16, React 19, TypeScript]:::host
     api[backend · familyroots-api<br/>FastAPI, SQLAlchemy async<br/>DDD, CQRS, hexagonal]:::host
-    sched[scheduler · Vercel Cron<br/>giỗ anniversaries, document purge<br/>advisory-locked daily jobs]:::host
+    sched[scheduler · Vercel Cron<br/>two daily calls, UTC]:::host
   end
 
   db[(database · Supabase<br/>PostgreSQL 17<br/>single schema, RLS layer-2)]:::store
@@ -51,7 +51,7 @@ graph TB
 | **web** | Browser UX, admin/backoffice, clan switcher, tree render (XYFlow) | Hold business rules; bypass application ports |
 | **mobile** | Native UX, offline-ish cache, push receipt | Assemble auth headers ad-hoc |
 | **backend** | All business rules, persistence, authz, contracts, export | Leak infra into domain |
-| **scheduler** | Daily anniversary scan + FCM fan-out | Write via UoW (sanctioned out-of-band writer) |
+| **scheduler** | Vercel Cron calls `/internal/cron/*` daily; the backend runs the anniversary scan + FCM fan-out and the document purge, each under a transaction-scoped advisory lock (ADR-065) | Write via UoW (sanctioned out-of-band writer) |
 | **database** | Canonical state + invariant backstops + RLS | Be reached by any client directly |
 
 ## 5.3 Interfaces between containers

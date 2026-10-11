@@ -98,11 +98,8 @@ uv run pulumi config set --secret supabase-service-key "sk_..."
 ## Backend Deployment
 
 The backend runs on Vercel Functions as project `familyroots-api`
-([ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md)). A merge to `main` deploys
-nothing. Publishing a GitHub Release runs `release.yml`, which migrates, deploys the API, reads
-`/health`, then deploys the web
-([ADR-067](../decisions/067-production-ships-on-a-published-release.md),
-[deployment.md](../ops/deployment.md)).
+([ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md)). How a release reaches
+production is [deployment.md](../ops/deployment.md).
 
 ## CI/CD Integration
 

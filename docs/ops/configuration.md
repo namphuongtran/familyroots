@@ -25,7 +25,7 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `CORS_ORIGINS` | localhost:3000/8080 | Allowed browser origins (JSON list) | **Boot fails** if `["*"]` or any loopback origin, `localhost` or `127.0.0.1` (#231) |
 | `ALLOWED_HOSTS` | `["*"]` | TrustedHost allow-list (JSON list) | **Boot fails** if `["*"]`. On Vercel it names the production alias |
 | `VERCEL_URL` | `""` | Set by Vercel, never by hand: this deployment's own generated host. `trusted_hosts` adds it to an explicit `ALLOWED_HOSTS`, because Vercel Cron calls that host (#265) | — |
-| `RATE_LIMIT_TRUST_FORWARDED_FOR` | unset (dev resolves `false`) | Trust `X-Forwarded-For` for rate-limit + audit IPs | **Required explicitly in production** (boot fails if unset): `true` behind a trusted proxy that overwrites `X-Forwarded-For`, as Vercel does ([deployment.md](deployment.md), "Go-live checklist" C), `false` when directly exposed |
+| `RATE_LIMIT_TRUST_FORWARDED_FOR` | unset (dev resolves `false`) | Trust `X-Forwarded-For` for rate-limit + audit IPs | **Required explicitly in production** (boot fails if unset): `true` behind a trusted proxy that sets `X-Forwarded-For`, as Vercel does ([deployment.md](deployment.md), "Go-live checklist" C), `false` when directly exposed |
 | `RATE_LIMIT_AUTH_MAX_REQUESTS` | `20` | Requests one client IP may send to `/api/v1/auth` and `/api/v1/invitations`, one shared bucket, per 60-second window ([ADR-021](../decisions/021-non-enumerating-auth-surfaces.md) Decision 3, amended by #226). The window is fixed. **Boot fails** below 1, in any environment, because 0 refuses every sign-in | **Leave unset**: production's budget is 20, and raising it weakens the mitigations ADR-021 cites, so it needs an ADR. Not refused under `production`, because the image e2e job boots that way with it raised. Only the authenticated e2e harness's backend sets it, to `1000` (`web/CLAUDE.md`, `image-e2e.yml`) |
 | `MAX_UPLOAD_SIZE_MB` | `50` (derived from domain policy) | Platform-wide upload cap; `max_upload_bytes` property is what handlers use. Enforced twice: at signing, on the declared size, and at confirm, on the size Storage recorded (ADR-068) | Tune as needed. Keep it at or under the bucket's `file_size_limit` (50 MiB), which refuses a larger PUT first |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Single platform clock for the cron **and** its date math | **Boot fails** on a non-IANA name (any env) |
@@ -114,8 +114,8 @@ JSON goes inline in `FIREBASE_CREDENTIALS_JSON`.
 
 `tests/unit/test_config_validation.py` pins the boot refusals for a wildcard or loopback
 `CORS_ORIGINS`, an unset `RATE_LIMIT_TRUST_FORWARDED_FOR`, and (since #191) an empty or loopback
-`INVITE_LINK_ORIGIN`. The validator in `app/core/config.py` also refuses each of the
-three Supabase vars when empty, and no test pins those three.
+`INVITE_LINK_ORIGIN`. `tests/unit/test_identity_unavailable_envelope.py` pins the refusal of
+each of the three Supabase vars when empty.
 
 Notes:
 
