@@ -256,6 +256,27 @@ jobs:
           # stack, or the backend cannot fetch the JWKS and every token is rejected.
           docker exec "$API_CONTAINER" python -c "import json, urllib.request; r = urllib.request.urlopen('$LOCAL_SUPABASE_URL/auth/v1/.well-known/jwks.json', timeout=10); print('from the container: JWKS', r.status, [k['kid'] for k in json.load(r)['keys']])"
 
+      # The image's own HEALTHCHECK, as Docker reads it, under this job's production
+      # configuration (#230). The step above reads /health from the runner. This reads the probe
+      # inside the container, which must find a Host that ALLOWED_HOSTS admits. Docker reports
+      # `starting` until the first probe passes, or until --retries failures land after
+      # --start-period. With backend/Dockerfile's timings that is about 125 s at worst: failures
+      # inside the 15 s start period do not count, and each of the three that do starts 30 s
+      # after the previous probe ended, which can take its full 5 s timeout. 150 s covers it.
+      - name: Read the backend image's own HEALTHCHECK
+        run: |
+          deadline=$((SECONDS + 150))
+          while :; do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "$API_CONTAINER")"
+            [ "$status" != starting ] && break
+            [ "$SECONDS" -lt "$deadline" ] || break
+            sleep 2
+          done
+          docker inspect --format '{{.State.Health.Status}} failing-streak={{.State.Health.FailingStreak}}' "$API_CONTAINER"
+          docker inspect --format '{{range .State.Health.Log}}exit {{.ExitCode}}: {{.Output}}{{end}}' "$API_CONTAINER"
+          [ "$status" = healthy ] \
+            || { echo "::error::The backend image's HEALTHCHECK reads $status, not healthy"; exit 1; }
+
       - name: Install web dependencies
         working-directory: web
         run: pnpm install --frozen-lockfile
