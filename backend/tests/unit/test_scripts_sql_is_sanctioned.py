@@ -16,13 +16,13 @@ database client is `scripts/restore_drill.sh:111`, which sets
     psql "$SCRATCH_DSN" -q -v ON_ERROR_STOP=1 -f "$BOOTSTRAP_SQL"
 
 **Nothing is wrong in `scripts/` today.** Measured 2026-08-22, `restore_bootstrap_role.sql`
-declared nine statements: one `CREATE ROLE` at `:38` and eight grant statements at
-`:44,45,46-47,50,51,52,53`. It declared no table and no policy. That is exactly what ADR-052
-decided it should declare. **The gap this guard closes is that nothing would notice if it
-changed.** Since 2026-10-11 (#283, ADR-052's amendment) it also replays migrations 041, 042 and
-043 for a restore into a Supabase project: more grant statements, and four
-`ALTER TABLE ... DISABLE ROW LEVEL SECURITY` statements, class `rls_off`. It still declares no
-table and no policy.
+declared nine statements, at line numbers it still had at `3ef0b68`: one `CREATE ROLE` at
+`:38` and eight grant statements at `:44,45,46-47,50,51,52,53`. It declared no table and no
+policy. That is exactly what ADR-052 decided it should declare. **The gap this guard closes is
+that nothing would notice if it changed.** Since 2026-10-11 (#283, ADR-052's amendment) it
+also replays migrations 041, 042 and 043 for a restore into a Supabase project: more grant
+statements, and four `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` statements, class `rls_off`.
+It still declares no table and no policy.
 
 ## The rule, and why it is shaped this way
 
@@ -238,7 +238,7 @@ def _classify(sql: str) -> list[tuple[str, str]]:
 
     The scan is over the whole comment-stripped text rather than over split statements, so a
     `CREATE ROLE` nested inside a `DO $$ ... $$` block — which is the exact shape
-    `restore_bootstrap_role.sql:53-58` uses — is classified rather than skipped.
+    `restore_bootstrap_role.sql:53-59` uses — is classified rather than skipped.
     """
     text = _strip_comments(sql)
     found: list[tuple[str, str]] = []
@@ -455,7 +455,7 @@ def test_a_policy_statement_after_a_table_statement_is_not_swallowed_by_it() -> 
 
 
 def test_the_do_block_is_looked_inside_rather_than_treated_as_one_opaque_statement() -> None:
-    """`restore_bootstrap_role.sql:53-58` wraps its `CREATE ROLE` in PL/pgSQL.
+    """`restore_bootstrap_role.sql:53-59` wraps its `CREATE ROLE` in PL/pgSQL.
 
     A classifier that split on `;` and read the leading keyword would see `DO`, then `BEGIN`,
     and never reach the `CREATE`. A `CREATE POLICY` hidden the same way would pass check 2.

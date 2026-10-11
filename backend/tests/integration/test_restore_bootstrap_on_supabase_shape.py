@@ -16,12 +16,12 @@ project needs three more:
 This module dumps the migrated chain from plain Postgres and restores it, as the shape's login,
 into the shape ``test_supabase_shaped_database`` builds, left empty. It runs the bootstrap with
 ``psql`` as the same login, which is the runbook in ``docs/ops/backup-restore.md``, "Restoring
-for real". Then it reads outcomes by running statements as the roles concerned
-(``.claude/rules/testing.md``):
+for real", and runs it twice, because the file must be idempotent. Then it reads outcomes by
+running statements as the roles concerned (``.claude/rules/testing.md``):
 
 1. the login enters the request role, and each clan sees its own rows (041);
-2. the Data API's roles are refused every relation in ``public``, and the next ones the login
-   creates (042);
+2. the Data API's roles are refused every table privilege but ``REFERENCES`` on every relation
+   in ``public``, and on the next table and sequence the login creates (042);
 3. the request role reads a row from each table the chain leaves outside layer 2 (043).
 
 **Each reading depends on one replay.** Readings 2 and 3 drop to their role from a superuser
@@ -33,9 +33,10 @@ turned RLS off on one table too many would leave the three readings above green.
 **The client binaries are chosen, not found.** ``pg_dump`` refuses a server newer than itself,
 and the ``pg_dump`` on the ubuntu runner's ``PATH`` is 16 while CI runs Postgres 18 (#282). So
 the module reads the server's major version and takes ``pg_dump``, ``pg_restore`` and ``psql``
-from one directory whose ``pg_dump`` is at least that version, the oldest such. ``TEST_PG_BIN_DIR``
-names the directory outright. Otherwise it looks in Debian's ``/usr/lib/postgresql/<N>/bin``,
-where ``backend-ci.yml`` installs the client, then Homebrew's keg-only ``libpq``, then ``PATH``.
+from one directory whose ``pg_dump`` is at least that version. ``TEST_PG_BIN_DIR`` names the
+directory outright. Otherwise the candidates are Debian's ``/usr/lib/postgresql/<N>/bin``, where
+``backend-ci.yml`` installs the client, Homebrew's keg-only ``libpq``, and ``PATH``, and the
+module takes the oldest version that is new enough, the earlier candidate on a tie.
 Finding none fails the module and lists what it tried. It never skips, because a restore test
 that skips is as silent as the backup in #282 was.
 
@@ -73,11 +74,11 @@ from tests.integration.test_supabase_shaped_database import (
     SupabaseShapedDb,
     _alembic_ok,
     _autocommit,
-    _new_objects_refused,
+    _new_objects_not_refused,
     _outcome,
     _rls_by_table,
-    _select_and_insert_not_refused,
     _supabase_shaped_database,
+    _table_privileges_not_refused,
 )
 
 pytestmark = pytest.mark.integration
@@ -161,10 +162,16 @@ def _run(binary: Path, *args: str) -> None:
     assert done.returncode == 0, f"{binary.name} exited {done.returncode}:\n{done.stderr[-4000:]}"
 
 
-def _restore_and_bootstrap(pg_client: Path, dump: Path, url: str) -> None:
-    """The runbook's two commands (``docs/ops/backup-restore.md``, "Restoring for real"),
-    as *url*'s login. ``psql -f`` is how the runbook and ``scripts/restore_drill.sh:149`` run
-    the bootstrap, so the file is read as a script, not as one statement."""
+def _bootstrap(pg_client: Path, url: str) -> None:
+    """``psql -f``, as the runbook and ``scripts/restore_drill.sh:149`` run the file, so it is
+    read as a script, not as one statement."""
+    _run(pg_client / "psql", _libpq(url), "-q", "-v", "ON_ERROR_STOP=1", "-f", str(_BOOTSTRAP_SQL))
+
+
+def _restore_and_bootstrap_twice(pg_client: Path, dump: Path, url: str) -> None:
+    """The runbook's two commands (``docs/ops/backup-restore.md``, "Restoring for real"), as
+    *url*'s login. The bootstrap runs a second time because the file must be idempotent: the
+    second run must succeed, and every reading comes after it."""
     _run(
         pg_client / "pg_restore",
         "--no-owner",
@@ -173,7 +180,8 @@ def _restore_and_bootstrap(pg_client: Path, dump: Path, url: str) -> None:
         f"--dbname={_libpq(url)}",
         str(dump),
     )
-    _run(pg_client / "psql", _libpq(url), "-q", "-v", "ON_ERROR_STOP=1", "-f", str(_BOOTSTRAP_SQL))
+    _bootstrap(pg_client, url)
+    _bootstrap(pg_client, url)
 
 
 # ---------------------------------------------------------------------------------------
@@ -248,10 +256,10 @@ def chain_dump(pg_client: Path, tmp_path_factory: pytest.TempPathFactory) -> Cha
 def restored(
     request: pytest.FixtureRequest, pg_client: Path, chain_dump: ChainDump
 ) -> Iterator[SupabaseShapedDb]:
-    """The dump restored into an empty Supabase-shaped database, then the bootstrap, both
-    as that shape's login."""
+    """The dump restored into an empty Supabase-shaped database, then the bootstrap twice,
+    all as that shape's login."""
     with _supabase_shaped_database(request.param, migrate=False) as db:
-        _restore_and_bootstrap(pg_client, chain_dump.path, db.login_url)
+        _restore_and_bootstrap_twice(pg_client, chain_dump.path, db.login_url)
         yield db
 
 
@@ -312,8 +320,10 @@ def test_the_data_api_roles_are_refused_every_restored_relation(
 ) -> None:
     """``pg_restore`` created every table as the login, so Supabase's default privileges
     granted these roles ALL on each. ``user_profiles`` is the one that matters most: it has
-    no RLS (ADR-059), so a granted ``SELECT`` there reads every user's email."""
-    relations, not_refused = _select_and_insert_not_refused(restored.admin_url, api_role)
+    no RLS (ADR-059), so a granted ``SELECT`` there reads every user's email. Every table
+    privilege but ``REFERENCES`` is tried, because the local Supabase image grants
+    ``TRUNCATE``, ``TRIGGER`` and ``MAINTAIN`` and no ``SELECT`` (042's docstring)."""
+    relations, not_refused = _table_privileges_not_refused(restored.admin_url, api_role)
 
     assert set(Base.metadata.tables) | {"alembic_version"} <= relations
     assert not_refused == {}
@@ -331,7 +341,7 @@ def test_a_table_and_a_sequence_created_after_the_bootstrap_are_refused_too(
 ) -> None:
     """The first migration after the recovery. The login's default privileges decide its
     grants, and in the ``global`` shape only the bootstrap's global revoke clears them."""
-    assert _new_objects_refused(restored, api_role, "fr_after_restore") == {}
+    assert _new_objects_not_refused(restored, api_role, "fr_after_restore") == {}
 
 
 # ---------------------------------------------------------------------------------------
@@ -346,7 +356,7 @@ def test_the_request_role_reads_each_table_the_chain_leaves_outside_layer_2(
     request role read no row from any of them: ``/health`` answered ``behind``, and login
     found no profile. The session is the superuser's, so this does not lean on 041."""
     clan_id = next(iter(chain_dump.docs))
-    user = {"u": chain_dump.user_id}
+    user_id = chain_dump.user_id
     engine = sa.create_engine(restored.admin_url)
     try:
         with engine.connect() as conn:
@@ -358,10 +368,10 @@ def test_the_request_role_reads_each_table_the_chain_leaves_outside_layer_2(
                     "alembic_version": _outcome(conn, "SELECT version_num FROM alembic_version"),
                     "clans": _outcome(conn, f"SELECT id FROM clans WHERE id = '{clan_id}'"),
                     "user_profiles": _outcome(
-                        conn, f"SELECT id FROM user_profiles WHERE id = '{user['u']}'"
+                        conn, f"SELECT id FROM user_profiles WHERE id = '{user_id}'"
                     ),
                     "user_fcm_tokens": _outcome(
-                        conn, f"SELECT token FROM user_fcm_tokens WHERE user_id = '{user['u']}'"
+                        conn, f"SELECT token FROM user_fcm_tokens WHERE user_id = '{user_id}'"
                     ),
                 }
             finally:
@@ -421,16 +431,7 @@ def test_on_plain_postgres_as_a_superuser_the_bootstrap_runs_twice_and_grants_no
         with _autocommit(ADMIN_URL) as admin:
             admin.execute(sa.text(f'CREATE DATABASE "{db_name}"'))
         before = _memberships_of_current_user(url)
-        _restore_and_bootstrap(pg_client, chain_dump.path, url)
-        _run(
-            pg_client / "psql",
-            _libpq(url),
-            "-q",
-            "-v",
-            "ON_ERROR_STOP=1",
-            "-f",
-            str(_BOOTSTRAP_SQL),
-        )
+        _restore_and_bootstrap_twice(pg_client, chain_dump.path, url)
         after = _memberships_of_current_user(url)
         rls = _rls_by_table(url)
         engine = sa.create_engine(url)

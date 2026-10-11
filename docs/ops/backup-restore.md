@@ -187,7 +187,9 @@ already reads head and no migration runs again:
   no policy, and leaves every other table as the dump had it.
 
 Prove the `042` half too, as `postgres`. It must fail with
-`permission denied for table user_profiles`:
+`permission denied for table user_profiles`. Read on the hosted project on
+2026-10-11, `postgres` may `SET ROLE` to `anon` and to `authenticated`
+(`pg_has_role(..., 'SET')` true for both):
 
 ```bash
 psql "$RESTORE_DSN" -tA --single-transaction \

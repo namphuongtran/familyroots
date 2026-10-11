@@ -14,6 +14,10 @@ and a fourth check in `scripts/restore_drill.sh`. **No backend file changed**, a
 part of the decision. Section "What was considered and rejected" says why a migration was the wrong
 place for it.
 
+> **Amended 2026-10-11 (#283).** The amendment changed backend files, all of them tests: a new
+> integration module, the Supabase-shaped fixture it reuses, and the scripts guards. No application
+> code and no migration changed, so the decision above still holds.
+
 Every measurement below was taken on **2026-08-22** in the worktree `.claude/worktrees/design`, on
 branch `seed/s-057-restore-role-bootstrap`, from commit `8fb930a`.
 
@@ -223,6 +227,13 @@ the ordering in part 2 above would need to move.
 `scripts/restore_bootstrap_role.sql` holds a copy of what migrations 002 and 026 do. **Nothing
 enforces that they stay equal.** Three things reduce the cost, and none of them removes it:
 
+> **Amended 2026-10-11 (#283).** The file now also copies `041`, `042` and `043`, and the first
+> bullet below no longer holds for all of it: section 6 names four tables, the ones `043` names. A
+> table the chain later leaves outside layer 2 needs a line there, in the same pull request as its
+> migration. `backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py` is a second
+> backstop, for the three Supabase sections. See
+> [the amendment](#amendment-2026-10-11-283-a-restore-into-a-supabase-project).
+
 - **The copy is not a list of tables.** All seven statements are schema-wide
   (`ON ALL TABLES IN SCHEMA public`, `ON ALL FUNCTIONS`, `ON ALL SEQUENCES`) plus the matching
   `ALTER DEFAULT PRIVILEGES`. A new table, a new function, or a new sequence is covered with no edit.
@@ -249,7 +260,9 @@ name genuinely configurable is a backend change and is not this ADR's.
 ### What this ADR does not change
 
 `db_backup.sh` still dumps with `--no-owner --no-privileges`. No RLS policy changed. No migration was
-added, and the fenced `backend/**` tree is untouched. Production has still never been dumped or
+added, and the fenced `backend/**` tree is untouched.
+**Amended 2026-10-11 (#283):** still no policy and no migration. The amendment's bootstrap turns RLS
+off on four tables, which restores the state `043` left, and it changed backend tests. Production has still never been dumped or
 restored, which stays an open gap in [`../ops/backup-restore.md`](../ops/backup-restore.md).
 
 ## Amendment 2026-10-11 (#283): a restore into a Supabase project
@@ -296,15 +309,17 @@ The file also said "Run as a superuser", and a Supabase project offers none.
    `backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py` dumps the migrated chain
    with `--no-owner --no-privileges`, restores it as a non-superuser `CREATEROLE` login into a
    database where `anon` and `authenticated` hold Supabase's legacy default grants and `ensure_rls`
-   is installed, and runs this file with `psql` as the same login. It reads, by running statements:
-   the login enters the request role and each clan sees only its own rows; both Data API roles are
-   refused `SELECT` and `INSERT` on every relation, and on a table and a sequence created afterwards;
-   the request role reads a row from each of the four tables. A fourth reading compares every
+   is installed, and runs this file twice with `psql` as the same login. It reads, by running
+   statements: the login enters the request role and each clan sees only its own rows; both Data
+   API roles are refused every table privilege but `REFERENCES` on every relation, and on a table
+   and a sequence created afterwards; the request role reads a row from each of the four tables. A fourth reading compares every
    table's RLS state with the dump's, and a fifth runs the file twice on plain Postgres as a
    superuser and finds no membership added. Backend CI installs `postgresql-client-18` for it,
    because the runner's own `pg_dump` is 16 (#282).
 
 ### Measured 2026-10-11
+
+On the working tree over `3ef0b68`, branch `fix/283-restore-replays-041-043`.
 
 - Against the file as it stood before this amendment, the test failed all three outcomes:
   `42501: permission denied to set role "familyroots_app"` for both clans; `INSERT audit_logs`
@@ -315,10 +330,16 @@ The file also said "Run as a superuser", and a Supabase project offers none.
   test, and removing only the per-schema ones failed only the `per_schema` shape's. Adding
   `DISABLE ROW LEVEL SECURITY` on `persons` failed the RLS-state comparison. Dropping section 4's
   `SET` check failed the plain-Postgres test, which found a self-grant added for the superuser.
-- **Two of section 5's statements have no reading.** The chain creates no sequence, so
-  `REVOKE ALL ON ALL SEQUENCES` acts on nothing yet. And `PUBLIC` keeps Postgres's default EXECUTE
-  on functions, which `anon` inherits, so `REVOKE ALL ON ALL ROUTINES` changes nothing a call can
-  show. `042` carries both for the same reasons, and the file stays equal to it.
+- Narrowing the table revoke to `SELECT, INSERT`, or to every privilege but `MAINTAIN`, or to every
+  privilege but `TRUNCATE`, failed the every-relation test. Narrowing the per-schema default revoke
+  to `SELECT, INSERT` failed the `per_schema` shape's created-afterwards test.
+- **Four of section 5's statements, and one privilege, have no reading.** Removing all four together
+  left every test green. The chain creates no sequence, so `REVOKE ALL ON ALL SEQUENCES` acts on
+  nothing yet. `PUBLIC` keeps Postgres's default EXECUTE on functions, which `anon` inherits, so
+  `REVOKE ALL ON ALL ROUTINES` and the two default-privilege revokes on routines change nothing a
+  call can show. And a revoke that leaves `REFERENCES` stays green, because a foreign key needs a
+  table to declare it on and these roles may create none in `public`. `042` carries all of it, and
+  the file stays equal to `042`.
 
 ### What it still does not cover
 
