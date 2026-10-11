@@ -119,15 +119,15 @@ class ExportQueryHandler:
     async def _presign_manifest(
         self, documents: list[dict[str, Any]], now: datetime
     ) -> list[dict[str, Any]]:
+        # One batch call, not one Storage round trip per document (#271). The adapter
+        # pages it by the provider's per-request limit.
         expires_at = (now + timedelta(seconds=DEFAULT_PRESIGN_TTL)).isoformat()
-        manifest: list[dict[str, Any]] = []
-        for doc in documents:
-            download_url = await self._storage.get_presigned_url(doc["storage_path"])
-            manifest.append(
-                {
-                    **doc,
-                    "download_url": download_url,
-                    "download_url_expires_at": expires_at,
-                }
-            )
-        return manifest
+        urls = await self._storage.get_presigned_urls([doc["storage_path"] for doc in documents])
+        return [
+            {
+                **doc,
+                "download_url": urls[doc["storage_path"]],
+                "download_url_expires_at": expires_at,
+            }
+            for doc in documents
+        ]

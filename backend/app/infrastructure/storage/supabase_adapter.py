@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote
@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 
 # Storage's list endpoint pages its results; 100 is its default page size.
 _LIST_PAGE_SIZE = 100
+
+# Storage's batch sign refuses more than 1000 paths in one request, and an empty
+# list, each with a 400: "body/paths must NOT have more than 1000 items". It is
+# storage-api's MAX_OBJECTS_PER_REQUEST; measured on local v1.77.5 on 2026-10-11.
+_SIGN_BATCH_SIZE = 1000
 
 
 def _parse_storage_timestamp(value: object) -> datetime | None:
@@ -245,6 +250,35 @@ class SupabaseStorageAdapter:
             # it 503s instead of handing None to the caller as if it were a URL.
             raise StorageUnavailableError(f"storage returned no signed URL for {storage_path!r}")
         return signed_url
+
+    async def get_presigned_urls(
+        self, storage_paths: Sequence[str], expires_in: int = DEFAULT_PRESIGN_TTL
+    ) -> dict[str, str]:
+        paths = list(storage_paths)
+        if not paths:
+            return {}  # a clan with no documents never needed a Storage client
+        bucket = settings.SUPABASE_STORAGE_BUCKET
+        files_api = get_service_client().storage.from_(bucket)
+        signed: dict[str, str] = {}
+        for start in range(0, len(paths), _SIGN_BATCH_SIZE):
+            chunk = paths[start : start + _SIGN_BATCH_SIZE]
+            try:
+                items = await asyncio.to_thread(files_api.create_signed_urls, chunk, expires_in)
+            except Exception as e:
+                raise _classify_bucket(e, bucket) from e
+            for item in items:
+                if item["error"]:
+                    # Storage sets an item's error only when its object lookup found no
+                    # row, the case the single sign answers with a 404 `not_found`
+                    # (storage-api v1.77.5, `signObjectUrls`, read 2026-10-11).
+                    raise StorageNotFoundError(f"{item['path']!r}: {item['error']}")
+                if item["signedURL"]:
+                    signed[item["path"]] = item["signedURL"]
+        for path in paths:
+            if path not in signed:
+                # As in get_presigned_url: a success with no URL is a provider fault.
+                raise StorageUnavailableError(f"storage returned no signed URL for {path!r}")
+        return signed
 
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None

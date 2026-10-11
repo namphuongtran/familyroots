@@ -25,7 +25,7 @@ by design for three of the five tests below.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 
 import pytest
 import sqlalchemy as sa
@@ -87,6 +87,12 @@ class TxnRecordingStorage:
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         self.presign_in_txn.append(self._session.in_transaction())
         return f"https://signed.example/{storage_path}"
+
+    async def get_presigned_urls(
+        self, storage_paths: Sequence[str], expires_in: int = 3600
+    ) -> dict[str, str]:
+        self.presign_in_txn.append(self._session.in_transaction())
+        return {p: f"https://signed.example/{p}" for p in storage_paths}
 
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
@@ -285,12 +291,12 @@ async def test_export_holds_no_connection_during_presign(
     session_factory: async_sessionmaker[AsyncSession],
     seeded: dict[str, uuid.UUID],
 ) -> None:
-    """H5: the export's manifest presigning loops over every document doing a
-    multi-second external call per document. It must not run while a pooled
-    connection sits idle-in-transaction. RED today: the port's read queries
-    autobegin the session's transaction and it is never committed/closed
-    before `_presign_manifest` runs, so presign_in_txn records [True, True]
-    for the two seeded documents."""
+    """H5: the export's manifest presigning is an external call to Storage. It
+    must not run while a pooled connection sits idle-in-transaction. RED when
+    written: the port's read queries autobegin the session's transaction and it
+    is never committed/closed before `_presign_manifest` runs, so presign_in_txn
+    recorded [True, True], one per seeded document. Since #271 the two documents
+    are presigned in one batch call, so one reading."""
     clan_id = seeded["clan_id"]
     admin_id = seeded["admin_id"]
     doc_ids = [uuid.uuid4(), uuid.uuid4()]
@@ -319,7 +325,7 @@ async def test_export_holds_no_connection_during_presign(
 
         filename, media_type, body = await handler.export_clan(clan_id, fmt="json")
 
-    assert storage.presign_in_txn == [False, False]
+    assert storage.presign_in_txn == [False]
 
     import json
 

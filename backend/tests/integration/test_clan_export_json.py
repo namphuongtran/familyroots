@@ -12,7 +12,7 @@ Supabase Storage and the manifest's `download_url` is deterministic.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -73,6 +73,11 @@ class FakeStorage:
 
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return f"https://signed.example/{storage_path}"
+
+    async def get_presigned_urls(
+        self, storage_paths: Sequence[str], expires_in: int = 3600
+    ) -> dict[str, str]:
+        return {p: f"https://signed.example/{p}" for p in storage_paths}
 
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None

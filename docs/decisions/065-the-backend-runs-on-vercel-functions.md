@@ -39,6 +39,40 @@ at 4.5 MB. And `MAX_UPLOAD_SIZE_MB` stays env-driven. Production's `4` must be r
 at the release (ADR-068, Consequences). § 6's "Not handled" sentence about responses is #271's,
 not this amendment's.
 
+**Amended 2026-10-11 (#271): § 6's "Not handled: a response over 4.5 MB" is withdrawn.** It rested
+on Vercel's limits page, quoted under Context: "The maximum payload size for the request body or
+the response body of a Vercel Function is **4.5 MB**". A probe on 2026-10-11 measured that false
+for a FastAPI `Response` on Vercel's Python runtime. The probe was a throwaway project,
+`namtp/stream-probe`, Python 3.12, deployed with `vercel deploy --prod`, served from `iad1`, and
+since removed. `/plain?mb=N` returns `Response(content=os.urandom(N MiB))` with a
+`Content-Disposition` header, as the export does; `/stream?mb=N` returns a `StreamingResponse` of
+64 KiB chunks. Read with `curl -s -o /dev/null -w 'status=%{http_code} bytes=%{size_download}' <url>`:
+
+```
+plain?mb=4    status=200 bytes=4194304
+plain?mb=5    status=200 bytes=5242880
+plain?mb=10   status=200 bytes=10485760   (response header content-length: 10485760)
+stream?mb=10  status=200 bytes=10485760
+stream?mb=30  status=200 bytes=31457280
+```
+
+The control, on the same deployment, shows the probe did meet Vercel's limit on the request side.
+Read with `curl -X POST --data-binary @<file> <url>/plain`:
+
+```
+4 MiB body    status=405  {"detail":"Method Not Allowed"}   (reached FastAPI)
+5 MiB body    status=413  Request Entity Too Large / FUNCTION_PAYLOAD_TOO_LARGE
+```
+
+Request bodies stay capped at 4.5 MB; only the response half of that Context bullet is withdrawn.
+`GET /exports/clan` keeps its contract and its in-memory build, with no streaming. What it still
+risked was time, Hobby's 300 s, because it presigned one URL per document, one Storage round trip
+after another. It now makes one `StoragePort.get_presigned_urls` call, which the adapter sends as
+storage3's `create_signed_urls`, one request per 1000 paths. Its failures are unchanged
+([storage.md](../architecture/storage.md), "StorageError taxonomy"). The probe did not run in
+`familyroots-api` in `sin1`. After the release the maintainer may export a throwaway clan whose
+JSON exceeds 4.5 MB from production, and post the status and byte count on #271.
+
 ## Context
 
 ### What Vercel provides, read 2026-10-10
