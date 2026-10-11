@@ -122,12 +122,14 @@ function recordTheWalk(page: Page) {
 
 /**
  * **The walk's web origin is the invite link's, not the project's `baseURL`.** The backend builds
- * the link on `INVITE_LINK_ORIGIN`. On a laptop that is the harness's own origin, but the image e2e
+ * the link on `INVITE_LINK_ORIGIN`. On a laptop that is the harness's own origin. The image e2e
  * job (#193) cannot use a loopback value, so its links open on `http://familyroots-web.test:3102`,
- * the same server under another name. A session cookie belongs to one host, so every page of the
- * walk opens on the link's origin, and the token's home is read there too. Read against
- * `baseURL`, the job's first run past its image pull (2026-10-07) named the invitation page's own
- * URL as a leak, and a sign-in on `127.0.0.1` left the reopened link signed out.
+ * the same server under another name, and until #231 the job's `baseURL` stayed on `127.0.0.1`.
+ * Since #231 the job sets `E2E_AUTH_HOST` to that name, so there too the two origins agree. The
+ * walk still reads the link's: a session cookie belongs to one host, so every page of the walk
+ * opens on the link's origin, and the token's home is read there too. Read against `baseURL`, the
+ * job's first run past its image pull (2026-10-07) named the invitation page's own URL as a leak,
+ * and a sign-in on `127.0.0.1` left the reopened link signed out.
  */
 function walkOrigin(invitation: CreatedInvitation): string {
   return new URL(invitation.invite_url).origin

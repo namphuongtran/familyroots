@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { BASE_URL } from '../../playwright.config'
+import { AUTH_HOST, BASE_URL } from '../../playwright.config'
 import { SEEDED_USERS } from './fixtures'
 
 /**
@@ -534,6 +534,13 @@ test.describe('the role gate answers two different refusals', () => {
  * `https://e2e-fake-project.example.supabase.co`: a different project, a different cookie
  * name, a different key.
  *
+ * **It is replayed under the name the session was captured on, `AUTH_HOST`** (#231). A cookie
+ * belongs to a host, not a port, so on a laptop `127.0.0.1` reaches both servers with it. Under
+ * `image-e2e.yml`'s `E2E_AUTH_HOST` the cookies belong to `familyroots-web.test`, and a replay
+ * against `BASE_URL`'s `127.0.0.1` would carry none: the 307 would read the same and prove only
+ * that no session was sent. So the case first reads that the context presents the captured
+ * `sb-…-auth-token` to the URL it requests.
+ *
  * **What this proves and what it does not.** It proves a session captured from one Supabase
  * project does not carry into a build pointed at another. It does not prove that middleware
  * verifies a signature — it does not: `supabase.auth.getSession()` reads the cookie. A
@@ -546,7 +553,13 @@ test.describe('the captured session does not travel', () => {
   test('replayed against a build pointed at another Supabase project, it is nobody', async ({
     page,
   }) => {
-    const response = await page.request.get(`${BASE_URL}${BACKOFFICE_PATH}`, { maxRedirects: 0 })
+    const hermetic = new URL(BACKOFFICE_PATH, BASE_URL)
+    hermetic.hostname = AUTH_HOST
+    const presented = (await page.context().cookies(hermetic.href)).map(({ name }) => name)
+    const session = presented.filter((name) => /^sb-.+-auth-token(\.\d+)?$/.test(name))
+    expect(session, `the captured session, presented to ${hermetic.href}`).not.toEqual([])
+
+    const response = await page.request.get(hermetic.href, { maxRedirects: 0 })
 
     expect(response.status()).toBe(307)
     expect(response.headers()['location']).toMatch(/\/vi\/login$/)

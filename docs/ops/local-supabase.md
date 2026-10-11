@@ -342,7 +342,9 @@ Vercel bundle.
    `healthy` (#230, below).
 7. The web image, read once in Chromium. `/vi/login` must render the login form and no
    missing-Supabase banner. Then the container is removed, because the harness does not use it.
-8. `pnpm test:e2e:auth`, on `next dev` as on a laptop, against the backend container.
+8. `pnpm test:e2e:auth`, on `next dev` as on a laptop, against the backend container. The one
+   difference from a laptop is `E2E_AUTH_HOST=familyroots-web.test`, the name the harness's browser
+   uses (#231, below).
 
 Nothing is uploaded, on success or failure. `web/e2e/.auth/` holds live sessions, and a Playwright
 report or trace carries the same cookies in its captured requests. The repository is public, so its
@@ -383,30 +385,38 @@ repository does not have.
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots` | `pgdb` is a name on the compose network the container joins. Inside a container, `localhost` would not be the database anyway |
 | `ALLOWED_HOSTS` | `["127.0.0.1"]` | every request reaches the container through `127.0.0.1:8073` on the runner |
-| `CORS_ORIGINS` | `["http://127.0.0.1:3102","http://familyroots-web.test:3102"]` | the harness's auth origin, and the invite link's. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
+| `CORS_ORIGINS` | `["http://familyroots-web.test:3102"]` | the harness's auth origin, which is also the invite link's. The validator refuses `*` and any entry `names_loopback` matches, `127.0.0.1` included since #231, so the harness's browser uses this name (below) |
 | `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Production sets `true`, because Vercel overwrites `X-Forwarded-For` with the client's address ([deployment.md](deployment.md), "Go-live checklist", C) |
 | `RATE_LIMIT_AUTH_MAX_REQUESTS` | `1000` | the validator refuses only a value below 1, in every environment. **The one value here that production does not run**: production sets nothing, so it keeps the default 20 (ADR-021, amended by #226). Every request reaches the container from one address, and a full run spends 28 from the bucket in under a minute (2026-10-07). See "The job inherited the harness's rate-limit collision" below |
 | `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Production's is set by hand in Vercel |
 | `SUPABASE_URL` and both keys | this stack's, from `scripts/supabase_local.sh env` | `supabase.localhost`, for the reason in "The two settings that are load bearing" |
 
-**`INVITE_LINK_ORIGIN` is a name, because the validator refuses the harness's origin.** Since #191 the
-validator refuses an empty or loopback value (`config.py:247-251`, `names_loopback`).
+**The harness's origin is a name, because the validator refuses a loopback one.** The validator
+refuses an empty or loopback `INVITE_LINK_ORIGIN` since #191, and a loopback `CORS_ORIGINS` entry
+since #231, both through `names_loopback` in `backend/app/core/config.py`.
 `invitation-link.auth.spec.ts` opens the link the backend builds, so the link has to reach the
-harness's `next dev` on `127.0.0.1:3102`. The job adds `127.0.0.1 familyroots-web.test` to the
-runner's `/etc/hosts` and builds links on that name. `.test` is reserved by RFC 2606, so it resolves
-nowhere else. Do not "fix" this by loosening `names_loopback`. That refusal is what stops a production
-deployment from handing every invitee a link to `localhost`.
+harness's `next dev` on `127.0.0.1:3102`, and every page the harness opens has to be an origin the
+backend's CORS admits. The job adds `127.0.0.1 familyroots-web.test` to the runner's `/etc/hosts`
+and sets `E2E_AUTH_HOST=familyroots-web.test`, so `web/playwright.config.ts`'s `AUTH_BASE_URL` is
+`http://familyroots-web.test:3102`. The dev server still binds `127.0.0.1`. Only the name the
+browser and Playwright use changes, and the session cookies belong to that name. The backend builds
+links on the same origin. `.test` is reserved by RFC 2606, so it resolves nowhere else. Do not "fix"
+this by loosening `names_loopback`. That refusal is what stops a production deployment from handing
+every invitee a link to `localhost`, or admitting a browser origin left over from development.
 
-**So `CORS_ORIGINS` lists that name too.** A page opened from the link has the origin
-`http://familyroots-web.test:3102`, and `invitee-registers.auth.spec.ts` (#196) registers from it.
-With only `127.0.0.1` listed, the browser's preflight was refused. The job's first run past the image
-pull (2026-10-07, run 37547827576) logged `"OPTIONS /api/v1/auth/register HTTP/1.1" 400 Bad Request`
-twice, and the walk timed out waiting for the registration message. On a laptop the recipe in
-`web/CLAUDE.md` sets `INVITE_LINK_ORIGIN` to the auth origin itself, so the two origins are one, which
-is why no local run saw it.
+**Until #231 the harness stayed on `127.0.0.1`, and the job admitted two origins.** The validator
+then refused a `localhost` CORS entry but not a `127.0.0.1` one, so `CORS_ORIGINS` listed
+`http://127.0.0.1:3102` for the harness and the name for the link. A page opened from the link has
+the link's origin, and `invitee-registers.auth.spec.ts` (#196) registers from it. With only
+`127.0.0.1` listed, the browser's preflight was refused. The job's first run past the image pull
+(2026-10-07, run 37547827576) logged `"OPTIONS /api/v1/auth/register HTTP/1.1" 400 Bad Request`
+twice, and the walk timed out waiting for the registration message. With one origin for the harness
+and the link, as on a laptop, where the recipe in `web/CLAUDE.md` sets `INVITE_LINK_ORIGIN` to the
+auth origin itself, that split cannot happen again.
 
-**The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`.** Next 16's dev server
+**The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`**, and since #231 every page
+the harness opens is on it, not only the invitation page. Next 16's dev server
 refuses its `/_next/webpack-hmr` socket to a page on any host but `localhost`, `*.localhost` and the
 one it was started on (`blockCrossSiteDEV` in Next 16.2.12's
 `dist/server/lib/router-utils/block-cross-site-dev.js:77-108`). Measured on this repository's Linux
