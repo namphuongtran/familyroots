@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Package manager is **pnpm 10** (pinned via `packageManager`). All scripts:
 
 ```bash
-pnpm install                                   # install deps
+pnpm install                                   # install deps; applies the Next patch in patches/ (see "`next dev` carries a patch")
 pnpm dev                                       # Next dev server on :3000
 pnpm build && pnpm start                       # production build + serve
 pnpm type-check                                # tsc --noEmit (strict)
@@ -1099,8 +1099,62 @@ sets the same request aside; #196 met it there on a navigation on 2026-10-06. Th
 `pnpm test:e2e` in the primary checkout, at the default ports with nothing else listening, failed
 once on 2026-10-05: 86 passed and 20 failed, every one of them `invitation-accept.spec.ts`, every
 page Next's own 404. The spec passed ten of ten alone, and the full suite rerun reported 106
-passed. That one is not explained yet, and #228 owns it. With nothing listening, the old and new
-configs start the same servers, so neither failure reads on this change.
+passed. **#228 explained it on 2026-10-10:** `next dev`'s route watcher had come up without the
+invitation route, a race inside Next, and it stays that way until the server restarts or a file
+under `src/app` changes. See "`next dev` carries a patch" below and ADR-068. With nothing listening,
+the old and new configs start the same servers, so neither failure reads on this change.
+
+## `next dev` carries a patch (#228, ADR-068)
+
+**What it fixes.** In Next 16.2.12, `next dev` can come up with every page four or more directories
+below `src/app` missing from its route table. Those pages then answer Next's own 404 until the
+server restarts or a file under `src/app` changes. The invitation page is one of them, so on
+2026-10-05 every case of `invitation-accept.spec.ts` read the 404 page. The watcher's `aggregated`
+handler is async and unserialized, so a run that started on a partial startup scan can write the
+route list after the run that saw every file. `patches/next@16.2.12.patch` runs it one at a time.
+ADR-068 holds the source lines and the readings.
+
+**How to tell a stuck server.** A deep route answers 404 at once, with no `○ Compiling` line before
+it, while `/vi/login` answers 200, and the server's `dev/types/routes.d.ts` lacks
+`/[locale]/invitations/[token]`: under `.next/` for the hermetic server, under `.next-banner-e2e/`
+for the banner server. Restarting clears it, and so does touching any file under `src/app`:
+`touch src/app/[locale]/(auth)/login/page.tsx` turned it to 200 within 3 s on 2 of 2 stuck servers.
+Unpatched, started with `next dev` both at once, 6 of 8 servers came up this way on 2026-10-10.
+
+**Why a full run rarely showed it.** Playwright starts the banner server only after the hermetic
+one answers, and through `pnpm dev`. Started that way and unpatched, the hermetic server came up
+stuck in 0 of 6 startups and the banner server in 3 of 6. No hermetic spec asks the banner server
+for a deep route, so a full run failed only when 3100 itself lost the race.
+
+**Three traps from putting the patch in:**
+
+1. **`pnpm patch-commit` writes `patchedDependencies` into `package.json`, and pnpm 10.6.0 ignores
+   it there.** pnpm reads a fixed list of keys from that field, and this one is not on it. The
+   next `pnpm install` dropped the patch from the lockfile and restored the unpatched Next with no
+   error, and `pnpm install --frozen-lockfile` failed with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. The
+   entry lives in `pnpm-workspace.yaml`. Move it there after every `patch-commit`.
+2. **The `Dockerfile`'s deps stage copies `pnpm-workspace.yaml` and `patches/`** before its frozen
+   install. Without them that install fails with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`, which was
+   measured by running the stage's install in a scratch directory.
+3. **The first startups after an install that changes the patch compile cold.** The patched Next
+   has its own directory under `node_modules/.pnpm`, so Turbopack's cache in `.next/dev` misses.
+   The invitation route took over 60 s on the first two startups, then 43 s, then 5 to 7 s. The
+   first full run after the patch had gone out and back in for the negative control read 119
+   passed and 1 failed. The failure was a `/vi/login` 500,
+   `SyntaxError: Unexpected end of JSON input`, while the banner server beside it logged
+   Turbopack cache compactions of 12.9 s and 14.8 s. It was not the 404. The next two full runs
+   read 120 passed each. That 500 is not explained.
+
+**On a Next bump.** `pnpm install` stops with `ERR_PNPM_PATCH_NOT_APPLIED` naming
+`next@16.2.12`. First read `dist/server/lib/router-utils/setup-dev-bundler.js` in the new version.
+If its `wp.on('aggregated', async ()=>{` listener is now serialized, delete the patch and its
+`pnpm-workspace.yaml` entry, take both out of the Dockerfile's deps stage (`pnpm-workspace.yaml`
+from its first `COPY`, and the `COPY patches` line), and amend ADR-068. As of
+16.5.0-canary.7 it was not. Otherwise run `pnpm patch next@<new> --edit-dir <dir>`, make the edit the
+current patch file shows, run `pnpm patch-commit <dir>`, then move the entry (trap 1) and delete the old patch file.
+Before trusting either outcome, read it the way ADR-068 did: start `next dev` on base and base+1
+at once, which loses the race more often than Playwright's order does, ask each for
+`/vi/invitations/abc` once it answers `/`, and repeat, unpatched and patched.
 
 ## The authenticated e2e harness (2026-08-26)
 

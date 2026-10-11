@@ -7,7 +7,10 @@ RUN corepack enable
 # ── Stage 2: Install ALL dependencies (incl. devDeps needed for build) ─────────
 FROM base AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+# `pnpm-workspace.yaml` holds `patchedDependencies`, and `patches/` the files it names: a frozen
+# install fails without either (ADR-068).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 
 # ── Stage 3: Build the Next.js application ─────────────────────────────────────
