@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { AUTH_HOST, BASE_URL } from '../../playwright.config'
 import { SEEDED_USERS } from './fixtures'
+import { SESSION_COOKIE_NAME } from './session-cookie'
 
 /**
  * the authenticated e2e harness. The first authenticated screen this repository has ever read in a browser.
@@ -556,7 +557,7 @@ test.describe('the captured session does not travel', () => {
     const hermetic = new URL(BACKOFFICE_PATH, BASE_URL)
     hermetic.hostname = AUTH_HOST
     const presented = (await page.context().cookies(hermetic.href)).map(({ name }) => name)
-    const session = presented.filter((name) => /^sb-.+-auth-token(\.\d+)?$/.test(name))
+    const session = presented.filter((name) => SESSION_COOKIE_NAME.test(name))
     expect(session, `the captured session, presented to ${hermetic.href}`).not.toEqual([])
 
     const response = await page.request.get(hermetic.href, { maxRedirects: 0 })

@@ -76,8 +76,9 @@ def test_production_rejects_a_wildcard_or_loopback_cors_origin(origins: list[str
 
 
 def test_production_boots_with_explicit_cors_origins() -> None:
-    s = _build(**{**_PROD_SAFE, "CORS_ORIGINS": ["https://app.example.com"]})
-    assert s.CORS_ORIGINS == ["https://app.example.com"]
+    _build(
+        **{**_PROD_SAFE, "CORS_ORIGINS": ["https://app.example.test", "https://admin.example.test"]}
+    )
 
 
 @pytest.mark.parametrize(

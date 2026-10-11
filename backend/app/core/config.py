@@ -291,8 +291,8 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "DATABASE_URL must point at the production database, not localhost"
                 )
-            # CORS must be real origins: not a loopback dev value under either name (#231), and
-            # not wildcard, which is also invalid with allow_credentials=True.
+            # CORS must be real origins: not a loopback dev value, `localhost` or `127.0.0.1`
+            # (#231), and not wildcard, which is also invalid with allow_credentials=True.
             if self.CORS_ORIGINS == ["*"] or any(
                 names_loopback(origin) for origin in self.CORS_ORIGINS
             ):

@@ -950,7 +950,8 @@ Four harnesses, one gate each:
   context, trace id generation, single-flight refresh, `apiFetch`, the logger. `vitest.config.mts`
   adds five globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
   `scripts/**`, which holds the legacy gate's test, `playwright.config.test.ts`, which reads
-  whether an e2e run uses a server it did not start (#192), and `eslint.config.test.ts`, which
+  whether an e2e run uses a server it did not start (#192) and which name the authenticated
+  project reaches its server by (#231), and `eslint.config.test.ts`, which
   reads whether a Tailwind default-palette class fails lint (#199).
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
@@ -1075,6 +1076,14 @@ under `CI` the old config never attached either. Each case was seen to fail on 2
 its plant: the old `!process.env.CI` fails the first, the opt-in honoured under `CI` fails the
 third, reuse never on fails the second, a literal hermetic or banner port fails the cases that
 reach it, and no validation fails the last, on `TypeError: Invalid URL`.
+
+**Three more cases read `E2E_AUTH_HOST` (#231).** They hold a third stand-in on base+2 and run a
+throwaway spec in the `auth-chromium` project with `E2E_REUSE_SERVER=1`, so no dev server starts,
+and read the `Host` header the spec's request carries: `127.0.0.1:<base+2>` unset, and
+`localhost:<base+2>` with `E2E_AUTH_HOST=localhost`, a name that resolves everywhere with no
+`/etc/hosts` line. A malformed value fails the run naming it. Each was seen to fail on 2026-10-11:
+the variable ignored fails the set case, an unset default of `localhost` fails the unset case, and
+no validation fails the last.
 
 **The issue's four readings with two worktrees, 2026-10-05.** Reading 3 has two halves, 3a and
 3b. A and B were worktrees of this repository. The plant was `lang="en"` for `lang={locale}` in
