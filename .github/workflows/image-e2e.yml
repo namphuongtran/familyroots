@@ -66,14 +66,18 @@ jobs:
       # Not SUPABASE_*: the Supabase CLI reads that prefix as config overrides, so the stack's
       # values travel under these names and each step that needs one names it.
       LOCAL_SUPABASE_URL: http://supabase.localhost:54321
-      # `playwright.config.ts`'s AUTH_BASE_URL with E2E_PORT_BASE unset: base 3100, plus two. The
-      # harness's own web origin, which the backend's CORS_ORIGINS must admit.
-      AUTH_BASE_URL: http://127.0.0.1:3102
-      # The production validator refuses a loopback INVITE_LINK_ORIGIN
-      # (backend/app/core/config.py, `names_loopback`), and the harness's web origin is
-      # 127.0.0.1. This name maps to 127.0.0.1 in the runner's /etc/hosts, so the link the
-      # backend builds opens the harness's own `next dev`. See the ops doc.
-      INVITE_LINK_HOST: familyroots-web.test
+      # The name the authenticated harness's browser and Playwright use for its `next dev`
+      # (web/playwright.config.ts, `E2E_AUTH_HOST`; unset there, it is 127.0.0.1). The production
+      # validator refuses a loopback CORS_ORIGINS entry and a loopback INVITE_LINK_ORIGIN
+      # (backend/app/core/config.py, `names_loopback`, #231), so the harness's origin cannot be
+      # 127.0.0.1 here. This name maps to 127.0.0.1 in the runner's /etc/hosts, and the server
+      # still binds 127.0.0.1. It must stay in web/next.config.ts's `allowedDevOrigins`. See the
+      # ops doc.
+      E2E_AUTH_HOST: familyroots-web.test
+      # `playwright.config.ts`'s AUTH_BASE_URL under that host, with E2E_PORT_BASE unset: base
+      # 3100, plus two. The harness's web origin and the invite link's are this one origin, which
+      # the backend's CORS_ORIGINS must admit.
+      AUTH_BASE_URL: http://familyroots-web.test:3102
 
     steps:
       - uses: actions/checkout@v4
@@ -100,8 +104,11 @@ jobs:
             echo "127.0.0.1 supabase.localhost" | sudo tee -a /etc/hosts
             getent ahosts supabase.localhost
           fi
-          echo "127.0.0.1 $INVITE_LINK_HOST" | sudo tee -a /etc/hosts
-          getent ahosts "$INVITE_LINK_HOST"
+          echo "127.0.0.1 $E2E_AUTH_HOST" | sudo tee -a /etc/hosts
+          getent ahosts "$E2E_AUTH_HOST"
+          auth_host="${AUTH_BASE_URL#http://}"
+          [ "${auth_host%%:*}" = "$E2E_AUTH_HOST" ] \
+            || { echo "::error::AUTH_BASE_URL=$AUTH_BASE_URL does not name E2E_AUTH_HOST=$E2E_AUTH_HOST, so the backend would admit an origin the browser never uses"; exit 1; }
 
       # Pulled here, not inside `up`, so the cost of a cold pull is its own step. The Supabase
       # list is the six containers docs/ops/local-supabase.md counts for CLI 2.115.0
@@ -209,8 +216,8 @@ jobs:
           ALLOWED_HOSTS=["127.0.0.1"]
           RATE_LIMIT_AUTH_MAX_REQUESTS=1000
           RATE_LIMIT_TRUST_FORWARDED_FOR=false
-          CORS_ORIGINS=["$AUTH_BASE_URL","http://$INVITE_LINK_HOST:${AUTH_BASE_URL##*:}"]
-          INVITE_LINK_ORIGIN=http://$INVITE_LINK_HOST:${AUTH_BASE_URL##*:}
+          CORS_ORIGINS=["$AUTH_BASE_URL"]
+          INVITE_LINK_ORIGIN=$AUTH_BASE_URL
           SUPABASE_URL=$LOCAL_SUPABASE_URL
           SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY
           SUPABASE_SERVICE_ROLE_KEY=$LOCAL_SUPABASE_SERVICE_ROLE_KEY
@@ -255,6 +262,27 @@ jobs:
           # The container half of the name-resolution question: `host-gateway` must reach the
           # stack, or the backend cannot fetch the JWKS and every token is rejected.
           docker exec "$API_CONTAINER" python -c "import json, urllib.request; r = urllib.request.urlopen('$LOCAL_SUPABASE_URL/auth/v1/.well-known/jwks.json', timeout=10); print('from the container: JWKS', r.status, [k['kid'] for k in json.load(r)['keys']])"
+
+      # The image's own HEALTHCHECK, as Docker reads it, under this job's production
+      # configuration (#230). The step above reads /health from the runner. This reads the probe
+      # inside the container, which must find a Host that ALLOWED_HOSTS admits. Docker reports
+      # `starting` until the first probe passes, or until --retries failures land after
+      # --start-period. With backend/Dockerfile's timings that is about 125 s at worst: failures
+      # inside the 15 s start period do not count, and each of the three that do starts 30 s
+      # after the previous probe ended, which can take its full 5 s timeout. 150 s covers it.
+      - name: Read the backend image's own HEALTHCHECK
+        run: |
+          deadline=$((SECONDS + 150))
+          while :; do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "$API_CONTAINER")"
+            [ "$status" != starting ] && break
+            [ "$SECONDS" -lt "$deadline" ] || break
+            sleep 2
+          done
+          docker inspect --format '{{.State.Health.Status}} failing-streak={{.State.Health.FailingStreak}}' "$API_CONTAINER"
+          docker inspect --format '{{range .State.Health.Log}}exit {{.ExitCode}}: {{.Output}}{{end}}' "$API_CONTAINER"
+          [ "$status" = healthy ] \
+            || { echo "::error::The backend image's HEALTHCHECK reads $status, not healthy"; exit 1; }
 
       - name: Install web dependencies
         working-directory: web

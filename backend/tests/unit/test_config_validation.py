@@ -58,9 +58,27 @@ def test_production_rejects_localhost_database_url():
         _build(**{**_PROD_SAFE, "DATABASE_URL": "postgresql+psycopg://u:p@localhost:5432/x"})
 
 
-def test_production_rejects_localhost_cors_origin():
-    with pytest.raises(ValidationError):
-        _build(**{**_PROD_SAFE, "CORS_ORIGINS": ["http://localhost:3000"]})
+@pytest.mark.parametrize(
+    "origins",
+    [
+        ["*"],
+        ["http://localhost:3000"],
+        ["http://127.0.0.1:3000"],
+        ["https://app.example.com", "http://127.0.0.1:3102"],
+    ],
+)
+def test_production_rejects_a_wildcard_or_loopback_cors_origin(origins: list[str]) -> None:
+    """#231. A loopback entry is a dev value left in place, whichever name it uses: the refusal
+    is `names_loopback`, the same predicate as `DATABASE_URL`'s and `INVITE_LINK_ORIGIN`'s.
+    `match` names the setting: the baseline constructs, so the refusal is this setting's."""
+    with pytest.raises(ValidationError, match="CORS_ORIGINS"):
+        _build(**{**_PROD_SAFE, "CORS_ORIGINS": origins})
+
+
+def test_production_boots_with_explicit_cors_origins() -> None:
+    _build(
+        **{**_PROD_SAFE, "CORS_ORIGINS": ["https://app.example.test", "https://admin.example.test"]}
+    )
 
 
 @pytest.mark.parametrize(

@@ -31,8 +31,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.domain.document.repository import DEFAULT_PRESIGN_TTL
-from app.infrastructure.dependencies import get_document_command_handler, get_document_query_handler
+from app.domain.document.repository import (
+    DEFAULT_PRESIGN_TTL,
+    SignedUpload,
+    StorageNotFoundError,
+    StoredObject,
+)
+from app.infrastructure.dependencies import (
+    get_document_command_handler,
+    get_document_query_handler,
+    get_document_upload_handler,
+)
 from app.main import create_app
 from app.services.translator import load_translations
 
@@ -53,9 +62,22 @@ class FakeStorage:
 
     def __init__(self) -> None:
         self.signed_ttls: list[int] = []
+        self.objects: dict[str, StoredObject] = {}
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
-        return path
+    def put(self, path: str, content: bytes, content_type: str) -> None:
+        """What the browser's PUT to the signed URL does (ADR-068)."""
+        self.objects[path] = StoredObject(size_bytes=len(content), content_type=content_type)
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        return SignedUpload(upload_url=f"https://storage.example/sign/{path}", token="t")
+
+    async def stat(self, path: str) -> StoredObject:
+        if path not in self.objects:
+            raise StorageNotFoundError(path)
+        return self.objects[path]
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        self.objects[to_path] = self.objects.pop(from_path)
 
     async def delete(self, storage_path: str) -> bool:
         return True
@@ -147,6 +169,13 @@ async def client(
                 SqlAlchemyPersonRepository(uow),
             )
 
+    async def _make_upload_handler() -> AsyncGenerator[Any]:
+        from app.application.document.upload import DocumentUploadHandler
+
+        async with session_factory() as db:
+            uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+            yield DocumentUploadHandler(SqlAlchemyDocumentRepository(uow), fake_storage, uow)
+
     async def _make_query_handler() -> AsyncGenerator[Any]:
         from app.application.document.handlers import DocumentQueryHandler
 
@@ -158,6 +187,7 @@ async def client(
     app.dependency_overrides[get_current_user] = _override_current_user
     app.dependency_overrides[get_document_command_handler] = _make_cmd_handler
     app.dependency_overrides[get_document_query_handler] = _make_query_handler
+    app.dependency_overrides[get_document_upload_handler] = _make_upload_handler
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
         yield ac
@@ -170,14 +200,30 @@ def _headers(seeded: dict[str, Any], clan: str) -> dict[str, str]:
     }
 
 
-@pytest.fixture()
-async def doc_in_clan_a(client: AsyncClient, seeded: dict[str, Any]) -> str:
-    resp = await client.post(
-        "/api/v1/documents",
-        headers=_headers(seeded, "a"),
-        data={"title": "Ảnh gia phả", "document_type": "photo"},
-        files={"file": ("test.png", _PNG_BYTES, "image/png")},
+async def _upload(
+    client: AsyncClient, headers: dict[str, str], storage: FakeStorage, title: str
+) -> Any:
+    """Sign, PUT, confirm: the three steps the web client takes (ADR-068)."""
+    signed = await client.post(
+        "/api/v1/documents/uploads",
+        headers=headers,
+        json={"filename": "test.png", "content_type": "image/png", "size_bytes": len(_PNG_BYTES)},
     )
+    assert signed.status_code == 200, signed.text
+    staged = signed.json()["data"]["storage_path"]
+    storage.put(staged, _PNG_BYTES, "image/png")
+    return await client.post(
+        "/api/v1/documents",
+        headers=headers,
+        json={"storage_path": staged, "title": title, "document_type": "photo"},
+    )
+
+
+@pytest.fixture()
+async def doc_in_clan_a(
+    client: AsyncClient, seeded: dict[str, Any], fake_storage: FakeStorage
+) -> str:
+    resp = await _upload(client, _headers(seeded, "a"), fake_storage, "Ảnh gia phả")
     assert resp.status_code == 201, resp.text
     return str(resp.json()["data"]["id"])
 
@@ -210,16 +256,11 @@ async def test_get_expiry_matches_the_ttl_the_url_was_signed_with(
 
 
 async def test_upload_and_get_agree_on_the_expiry_contract(
-    client: AsyncClient, seeded: dict[str, Any]
+    client: AsyncClient, seeded: dict[str, Any], fake_storage: FakeStorage
 ) -> None:
     """Upload already set the field; GET must not be the odd one out."""
     sent_at = datetime.now(UTC)
-    upload = await client.post(
-        "/api/v1/documents",
-        headers=_headers(seeded, "a"),
-        data={"title": "Giấy khai sinh", "document_type": "photo"},
-        files={"file": ("test.png", _PNG_BYTES, "image/png")},
-    )
+    upload = await _upload(client, _headers(seeded, "a"), fake_storage, "Giấy khai sinh")
     assert upload.status_code == 201, upload.text
     _assert_within_ttl_window(
         upload.json()["data"]["presigned_url_expires_at"], DEFAULT_PRESIGN_TTL, sent_at

@@ -794,6 +794,30 @@ export interface paths {
         patch: operations["update_parent_child_api_v1_relationships_parent_child__link_id__patch"];
         trace?: never;
     };
+    "/api/v1/documents/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Document Upload
+         * @description Sign a direct-to-Storage upload of one file (ADR-068).
+         *
+         *     The file is checked against the declared name, type and size first, so a file
+         *     that breaks a rule is refused before any byte is sent. The client then uploads
+         *     the bytes to `upload_url` and confirms with `POST /documents`.
+         */
+        post: operations["sign_document_upload_api_v1_documents_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents": {
         parameters: {
             query?: never;
@@ -808,10 +832,10 @@ export interface paths {
         get: operations["list_documents_api_v1_documents_get"];
         put?: never;
         /**
-         * Upload Document
-         * @description Upload a document/photo to storage and save metadata.
+         * Create Document
+         * @description Confirm a staged upload as a document, checking what Storage really holds.
          */
-        post: operations["upload_document_api_v1_documents_post"];
+        post: operations["create_document_api_v1_documents_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1562,23 +1586,6 @@ export interface components {
             /** Code */
             code: string;
         };
-        /** Body_upload_document_api_v1_documents_post */
-        Body_upload_document_api_v1_documents_post: {
-            /** File */
-            file: string;
-            /** Title */
-            title: string;
-            /** Document Type */
-            document_type: string;
-            /** Person Id */
-            person_id?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Taken Date */
-            taken_date?: string | null;
-            /** Taken Place */
-            taken_place?: string | null;
-        };
         /**
          * BranchCreateRequest
          * @description Request body for creating a branch within a clan.
@@ -1954,6 +1961,28 @@ export interface components {
             /** Created At */
             created_at: string;
         };
+        /**
+         * DocumentCreateRequest
+         * @description ``POST /documents``: confirm a staged upload as a document of this clan.
+         */
+        DocumentCreateRequest: {
+            /** Storage Path */
+            storage_path: string;
+            /** Title */
+            title: string;
+            /** Document Type */
+            document_type: string;
+            /** Original Filename */
+            original_filename?: string | null;
+            /** Person Id */
+            person_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Taken Date */
+            taken_date?: string | null;
+            /** Taken Place */
+            taken_place?: string | null;
+        };
         /** DocumentResponse */
         DocumentResponse: {
             /**
@@ -2120,6 +2149,10 @@ export interface components {
         /** Envelope[RelationshipPathResponse] */
         Envelope_RelationshipPathResponse_: {
             data: components["schemas"]["RelationshipPathResponse"];
+        };
+        /** Envelope[SignedUploadResponse] */
+        Envelope_SignedUploadResponse_: {
+            data: components["schemas"]["SignedUploadResponse"];
         };
         /** Envelope[TokenRefreshResponse] */
         Envelope_TokenRefreshResponse_: {
@@ -3458,6 +3491,38 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /**
+         * SignUploadRequest
+         * @description ``POST /documents/uploads``: what the client says it is about to upload.
+         *
+         *     These are declarations, checked before any byte is sent. The confirm call checks
+         *     what Storage actually received (ADR-068).
+         */
+        SignUploadRequest: {
+            /** Filename */
+            filename: string;
+            /** Content Type */
+            content_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /**
+         * SignedUploadResponse
+         * @description Where to send the bytes. ``storage_path`` goes back in the confirm call.
+         */
+        SignedUploadResponse: {
+            /** Storage Path */
+            storage_path: string;
+            /** Upload Url */
+            upload_url: string;
+            /** Token */
+            token: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
         };
         /**
          * SpouseNode
@@ -7190,6 +7255,77 @@ export interface operations {
             };
         };
     };
+    sign_document_upload_api_v1_documents_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-current-clan-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignedUploadResponse_"];
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_documents_api_v1_documents_get: {
         parameters: {
             query?: {
@@ -7263,7 +7399,7 @@ export interface operations {
             };
         };
     };
-    upload_document_api_v1_documents_post: {
+    create_document_api_v1_documents_post: {
         parameters: {
             query?: never;
             header?: {
@@ -7274,7 +7410,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_document_api_v1_documents_post"];
+                "application/json": components["schemas"]["DocumentCreateRequest"];
             };
         };
         responses: {

@@ -338,9 +338,13 @@ Vercel bundle.
 5. The backend image, with its own `CMD`, `APP_ENV=production` and no source mount. The step waits for
    `GET /health` to answer 200 with `"migrations":"current"`. If the process exits first, the step
    fails and quotes the container's `RuntimeError:` line.
-6. The web image, read once in Chromium. `/vi/login` must render the login form and no
+6. The backend image's own `HEALTHCHECK`, as Docker reports it. The step fails unless it reads
+   `healthy` (#230, below).
+7. The web image, read once in Chromium. `/vi/login` must render the login form and no
    missing-Supabase banner. Then the container is removed, because the harness does not use it.
-7. `pnpm test:e2e:auth`, on `next dev` as on a laptop, against the backend container.
+8. `pnpm test:e2e:auth`, on `next dev` as on a laptop, against the backend container. The one
+   difference from a laptop is `E2E_AUTH_HOST=familyroots-web.test`, the name the harness's browser
+   uses (#231, below).
 
 Nothing is uploaded, on success or failure. `web/e2e/.auth/` holds live sessions, and a Playwright
 report or trace carries the same cookies in its captured requests. The repository is public, so its
@@ -381,30 +385,38 @@ repository does not have.
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@pgdb:5432/family_roots` | `pgdb` is a name on the compose network the container joins. Inside a container, `localhost` would not be the database anyway |
 | `ALLOWED_HOSTS` | `["127.0.0.1"]` | every request reaches the container through `127.0.0.1:8073` on the runner |
-| `CORS_ORIGINS` | `["http://127.0.0.1:3102","http://familyroots-web.test:3102"]` | the harness's auth origin, and the invite link's. The CORS refusal checks for `localhost` and `*`, not `127.0.0.1` (`backend/app/core/config.py:241-244`) |
+| `CORS_ORIGINS` | `["http://familyroots-web.test:3102"]` | the harness's auth origin, which is also the invite link's. The validator refuses `*` and any entry `names_loopback` matches, `127.0.0.1` included since #231, so the harness's browser uses this name (below) |
 | `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Production sets `true`, because Vercel overwrites `X-Forwarded-For` with the client's address ([deployment.md](deployment.md), "Go-live checklist", C) |
 | `RATE_LIMIT_AUTH_MAX_REQUESTS` | `1000` | the validator refuses only a value below 1, in every environment. **The one value here that production does not run**: production sets nothing, so it keeps the default 20 (ADR-021, amended by #226). Every request reaches the container from one address, and a full run spends 28 from the bucket in under a minute (2026-10-07). See "The job inherited the harness's rate-limit collision" below |
 | `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Production's is set by hand in Vercel |
 | `SUPABASE_URL` and both keys | this stack's, from `scripts/supabase_local.sh env` | `supabase.localhost`, for the reason in "The two settings that are load bearing" |
 
-**`INVITE_LINK_ORIGIN` is a name, because the validator refuses the harness's origin.** Since #191 the
-validator refuses an empty or loopback value (`config.py:247-251`, `names_loopback`).
+**The harness's origin is a name, because the validator refuses a loopback one.** The validator
+refuses an empty or loopback `INVITE_LINK_ORIGIN` since #191, and a loopback `CORS_ORIGINS` entry
+since #231, both through `names_loopback` in `backend/app/core/config.py`.
 `invitation-link.auth.spec.ts` opens the link the backend builds, so the link has to reach the
-harness's `next dev` on `127.0.0.1:3102`. The job adds `127.0.0.1 familyroots-web.test` to the
-runner's `/etc/hosts` and builds links on that name. `.test` is reserved by RFC 2606, so it resolves
-nowhere else. Do not "fix" this by loosening `names_loopback`. That refusal is what stops a production
-deployment from handing every invitee a link to `localhost`.
+harness's `next dev` on `127.0.0.1:3102`, and every page the harness opens has to be an origin the
+backend's CORS admits. The job adds `127.0.0.1 familyroots-web.test` to the runner's `/etc/hosts`
+and sets `E2E_AUTH_HOST=familyroots-web.test`, so `web/playwright.config.ts`'s `AUTH_BASE_URL` is
+`http://familyroots-web.test:3102`. The dev server still binds `127.0.0.1`. Only the name the
+browser and Playwright use changes, and the session cookies belong to that name. The backend builds
+links on the same origin. `.test` is reserved by RFC 2606, so it resolves nowhere else. Do not "fix"
+this by loosening `names_loopback`. That refusal is what stops a production deployment from handing
+every invitee a link to `localhost`, or admitting a browser origin left over from development.
 
-**So `CORS_ORIGINS` lists that name too.** A page opened from the link has the origin
-`http://familyroots-web.test:3102`, and `invitee-registers.auth.spec.ts` (#196) registers from it.
-With only `127.0.0.1` listed, the browser's preflight was refused. The job's first run past the image
-pull (2026-10-07, run 37547827576) logged `"OPTIONS /api/v1/auth/register HTTP/1.1" 400 Bad Request`
-twice, and the walk timed out waiting for the registration message. On a laptop the recipe in
-`web/CLAUDE.md` sets `INVITE_LINK_ORIGIN` to the auth origin itself, so the two origins are one, which
-is why no local run saw it.
+**Until #231 the harness stayed on `127.0.0.1`, and the job admitted two origins.** The validator
+then refused a `localhost` CORS entry but not a `127.0.0.1` one, so `CORS_ORIGINS` listed
+`http://127.0.0.1:3102` for the harness and the name for the link. A page opened from the link has
+the link's origin, and `invitee-registers.auth.spec.ts` (#196) registers from it. With only
+`127.0.0.1` listed, the browser's preflight was refused. The job's first run past the image pull
+(2026-10-07, run 37547827576) logged `"OPTIONS /api/v1/auth/register HTTP/1.1" 400 Bad Request`
+twice, and the walk timed out waiting for the registration message. With one origin for the harness
+and the link, as on a laptop, where the recipe in `web/CLAUDE.md` sets `INVITE_LINK_ORIGIN` to the
+auth origin itself, that split cannot happen again.
 
-**The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`.** Next 16's dev server
+**The name also has to be in `web/next.config.ts`'s `allowedDevOrigins`**, and since #231 every page
+the harness opens is on it, not only the invitation page. Next 16's dev server
 refuses its `/_next/webpack-hmr` socket to a page on any host but `localhost`, `*.localhost` and the
 one it was started on (`blockCrossSiteDEV` in Next 16.2.12's
 `dist/server/lib/router-utils/block-cross-site-dev.js:77-108`). Measured on this repository's Linux
@@ -426,18 +438,59 @@ job, before the entry existed: the heading it waits for never appeared, on the f
 (`isSecureContext` false, no `crypto.subtle`), and the third row shows that is not the cause. Why a
 refused HMR socket leaves the session read pending was not established.
 
-### The image's own `HEALTHCHECK` reports unhealthy here, and the job does not read it
+### The image's own `HEALTHCHECK` reports healthy here, and the job reads it (#230)
 
-`backend/Dockerfile`'s `HEALTHCHECK` requests `http://localhost:8000/health`. `ALLOWED_HOSTS` does not
-list `localhost`, so `TrustedHostMiddleware` answers 400 and Docker marks the container unhealthy.
-Read on this repository's Linux dev machine on 2026-10-06, with the image booted as the job boots it:
-the container log held six `"GET /health HTTP/1.1" 400 Bad Request` lines from the probe beside two
-200s from the runner, and `docker inspect` read `unhealthy failing-streak=7`. The job reads
-`GET /health` from the runner, through the host the backend admits. Render's blueprint set
-`ALLOWED_HOSTS` to `["familyroots-api.onrender.com"]`, which did not list `localhost` either, so the
-same probe would have failed inside a production container too. **Since #252 no production
-container exists.** Vercel runs the backend from source with its own Python runtime, so the image's
-`HEALTHCHECK` matters only to compose and to this job. #230 tracks the probe itself.
+`backend/Dockerfile`'s `HEALTHCHECK` runs `python -m app.healthcheck` (`backend/app/healthcheck.py`).
+It sends `GET /health` to `127.0.0.1:8000` under a `Host` taken from the container's own
+`ALLOWED_HOSTS`, read through the same `Settings` the app builds: the first entry, a name under the
+domain when that entry is a `*.domain` wildcard, and `localhost` for the development default `["*"]`.
+`TrustedHostMiddleware`, its place in the stack and `ALLOWED_HOSTS` are unchanged, and no path is
+exempted from the host check. The probe exits 1 on anything but a 200, and `/health` reads the
+database, so a database that is unreachable or behind still reads unhealthy.
+
+**Why it changed.** Until #230 the probe requested `http://localhost:8000/health`. This job's
+`ALLOWED_HOSTS` is `["127.0.0.1"]`, which does not list `localhost`, so `TrustedHostMiddleware`
+answered 400 and Docker marked a healthy container unhealthy. Read on this repository's Linux dev
+machine on 2026-10-06 at `f6f9409`, with the image booted as the job boots it: six
+`"GET /health HTTP/1.1" 400 Bad Request` lines from the probe beside two 200s from the runner, and
+`docker inspect` read `unhealthy failing-streak=7`. Render's `["familyroots-api.onrender.com"]` did
+not list `localhost` either, and no production list does.
+
+**Read on 2026-10-10**, on the macOS dev machine with Docker 29.8.2, on #230's branch based on
+`3169076`. Each container was booted under `APP_ENV=production` beside a throwaway Postgres, migrated
+by the image's own `alembic upgrade head`, and read once it had left `starting` and one more
+`--interval` had passed:
+
+| Container | `ALLOWED_HOSTS` | Docker's reading | The probe's last line, from `.State.Health.Log` | `GET /health` in the container log |
+|---|---|---|---|---|
+| the image | `["127.0.0.1"]` | `healthy failing-streak=0` | `GET /health (Host: 127.0.0.1) -> 200` | 5 × `200 OK` |
+| the image | `["*.familyroots.example","api.familyroots.example"]` | `healthy failing-streak=0` | `GET /health (Host: healthcheck.familyroots.example) -> 200` | 5 × `200 OK` |
+| control 1: the old probe put back | `["127.0.0.1"]` | `unhealthy failing-streak=4` | `urllib.error.HTTPError: HTTP Error 400: Bad Request` | 7 × `400 Bad Request` |
+| control 2: the image, its `CMD` replaced by `sleep 600` | `["127.0.0.1"]` | `unhealthy failing-streak=4` | `ConnectionRefusedError(111, 'Connection refused')` | none |
+
+Control 2 is the one that shows the probe can still fail. Without it, a probe that reported healthy
+because of the host it sends would read the same as one that measures `/health`.
+
+**Starlette admits the wildcard pattern itself as a Host**, because it matches `*.domain` by suffix,
+so sending `*.familyroots.example` literally would also pass the middleware. `*` admits `*` too. The
+probe sends a name instead, and `backend/tests/unit/test_image_healthcheck.py` reads the Host the
+server received, not only the status. That test runs the probe against a real uvicorn behind
+`TrustedHostMiddleware` for each `ALLOWED_HOSTS` shape the validator admits, and reads `create_app`'s
+own answer to the Host the probe takes from its settings, so the probe cannot drift from the list
+the app hands its middleware.
+
+**Compose's `api` service runs the same probe.** It sets only the timings, and Docker keeps an
+image's test when a container sets none. A container compose created read
+`"Test":["CMD","python","-m","app.healthcheck"]` with compose's 15 s interval, and, run against a
+throwaway database under compose's `APP_ENV: development`, `healthy failing-streak=0` with the probe
+sending `Host: localhost`.
+
+**The job reads it**, in the step after the boot. It waits for Docker to leave `starting` and fails
+unless the status is `healthy`. 150 s covers a failing probe, which reads `unhealthy` about 125 s
+after the container starts at worst: failures inside the 15 s `--start-period` do not count, and
+each of the three that do starts 30 s after the previous probe ended, which can take its full 5 s
+`--timeout`. **Since #252 no production container exists.** Vercel runs the backend from source
+with its own Python runtime, so the image's `HEALTHCHECK` matters only to compose and to this job.
 
 ### The job inherited the harness's rate-limit collision, until #226
 

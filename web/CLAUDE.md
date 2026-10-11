@@ -950,7 +950,8 @@ Four harnesses, one gate each:
   context, trace id generation, single-flight refresh, `apiFetch`, the logger. `vitest.config.mts`
   adds five globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
   `scripts/**`, which holds the legacy gate's test, `playwright.config.test.ts`, which reads
-  whether an e2e run uses a server it did not start (#192), and `eslint.config.test.ts`, which
+  whether an e2e run uses a server it did not start (#192) and which name the authenticated
+  project reaches its server by (#231), and `eslint.config.test.ts`, which
   reads whether a Tailwind default-palette class fails lint (#199).
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
@@ -1023,6 +1024,17 @@ reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting i
   `E2E_PORT_BASE=3110` and `E2E_PORT_BASE=3120`. A value that is not a whole number from 1024 to
   65533 fails the run, naming the variable and the value. A hash of the worktree path was rejected:
   two hashes can collide, and the auth origin has to be predictable for `CORS_ORIGINS`.
+- **`E2E_AUTH_HOST` renames the authenticated server, and only that one** (#231). Unset, it is
+  `127.0.0.1`, so `AUTH_BASE_URL` is `http://127.0.0.1:<base+2>` and every recipe here behaves as
+  before it existed. Set, the browser and Playwright reach base+2 by that name, and the session
+  cookies belong to it. The dev server still binds `127.0.0.1`, and the hermetic and banner servers
+  keep their names. `image-e2e.yml` sets `familyroots-web.test`, because its backend runs under the
+  production validator, which refuses a loopback `CORS_ORIGINS` entry. A name other than
+  `127.0.0.1` must resolve to this machine (the runner adds an `/etc/hosts` line) and be in
+  `next.config.ts`'s `allowedDevOrigins`, and the backend's `CORS_ORIGINS` and
+  `INVITE_LINK_ORIGIN` must name the origin it makes. A value that is not a bare host name fails the
+  run, naming it. `playwright.config.test.ts` reads the `Host` the authenticated project's request
+  carries, unset and set.
 - **`E2E_REUSE_SERVER=1` attaches**, to whatever already answers on each URL, as-is and with
   whatever env it was started with. It covers all three ports at once, so a server you meant to
   reuse, such as a warm `:3102` (the authenticated harness's cold-compile trap, below, which the
@@ -1065,6 +1077,14 @@ its plant: the old `!process.env.CI` fails the first, the opt-in honoured under 
 third, reuse never on fails the second, a literal hermetic or banner port fails the cases that
 reach it, and no validation fails the last, on `TypeError: Invalid URL`.
 
+**Three more cases read `E2E_AUTH_HOST` (#231).** They hold a third stand-in on base+2 and run a
+throwaway spec in the `auth-chromium` project with `E2E_REUSE_SERVER=1`, so no dev server starts,
+and read the `Host` header the spec's request carries: `127.0.0.1:<base+2>` unset, and
+`localhost:<base+2>` with `E2E_AUTH_HOST=localhost`, a name that resolves everywhere with no
+`/etc/hosts` line. A malformed value fails the run naming it. Each was seen to fail on 2026-10-11:
+the variable ignored fails the set case, an unset default of `localhost` fails the unset case, and
+no validation fails the last.
+
 **The issue's four readings with two worktrees, 2026-10-05.** Reading 3 has two halves, 3a and
 3b. A and B were worktrees of this repository. The plant was `lang="en"` for `lang={locale}` in
 `src/app/layout.tsx`, which fails `smoke.spec.ts`'s "declares Vietnamese" case with
@@ -1101,10 +1121,10 @@ once on 2026-10-05: 86 passed and 20 failed, every one of them `invitation-accep
 page Next's own 404. The spec passed ten of ten alone, and the full suite rerun reported 106
 passed. **#228 explained it on 2026-10-10:** `next dev`'s route watcher had come up without the
 invitation route, a race inside Next, and it stays that way until the server restarts or a file
-under `src/app` changes. See "`next dev` carries a patch" below and ADR-068. With nothing listening,
+under `src/app` changes. See "`next dev` carries a patch" below and ADR-069. With nothing listening,
 the old and new configs start the same servers, so neither failure reads on this change.
 
-## `next dev` carries a patch (#228, ADR-068)
+## `next dev` carries a patch (#228, ADR-069)
 
 **What it fixes.** In Next 16.2.12, `next dev` can come up with every page four or more directories
 below `src/app` missing from its route table. Those pages then answer Next's own 404 until the
@@ -1112,7 +1132,7 @@ server restarts or a file under `src/app` changes. The invitation page is one of
 2026-10-05 every case of `invitation-accept.spec.ts` read the 404 page. The watcher's `aggregated`
 handler is async and unserialized, so a run that started on a partial startup scan can write the
 route list after the run that saw every file. `patches/next@16.2.12.patch` runs it one at a time.
-ADR-068 holds the source lines and the readings.
+ADR-069 holds the source lines and the readings.
 
 **How to tell a stuck server.** A deep route answers 404 at once, with no `○ Compiling` line before
 it, while `/vi/login` answers 200, and the server's `dev/types/routes.d.ts` lacks
@@ -1149,10 +1169,10 @@ for a deep route, so a full run failed only when 3100 itself lost the race.
 `next@16.2.12`. First read `dist/server/lib/router-utils/setup-dev-bundler.js` in the new version.
 If its `wp.on('aggregated', async ()=>{` listener is now serialized, delete the patch and its
 `pnpm-workspace.yaml` entry, take both out of the Dockerfile's deps stage (`pnpm-workspace.yaml`
-from its first `COPY`, and the `COPY patches` line), and amend ADR-068. As of
+from its first `COPY`, and the `COPY patches` line), and amend ADR-069. As of
 16.5.0-canary.7 it was not. Otherwise run `pnpm patch next@<new> --edit-dir <dir>`, make the edit the
 current patch file shows, run `pnpm patch-commit <dir>`, then move the entry (trap 1) and delete the old patch file.
-Before trusting either outcome, read it the way ADR-068 did: start `next dev` on base and base+1
+Before trusting either outcome, read it the way ADR-069 did: start `next dev` on base and base+1
 at once, which loses the race more often than Playwright's order does, ask each for
 `/vi/invitations/abc` once it answers `/`, and repeat, unpatched and patched.
 
@@ -1194,8 +1214,10 @@ export E2E_AUTH_MAIL_URL=http://127.0.0.1:54324                # Mailpit; the in
 pnpm test:e2e:auth
 ```
 
-**CI runs the same command against the built backend image** (`image-e2e.yml`, #193). Its backend
-values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
+**CI runs the same command against the built backend image** (`image-e2e.yml`, #193), with
+`E2E_AUTH_HOST=familyroots-web.test` (#231), so its auth origin is
+`http://familyroots-web.test:3102` rather than `127.0.0.1`. Its backend values differ from the
+recipe above, `CORS_ORIGINS` and `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
 
 **Twenty-four tests, re-read 2026-10-09 (#202): the walks take their link from the mail.** The
@@ -1324,8 +1346,11 @@ promise:
    `AssertionError: expected [ 'src/lib/server/auth-context.ts' ] to deeply equal []`,
    naming the file. Removed; the suite went back to 434 passing.
 3. **The credential is worthless elsewhere.** `backoffice.auth.spec.ts`'s last case replays
-   the captured admin state against the hermetic server (`BASE_URL`, `:3100` by default), which
-   points at `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. Cookies are
+   the captured admin state against the hermetic server (`:3100` by default), which
+   points at `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. It
+   requests that server under `E2E_AUTH_HOST`'s name and first reads that the context presents
+   the `sb-…-auth-token` there (#231): a cookie belongs to a host, so under another name the
+   replay would send no session and read the same 307. Cookies are
    named for their project (`sb-<ref>-auth-token`) and the token is signed by the stack that
    issued it. **This does not prove middleware checks a signature — it does not**;
    `supabase.auth.getSession()` reads the cookie. Signature checking is the backend's JWKS

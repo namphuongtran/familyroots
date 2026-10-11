@@ -16,8 +16,10 @@ const nextConfig: NextConfig = {
   distDir: process.env.PLAYWRIGHT_SECOND_DIST_DIR || '.next',
   /**
    * `next dev` only, and only for `.github/workflows/image-e2e.yml` (#193). That job runs the
-   * backend under `APP_ENV=production`, whose validator refuses a loopback `INVITE_LINK_ORIGIN`, so
-   * invitation links are built on this name and the runner's `/etc/hosts` maps it to `127.0.0.1`.
+   * backend under `APP_ENV=production`, whose validator refuses a loopback `INVITE_LINK_ORIGIN` and,
+   * since #231, a loopback `CORS_ORIGINS` entry. So the authenticated harness opens every page on
+   * this name (`E2E_AUTH_HOST` in `playwright.config.ts`), invitation links are built on it, and
+   * the runner's `/etc/hosts` maps it to `127.0.0.1`.
    * Next 16 blocks a page on any other host from the dev server's `/_next/webpack-hmr` socket, and
    * the invitation page then never reads its session: measured 2026-10-06, the page stayed on its
    * loading button without this entry and showed "Hãy đăng nhập trước" with it. `.test` is

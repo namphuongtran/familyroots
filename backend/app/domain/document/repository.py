@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from typing import Protocol
 
 from app.domain.document.entity import Document
@@ -91,11 +92,11 @@ class StorageBucketNotConfiguredError(StorageError):
 
 
 class StoragePort(Protocol):
-    """Abstract storage contract — decouples from Supabase."""
+    """Abstract storage contract — decouples from Supabase.
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
-        """Upload a file, return the storage path."""
-        ...
+    No method here writes a document's bytes: the browser uploads them straight to
+    Storage (ADR-068), and ``StagedUploadStorage`` below is the port for that flow.
+    """
 
     async def delete(self, storage_path: str) -> bool:
         """Delete a file by path.
@@ -136,4 +137,58 @@ class StoragePort(Protocol):
         and ``StorageUnavailableError`` for provider/transport failures. It never
         returns a URL it could not actually publish.
         """
+        ...
+
+
+# Supabase fixes a signed upload URL's lifetime at two hours; there is no parameter to
+# change it. Stated here so the sign response can tell the client its deadline.
+SIGNED_UPLOAD_TTL = 7200  # seconds
+
+
+@dataclass(frozen=True)
+class SignedUpload:
+    """Where the client sends the bytes, and the token that authorizes one upload."""
+
+    upload_url: str
+    token: str
+
+
+@dataclass(frozen=True)
+class StoredObject:
+    """What Storage actually holds at a path: the facts a confirm call checks."""
+
+    size_bytes: int
+    content_type: str | None
+
+
+class StagedUploadStorage(Protocol):
+    """Storage contract for the direct-to-Storage upload flow (ADR-068).
+
+    Sign mints a URL for one staged path; the browser uploads to it; confirm reads
+    the stored object back, then moves it into the clan's documents folder. Kept apart
+    from ``StoragePort`` because only this flow needs it.
+    """
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        """Mint a URL that accepts exactly one upload to ``path``, which must not exist."""
+        ...
+
+    async def stat(self, path: str) -> StoredObject:
+        """Read the stored object's size and type. Raises ``StorageNotFoundError``
+        when nothing is at ``path``."""
+        ...
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        """Move an object within the private bucket. Raises ``StorageNotFoundError``
+        when ``from_path`` is gone, which is how a second confirm of one path loses."""
+        ...
+
+    async def delete(self, storage_path: str) -> bool:
+        """As ``StoragePort.delete``: True on success or confirmed absence."""
+        ...
+
+    async def get_presigned_url(
+        self, storage_path: str, expires_in: int = DEFAULT_PRESIGN_TTL
+    ) -> str:
+        """As ``StoragePort.get_presigned_url``."""
         ...

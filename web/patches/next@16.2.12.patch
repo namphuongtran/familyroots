@@ -7,7 +7,7 @@ index b21ed5e236ad10a48653ff354045def4347c4e0a..17ea950b3bb63a0dd93b8917a3f96b96
          const validatorFilePath = _path.default.join(distDir, 'types', 'validator.ts');
          let initialWatchTime = performance.now() + performance.timeOrigin;
 -        wp.on('aggregated', async ()=>{
-+        // FamilyRoots patch (#228, ADR-068): one run of this handler at a time.
++        // FamilyRoots patch (#228, ADR-069): one run of this handler at a time.
 +        // Watchpack fires this each time its startup scan pauses for 5 ms, so one startup
 +        // fires it several times. Each run reads the file list when it starts and writes
 +        // the route list after several awaits. Unserialized, a run that started on a

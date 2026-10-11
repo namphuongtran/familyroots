@@ -1,4 +1,4 @@
-# ADR-068: `next dev` Carries a Patch That Serializes Its Route Watcher
+# ADR-069: `next dev` Carries a Patch That Serializes Its Route Watcher
 
 ## Status
 

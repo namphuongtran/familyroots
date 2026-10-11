@@ -292,7 +292,8 @@ authenticated admin surface, not the abuse-prone unauthenticated-adjacent one.
 
 | Method | Path                       | Auth | Role   | Description                    |
 |--------|----------------------------|------|--------|--------------------------------|
-| POST   | `/`                        | Yes  | editor | Upload file (multipart/form)   |
+| POST   | `/uploads`                 | Yes  | editor | Sign a direct-to-Storage upload (ADR-068) |
+| POST   | `/`                        | Yes  | editor | Confirm a staged upload as a document (JSON) |
 | GET    | `/`                        | Yes  | viewer | List documents (paginated)     |
 | GET    | `/{id}`                    | Yes  | viewer | Get document with presigned URL |
 | DELETE | `/{id}`                    | Yes  | admin  | Soft-delete (blob kept; see ADR-019) |
@@ -305,19 +306,27 @@ authenticated admin surface, not the abuse-prone unauthenticated-adjacent one.
 
 ### Max File Size
 
-50 MB
+50 MB (`MAX_UPLOAD_SIZE_MB`)
 
-### Upload (POST `/`) — multipart/form-data
+### Upload — sign, PUT to Storage, confirm (ADR-068)
 
-| Field          | Type   | Required | Description              |
-|----------------|--------|----------|--------------------------|
-| file           | file   | Yes      | The file to upload       |
-| title          | string | Yes      | Document title           |
-| document_type  | string | Yes      | photo/id_document/certificate/audio/video/other |
-| person_id      | uuid   | No       | Link to a person         |
-| description    | string | No       | Description              |
-| taken_date     | date   | No       | When photo was taken     |
-| taken_place    | string | No       | Where photo was taken    |
+The file never passes through the API. `POST /uploads` takes `{filename, content_type,
+size_bytes}` and returns `{storage_path, upload_url, token, expires_at}`. The client PUTs the
+file to `upload_url`, then confirms with `POST /`:
+
+| Field             | Type   | Required | Description              |
+|-------------------|--------|----------|--------------------------|
+| storage_path      | string | Yes      | The staged path `POST /uploads` returned |
+| title             | string | Yes      | Document title           |
+| document_type     | string | Yes      | photo/id_document/certificate/audio/video/other |
+| original_filename | string | No       | The file's name, as the user knows it |
+| person_id         | uuid   | No       | Link to a person         |
+| description       | string | No       | Description              |
+| taken_date        | date   | No       | When photo was taken     |
+| taken_place       | string | No       | Where photo was taken    |
+
+[contracts/rest-documents-api.md](../contracts/rest-documents-api.md) holds every status and
+error code.
 
 ---
 

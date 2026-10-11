@@ -291,10 +291,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "DATABASE_URL must point at the production database, not localhost"
                 )
-            # CORS must be real origins (not the localhost dev defaults, not wildcard —
-            # "*" is also invalid with allow_credentials=True).
+            # CORS must be real origins: not a loopback dev value, `localhost` or `127.0.0.1`
+            # (#231), and not wildcard, which is also invalid with allow_credentials=True.
             if self.CORS_ORIGINS == ["*"] or any(
-                "localhost" in origin for origin in self.CORS_ORIGINS
+                names_loopback(origin) for origin in self.CORS_ORIGINS
             ):
                 raise ValueError("CORS_ORIGINS must be explicit production origins")
             # Every invitation link is shared with a person outside this deployment, so an

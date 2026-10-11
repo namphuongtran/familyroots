@@ -7,13 +7,22 @@ import type {
   CursorPage,
 } from '@/lib/types'
 
-// The backend runs on Vercel Functions, which refuse a request body over 4.5 MB with their
-// own 413. That response never reaches the API, so it carries no error envelope (ADR-065).
-// Production's server limit, MAX_UPLOAD_SIZE_MB, is 4 for that reason, and a larger file
-// is refused here, before any byte is sent. Lifting this needs direct-to-Storage uploads.
+// A document's bytes go from the browser straight to Supabase Storage (ADR-068), so Vercel's
+// 4.5 MB body limit on the API no longer caps them (ADR-065 § 6). Three steps: the API signs
+// one staged path after checking the declared name, type and size; the browser PUTs the file
+// to the signed URL; the API confirms it, checking what Storage actually received. 50 MB is
+// the domain's limit and the bucket's, and a larger file is refused here before any request.
 // DocumentUpload reads the same number, so the screen and the transport cannot disagree.
-export const MAX_UPLOAD_MB = 4
+export const MAX_UPLOAD_MB = 50
 const MAX_FILE_SIZE_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+/** `POST /documents/uploads`'s `data`. `storage_path` goes back in the confirm call. */
+interface SignedUpload {
+  storage_path: string
+  upload_url: string
+  token: string
+  expires_at: string
+}
 
 export const documentsApi = {
   list: async (params?: {
@@ -36,20 +45,33 @@ export const documentsApi = {
 
   upload: async (file: File, meta: DocumentUploadMeta): Promise<DocumentResponse> => {
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      throw new Error(`File size exceeds the 4 MB limit`)
+      throw new Error(`File size exceeds the ${MAX_UPLOAD_MB} MB limit`)
+    }
+    // A browser reports '' for a type it does not know. Sent as is, the API would answer with
+    // a bare validation error; as octet-stream it answers invalid_mime_type, which names why.
+    const contentType = file.type || 'application/octet-stream'
+
+    const { data: signed } = await api.post<ApiResponse<SignedUpload>>('/documents/uploads', {
+      filename: file.name,
+      content_type: contentType,
+      size_bytes: file.size,
+    })
+
+    // Not through `api`: the request goes to Storage, which must not receive the session's
+    // bearer token, and the signed URL is the whole authorization for this one upload.
+    const put = await fetch(signed.data.upload_url, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': contentType },
+    })
+    if (!put.ok) {
+      throw new Error(`Storage refused the upload (${put.status})`)
     }
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('title', meta.title)
-    formData.append('document_type', meta.document_type)
-    if (meta.person_id) formData.append('person_id', meta.person_id)
-    if (meta.description) formData.append('description', meta.description)
-    if (meta.taken_date) formData.append('taken_date', meta.taken_date)
-    if (meta.taken_place) formData.append('taken_place', meta.taken_place)
-
-    const { data } = await api.post<ApiResponse<DocumentResponse>>('/documents', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    const { data } = await api.post<ApiResponse<DocumentResponse>>('/documents', {
+      storage_path: signed.data.storage_path,
+      original_filename: file.name,
+      ...meta,
     })
     return data.data
   },

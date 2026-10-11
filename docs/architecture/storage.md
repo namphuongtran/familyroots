@@ -1,8 +1,9 @@
 # File Storage
 
 How document/photo blobs are stored in Supabase Storage: two buckets (a private one
-for documents, a public one for avatars), path-based clan isolation, presigned reads,
-and a soft-delete → retention → purge lifecycle.
+for documents, a public one for avatars), path-based clan isolation, direct-to-Storage
+uploads through signed URLs (ADR-068), presigned reads, and a soft-delete → retention →
+purge lifecycle.
 
 ## Delete lifecycle (ADR-019)
 
@@ -24,10 +25,15 @@ orphan blob left by *this* code path. Full crash-safety analysis and the
 per-item error-isolation guarantees are in
 [ADR-019](../decisions/019-document-soft-delete-purge.md).
 
-> ⚠️ **Still deferred**: orphan-blob reconciliation for blobs that predate this
-> lifecycle or come from a failed upload compensation (see the upload-flow
+The same daily run also sweeps **staged uploads**: every object under
+`clans/*/uploads/` older than 24 hours, a file that was signed and maybe uploaded but
+never confirmed (ADR-068, the upload flow below). It lists only the staging folders,
+so it never touches a document's blob.
+
+> ⚠️ **Still deferred**: orphan-blob reconciliation for blobs under `documents/` that
+> predate this lifecycle or come from a failed upload compensation (see the upload-flow
 > note below) — those are only logged, never reclaimed; needs bucket-listing
-> pagination, tracked as a follow-up. See
+> pagination over every document blob, tracked as a follow-up. See
 > [ops/backup-restore.md](../ops/backup-restore.md).
 
 ## Bucket layout & isolation
@@ -37,7 +43,8 @@ storage arm of [multi-tenancy](multi-tenancy.md) — but only the first is priva
 
 ```
 family-roots-files/                                 # PRIVATE  (SUPABASE_STORAGE_BUCKET)
-└── clans/{clan_id}/documents/{file_uuid}.{ext}
+├── clans/{clan_id}/uploads/{file_uuid}.{ext}       # staged: signed, maybe uploaded, not confirmed
+└── clans/{clan_id}/documents/{file_uuid}.{ext}     # a confirmed document's blob
 
 family-roots-avatars/                               # PUBLIC   (SUPABASE_AVATAR_BUCKET)
 └── clans/{clan_id}/avatars/{person_id}             # no extension; Content-Type carries the format
@@ -47,44 +54,67 @@ Keeping them apart is load-bearing: it is what stops "avatars are public" (ADR-0
 from making every certificate, ID document and audio recording public too. Never point
 `SUPABASE_AVATAR_BUCKET` at `SUPABASE_STORAGE_BUCKET`.
 
-The document key is built server-side in `DocumentCommandHandler.upload`
-(`backend/app/application/document/handlers.py`); the extension is sanitized by
-`_safe_extension` (lowercase alphanumerics only) so a hostile filename like
-`x.jpg/../../other-clan/evil` cannot escape the clan prefix. The avatar key is built by
+The document key is built server-side, at signing, by `DocumentUploadHandler.sign`
+(`backend/app/application/document/upload.py`) from `storage_paths.staged_upload_path`
+(`backend/app/domain/document/storage_paths.py`). The extension is sanitized by
+`safe_extension` (lowercase alphanumerics only) so a hostile filename like
+`x.jpg/../../other-clan/evil` cannot escape the clan prefix. The client sends that key
+back at confirm, so `parse_staged_upload_path` refuses any key that is not exactly a
+staged key of the acting clan before Storage is read. That check is this flow's clan
+isolation. The avatar key is built by
 `_avatar_object_path` from the authenticated clan id and the document's person link —
 both server state, so there is nothing to sanitize — and is stable per person, so
 replacing an avatar upserts the same object and the stored URL never changes.
 
-All storage calls go through the **service-role Supabase client**
+All of the backend's storage calls go through the **service-role Supabase client**
 (`app/infrastructure/supabase_client.py`), which **bypasses RLS** — bucket policies do
 not protect anything on the write side; isolation is enforced by the application
-building the path and by clan-scoped repository reads. On the *read* side the two
+building the path and by clan-scoped repository reads. The one write that does not use
+that client is the browser's PUT of a document's bytes, and it is authorized by a signed
+upload URL the backend minted for one path, not by a bucket policy. Add no anonymous
+write policy to either bucket. On the *read* side the two
 buckets differ absolutely: `family-roots-files` is unreadable without a presign, while
 anything in `family-roots-avatars` is readable by anyone with the URL, forever, with no
 authentication and no clan check. See ADR-036's Consequences.
 
-## Upload flow
+## Upload flow (ADR-068)
 
-`POST /api/v1/documents` (editor+) → `app/api/v1/documents.py`:
+The bytes never pass through the API: on Vercel a request body over 4.5 MB never
+reaches FastAPI (ADR-065). The contract is
+[contracts/rest-documents-api.md](../contracts/rest-documents-api.md), "Upload".
 
-1. Route reads at most `max_upload_bytes + 1` bytes (bounds the in-RAM copy; the `+1`
-   still trips the size check). NOTE: the multipart parser has already spooled the full
-   body to a temp file — a hard total-body limit belongs at the proxy/ASGI layer.
-2. `Document.create` (**domain**, `app/domain/document/entity.py`) validates:
-   - MIME against `ALLOWED_MIME_TYPES` (jpeg/png/webp/heic, pdf, mpeg/wav audio,
-     mp4/quicktime video) → `invalid_mime_type`;
-   - size against the injected limit → `file_too_large`. Default 50 MB
-     (`DEFAULT_MAX_FILE_SIZE_BYTES`), env-tunable via `MAX_UPLOAD_SIZE_MB`.
-3. **Blob first, then metadata** — with compensation: if the DB save/commit fails, the
-   just-uploaded blob is deleted (best-effort) before re-raising, so neither an orphan
-   blob nor a dangling row survives. A failed cleanup logs
-   `Orphaned blob after failed upload commit`.
+1. **Sign.** `POST /api/v1/documents/uploads` (editor+) → `DocumentUploadHandler.sign`.
+   `check_upload_file` (**domain**, `app/domain/document/entity.py`) runs against the
+   declared type and size: MIME against `ALLOWED_MIME_TYPES` (jpeg/png/webp/heic, pdf,
+   mpeg/wav audio, mp4/quicktime video) → `invalid_mime_type`, a missing type included;
+   size against the injected limit → `file_too_large`. The limit is
+   `DEFAULT_MAX_FILE_SIZE_BYTES`, 50 MB, env-tunable via `MAX_UPLOAD_SIZE_MB`. Then the
+   read transaction ends (ADR-028) and the adapter mints a signed upload URL for a fresh
+   `clans/{clan}/uploads/{uuid}.{ext}`. Supabase fixes its lifetime at two hours.
+2. **PUT.** The browser sends the file to that URL with no session token. The bucket's
+   `allowed_mime_types` refuses an unapproved declared type (415), its `file_size_limit`
+   an oversized file, and Storage a second PUT to the same path (409).
+3. **Confirm.** `POST /api/v1/documents` (editor+) → `DocumentUploadHandler.confirm`:
+   - `parse_staged_upload_path` refuses any other key → `422 document.upload_path_invalid`;
+   - a body-supplied `person_id` must be in the clan → `404 person_not_found`; the staged
+     file is kept for a retry;
+   - the read transaction ends (ADR-028), then `stat()` reads the stored object →
+     `404 document.upload_not_found` when nothing is there;
+   - `check_upload_file` runs again on the **stored** type and size. A failing file is
+     deleted, so it can never be confirmed later, and the call is refused;
+   - the object moves to `clans/{clan}/documents/{same uuid}.{ext}`. A concurrent confirm
+     that loses the move gets the same 404;
+   - **blob first, then metadata, with compensation**: if the save or commit fails, the
+     moved blob is deleted (best-effort) before re-raising. A failed cleanup logs
+     `Orphaned blob after failed upload commit`.
+
+A staged file nobody confirms is swept after 24 hours (the delete lifecycle above).
 
 ## Presigned URL flow
 
 Blobs are never public; reads go through time-limited signed URLs:
 
-- `GET /documents/{id}`, the upload response, and `POST /documents/{id}/restore`
+- `GET /documents/{id}`, the confirm response, and `POST /documents/{id}/restore`
   include `presigned_url` + `presigned_url_expires_at` (computed by
   `_presign_expiry()` in `app/application/document/handlers.py` — one helper, so a
   URL-bearing response can never again ship without its deadline).

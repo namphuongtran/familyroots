@@ -298,7 +298,9 @@ Every variable is set for the **Production** environment only. Preview deploymen
   project had Google on (read 2026-10-04). Nothing carried that over.
 - [ ] **Buckets.** `supabase link --project-ref xkmutzxdhdigyfisfrwd`, then
   `supabase seed buckets --linked`, which creates the private `family-roots-files` and the public
-  `family-roots-avatars` with its MIME list from `supabase/config.toml`. Read them back with
+  `family-roots-avatars`, each with its MIME list, from `supabase/config.toml`. The files bucket's
+  list arrived with #256 ([supabase-hosted-project.md](supabase-hosted-project.md) § 2b). A bucket
+  seeded before that release needs the seed run again. Read them back with
   `supabase db query --linked "select id, public, allowed_mime_types from storage.buckets order by id;"`.
 - [ ] **The private `backups` bucket**, by hand. It is not in `config.toml`, so the seed does not
   make it ([backup-restore.md](backup-restore.md), "Go-live checklist").
@@ -361,7 +363,7 @@ and the job prints it:
 | `SUPABASE_ANON_KEY` | the project's anon key | boot fails |
 | `SUPABASE_SERVICE_ROLE_KEY` | the project's service-role key | boot fails |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `true` | boot fails while unset. Vercel overwrites `X-Forwarded-For` "and **do not forward external IPs**. This restriction is in place to prevent IP spoofing" ("Request headers", read 2026-10-10), so the rightmost entry the limiter reads is the client |
-| `MAX_UPLOAD_SIZE_MB` | `4` | the server admits 50 MB, and Vercel refuses any body over 4.5 MB with its own 413, which never reaches the app's envelope (#250) |
+| `MAX_UPLOAD_SIZE_MB` | unset, so `50`; or `50` | since #256 a document goes from the browser straight to Storage (ADR-068), so Vercel's 4.5 MB body limit no longer applies. Until that release production held `4` (#250). Remove it or set `50` at that release, or every upload over 4 MB is refused at signing with `422 file_too_large` |
 | `FIREBASE_CREDENTIALS_JSON` *(optional)* | the service-account JSON, inline | push notifications are off, with a warning, not a boot failure (#250) |
 | `SENTRY_DSN` *(optional)* | the DSN | Sentry is off |
 

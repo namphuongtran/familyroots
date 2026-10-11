@@ -8,7 +8,7 @@ RUN corepack enable
 FROM base AS deps
 WORKDIR /app
 # `pnpm-workspace.yaml` holds `patchedDependencies`, and `patches/` the files it names: a frozen
-# install fails without either (ADR-068).
+# install fails without either (ADR-069).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches
 RUN pnpm install --frozen-lockfile
