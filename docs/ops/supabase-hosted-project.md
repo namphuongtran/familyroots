@@ -114,7 +114,7 @@ supabase seed buckets --linked
 #   expect "buckets_updated" to name family-roots-avatars (the seed updates an existing bucket)
 supabase db query --linked "select id, allowed_mime_types from storage.buckets order by id;"
 #   expect family-roots-avatars | {image/jpeg,image/png,image/webp,image/heic}
-#   expect family-roots-files   | null   (unchanged; that bucket has no list)
+#   expect family-roots-files   | null   (until #256: see § 2b, which gives it a list)
 
 printf 'familyroots avatar mime probe\n' > probe.txt     # and any real 1x1 PNG as probe.png
 supabase storage cp probe.txt ss:///family-roots-avatars/probe.txt --linked --experimental
@@ -138,6 +138,29 @@ probes were removed and `storage.objects` held 0 rows for the bucket.
 When the hosted run is done, replace this section's heading with the date and the readings.
 
 ---
+
+### 2b. The files bucket's MIME list (#256): owner step at that release, NOT yet run on hosted
+
+Since #256 the browser uploads a document straight to `family-roots-files` through a signed URL
+(ADR-068), so `supabase/config.toml` gives that bucket
+`allowed_mime_types` equal to the domain's `ALLOWED_MIME_TYPES`, nine types.
+`backend/tests/unit/test_files_bucket_mime_types.py` fails if the two drift. It is a second wall:
+the confirm call re-checks the stored type and deletes a file that fails. The hosted bucket gets
+the list only when someone seeds it, **after the #256 pull request merges**. The same command
+also applies § 2a's list if that was never run:
+
+```bash
+supabase seed buckets --linked
+#   expect "buckets_updated" to name family-roots-files
+supabase db query --linked "select id, allowed_mime_types from storage.buckets order by id;"
+#   expect family-roots-files | {image/jpeg,image/png,image/webp,image/heic,application/pdf,audio/mpeg,audio/wav,video/mp4,video/quicktime}
+```
+
+**Read on the local stack on 2026-10-11** with CLI 2.115.0, which `scripts/supabase_local.sh`
+pins. `supabase seed buckets --local` reported `"buckets_updated":["family-roots-files","family-roots-avatars"]`.
+After it, a PUT to a signed upload URL as `text/html` was refused with `415 InvalidMimeType`, and
+the same PUT as `image/png` answered 200. Like § 2a's, the wall reads the declared type, not the
+bytes.
 
 ## 3. Auth settings: read 2026-10-04 on the retired project
 

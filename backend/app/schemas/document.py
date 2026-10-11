@@ -5,25 +5,36 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-ALLOWED_MIME_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/heic",
-    "application/pdf",
-    "audio/mpeg",
-    "audio/wav",
-    "video/mp4",
-    "video/quicktime",
-}
+
+class SignUploadRequest(BaseModel):
+    """``POST /documents/uploads``: what the client says it is about to upload.
+
+    These are declarations, checked before any byte is sent. The confirm call checks
+    what Storage actually received (ADR-068).
+    """
+
+    filename: str = Field(..., min_length=1, max_length=255)
+    content_type: str = Field(..., min_length=1, max_length=100)
+    size_bytes: int = Field(..., ge=0)
 
 
-class DocumentUploadMeta(BaseModel):
-    """Metadata fields sent alongside the file upload (form fields)."""
+class SignedUploadResponse(BaseModel):
+    """Where to send the bytes. ``storage_path`` goes back in the confirm call."""
 
-    person_id: uuid.UUID | None = None
+    storage_path: str
+    upload_url: str
+    token: str
+    expires_at: datetime
+
+
+class DocumentCreateRequest(BaseModel):
+    """``POST /documents``: confirm a staged upload as a document of this clan."""
+
+    storage_path: str = Field(..., min_length=1, max_length=500)
     title: str = Field(..., min_length=1, max_length=255)
     document_type: str = Field(..., pattern="^(photo|id_document|certificate|audio|video|other)$")
+    original_filename: str | None = Field(None, max_length=255)
+    person_id: uuid.UUID | None = None
     description: str | None = None
     taken_date: date | None = None
     taken_place: str | None = Field(None, max_length=255)

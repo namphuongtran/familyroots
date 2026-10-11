@@ -6,16 +6,15 @@ audited as "editor". The routes now thread the resolved `role.value` from the pe
 dependency, so the audit trail reflects who actually acted.
 """
 
-import io
 import uuid
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from fastapi import UploadFile
 
 import app.api.v1.documents as documents_route
 from app.core.permissions import ClanRole
+from app.schemas.document import DocumentCreateRequest
 
 pytestmark = [pytest.mark.unit]
 
@@ -24,7 +23,7 @@ class _ActorCapturingHandler:
     def __init__(self) -> None:
         self.actor: Any = None
 
-    async def upload(self, *, file_content: bytes, actor: Any, **_: Any) -> SimpleNamespace:
+    async def confirm(self, *, actor: Any, **_: Any) -> SimpleNamespace:
         self.actor = actor
         return SimpleNamespace(model_dump=lambda: {})
 
@@ -36,20 +35,20 @@ class _ActorCapturingHandler:
 @pytest.mark.asyncio
 async def test_audit_actor_uses_resolved_role(caller_role: ClanRole, expected: str) -> None:
     handler = _ActorCapturingHandler()
-    await documents_route.upload_document(
-        file=UploadFile(io.BytesIO(b"x"), filename="f.jpg"),
-        title="t",
-        document_type="photo",
-        person_id=None,
-        description=None,
-        taken_date=None,
-        taken_place=None,
+    clan_id = uuid.uuid4()
+    await documents_route.create_document(
+        body=DocumentCreateRequest(
+            storage_path=f"clans/{clan_id}/uploads/{uuid.uuid4()}.jpg",
+            title="t",
+            document_type="photo",
+        ),
         current_user={"sub": str(uuid.uuid4())},
-        clan_id=uuid.uuid4(),
-        cmd_handler=handler,  # type: ignore[arg-type]
+        clan_id=clan_id,
+        upload_handler=handler,  # type: ignore[arg-type]
         role=caller_role,
     )
-    # The document upload route is EDITOR-gated. Before the fix, an admin caller was still
-    # recorded as "editor" (hardcoded); now the audit actor carries the resolved role.
+    # The document create (upload confirm) route is EDITOR-gated. Before the fix, an admin
+    # caller was still recorded as "editor" (hardcoded); now the audit actor carries the
+    # resolved role.
     assert handler.actor is not None
     assert handler.actor.role == expected

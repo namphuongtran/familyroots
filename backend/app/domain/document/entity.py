@@ -41,6 +41,26 @@ ALLOWED_MIME_TYPES = AVATAR_MIME_TYPES | frozenset(
 DEFAULT_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
+def check_upload_file(
+    *,
+    mime_type: str | None,
+    size_bytes: int,
+    max_file_size_bytes: int = DEFAULT_MAX_FILE_SIZE_BYTES,
+) -> None:
+    """The type and size rule a new upload must pass, at signing and again at confirm.
+
+    Stricter than ``Document.create`` on one point: a missing type is refused here.
+    ``create`` still lets ``None`` through because it also builds documents from rows
+    that predate this rule. At signing the values are the client's declaration; at
+    confirm they are what Storage actually holds (ADR-068), which is the reading that
+    counts, because the signed URL itself carries no type or size limit.
+    """
+    if not mime_type or mime_type not in ALLOWED_MIME_TYPES:
+        raise ValidationError("invalid_mime_type", {"allowed": sorted(ALLOWED_MIME_TYPES)})
+    if size_bytes > max_file_size_bytes:
+        raise ValidationError("file_too_large", {"max_bytes": max_file_size_bytes})
+
+
 @dataclass
 class Document(AggregateRoot):
     """Document aggregate root.

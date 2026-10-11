@@ -13,14 +13,16 @@ import viMessages from '../../../messages/vi.json'
 import { DocumentUpload } from './DocumentUpload'
 
 /**
- * #250: the screen refuses a file the transport would refuse. On Vercel the API takes at most
- * 4.5 MB, so `lib/api/documents.ts` throws past 4 MB before sending, and nothing catches that
- * rejection in `handleSubmit`. While this screen allowed 20 MB, a 4-20 MB file was accepted
- * here and then failed with nothing shown. The case reads what a person gets: the size message
- * and no file staged, or the file staged and no message.
+ * #250, then #256: the screen refuses a file the transport would refuse. `lib/api/documents.ts`
+ * throws past its limit before sending, and nothing catches that rejection in `handleSubmit`.
+ * While this screen allowed 20 MB and the transport 4, a 4-20 MB file was accepted here and then
+ * failed with nothing shown. Since #256 the file goes straight to Storage (ADR-068) and the limit
+ * is 50 MB. The case reads what a person gets: the size message and no file staged, or the file
+ * staged and no message.
  *
- * Negative control, 2026-10-10: with `MAX_MB = 20` put back, the over-limit case fails, the
- * 5 MB file is staged and no message appears.
+ * Negative control, 2026-10-10: with `MAX_MB = 20` put back, the over-limit case failed, the
+ * 5 MB file was staged and no message appeared. Re-run 2026-10-11 at 50 MB: with `MAX_MB = 60`,
+ * the 51 MB case fails the same way.
  */
 
 vi.mock('@/shared/supabase/client', () => ({ createClientOrNull: vi.fn() }))
@@ -29,7 +31,7 @@ const messages = viMessages as unknown as AbstractIntlMessages
 const API = `${process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'}/api/v1`
 const CLAN_A = 'aaaaaaaa-0000-4000-8000-000000000001'
 const MB = 1024 * 1024
-const TOO_LARGE = expected(viMessages.documents.file_too_large).replace('{max}', '4')
+const TOO_LARGE = expected(viMessages.documents.file_too_large).replace('{max}', '50')
 
 function profile(): components['schemas']['UserProfile'] {
   return {
@@ -93,19 +95,28 @@ afterEach(() => {
 })
 
 describe('DocumentUpload refuses what the transport would refuse', () => {
-  it('a 5 MB file shows the 4 MB message and is not staged', async () => {
+  it('a 51 MB file shows the 50 MB message and is not staged', async () => {
     const input = await renderAsEditor()
 
-    fireEvent.change(input, { target: { files: [fileOf('gia-pha.pdf', 5 * MB)] } })
+    fireEvent.change(input, { target: { files: [fileOf('gia-pha.pdf', 51 * MB)] } })
 
     expect(screen.getByText(TOO_LARGE)).toBeInTheDocument()
     expect(screen.queryByText('gia-pha.pdf')).not.toBeInTheDocument()
   })
 
-  it('a file of exactly 4 MB is staged with no message', async () => {
+  it('a 20 MB file, refused before #256, is staged with no message', async () => {
     const input = await renderAsEditor()
 
-    fireEvent.change(input, { target: { files: [fileOf('gia-pha.pdf', 4 * MB)] } })
+    fireEvent.change(input, { target: { files: [fileOf('gia-pha.pdf', 20 * MB)] } })
+
+    expect(screen.getByText('gia-pha.pdf')).toBeInTheDocument()
+    expect(screen.queryByText(TOO_LARGE)).not.toBeInTheDocument()
+  })
+
+  it('a file of exactly 50 MB is staged with no message', async () => {
+    const input = await renderAsEditor()
+
+    fireEvent.change(input, { target: { files: [fileOf('gia-pha.pdf', 50 * MB)] } })
 
     expect(screen.getByText('gia-pha.pdf')).toBeInTheDocument()
     expect(screen.queryByText(TOO_LARGE)).not.toBeInTheDocument()

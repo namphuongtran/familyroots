@@ -31,6 +31,14 @@ hostname, to an explicit `ALLOWED_HOSTS`, and `create_app` passes that list to t
 - **The deployment URL stays protected.** Vercel's deployment protection guards it for browsers.
 - **No path is exempted from the host check**, which keeps #230's rule.
 
+**Amended 2026-10-11 (#256): § 6's cap is lifted by [ADR-068](068-documents-upload-straight-to-storage.md).**
+Documents now go from the browser straight to Supabase Storage. The API signs a staged path and
+then confirms what Storage holds, so no document byte passes through the Function, and the limit
+is the domain's and the bucket's, 50 MB. Two parts of § 6 still stand. Request bodies stay capped
+at 4.5 MB. And `MAX_UPLOAD_SIZE_MB` stays env-driven. Production's `4` must be removed or raised
+at the release (ADR-068, Consequences). § 6's "Not handled" sentence about responses is #271's,
+not this amendment's.
+
 ## Context
 
 ### What Vercel provides, read 2026-10-10

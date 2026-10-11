@@ -115,18 +115,99 @@ async def test_get_presigned_url_returns_url_on_success(monkeypatch: pytest.Monk
     assert url == "https://cdn.example/signed"
 
 
-@pytest.mark.asyncio
-async def test_upload_raises_unavailable_on_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
+def _install_bucket(monkeypatch: pytest.MonkeyPatch, bucket: MagicMock) -> None:
     from app.infrastructure.storage import supabase_adapter as mod
 
-    bucket = MagicMock()
-    bucket.upload.side_effect = StorageApiError("boom", "internal_error", 500)
     client = MagicMock()
     client.storage.from_.return_value = bucket
     monkeypatch.setattr(mod, "get_service_client", lambda: client)
 
+
+@pytest.mark.asyncio
+async def test_create_signed_upload_raises_unavailable_on_5xx(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.create_signed_upload_url.side_effect = StorageApiError("boom", "internal_error", 500)
+    _install_bucket(monkeypatch, bucket)
+
     with pytest.raises(StorageUnavailableError):
-        await mod.SupabaseStorageAdapter().upload("p", b"data", "image/jpeg")
+        await mod.SupabaseStorageAdapter().create_signed_upload("clans/x/uploads/y.jpg")
+
+
+@pytest.mark.asyncio
+async def test_create_signed_upload_returns_the_url_and_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.create_signed_upload_url.return_value = {
+        "signed_url": "https://storage.example/object/upload/sign/b/p?token=t1",
+        "signedUrl": "https://storage.example/object/upload/sign/b/p?token=t1",
+        "token": "t1",
+        "path": "p",
+    }
+    _install_bucket(monkeypatch, bucket)
+
+    signed = await mod.SupabaseStorageAdapter().create_signed_upload("p")
+
+    assert signed.upload_url == "https://storage.example/object/upload/sign/b/p?token=t1"
+    assert signed.token == "t1"
+
+
+@pytest.mark.asyncio
+async def test_stat_reads_size_and_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    # The shape the local stack's storage-api answered with on 2026-10-11.
+    bucket.info.return_value = {"name": "p", "size": 108, "content_type": "image/png"}
+    _install_bucket(monkeypatch, bucket)
+
+    stored = await mod.SupabaseStorageAdapter().stat("p")
+
+    assert (stored.size_bytes, stored.content_type) == (108, "image/png")
+
+
+@pytest.mark.asyncio
+async def test_stat_of_a_missing_object_is_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.info.side_effect = StorageApiError("Object not found", "not_found", 404)
+    _install_bucket(monkeypatch, bucket)
+
+    with pytest.raises(StorageNotFoundError):
+        await mod.SupabaseStorageAdapter().stat("clans/x/uploads/y.jpg")
+
+
+@pytest.mark.asyncio
+async def test_stat_with_no_size_is_a_provider_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never a guessed size: a size of None must not read as zero and pass the limit."""
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.info.return_value = {"name": "p", "content_type": "image/png"}
+    _install_bucket(monkeypatch, bucket)
+
+    with pytest.raises(StorageUnavailableError):
+        await mod.SupabaseStorageAdapter().stat("p")
+
+
+@pytest.mark.asyncio
+async def test_move_of_a_missing_source_is_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    """How the second of two concurrent confirms of one path loses."""
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.move.side_effect = StorageApiError("Object not found", "not_found", 404)
+    _install_bucket(monkeypatch, bucket)
+
+    with pytest.raises(StorageNotFoundError):
+        await mod.SupabaseStorageAdapter().move("clans/x/uploads/y.jpg", "clans/x/documents/y.jpg")
 
 
 @pytest.mark.asyncio
@@ -184,7 +265,7 @@ async def test_delete_raises_on_a_missing_bucket(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
-async def test_upload_on_a_missing_bucket_is_a_config_error(
+async def test_create_signed_upload_on_a_missing_bucket_is_a_config_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Our misconfiguration, so 503 storage_bucket_not_configured, never a 404 that
@@ -192,13 +273,24 @@ async def test_upload_on_a_missing_bucket_is_a_config_error(
     from app.infrastructure.storage import supabase_adapter as mod
 
     bucket = MagicMock()
-    bucket.upload.side_effect = _bucket_not_found()
-    client = MagicMock()
-    client.storage.from_.return_value = bucket
-    monkeypatch.setattr(mod, "get_service_client", lambda: client)
+    bucket.create_signed_upload_url.side_effect = _bucket_not_found()
+    _install_bucket(monkeypatch, bucket)
 
     with pytest.raises(StorageBucketNotConfiguredError):
-        await mod.SupabaseStorageAdapter().upload("p", b"data", "image/jpeg")
+        await mod.SupabaseStorageAdapter().create_signed_upload("clans/x/uploads/y.jpg")
+
+
+@pytest.mark.asyncio
+async def test_stat_on_a_missing_bucket_is_a_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing bucket must not read as a missing upload (404 upload_not_found)."""
+    from app.infrastructure.storage import supabase_adapter as mod
+
+    bucket = MagicMock()
+    bucket.info.side_effect = _bucket_not_found()
+    _install_bucket(monkeypatch, bucket)
+
+    with pytest.raises(StorageBucketNotConfiguredError):
+        await mod.SupabaseStorageAdapter().stat("clans/x/uploads/y.jpg")
 
 
 @pytest.mark.asyncio

@@ -60,6 +60,15 @@ class FakeStorageAdapter:
         self.calls: list[str] = []
         self.raise_for: set[str] = set()
         self.missing: set[str] = set()
+        # The staged-upload sweep (ADR-068): what the listing reports, and each cutoff
+        # the job asked it for. The listing itself is tested over a fake storage3 client
+        # in tests/unit/infrastructure/test_staged_upload_sweep.py.
+        self.staged: list[str] = []
+        self.sweep_cutoffs: list[datetime] = []
+
+    async def list_staged_uploads_older_than(self, cutoff: datetime) -> list[str]:
+        self.sweep_cutoffs.append(cutoff)
+        return list(self.staged)
 
     async def delete(self, storage_path: str) -> bool:
         self.calls.append(storage_path)
@@ -374,3 +383,20 @@ async def test_missing_bucket_keeps_the_row(
     assert await _row_count(maker, seeded.expired_id) == 1
     assert await _is_deleted(maker, seeded.expired_id) is True
     assert await _row_count(maker, seeded.poison_id) == 1
+
+
+async def test_the_job_sweeps_the_staged_uploads_older_than_a_day(seeded: Seeded) -> None:
+    """ADR-068: the same run deletes unconfirmed staged uploads, after the documents,
+    and asks for those older than STAGED_UPLOAD_MAX_AGE, and only those."""
+    now = datetime.now(UTC)
+    staged = [
+        f"clans/{seeded.clan_id}/uploads/{uuid.uuid4()}.png",
+        f"clans/{seeded.clan_id}/uploads/{uuid.uuid4()}.pdf",
+    ]
+    seeded.storage.staged = staged
+    seeded.storage.raise_for = {staged[0]}  # one failure must not stop the sweep
+
+    await purge_expired_documents(now=now)
+
+    assert seeded.storage.sweep_cutoffs == [now - timedelta(hours=24)]
+    assert seeded.storage.calls[-2:] == staged

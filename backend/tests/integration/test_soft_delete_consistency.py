@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 import app.core.database  # noqa: F401  (ensures the module is loaded before monkeypatch)
 from app.application.branch.handlers import BranchCommandHandler
-from app.application.document.handlers import DocumentCommandHandler
+from app.application.document.upload import DocumentUploadHandler
 from app.application.event.handlers import EventCommandHandler, EventQueryHandler
 from app.application.person.claim_handlers import ClaimCommandHandler
 from app.application.relationship.commands import CreateMarriage, CreateParentChild
@@ -46,6 +46,7 @@ from app.application.relationship.handlers import (
     ParentChildCommandHandler,
 )
 from app.core.config import settings
+from app.domain.document.repository import SignedUpload, StorageNotFoundError, StoredObject
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.domain.shared.exceptions import EntityNotFoundError
 from app.domain.shared.value_objects import ActorInfo
@@ -54,7 +55,6 @@ from app.infrastructure.persistence.branch_repository import SqlAlchemyBranchRep
 from app.infrastructure.persistence.claim_repository import SqlAlchemyClaimRepository
 from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.persistence.event_repository import SqlAlchemyEventRepository
-from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
 from app.infrastructure.persistence.relationship_repository import (
     SqlAlchemyMarriageRepository,
     SqlAlchemyParentChildRepository,
@@ -132,15 +132,28 @@ async def _set_deleted(s: AsyncSession, person_id: uuid.UUID, deleted: bool) -> 
 
 
 class FakeStorage:
-    """In-memory StoragePort double (mirrors tests/integration/test_document_soft_delete.py)
-    — records uploads so the blocked path can assert no blob was ever written."""
+    """In-memory storage double (mirrors tests/integration/test_document_soft_delete.py)
+    — records moves so the blocked path can assert no blob became a document's."""
 
     def __init__(self) -> None:
-        self.uploaded: list[str] = []
+        self.objects: dict[str, StoredObject] = {}
+        self.moves: list[tuple[str, str]] = []
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
-        self.uploaded.append(path)
-        return path
+    def put(self, path: str, content: bytes, content_type: str) -> None:
+        """What the browser's PUT to the signed URL does (ADR-068)."""
+        self.objects[path] = StoredObject(size_bytes=len(content), content_type=content_type)
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        return SignedUpload(upload_url=f"https://storage.example/sign/{path}", token="t")
+
+    async def stat(self, path: str) -> StoredObject:
+        if path not in self.objects:
+            raise StorageNotFoundError(path)
+        return self.objects[path]
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        self.objects[to_path] = self.objects.pop(from_path)
+        self.moves.append((from_path, to_path))
 
     async def delete(self, storage_path: str) -> bool:
         return True
@@ -306,10 +319,16 @@ async def test_document_upload_blocked_for_soft_deleted_person(
     clan_id = await _clan(async_session)
     storage = FakeStorage()
     uow = SqlAlchemyUnitOfWork(async_session, create_event_dispatcher(async_session))
-    handler = DocumentCommandHandler(
-        SqlAlchemyDocumentRepository(uow), storage, uow, SqlAlchemyPersonRepository(uow)
-    )
+    handler = DocumentUploadHandler(SqlAlchemyDocumentRepository(uow), storage, uow)
     actor = ActorInfo(user_id=creator, role="editor")
+
+    async def staged(filename: str) -> str:
+        """Sign, then the browser's PUT (ADR-068)."""
+        signed = await handler.sign(
+            clan_id=clan_id, filename=filename, content_type="image/png", size_bytes=1
+        )
+        storage.put(signed.storage_path, _PNG_BYTES, "image/png")
+        return signed.storage_path
 
     # Restore-symmetry control.
     person_ctrl = await _person(async_session, clan_id, creator, "Ctrl")
@@ -318,10 +337,8 @@ async def test_document_upload_blocked_for_soft_deleted_person(
     await _set_deleted(async_session, person_ctrl, True)
     await _set_deleted(async_session, person_ctrl, False)
 
-    ctrl = await handler.upload(
-        file_content=_PNG_BYTES,
-        filename="ctrl.png",
-        content_type="image/png",
+    ctrl = await handler.confirm(
+        storage_path=await staged("ctrl.png"),
         title="Ctrl doc",
         document_type="photo",
         clan_id=clan_id,
@@ -329,7 +346,7 @@ async def test_document_upload_blocked_for_soft_deleted_person(
         person_id=person_ctrl,
     )
     assert ctrl.person_id == person_ctrl
-    assert storage.uploaded  # sanity: the control path really uploads
+    assert storage.moves  # sanity: the control path really confirms
 
     # Blocked path: no orphan blob must land in storage.
     person = await _person(async_session, clan_id, creator, "Deleted")
@@ -337,21 +354,21 @@ async def test_document_upload_blocked_for_soft_deleted_person(
     await async_session.commit()
     await _set_deleted(async_session, person, True)
 
-    uploaded_before = list(storage.uploaded)
+    moves_before = list(storage.moves)
+    blocked = await staged("blocked.png")
     with pytest.raises(EntityNotFoundError, match="person_not_found"):
-        await handler.upload(
-            file_content=_PNG_BYTES,
-            filename="blocked.png",
-            content_type="image/png",
+        await handler.confirm(
+            storage_path=blocked,
             title="Blocked doc",
             document_type="photo",
             clan_id=clan_id,
             actor=actor,
             person_id=person,
         )
-    assert storage.uploaded == uploaded_before, (
-        "M3: a blocked upload must not touch storage (no orphan blob)"
+    assert storage.moves == moves_before, (
+        "M3: a blocked confirm must not turn the staged file into a document's blob"
     )
+    assert blocked in storage.objects  # left staged, for a retry or the sweep
 
 
 # ── Branch founder (both guard sites: create + update) ──────────────────

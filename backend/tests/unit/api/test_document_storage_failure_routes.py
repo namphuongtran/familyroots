@@ -3,11 +3,11 @@
 The storage classifier (_classify_storage) and the handler envelopes are unit-tested in
 isolation, but nothing drove a REAL route and asserted the mapping end-to-end — so a
 regression that unwraps a storage call site (letting a raw httpx/KeyError escape) would
-silently become a 500 with nothing catching it. This drives GET /documents/{id} and
-POST /documents through create_app() (which registers the storage handlers) with a
-StoragePort-backed handler that raises, and asserts the 503 storage_unavailable /
-503 storage_bucket_not_configured / 404 storage_not_found envelopes — with no raw
-storage detail leaked.
+silently become a 500 with nothing catching it. This drives GET /documents/{id},
+POST /documents/uploads (sign) and POST /documents (confirm) through create_app()
+(which registers the storage handlers) with a storage-backed handler that raises,
+and asserts the 503 storage_unavailable / 503 storage_bucket_not_configured /
+404 storage_not_found envelopes — with no raw storage detail leaked.
 """
 
 from __future__ import annotations
@@ -25,18 +25,21 @@ from app.domain.document.repository import (
     StorageUnavailableError,
 )
 from app.infrastructure.dependencies import (
-    get_document_command_handler,
     get_document_query_handler,
+    get_document_upload_handler,
 )
 from app.main import create_app
 from app.services.translator import load_translations
 
 
-class _FailingCmdHandler:
+class _FailingUploadHandler:
     def __init__(self, exc: Exception) -> None:
         self._exc = exc
 
-    async def upload(self, **_: Any) -> Any:
+    async def sign(self, **_: Any) -> Any:
+        raise self._exc
+
+    async def confirm(self, **_: Any) -> Any:
         raise self._exc
 
 
@@ -48,7 +51,9 @@ class _FailingQueryHandler:
         raise self._exc
 
 
-def _client(*, cmd_exc: Exception | None = None, query_exc: Exception | None = None) -> TestClient:
+def _client(
+    *, upload_exc: Exception | None = None, query_exc: Exception | None = None
+) -> TestClient:
     load_translations()
     app = create_app()
     # Bypass auth + RBAC (a DB lookup); the point under test is storage-error mapping.
@@ -56,8 +61,10 @@ def _client(*, cmd_exc: Exception | None = None, query_exc: Exception | None = N
     app.dependency_overrides[get_current_clan_id] = lambda: uuid.uuid4()
     app.dependency_overrides[RequireViewer.dependency] = lambda: ClanRole.VIEWER
     app.dependency_overrides[RequireEditor.dependency] = lambda: ClanRole.EDITOR
-    if cmd_exc is not None:
-        app.dependency_overrides[get_document_command_handler] = lambda: _FailingCmdHandler(cmd_exc)
+    if upload_exc is not None:
+        app.dependency_overrides[get_document_upload_handler] = lambda: _FailingUploadHandler(
+            upload_exc
+        )
     if query_exc is not None:
         app.dependency_overrides[get_document_query_handler] = lambda: _FailingQueryHandler(
             query_exc
@@ -81,13 +88,28 @@ def test_get_document_missing_object_is_404() -> None:
     assert "no such object" not in resp.text
 
 
-def test_upload_storage_outage_is_503() -> None:
-    client = _client(cmd_exc=StorageUnavailableError("upload failed: bucket unreachable"))
-    resp = client.post(
-        "/api/v1/documents",
-        files={"file": ("photo.jpg", b"binarydata", "image/jpeg")},
-        data={"title": "Family photo", "document_type": "photo"},
-    )
+_SIGN_BODY = {"filename": "photo.jpg", "content_type": "image/jpeg", "size_bytes": 10}
+
+
+def _confirm_body() -> dict[str, str]:
+    return {
+        "storage_path": f"clans/{uuid.uuid4()}/uploads/{uuid.uuid4()}.jpg",
+        "title": "Family photo",
+        "document_type": "photo",
+    }
+
+
+def test_sign_storage_outage_is_503() -> None:
+    client = _client(upload_exc=StorageUnavailableError("sign failed: bucket unreachable"))
+    resp = client.post("/api/v1/documents/uploads", json=_SIGN_BODY)
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["error"]["code"] == "storage_unavailable"
+    assert "bucket unreachable" not in resp.text
+
+
+def test_confirm_storage_outage_is_503() -> None:
+    client = _client(upload_exc=StorageUnavailableError("move failed: bucket unreachable"))
+    resp = client.post("/api/v1/documents", json=_confirm_body())
     assert resp.status_code == 503, resp.text
     assert resp.json()["error"]["code"] == "storage_unavailable"
     assert "bucket unreachable" not in resp.text
@@ -105,15 +127,11 @@ def test_get_document_missing_bucket_is_503_not_404() -> None:
     assert "family-roots-files" not in resp.text
 
 
-def test_upload_missing_bucket_is_503_not_404() -> None:
+def test_confirm_missing_bucket_is_503_not_404() -> None:
     client = _client(
-        cmd_exc=StorageBucketNotConfiguredError("bucket 'family-roots-files' does not exist")
+        upload_exc=StorageBucketNotConfiguredError("bucket 'family-roots-files' does not exist")
     )
-    resp = client.post(
-        "/api/v1/documents",
-        files={"file": ("photo.jpg", b"binarydata", "image/jpeg")},
-        data={"title": "Family photo", "document_type": "photo"},
-    )
+    resp = client.post("/api/v1/documents", json=_confirm_body())
     assert resp.status_code == 503, resp.text
     assert resp.json()["error"]["code"] == "storage_bucket_not_configured"
     assert "family-roots-files" not in resp.text

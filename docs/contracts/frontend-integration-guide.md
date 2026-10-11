@@ -518,7 +518,7 @@ Code: `app/infrastructure/storage/supabase_adapter.py`,
   upload, `GET /documents/{id}`, and restore.
 - **Every response that carries a `presigned_url` also carries
   `presigned_url_expires_at`** — an absolute, timezone-aware UTC timestamp
-  (`<url minted at> + TTL`). This holds for `POST /documents` (upload),
+  (`<url minted at> + TTL`). This holds for `POST /documents` (the upload's confirm),
   `GET /documents/{id}`, and `POST /documents/{id}/restore`. Schedule refreshes off
   that timestamp; do not hardcode a TTL client-side (the server may shorten it).
 - `GET /documents` (list) returns summaries **without** URLs — so also without an

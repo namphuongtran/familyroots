@@ -38,8 +38,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.domain.document.repository import SignedUpload, StorageNotFoundError, StoredObject
 from app.infrastructure.dependencies import (
-    get_document_command_handler,
+    get_document_upload_handler,
     get_export_query_handler,
 )
 from app.main import create_app
@@ -64,10 +65,23 @@ class FakeStorage:
 
     def __init__(self) -> None:
         self.uploaded: list[str] = []
+        self.objects: dict[str, StoredObject] = {}
 
-    async def upload(self, path: str, content: bytes, content_type: str | None) -> str:
+    def put(self, path: str, content: bytes, content_type: str) -> None:
+        """What the browser's PUT to the signed URL does (ADR-068)."""
+        self.objects[path] = StoredObject(size_bytes=len(content), content_type=content_type)
         self.uploaded.append(path)
-        return path
+
+    async def create_signed_upload(self, path: str) -> SignedUpload:
+        return SignedUpload(upload_url=f"https://storage.example/sign/{path}", token="t")
+
+    async def stat(self, path: str) -> StoredObject:
+        if path not in self.objects:
+            raise StorageNotFoundError(path)
+        return self.objects[path]
+
+    async def move(self, from_path: str, to_path: str) -> None:
+        self.objects[to_path] = self.objects.pop(from_path)
 
     async def delete(self, storage_path: str) -> bool:
         return True
@@ -101,12 +115,11 @@ async def client(
     session_factory: async_sessionmaker[AsyncSession],
     fake_storage: FakeStorage,
 ) -> AsyncGenerator[AsyncClient]:
-    from app.application.document.handlers import DocumentCommandHandler
+    from app.application.document.upload import DocumentUploadHandler
     from app.application.export.handlers import ExportQueryHandler
     from app.infrastructure.event_dispatcher import create_event_dispatcher
     from app.infrastructure.persistence.document_repository import SqlAlchemyDocumentRepository
     from app.infrastructure.persistence.export_query_port import SqlAlchemyExportQueryPort
-    from app.infrastructure.persistence.person_repository import SqlAlchemyPersonRepository
     from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
     from app.services.clan_export import build_clan_export, to_json_bytes
     from app.services.gedcom_export import build_gedcom
@@ -117,15 +130,10 @@ async def client(
         async with session_factory() as session:
             yield session
 
-    async def _make_cmd_handler() -> AsyncGenerator[Any]:
+    async def _make_upload_handler() -> AsyncGenerator[Any]:
         async with session_factory() as db:
             uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
-            yield DocumentCommandHandler(
-                SqlAlchemyDocumentRepository(uow),
-                fake_storage,
-                uow,
-                SqlAlchemyPersonRepository(uow),
-            )
+            yield DocumentUploadHandler(SqlAlchemyDocumentRepository(uow), fake_storage, uow)
 
     async def _make_export_handler() -> AsyncGenerator[Any]:
         async with session_factory() as db:
@@ -139,7 +147,7 @@ async def client(
 
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_current_user] = _override_current_user
-    app.dependency_overrides[get_document_command_handler] = _make_cmd_handler
+    app.dependency_overrides[get_document_upload_handler] = _make_upload_handler
     app.dependency_overrides[get_export_query_handler] = _make_export_handler
 
     transport = ASGITransport(app=app)
@@ -151,6 +159,7 @@ async def client(
 async def rich_clan(
     session_factory: async_sessionmaker[AsyncSession],
     client: AsyncClient,
+    fake_storage: FakeStorage,
 ) -> dict[str, Any]:
     """ "clan đủ gia vị": thủy tổ + polygamous con trưởng + 2 cháu (1 adopted) +
     1 soft-deleted person, 1 soft-deleted marriage, 1 branch, plus a real
@@ -376,11 +385,23 @@ async def rich_clan(
         "X-Current-Clan-Id": str(clan_a),
     }
 
+    signed = await client.post(
+        "/api/v1/documents/uploads",
+        headers=admin_headers,
+        json={"filename": "giapha.png", "content_type": "image/png", "size_bytes": len(_PNG_BYTES)},
+    )
+    assert signed.status_code == 200, signed.text
+    staged = signed.json()["data"]["storage_path"]
+    fake_storage.put(staged, _PNG_BYTES, "image/png")  # the browser's PUT (ADR-068)
     resp = await client.post(
         "/api/v1/documents",
         headers=admin_headers,
-        data={"title": "Gia phả", "document_type": "certificate"},
-        files={"file": ("giapha.png", _PNG_BYTES, "image/png")},
+        json={
+            "storage_path": staged,
+            "title": "Gia phả",
+            "document_type": "certificate",
+            "original_filename": "giapha.png",
+        },
     )
     assert resp.status_code == 201, resp.text
 
