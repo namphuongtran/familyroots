@@ -39,7 +39,7 @@ Vercel (both apps) and GitHub Actions (migrations, deploys, backups). Config liv
 ## Production fail-fast (`app/core/config.py`)
 When `APP_ENV=production`, the app **refuses to boot** if any of these is wrong:
 placeholder `APP_SECRET_KEY`; `APP_DEBUG=true` (also gates `/docs`+`/redoc`);
-wildcard `ALLOWED_HOSTS`; a localhost `DATABASE_URL`; wildcard/localhost
+wildcard `ALLOWED_HOSTS`; a localhost `DATABASE_URL`; wildcard/loopback
 `CORS_ORIGINS`; an empty or localhost `INVITE_LINK_ORIGIN`; missing `SUPABASE_URL` / `SUPABASE_ANON_KEY` /
 `SUPABASE_SERVICE_ROLE_KEY`; unset `RATE_LIMIT_TRUST_FORWARDED_FOR`; or, with
 `SCHEDULER_ENABLED=false`, a `CRON_SECRET` under the floor (#250). The full
