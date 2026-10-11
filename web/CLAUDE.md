@@ -950,7 +950,8 @@ Four harnesses, one gate each:
   context, trace id generation, single-flight refresh, `apiFetch`, the logger. `vitest.config.mts`
   adds five globs outside `src/`, each with its reason: `messages/**`, `e2e/**/*.guard.test.ts`,
   `scripts/**`, which holds the legacy gate's test, `playwright.config.test.ts`, which reads
-  whether an e2e run uses a server it did not start (#192), and `eslint.config.test.ts`, which
+  whether an e2e run uses a server it did not start (#192) and which name the authenticated
+  project reaches its server by (#231), and `eslint.config.test.ts`, which
   reads whether a Tailwind default-palette class fails lint (#199).
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
@@ -1023,6 +1024,17 @@ reuseExistingServer:true in config.webServer.` Ignore the last clause. Setting i
   `E2E_PORT_BASE=3110` and `E2E_PORT_BASE=3120`. A value that is not a whole number from 1024 to
   65533 fails the run, naming the variable and the value. A hash of the worktree path was rejected:
   two hashes can collide, and the auth origin has to be predictable for `CORS_ORIGINS`.
+- **`E2E_AUTH_HOST` renames the authenticated server, and only that one** (#231). Unset, it is
+  `127.0.0.1`, so `AUTH_BASE_URL` is `http://127.0.0.1:<base+2>` and every recipe here behaves as
+  before it existed. Set, the browser and Playwright reach base+2 by that name, and the session
+  cookies belong to it. The dev server still binds `127.0.0.1`, and the hermetic and banner servers
+  keep their names. `image-e2e.yml` sets `familyroots-web.test`, because its backend runs under the
+  production validator, which refuses a loopback `CORS_ORIGINS` entry. A name other than
+  `127.0.0.1` must resolve to this machine (the runner adds an `/etc/hosts` line) and be in
+  `next.config.ts`'s `allowedDevOrigins`, and the backend's `CORS_ORIGINS` and
+  `INVITE_LINK_ORIGIN` must name the origin it makes. A value that is not a bare host name fails the
+  run, naming it. `playwright.config.test.ts` reads the `Host` the authenticated project's request
+  carries, unset and set.
 - **`E2E_REUSE_SERVER=1` attaches**, to whatever already answers on each URL, as-is and with
   whatever env it was started with. It covers all three ports at once, so a server you meant to
   reuse, such as a warm `:3102` (the authenticated harness's cold-compile trap, below, which the
@@ -1064,6 +1076,14 @@ under `CI` the old config never attached either. Each case was seen to fail on 2
 its plant: the old `!process.env.CI` fails the first, the opt-in honoured under `CI` fails the
 third, reuse never on fails the second, a literal hermetic or banner port fails the cases that
 reach it, and no validation fails the last, on `TypeError: Invalid URL`.
+
+**Three more cases read `E2E_AUTH_HOST` (#231).** They hold a third stand-in on base+2 and run a
+throwaway spec in the `auth-chromium` project with `E2E_REUSE_SERVER=1`, so no dev server starts,
+and read the `Host` header the spec's request carries: `127.0.0.1:<base+2>` unset, and
+`localhost:<base+2>` with `E2E_AUTH_HOST=localhost`, a name that resolves everywhere with no
+`/etc/hosts` line. A malformed value fails the run naming it. Each was seen to fail on 2026-10-11:
+the variable ignored fails the set case, an unset default of `localhost` fails the unset case, and
+no validation fails the last.
 
 **The issue's four readings with two worktrees, 2026-10-05.** Reading 3 has two halves, 3a and
 3b. A and B were worktrees of this repository. The plant was `lang="en"` for `lang={locale}` in
@@ -1140,8 +1160,10 @@ export E2E_AUTH_MAIL_URL=http://127.0.0.1:54324                # Mailpit; the in
 pnpm test:e2e:auth
 ```
 
-**CI runs the same command against the built backend image** (`image-e2e.yml`, #193). Its backend
-values differ from the recipe above, `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
+**CI runs the same command against the built backend image** (`image-e2e.yml`, #193), with
+`E2E_AUTH_HOST=familyroots-web.test` (#231), so its auth origin is
+`http://familyroots-web.test:3102` rather than `127.0.0.1`. Its backend values differ from the
+recipe above, `CORS_ORIGINS` and `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
 
 **Twenty-four tests, re-read 2026-10-09 (#202): the walks take their link from the mail.** The
@@ -1270,8 +1292,11 @@ promise:
    `AssertionError: expected [ 'src/lib/server/auth-context.ts' ] to deeply equal []`,
    naming the file. Removed; the suite went back to 434 passing.
 3. **The credential is worthless elsewhere.** `backoffice.auth.spec.ts`'s last case replays
-   the captured admin state against the hermetic server (`BASE_URL`, `:3100` by default), which
-   points at `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. Cookies are
+   the captured admin state against the hermetic server (`:3100` by default), which
+   points at `https://e2e-fake-project.example.supabase.co`, and reads `307 → /vi/login`. It
+   requests that server under `E2E_AUTH_HOST`'s name and first reads that the context presents
+   the `sb-…-auth-token` there (#231): a cookie belongs to a host, so under another name the
+   replay would send no session and read the same 307. Cookies are
    named for their project (`sb-<ref>-auth-token`) and the token is signed by the stack that
    issued it. **This does not prove middleware checks a signature — it does not**;
    `supabase.auth.getSession()` reads the cookie. Signature checking is the backend's JWKS

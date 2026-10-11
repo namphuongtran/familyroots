@@ -104,7 +104,30 @@ const NO_SUPABASE_ENV = {
  * not exist, and `authStackEnv()` throws by name when the switch is on and an input is not.
  */
 const AUTH_PORT = PORT_BASE + 2
-export const AUTH_BASE_URL = `http://127.0.0.1:${AUTH_PORT}`
+
+/**
+ * **`E2E_AUTH_HOST` renames the authenticated server, and only that one** (#231). Unset, it is
+ * `127.0.0.1`. The server still binds `127.0.0.1`: this is the name the browser and Playwright
+ * spell its origin with, so the session cookies belong to it too. `image-e2e.yml` sets
+ * `familyroots-web.test`, which its runner's `/etc/hosts` maps to `127.0.0.1`, because the backend
+ * there runs under the production validator, and that refuses a loopback `CORS_ORIGINS` entry. A
+ * name other than `127.0.0.1` must resolve to this machine and be in `next.config.ts`'s
+ * `allowedDevOrigins`, or the pages never read their session. A value that is not a bare host name
+ * fails the run here, naming it.
+ */
+export const AUTH_HOST = authHost(process.env.E2E_AUTH_HOST)
+export const AUTH_BASE_URL = `http://${AUTH_HOST}:${AUTH_PORT}`
+
+function authHost(raw: string | undefined): string {
+  if (raw === undefined || raw === '') return '127.0.0.1'
+  if (!/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/.test(raw)) {
+    throw new Error(
+      `E2E_AUTH_HOST must be a bare host name, with no scheme, port or path, such as ` +
+        `familyroots-web.test; got ${JSON.stringify(raw)}.`,
+    )
+  }
+  return raw
+}
 
 /**
  * Everything under `e2e/auth/`, for the hermetic projects to ignore. `*.guard.test.ts`

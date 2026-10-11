@@ -22,7 +22,7 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `FIREBASE_CREDENTIALS_PATH` | `./firebase-credentials.json` | FCM service-account file. Read only when `FIREBASE_CREDENTIALS_JSON` is empty | Optional — missing file just disables pushes (warning) |
 | `FIREBASE_CREDENTIALS_JSON` | `""` | The FCM service-account key file's **whole content, inline** ([ADR-065](../decisions/065-the-backend-runs-on-vercel-functions.md)), for hosts with no file mount, such as Vercel Functions. When set it wins over `FIREBASE_CREDENTIALS_PATH`. A value that is not a JSON object, or not a valid service account, disables pushes with a warning that never quotes the value | Optional. On Vercel, set it as a sensitive environment variable (deploy issue, #252). Empty means the path is used |
 | `SENTRY_DSN` | `""` | Sentry error reporting | Optional — empty disables Sentry |
-| `CORS_ORIGINS` | localhost:3000/8080 | Allowed browser origins (JSON list) | **Boot fails** if `["*"]` or any localhost origin |
+| `CORS_ORIGINS` | localhost:3000/8080 | Allowed browser origins (JSON list) | **Boot fails** if `["*"]` or any loopback origin, `localhost` or `127.0.0.1` (#231) |
 | `ALLOWED_HOSTS` | `["*"]` | TrustedHost allow-list (JSON list) | **Boot fails** if `["*"]`. On Vercel it names the production alias |
 | `VERCEL_URL` | `""` | Set by Vercel, never by hand: this deployment's own generated host. `trusted_hosts` adds it to an explicit `ALLOWED_HOSTS`, because Vercel Cron calls that host (#265) | — |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | unset (dev resolves `false`) | Trust `X-Forwarded-For` for rate-limit + audit IPs | **Required explicitly in production** (boot fails if unset): `true` behind a trusted proxy/LB (Render), `false` when directly exposed |
@@ -93,7 +93,7 @@ count** under the database provider's ceiling:
   instead of an opaque failure at scheduler import.
 - **Production safety** (`APP_ENV=production` only) — the app **refuses to boot** on:
   placeholder `APP_SECRET_KEY`; `APP_DEBUG=true`; wildcard `ALLOWED_HOSTS`; a
-  localhost `DATABASE_URL`; wildcard-or-localhost `CORS_ORIGINS` (`"*"` is also
+  localhost `DATABASE_URL`; wildcard-or-loopback `CORS_ORIGINS` (`"*"` is also
   invalid with `allow_credentials=True`); an empty or localhost `INVITE_LINK_ORIGIN`;
   missing `SUPABASE_URL`, `SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY`; and,
   with `SCHEDULER_ENABLED=false`, a `CRON_SECRET` that is empty or below the

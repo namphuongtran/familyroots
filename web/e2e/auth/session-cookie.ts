@@ -1,12 +1,15 @@
 import type { BrowserContext } from '@playwright/test'
 
+/** The name of `@supabase/ssr`'s session cookie, or of one chunk of it; group 1 is the chunk. */
+export const SESSION_COOKIE_NAME = /^sb-.+-auth-token(?:\.(\d+))?$/
+
 /**
  * The access token in the browser's `sb-<ref>-auth-token` cookie. `@supabase/ssr` splits a long
  * value into `.0`, `.1`, … chunks and writes it as `base64-` and the base64url of the session.
  */
 export async function browserAccessToken(context: BrowserContext): Promise<string> {
   const chunks = (await context.cookies())
-    .map((cookie) => ({ cookie, match: /^sb-.+-auth-token(?:\.(\d+))?$/.exec(cookie.name) }))
+    .map((cookie) => ({ cookie, match: SESSION_COOKIE_NAME.exec(cookie.name) }))
     .filter(({ match }) => match !== null)
     .sort((a, b) => Number(a.match?.[1] ?? 0) - Number(b.match?.[1] ?? 0))
   if (chunks.length === 0) throw new Error('the browser holds no Supabase session cookie')
