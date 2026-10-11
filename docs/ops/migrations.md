@@ -291,7 +291,7 @@ bootstrap, the docker-compose `api` service runs `python -m alembic upgrade head
 before starting uvicorn.
 
 **The gate needs the migration scripts at run time, so they ship inside the
-distribution.** `app/core/readiness.py` reads the head revision through
+distribution.** `app/core/readiness.py` reads the head and every revision id through
 `importlib.resources.files("migrations")`, and `backend/pyproject.toml` lists
 `migrations` in `[tool.hatch.build.targets.wheel] packages` so the wheel carries
 it. Two consequences, and both are load-bearing:

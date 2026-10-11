@@ -152,7 +152,7 @@ gate blocked the release itself.
 ```mermaid
 graph TB
   b[Backend rollback]:::comp
-  bd{Did a migration ship that broke the rule,<br/>or is the target older than ADR-070}:::dec
+  bd{Did a migration ship, and did it break the rule<br/>or is the target older than ADR-070}:::dec
   b3[Downgrade the schema first<br/>alembic downgrade, session pooler<br/>prefer a forward fix · destructive migrations may not reverse]:::bad
   b1[Instant Rollback or vercel rollback<br/>Hobby: the previous deployment only]:::comp
   bp[vercel promote later<br/>rollback turns off domain auto-assignment]:::comp

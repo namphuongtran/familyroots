@@ -114,9 +114,10 @@ lifespan raises is still production, and every cold start of it fails.
   deployment's own `VERCEL_URL`, and `TrustedHostMiddleware` answers any other host with 400.
 
 The step makes six attempts, ten seconds apart, each into a fresh file (#263), which covers a
-cold start. It passes on the first `200` whose body's `migrations` is `current`. A `200` with
-`ahead` is the previous deployment, still production because the new build is not live yet. It
-boots against the migrated database (ADR-070), so only `current` shows the new one serving.
+cold start. It passes on the first `200` whose body's `migrations` is `current`. A request can
+still reach the previous deployment just after step 2 returns (#263). That deployment boots against
+the migrated database and answers `200` with `ahead` (ADR-070), so only `current` shows the new
+one serving.
 **A red step here means production already serves the new API deployment.** Roll it back
 (§ Rollback). A red step also stops the job, so the web is not deployed.
 

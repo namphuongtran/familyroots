@@ -122,22 +122,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # A DB *ahead* of this code boots (ADR-070). A release migrates before its deployment
     # goes live, so until then the previous deployment cold-starts against a revision it
     # does not know. That is safe because every migration keeps the code already live working.
+    reading: MigrationReading | None = None
     try:
         async with AsyncSessionLocal() as session:
             reading = await read_migrations(session)
+        status = reading.status
     except Exception as exc:
-        reading = MigrationReading(
-            status=f"db-unreachable ({type(exc).__name__})", database=None, head=None
-        )
-    if reading.status not in MIGRATIONS_SERVABLE:
+        status = f"db-unreachable ({type(exc).__name__})"
+    if status not in MIGRATIONS_SERVABLE:
         message = (
-            f"Database is not ready (migrations: {reading.status}). "
+            f"Database is not ready (migrations: {status}). "
             "Run `alembic upgrade head` against this database."
         )
         if settings.APP_ENV == "production":
             raise RuntimeError(message)
         logger.error(message)
-    elif reading.status == MIGRATIONS_AHEAD:
+    elif reading is not None and reading.status == MIGRATIONS_AHEAD:
         logger.warning(
             "Database is ahead of this deployment (migrations: ahead): alembic_version is %s, "
             "a revision this deployment's scripts do not know, and their head is %s. Booting: "
