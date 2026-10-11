@@ -12,7 +12,7 @@
 | Supabase Auth issues JWTs; backend validates via JWKS | Backend never mints tokens |
 | Supabase Storage, one bucket, path isolation `clans/{clan_id}/…` | No per-clan bucket |
 | Vercel (backend + web, functions in `sin1`) + one Supabase project (database, auth, storage; `ap-southeast-1`), all in Singapore, since 2026-10-10 (ADR-065, ADR-066) | Latency budget set by region. Render is retired |
-| Backend runs as Vercel Functions on Hobby: no long-running process, one region, 300 s per request, 4.5 MB request body, crons at most daily and anywhere in their hour | Scheduled jobs run from Vercel Cron, not in-process; DB through Supavisor's transaction pooler with `NullPool`; uploads capped at 4 MB (ADR-065) |
+| Backend runs as Vercel Functions on Hobby: no long-running process, one region, 300 s per request, 4.5 MB request body, crons at most daily and anywhere in their hour | Scheduled jobs run from Vercel Cron, not in-process; DB through Supavisor's transaction pooler with `NullPool`; documents upload straight to Storage through a signed URL, so the body limit does not cap them (ADR-068) |
 | Production migrations run from CI (`release.yml` `deploy` job, on a published release), before the deploy | A migration must stay compatible with the code already live ([../ops/migrations.md](../ops/migrations.md)) |
 
 ## 2.2 Organizational / process

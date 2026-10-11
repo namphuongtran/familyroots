@@ -154,25 +154,40 @@ graph TB
 
 ## 6.5 Document upload
 
+The bytes go from the browser straight to Storage, never through the API (ADR-068).
+
 ```mermaid
 graph TB
-  u1[1 POST /api/v1/documents · multipart]:::comp
+  u1[1 POST /api/v1/documents/uploads · JSON]:::comp
   u2[2 Authorise EDITOR on the clan]:::comp
-  u3[3 Validate size and type]:::comp
-  d1{4 SupabaseStorageAdapter writes to<br/>family-roots-files/clans/clan_id}:::dec
+  u3[3 Check the declared size and type]:::comp
+  u4[4 Sign clans/clan_id/uploads/uuid.ext]:::comp
+  p1[5 Browser PUTs the file to the signed URL]:::comp
+  c1[6 POST /api/v1/documents · JSON with the staged path]:::comp
+  c2{7 Path is a staged path of this clan,<br/>and Storage holds it}:::dec
+  c3{8 Stored size and type pass}:::dec
+  cbad[422 or 404 · a failing file is deleted]:::bad
   serr[503 or 404 surfaced · never a raw 500]:::bad
-  u5[5 Document aggregate, UoW commit, audit row]:::comp
-  u6[6 201 with the data envelope and a presigned URL]:::good
+  c4[9 Move to documents/, Document aggregate,<br/>UoW commit, audit row]:::comp
+  c5[10 201 with the data envelope and a presigned URL]:::good
+  sw[document_purge job · staged files older than 24 h are deleted]:::comp
   sd[Soft delete sets deleted_at]:::comp
   pg[document_purge job after retention · ADR-019<br/>removes the blob and the row]:::comp
 
   u1 --> u2
   u2 --> u3
-  u3 --> d1
-  d1 -->|storage 5xx or missing| serr
-  d1 -->|ok| u5
-  u5 --> u6
-  u6 --> sd
+  u3 --> u4
+  u4 --> p1
+  p1 --> c1
+  p1 -.->|never confirmed| sw
+  c1 --> c2
+  c2 -->|no| cbad
+  c2 -->|storage 5xx| serr
+  c2 -->|yes| c3
+  c3 -->|no| cbad
+  c3 -->|yes| c4
+  c4 --> c5
+  c5 --> sd
   sd --> pg
 
   classDef comp fill:#85bbf0,stroke:#5d82a8,color:#000000

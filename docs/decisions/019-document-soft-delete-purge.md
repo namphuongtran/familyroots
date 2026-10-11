@@ -5,6 +5,14 @@ Accepted (2026-07-12 — shipped). Supersedes the `documents` row of
 [ADR-006](006-soft-vs-hard-delete.md)'s soft-vs-hard table: documents move from
 hard-delete to soft-delete + retention purge.
 
+**Amended 2026-10-11 (#256): the purge job also sweeps staged uploads, per
+[ADR-068](068-documents-upload-straight-to-storage.md).** The browser now uploads a document to
+`clans/{clan_id}/uploads/` and the API's confirm call moves it into `documents/`. After the
+row-driven purge below, the same run, under the same lock, deletes every object under
+`clans/*/uploads/` older than 24 hours. Nothing is claimed first, because a staged file has no
+row. It lists staging folders only, so the "Deferred: orphan-blob reconciliation" section below
+still stands for `documents/`.
+
 ## Context
 The 2026-07-12 data-safety review found `document_repository.delete()`
 hard-deleted the row and the command handler permanently removed the blob in

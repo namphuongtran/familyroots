@@ -14,7 +14,8 @@ backend
 Base route: /api/v1/documents
 
 Core operations:
-- POST /
+- POST /uploads  (editor+) — sign a direct-to-Storage upload, see below
+- POST /  (editor+) — confirm a staged upload as a document, see below
 - GET /  (cursor-paginated; query params: cursor, limit, person_id, document_type, fields)
 - GET /{id}
 - DELETE /{id}  (admin) — **soft-delete**, see below
@@ -35,23 +36,87 @@ List response envelope (cursor pagination):
 Every response that includes a `presigned_url` also includes
 `presigned_url_expires_at` — an absolute, timezone-aware UTC timestamp equal to
 the moment the URL was minted plus the presign TTL (`DEFAULT_PRESIGN_TTL`, 3600 s).
-That covers `POST /` (upload), `GET /{id}`, and `POST /{id}/restore`. Clients
+That covers `POST /` (confirm), `GET /{id}`, and `POST /{id}/restore`. Clients
 schedule refreshes off this timestamp instead of hardcoding the TTL. Corrected
 2026-08-02: `GET /{id}` and restore previously returned `null` here while still
 returning a fresh URL.
 
 `GET /` (list) returns summaries with neither a URL nor an expiry.
 
-Upload expectations:
-- multipart/form-data upload
-- file, title, document_type required
-- person_id, description, taken_date, taken_place optional
-- supports approved media and document MIME types
+### Upload: sign, PUT to Storage, confirm (ADR-068)
+
+A document's bytes never pass through the API. On Vercel a request body over 4.5 MB is refused
+with Vercel's own 413, which carries no error envelope (ADR-065), so the browser sends the file
+straight to Supabase Storage. The limit is `MAX_UPLOAD_SIZE_MB`, 50 MB by default. Three steps:
+
+**1. `POST /documents/uploads`** (editor+), JSON body:
+
+```json
+{ "filename": "gia-pha.jpg", "content_type": "image/jpeg", "size_bytes": 2048000 }
+```
+
+| Field | Rule |
+|---|---|
+| `filename` | 1 to 255 characters. Only its extension is kept, sanitised to lowercase alphanumerics, `bin` when there is none |
+| `content_type` | 1 to 100 characters, and one of the approved types: `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `application/pdf`, `audio/mpeg`, `audio/wav`, `video/mp4`, `video/quicktime` |
+| `size_bytes` | at least 0, at most the limit |
+
+These are declarations, checked before any byte is sent: `422 invalid_mime_type` or
+`422 file_too_large`. On success, 200:
+
+```json
+{
+  "data": {
+    "storage_path": "clans/{clan_id}/uploads/{uuid}.jpg",
+    "upload_url": "https://<project>.supabase.co/storage/v1/object/upload/sign/family-roots-files/clans/{clan_id}/uploads/{uuid}.jpg?token=…",
+    "token": "…",
+    "expires_at": "2026-10-11T12:00:00Z"
+  }
+}
+```
+
+`expires_at` is two hours out, the lifetime Supabase fixes for a signed upload URL.
+
+**2. `PUT upload_url`**, to Storage, not the API. The body is the file, with `Content-Type`
+equal to the declared type. Send no `Authorization` header: the signed URL is the whole
+authorization for this one upload. Storage answers 200. It refuses a type outside the bucket's
+`allowed_mime_types` (415 `InvalidMimeType`), a file over the bucket's limit, and a second PUT to
+the same path (409 `KeyAlreadyExists`).
+
+**3. `POST /documents`** (editor+), JSON body:
+
+| Field | Rule |
+|---|---|
+| `storage_path` | required, exactly as step 1 returned it |
+| `title` | required, 1 to 255 characters |
+| `document_type` | required, `photo`, `id_document`, `certificate`, `audio`, `video` or `other` |
+| `original_filename` | optional, at most 255 characters |
+| `person_id` | optional, a person of the acting clan |
+| `description`, `taken_date`, `taken_place` | optional; `taken_place` at most 255 characters |
+
+The API then reads what Storage actually holds. A file whose stored type or size breaks the rule
+is **deleted** and refused, so it can never be confirmed later. A missing type is refused too.
+Otherwise the file moves to `clans/{clan_id}/documents/{uuid}.{ext}` and the row is saved: 201
+with the same `DocumentResponse` as every other route, its `storage_path` the `documents/` one
+and its `mime_type` and `file_size_bytes` what Storage recorded.
+
+| Status | Code | When | The staged file |
+|---|---|---|---|
+| 422 | `document.upload_path_invalid` | `storage_path` is not a staged path of the acting clan: another clan's, a `documents/` path, a traversal, any other shape | untouched |
+| 404 | `document.upload_not_found` | nothing is stored there: never uploaded, already confirmed, or swept | — |
+| 404 | `person_not_found` | `person_id` is not a person of the acting clan | kept, so the call can be retried |
+| 422 | `invalid_mime_type` | the stored type is missing or not approved | deleted |
+| 422 | `file_too_large` | the stored size is over the limit | deleted |
+| 422 | `validation_error` | a field above breaks its rule | kept |
+
+A second confirm of one path answers `404 document.upload_not_found` and makes no second row.
+A staged file nobody confirms is deleted by the retention purge after 24 hours (below).
 
 ### Storage errors on the routes that mint a presigned URL
 
-`POST /` uploads to the private bucket (`SUPABASE_STORAGE_BUCKET`) and then mints a
-presigned URL. `GET /{id}` and `POST /{id}/restore` only mint the URL. Each can answer:
+`POST /uploads` signs a path in the private bucket (`SUPABASE_STORAGE_BUCKET`). `POST /`
+reads the staged object, moves it, and then mints a presigned URL. `GET /{id}` and
+`POST /{id}/restore` only mint the URL. Each can answer:
 
 | Status | Code | When |
 |---|---|---|
@@ -62,11 +127,12 @@ presigned URL. `GET /{id}` and `POST /{id}/restore` only mint the URL. Each can 
 **A 503 does not always mean nothing happened.** `POST /` and `POST /{id}/restore`
 commit their row **before** they mint the URL. So a 503 from the URL step arrives
 after the write: the document exists, or is restored, but the response carries no
-URL. Do not retry those two blindly. Re-read with `GET /` or `GET /{id}` first, or a
-retried upload makes a second document and a retried restore answers `404
-document_not_found`. A missing bucket fails the upload itself, before any row is
-written, so `storage_bucket_not_configured` on `POST /` means nothing was saved; on
-restore it means the restore went through. `GET /{id}` writes nothing and is safe to
+URL. Do not retry those two blindly. Re-read with `GET /` or `GET /{id}` first. A retried
+confirm answers `404 document.upload_not_found`, because its staged file has already moved, and
+a retried restore answers `404 document_not_found`. A missing bucket fails the confirm at its
+first Storage read, before any row is written, so `storage_bucket_not_configured` on `POST /`
+means nothing was saved; on restore it means the restore went through. `POST /uploads` writes
+nothing and is safe to retry. `GET /{id}` writes nothing and is safe to
 retry once the cause is fixed.
 
 `GET /` (list) mints no URL and touches no blob. Set-avatar's own storage errors are
@@ -109,6 +175,10 @@ names a bucket that does not exist, the purge removes nothing and every eligible
 row survives to the next run (#177). Before that fix the job read Supabase's
 "Bucket not found" as a missing object and purged the rows, leaving their blobs
 in the real bucket for ever.
+
+The same run also deletes every **staged upload** older than 24 hours: a file under
+`clans/{clan_id}/uploads/` that was signed, maybe uploaded, and never confirmed (ADR-068). Confirm
+moves a file out of that folder, so a confirmed document's blob is never touched by this sweep.
 
 Avatar interplay: soft-deleting a document currently set as a person's avatar
 does not clear `is_avatar`, and since ADR-036 it does not affect the person's
@@ -167,6 +237,10 @@ longer mints the 30-day presigned URL it used to compute and discard.
 > the URL keeps access. Tracked as a follow-up in ADR-036 "Known gaps".
 
 ## Versioning & Compatibility Rules
+- **`POST /` stopped taking multipart on 2026-10-11 (ADR-068, #256), a breaking change shipped
+  without a version bump.** It takes JSON naming a staged path that `POST /uploads` signed. The
+  web was the only caller and moved in the same pull request; mobile has no upload. The response
+  is unchanged. The limit went from production's 4 MB to 50 MB.
 - Adding optional metadata fields is non-breaking.
 - Changing upload requirements or allowed MIME sets is breaking.
 - Keep presigned URL and delete/restore semantics stable.

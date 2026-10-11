@@ -48,7 +48,7 @@ When `SCHEDULER_ENABLED` is true, `backend/app/services/scheduler.py` runs an
 | Job | Trigger | Lock key | Purpose |
 |---|---|---|---|
 | `anniversary_notifications` | `CronTrigger(hour=NOTIFICATION_CRON_HOUR, minute=0, timezone=SCHEDULER_TIMEZONE)`, `misfire_grace_time=3600` | `728_115_001` | Solar + lunar giỗ/anniversary FCM pushes (see below) |
-| `document_purge` | `CronTrigger(hour=NOTIFICATION_CRON_HOUR, minute=30, timezone=SCHEDULER_TIMEZONE)`, `misfire_grace_time=3600` | `728_115_002` | Permanently remove soft-deleted documents past `DOCUMENT_RETENTION_DAYS` (ADR-019) |
+| `document_purge` | `CronTrigger(hour=NOTIFICATION_CRON_HOUR, minute=30, timezone=SCHEDULER_TIMEZONE)`, `misfire_grace_time=3600` | `728_115_002` | Permanently remove soft-deleted documents past `DOCUMENT_RETENTION_DAYS` (ADR-019), then delete staged uploads older than 24 hours (ADR-068) |
 
 Both jobs share `NOTIFICATION_CRON_HOUR` and `SCHEDULER_TIMEZONE` — the purge
 job is offset 30 minutes after the anniversary job (same hour, `minute=30`) so
