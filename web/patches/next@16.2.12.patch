@@ -1,0 +1,51 @@
+diff --git a/dist/server/lib/router-utils/setup-dev-bundler.js b/dist/server/lib/router-utils/setup-dev-bundler.js
+index b21ed5e236ad10a48653ff354045def4347c4e0a..17ea950b3bb63a0dd93b8917a3f96b96573677f9 100644
+--- a/dist/server/lib/router-utils/setup-dev-bundler.js
++++ b/dist/server/lib/router-utils/setup-dev-bundler.js
+@@ -298,7 +298,13 @@ async function startWatcher(opts) {
+         const routeTypesFilePath = _path.default.join(distDir, 'types', 'routes.d.ts');
+         const validatorFilePath = _path.default.join(distDir, 'types', 'validator.ts');
+         let initialWatchTime = performance.now() + performance.timeOrigin;
+-        wp.on('aggregated', async ()=>{
++        // FamilyRoots patch (#228, ADR-069): one run of this handler at a time.
++        // Watchpack fires this each time its startup scan pauses for 5 ms, so one startup
++        // fires it several times. Each run reads the file list when it starts and writes
++        // the route list after several awaits. Unserialized, a run that started on a
++        // partial scan could write last, and the routes it had not seen then answered
++        // 404 until some file changed.
++        const onAggregated = async ()=>{
+             var _serverFields_middleware, _serverFields_middleware1;
+             let writeEnvDefinitions = false;
+             let typescriptStatusFromLastAggregation = enabledTypeScript;
+@@ -857,6 +863,31 @@ async function startWatcher(opts) {
+                     _log.warn('Failed to reload dynamic routes:', e);
+                 }
+             }
++        };
++        // An event that arrives during a run asks for one more run, which reads the file
++        // list afresh, so the last write always comes from the latest scan. A run that
++        // throws still surfaces, and does not cancel the run an event asked for.
++        let aggregating = false;
++        let aggregateAgain = false;
++        wp.on('aggregated', async ()=>{
++            if (aggregating) {
++                aggregateAgain = true;
++                return;
++            }
++            aggregating = true;
++            try {
++                do {
++                    aggregateAgain = false;
++                    try {
++                        await onAggregated();
++                    } catch (err) {
++                        if (!aggregateAgain) throw err;
++                        _log.error(err);
++                    }
++                }while (aggregateAgain);
++            } finally{
++                aggregating = false;
++            }
+         });
+         wp.watch({
+             directories: [
