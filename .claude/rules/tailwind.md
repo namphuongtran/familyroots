@@ -303,8 +303,10 @@ P="\\b([a-z]+-)+($F)-[0-9]{2,3}\\b"
 grep -rEoh "$P" web/src | wc -l; grep -rElE "$P" web/src | wc -l
 ```
 
-The white and black count, the same way. On 2026-10-11 it printed one hit, the comment at
-`app/[locale]/backoffice/dashboard/page.tsx:193`. **Use `-P`, not `-E`, with `git grep` on a Mac.**
+The white and black count has the sibling rule's shape, and reads only what that rule lints: the
+`.ts` and `.tsx` files under `web/src`, tests left out. `globals.css` is not in it; its comments
+name the classes the scrim replaced. On 2026-10-11 it printed one hit, the comment at
+`app/[locale]/backoffice/dashboard/page.tsx:193`, against eleven on `main` the same day. **Use `-P`, not `-E`, with `git grep` on a Mac.**
 Apple Git 2.54 does not read `\b` in an extended pattern, so `git grep -nE` with this pattern
 printed nothing on the same tree, with ten live sites still in it. A count that prints nothing is
 a reading only once it has been seen to print something.

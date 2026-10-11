@@ -59,6 +59,11 @@ const CLOSE = 'Đóng'
 /** T-04's viewport: 320 px wide, and tall enough to be a phone. */
 const NARROW = { width: 320, height: 640 }
 /**
+ * A point beside the open drawer, on its scrim: the drawer is `min(85vw, 16.5rem)` wide, 272 px at
+ * most at 320. The drawer case taps here to dismiss it, and the scrim case reads what is painted here.
+ */
+const BESIDE_DRAWER = { x: NARROW.width - 8, y: NARROW.height / 2 }
+/**
  * #212: the widths the T-04 case resizes through, in place. T-04 names only 320, but the
  * dashboard's grids broke from 640 up, and worst at 1024, where the `lg` rail at a 32px root
  * leaves `main` 496 px. 375 is a phone, and the 100% reading names it.
@@ -198,8 +203,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
       await expect(page.getByRole('dialog')).toBeVisible()
 
       // What a person sees beside the open drawer: the element painted at the point the drawer
-      // case above taps to dismiss it, read without naming the overlay's markup.
-      const beside = { x: NARROW.width - 8, y: NARROW.height / 2 }
+      // case below taps to dismiss it, read without naming the overlay's markup.
       const painted = () =>
         page.evaluate(({ x, y }) => {
           const element = document.elementFromPoint(x, y)!
@@ -207,7 +211,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
             inDrawer: element.closest('[role="dialog"]') !== null,
             background: getComputedStyle(element).backgroundColor,
           }
-        }, beside)
+        }, BESIDE_DRAWER)
 
       // Both schemes are read before either is judged, so a failure quotes the two readings. The
       // overlay mounts with the drawer and carries no transition, so neither read is mid-flight.
@@ -536,7 +540,7 @@ test.describe('the backoffice dashboard, as an admin', () => {
       expect(hydrations).toEqual([])
 
       // A tap on the scrim closes it: a navigation drawer has nothing to lose on dismiss.
-      await page.mouse.click(NARROW.width - 8, NARROW.height / 2)
+      await page.mouse.click(BESIDE_DRAWER.x, BESIDE_DRAWER.y)
       await expect(drawer).toBeHidden()
     })
   })

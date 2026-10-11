@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import {
   GOLD_IS_NEVER_TEXT,
   PALETTE_HAS_NO_DARK_VALUE,
-  SINGLE_COLOUR_HAS_NO_DARK_VALUE,
+  SINGLE_VALUE_HAS_NO_DARK_VALUE,
 } from './eslint.config.mjs'
 
 /**
@@ -21,9 +21,9 @@ import {
  * from every step, so a config that read a shorter list, or typed one from memory, leaves a family uncaught
  * and the case names it.
  *
- * **#238 added `white` and `black`**, which have no step for the `-50` read to find. The second
- * block reads them the same way, independently: every `--color-<name>` in the theme with no step.
- * Its last block holds the `whitespace-*` utilities, which share the letters and are no colour.
+ * **#238 added `white` and `black`**, which have no step for the `-50` read to find. The block
+ * for them reads them independently too: every `--color-<name>` in the theme with no step. The
+ * block after it holds the `whitespace-*` utilities, which share the letters and are no colour.
  *
  * **Naming.** `eslint.config.test.ts` runs under `vitest --project unit` (its include glob in
  * `vitest.config.mts` names it), beside the config it reads, as `playwright.config.test.ts` does.
@@ -49,7 +49,7 @@ async function restrictedMessages(source: string): Promise<Restricted[]> {
 }
 
 /** What a planted class on line 4 draws when the palette rule catches it. */
-const CAUGHT_ON_LINE_4: Restricted[] = [{ line: 4, message: PALETTE_HAS_NO_DARK_VALUE }]
+const PALETTE_CAUGHT_ON_LINE_4: Restricted[] = [{ line: 4, message: PALETTE_HAS_NO_DARK_VALUE }]
 
 /** A component whose line 4 carries `expression`, the rest of it inert. */
 function plant(expression: string): string {
@@ -64,20 +64,29 @@ function plant(expression: string): string {
   ].join('\n')
 }
 
+/** The classes, planted one to a line, for which lint draws no `message`. */
+async function uncaught(classes: string[], message: string): Promise<string[]> {
+  const source = classes.map((c, i) => `export const c${i} = '${c}'`).join('\n')
+  const caught = new Set(
+    (await restrictedMessages(source)).filter((m) => m.message === message).map((m) => m.line),
+  )
+  return classes.filter((_c, i) => !caught.has(i + 1))
+}
+
 describe('a Tailwind default-palette class fails lint', () => {
   it.each([
     ['a className attribute', '<div className="text-gray-500" />'],
     ['a cn() argument', "<div className={cn('bg-blue-50', x)} />"],
     ['a template-literal segment', '<div className={`border-rose-200 ${x}`} />'],
   ])('in %s, naming the line', async (_shape, expression) => {
-    expect(await restrictedMessages(plant(expression))).toEqual(CAUGHT_ON_LINE_4)
+    expect(await restrictedMessages(plant(expression))).toEqual(PALETTE_CAUGHT_ON_LINE_4)
   })
 
   it.each([
     ['taupe', '<div className="text-taupe-500" />'],
     ['mist', '<div className="bg-mist-100" />'],
   ])('in %s, a family Tailwind added most recently', async (_family, expression) => {
-    expect(await restrictedMessages(plant(expression))).toEqual(CAUGHT_ON_LINE_4)
+    expect(await restrictedMessages(plant(expression))).toEqual(PALETTE_CAUGHT_ON_LINE_4)
   })
 
   it.each([
@@ -90,13 +99,13 @@ describe('a Tailwind default-palette class fails lint', () => {
     ['the important suffix', 'text-amber-700!'],
   ])('behind %s', async (_shape, className) => {
     expect(await restrictedMessages(plant(`<div className="p-2 ${className}" />`))).toEqual(
-      CAUGHT_ON_LINE_4,
+      PALETTE_CAUGHT_ON_LINE_4,
     )
   })
 
   it('named as a variable in a style, the same colour by another name', async () => {
     const expression = "<div style={{ color: 'var(--color-gray-500)' }} />"
-    expect(await restrictedMessages(plant(expression))).toEqual(CAUGHT_ON_LINE_4)
+    expect(await restrictedMessages(plant(expression))).toEqual(PALETTE_CAUGHT_ON_LINE_4)
   })
 
   it('in every family the installed Tailwind declares, on every step', async () => {
@@ -106,15 +115,7 @@ describe('a Tailwind default-palette class fails lint', () => {
       ([, family, step]) => `bg-${family}-${step}`,
     )
     expect(classes.length).toBeGreaterThan(0)
-
-    const source = classes.map((c, i) => `export const c${i} = '${c}'`).join('\n')
-    const caught = new Set(
-      (await restrictedMessages(source))
-        .filter((m) => m.message === PALETTE_HAS_NO_DARK_VALUE)
-        .map((m) => m.line),
-    )
-    const missed = classes.filter((_c, i) => !caught.has(i + 1))
-    expect(missed).toEqual([])
+    expect(await uncaught(classes, PALETTE_HAS_NO_DARK_VALUE)).toEqual([])
   })
 })
 
@@ -149,8 +150,8 @@ describe('what the palette rule leaves alone', () => {
  * #238. `white` and `black` are one value each, with no `-50` step, so the palette rule above
  * never saw them, and neither has a dark value: a `bg-white` header stays white on a dark screen.
  */
-const SINGLE_CAUGHT_ON_LINE_4: Restricted[] = [
-  { line: 4, message: SINGLE_COLOUR_HAS_NO_DARK_VALUE },
+const SINGLE_VALUE_CAUGHT_ON_LINE_4: Restricted[] = [
+  { line: 4, message: SINGLE_VALUE_HAS_NO_DARK_VALUE },
 ]
 
 describe('a white or black colour class fails lint', () => {
@@ -159,7 +160,7 @@ describe('a white or black colour class fails lint', () => {
     ['text-white', "<button className={cn('bg-destructive text-white', x)} />"],
     ['bg-black/40', '<div className={`fixed inset-0 bg-black/40 ${x}`} />'],
   ])('%s, naming the line', async (_class, expression) => {
-    expect(await restrictedMessages(plant(expression))).toEqual(SINGLE_CAUGHT_ON_LINE_4)
+    expect(await restrictedMessages(plant(expression))).toEqual(SINGLE_VALUE_CAUGHT_ON_LINE_4)
   })
 
   it.each([
@@ -171,13 +172,13 @@ describe('a white or black colour class fails lint', () => {
     ['the important suffix', 'text-white!'],
   ])('behind %s', async (_shape, className) => {
     expect(await restrictedMessages(plant(`<div className="p-2 ${className}" />`))).toEqual(
-      SINGLE_CAUGHT_ON_LINE_4,
+      SINGLE_VALUE_CAUGHT_ON_LINE_4,
     )
   })
 
   it('named as a variable in a style, the same colour by another name', async () => {
     const expression = "<div style={{ background: 'var(--color-black)' }} />"
-    expect(await restrictedMessages(plant(expression))).toEqual(SINGLE_CAUGHT_ON_LINE_4)
+    expect(await restrictedMessages(plant(expression))).toEqual(SINGLE_VALUE_CAUGHT_ON_LINE_4)
   })
 
   /**
@@ -193,14 +194,7 @@ describe('a white or black colour class fails lint', () => {
       .filter((name) => !/-\d+$/.test(name))
       .map((name) => `bg-${name}`)
     expect(classes).toEqual(expect.arrayContaining(['bg-black', 'bg-white']))
-
-    const source = classes.map((c, i) => `export const c${i} = '${c}'`).join('\n')
-    const caught = new Set(
-      (await restrictedMessages(source))
-        .filter((m) => m.message === SINGLE_COLOUR_HAS_NO_DARK_VALUE)
-        .map((m) => m.line),
-    )
-    expect(classes.filter((_c, i) => !caught.has(i + 1))).toEqual([])
+    expect(await uncaught(classes, SINGLE_VALUE_HAS_NO_DARK_VALUE)).toEqual([])
   })
 
   it('beside a palette class, each rule naming its own', async () => {
@@ -210,7 +204,7 @@ describe('a white or black colour class fails lint', () => {
     expect(messages).toEqual(
       expect.arrayContaining([
         { line: 4, message: PALETTE_HAS_NO_DARK_VALUE },
-        { line: 4, message: SINGLE_COLOUR_HAS_NO_DARK_VALUE },
+        { line: 4, message: SINGLE_VALUE_HAS_NO_DARK_VALUE },
       ]),
     )
   })
