@@ -11,9 +11,8 @@ interface RoleSelectorProps {
   disabled?: boolean
 }
 
-// #233: these asked for `role.viewer` and `role.viewer_desc`, but `admin.role` is the string
-// "Role", so every locale rendered the key path. The names reuse the `admin` keys that already
-// say them; the descriptions come from the permission matrix in docs/architecture/rbac.md.
+// Keys in the `admin` namespace. Each description says what that role may do, worded from the
+// permission matrix in docs/architecture/rbac.md.
 const ROLES: Array<{ value: ClanRole; labelKey: string; descKey: string }> = [
   { value: 'viewer', labelKey: 'viewer', descKey: 'viewer_desc' },
   { value: 'editor', labelKey: 'editor', descKey: 'editor_desc' },
