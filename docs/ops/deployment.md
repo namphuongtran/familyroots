@@ -114,9 +114,12 @@ lifespan raises is still production, and every cold start of it fails.
   deployment's own `VERCEL_URL`, and `TrustedHostMiddleware` answers any other host with 400.
 
 The step makes six attempts, ten seconds apart, each into a fresh file (#263), which covers a
-cold start. It passes on the first `200` whose body's `migrations` is `current`. **A red step
-here means production already serves the new API deployment.** Roll it back (§ Rollback). A red
-step also stops the job, so the web is not deployed.
+cold start. It passes on the first `200` whose body's `migrations` is `current`. A request can
+still reach the previous deployment just after step 2 returns (#263). That deployment boots against
+the migrated database and answers `200` with `ahead` (ADR-070), so only `current` shows the new
+one serving.
+**A red step here means production already serves the new API deployment.** Roll it back
+(§ Rollback). A red step also stops the job, so the web is not deployed.
 
 **4. Deploy the web.** `pnpm install --frozen-lockfile`, then `pnpm dlx vercel@63.1.0 deploy
 --prod` from `web/`, with `VERCEL_PROJECT_ID` from the `VERCEL_WEB_PROJECT_ID` secret. It runs
@@ -132,18 +135,26 @@ sees the three Vercel values for its project. The health step sees `API_ORIGIN`.
 `pnpm install` and `setup-node` see none of them. With the secrets moved into the `production`
 environment ("Go-live checklist", B), only an approved run of this job can read them.
 
-**The window this order leaves, read from source and not yet measured.** `migration_status`
-(`backend/app/core/readiness.py:64-79`, read at `c39ad2e`) returns `current` only when
-`alembic_version` equals the deployment's own head, exactly. Between step 1 and the moment step
-2's deployment becomes production, the old deployment is still production, and the database is
-already ahead of it. A warm instance of it keeps serving, because its lifespan ran before the migration.
-A **cold start** of it in that window raises at the boot gate, and that request fails. This happens
-only on a release that carries a migration, and the window lasts as long as step 2's upload and
-build. Since #267 a release that batches several merged migrations opens one window, not one per
-merge. Render's container was long-running, so it had no such window. A shorter one is possible:
-deploy first with `vercel deploy --prod --skip-domain`, migrate, then `vercel promote` the
-deployment (`vercel deploy` reference, read 2026-10-10). #252's issue body set the order used here,
-so that change is left to a follow-up.
+**The window this order leaves, and why it no longer fails a cold start.** Between step 1 and the
+moment step 2's deployment becomes production, the old deployment is still production, and the
+database is already ahead of it. A warm instance of it keeps serving, because its lifespan ran
+before the migration. Until ADR-070 a **cold start** of it raised at the boot gate, which demanded
+that `alembic_version` equal the deployment's own head exactly, and Vercel answered
+`FUNCTION_INVOCATION_FAILED`. That was measured on 2026-10-10 in run 38055909194 (#255). Since
+ADR-070 the gate reads a revision its own scripts do not know as `ahead`. It boots on it and logs
+one warning that names both revisions (`read_migrations` in `backend/app/core/readiness.py`). The
+window lasts as long as step 2's upload and build. Since #267 a release that batches several merged
+migrations opens one window, not one per merge.
+
+- **It is safe only because every migration keeps the code already live working**
+  ([migrations.md](migrations.md), "How migrations reach production"). A migration that breaks the
+  rule no longer stops the old deployment booting. It fails that deployment's requests that touch
+  what the migration changed, until the new build is live.
+- **The first release that ships ADR-070 still opens the window once**, if it also carries a
+  migration. The deployment it replaces was built before the change and still has the old gate.
+  The same holds for a rollback to a deployment built before ADR-070 (§ Rollback).
+- **Staging the deployment with `--skip-domain`, migrating, then `vercel promote` was not chosen.**
+  The migration still commits before the promote, so it only shortens the window (ADR-070).
 
 ## What the Vercel files set
 
@@ -244,12 +255,16 @@ the same contract Render's `preDeployCommand` gave. See [migrations.md](migratio
 "How migrations reach production".
 
 ## Rollback
-- **Backend: a code rollback across a migration cannot boot. Downgrade the schema first.** The boot
-  gate demands exact equality between `alembic_version` and the deployment's head
-  (`readiness.py:79`). Run `alembic downgrade <that deployment's head>` from `backend/`, with
-  `DATABASE_URL` set to the session-pooler string. Then roll back the code with
-  **Instant Rollback** in the dashboard, or `vercel rollback`. Destructive migrations may not
-  reverse cleanly. Prefer a forward fix.
+- **Backend: a code rollback across a migration boots without a downgrade, if every migration
+  since kept the rule.** The rolled-back deployment reads the database as `ahead`, a revision its
+  scripts do not know, and boots on it (ADR-070). Roll back with **Instant Rollback** in the
+  dashboard, or `vercel rollback`.
+  - **Downgrade the schema first only when a migration broke the rule**, by dropping or renaming
+    something the rolled-back code reads. Run `alembic downgrade <that deployment's head>` from
+    `backend/`, with `DATABASE_URL` set to the session-pooler string, then roll back the code.
+    Destructive migrations may not reverse cleanly. Prefer a forward fix.
+  - **A deployment built before ADR-070 has the old gate**, which demands exact equality. Rolling
+    back to one across a migration needs the downgrade whatever the migration did.
 - **Hobby rolls back to the immediately previous deployment only**, which since #267 is the
   previous release ("Performing an Instant
   Rollback", read 2026-10-10). After a rollback, Vercel **turns off auto-assignment of production
@@ -427,7 +442,10 @@ Do A to E first. A backend deploy with its variables unset fails its own health 
 - **Merged work waits for a release.** A fix is not live until someone publishes one.
 - **The boot gate no longer guards production.** On Vercel a deployment whose lifespan raises is
   production anyway, and the health read in step 3 is the first thing to notice (§ step 2).
-- **A deploy that carries a migration leaves a cold-start window** in which the old deployment
-  cannot boot (§ "The window this order leaves").
+- **The old deployment serves the new schema during a release, and a rollback serves it after
+  one.** The boot gate admits a database ahead of the code (ADR-070), which rests on an authoring
+  rule: every migration keeps the code already live working. Nothing in CI rejects a migration
+  that breaks it. The first release that ships ADR-070 still opens the old cold-start window once
+  (§ "The window this order leaves").
 - The rate limiter and the metrics throttle hold their state per instance on serverless. ADR-065
   accepts that.

@@ -25,9 +25,11 @@ Accept-Language: vi | en | fr | zh
 |--------|-----------|------|-------------------|
 | GET    | `/health` | No   | Liveness + readiness |
 
-Returns `{"status": "ok", "database": "connected", "migrations": "current"}`; degrades
-to 503 when the DB is unreachable **or** migrations are behind head. Exempt from the
-response envelope.
+Returns `{"status": "ok", "database": "connected", "migrations": "current"}`. Also
+answers 200, with `"migrations": "ahead"`, when the database holds a revision this code's
+scripts do not know, as the previous deployment does during a release (ADR-070). Degrades
+to 503 when the DB is unreachable **or** `migrations` is `behind` or `unknown`. Exempt from
+the response envelope.
 
 ---
 

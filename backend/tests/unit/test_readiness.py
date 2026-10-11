@@ -5,10 +5,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.core.readiness import (
+    MIGRATIONS_AHEAD,
     MIGRATIONS_BEHIND,
     MIGRATIONS_CURRENT,
+    MigrationReading,
     expected_head,
     migration_status,
+    read_migrations,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -43,6 +46,29 @@ async def test_status_current_when_db_matches_head() -> None:
 async def test_status_behind_when_db_on_older_revision() -> None:
     session = _session_returning("001_initial")
     assert await migration_status(session) == MIGRATIONS_BEHIND
+
+
+@pytest.mark.asyncio
+async def test_status_ahead_when_db_on_a_revision_the_scripts_do_not_know() -> None:
+    """A later release migrated first. The old code cannot see that migration (#255)."""
+    session = _session_returning("999_from_a_later_release")
+    assert await migration_status(session) == MIGRATIONS_AHEAD
+
+
+@pytest.mark.asyncio
+async def test_status_behind_when_alembic_version_is_empty() -> None:
+    """No revision is not an unknown revision: an empty table is never ``ahead``."""
+    session = _session_returning(None)
+    assert await migration_status(session) == MIGRATIONS_BEHIND
+
+
+@pytest.mark.asyncio
+async def test_reading_names_the_database_revision_and_the_code_head() -> None:
+    """The boot warning names both, so the reading must carry both."""
+    session = _session_returning("999_from_a_later_release")
+    assert await read_migrations(session) == MigrationReading(
+        status=MIGRATIONS_AHEAD, database="999_from_a_later_release", head=expected_head()
+    )
 
 
 @pytest.mark.asyncio

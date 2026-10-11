@@ -14,6 +14,14 @@ with the workflow change, in the same pull request. Source readings were taken a
 It amends the pipeline that #252 set. ADR-065 and ADR-066 are unchanged, and so is the order of the
 deploy steps.
 
+**Amended 2026-10-11 (#255): the migration window is closed by
+[ADR-070](070-the-boot-gate-admits-a-database-ahead-of-the-code.md).** Consequences says a release
+that batches migrations opens one window and that "the window itself is unchanged". ADR-070 makes
+the boot gate admit a database ahead of the code, so a cold start of the previous deployment boots
+during that window. That holds for every deployment built with ADR-070, and not for the release
+that ships it. The order of the deploy steps, and the health read's demand for `current`, are
+unchanged.
+
 ## Context
 
 Until this change, two workflows each deployed to production on every push to `main` that matched
