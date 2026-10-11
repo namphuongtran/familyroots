@@ -39,7 +39,13 @@ from app.core.exceptions import (
 )
 from app.core.logging import configure_logging
 from app.core.metrics_guard import MetricsFailureThrottle
-from app.core.readiness import MIGRATIONS_CURRENT, migration_status
+from app.core.readiness import (
+    MIGRATIONS_AHEAD,
+    MIGRATIONS_SERVABLE,
+    MigrationReading,
+    migration_status,
+    read_migrations,
+)
 from app.domain.auth.identity_provider import (
     IdentityEmailNotVerifiedError,
     IdentityUnavailableError,
@@ -110,21 +116,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     # DB readiness: an unmigrated runtime DB means "relation does not exist" 500s
-    # on nearly every endpoint. In production, refuse to boot (the deploy fails and
-    # the previous version keeps serving); in dev, warn loudly and continue.
+    # on nearly every endpoint. In production, refuse to boot; in dev, warn loudly and
+    # continue. On Vercel a refusal fails this cold start, not the deploy.
+    #
+    # A DB *ahead* of this code boots (ADR-070). A release migrates before its deployment
+    # goes live, so until then the previous deployment cold-starts against a revision it
+    # does not know. That is safe because every migration keeps the code already live working.
     try:
         async with AsyncSessionLocal() as session:
-            status = await migration_status(session)
+            reading = await read_migrations(session)
     except Exception as exc:
-        status = f"db-unreachable ({type(exc).__name__})"
-    if status != MIGRATIONS_CURRENT:
+        reading = MigrationReading(
+            status=f"db-unreachable ({type(exc).__name__})", database=None, head=None
+        )
+    if reading.status not in MIGRATIONS_SERVABLE:
         message = (
-            f"Database is not ready (migrations: {status}). "
+            f"Database is not ready (migrations: {reading.status}). "
             "Run `alembic upgrade head` against this database."
         )
         if settings.APP_ENV == "production":
             raise RuntimeError(message)
         logger.error(message)
+    elif reading.status == MIGRATIONS_AHEAD:
+        logger.warning(
+            "Database is ahead of this deployment (migrations: ahead): alembic_version is %s, "
+            "a revision this deployment's scripts do not know, and their head is %s. Booting: "
+            "a later release has migrated, and its migrations keep this code working (ADR-070).",
+            reading.database,
+            reading.head,
+        )
 
     # RLS layer-2 readiness (SP-3, ADR-008): if RLS is enabled, prove the request path
     # genuinely drops to the non-bypass role. Otherwise RLS is silently inert (false
@@ -404,9 +424,11 @@ def create_app() -> FastAPI:
                 content={"status": "degraded", "database": "unreachable"},
             )
         migrations = await migration_status(db)
-        if migrations != MIGRATIONS_CURRENT:
+        if migrations not in MIGRATIONS_SERVABLE:
             # Schema missing/behind → most endpoints would 500; report degraded so
-            # deploys and load balancers get the true signal.
+            # deploys and load balancers get the true signal. ``ahead`` answers 200, like
+            # the boot gate it mirrors (ADR-070), so a release's health read must ask for
+            # ``current``: ``ahead`` is what the deployment it replaces answers.
             return JSONResponse(
                 status_code=503,
                 content={

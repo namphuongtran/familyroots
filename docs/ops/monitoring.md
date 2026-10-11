@@ -20,10 +20,12 @@ W3C `traceparent` header (ADR-033).
 - `GET /health` runs `SELECT 1` and checks Alembic migration status; the healthy
   payload is `{"status":"ok","database":"connected","migrations":"current"}`.
 - Returns a 503 `degraded` response when the DB is unreachable
-  (`{"status":"degraded","database":"unreachable"}`) **or** when migrations are
-  not at head (the `migrations` field reports the mismatch). `release.yml` reads it
-  after deploying the API and fails unless `migrations` is `current`. Vercel does not
-  call it ([deployment.md](deployment.md), "The release workflow, step by step").
+  (`{"status":"degraded","database":"unreachable"}`) **or** when `migrations` is
+  `behind` or `unknown`. A database ahead of the code answers 200 with
+  `"migrations":"ahead"` (ADR-070). `release.yml` reads it after deploying the API and
+  fails unless `migrations` is `current`, because `ahead` is what the previous deployment
+  answers. Vercel does not call it ([deployment.md](deployment.md), "The release
+  workflow, step by step").
 
 ## Metrics — `GET /internal/metrics` (ADR-033)
 Prometheus RED metrics (`http_requests_total`, `http_request_duration_seconds`, …) for

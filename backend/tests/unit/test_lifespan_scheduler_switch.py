@@ -22,7 +22,7 @@ from fastapi import FastAPI
 
 import app.main as main_module
 from app.core.config import settings
-from app.core.readiness import MIGRATIONS_CURRENT
+from app.core.readiness import MIGRATIONS_CURRENT, MigrationReading
 from app.services.scheduler import scheduler
 
 pytestmark = pytest.mark.unit
@@ -43,10 +43,10 @@ class _NoDbEngine:
 
 @pytest.fixture
 def isolated_lifespan(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def migrations_are_current(_session: Any) -> str:
-        return MIGRATIONS_CURRENT
+    async def migrations_are_current(_session: Any) -> MigrationReading:
+        return MigrationReading(status=MIGRATIONS_CURRENT, database="head", head="head")
 
-    monkeypatch.setattr(main_module, "migration_status", migrations_are_current)
+    monkeypatch.setattr(main_module, "read_migrations", migrations_are_current)
     monkeypatch.setattr(main_module, "AsyncSessionLocal", _NoDbSession)
     monkeypatch.setattr(main_module, "init_firebase", lambda: None)
     monkeypatch.setattr(main_module, "load_translations", lambda: None)

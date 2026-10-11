@@ -152,7 +152,7 @@ gate blocked the release itself.
 ```mermaid
 graph TB
   b[Backend rollback]:::comp
-  bd{Did a migration ship}:::dec
+  bd{Did a migration ship that broke the rule,<br/>or is the target older than ADR-070}:::dec
   b3[Downgrade the schema first<br/>alembic downgrade, session pooler<br/>prefer a forward fix · destructive migrations may not reverse]:::bad
   b1[Instant Rollback or vercel rollback<br/>Hobby: the previous deployment only]:::comp
   bp[vercel promote later<br/>rollback turns off domain auto-assignment]:::comp
@@ -175,5 +175,8 @@ graph TB
   classDef bad fill:#c94f4f,stroke:#8f3636,color:#ffffff
 ```
 
-A code rollback across a migration cannot boot: the boot gate demands that `alembic_version`
-equal the deployment's own head, exactly. Hence the downgrade first.
+A code rollback across a migration boots without a downgrade when the migration kept the rule
+that every migration keeps the code already live working: the rolled-back deployment reads the
+database as `ahead` and boots on it (ADR-070). The downgrade comes first only when a migration
+broke that rule, or when the target deployment was built before ADR-070 and still demands exact
+equality.

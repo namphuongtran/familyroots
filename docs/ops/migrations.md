@@ -26,13 +26,16 @@ migrates nothing.** **A failed migration fails the job before anything is deploy
   will apply it to production. The production database is Postgres 17
   (Supabase project `xkmutzxdhdigyfisfrwd`). `backend-ci.yml`'s service container and
   local `pgdb` ran Postgres 18 when this was written (read at `c39ad2e`).
-- **Keep every migration compatible with the code already live.** The old deployment
-  serves against the new schema until the new one is promoted. On Vercel this window also
-  costs cold starts: the boot gate below demands exact equality, so a cold start of the old
-  deployment raises until the new one is live ([deployment.md](deployment.md), "The window this
-  order leaves").
-- **A code rollback across a migration needs the schema downgraded first**, for the same
-  reason ([deployment.md](deployment.md), "Rollback").
+- **Keep every migration compatible with the code already live. ADR-070 makes this rule
+  load-bearing.** The old deployment serves against the new schema until the new one is live,
+  and the boot gate below lets its cold starts boot there, because it admits a database ahead of
+  the code ([deployment.md](deployment.md), "The window this order leaves"). **A migration that
+  drops or renames something live code reads ships in two releases**: the first stops the code
+  reading it, a later one's migration removes it (the shape of ADR-067 § 5). Nothing in CI checks
+  this. A migration that breaks it fails the old deployment's requests during the window.
+- **A code rollback across a migration that kept the rule boots without a downgrade**, for the
+  same reason. `alembic downgrade` is needed only when a migration broke the rule, or when the
+  rollback target was built before ADR-070 ([deployment.md](deployment.md), "Rollback").
 
 **Which connection, and why.** The job sets `DATABASE_URL` from the `MIGRATION_DATABASE_URL`
 secret, and sets nothing else. `migrations/env.py` reads `settings.DATABASE_URL`, and with
@@ -272,11 +275,20 @@ Head = `043_rls_off_outside_layer_2`; verify with `cd backend && uv run alembic 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 
 ## Boot-time migration gate
-`backend/app/main.py` checks migration status in the lifespan handler — in
-production the app **refuses to boot** if the DB is not at head. `/health`
-reports a `migrations` field and degrades on mismatch. As a dev bootstrap, the
-docker-compose `api` service runs `python -m alembic upgrade head` before
-starting uvicorn.
+`backend/app/main.py` checks migration status in the lifespan handler. It places
+`alembic_version` against the code's own scripts (`read_migrations` in
+`app/core/readiness.py`, ADR-070):
+
+| `migrations` | `alembic_version` holds | Production boot | `/health` |
+|---|---|---|---|
+| `current` | the scripts' head | boots | 200 |
+| `ahead` | a revision the scripts do not know, as from a later release | boots, with one warning naming both revisions | 200 |
+| `behind` | a known revision short of head, or nothing (missing table or empty) | **refuses** | 503 |
+| `unknown` | not read: the scripts are unreadable | **refuses** | 503 |
+
+Outside production a refusal is a loud error and the app boots anyway. As a dev
+bootstrap, the docker-compose `api` service runs `python -m alembic upgrade head`
+before starting uvicorn.
 
 **The gate needs the migration scripts at run time, so they ship inside the
 distribution.** `app/core/readiness.py` reads the head revision through

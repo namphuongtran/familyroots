@@ -1,4 +1,4 @@
-"""Runtime readiness — is the database schema migrated to head?
+"""Runtime readiness — is the database schema migrated to this code's head?
 
 A fresh runtime DB with no schema previously surfaced only as per-request 500s
 ("relation does not exist") and a paused auth provider only as failing requests.
@@ -9,6 +9,7 @@ mystery to debug one endpoint at a time.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
 
@@ -37,12 +38,24 @@ _MIGRATIONS_PACKAGE = "migrations"
 
 MIGRATIONS_CURRENT = "current"
 MIGRATIONS_BEHIND = "behind"
+MIGRATIONS_AHEAD = "ahead"
 MIGRATIONS_UNKNOWN = "unknown"
+
+# The statuses a deployment boots and serves under (ADR-070). ``ahead`` is the previous
+# deployment during a release: ``release.yml`` migrates before the new deployment goes live,
+# and every migration keeps the code already live working (``docs/ops/migrations.md``).
+MIGRATIONS_SERVABLE = frozenset({MIGRATIONS_CURRENT, MIGRATIONS_AHEAD})
+
+
+@dataclass(frozen=True)
+class _Scripts:
+    head: str
+    revisions: frozenset[str]
 
 
 @lru_cache
-def expected_head() -> str | None:
-    """Head revision id from the migration scripts (filesystem read, cached).
+def _read_scripts() -> _Scripts | None:
+    """Head and every revision id from the migration scripts (filesystem read, cached).
 
     ``ScriptDirectory`` only parses the version files — it does not run
     ``env.py`` — so this is safe to call without a database.
@@ -56,24 +69,64 @@ def expected_head() -> str | None:
         with resources.as_file(resources.files(_MIGRATIONS_PACKAGE)) as scripts_dir:
             cfg = Config()
             cfg.set_main_option("script_location", str(scripts_dir))
-            return ScriptDirectory.from_config(cfg).get_current_head()
+            scripts = ScriptDirectory.from_config(cfg)
+            head = scripts.get_current_head()
+            if head is None:
+                return None
+            revisions = frozenset(script.revision for script in scripts.walk_revisions())
+            return _Scripts(head=head, revisions=revisions)
     except Exception:
         return None
 
 
-async def migration_status(db: AsyncSession) -> str:
-    """Compare the DB's ``alembic_version`` against the scripts' head.
+def expected_head() -> str | None:
+    """Head revision id from the migration scripts, or ``None`` when they are unreadable."""
+    scripts = _read_scripts()
+    return None if scripts is None else scripts.head
 
-    Returns ``current`` | ``behind`` | ``unknown`` (scripts unreadable). A missing
-    ``alembic_version`` table means the DB was never migrated → ``behind``."""
-    head = expected_head()
-    if head is None:
-        return MIGRATIONS_UNKNOWN
+
+@dataclass(frozen=True)
+class MigrationReading:
+    """A status, and the two revisions it was decided from."""
+
+    status: str
+    # ``alembic_version.version_num``. ``None`` when the table is missing or empty, or when the
+    # scripts could not be read and the database was not asked.
+    database: str | None
+    # The scripts' head. ``None`` when they could not be read.
+    head: str | None
+
+
+async def read_migrations(db: AsyncSession) -> MigrationReading:
+    """Place the DB's ``alembic_version`` against this code's own migration scripts.
+
+    - ``current``: it is the scripts' head.
+    - ``behind``: it is a revision the scripts know but not their head, or there is
+      none. A missing ``alembic_version`` table means the DB was never migrated.
+    - ``ahead``: it is a revision the scripts do not know. Code cannot see a
+      migration written after it, so "a revision I don't know" is the whole test,
+      and a revision that never reached ``main`` reads the same way. Production
+      migrates only from tags ADR-067's ``verify-ref`` traced to ``main`` (ADR-070).
+    - ``unknown``: the scripts are unreadable."""
+    scripts = _read_scripts()
+    if scripts is None:
+        return MigrationReading(status=MIGRATIONS_UNKNOWN, database=None, head=None)
     try:
         result = await db.execute(text("SELECT version_num FROM alembic_version"))
-        current = result.scalar()
+        database = result.scalar()
     except Exception:
         # Aborted transaction state must not leak into the caller's session.
         await db.rollback()
-        return MIGRATIONS_BEHIND
-    return MIGRATIONS_CURRENT if current == head else MIGRATIONS_BEHIND
+        return MigrationReading(status=MIGRATIONS_BEHIND, database=None, head=scripts.head)
+    if database == scripts.head:
+        status = MIGRATIONS_CURRENT
+    elif database is None or database in scripts.revisions:
+        status = MIGRATIONS_BEHIND
+    else:
+        status = MIGRATIONS_AHEAD
+    return MigrationReading(status=status, database=database, head=scripts.head)
+
+
+async def migration_status(db: AsyncSession) -> str:
+    """``current`` | ``behind`` | ``ahead`` | ``unknown``, as ``read_migrations`` decides them."""
+    return (await read_migrations(db)).status

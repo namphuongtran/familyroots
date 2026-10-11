@@ -16,8 +16,9 @@ engineer owns triage and may escalate to the maintainer for SEV-1.
 2. Identify the trigger: a release/migration (most likely — a published release is the only path
    to prod, with no staging; `gh release list --limit 2` names the last two) or external
    (Supabase/Vercel outage).
-3. If a recent deploy is implicated → **roll back** (`deployment.md`). If a migration
-   shipped, assess reversibility before `alembic downgrade`.
+3. If a recent deploy is implicated → **roll back** (`deployment.md`). A rollback across a
+   migration that kept live code working needs no downgrade (ADR-070). If one broke that rule,
+   assess reversibility before `alembic downgrade`.
 4. For a suspected isolation/auth breach (SEV-1): stop further writes if practical,
    capture `audit_logs` for the window, then patch.
 

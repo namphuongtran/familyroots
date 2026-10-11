@@ -152,9 +152,11 @@ jobs:
       # Read after the fact. The deployment is already production when this runs. A red
       # step means production is serving it, so roll back (docs/ops/deployment.md,
       # "Rollback"). Read through the production host: Standard Protection guards the
-      # deployment's own URL. The first request cold-starts an instance, whose lifespan
-      # refuses to boot unless the database is at head. A red step here also stops the web
-      # deploy below, so the web never goes live against an API that failed its read.
+      # deployment's own URL. The first request may cold-start an instance, whose lifespan
+      # refuses to boot on a database behind its head. A request can still reach the previous
+      # deployment (#263, below). That one boots on a database ahead of its own head and
+      # answers 200 "ahead" (ADR-070), so only "current" passes. A red step here also stops
+      # the web deploy below, so the web never goes live against an API that failed its read.
       - name: Read /health on the production host
         env:
           API_ORIGIN: ${{ vars.API_ORIGIN }}
