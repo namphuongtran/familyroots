@@ -44,7 +44,7 @@ graph TB
 | FCM | out | Firebase Admin SDK; tokens in `user_fcm_tokens` |
 | Sentry | out | DSN, error + trace ingest |
 | GEDCOM consumers | out | GEDCOM 5.5.1 file (ADR-020) |
-| GitHub Actions | in | Render deploy hook, Vercel CLI, `pg_dump` backup |
+| GitHub Actions | in | `release.yml`: `alembic upgrade head`, Vercel CLI deploys, `/health` read; `pg_dump` backup |
 
 ## 3.3 In scope / out of scope
 

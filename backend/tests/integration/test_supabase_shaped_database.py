@@ -128,8 +128,8 @@ class SupabaseShapedDb:
 
 
 def _alembic(url: str, *args: str) -> subprocess.CompletedProcess[str]:
-    """Run the Alembic CLI as its own process, as ``render.yaml``'s ``preDeployCommand``
-    does, so the chain runs as *url*'s login.
+    """Run the Alembic CLI as its own process, as ``release.yml``'s ``deploy`` job does,
+    so the chain runs as *url*'s login.
 
     ``migrations/env.py`` takes its URL from ``settings.DATABASE_URL``, a cached singleton
     the session fixture already pointed at the suite's database, so an in-process run

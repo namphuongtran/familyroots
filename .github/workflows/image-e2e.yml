@@ -1,15 +1,17 @@
 name: Image E2E
 
-# Builds both Docker images, boots the backend image the way infra/render/render.yaml runs it,
-# and runs the authenticated e2e (`pnpm test:e2e:auth`) against that container (#193).
+# Builds both Docker images, boots the backend image under APP_ENV=production, and runs the
+# authenticated e2e (`pnpm test:e2e:auth`) against that container (#193).
+#
+# The images are for docker-compose.yml and for this check. Production does not run them: the
+# backend and web deploy to Vercel from a published release (docs/ops/deployment.md).
 #
 # Why the built image and not the source tree: on 2026-08-22 a built image refused every
 # production boot while every test, all run from source, stayed green, and compose's `api`
 # service hid it too, because it bind-mounts ./backend/app over the installed package and runs
 # APP_ENV=development (docs/ops/migrations.md, "Boot-time migration gate"). So nothing here uses
 # compose's `api` service. The backend runs the image's own CMD with APP_ENV=production, and the
-# image's own `alembic upgrade head` migrates the application database, as render.yaml's
-# `preDeployCommand` does.
+# image's own `alembic upgrade head` migrates the application database.
 #
 # docs/ops/local-supabase.md holds the rest: "The image e2e job in CI" for every value the backend
 # gets and why, "Running it beside docker-compose.yml" for the two name-resolution readings, and
@@ -25,7 +27,6 @@ on:
       - "scripts/**"
       - "Makefile"
       - "docker-compose.yml"
-      - "infra/render/**"
       - ".github/workflows/image-e2e.yml"
   pull_request:
     branches: [main]
@@ -36,7 +37,6 @@ on:
       - "scripts/**"
       - "Makefile"
       - "docker-compose.yml"
-      - "infra/render/**"
       - ".github/workflows/image-e2e.yml"
 
 permissions:
@@ -185,7 +185,7 @@ jobs:
               || echo "::warning::$image was not pre-pulled, so its pull time is inside the stack step. Update SUPABASE_IMAGES."
           done
 
-      # Render builds with `dockerContext: ./backend` and `dockerfilePath: ./backend/Dockerfile`.
+      # The context and Dockerfile docker-compose.yml's `api` service builds.
       - name: Build the backend image
         run: docker build --tag "$API_IMAGE" backend
 
@@ -199,8 +199,7 @@ jobs:
             --build-arg NEXT_PUBLIC_API_URL="http://127.0.0.1:$API_PORT/api/v1" \
             web
 
-      # One environment for the migration and the server, as on Render, where
-      # `preDeployCommand` runs with the service's own variables. Every value satisfies the
+      # One environment for the migration and the server. Every value satisfies the
       # production validator (backend/app/core/config.py, `_enforce_production_safety`); none
       # relaxes it. The database host is `pgdb`, a name on the compose network.
       # RATE_LIMIT_TRUST_FORWARDED_FOR is false because nothing proxies this container.

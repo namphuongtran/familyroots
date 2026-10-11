@@ -19,8 +19,6 @@ infra/
 │       ├── supabase_project.py
 │       ├── firebase_project.py
 │       └── github_settings.py
-├── render/
-│   └── render.yaml      # Render.com config-as-code
 ├── supabase/
 │   └── seed.sql            # empty scaffold — no schema, no policies. See below
 ├── firebase/
@@ -57,9 +55,11 @@ cd infra/pulumi && uv run pulumi destroy
 - `Pulumi.staging.yaml` — Staging environment
 - `Pulumi.prod.yaml` — Production environment
 
-## Render
+## Deployment
 
-Backend API is deployed on [Render](https://render.com/) using native `render.yaml` config-as-code.
+Nothing under `infra/` deploys the apps. The backend and web run on Vercel, configured by
+`backend/vercel.json` and `web/vercel.json`, and a published GitHub Release deploys both through
+`.github/workflows/release.yml`. See [docs/ops/deployment.md](../docs/ops/deployment.md).
 
 ## Supabase
 

@@ -22,8 +22,8 @@ flowchart TD
        GH[GitHub Actions] -->|Build/Test/Deploy| B
        GH -->|Build/Test/Deploy| W
        GH -->|Auto Publish| M_STORES[App Store / Play Store]
-       R[Render] --> B
-       V[Vercel] --> W
+       V[Vercel] --> B
+       V --> W
 ```
 
 ## Communication Model

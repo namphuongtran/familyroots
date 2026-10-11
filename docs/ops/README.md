@@ -16,4 +16,4 @@ This folder captures the operational knowledge needed to run and support FamilyR
 
 ## Usage
 - Use these docs when planning deploys, rotating secrets, running migrations, or responding to incidents.
-- Keep them aligned with current CI/CD, Render, Vercel, Supabase, and Pulumi behavior.
+- Keep them aligned with current CI/CD, Vercel, Supabase, and Pulumi behavior.

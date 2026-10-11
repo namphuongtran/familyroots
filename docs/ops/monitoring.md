@@ -21,8 +21,9 @@ W3C `traceparent` header (ADR-033).
   payload is `{"status":"ok","database":"connected","migrations":"current"}`.
 - Returns a 503 `degraded` response when the DB is unreachable
   (`{"status":"degraded","database":"unreachable"}`) **or** when migrations are
-  not at head (the `migrations` field reports the mismatch). Render uses it as
-  the `healthCheckPath`.
+  not at head (the `migrations` field reports the mismatch). `release.yml` reads it
+  after deploying the API and fails unless `migrations` is `current`. Vercel does not
+  call it ([deployment.md](deployment.md), "The release workflow, step by step").
 
 ## Metrics — `GET /internal/metrics` (ADR-033)
 Prometheus RED metrics (`http_requests_total`, `http_request_duration_seconds`, …) for
@@ -38,9 +39,11 @@ the whole ASGI stack. **Disabled by default**; there is no scraper deployed yet.
 - **The token has an enforced floor (ADR-040): at least 32 characters and at least 8
   distinct characters.** With `METRICS_ENABLED=true`, a token below it makes the app
   **refuse to boot**, with an error naming the setting and the generator command. On
-  Render that is a failed deploy and the previous release keeps serving — the same
-  posture as an unmigrated database. Settings are read once per process (no reload
-  path), so this can never drop a running instance mid-flight.
+  Vercel that does not keep the previous release serving: the deployment is live, and
+  every cold start of it fails until the variable is fixed — the same posture as an
+  unmigrated database ([deployment.md](deployment.md), "The release workflow, step by
+  step"). Settings are read once per process (no reload path), so this can never drop
+  a running instance mid-flight.
 
   This is a **length** floor, not an entropy floor, and the difference matters when
   you pick a value: 32 characters of `openssl rand -hex 32` output is 128 bits, while
@@ -119,21 +122,23 @@ the header for that case. → ADR-033.
 - 5xx rate and the `internal_error` code (unhandled exceptions).
 - Auth-surface 401/403 spikes (now emitted with stable codes — see the error envelope
   in the contracts docs).
-- Migration/deploy failures (the Render pre-deploy migration blocks the release; a
-  failed deploy is the signal).
+- Migration/deploy failures. A failed migration fails `release.yml` before anything is
+  deployed. A red `/health` read after the API deploy means production already serves the
+  new deployment, so roll back ([deployment.md](deployment.md), "Rollback").
 - Scheduler: the anniversary-notification job uses a Postgres advisory lock so only one
   replica runs it; non-winning replicas no-op.
 
 ## Gaps / TODO
-- `SENTRY_DSN` is not yet wired in `render.yaml` (go-live item) — until then production
-  emits no Sentry events.
+- `SENTRY_DSN` is a go-live item: [secrets.md](secrets.md), "Known gaps", lists every Vercel
+  variable as still outstanding ([deployment.md](deployment.md), "Go-live checklist" C). Until
+  it is set, production emits no Sentry events.
 - RED metrics now **exist** (`/internal/metrics`, opt-in) but nothing scrapes them:
   no Prometheus/Grafana deployment, no dashboards, and no alerting thresholds. Until a
   scraper exists, the endpoint is preparation only and Sentry remains the dashboard.
-- `METRICS_ENABLED` / `METRICS_TOKEN` are not wired in `render.yaml`, so production
-  currently serves 404 on `/internal/metrics`. When they are wired, `METRICS_TOKEN`
-  must clear the ADR-040 floor or the deploy will fail at boot — generate it with
-  `openssl rand -hex 32`.
+- The go-live checklist leaves `METRICS_ENABLED` unset ([deployment.md](deployment.md),
+  "Go-live checklist" C), so production serves 404 on `/internal/metrics`. When it is
+  set, `METRICS_TOKEN` must clear the ADR-040 floor or every cold start fails at boot —
+  generate it with `openssl rand -hex 32`.
 - `METRICS_TOKEN`'s floor is a **length** floor, not an entropy measurement (ADR-040).
   A 32-character hand-composed token passes and may be weak. There is no fix from
   inside the process; the mitigation is to generate the value.

@@ -8,9 +8,9 @@ from app.core.config import Settings
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        # Render injects bare postgresql:// via fromDatabase.connectionString
+        # Supabase's connection strings carry bare postgresql://
         ("postgresql://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),
-        # Render historically also used the postgres:// scheme
+        # The older postgres:// alias
         ("postgres://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),
         # Legacy developer .env files
         ("postgresql+asyncpg://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),

@@ -1,15 +1,18 @@
 """Fail when a second, unexecuted set of schema or security DDL appears under `infra/`.
 
 **The module name is narrower than what this file asserts, and the name is kept on purpose.**
-Prose in two files names the module: `docs/ops/migrations.md:222,240` and
-`test_migrations_doc_matches_alembic.py:40`. Renaming the module would strand both. A
-rename is worth doing when whoever owns those files is next in them.
+Five other files name the module, read on 2026-10-11: `docs/ops/migrations.md` § "Known
+risks", twice (lines 323 and 341), `docs/guides/iac-guide.md:56`, `infra/README.md:126`,
+`test_migrations_doc_matches_alembic.py:40` and `test_scripts_sql_is_sanctioned.py:5`.
+Renaming the module would strand all five. A rename is worth doing when whoever owns those
+files is next in them.
 
-**One of those pointers was wrong, and it is corrected here on 2026-08-26.** This
-docstring said `docs/ops/migrations.md:187`. Read at source, line 187 of
-`migrations.md` is prose about a package being neither importable nor installed, and it
-did not name this module. A line number into a file that grows at the top is the wrong
-anchor for a section.
+**The `migrations.md` pointer has gone stale twice.** Until 2026-08-26 this docstring said
+`docs/ops/migrations.md:187`, a line about a package being neither importable nor installed.
+It then said `:222,240`, and at `c39ad2e` (2026-10-10) those lines held a table row and a
+sentence about deleted policies, while the module was named on 236 and 254 (#254). A line
+number into a file that grows at the top is the wrong anchor for a section, so the section
+now leads and its line numbers carry the date they were read.
 
 ## Part 1 — table DDL (2026-08-22)
 

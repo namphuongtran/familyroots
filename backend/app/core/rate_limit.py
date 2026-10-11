@@ -55,12 +55,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _client_ip(self, request: Request) -> str:
         """Resolve the client IP, honoring X-Forwarded-For only when trusted.
 
-        Behind a single trusted proxy/LB (e.g. Render) that *appends* the peer
-        it observed, the trustworthy client IP is the RIGHTMOST X-Forwarded-For
-        entry. The leftmost entries are client-supplied and spoofable — using
-        them would let an attacker rotate a fake IP per request to bypass the
-        limit and inflate bucket memory. (Assumes exactly one trusted appending
-        proxy; multiple proxies would need a configurable trusted-hop count.)
+        Behind a single trusted proxy/LB that *appends* the peer it observed,
+        or one that overwrites the header with it (Vercel), the trustworthy
+        client IP is the RIGHTMOST X-Forwarded-For entry. The leftmost entries
+        are client-supplied and spoofable — using them would let an attacker
+        rotate a fake IP per request to bypass the limit and inflate bucket
+        memory. (Assumes exactly one trusted proxy; multiple proxies would need
+        a configurable trusted-hop count.)
         """
         return (
             resolve_client_ip(
