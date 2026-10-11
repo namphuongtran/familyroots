@@ -179,7 +179,7 @@ export function BackofficeSidebar({ locale }: { locale: string }) {
             <Menu className="h-5 w-5" />
           </Dialog.Trigger>
           <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+            <Dialog.Overlay className="bg-scrim fixed inset-0 z-40" />
             <Dialog.Content
               aria-describedby={undefined}
               className="bg-muted text-foreground fixed inset-y-0 left-0 z-50 flex w-[min(85vw,16.5rem)] flex-col overflow-y-auto"

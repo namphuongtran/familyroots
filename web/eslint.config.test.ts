@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { ESLint, type Linter } from 'eslint'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { GOLD_IS_NEVER_TEXT, PALETTE_HAS_NO_DARK_VALUE } from './eslint.config.mjs'
+import {
+  GOLD_IS_NEVER_TEXT,
+  PALETTE_HAS_NO_DARK_VALUE,
+  SINGLE_COLOUR_HAS_NO_DARK_VALUE,
+} from './eslint.config.mjs'
 
 /**
  * Whether `pnpm lint` refuses a Tailwind default-palette class, read on its outcome: issue #199.
@@ -16,6 +20,10 @@ import { GOLD_IS_NEVER_TEXT, PALETTE_HAS_NO_DARK_VALUE } from './eslint.config.m
  * installed `tailwindcss/theme.css` on the `-50` step. The last case of the first block takes them
  * from every step, so a config that read a shorter list, or typed one from memory, leaves a family uncaught
  * and the case names it.
+ *
+ * **#238 added `white` and `black`**, which have no step for the `-50` read to find. The second
+ * block reads them the same way, independently: every `--color-<name>` in the theme with no step.
+ * Its last block holds the `whitespace-*` utilities, which share the letters and are no colour.
  *
  * **Naming.** `eslint.config.test.ts` runs under `vitest --project unit` (its include glob in
  * `vitest.config.mts` names it), beside the config it reads, as `playwright.config.test.ts` does.
@@ -134,5 +142,114 @@ describe('what the palette rule leaves alone', () => {
     expect(await restrictedMessages(plant('<div className="text-gold-500" />'))).toEqual([
       { line: 4, message: GOLD_IS_NEVER_TEXT },
     ])
+  })
+})
+
+/**
+ * #238. `white` and `black` are one value each, with no `-50` step, so the palette rule above
+ * never saw them, and neither has a dark value: a `bg-white` header stays white on a dark screen.
+ */
+const SINGLE_CAUGHT_ON_LINE_4: Restricted[] = [
+  { line: 4, message: SINGLE_COLOUR_HAS_NO_DARK_VALUE },
+]
+
+describe('a white or black colour class fails lint', () => {
+  it.each([
+    ['bg-white', '<header className="border-b bg-white px-6" />'],
+    ['text-white', "<button className={cn('bg-destructive text-white', x)} />"],
+    ['bg-black/40', '<div className={`fixed inset-0 bg-black/40 ${x}`} />'],
+  ])('%s, naming the line', async (_class, expression) => {
+    expect(await restrictedMessages(plant(expression))).toEqual(SINGLE_CAUGHT_ON_LINE_4)
+  })
+
+  it.each([
+    ['a variant', 'hover:bg-white'],
+    ['a gradient stop', 'from-black/40'],
+    ['an opacity modifier', 'bg-white/80'],
+    ['a ring offset', 'ring-offset-white'],
+    ['a one-side border', 'border-t-black'],
+    ['the important suffix', 'text-white!'],
+  ])('behind %s', async (_shape, className) => {
+    expect(await restrictedMessages(plant(`<div className="p-2 ${className}" />`))).toEqual(
+      SINGLE_CAUGHT_ON_LINE_4,
+    )
+  })
+
+  it('named as a variable in a style, the same colour by another name', async () => {
+    const expression = "<div style={{ background: 'var(--color-black)' }} />"
+    expect(await restrictedMessages(plant(expression))).toEqual(SINGLE_CAUGHT_ON_LINE_4)
+  })
+
+  /**
+   * Read independently of the config: every `--color-<name>` the installed theme declares that
+   * ends in no step. At tailwindcss 4.3.3 that is `black` and `white`, and a colour a later
+   * Tailwind adds the same way is named here if the config does not read it.
+   */
+  it('for every single-value colour the installed Tailwind declares', async () => {
+    const require = createRequire(import.meta.url)
+    const theme = readFileSync(require.resolve('tailwindcss/theme.css'), 'utf8')
+    const classes = [...theme.matchAll(/--color-([a-z-]+):/g)]
+      .map(([, name]) => name)
+      .filter((name) => !/-\d+$/.test(name))
+      .map((name) => `bg-${name}`)
+    expect(classes).toEqual(expect.arrayContaining(['bg-black', 'bg-white']))
+
+    const source = classes.map((c, i) => `export const c${i} = '${c}'`).join('\n')
+    const caught = new Set(
+      (await restrictedMessages(source))
+        .filter((m) => m.message === SINGLE_COLOUR_HAS_NO_DARK_VALUE)
+        .map((m) => m.line),
+    )
+    expect(classes.filter((_c, i) => !caught.has(i + 1))).toEqual([])
+  })
+
+  it('beside a palette class, each rule naming its own', async () => {
+    const expression = '<div className="bg-gray-500 bg-white" />'
+    const messages = await restrictedMessages(plant(expression))
+    expect(messages).toHaveLength(2)
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        { line: 4, message: PALETTE_HAS_NO_DARK_VALUE },
+        { line: 4, message: SINGLE_COLOUR_HAS_NO_DARK_VALUE },
+      ]),
+    )
+  })
+})
+
+describe('what the white and black rule leaves alone', () => {
+  it.each([
+    'whitespace-nowrap',
+    'whitespace-pre-line',
+    'whitespace-pre-wrap',
+    'whitespace-normal',
+    'whitespace-pre',
+    'whitespace-break-spaces',
+  ])('%s, which is no colour', async (className) => {
+    expect(await restrictedMessages(plant(`<p className="${className}" />`))).toEqual([])
+  })
+
+  it.each([
+    ['the scrim token', '<div className="fixed inset-0 bg-scrim" />'],
+    [
+      'the scrim as a gradient stop',
+      '<div className="bg-linear-to-t from-scrim to-transparent" />',
+    ],
+    ['a card at an alpha', '<span className="bg-card/80 hover:bg-card" />'],
+    [
+      'the ink on a destructive fill',
+      '<span className="bg-destructive text-destructive-foreground" />',
+    ],
+    ['a colour that follows its context', '<span className="border-current to-transparent" />'],
+  ])('%s', async (_subject, expression) => {
+    expect(await restrictedMessages(plant(expression))).toEqual([])
+  })
+
+  it('a comment that records a removed class', async () => {
+    const source = [
+      '// #238: the header was `bg-white`, and the scrims `bg-black/40`',
+      "export const surface = 'card'",
+      '',
+    ].join('\n')
+    expect(await restrictedMessages(source)).toEqual([])
   })
 })

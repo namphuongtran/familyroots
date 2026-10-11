@@ -44,7 +44,7 @@ export function EventCard({ event, className }: EventCardProps) {
             <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">{event.description}</p>
           )}
         </div>
-        <span className="text-muted-foreground shrink-0 rounded border border-current bg-white/70 px-1.5 py-0.5 text-[10px]">
+        <span className="text-muted-foreground bg-card/70 shrink-0 rounded border border-current px-1.5 py-0.5 text-[10px]">
           {t(`type.${event.event_type}`)}
         </span>
       </div>

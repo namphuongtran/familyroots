@@ -952,7 +952,8 @@ Four harnesses, one gate each:
   `scripts/**`, which holds the legacy gate's test, `playwright.config.test.ts`, which reads
   whether an e2e run uses a server it did not start (#192) and which name the authenticated
   project reaches its server by (#231), and `eslint.config.test.ts`, which
-  reads whether a Tailwind default-palette class fails lint (#199).
+  reads whether a Tailwind default-palette class fails lint (#199), and a `white` or `black` one
+  (#238).
 - `pnpm test:component` — Vitest, jsdom, `*.test.tsx`. React Testing Library + MSW
   (`src/shared/testing/`); MSW handlers build real envelopes, so a test cannot invent a
   response shape.
@@ -1165,6 +1166,13 @@ pnpm test:e2e:auth
 `http://familyroots-web.test:3102` rather than `127.0.0.1`. Its backend values differ from the
 recipe above, `CORS_ORIGINS` and `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
+
+**Twenty-seven tests, 2026-10-11 (#238)**: three `auth-setup` logins and twenty-four
+`auth-chromium` cases, one run reading `27 passed` with no `429` in the backend log. #238 added
+two to `backoffice.auth.spec.ts`, each one load read under both schemes: the `(dashboard)`
+header's `card` ground, and the backoffice drawer's `scrim`, read off the element painted beside
+the open drawer. So the count was 25 before #238, not the 24 below: the case #256 added in
+`document-upload.auth.spec.ts` was not counted here.
 
 **Twenty-four tests, re-read 2026-10-09 (#202): the walks take their link from the mail.** The
 local stack now renders `supabase/templates/` (ADR-063 § 1), so the confirmation mail links

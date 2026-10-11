@@ -32,7 +32,7 @@ export const MemberNode = memo(function MemberNode({
         // decision is to stop encoding gender in border colour rather than add
         // a token: every node now takes the same `border-border` a `data.gender`
         // of `'unknown'` already used.
-        'border-border w-36 bg-white shadow-xs transition-all hover:shadow-md',
+        'border-border bg-card w-36 shadow-xs transition-all hover:shadow-md',
         selected && 'ring-ring ring-2 ring-offset-1',
         isDeceased && 'opacity-70',
       )}

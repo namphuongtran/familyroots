@@ -36,6 +36,10 @@ const TOKEN = {
   muted: { light: 'rgb(243, 244, 246)', dark: 'rgb(36, 34, 26)' },
   /** `--color-primary`, the `FR` mark ADR-046 kept on that ground: `#3e5c38` / `#a3c398`. */
   primary: { light: 'rgb(62, 92, 56)', dark: 'rgb(163, 195, 152)' },
+  /** `--color-card`, the `(dashboard)` header's ground since #238: `#ffffff` / `#1d1b15`. */
+  card: { light: 'rgb(255, 255, 255)', dark: 'rgb(29, 27, 21)' },
+  /** `--color-scrim`, behind every dialog since #238: spec § 2.1 and § 2.2, each with its alpha. */
+  scrim: { light: 'rgba(29, 27, 22, 0.44)', dark: 'rgba(8, 7, 5, 0.62)' },
 }
 
 const BACKOFFICE_PATH = '/vi/backoffice/dashboard'
@@ -165,6 +169,57 @@ test.describe('the backoffice dashboard, as an admin', () => {
     }))
     expect(marker.classes).not.toContain('dark')
     expect(marker.theme).toBeNull()
+  })
+
+  /**
+   * #238, the two surfaces that were `white` and `black`, read the way the case above reads the
+   * rail: one load, both schemes, no reload. `white` and `black` have no dark value, so before
+   * #238 each read the same under both, and the dark reading is the one that tells them apart.
+   */
+  test.describe('the surfaces that were white and black follow the scheme (#238)', () => {
+    test('the (dashboard) header takes the card ground', async ({ page }) => {
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.goto('/vi/dashboard')
+      await expect(page).toHaveURL(/\/vi\/dashboard$/)
+
+      // `Header` is the one `<header>` the `(dashboard)` shell renders, so the one banner.
+      const header = page.getByRole('banner')
+      await expect(header).toHaveCSS('background-color', TOKEN.card.light)
+
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await expect(header).toHaveCSS('background-color', TOKEN.card.dark)
+    })
+
+    test("the drawer's scrim takes the scrim token", async ({ page }) => {
+      await page.setViewportSize(NARROW)
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.goto(BACKOFFICE_PATH)
+      await page.getByRole('button', { name: MENU_OPEN }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+
+      // What a person sees beside the open drawer: the element painted at the point the drawer
+      // case above taps to dismiss it, read without naming the overlay's markup.
+      const beside = { x: NARROW.width - 8, y: NARROW.height / 2 }
+      const painted = () =>
+        page.evaluate(({ x, y }) => {
+          const element = document.elementFromPoint(x, y)!
+          return {
+            inDrawer: element.closest('[role="dialog"]') !== null,
+            background: getComputedStyle(element).backgroundColor,
+          }
+        }, beside)
+
+      // Both schemes are read before either is judged, so a failure quotes the two readings. The
+      // overlay mounts with the drawer and carries no transition, so neither read is mid-flight.
+      const light = await painted()
+      await page.emulateMedia({ colorScheme: 'dark' })
+      const dark = await painted()
+
+      expect({ light, dark }).toEqual({
+        light: { inDrawer: false, background: TOKEN.scrim.light },
+        dark: { inDrawer: false, background: TOKEN.scrim.dark },
+      })
+    })
   })
 
   test.describe('at 320dp and 200% text scale', () => {
