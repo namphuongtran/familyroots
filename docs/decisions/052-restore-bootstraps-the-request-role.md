@@ -5,6 +5,10 @@
 Accepted, shipped (2026-08-22). The failure was measured first and
 declining to repair it, because the repair contained this decision.
 
+**Amended 2026-10-11 (#283): the bootstrap also replays migrations `041`, `042` and `043`, so a
+restore into a Supabase project works, and it may be run there as `postgres`.** See
+[the amendment](#amendment-2026-10-11-283-a-restore-into-a-supabase-project).
+
 **This ADR ships operations code, not application code**: `scripts/restore_bootstrap_role.sql` (new)
 and a fourth check in `scripts/restore_drill.sh`. **No backend file changed**, and that absence is
 part of the decision. Section "What was considered and rejected" says why a migration was the wrong
@@ -81,6 +85,11 @@ superuser bypasses RLS. Every one of them passes on a database the application c
    `IF NOT EXISTS` block migration 002 uses, and replays the seven grant statements from
    `backend/migrations/versions/002_rls_documents_pilot.py:44-50` and
    `backend/migrations/versions/026_rls_activation_grants.py:30-37`. Every statement is idempotent.
+
+   > **Amended 2026-10-11 (#283).** The file now also replays `041`, `042` and `043`, for a restore
+   > into a Supabase project, and declares four `ALTER TABLE ... DISABLE ROW LEVEL SECURITY`
+   > statements besides its role and grant DDL. See
+   > [the amendment](#amendment-2026-10-11-283-a-restore-into-a-supabase-project).
 
 2. **It runs after `pg_restore`, not before.** `GRANT ... ON ALL TABLES IN SCHEMA public` needs the
    tables to exist. The current dumps carry no `GRANT`, so the restore itself does not need the role,
@@ -243,11 +252,96 @@ name genuinely configurable is a backend change and is not this ADR's.
 added, and the fenced `backend/**` tree is untouched. Production has still never been dumped or
 restored, which stays an open gap in [`../ops/backup-restore.md`](../ops/backup-restore.md).
 
+## Amendment 2026-10-11 (#283): a restore into a Supabase project
+
+### What was wrong
+
+[ADR-066](066-the-application-database-lives-in-the-supabase-project.md) moved the application
+database into the Supabase project, and the chain gained three migrations whose work a dump does not
+carry. The restored `alembic_version` already reads head, so none of them runs again:
+
+- **`041`** grants the migrating login `SET` on `familyroots_app`. Supabase's `postgres` is not a
+  superuser. As the role's creator it holds ADMIN without SET, so without the grant every request
+  fails with `permission denied to set role "familyroots_app"`. Role membership is a cluster
+  object, and the dump has none.
+- **`042`** revokes everything `anon` and `authenticated` hold in `public`. `pg_restore
+  --no-privileges` creates every table as the restoring login, so the login's default privileges
+  hand both roles whatever the project's defaults grant, ALL at worst. `user_profiles` has no RLS,
+  so the Data API could then read every user's email.
+- **`043`** turns RLS off on `alembic_version`, `clans`, `user_profiles` and `user_fcm_tokens`. The
+  project's `ensure_rls` event trigger fires on every `CREATE TABLE` that `pg_restore` issues, so
+  the restore turns RLS back on for exactly those four, and the request role reads no row from them.
+
+The file also said "Run as a superuser", and a Supabase project offers none.
+
+### What changed
+
+1. **The file replays all three**, as sections 4, 5 and 6, copied from the migrations. Section 4
+   checks `pg_has_role(current_user, 'familyroots_app', 'SET')` first, so it grants nothing where
+   the login can already enter the role. It names the login through `format('%I')` and never
+   writes `CURRENT_USER`, for the `supautils` crash `041` records. Section 5 skips a role that does
+   not exist. Section 6 is `ALTER TABLE IF EXISTS ... DISABLE ROW LEVEL SECURITY` on 043's four
+   tables, and on no other.
+2. **It may run as one of two logins.** On plain Postgres, a superuser, as before. On a Supabase
+   project, `postgres`, the login the application and the migrations use, which holds CREATEROLE
+   and ADMIN on `familyroots_app`. Run it as the login that ran `pg_restore`, because section 5 can
+   change only that login's default privileges.
+3. **On plain Postgres as a superuser, the three new sections change nothing.** A superuser may
+   already `SET ROLE`, there is no `anon` or `authenticated`, and RLS is already off on the four
+   tables. The drill restores into plain Postgres and is unchanged.
+4. **`backend/tests/unit/test_scripts_sql_is_sanctioned.py` gains a class, `rls_off`,** split from
+   `policy`, and sanctions this file for `role`, `grant` and `rls_off`. Sanctioning `policy` would
+   also have admitted `DROP POLICY` and `CREATE POLICY` here.
+5. **A test restores the chain into a Supabase-shaped database and reads the outcomes.**
+   `backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py` dumps the migrated chain
+   with `--no-owner --no-privileges`, restores it as a non-superuser `CREATEROLE` login into a
+   database where `anon` and `authenticated` hold Supabase's legacy default grants and `ensure_rls`
+   is installed, and runs this file with `psql` as the same login. It reads, by running statements:
+   the login enters the request role and each clan sees only its own rows; both Data API roles are
+   refused `SELECT` and `INSERT` on every relation, and on a table and a sequence created afterwards;
+   the request role reads a row from each of the four tables. A fourth reading compares every
+   table's RLS state with the dump's, and a fifth runs the file twice on plain Postgres as a
+   superuser and finds no membership added. Backend CI installs `postgresql-client-18` for it,
+   because the runner's own `pg_dump` is 16 (#282).
+
+### Measured 2026-10-11
+
+- Against the file as it stood before this amendment, the test failed all three outcomes:
+  `42501: permission denied to set role "familyroots_app"` for both clans; `INSERT audit_logs`
+  reaching a `NOT NULL` check, so past the privilege layer, among 34 tries `anon` was not refused;
+  and `ran, 0 row(s)` from each of the four tables.
+- Removing section 4, 5 or 6 alone failed only the tests that read that section's outcome. Removing
+  only the global default-privilege revokes failed only the `global` shape's created-afterwards
+  test, and removing only the per-schema ones failed only the `per_schema` shape's. Adding
+  `DISABLE ROW LEVEL SECURITY` on `persons` failed the RLS-state comparison. Dropping section 4's
+  `SET` check failed the plain-Postgres test, which found a self-grant added for the superuser.
+- **Two of section 5's statements have no reading.** The chain creates no sequence, so
+  `REVOKE ALL ON ALL SEQUENCES` acts on nothing yet. And `PUBLIC` keeps Postgres's default EXECUTE
+  on functions, which `anon` inherits, so `REVOKE ALL ON ALL ROUTINES` changes nothing a call can
+  show. `042` carries both for the same reasons, and the file stays equal to it.
+
+### What it still does not cover
+
+- **A project that never held `familyroots_app`.** There section 1 creates the role, which gives
+  `postgres` its creator's ADMIN, and section 4 grants SET. That is `041`'s own reading of 2026-10-10,
+  not a measurement of this file: the role is a cluster object shared with the rest of the suite, so
+  the test copies a creator's options onto the existing role.
+- **Which schemas a backup holds**, and so whether a production dump restores at all. A dump taken
+  with no `--schema` carries Supabase's own schemas, and on the hosted project `public` also holds
+  `rls_auto_enable`, the function behind `ensure_rls`. That is #285. This file's test restores only
+  what the chain creates.
+- **A mechanical check that the file stays equal to the migrations.** The rule in its header now
+  names five migrations, and still nothing enforces it. § Consequences above still owes that.
+
 ## Sources
 
 - `scripts/db_backup.sh:40` — the `pg_dump` line that drops owners and privileges.
 - `scripts/restore_drill.sh` — the drill, its four checks, and the bootstrap invocation.
 - `scripts/restore_bootstrap_role.sql` — the bootstrap itself.
+- `backend/migrations/versions/041_grant_app_role_to_login.py:64-87`,
+  `042_close_data_api_on_public.py:69-98`, `043_rls_off_outside_layer_2.py:51-56` — what the
+  2026-10-11 amendment replays.
+- `backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py` — the amendment's readings.
 - `backend/migrations/versions/002_rls_documents_pilot.py:38,44-50` — role creation and the first
   four grant statements.
 - `backend/migrations/versions/026_rls_activation_grants.py:30-37` — the function and sequence grants.

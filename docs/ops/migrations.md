@@ -108,13 +108,17 @@ functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3
 ADR-008); grants only, no table/RLS change, reversible.
 
 > **A migration that changes what `familyroots_app` may do must also change
-> `scripts/restore_bootstrap_role.sql`, in the same pull request.** That file replays what
-> migrations `002` and `026` grant, so that a restore into a cluster which never held the role
-> produces a database the application can open. A dump carries neither the role, which is a cluster
-> object, nor the grants, which `--no-privileges` drops. Nothing enforces the two staying equal.
-> `scripts/restore_drill.sh` check 4 catches a missing table, function, or sequence grant, because
-> it runs a real query as the role; it would not catch a privilege class no query exercises. Added
-> 2026-08-22, [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).
+> `scripts/restore_bootstrap_role.sql`, in the same pull request.** So must one that changes what
+> `anon` and `authenticated` may do, or which tables run without RLS. That file replays what
+> migrations `002`, `026`, `041`, `042` and `043` do, so that a restore into a cluster which never
+> held the role, or into a Supabase project, produces a database the application can open. A
+> dump carries neither the role, which is a cluster object, nor the grants, which
+> `--no-privileges` drops, and its `alembic_version` already reads head. Nothing enforces the file
+> staying equal to the chain. `scripts/restore_drill.sh` check 4 catches a missing table,
+> function, or sequence grant, because it runs a real query as the role; it would not catch a
+> privilege class no query exercises. `backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py`
+> catches a gap in what `041`, `042` and `043` need. Added 2026-08-22,
+> [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md), amended 2026-10-11 (#283).
 
 `027_rls_events_branches` enables the clan-isolation RLS policy on `events` + `branches` (SP-3 Phase 2); reversible (drop policy + disable).
 

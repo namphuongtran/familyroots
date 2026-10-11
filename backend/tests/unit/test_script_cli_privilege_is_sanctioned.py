@@ -411,7 +411,7 @@ _SANCTIONED: dict[str, _Sanction] = {
             "carries neither --clean nor --create, so it is class restore and not database: "
             "the drop and the create are done at :116 and :122 through psql -c, which is "
             "the inline guard's subject, not this one's. sql_file: :149 runs "
-            "scripts/restore_bootstrap_role.sql, whose nine statements are the `.sql` guard's "
+            "scripts/restore_bootstrap_role.sql, whose statements are the `.sql` guard's "
             "subject; ADR-052 section 1 is the decision that the role and its grants have to "
             "be replayed outside the Alembic chain after a restore. It is sanctioned for "
             "nothing else. A createuser, a dropdb, or a pg_restore --clean added here fails "
@@ -698,7 +698,7 @@ def test_no_script_invokes_a_cli_that_confers_an_escalating_role_attribute() -> 
             *offences,
             "No decision sanctions any of these, and _SANCTIONED cannot override this check. "
             "The request role is NOBYPASSRLS by design (ADR-052; "
-            "scripts/restore_bootstrap_role.sql:34) — RLS layer-2 (ADR-008) means nothing "
+            "scripts/restore_bootstrap_role.sql:52) — RLS layer-2 (ADR-008) means nothing "
             "against a role that bypasses it. This is the same set of attributes "
             "test_scripts_sql_is_sanctioned.py forbids in SQL text; the only difference is "
             "that here they are spelled as command-line flags.",

@@ -66,6 +66,17 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --dev
 
+      # tests/integration/test_restore_bootstrap_on_supabase_shape.py runs pg_dump, pg_restore
+      # and psql, and pg_dump refuses a server newer than itself. The runner's own pg_dump is
+      # 16 (#282), so this installs 18, the service's major, into /usr/lib/postgresql/18/bin,
+      # where that test finds it. Re-pin with the service image.
+      - name: Install postgres client 18
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -sSf -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-18
+
       # The gate is one script shared with local dev (scripts/check.sh): CI and
       # humans always run the identical, lockfile-pinned commands — a branch
       # that fails here fails locally and vice versa.

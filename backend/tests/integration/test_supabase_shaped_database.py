@@ -210,7 +210,9 @@ def _grant_creator_options(admin: sa.Connection, login: str, opts: tuple[bool, b
 
 
 @contextmanager
-def _supabase_shaped_database(shape: str) -> Iterator[SupabaseShapedDb]:
+def _supabase_shaped_database(shape: str, *, migrate: bool = True) -> Iterator[SupabaseShapedDb]:
+    """Build the shape, then run the chain as its login. With ``migrate`` false the
+    database is left empty, for a restore to fill (``test_restore_bootstrap_on_supabase_shape``)."""
     suffix = uuid.uuid4().hex[:10]
     login = f"fr_supa_login_{suffix}"
     no_grant_role = f"fr_no_grant_{suffix}"
@@ -264,7 +266,8 @@ def _supabase_shaped_database(shape: str) -> Iterator[SupabaseShapedDb]:
         with _autocommit(admin_url) as admin:
             admin.execute(sa.text(_ENSURE_RLS))
 
-        _alembic_ok(login_url_str, "upgrade", "head")
+        if migrate:
+            _alembic_ok(login_url_str, "upgrade", "head")
 
         yield SupabaseShapedDb(
             shape=shape,
@@ -499,19 +502,17 @@ def _public_relations(conn: sa.Connection) -> dict[str, str]:
     return {str(name): _RELKIND_NOUN[str(kind)] for name, kind in rows}
 
 
-@pytest.mark.parametrize("api_role", _DATA_API_ROLES)
-def test_the_data_api_roles_are_refused_select_and_insert_on_every_table(
-    supabase_db: SupabaseShapedDb, api_role: str
-) -> None:
-    seeded = _seed_user_rows(supabase_db.login_url)
-    engine = sa.create_engine(supabase_db.admin_url)
+def _select_and_insert_not_refused(admin_url: str, role: str) -> tuple[set[str], dict[str, str]]:
+    """Try ``SELECT`` and ``INSERT`` on every relation in ``public`` as *role*. Return the
+    relations tried, and each try the privilege layer did not refuse, with its outcome."""
+    engine = sa.create_engine(admin_url)
     try:
         with engine.connect() as conn:
             relations = _public_relations(conn)
             conn.rollback()  # end the catalog read's implicit transaction
             tx = conn.begin()
             try:
-                conn.execute(sa.text(f"SET LOCAL ROLE {api_role}"))
+                conn.execute(sa.text(f"SET LOCAL ROLE {role}"))
                 not_refused: dict[str, str] = {}
                 for name, noun in sorted(relations.items()):
                     refused = f"42501: permission denied for {noun} {name}"
@@ -526,9 +527,18 @@ def test_the_data_api_roles_are_refused_select_and_insert_on_every_table(
                 tx.rollback()
     finally:
         engine.dispose()
+    return set(relations), not_refused
+
+
+@pytest.mark.parametrize("api_role", _DATA_API_ROLES)
+def test_the_data_api_roles_are_refused_select_and_insert_on_every_table(
+    supabase_db: SupabaseShapedDb, api_role: str
+) -> None:
+    seeded = _seed_user_rows(supabase_db.login_url)
+    relations, not_refused = _select_and_insert_not_refused(supabase_db.admin_url, api_role)
 
     # Every application table was tried, so an empty list of tries cannot pass.
-    assert set(Base.metadata.tables) | {"alembic_version"} <= set(relations)
+    assert set(Base.metadata.tables) | {"alembic_version"} <= relations
     assert not_refused == {}
     # The privileged read: the rows a refused read would have returned are there.
     with _autocommit(supabase_db.login_url) as conn:
@@ -602,37 +612,43 @@ def test_a_routine_gives_the_data_api_roles_nothing_a_role_without_grants_lacks(
     assert outcomes[api_role] == baseline
 
 
+def _new_objects_refused(db: SupabaseShapedDb, role: str, name: str) -> dict[str, str]:
+    """Have the login create table *name* and sequence ``<name>_seq``, then report what *role*
+    may do to them, rolled back. Return each try *role* was not refused, with its outcome."""
+    engine = sa.create_engine(db.admin_url)
+    try:
+        with engine.connect() as conn:
+            tx = conn.begin()
+            try:
+                conn.execute(sa.text(f"SET LOCAL ROLE {db.login}"))
+                conn.execute(sa.text(f"CREATE TABLE public.{name} (id integer)"))
+                conn.execute(sa.text(f"CREATE SEQUENCE public.{name}_seq"))
+                conn.execute(sa.text(f"INSERT INTO public.{name} VALUES (1)"))
+                conn.execute(sa.text(f"SET LOCAL ROLE {role}"))
+                outcomes = {
+                    "SELECT": _outcome(conn, f"SELECT * FROM public.{name}"),
+                    "INSERT": _outcome(conn, f"INSERT INTO public.{name} VALUES (2)"),
+                    "nextval": _outcome(conn, f"SELECT nextval('public.{name}_seq')"),
+                }
+            finally:
+                tx.rollback()
+    finally:
+        engine.dispose()
+    refused = {
+        "SELECT": f"42501: permission denied for table {name}",
+        "INSERT": f"42501: permission denied for table {name}",
+        "nextval": f"42501: permission denied for sequence {name}_seq",
+    }
+    return {verb: outcome for verb, outcome in outcomes.items() if outcome != refused[verb]}
+
+
 @pytest.mark.parametrize("api_role", _DATA_API_ROLES)
 def test_a_table_and_a_sequence_created_after_042_are_refused_too(
     supabase_db: SupabaseShapedDb, api_role: str
 ) -> None:
     """The next migration's objects. They are created by the login, so the login's default
     privileges decide their grants, in whichever shape the fixture set them."""
-    engine = sa.create_engine(supabase_db.admin_url)
-    try:
-        with engine.connect() as conn:
-            tx = conn.begin()
-            try:
-                conn.execute(sa.text(f"SET LOCAL ROLE {supabase_db.login}"))
-                conn.execute(sa.text("CREATE TABLE public.fr_after_042 (id integer)"))
-                conn.execute(sa.text("CREATE SEQUENCE public.fr_after_042_seq"))
-                conn.execute(sa.text("INSERT INTO public.fr_after_042 VALUES (1)"))
-                conn.execute(sa.text(f"SET LOCAL ROLE {api_role}"))
-                outcomes = {
-                    "SELECT": _outcome(conn, "SELECT * FROM public.fr_after_042"),
-                    "INSERT": _outcome(conn, "INSERT INTO public.fr_after_042 VALUES (2)"),
-                    "nextval": _outcome(conn, "SELECT nextval('public.fr_after_042_seq')"),
-                }
-            finally:
-                tx.rollback()
-    finally:
-        engine.dispose()
-
-    assert outcomes == {
-        "SELECT": "42501: permission denied for table fr_after_042",
-        "INSERT": "42501: permission denied for table fr_after_042",
-        "nextval": "42501: permission denied for sequence fr_after_042_seq",
-    }
+    assert _new_objects_refused(supabase_db, api_role, "fr_after_042") == {}
 
 
 # ---------------------------------------------------------------------------------------

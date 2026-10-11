@@ -110,6 +110,10 @@ cluster object, a `GRANT` is a database object, and both scripts pass
 `--no-privileges`. Every statement is idempotent, so a same-cluster drill, where
 the role is already there, is unaffected. See
 [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md).
+Since 2026-10-11 (#283) the file also replays migrations `041`, `042` and `043`,
+which a restore into a Supabase project needs
+([Restoring for real](#restoring-for-real-not-as-a-drill)). On the drill's plain
+Postgres, run as a superuser, those three sections change nothing.
 
 1. **Alembic head** — compares the restored `alembic_version` against
    `cd backend && uv run alembic heads`. A dump older than the repo head
@@ -158,6 +162,45 @@ psql "$RESTORE_DSN" -tA --single-transaction \
 The bootstrap runs **after** `pg_restore`, because
 `GRANT ... ON ALL TABLES IN SCHEMA public` needs the tables to exist. Running it
 before as well is harmless and does not remove the need to run it after.
+
+**Into a Supabase project, run both commands as `postgres`**, the login the
+application and the migrations use. The project offers no superuser, and
+`postgres` holds CREATEROLE and ADMIN on `familyroots_app`. Use the same login for
+`pg_restore` and for the bootstrap: the restore makes it the owner of every table,
+and the bootstrap can change only its own default privileges. Since 2026-10-11
+(#283, [ADR-052's amendment](../decisions/052-restore-bootstraps-the-request-role.md#amendment-2026-10-11-283-a-restore-into-a-supabase-project))
+the bootstrap covers what a restore there loses, because the restored database
+already reads head and no migration runs again:
+
+- **`041`.** It grants `postgres` `SET` on `familyroots_app`, which the role's
+  creator does not hold. Without it the proving query above fails with
+  `permission denied to set role "familyroots_app"`, and so does every request.
+  It grants nothing where the login can already enter the role.
+- **`042`.** `pg_restore` created every table as `postgres`, so the project's
+  default privileges handed `anon` and `authenticated` whatever they grant, ALL
+  at worst. The bootstrap revokes everything both roles hold on tables, sequences
+  and routines in `public`, and the default privileges that would hand them the
+  next table.
+- **`043`.** The project's `ensure_rls` event trigger turned RLS on for every
+  table `pg_restore` created. The bootstrap turns it back off on
+  `alembic_version`, `clans`, `user_profiles` and `user_fcm_tokens`, which carry
+  no policy, and leaves every other table as the dump had it.
+
+Prove the `042` half too, as `postgres`. It must fail with
+`permission denied for table user_profiles`:
+
+```bash
+psql "$RESTORE_DSN" -tA --single-transaction \
+  -c "SET LOCAL ROLE anon" -c "SELECT count(*) FROM user_profiles"
+```
+
+`backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py` restores
+the chain into a database shaped like the project and reads all three outcomes.
+**What it does not show** is that a production dump restores at all. A dump taken
+with no `--schema` carries Supabase's own schemas, and on the hosted project
+`public` also holds `rls_auto_enable`, the function behind `ensure_rls`, which the
+project would already have. Which schemas a backup holds is #285, and the test
+restores only what the chain creates.
 
 ## Drill log
 
@@ -774,11 +817,16 @@ and what is still open:
   account lives now, so a `public`-only dump would restore data no one can sign
   in to. Read the first dump's table of contents
   (`gunzip -c <dump.gz> | pg_restore -l`) before deciding.
-- **A restore into a Supabase project needs one more grant.** Migration
-  `041_grant_app_role_to_login` makes the migrating login a member of
-  `familyroots_app`, because Supabase's `postgres` is not a superuser (ADR-066).
-  A restore replays grants through `scripts/restore_bootstrap_role.sql`. Check
-  that it replays that membership too before relying on it there.
+- **A restore into a Supabase project replays `041`, `042` and `043`, since
+  2026-10-11 (#283).** `scripts/restore_bootstrap_role.sql` lets `postgres` enter
+  `familyroots_app`, takes from `anon` and `authenticated` everything the
+  project's default privileges gave them on the restored tables, and turns RLS
+  back off on the four tables `ensure_rls` turned it on for. Run it as
+  `postgres`, the login that ran `pg_restore`
+  ([Restoring for real](#restoring-for-real-not-as-a-drill)).
+  `backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py` reads
+  those outcomes on a Supabase-shaped database. It restores only what the chain
+  creates, so the bullet above, on which schemas the dump carries, still stands.
 
 ## Go-live checklist
 
@@ -853,9 +901,12 @@ and what is still open:
   `ERROR:  role "familyroots_app" does not exist`. The restore path now runs
   `scripts/restore_bootstrap_role.sql` and the drill checks the outcome two-sided; the fourth drill
   row records the repaired run. **What is still owed here is smaller and named**: the bootstrap
-  holds a copy of what migrations `002` and `026` grant, and nothing enforces that they stay equal.
-  A missing table, function, or sequence grant turns the drill red. A privilege class no query
-  exercises, `TRUNCATE` for example, would not. See ADR-052 § Consequences.
+  holds a copy of what migrations `002` and `026` grant, and since 2026-10-11 of what `041`, `042`
+  and `043` do, and nothing enforces that they stay equal. A missing table, function, or sequence
+  grant turns the drill red. A privilege class no query exercises, `TRUNCATE` for example, would
+  not. A gap in the three Supabase sections turns
+  `backend/tests/integration/test_restore_bootstrap_on_supabase_shape.py` red. See ADR-052
+  § Consequences.
 - **No drill against a production dump.** All three recorded results ran against local dev data.
   The 2026-07-14 and 2026-08-22 (first) rows also ran against a dump at
   `016_document_soft_delete`, so only the third row exercises the current schema.
