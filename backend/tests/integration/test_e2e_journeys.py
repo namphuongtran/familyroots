@@ -15,10 +15,8 @@ test_tree_renders_after_founder_designation and
 test_tree_404_without_founder_designation. No KNOWN_DEFECT pins remain.
 
 Rate-limit budget: this module's app shares ONE 20 req/min/IP bucket across
-the counted routes — register, onboard, login, refresh, forgot-password and
-resend-verification under /api/v1/auth, plus
-POST /api/v1/invitations/{token}/accept — matched by exact route, so
-GET /auth/me spends nothing (#280; `counted_paths` in app/main.py). Note the
+the counted routes (`counted_paths` in app/main.py), matched by exact route,
+so GET /auth/me spends nothing (#280). Note the
 admin invitation-create call is POST /api/v1/clans/{clan_id}/invitations, which
 is not a counted route and does NOT spend this bucket; only
 POST /api/v1/invitations/{token}/accept does. PUT /api/v1/clans/me/founder is

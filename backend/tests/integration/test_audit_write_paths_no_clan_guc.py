@@ -231,7 +231,7 @@ async def http(
 ) -> AsyncGenerator[AsyncClient]:
     """Production wiring: ``get_db`` on the RLS request session, ``get_system_db``
     privileged. A fresh ``create_app()`` per test keeps the ADR-021 rate-limit bucket
-    (20 req/min/IP on ``/api/v1/auth`` and ``/api/v1/invitations``) empty."""
+    (20 req/min/IP on the counted auth routes, ``counted_paths`` in app/main.py) empty."""
     rls_factory = _rls(engine)
     system_factory = _system(engine)
     app = create_app()

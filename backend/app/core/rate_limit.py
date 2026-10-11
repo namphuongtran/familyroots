@@ -14,6 +14,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
+from starlette._utils import get_route_path
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -106,7 +107,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._last_sweep = now
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        path = request.url.path
+        # The path the router matches, not request.url.path: that one re-parses the decoded
+        # path as a URL, so a "%3F" or "%23" inside a token would cut it short and the request
+        # would reach accept uncounted.
+        path = get_route_path(request.scope)
         if not any(pattern.match(path) for pattern in self._counted):
             return await call_next(request)
 

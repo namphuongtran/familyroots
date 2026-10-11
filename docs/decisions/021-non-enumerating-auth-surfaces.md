@@ -287,17 +287,32 @@ already bounds who can call it.
 > the 2026-10-07 measurement, was `GET /auth/me`, which no longer counts, but lowering the
 > harness's value is not part of this change.
 >
-> **What is given up.** The limit no longer stops a client that loops on `GET /auth/me`. Before
-> #183, `/vi/dashboard` sent 9037 of them in twelve seconds, and this bucket was what cut that
-> loop off. `web/e2e/auth/dashboard.auth.spec.ts`, which counts the `GET /auth/me` one dashboard
-> load sends, is what catches that class of defect now.
+> **What is given up.** The limit no longer refuses any request from a client that loops on
+> `GET /auth/me`. Before #183, `/vi/dashboard` sent 9037 of them in one twelve-second probe. The
+> bucket answered 3111 of those with 429, and the loop never stopped (`web/CLAUDE.md`, measured
+> 2026-10-04). Refusing them was all the limit did, and it no longer does even that. So the #226
+> amendment's last sentence under "Who raises it", that 1000 a minute "refuses most of them", no
+> longer holds. `web/e2e/auth/dashboard.auth.spec.ts`, which counts the `GET /auth/me` one
+> dashboard load sends, is what catches that class of defect.
+>
+> **The path matched is the router's.** The limiter matches the decoded path the router
+> matches, `scope["path"]` without any `root_path`, and not `request.url.path`. That one
+> re-parses the decoded path as a URL, so a `%3F` or `%23` inside a token would cut the path
+> short at the token. The router would still send the request to accept, and the limiter would
+> not count it.
 >
 > Pinned by `backend/tests/unit/test_auth_rate_limit_budget.py`. Through `create_app()`, twenty
 > `POST /auth/login` spend the budget. The 21st answers 429, `GET /auth/me` with no token answers
 > 401, and `POST /invitations/{token}/accept` answers 429. Each counted path spends the login
 > bucket and is refused by it, and each uncounted one neither spends it nor is refused by it.
-> Negative controls, run 2026-10-11: with `/api/v1/auth/me` put back in the set, the `/auth/me`
-> case reads 429 for 401. With `/api/v1/auth/login` taken out, the 21st login is admitted.
+> Every route the app serves under either old prefix must be in one of the two lists, so a new
+> route there fails until someone sorts it. Negative controls, run 2026-10-11:
+>
+> - With `/api/v1/auth/me` put back in the set, the `/auth/me` case reads 429 for 401.
+> - With `/api/v1/auth/login` taken out, the 21st login is admitted.
+> - With `request.url.path` in place of the router's path, the `%3F` and `%23` accept cases spend
+>   nothing.
+> - With logout dropped from the uncounted list, the route guard names it.
 
 ### 4. `engine.dispose()` on shutdown
 One-liner in `main.py`'s lifespan `finally` (after scheduler stop): the async

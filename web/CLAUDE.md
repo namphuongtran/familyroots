@@ -1388,10 +1388,10 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
 4. **Read colour schemes without reloading.** `page.emulateMedia({ colorScheme })`
    re-evaluates the media query in place, and ADR-045 made the media query the only
    mechanism. One page load per case matters: see the rate limit below.
-5. **Budget the requests.** The backend's rate limit counts seven routes in one bucket:
-   `/api/v1/auth/register`, `/onboard`, `/login`, `/refresh`, `/forgot-password`,
-   `/resend-verification`, and `/api/v1/invitations/{token}/accept`. That is 20 requests per 60
-   seconds per IP unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS` (ADR-021, amended by
+5. **Budget the requests.** The backend's rate limit counts the auth routes where an account or
+   a token can be guessed, and invitation accept, in one bucket (the list is in
+   `docs/contracts/error-codes.md`, "429 and Retry-After"). That is 20 requests per 60 seconds
+   per IP unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS` (ADR-021, amended by
    #226 and #280). Production sets nothing. **`GET /auth/me` is not counted since #280**, so the
    guard's read and the session query spend nothing. **The harness's backend sets 1000**, in the
    recipe above and in `image-e2e.yml`. It was raised because every request the suite sends
@@ -1400,9 +1400,11 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
    2026-10-07 (26 `GET /auth/me`, one register, one accept). At 20 the server guard's read met a
    429 and `guard.auth.spec.ts` read `500` for `307`. Of those 28, only the register and the
    accept still count. The harness keeps 1000 so that a new case does not have to count against
-   the bucket. **The limit no longer stops a `GET /auth/me` runaway** like the one #183 removed,
-   which it cut off at 9037 requests. `dashboard.auth.spec.ts` is what catches that class now: it
-   counts the browser's `GET /auth/me` on one load, which is why it still reads 1. One load of a
+   the bucket. **The limit no longer refuses any of a `GET /auth/me` runaway** like the one #183
+   removed, where it had answered 3111 of 9037 with 429 without stopping the loop (the #183
+   table under "Three things found by looking at the harness"). `dashboard.auth.spec.ts` is
+   what catches that class now: it counts the browser's `GET /auth/me` on one load, which is why
+   it still reads 1. One load of a
    `(dashboard)` screen sends two `GET /auth/me` since #186: the server guard's, and the
    browser's one, which every consumer shares since #183. It was about three per load, and then
    thousands, before #183. Keep a case to one navigation where it can be: page loads cost time

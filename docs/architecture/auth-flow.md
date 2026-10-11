@@ -95,8 +95,8 @@ are the routes where an account or a token can be guessed or probed. Every other
 uncounted, including `GET`/`PATCH /auth/me`, `/auth/me/fcm-token` and `/auth/logout`: a wrong
 bearer token there is a 401 and a signed token cannot be guessed, and the web's server guard
 sends `GET /auth/me` with the web's address, not the user's (ADR-021, amended 2026-10-11 by
-#280). The bucket is per instance (fine for a single instance; a shared store is #257). The count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20, which no
-production deployment sets; only the authenticated e2e harness's backend raises it, to
+#280). On Vercel Functions the bucket is per instance (ADR-065); a shared store is #257.
+The count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20, which no production deployment sets; only the authenticated e2e harness's backend raises it, to
 1000, because that suite sends every request from one address (ADR-021, amended
 2026-10-07 by #226). The 60-second window is fixed. The scope was extended to cover `/invitations/{token}/accept`
 — the one token-bearing, unauthenticated-adjacent surface outside the

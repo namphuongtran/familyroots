@@ -23,6 +23,7 @@ so no case can reach a database whatever the route does.
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator, Sequence
 
 import pytest
@@ -39,14 +40,13 @@ pytestmark = pytest.mark.unit
 
 _SETTING = "RATE_LIMIT_AUTH_MAX_REQUESTS"
 
-Request = tuple[str, str]
-"""A method and a path."""
+_MethodPath = tuple[str, str]
 
-_PROBE: Request = ("POST", "/api/v1/auth/login")
+_PROBE: _MethodPath = ("POST", "/api/v1/auth/login")
 
 # The routes where an account or a token can be guessed or probed, under the method each is
 # served with, and under a method none of them serves, because the count is by path.
-_COUNTED: list[Request] = [
+_COUNTED: list[_MethodPath] = [
     ("POST", "/api/v1/auth/register"),
     ("POST", "/api/v1/auth/onboard"),
     ("POST", "/api/v1/auth/login"),
@@ -56,11 +56,15 @@ _COUNTED: list[Request] = [
     ("POST", "/api/v1/invitations/any-token/accept"),
     ("GET", "/api/v1/auth/login"),
     ("PUT", "/api/v1/invitations/another-token/accept"),
+    # An encoded "?" or "#" decodes inside the token, where the router still matches accept.
+    # Re-parsed as a URL, the same path would end at the token and pass uncounted.
+    ("POST", "/api/v1/invitations/any%3Ftoken/accept"),
+    ("POST", "/api/v1/invitations/any%23token/accept"),
 ]
 
 # Signed-in profile routes, where a wrong bearer token is a 401 and a signed token cannot be
 # guessed, and paths under either old prefix that name no counted route.
-_UNCOUNTED: list[Request] = [
+_UNCOUNTED: list[_MethodPath] = [
     ("GET", "/api/v1/auth/me"),
     ("PATCH", "/api/v1/auth/me"),
     ("POST", "/api/v1/auth/me/fcm-token"),
@@ -93,7 +97,7 @@ def _app(monkeypatch: pytest.MonkeyPatch, value: str | None) -> FastAPI:
     return application
 
 
-async def _statuses(application: FastAPI, requests: Sequence[Request]) -> list[int]:
+async def _statuses(application: FastAPI, requests: Sequence[_MethodPath]) -> list[int]:
     """Send *requests* in order from one client address, inside one window, and read each."""
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -177,6 +181,33 @@ async def test_an_uncounted_request_neither_spends_the_bucket_nor_is_refused_by_
     assert statuses[20:40] == [422] * 20, statuses
     assert statuses[40] == statuses[0], statuses
     assert statuses[41] == 429, statuses
+
+
+def test_every_route_under_the_old_prefixes_is_in_one_of_the_two_sets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A route added under ``/api/v1/auth`` or ``/api/v1/invitations`` has to be sorted.
+
+    The two lists above are a setting until something checks them against the app. This reads
+    the routes ``create_app()`` serves under either prefix, with ``{token}`` filled in the way
+    the lists fill it, and requires each method and path to be in exactly one of them. It does
+    not decide which list a new route belongs in. The parametrized cases above read that.
+
+    It reads the OpenAPI schema, because FastAPI 0.141 no longer flattens included routers into
+    ``app.routes`` (``test_app_smoke.py``). A route declared with ``include_in_schema=False``
+    would not be seen. None under these prefixes is.
+    """
+    paths = _app(monkeypatch, None).openapi()["paths"]
+    served = {
+        (method.upper(), re.sub(r"\{[^}]+\}", "any-token", path))
+        for path, operations in paths.items()
+        if path.startswith(("/api/v1/auth/", "/api/v1/invitations/"))
+        for method in operations
+    }
+
+    assert served, "no route found under either prefix"
+    assert not set(_COUNTED) & set(_UNCOUNTED)
+    assert served - set(_COUNTED) - set(_UNCOUNTED) == set()
 
 
 @pytest.mark.parametrize("value", ["0", "-5"])

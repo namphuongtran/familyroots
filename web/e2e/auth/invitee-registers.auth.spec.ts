@@ -36,11 +36,13 @@ import { mailedConfirmation, onOrigin } from './mail'
  * second page's URLs carry the token hash, never the invitation token, so the token checks below
  * are unchanged.
  *
- * **Budget.** `/api/v1/auth` and `/api/v1/invitations` share one bucket per IP, 20 requests per
- * 60 seconds unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS`. The harness's backend sets
- * 1000 since #226, because a full run of this suite spends 28 in under a minute from one address
- * (`web/CLAUDE.md`, "Budget the requests"). The walk counts what it spent and attaches the count;
- * measured on 2026-10-06, see the commit that added this file. The admin's requests go to
+ * **Budget.** The register and the accept spend one bucket per IP, with the backend's other
+ * guessable auth routes, 20 requests per 60 seconds unless the backend sets
+ * `RATE_LIMIT_AUTH_MAX_REQUESTS` (ADR-021, amended by #280). The harness's backend sets 1000 since
+ * #226, because before #280 a full run of this suite spent 28 in under a minute from one address
+ * (`web/CLAUDE.md`, "Budget the requests"). The walk attaches every browser request it sent under
+ * `/api/v1/auth` and `/api/v1/invitations`, which since #280 includes requests the bucket does not
+ * count, such as `GET /auth/me`; measured on 2026-10-06, see the commit that added this file. The admin's requests go to
  * `/api/v1/clans` and `/api/v1/me`, which spend nothing.
  *
  * **What it leaves behind.** The invitation is accepted, so it is no longer pending. The new

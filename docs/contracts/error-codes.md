@@ -272,7 +272,7 @@ validation codes which are 422. Branch on the code, not the status.
 |---|---|---|---|---|
 | `validation_error` | 422 | FastAPI request-body/query validation failed (including a PATCH body missing the required `expected_version`) | `fields` (list of dotted locations) | Map to form fields |
 | `conflict` | 409 | Generic conflict; also the safety net for a DB unique-violation race (SQLSTATE 23505) | — | Refetch and retry |
-| `rate_limited` | 429 | Too many requests to the counted auth paths (20/min per IP, one shared bucket, sliding window); see "429 and Retry-After" for the list | `retry_after` (seconds) | Back off; see header note below |
+| `rate_limited` | 429 | Too many requests, whatever the method, to `/api/v1/auth/register`, `/onboard`, `/login`, `/refresh`, `/forgot-password`, `/resend-verification` or `/api/v1/invitations/{token}/accept` (20/min per IP, one shared bucket, sliding window) | `retry_after` (seconds) | Back off; see header note below |
 | `internal_error` | 500 | Unhandled server error (details logged server-side only) | — | Generic error state; safe to retry |
 | `database_unavailable` | 503 | Transient DB operational failure mid-request — dropped connection, pool exhaustion, DB restart/shutdown, or resource exhaustion (SQLAlchemy `OperationalError`). NOT our-bug DB errors (`ProgrammingError`/`DataError`), which stay `internal_error` 500 (ADR-032) | — | Retry-later banner; safe to retry with backoff |
 | `bad_request` | 400 | Bare 400 normalized into the envelope | `hint` (string, optional) | Generic |
