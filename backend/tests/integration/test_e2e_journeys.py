@@ -15,23 +15,21 @@ test_tree_renders_after_founder_designation and
 test_tree_404_without_founder_designation. No KNOWN_DEFECT pins remain.
 
 Rate-limit budget: this module's app shares ONE 20 req/min/IP bucket across
-/api/v1/auth + /api/v1/invitations — matched by path PREFIX, so GET /auth/me
-counts too (RateLimitMiddleware.dispatch: `request.url.path.startswith(p)`, see
-app/core/rate_limit.py). Note the admin invitation-create call is
-POST /api/v1/clans/{clan_id}/invitations — that path starts with /api/v1/clans,
-NOT /api/v1/invitations, so it does NOT count against this bucket; only
+the counted routes (`counted_paths` in app/main.py), matched by exact route,
+so GET /auth/me spends nothing (#280). Note the
+admin invitation-create call is POST /api/v1/clans/{clan_id}/invitations, which
+is not a counted route and does NOT spend this bucket; only
 POST /api/v1/invitations/{token}/accept does. PUT /api/v1/clans/me/founder is
-also under /api/v1/clans, not /api/v1/auth or /api/v1/invitations — it spends
-ZERO budget. Current spend: J1=3 auth (register, login, /auth/me), J2=3 auth
-(admin register, admin login, joiner register) + 1 invitation (accept only —
-create does not match the prefix), test_tree_renders_after_founder_designation
-=2 auth (register, login; the founder designation PUT itself is free) +
-test_tree_404_without_founder_designation=2 auth (register, login) → 10 auth +
-1 invitation = 11/20. The M9 and i18n tests below add ZERO: M9 mints its JWT
+not counted either — it spends ZERO budget. Current spend: J1=2 auth (register,
+login; its /auth/me is free), J2=3 auth (admin register, admin login, joiner
+register) + 1 invitation (accept only — create is not counted),
+test_tree_renders_after_founder_designation=2 auth (register, login; the
+founder designation PUT itself is free) +
+test_tree_404_without_founder_designation=2 auth (register, login) → 9 auth +
+1 invitation = 10/20. The M9 and i18n tests below add ZERO: M9 mints its JWT
 directly against a SQL-seeded clan (no /auth/* call at all), and the i18n
-test's unauthenticated GET /api/v1/persons never touches the /api/v1/auth or
-/api/v1/invitations prefixes. Re-count before adding requests on those
-prefixes.
+test's unauthenticated GET /api/v1/persons is not a counted route. Re-count
+before adding requests to the counted routes.
 """
 
 import json

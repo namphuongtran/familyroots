@@ -50,9 +50,12 @@ the response envelope.
 | DELETE | `/me/fcm-token`    | Yes  | —    | Remove FCM device token         |
 
 Login with correct credentials but an unverified email fails with **403
-`email_not_verified`** (distinct from 401 bad-credentials). All `/api/v1/auth`
-and `/api/v1/invitations` routes are rate-limited (in-memory sliding window,
-20 req/min/IP, same bucket — the only rate-limited scope; ADR-021).
+`email_not_verified`** (distinct from 401 bad-credentials). The auth routes where an
+account or a token can be guessed share one rate-limit bucket with
+`/invitations/{token}/accept` (in-memory sliding window, 20 req/min/IP — the only
+rate-limited scope; ADR-021, amended by #280). The list is in
+[error-codes.md](../contracts/error-codes.md), "429 and Retry-After". `/me`,
+`/me/fcm-token` and `/logout` are not counted.
 
 ### POST `/register`
 
@@ -283,8 +286,9 @@ Full contract: `docs/contracts/rest-invitations-api.md`.
 | DELETE | `/clans/{clan_id}/invitations/{id}` | admin (204) |
 | POST   | `/invitations/{token}/accept`       | any authenticated user |
 
-`/api/v1/invitations` (the token-bearing accept surface) is rate-limited
-alongside `/api/v1/auth` (20 req/min/IP, same bucket — ADR-021). Admin CRUD
+`POST /invitations/{token}/accept` (the token-bearing accept surface) is rate-limited in
+the same bucket as the auth routes where an account can be guessed (20 req/min/IP —
+ADR-021, amended by #280). Admin CRUD
 under `/clans/{clan_id}/invitations` is **not** rate-limited — it's an
 authenticated admin surface, not the abuse-prone unauthenticated-adjacent one.
 

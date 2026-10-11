@@ -248,7 +248,18 @@ def create_app() -> FastAPI:
     # innermost
     application.add_middleware(
         RateLimitMiddleware,
-        path_prefixes=("/api/v1/auth", "/api/v1/invitations"),
+        # The routes where an account or a token can be guessed or probed (ADR-021, amended
+        # 2026-10-11 by #280). Signed-in profile routes such as GET /auth/me are not counted:
+        # the web's server guard sends that request with the web's address, not the user's.
+        counted_paths=(
+            "/api/v1/auth/register",
+            "/api/v1/auth/onboard",
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/resend-verification",
+            "/api/v1/invitations/{token}/accept",
+        ),
         # 20 unless set (ADR-021, amended 2026-10-07 by #226); only the e2e harness raises it.
         max_requests=settings.RATE_LIMIT_AUTH_MAX_REQUESTS,
         window_seconds=60,

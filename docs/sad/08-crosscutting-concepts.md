@@ -196,8 +196,8 @@ graph LR
 
 ## 8.10 Security
 
-Non-enumerating auth surfaces + 20 rpm/IP rate limit on `/auth` and `/invitations`
-(ADR-021) · path-isolated storage + presigned URLs · gitleaks + no-`.env` CI gate ·
+Non-enumerating auth surfaces + 20 rpm/IP rate limit on the auth routes where an account or
+a token can be guessed, and invitation accept (ADR-021, amended by #280) · path-isolated storage + presigned URLs · gitleaks + no-`.env` CI gate ·
 prod config fail-fast · docs endpoints off unless `APP_DEBUG`.
 
 ## 8.11 Testing

@@ -446,8 +446,11 @@ Global interceptor rules:
 - **403 `no_approved_clan_membership`** → pending/onboarding routing (§5).
 - **400 `multiple_clans_no_selection`** → clan picker (§1.2).
 - **409 `stale_write`** → see §6.1 below.
-- **429 `rate_limited`** → back off. `/api/v1/auth/*` is limited to **20
-  requests/min/IP** (`RateLimitMiddleware`, `app/main.py`). The 429 carries
+- **429 `rate_limited`** → back off. `/auth/register`, `/auth/onboard`, `/auth/login`,
+  `/auth/refresh`, `/auth/forgot-password`, `/auth/resend-verification` and
+  `/invitations/{token}/accept`, whatever the method, share one bucket of **20 requests/min/IP**
+  (`RateLimitMiddleware`, `app/main.py`; ADR-021, amended by #280). `/auth/me`, its FCM-token
+  routes and `/auth/logout` are not counted and never answer 429. The 429 carries
   `error.detail.retry_after` (seconds) and a `Retry-After` header — honor them; do
   not blind-retry login/refresh.
 - **503 `auth_provider_unavailable` / `storage_unavailable`** → transient-outage

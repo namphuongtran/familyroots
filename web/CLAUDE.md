@@ -1388,21 +1388,27 @@ maxRedirects: 0 })` reads a server-side gate as a status and a `Location` withou
 4. **Read colour schemes without reloading.** `page.emulateMedia({ colorScheme })`
    re-evaluates the media query in place, and ADR-045 made the media query the only
    mechanism. One page load per case matters: see the rate limit below.
-5. **Budget the requests.** `/api/v1/auth/*` and `/api/v1/invitations/*` share one bucket,
-   20 requests per 60 seconds per IP unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS`
-   (ADR-021, amended by #226). Production sets nothing. **The harness's backend sets 1000**, in
-   the recipe above and in `image-e2e.yml`, because every request the suite sends comes from
-   `127.0.0.1` and a full run spends more than 20 in a minute: 28 requests in 54 s on a warm
-   server, and 28 in 88 s with 22 in the busiest minute on a cold one, measured 2026-10-07
-   (26 `GET /auth/me`, one register, one accept). At 20 the server guard's read meets a 429 and
-   `guard.auth.spec.ts` reads `500` for `307`. 1000 is more than 35 times a run's busiest
-   minute, so a new case does not have to count against it, and a backend started without it
-   fails that way again. It is still a limit, so a runaway like the one #183 removed still meets
-   it. One load of a `(dashboard)` screen spends two `GET /auth/me` since #186: the server
-   guard's, and the browser's one, which every consumer shares since #183. Both come from
-   `127.0.0.1` here. It was about three per load, and then thousands, before #183. Keep a case
-   to one navigation where it can be: the headroom is for the suite to grow, not to spend.
-   `dashboard.auth.spec.ts` counts the browser's alone, which is why it still reads 1.
+5. **Budget the requests.** The backend's rate limit counts the auth routes where an account or
+   a token can be guessed, and invitation accept, in one bucket (the list is in
+   `docs/contracts/error-codes.md`, "429 and Retry-After"). That is 20 requests per 60 seconds
+   per IP unless the backend sets `RATE_LIMIT_AUTH_MAX_REQUESTS` (ADR-021, amended by
+   #226 and #280). Production sets nothing. **`GET /auth/me` is not counted since #280**, so the
+   guard's read and the session query spend nothing. **The harness's backend sets 1000**, in the
+   recipe above and in `image-e2e.yml`. It was raised because every request the suite sends
+   comes from `127.0.0.1`, and before #280 a full run spent more than 20 in a minute: 28 requests
+   in 54 s on a warm server, and 28 in 88 s with 22 in the busiest minute on a cold one, measured
+   2026-10-07 (26 `GET /auth/me`, one register, one accept). At 20 the server guard's read met a
+   429 and `guard.auth.spec.ts` read `500` for `307`. Of those 28, only the register and the
+   accept still count. The harness keeps 1000 so that a new case does not have to count against
+   the bucket. **The limit no longer refuses any of a `GET /auth/me` runaway** like the one #183
+   removed, where it had answered 3111 of 9037 with 429 without stopping the loop (the #183
+   table under "Three things found by looking at the harness"). `dashboard.auth.spec.ts` is
+   what catches that class now: it counts the browser's `GET /auth/me` on one load, which is why
+   it still reads 1. One load of a
+   `(dashboard)` screen sends two `GET /auth/me` since #186: the server guard's, and the
+   browser's one, which every consumer shares since #183. It was about three per load, and then
+   thousands, before #183. Keep a case to one navigation where it can be: page loads cost time
+   even where they no longer cost budget.
    **One exception, a walk.** `invitee-registers.auth.spec.ts` (#196) is one person across four
    pages, because each step needs the account the one before made. It counts what it spends and
    attaches the count: 3 browser requests from the bucket on 2026-10-06.

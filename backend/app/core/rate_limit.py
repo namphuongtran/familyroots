@@ -11,21 +11,27 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Any
 
+from starlette._utils import get_route_path
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.routing import compile_path
 
 from app.core.request_meta import resolve_client_ip
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate-limit specific path prefixes by client IP.
+    """Rate-limit specific paths by client IP, whatever the method.
 
     Args:
         app: The ASGI application.
-        path_prefixes: Only apply limits to paths starting with one of these prefixes.
+        counted_paths: Only requests whose path matches one of these route templates are
+            counted and limited, all in one bucket per IP. A ``{name}`` segment matches any
+            one path segment, as in the router (``/api/v1/invitations/{token}/accept``).
+            Every other path passes uncounted.
         max_requests: Maximum requests allowed within the window.
         window_seconds: Time window in seconds.
         trust_forwarded_for: When True, derive the client IP from the first hop
@@ -37,13 +43,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self,
         app: Any,
         *,
-        path_prefixes: tuple[str, ...] = ("/api/v1/auth",),
+        counted_paths: Iterable[str],
         max_requests: int = 20,
         window_seconds: int = 60,
         trust_forwarded_for: bool = False,
     ) -> None:
         super().__init__(app)
-        self._prefixes = path_prefixes
+        self._counted = tuple(compile_path(template)[0] for template in counted_paths)
         self._max = max_requests
         self._window = window_seconds
         self._trust_xff = trust_forwarded_for
@@ -101,7 +107,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._last_sweep = now
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if not any(request.url.path.startswith(p) for p in self._prefixes):
+        # The path the router matches, not request.url.path: that one re-parses the decoded
+        # path as a URL, so a "%3F" or "%23" inside a token would cut it short and the request
+        # would reach accept uncounted.
+        path = get_route_path(request.scope)
+        if not any(pattern.match(path) for pattern in self._counted):
             return await call_next(request)
 
         client_ip = self._client_ip(request)
