@@ -181,10 +181,11 @@ backend therefore counts through the production adapter.
   - The adapter catching only `httpx2.HTTPError` and parse errors: the unparsable URL, whose
     `InvalidURL` is not an `HTTPError`, fails its case.
   - The production refusal removed: both production cases fail.
-- **Owed, in production.** Before the release and again after it, send 40 concurrent
-  `POST /api/v1/auth/login` with body `{}` to `https://familyroots-api.vercel.app` after a
-  65-second quiet period, and count the codes. Before is expected to admit more than 20. After is
-  expected to read `20 × 422, 20 × 429`. Both readings go on #257.
+- **In production, before the release.** 40 concurrent `POST /api/v1/auth/login` with body
+  `{}` to `https://familyroots-api.vercel.app`, taken by the maintainer after a quiet period on
+  2026-10-18 at about 13:30Z, read **`40 × 422`**: every request admitted, none refused.
+- **Owed, in production, after the release.** The same reading is expected to give
+  `20 × 422, 20 × 429`. It goes on #257.
 
 ## Related
 
