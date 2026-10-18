@@ -74,8 +74,8 @@ never a JWT claim or env match. Bootstrap via `scripts/bootstrap_super_admin.py`
   `token_hash` on a web page of ours, spent only by a user action (ADR-063, built by
   #200 to #203). The web pages are built: `/{locale}/verify-email/confirm` (#200), and
   `/{locale}/forgot-password` with `/{locale}/reset-password` (#201). The templates that link
-  them live in `supabase/templates/` (#202), and the local stack sends them. The owner pushes
-  them to the hosted project in #203. Neither email passes a redirect: the link's origin is
+  them live in `supabase/templates/` (#202), and the local stack sends them. The owner pushed
+  them to the hosted project on 2026-10-18 (#203). Neither email passes a redirect: the link's origin is
   the Supabase Site URL.
 - Ops prerequisite: Supabase dashboard "Confirm email" ON + SMTP configured. The hosted project
   sends through Resend from `noreply@getnami.dev` since 2026-10-18 (ADR-071,

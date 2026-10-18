@@ -193,8 +193,8 @@ and host (any port, for a loopback host), or when it is listed under Redirect UR
   the repository's templates (§ 4) build their link from `{{ .SiteURL }}` itself.
 - **A deployed web origin or a mobile deep link does not work yet.** Every redirect to one falls back
   to `http://localhost:3000`. Add the origin under Redirect URLs, and change the Site URL, when the
-  web app is first deployed. Once #203 has pushed the templates, the Site URL is also the origin of
-  every auth email link, so a wrong one breaks them all (ADR-063, Consequences).
+  web app is first deployed. Since #203 pushed the templates (2026-10-18), the Site URL is also the
+  origin of every auth email link, so a wrong one breaks them all (ADR-063, Consequences).
 
 ---
 
@@ -228,10 +228,10 @@ why the hosted config sits inside `supabase/` rather than beside it.
 `backend/tests/unit/test_auth_email_templates.py` resolves both, and checks each link and the
 language order.
 
-**What the hosted project holds until #203.** The push below is an owner step, so until #203 both
-hosted templates are still Supabase's default bodies, and no hosted email reaches the two pages
-yet. Both pages exist: the confirmation page (#200) since 2026-10-07 and the reset pages (#201)
-since 2026-10-08. The defaults, as read on 2026-10-04:
+**What the hosted project holds: the repository's two bodies, since 2026-10-18 (#203).** The owner
+pushed them that day (§ 4a), and a hosted recovery email now links the reset page (§ 4c). Both
+pages exist: the confirmation page (#200) since 2026-10-07 and the reset pages (#201) since
+2026-10-08. Before the push, the hosted project held Supabase's defaults, as read on 2026-10-04:
 
 ```html
 <h2>Confirm your signup</h2>
@@ -258,6 +258,19 @@ current project, `xkmutzxdhdigyfisfrwd`, as below.
 **The push needs the custom SMTP sender of § 4d.** On 2026-10-11, before there was one, Supabase
 refused it with HTTP 400: "Email template modification is not available for free tier projects
 using the default email provider." Nothing was written. The sender has been set since 2026-10-18.
+
+**Pushed 2026-10-18 by the owner, to `xkmutzxdhdigyfisfrwd`.** The owner ran § 4b before the push,
+the push, and § 4b again, and reported each as expected: the read-back failing first, then exiting
+0. The outputs were not kept, so this record carries the owner's report of them, not the text.
+Read independently afterwards, without the owner's token:
+
+- `npx --yes supabase@2.120.0 config diff --workdir supabase --project-ref xkmutzxdhdigyfisfrwd`
+  reported `"update": 0`, and none of its 19 `remote_only` differences is under
+  `auth.email.template`. On 2026-10-11 the same command had read the remote subjects as Supabase's
+  defaults, so the two subjects changed. `config diff` never reads a body (trap 3).
+- The bodies are evidenced by the recovery email of § 4c: its link has the repository's shape,
+  which the default body cannot produce. The confirmation body rests on the owner's read-back
+  alone, because no confirmation email has been sent from the hosted project yet.
 
 From the repository root, with the CLI pinned in the command. **Not with a global `supabase`, and
 never with 2.115.0**, the version `scripts/supabase_local.sh` pins for the local stack:
@@ -320,12 +333,24 @@ The read-back proves what the project holds. The email proves what a person rece
 
 1. Dashboard → Authentication → Users → an account whose mailbox you own → **Send password
    recovery**.
-2. In the email, copy the link **without opening it**. After #203 it must begin with
+2. In the email, copy the link **without opening it**. It must begin with
    `<Site URL>/reset-password?token_hash=` and carry `type=recovery`. The Site URL is
-   `https://<web-host>` once go-live has set it, and the project's default until then. Before
-   #203 it begins with `https://xkmutzxdhdigyfisfrwd.supabase.co/auth/v1/verify?token=` and
-   carries `type=recovery` and a `redirect_to` naming the Site URL.
+   `https://familyroots-web.vercel.app`, read with `config diff` on 2026-10-11 and again on
+   2026-10-18. Before #203 it began with `https://xkmutzxdhdigyfisfrwd.supabase.co/auth/v1/verify?token=`
+   and carried `type=recovery` and a `redirect_to` naming the Site URL.
 3. A link that does anything else (`...`, a missing token, another host) is a broken template.
+4. Open it, and set a password on `/reset-password`. The token is spent then, so the account's
+   `recovery_token` in `auth.users` reads empty afterwards, `recovery_sent_at` returns to null, and
+   `last_sign_in_at` is set.
+
+**Read 2026-10-18 (#203).** The project had no auth user, so the owner created one in the
+dashboard (**Add user**, auto-confirmed, on a mailbox the owner holds). `auth.users` read
+`created_at` 12:53:35 UTC and `recovery_sent_at` 12:54:13 UTC. The owner read the link as beginning
+`https://familyroots-web.vercel.app/reset-password?token_hash=`. At 12:57:01 UTC, before step 4,
+the `recovery_token` was unspent and `last_sign_in_at` was null. The owner then opened the link and
+set a password. At 12:59:52 UTC the `recovery_token` was empty, `recovery_sent_at` was null,
+`last_sign_in_at` read 12:58:52.27 and `updated_at` 12:58:52.84, the password write half a second
+after the sign-in.
 
 ### 4d. The sender: Resend on the owner's domain (#276, ADR-071)
 
@@ -372,14 +397,16 @@ dig +short TXT _dmarc.getnami.dev @galilea.ns.cloudflare.com              # "v=D
 
 Read 2026-10-18: all five as shown. Resend showed the domain as verified, as the owner reported.
 
-**Not yet checked: an email reaching an address outside the team.** That is #276's outcome check.
-The owner deferred it on 2026-10-18 because the web's sign-up flow has open defects of its own. It
-does not need the sign-up form. Either of these proves the sender:
+**Checked 2026-10-18, by the first of the two ways below.** That is #276's outcome check. The
+recovery email of § 4c (#203) came from `noreply@getnami.dev`, and Resend's email log lists it, as
+the owner reported. So hosted auth email leaves through Resend, not the default provider. The
+second way, a sign-up from a mailbox outside the team, was not tried, because the web's sign-up
+flow has open defects of its own. Either of these proves the sender:
 
 1. Dashboard → Authentication → Users → an account whose mailbox you hold → **Send password
    recovery**. The email must come from `noreply@getnami.dev`, and Resend's email log must list
    it. The default provider sends from Supabase's own address and never appears in Resend's log.
-   Do not open the link before #203.
+   Done 2026-10-18 (§ 4c).
 2. Sign up on `https://familyroots-web.vercel.app` with a mailbox outside the team, once sign-up
    works. The confirmation email must arrive.
 
@@ -413,8 +440,8 @@ delete the old key in Resend.
    `GET https://api.supabase.com/v1/projects/bftqrkgbulwtbptnpfca/config/auth` returns
    `mailer_templates_confirmation_content` and `mailer_templates_recovery_content` to a personal
    access token with `auth:read`. That is a source reading of the API's OpenAPI schema, under
-   ADR-063. #202 built the read-back on it, `scripts/read_back_auth_email_templates.py` (§ 4b). It
-   has not yet been run against this project. #203 runs it.
+   ADR-063. #202 built the read-back on it, `scripts/read_back_auth_email_templates.py` (§ 4b). The
+   owner ran it against `xkmutzxdhdigyfisfrwd` on 2026-10-18, before and after #203's push (§ 4a).
 4. **Never run `supabase config push` from `supabase/config.toml` against this project.** That file
    configures the local stack, and a push writes every property it declares. Its Site URL, redirect
    list and confirmation setting would overwrite the hosted values. **And the CLI version decides
