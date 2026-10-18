@@ -24,6 +24,12 @@
 - **Workflow**: `.github/workflows/db-backup.yml`, job `backup`.
 - **Schedule**: `cron: "15 17 * * *"` = **00:15 Asia/Ho_Chi_Minh** nightly, plus
   `workflow_dispatch` for on-demand runs (Actions tab → "db-backup" → "Run workflow").
+  **The schedule is off by choice since 2026-10-11.** The maintainer disabled the
+  workflow to save Actions minutes, and
+  `gh api repos/namphuongtran/familyroots/actions/workflows/db-backup.yml` read
+  `disabled_manually` on 2026-10-18. The newest dump is
+  `db/daily/familyroots-2026-10-11.dump.gz`. Re-enable with
+  `gh workflow enable db-backup.yml`.
 - **Steps**: install `postgresql-client-18` and put `/usr/lib/postgresql/18/bin`
   first on `PATH` → `scripts/db_backup.sh` logs the `pg_dump` version and path it
   runs, then runs
@@ -203,8 +209,17 @@ the chain into a database shaped like the project and reads all three outcomes.
 **What it does not show** is that a production dump restores at all. A dump taken
 with no `--schema` carries Supabase's own schemas, and on the hosted project
 `public` also holds `rls_auto_enable`, the function behind `ensure_rls`, which the
-project would already have. Which schemas a backup holds is #285, and the test
-restores only what the chain creates.
+project would already have. The test restores only what the chain creates.
+
+**Since 2026-10-18 the commands above are not the whole of a real recovery.**
+[ADR-074](../decisions/074-a-restore-takes-public-whole-and-the-data-of-auth.md)
+decides what a restore takes from a production dump: `public` whole except
+`public.rls_auto_enable`, plus the data of every `auth` table except
+`auth.schema_migrations`, run with `session_replication_role = replica`, before
+traffic opens. ADR-074 § 3 gives the order of a recovery into a new project. #258
+writes the commands here and in the drill. Until then the `pg_restore` line above
+restores everything the dump holds, and into a Supabase project it fails on the
+first object that project already owns.
 
 ## Drill log
 
@@ -830,18 +845,24 @@ open:
   2026-10-18: Backblaze B2, EU Central, with both copies encrypted with `age`
   ([ADR-073](../decisions/073-the-off-provider-dump-copy-lives-in-backblaze-b2-encrypted-with-age.md)).
   #258 builds it. Until then this bullet stands.
-- **The dump now carries Supabase's own schemas. Not measured.**
-  `scripts/db_backup.sh:40` runs `pg_dump` with no `--schema`, so a dump of the
-  Supabase database takes `auth`, `storage` and the other schemas Supabase
-  manages, not only `public`. `scripts/restore_drill.sh:130` restores with
-  `--exit-on-error` into a plain local Postgres, which has none of Supabase's
-  roles and extensions. Expect the first drill of a production dump to fail
-  there. Which schemas a backup should hold is open. `auth.users` is where every
-  account lives now, so a `public`-only dump would restore data no one can sign
-  in to. Read the first dump's table of contents
-  (`gunzip -c <dump.gz> | pg_restore -l`) before deciding. That dump exists
-  since 2026-10-11, `db/daily/familyroots-2026-10-11.dump.gz`, and its table
-  of contents has not been read (#285).
+- **The dump carries Supabase's own schemas, read 2026-10-18 (#285).**
+  `scripts/db_backup.sh:40` runs `pg_dump` with no `--schema`. The table of
+  contents of `db/daily/familyroots-2026-10-11.dump.gz` holds 616 entries. Among
+  them are 27 tables of `auth` with their data, 8 of `storage`, 3 of
+  `realtime`, the data of `vault.secrets`, 6 extensions, 7 event triggers and the
+  `supabase_realtime` publication, beside `public`'s 17 tables.
+  [ADR-074](../decisions/074-a-restore-takes-public-whole-and-the-data-of-auth.md)
+  quotes the full listing and decides what to do with it:
+  - the dump stays whole;
+  - a restore takes `public` whole, except `public.rls_auto_enable`, and the
+    data of every `auth` table except `auth.schema_migrations`, so accounts come
+    back with their UUIDs and passwords;
+  - the drill restores into the local Supabase stack as `postgres`, not into
+    plain Postgres, and proves a sign-in by a canary account.
+
+  #258 builds it. Until then `scripts/restore_drill.sh:130` still restores
+  everything with `--exit-on-error` into plain Postgres, and a production dump
+  still fails there.
 - **A restore into a Supabase project replays `041`, `042` and `043`, since
   2026-10-11 (#283).** `scripts/restore_bootstrap_role.sql` lets `postgres` enter
   `familyroots_app`, takes from `anon` and `authenticated` everything the
@@ -865,9 +886,11 @@ open:
   [deployment.md](deployment.md), "Go-live checklist", B, for the values.
   All three set 2026-10-10 between `11:59Z` and `12:09Z` per `gh secret list`.
   Run `38144882642` dumped and uploaded with them.
-- [ ] **Read the first dump's schema list before drilling it**
+- [x] **Read the first dump's schema list before drilling it**
   ([Since 2026-10-10: one project](#since-2026-10-10-one-project)), and decide
-  which schemas a backup holds.
+  which schemas a backup holds. Read 2026-10-18 and decided in
+  [ADR-074](../decisions/074-a-restore-takes-public-whole-and-the-data-of-auth.md)
+  (#285).
 - [ ] **⚠️ `SUPABASE_SERVICE_ROLE_KEY` is a project-wide admin credential, not
   a bucket-scoped one** — it bypasses RLS on every table and grants full
   access to every Storage bucket (including the live `documents` bucket) plus
@@ -884,6 +907,8 @@ open:
   and `storage.objects` holds it at 68,588 bytes.
 - [ ] Run `scripts/restore_drill.sh --latest` against that first real prod
   dump and confirm `DRILL: PASS`; record the result in the drill log above.
+  This waits on #258: ADR-074 moves the drill into the local Supabase stack and
+  adds the canary sign-in, which needs the canary account to exist first.
 - [ ] **Read the drill's `request role:` line and record it**, not only the
   `DRILL:` line. Since 2026-08-22 the drill makes that check itself (check 4,
   [ADR-052](../decisions/052-restore-bootstraps-the-request-role.md)), so it no
@@ -925,7 +950,9 @@ open:
   Storage (same provider as the DB backups), so a DB-only restore repoints at
   live blobs today — but there is no independent backup/mirror of the
   documents bucket itself onto a second provider. A Supabase-wide outage or
-  account loss would take blobs down with no off-provider copy.
+  account loss would take blobs down with no off-provider copy. A recovery into a
+  new project brings back no file at all: the dump holds only `storage.objects`
+  metadata, and ADR-074 restores none of it (#296).
 - **Admin-succession runbook**: no runbook exists for a clan whose only admin
   dies or leaves — unrelated to backups mechanically, but the same "family
   data must outlive individuals" principle; still TBD.
