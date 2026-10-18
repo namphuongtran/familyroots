@@ -165,11 +165,13 @@ bytes.
 ## 3. Auth settings: read 2026-10-04 on the retired project
 
 Read with `supabase config diff --project-ref bftqrkgbulwtbptnpfca`, which changes nothing. The
-"local" column is `supabase/config.toml`, the **local stack's** file. **The current project has not
-been read.** Read it the same way with `--project-ref xkmutzxdhdigyfisfrwd` and record it here. Its
-Site URL and Redirect URLs are set at go-live to the web's production origin
-([deployment.md](deployment.md), "Go-live checklist", A), so the "Hosted" column below is not what
-production will run.
+"local" column is `supabase/config.toml`, the **local stack's** file. **The current project was read
+on 2026-10-18**, with the scratch-directory `config pull --dry-run` of § 4d, which writes nothing:
+Site URL `https://familyroots-web.vercel.app`, Redirect URLs `["https://familyroots-web.vercel.app/**"]`,
+Confirm email on, OTP length 8, send interval 1 minute, TOTP enroll and verify on, and the SMTP
+sender of § 4d. Google sign-in was not read. The "Hosted" column below is still the **retired**
+project's, and production's Site URL and Redirect URLs are the values just given
+([deployment.md](deployment.md), "Go-live checklist", A).
 
 | Setting | Hosted | Local file |
 |---|---|---|
@@ -253,6 +255,10 @@ What each shape lands as on the client, and why `?code=` never happens, is in
 #203's body was written on 2026-10-04 and names the retired `bftqrkgbulwtbptnpfca`. Push to the
 current project, `xkmutzxdhdigyfisfrwd`, as below.
 
+**The push needs the custom SMTP sender of § 4d.** On 2026-10-11, before there was one, Supabase
+refused it with HTTP 400: "Email template modification is not available for free tier projects
+using the default email provider." Nothing was written. The sender has been set since 2026-10-18.
+
 From the repository root, with the CLI pinned in the command. **Not with a global `supabase`, and
 never with 2.115.0**, the version `scripts/supabase_local.sh` pins for the local stack:
 
@@ -320,6 +326,74 @@ The read-back proves what the project holds. The email proves what a person rece
    #203 it begins with `https://xkmutzxdhdigyfisfrwd.supabase.co/auth/v1/verify?token=` and
    carries `type=recovery` and a `redirect_to` naming the Site URL.
 3. A link that does anything else (`...`, a missing token, another host) is a broken template.
+
+### 4d. The sender: Resend on the owner's domain (#276, ADR-071)
+
+**Set by the owner on 2026-10-18.** Supabase's default provider delivers only to the project's team,
+so every auth email to anyone else goes through this sender
+([ADR-071](../decisions/071-hosted-auth-email-goes-out-through-resend-on-the-owners-domain.md)).
+
+| | Value |
+|---|---|
+| Provider | Resend. The domain and the API key are in the owner's Resend account |
+| Domain | `getnami.dev`. Its nameservers are Cloudflare's, and Resend's records live there |
+| Sender | `noreply@getnami.dev`. No mailbox stands behind it, and the apex has no MX record |
+| Sender name | `Familyroots`, as read. #276 proposed `FamilyRoots`. The casing is the owner's choice |
+| Where it is set | Dashboard → Authentication → Emails → SMTP Settings |
+| SMTP | host `smtp.resend.com`, port `465`, username `resend` |
+| Password | a Resend API key with sending access. **It is set in the dashboard and nowhere else.** Never record it here |
+| Email rate limit | 30 an hour (`auth.rate_limit.email_sent`), read 2026-10-18 |
+
+**Read the settings back without writing anything.** `config pull` with `--dry-run` reads every
+SMTP field except the password. Run it from a scratch directory, never from the repository's
+`supabase/`, so no repository config is involved:
+
+```bash
+mkdir -p /path/to/scratch/supabase && printf 'project_id = "scratch"\n' > /path/to/scratch/supabase/config.toml
+cd /path/to/scratch
+npx --yes supabase@2.120.0 config pull --workdir . --project-ref xkmutzxdhdigyfisfrwd --dry-run
+#   expect, under auth.email.smtp: enabled true, host smtp.resend.com, port 465, user resend,
+#   admin_email noreply@getnami.dev. It reports "dry_run": true and "wrote": false.
+```
+
+Read 2026-10-18: every value in the table above, and `"wrote":false`.
+
+**Read the DNS records from Cloudflare's nameserver.** A public resolver can keep an earlier "no
+record" for up to 30 minutes after a change, because the zone's negative TTL is 1800 seconds. On
+2026-10-18, 1.1.1.1 and 8.8.8.8 still answered empty while the nameserver held every record.
+
+```bash
+dig +short TXT resend._domainkey.getnami.dev @galilea.ns.cloudflare.com   # DKIM: "p=MIGfMA0…"
+dig send.getnami.dev MX @galilea.ns.cloudflare.com +noall +answer          # CNAME send.forge.rmta.net.
+dig +short MX send.forge.rmta.net                                          # 10 feedback.forge.rmta.net.
+dig +short TXT send.forge.rmta.net                                         # "v=spf1 ip4:… ~all"
+dig +short TXT _dmarc.getnami.dev @galilea.ns.cloudflare.com              # "v=DMARC1; p=none;"
+```
+
+Read 2026-10-18: all five as shown. Resend showed the domain as verified, as the owner reported.
+
+**Not yet checked: an email reaching an address outside the team.** That is #276's outcome check.
+The owner deferred it on 2026-10-18 because the web's sign-up flow has open defects of its own. It
+does not need the sign-up form. Either of these proves the sender:
+
+1. Dashboard → Authentication → Users → an account whose mailbox you hold → **Send password
+   recovery**. The email must come from `noreply@getnami.dev`, and Resend's email log must list
+   it. The default provider sends from Supabase's own address and never appears in Resend's log.
+   Do not open the link before #203.
+2. Sign up on `https://familyroots-web.vercel.app` with a mailbox outside the team, once sign-up
+   works. The confirmation email must arrive.
+
+Record the date and what arrived here.
+
+**If no email arrives,** look in Resend's email log first. No row there means Supabase did not hand
+it over: read Dashboard → Logs → Auth for an SMTP error, usually a wrong key or a sender outside the
+verified domain. A row marked bounced or failed carries Resend's reason.
+
+**To change the domain,** add the new one in Resend, publish its records, wait for **Verified**,
+then change the sender in SMTP Settings, send one email, and update the table above. The templates
+build links from `{{ .SiteURL }}`, not from the sender, so no push and no new ADR is needed.
+**To rotate the key,** create a new one in Resend, paste it into SMTP Settings, send one email, then
+delete the old key in Resend.
 
 ---
 

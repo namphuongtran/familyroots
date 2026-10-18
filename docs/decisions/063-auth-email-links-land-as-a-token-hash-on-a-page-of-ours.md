@@ -215,7 +215,9 @@ Harder:
 - **The deployed origin and the Redirect URLs list.** That is M3, per ops § 3.
 - **The typed code.** It stays open as an addition.
 - **The email copy**, beyond its language order. That is build issue 3.
-- **The SMTP sender.**
+- **The SMTP sender.** Decided 2026-10-18 by
+  [ADR-071](071-hosted-auth-email-goes-out-through-resend-on-the-owners-domain.md): Resend, from a
+  `noreply@` address on the owner's domain.
 
 ## Related
 

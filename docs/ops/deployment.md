@@ -21,6 +21,7 @@ still captures infra intent, and its resources are still stubs.
 | `familyroots-api` | projectId `prj_bvR27jsrEOWsD2q1vGeKxwkLAY3Z`, deployed from `backend/` | `backend/vercel.json`, `backend/.vercelignore` |
 | `familyroots-web` | projectId `prj_TD73V51MFvGHzOYTeclsYVqaEfXT`, deployed from `web/` | `web/vercel.json` |
 | Supabase | project `xkmutzxdhdigyfisfrwd`, `ap-southeast-1`, Postgres 17 | `supabase/config.toml` (buckets), `supabase/supabase/config.toml` (email templates) |
+| Resend | SMTP for Supabase Auth email, sender `noreply@getnami.dev`, set 2026-10-18 (ADR-071) | none. Dashboard only, [supabase-hosted-project.md](supabase-hosted-project.md) § 4d |
 
 Both projects were created on 2026-10-10. The ids are not secrets, but CI reads them from GitHub
 secrets ("Go-live checklist", B). Read the same day with `vercel project inspect <name> --scope namtp`,
@@ -319,6 +320,10 @@ Every variable is set for the **Production** environment only. Preview deploymen
   `supabase db query --linked "select id, public, allowed_mime_types from storage.buckets order by id;"`.
 - [ ] **The private `backups` bucket**, by hand. It is not in `config.toml`, so the seed does not
   make it ([backup-restore.md](backup-restore.md), "Go-live checklist").
+- [ ] **Custom SMTP sender (#276).** Without it Supabase emails only the project's team, and refuses
+  the template push below. Set on 2026-10-18 to Resend, `noreply@getnami.dev`
+  ([supabase-hosted-project.md](supabase-hosted-project.md) § 4d, ADR-071). Still open: one email
+  seen to reach an address outside the team.
 - [ ] **Email templates (#203).** Push them from `supabase/supabase/config.toml` with
   `--project-ref xkmutzxdhdigyfisfrwd`, then read them back
   ([supabase-hosted-project.md](supabase-hosted-project.md) § 4a, § 4b). #203's body still names
