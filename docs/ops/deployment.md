@@ -324,10 +324,11 @@ Every variable is set for the **Production** environment only. Preview deploymen
   the template push below. Set on 2026-10-18 to Resend, `noreply@getnami.dev`
   ([supabase-hosted-project.md](supabase-hosted-project.md) § 4d, ADR-071). Still open: one email
   seen to reach an address outside the team.
-- [ ] **Email templates (#203).** Push them from `supabase/supabase/config.toml` with
-  `--project-ref xkmutzxdhdigyfisfrwd`, then read them back
-  ([supabase-hosted-project.md](supabase-hosted-project.md) § 4a, § 4b). #203's body still names
-  the retired project's ref.
+- [x] **Email templates (#203).** Pushed on 2026-10-18 from `supabase/supabase/config.toml` with
+  `--project-ref xkmutzxdhdigyfisfrwd`, and read back
+  ([supabase-hosted-project.md](supabase-hosted-project.md) § 4a, § 4b). A hosted recovery email
+  now links `https://familyroots-web.vercel.app/reset-password?token_hash=…` (§ 4c). Push again,
+  and read back, after any change under `supabase/templates/`.
 
 ### B. GitHub repository settings
 - [ ] **Create the `production` environment before the first release** (Settings → Environments →

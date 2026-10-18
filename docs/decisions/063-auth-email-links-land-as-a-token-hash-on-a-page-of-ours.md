@@ -230,7 +230,8 @@ Harder:
 - `docs/contracts/frontend-integration-guide.md` § 3, § 3.1 and § 4, `docs/contracts/rest-auth-api.md`,
   `docs/architecture/auth-flow.md`: now describe this shape as decided and not yet built.
   **Since #202 (2026-10-09)** they describe it as built: both pages, and the templates in
-  `supabase/templates/`, which the local stack sends. Only the hosted push, #203, is left.
+  `supabase/templates/`, which the local stack sends. The hosted push, #203, was done on
+  2026-10-18.
 - `docs/ops/supabase-hosted-project.md` § 4 and traps 3 and 4: corrected about reading and pushing
   template bodies.
 - Spec `docs/superpowers/specs/2026-08-02-design-system-and-screens.md` § 7.1c: the landing's states

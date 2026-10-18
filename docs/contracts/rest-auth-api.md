@@ -80,8 +80,8 @@ Request/response expectations:
   then `update_user({password})` (ADR-063; mobile users finish there too). The
   backend has no `reset-password` endpoint by design. The web pages are built (#201,
   `/{locale}/forgot-password` and `/{locale}/reset-password`), and so is the template that
-  links them (#202, `supabase/templates/recovery.html`), but until #203 pushes it the
-  hosted email still carries Supabase's default link
+  links them (#202, `supabase/templates/recovery.html`). The hosted project has sent it since
+  2026-10-18 (#203); a hosted email sent before that carries Supabase's default link
   ([frontend-integration-guide.md](frontend-integration-guide.md) § 3.1 and § 4).
 
 ### The join identifier: `clan_code` now, `clan_id` for one more release

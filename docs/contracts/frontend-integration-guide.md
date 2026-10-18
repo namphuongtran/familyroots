@@ -270,8 +270,8 @@ landing. An email link that reaches it carries no `code`, so it redirects to
 
 | Template link | The link opens | The client lands with | The client finishes with |
 |---|---|---|---|
-| `{{ .ConfirmationURL }}`, **the Supabase default, and what the hosted project carries until #203 pushes the repository's templates** | `https://<ref>.supabase.co/auth/v1/verify?token=…&type=signup\|recovery&redirect_to=…`. Supabase verifies it on the click | `<redirect_to>#access_token=…&refresh_token=…&expires_in=…&token_type=bearer&type=signup\|recovery`, a **URL fragment**. A failure arrives as `#error=…&error_code=…&error_description=…` | **signup**: nothing. The address is already confirmed on the click, so route to login. **recovery**: read the fragment in browser code, set the session, then `updateUser({ password })` |
-| a custom link built from `{{ .TokenHash }}`, **the shape ADR-063 decides, in `supabase/templates/` since #202 and on the local stack** | our own page, directly: `{{ .SiteURL }}/verify-email/confirm?token_hash=…&type=email` or `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery` | `?token_hash=…&type=email\|recovery` | `verifyOtp({ type, token_hash })`, **only on a user action**, never on load (ADR-063 § 2) |
+| `{{ .ConfirmationURL }}`, **the Supabase default, and what the hosted project carried until #203 pushed the repository's templates on 2026-10-18** | `https://<ref>.supabase.co/auth/v1/verify?token=…&type=signup\|recovery&redirect_to=…`. Supabase verifies it on the click | `<redirect_to>#access_token=…&refresh_token=…&expires_in=…&token_type=bearer&type=signup\|recovery`, a **URL fragment**. A failure arrives as `#error=…&error_code=…&error_description=…` | **signup**: nothing. The address is already confirmed on the click, so route to login. **recovery**: read the fragment in browser code, set the session, then `updateUser({ password })` |
+| a custom link built from `{{ .TokenHash }}`, **the shape ADR-063 decides, in `supabase/templates/` since #202, on the local stack, and on the hosted project since #203 (2026-10-18)** | our own page, directly: `{{ .SiteURL }}/verify-email/confirm?token_hash=…&type=email` or `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery` | `?token_hash=…&type=email\|recovery` | `verifyOtp({ type, token_hash })`, **only on a user action**, never on load (ADR-063 § 2) |
 
 **Two traps in the default shape:**
 - A fragment never reaches a server. A Next.js route handler or server component
@@ -302,9 +302,10 @@ since #202** (2026-10-09): `supabase/templates/confirmation.html` and
 `supabase/templates/recovery.html`, Vietnamese first. The local stack sends them, so on a
 laptop or in the image e2e job the mail lands as `http://127.0.0.1:3000/verify-email/confirm?token_hash=…&type=email`
 or `http://127.0.0.1:3000/reset-password?token_hash=…&type=recovery`, and the e2e walks open
-that link with only the origin swapped for the harness's. **The owner pushes them to the
-hosted project in #203. Until then the hosted emails still carry the default link, so no
-hosted email reaches either page yet.**
+that link with only the origin swapped for the harness's. **The owner pushed them to the
+hosted project on 2026-10-18 (#203)**, so a hosted email now lands on
+`https://familyroots-web.vercel.app/…?token_hash=…`. A hosted email sent before that carries the
+default link.
 
 ---
 
@@ -322,7 +323,7 @@ Code: `app/api/v1/auth.py` (`forgot_password`),
 2. The email link lands in one of the two shapes in §3.1, with `type=recovery`. The
    repository's template (#202) links `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery`,
    which the middleware sends to `/{locale}/reset-password` (#201). The local stack sends
-   it now; the hosted project sends it once #203 pushes it. Until then a hosted email
+   it, and the hosted project has since 2026-10-18 (#203). A hosted email sent before that
    carries the default template's URL fragment, which carries a session.
 3. The client completes the reset **entirely via the Supabase SDK**. The backend has
    no reset-password endpoint, by design. It establishes the session from the link,
