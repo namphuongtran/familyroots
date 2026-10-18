@@ -826,8 +826,10 @@ open:
 - **The database and its backups now share one project.** Before, losing the
   Render database left the dumps in Supabase. Now losing the Supabase project,
   or the account, loses both. Whether the project's plan keeps backups of its
-  own, and for how long, has not been read. A second provider for the dumps is a
-  follow-up.
+  own, and for how long, has not been read. The second provider was chosen on
+  2026-10-18: Backblaze B2, EU Central, with both copies encrypted with `age`
+  ([ADR-073](../decisions/073-the-off-provider-dump-copy-lives-in-backblaze-b2-encrypted-with-age.md)).
+  #258 builds it. Until then this bullet stands.
 - **The dump now carries Supabase's own schemas. Not measured.**
   `scripts/db_backup.sh:40` runs `pg_dump` with no `--schema`, so a dump of the
   Supabase database takes `auth`, `storage` and the other schemas Supabase
@@ -915,7 +917,10 @@ open:
   answered.)
 - **No off-provider copy of the database.** Since 2026-10-10 the database and
   the `backups` bucket are one Supabase project
-  ([Since 2026-10-10: one project](#since-2026-10-10-one-project)).
+  ([Since 2026-10-10: one project](#since-2026-10-10-one-project)). Where the
+  copy goes is decided in
+  [ADR-073](../decisions/073-the-off-provider-dump-copy-lives-in-backblaze-b2-encrypted-with-age.md),
+  and #258 builds it.
 - **Document-blob bucket mirroring**: document files already live in Supabase
   Storage (same provider as the DB backups), so a DB-only restore repoints at
   live blobs today — but there is no independent backup/mirror of the
