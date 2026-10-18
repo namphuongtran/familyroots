@@ -44,6 +44,9 @@ _PROD_BASE: dict[str, Any] = {
     "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_x",
     # Production requires an explicit XFF-trust decision (proxied → true).
     "RATE_LIMIT_TRUST_FORWARDED_FOR": True,
+    # And the rate limit's shared store (ADR-072).
+    "KV_REST_API_URL": "https://store.upstash.io",
+    "KV_REST_API_TOKEN": "upstash-token",
 }
 
 

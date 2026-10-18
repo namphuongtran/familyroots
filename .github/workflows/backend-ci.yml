@@ -51,6 +51,24 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # The rate limit's shared store, as docker-compose.yml runs it (ADR-072):
+      # tests/integration/test_rate_limit_shared_store.py reaches Redis through
+      # serverless-redis-http, which answers Upstash's REST API, on 127.0.0.1:8079.
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis-http:
+        image: hiett/serverless-redis-http:0.0.10
+        env:
+          SRH_MODE: env
+          SRH_TOKEN: familyroots-local-redis-http
+          SRH_CONNECTION_STRING: redis://redis:6379
+        ports:
+          - 8079:80
 
     steps:
       - uses: actions/checkout@v4

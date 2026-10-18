@@ -389,6 +389,7 @@ repository does not have.
 | `INVITE_LINK_ORIGIN` | `http://familyroots-web.test:3102` | see below |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | nothing proxies the container. Production sets `true`, because Vercel overwrites `X-Forwarded-For` with the client's address ([deployment.md](deployment.md), "Go-live checklist", C) |
 | `RATE_LIMIT_AUTH_MAX_REQUESTS` | `1000` | the validator refuses only a value below 1, in every environment. **The one value here that production does not run**: production sets nothing, so it keeps the default 20 (ADR-021, amended by #226). Every request reaches the container from one address, and a full run spent 28 from the bucket in under a minute (2026-10-07). 26 of them were `GET /auth/me`, which the bucket stopped counting in #280, but the harness keeps 1000. See "The job inherited the harness's rate-limit collision" below |
+| `KV_REST_API_URL` and `KV_REST_API_TOKEN` | `http://redis-http` and `familyroots-local-redis-http` | the validator refuses production without the rate limit's shared store (ADR-072). `redis-http` is compose's Redis behind `serverless-redis-http`, which answers Upstash's REST API, so the container counts through the adapter production runs. The token is that emulator's own, not a secret |
 | `APP_SECRET_KEY` | `openssl rand -hex 32`, per run | anything but the default passes. Production's is set by hand in Vercel |
 | `SUPABASE_URL` and both keys | this stack's, from `scripts/supabase_local.sh env` | `supabase.localhost`, for the reason in "The two settings that are load bearing" |
 

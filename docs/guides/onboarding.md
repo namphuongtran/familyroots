@@ -45,7 +45,7 @@ Verify: Open http://localhost:8000/docs to see the Swagger UI.
 
 ### Running backend integration tests
 
-Integration tests require a local Postgres (`docker compose up -d pgdb`).
+Integration tests require a local Postgres and the rate limit's emulated store (`docker compose up -d pgdb redis-http`, ADR-072).
 `tests/integration/conftest.py` drops/creates a throwaway database
 `family_roots_schema_test` and applies the full Alembic chain. Override the
 admin DSN via `TEST_PG_ADMIN_URL` (default

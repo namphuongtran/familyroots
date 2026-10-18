@@ -384,6 +384,7 @@ and the job prints it:
 | `SUPABASE_ANON_KEY` | the project's anon key | boot fails |
 | `SUPABASE_SERVICE_ROLE_KEY` | the project's service-role key | boot fails |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | `true` | boot fails while unset. Vercel overwrites `X-Forwarded-For` "and **do not forward external IPs**. This restriction is in place to prevent IP spoofing" ("Request headers", read 2026-10-10), so the rightmost entry the limiter reads is the client |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | **set by the Upstash for Redis integration**, not by hand: database `familyroots-ratelimit`, connected to Production and Development (#281) | boot fails while either is empty. The auth rate limit counts there, shared by every instance (ADR-072). If the integration is removed or disconnected, every cold start fails |
 | `MAX_UPLOAD_SIZE_MB` | unset, so `50`; or `50` | since #256 a document goes from the browser straight to Storage (ADR-068), so Vercel's 4.5 MB body limit no longer applies. Until that release production held `4` (#250). Remove it or set `50` at that release, or every upload over 4 MB is refused at signing with `422 file_too_large` |
 | `FIREBASE_CREDENTIALS_JSON` *(optional)* | the service-account JSON, inline | push notifications are off, with a warning, not a boot failure (#250) |
 | `SENTRY_DSN` *(optional)* | the DSN | Sentry is off |
@@ -453,5 +454,8 @@ Do A to E first. A backend deploy with its variables unset fails its own health 
   rule: every migration keeps the code already live working. Nothing in CI rejects a migration
   that breaks it. The first release that ships ADR-070 still opens the old cold-start window once
   (§ "The window this order leaves").
-- The rate limiter and the metrics throttle hold their state per instance on serverless. ADR-065
-  accepts that.
+- The auth rate limiter's count is in Upstash Redis, shared by every instance (ADR-072). While
+  Upstash errors or is slower than 0.5 s, each instance counts on its own again, and Sentry gets a
+  warning per instance per minute, `Rate limit store unavailable`. Upstash's own console is the
+  next place to look. The metrics throttle still holds its state per instance, which ADR-065
+  accepts.

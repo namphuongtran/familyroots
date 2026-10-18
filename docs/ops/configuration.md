@@ -27,6 +27,8 @@ secret *storage/rotation* is covered in [secrets.md](secrets.md).
 | `VERCEL_URL` | `""` | Set by Vercel, never by hand: this deployment's own generated host. `trusted_hosts` adds it to an explicit `ALLOWED_HOSTS`, because Vercel Cron calls that host (#265) | — |
 | `RATE_LIMIT_TRUST_FORWARDED_FOR` | unset (dev resolves `false`) | Trust `X-Forwarded-For` for rate-limit + audit IPs | **Required explicitly in production** (boot fails if unset): `true` behind a trusted proxy that sets `X-Forwarded-For`, as Vercel does ([deployment.md](deployment.md), "Go-live checklist" C), `false` when directly exposed |
 | `RATE_LIMIT_AUTH_MAX_REQUESTS` | `20` | Requests one client IP may send to the counted auth paths (listed in [error-codes.md](../contracts/error-codes.md), "429 and Retry-After"), one shared bucket, per 60-second window ([ADR-021](../decisions/021-non-enumerating-auth-surfaces.md) Decision 3, amended by #226 and #280). `/auth/me` is not counted. The window is fixed. **Boot fails** below 1, in any environment, because 0 refuses every sign-in | **Leave unset**: production's budget is 20, and raising it weakens the mitigations ADR-021 cites, so it needs an ADR. Not refused under `production`, because the image e2e job boots that way with it raised. Only the authenticated e2e harness's backend sets it, to `1000` (`web/CLAUDE.md`, `image-e2e.yml`) |
+| `KV_REST_API_URL` | `""` | The REST URL of the Upstash Redis database the auth rate limit counts in, shared by every instance ([ADR-072](../decisions/072-the-auth-rate-limit-counts-in-upstash-redis.md)). The Vercel Marketplace integration injects it (#281). With `KV_REST_API_TOKEN` empty too, the count is in process memory | **Required in production** (boot fails while either is empty). Set by the integration, never by hand. **Boot fails in any environment** when one of the pair is set without the other. Locally leave both unset, or point them at compose's `redis-http` (`http://127.0.0.1:8079`, token `familyroots-local-redis-http`) |
+| `KV_REST_API_TOKEN` | `""` | That database's read-write REST token. The integration also injects `KV_REST_API_READ_ONLY_TOKEN`, `KV_URL` and `REDIS_URL`, which the backend does not read | As `KV_REST_API_URL` |
 | `MAX_UPLOAD_SIZE_MB` | `50` (derived from domain policy) | Platform-wide upload cap; `max_upload_bytes` property is what handlers use. Enforced twice: at signing, on the declared size, and at confirm, on the size Storage recorded (ADR-068) | Tune as needed. Keep it at or under the bucket's `file_size_limit` (50 MiB), which refuses a larger PUT first |
 | `SCHEDULER_TIMEZONE` | `Asia/Ho_Chi_Minh` | Single platform clock for the cron **and** its date math | **Boot fails** on a non-IANA name (any env) |
 | `NOTIFICATION_CRON_HOUR` | `7` | Daily anniversary-job hour in the platform zone (the `document_purge` job also keys off this hour, at `minute=30`). Read by APScheduler only; under Vercel Cron the schedule lives in the deploy configuration, in UTC | — |
@@ -113,8 +115,8 @@ records that nothing compares the project's variables with that list.
 JSON goes inline in `FIREBASE_CREDENTIALS_JSON`.
 
 `tests/unit/test_config_validation.py` pins the boot refusals for a wildcard or loopback
-`CORS_ORIGINS`, an unset `RATE_LIMIT_TRUST_FORWARDED_FOR`, and (since #191) an empty or loopback
-`INVITE_LINK_ORIGIN`. `tests/unit/test_identity_unavailable_envelope.py` pins the refusal of
+`CORS_ORIGINS`, an unset `RATE_LIMIT_TRUST_FORWARDED_FOR`, (since #191) an empty or loopback
+`INVITE_LINK_ORIGIN`, and (since #257) an empty `KV_REST_API_URL` or `KV_REST_API_TOKEN`. `tests/unit/test_identity_unavailable_envelope.py` pins the refusal of
 each of the three Supabase vars when empty.
 
 Notes:

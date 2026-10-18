@@ -45,6 +45,9 @@ _PROD_SAFE = {
     "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_x",
     # Production must decide XFF trust explicitly; Vercel (proxied) → true.
     "RATE_LIMIT_TRUST_FORWARDED_FOR": True,
+    # The rate limit's shared store, which every Vercel instance reads (ADR-072).
+    "KV_REST_API_URL": "https://store.upstash.io",
+    "KV_REST_API_TOKEN": "upstash-token",
 }
 
 
@@ -233,3 +236,32 @@ def test_the_cron_secret_error_names_the_remedy() -> None:
     with pytest.raises(ValidationError) as exc:
         _build(**{**_PROD_SAFE, "SCHEDULER_ENABLED": False})
     assert "openssl rand -hex 32" in str(exc.value)
+
+
+@pytest.mark.parametrize("missing", ["KV_REST_API_URL", "KV_REST_API_TOKEN"])
+def test_production_refuses_to_boot_without_the_shared_rate_limit_store(missing: str) -> None:
+    """ADR-072, #257. Without the store each Vercel instance counts on its own, so a burst
+    spread over instances is admitted once per instance. Each half alone is refused, and with
+    both missing the refusal names the pair."""
+    with pytest.raises(ValidationError, match=missing):
+        _build(**{**_PROD_SAFE, missing: ""})
+    with pytest.raises(ValidationError, match="must be set in production"):
+        _build(**{**_PROD_SAFE, "KV_REST_API_URL": "", "KV_REST_API_TOKEN": ""})
+
+
+def test_production_with_the_shared_store_selects_it() -> None:
+    assert _build(**_PROD_SAFE).shared_rate_limit_store is True
+
+
+def test_development_without_the_store_counts_in_memory() -> None:
+    """Development, tests and the e2e harness set neither, and keep the in-memory count."""
+    assert _build(APP_ENV="development").shared_rate_limit_store is False
+
+
+@pytest.mark.parametrize("missing", ["KV_REST_API_URL", "KV_REST_API_TOKEN"])
+def test_half_a_store_pair_is_refused_in_every_environment(missing: str) -> None:
+    """One without the other would quietly select the in-memory count, so it is refused even
+    in development, and the refusal names the half that is missing."""
+    pair = {"KV_REST_API_URL": "http://127.0.0.1:8079", "KV_REST_API_TOKEN": "t", missing: ""}
+    with pytest.raises(ValidationError, match=missing):
+        _build(APP_ENV="development", **pair)

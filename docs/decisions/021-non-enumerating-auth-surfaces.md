@@ -11,6 +11,9 @@ stops APScheduler only where it runs. The same 404 rule now also guards the two
 Decision 3 amended 2026-10-11 by issue #280: the bucket counts seven routes where an account or a
 token can be guessed, not two path prefixes, so `GET /auth/me` no longer spends it. See the dated
 amendment under Decision 3.
+Decision 3 amended 2026-10-18 by [ADR-072](072-the-auth-rate-limit-counts-in-upstash-redis.md)
+(#257): the bucket is shared by every instance, in Upstash Redis. See the dated amendment under
+Decision 3.
 
 ## Context
 The 2026-07-12 deep review left three gaps on the production-hardening backlog,
@@ -313,6 +316,19 @@ already bounds who can call it.
 > - With `request.url.path` in place of the router's path, the `%3F` and `%23` accept cases spend
 >   nothing.
 > - With logout dropped from the uncounted list, the route guard names it.
+
+> **Amendment (2026-10-18, [ADR-072](072-the-auth-rate-limit-counts-in-upstash-redis.md),
+> #257):** the bucket is **one per IP across every instance**, not one per instance. The
+> 2026-10-10 amendment above no longer describes production. `RateLimitMiddleware` counts
+> through a store: in production an exact sliding log in Upstash Redis, checked and recorded in
+> one Lua script, and in development, tests and the e2e harness the in-memory log it always had.
+> The budget, the 60-second sliding window, the seven counted routes, the `rate_limited`
+> envelope and `Retry-After` are unchanged, and so is the rule that a refused request is not
+> recorded. Production refuses to boot without `KV_REST_API_URL` and `KV_REST_API_TOKEN`. If the
+> store fails or does not answer within 0.5 seconds, the request is decided by the instance's
+> in-memory bucket, which is the per-instance limit of the 2026-10-10 amendment, and Sentry gets
+> a warning. Decision 1's mitigations rest on "20 per minute per IP" again, except during such
+> an outage.
 
 ### 4. `engine.dispose()` on shutdown
 One-liner in `main.py`'s lifespan `finally` (after scheduler stop): the async

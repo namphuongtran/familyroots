@@ -73,6 +73,10 @@ storage3's `create_signed_urls`, one request per 1000 paths. Its failures are un
 `familyroots-api` in `sin1`. After the release the maintainer may export a throwaway clan whose
 JSON exceeds 4.5 MB from production, and post the status and byte count on #271.
 
+**Amended 2026-10-18 (#257): § 7's per-instance auth rate limit is replaced by
+[ADR-072](072-the-auth-rate-limit-counts-in-upstash-redis.md).** The count is in Upstash Redis,
+shared by every instance. `MetricsFailureThrottle` stays per instance, as § 7 accepted.
+
 ## Context
 
 ### What Vercel provides, read 2026-10-10
@@ -237,6 +241,13 @@ past the Function. **Not handled:** a response over 4.5 MB, which in practice me
 `GET /exports/clan` for a large clan.
 
 ### 7. The rate limiter and the metrics throttle are per instance, and that is accepted
+
+> **Amendment (2026-10-18, [ADR-072](072-the-auth-rate-limit-counts-in-upstash-redis.md),
+> #257):** the auth rate limiter is no longer per instance. Its count is in Upstash Redis, shared
+> by every instance, and an instance falls back to its own in-memory count only while the store
+> fails. **`MetricsFailureThrottle` stays per instance, and that is still accepted**, because
+> metrics stay off on Vercel (`METRICS_ENABLED` unset), so nothing reaches it there. The cron
+> routes' paragraph below is unchanged.
 
 `RateLimitMiddleware` (ADR-021 § 3) and `MetricsFailureThrottle` (ADR-040) keep their counters in
 process memory. ADR-040 already accepted "5×N failures per window" for N replicas. On Vercel, N
