@@ -39,6 +39,7 @@ from app.core.exceptions import (
 )
 from app.core.logging import configure_logging
 from app.core.metrics_guard import MetricsFailureThrottle
+from app.core.rate_limit import RateLimitMiddleware, RateLimitStore
 from app.core.readiness import (
     MIGRATIONS_AHEAD,
     MIGRATIONS_SERVABLE,
@@ -56,6 +57,7 @@ from app.domain.document.repository import (
     StorageUnavailableError,
 )
 from app.domain.shared.exceptions import DomainError
+from app.infrastructure.upstash_rate_limit_store import UpstashRateLimitStore
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.request_meta_middleware import RequestMetaMiddleware
 from app.middleware.sentry_middleware import SentryMiddleware
@@ -186,8 +188,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.exception("teardown step failed: engine-dispose")
 
 
-def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
+def _rate_limit_store() -> RateLimitStore | None:
+    """The shared Upstash store when its credentials are set, else None for in-memory.
+
+    Keys carry APP_ENV because the Vercel integration connects one database to both the
+    Production and the Development environment (#281)."""
+    if not settings.shared_rate_limit_store:
+        return None
+    return UpstashRateLimitStore(
+        url=settings.KV_REST_API_URL,
+        token=settings.KV_REST_API_TOKEN,
+        key_prefix=f"familyroots:{settings.APP_ENV}:rate-limit:auth:",
+    )
+
+
+def create_app(*, rate_limit_store: RateLimitStore | None = None) -> FastAPI:
+    """Create and configure the FastAPI application.
+
+    ``rate_limit_store`` replaces the store settings select (ADR-072). Two apps given one
+    store stand for two Vercel instances sharing one count."""
     application = FastAPI(
         title="FamilyRoots API",
         description="REST API for the FamilyRoots genealogy platform",
@@ -243,7 +262,8 @@ def create_app() -> FastAPI:
     #   - Language sets the locale before RateLimit builds its (localized) 429 envelope;
     #   - RequestMeta populates the ip/user-agent ContextVar for every request so
     #     AuditLogHandler can enrich audit rows regardless of path.
-    from app.core.rate_limit import RateLimitMiddleware
+    if rate_limit_store is None:
+        rate_limit_store = _rate_limit_store()
 
     # innermost
     application.add_middleware(
@@ -264,6 +284,9 @@ def create_app() -> FastAPI:
         max_requests=settings.RATE_LIMIT_AUTH_MAX_REQUESTS,
         window_seconds=60,
         trust_forwarded_for=settings.trust_forwarded_for,
+        # Upstash in production, so every instance reads one count; None counts in this
+        # process's memory (ADR-072). A failing store falls back to memory, never to a 5xx.
+        store=rate_limit_store,
     )
     if settings.SENTRY_DSN:
         application.add_middleware(SentryMiddleware)

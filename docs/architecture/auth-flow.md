@@ -90,14 +90,22 @@ Identity-provider failures map **truthfully**: infrastructure unavailability →
 
 ## Rate limiting
 
-In-memory sliding window, **20 req/min/IP, over exactly these paths, whatever the method**,
+Sliding window, **20 req/min/IP, over exactly these paths, whatever the method**,
 all in one bucket: `/api/v1/auth/register`, `/onboard`, `/login`, `/refresh`,
 `/forgot-password`, `/resend-verification`, and `/api/v1/invitations/{token}/accept`. These
 are the routes where an account or a token can be guessed or probed. Every other route passes
 uncounted, including `GET`/`PATCH /auth/me`, `/auth/me/fcm-token` and `/auth/logout`: a wrong
 bearer token there is a 401 and a signed token cannot be guessed, and the web's server guard
 sends `GET /auth/me` with the web's address, not the user's (ADR-021, amended 2026-10-11 by
-#280). On Vercel Functions the bucket is per instance (ADR-065); a shared store is #257.
+#280).
+
+**Where the count lives (ADR-072).** In production it is in Upstash Redis, one sorted set per IP
+shared by every Vercel instance, checked and recorded in one Lua script, so a burst is refused at
+20 whichever instance serves each request. Production refuses to boot without
+`KV_REST_API_URL` and `KV_REST_API_TOKEN`. Development, tests and the e2e harness set neither and
+count in process memory. If the store errors or does not answer within 0.5 s, the request is
+decided by the instance's own in-memory bucket and Sentry gets a warning, so sign-in never fails
+because of the store; during such an outage the limit is per instance again.
 The count is `RATE_LIMIT_AUTH_MAX_REQUESTS`, default 20, which no production deployment sets; only the authenticated e2e harness's backend raises it, to
 1000, because that suite sends every request from one address (ADR-021, amended
 2026-10-07 by #226). The 60-second window is fixed. The scope was extended to cover `/invitations/{token}/accept`

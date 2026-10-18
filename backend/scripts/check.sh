@@ -9,8 +9,9 @@
 # type error), and each exit code is checked individually — no chaining that
 # could mask a failure.
 #
-# Integration tests need Postgres: `docker compose up -d pgdb` from the repo
-# root (CI provides its own service container).
+# Integration tests need Postgres and the rate limit's emulated Upstash store:
+# `docker compose up -d pgdb redis-http` from the repo root (CI provides its own
+# service containers).
 #
 # Known divergence: env vars. CI sets DATABASE_URL / APP_ENV=testing /
 # APP_SECRET_KEY on the workflow step; locally the suite reads your shell and

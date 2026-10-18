@@ -158,6 +158,20 @@ class Settings(BaseSettings):
     # every sign-in with a 429.
     RATE_LIMIT_AUTH_MAX_REQUESTS: int = Field(default=20, ge=1)
 
+    # Where that count lives (ADR-072). Both set, it is the Upstash Redis database every
+    # instance shares; the names are the ones the Vercel Marketplace integration injects
+    # (#281). Both empty, each process keeps its own count in memory, which is right for
+    # development, tests and the e2e harness, and wrong on Vercel, where a burst spread over
+    # instances gets a budget per instance (ADR-065 § 7). Production refuses to boot without
+    # them, and one without the other is refused everywhere.
+    KV_REST_API_URL: str = ""
+    KV_REST_API_TOKEN: str = ""
+
+    @property
+    def shared_rate_limit_store(self) -> bool:
+        """Whether the rate limit counts in the shared Upstash store, not in memory."""
+        return bool(self.KV_REST_API_URL and self.KV_REST_API_TOKEN)
+
     # Document upload — the platform-wide max upload size (MB), env-tunable without a
     # code change. Defaults to the document domain's built-in policy so there is a
     # single source for the number. This is the ONLY upload limit: the per-clan override
@@ -279,6 +293,13 @@ class Settings(BaseSettings):
                     f"METRICS_TOKEN is unusable while METRICS_ENABLED is true: {weakness}. "
                     "Generate one with `openssl rand -hex 32`."
                 )
+        # Half a pair would quietly select the in-memory count, so name the missing half.
+        if bool(self.KV_REST_API_URL) != bool(self.KV_REST_API_TOKEN):
+            missing = "KV_REST_API_TOKEN" if self.KV_REST_API_URL else "KV_REST_API_URL"
+            raise ValueError(
+                f"{missing} is empty while its pair is set: the rate limit's shared store "
+                "needs both (ADR-072)"
+            )
         if self.APP_ENV == "production":
             if self.APP_SECRET_KEY == "change-me-in-production":
                 raise ValueError("APP_SECRET_KEY must be set to a real secret in production")
@@ -321,6 +342,14 @@ class Settings(BaseSettings):
                     "RATE_LIMIT_TRUST_FORWARDED_FOR must be set explicitly in production: "
                     "true behind a trusted proxy that sets X-Forwarded-For (Vercel), "
                     "false when directly exposed"
+                )
+            # Without the shared store, each Vercel instance counts on its own, and a burst
+            # spread over instances gets 20 a minute per instance (ADR-072, #257).
+            if not self.shared_rate_limit_store:
+                raise ValueError(
+                    "KV_REST_API_URL and KV_REST_API_TOKEN must be set in production: the auth "
+                    "rate limit counts in the Upstash Redis database every instance shares "
+                    "(ADR-072)"
                 )
             # With the in-process scheduler off, the /internal/cron/* routes are the only
             # thing that ever runs the giỗ reminders and the retention purge (ADR-065), and

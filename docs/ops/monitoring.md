@@ -101,8 +101,8 @@ the whole ASGI stack. **Disabled by default**; there is no scraper deployed yet.
   token mismatch. Each rejection logs the client IP and the running count (never the
   attempted token); volume is capped at 5 lines per IP per window by construction.
 
-  The throttle is **per-process and in-memory**, like the auth rate limiter, so with N
-  replicas the effective limit is 5×N failures per window.
+  The throttle is **per-process and in-memory**, unlike the auth rate limiter since ADR-072, so
+  with N replicas the effective limit is 5×N failures per window.
 - The endpoint is **envelope-exempt** (`text/plain` exposition, not `{"data": ...}`) and
   hidden from the OpenAPI schema.
 - `/health` and `/internal/metrics` are excluded from the metrics themselves, so

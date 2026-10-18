@@ -21,6 +21,39 @@ services:
     networks:
       - familyroots
 
+  # The auth rate limit's shared store, as production reaches it (ADR-072): a Redis behind
+  # serverless-redis-http, which answers Upstash's REST API. The backend suite's
+  # tests/integration/test_rate_limit_shared_store.py and the image e2e job use it; the api
+  # service below does not, so local development keeps the in-memory count. The token is
+  # this emulator's own, not a secret: production's comes from the Vercel integration.
+  redis:
+    image: redis:7-alpine
+    container_name: familyroots-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - familyroots
+
+  redis-http:
+    image: hiett/serverless-redis-http:0.0.10
+    container_name: familyroots-redis-http
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8079:80"
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: familyroots-local-redis-http
+      SRH_CONNECTION_STRING: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - familyroots
+
   api:
     build:
       context: ./backend

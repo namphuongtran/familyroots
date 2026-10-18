@@ -121,7 +121,8 @@ jobs:
       # runner shares its address with other jobs. Six pulls started at once failed this step with
       # `toomanyrequests: Rate exceeded` on every run from #193 to 2026-10-07, so the job never
       # reached its tests. They are pulled one at a time now, each retried after a growing wait.
-      # `pgdb` comes from Docker Hub, another registry and another limit, so it still pulls alongside.
+      # `pgdb`, `redis` and `redis-http` come from Docker Hub, another registry and another limit, so
+      # they still pull alongside.
       - name: Pull runtime images
         env:
           SUPABASE_IMAGES: >-
@@ -144,7 +145,7 @@ jobs:
             echo "::error::$image did not pull in 6 attempts"
             return 1
           }
-          docker compose pull --quiet pgdb & pgdb_pid=$!
+          docker compose pull --quiet pgdb redis redis-http & pgdb_pid=$!
           for image in $SUPABASE_IMAGES; do pull "$image"; done
           wait "$pgdb_pid"
           echo "$SUPABASE_IMAGES" | tr ' ' '\n' > "$RUNNER_TEMP/prepulled-images.txt"
@@ -166,9 +167,9 @@ jobs:
         with:
           version: "latest"
 
-      - name: Start pgdb and the Supabase stack
+      - name: Start pgdb, the rate limit's store and the Supabase stack
         run: |
-          docker compose up --detach --wait pgdb
+          docker compose up --detach --wait pgdb redis-http
           scripts/supabase_local.sh up
           eval "$(scripts/supabase_local.sh env)"
           [ "$SUPABASE_URL" = "$LOCAL_SUPABASE_URL" ] \
@@ -205,6 +206,9 @@ jobs:
       # RATE_LIMIT_TRUST_FORWARDED_FOR is false because nothing proxies this container.
       # RATE_LIMIT_AUTH_MAX_REQUESTS is the one value production does not run: the suite sends
       # every request from one address and spends more than the default 20 a minute (#226).
+      # KV_REST_API_* point at compose's `redis-http`, which answers Upstash's REST API, so the
+      # rate limit counts through the adapter production runs (ADR-072). Production refuses to
+      # boot without them, and the token is that emulator's own.
       - name: Migrate with the image, then seed both databases
         run: |
           cat > "$RUNNER_TEMP/api.env" <<EOF
@@ -215,6 +219,8 @@ jobs:
           ALLOWED_HOSTS=["127.0.0.1"]
           RATE_LIMIT_AUTH_MAX_REQUESTS=1000
           RATE_LIMIT_TRUST_FORWARDED_FOR=false
+          KV_REST_API_URL=http://redis-http
+          KV_REST_API_TOKEN=familyroots-local-redis-http
           CORS_ORIGINS=["$AUTH_BASE_URL"]
           INVITE_LINK_ORIGIN=$AUTH_BASE_URL
           SUPABASE_URL=$LOCAL_SUPABASE_URL
