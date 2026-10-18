@@ -63,6 +63,7 @@ Single-context. ADRs live in `docs/decisions/`. See `docs/agents/domain.md`.
 
 ## Shared Infrastructure
 - Supabase project `xkmutzxdhdigyfisfrwd` (`ap-southeast-1`, Postgres 17): the application database, Auth and Storage, in one project (ADR-066)
+- Resend: the SMTP sender for Supabase Auth email, from `noreply@getnami.dev`, set in the dashboard only (ADR-071)
 - Local PostgreSQL in Docker (`pgdb`), plus the local Supabase stack for Auth and Storage
 - Vercel team `namtp` (Hobby): `familyroots-api` from `backend/` and `familyroots-web` from `web/`, both in `sin1`; Vercel Cron runs the scheduled jobs (ADR-065)
 - GitHub Actions CI/CD: a merge to `main` runs CI only. Publishing a GitHub Release `vX.Y.Z` runs `release.yml`, which re-runs both gates, waits for approval in the `production` environment, migrates, deploys the API, reads `/health`, then deploys the web (ADR-067, docs/ops/deployment.md "Cutting a release")

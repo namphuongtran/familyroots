@@ -77,7 +77,9 @@ never a JWT claim or env match. Bootstrap via `scripts/bootstrap_super_admin.py`
   them live in `supabase/templates/` (#202), and the local stack sends them. The owner pushes
   them to the hosted project in #203. Neither email passes a redirect: the link's origin is
   the Supabase Site URL.
-- Ops prerequisite: Supabase dashboard "Confirm email" ON + SMTP configured.
+- Ops prerequisite: Supabase dashboard "Confirm email" ON + SMTP configured. The hosted project
+  sends through Resend from `noreply@getnami.dev` since 2026-10-18 (ADR-071,
+  `docs/ops/supabase-hosted-project.md` § 4d).
 
 ## Error semantics
 
