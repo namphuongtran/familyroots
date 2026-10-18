@@ -340,13 +340,17 @@ The read-back proves what the project holds. The email proves what a person rece
    and carried `type=recovery` and a `redirect_to` naming the Site URL.
 3. A link that does anything else (`...`, a missing token, another host) is a broken template.
 4. Open it, and set a password on `/reset-password`. The token is spent then, so the account's
-   `recovery_token` in `auth.users` reads empty afterwards and `last_sign_in_at` is set.
+   `recovery_token` in `auth.users` reads empty afterwards, `recovery_sent_at` returns to null, and
+   `last_sign_in_at` is set.
 
 **Read 2026-10-18 (#203).** The project had no auth user, so the owner created one in the
 dashboard (**Add user**, auto-confirmed, on a mailbox the owner holds). `auth.users` read
 `created_at` 12:53:35 UTC and `recovery_sent_at` 12:54:13 UTC. The owner read the link as beginning
-`https://familyroots-web.vercel.app/reset-password?token_hash=`. Step 4 was not yet done at
-12:57:01 UTC: the `recovery_token` was unspent and `last_sign_in_at` was null.
+`https://familyroots-web.vercel.app/reset-password?token_hash=`. At 12:57:01 UTC, before step 4,
+the `recovery_token` was unspent and `last_sign_in_at` was null. The owner then opened the link and
+set a password. At 12:59:52 UTC the `recovery_token` was empty, `recovery_sent_at` was null,
+`last_sign_in_at` read 12:58:52.27 and `updated_at` 12:58:52.84, the password write half a second
+after the sign-in.
 
 ### 4d. The sender: Resend on the owner's domain (#276, ADR-071)
 
@@ -393,15 +397,16 @@ dig +short TXT _dmarc.getnami.dev @galilea.ns.cloudflare.com              # "v=D
 
 Read 2026-10-18: all five as shown. Resend showed the domain as verified, as the owner reported.
 
-**Not yet checked: an email reaching an address outside the team.** That is #276's outcome check.
-The owner deferred it on 2026-10-18 because the web's sign-up flow has open defects of its own. It
-does not need the sign-up form. Either of these proves the sender:
+**Checked 2026-10-18, by the first of the two ways below.** That is #276's outcome check. The
+recovery email of § 4c (#203) came from `noreply@getnami.dev`, and Resend's email log lists it, as
+the owner reported. So hosted auth email leaves through Resend, not the default provider. The
+second way, a sign-up from a mailbox outside the team, was not tried, because the web's sign-up
+flow has open defects of its own. Either of these proves the sender:
 
 1. Dashboard → Authentication → Users → an account whose mailbox you hold → **Send password
    recovery**. The email must come from `noreply@getnami.dev`, and Resend's email log must list
    it. The default provider sends from Supabase's own address and never appears in Resend's log.
-   § 4c's reading of 2026-10-18 sent such an email; its sender and Resend's log are not yet
-   recorded here.
+   Done 2026-10-18 (§ 4c).
 2. Sign up on `https://familyroots-web.vercel.app` with a mailbox outside the team, once sign-up
    works. The confirmation email must arrive.
 

@@ -320,10 +320,10 @@ Every variable is set for the **Production** environment only. Preview deploymen
   `supabase db query --linked "select id, public, allowed_mime_types from storage.buckets order by id;"`.
 - [ ] **The private `backups` bucket**, by hand. It is not in `config.toml`, so the seed does not
   make it ([backup-restore.md](backup-restore.md), "Go-live checklist").
-- [ ] **Custom SMTP sender (#276).** Without it Supabase emails only the project's team, and refuses
+- [x] **Custom SMTP sender (#276).** Without it Supabase emails only the project's team, and refuses
   the template push below. Set on 2026-10-18 to Resend, `noreply@getnami.dev`
-  ([supabase-hosted-project.md](supabase-hosted-project.md) § 4d, ADR-071). Still open: one email
-  seen to reach an address outside the team.
+  ([supabase-hosted-project.md](supabase-hosted-project.md) § 4d, ADR-071). Checked the same day:
+  #203's recovery email came from that sender and is in Resend's log.
 - [x] **Email templates (#203).** Pushed on 2026-10-18 from `supabase/supabase/config.toml` with
   `--project-ref xkmutzxdhdigyfisfrwd`, and read back
   ([supabase-hosted-project.md](supabase-hosted-project.md) § 4a, § 4b). A hosted recovery email

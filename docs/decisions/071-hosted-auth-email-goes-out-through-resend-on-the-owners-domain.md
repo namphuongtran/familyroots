@@ -3,9 +3,10 @@
 ## Status
 
 Accepted (2026-10-18). Configured the same day. Resolves the decision in issue #276, "Send hosted
-auth email through a custom SMTP sender on the owner's domain". **#276's outcome check is not yet
-run**: no email has been seen to reach an address outside the Supabase team. The owner deferred it
-on 2026-10-18 because the web's sign-up flow has open defects of its own. The procedure is in
+auth email through a custom SMTP sender on the owner's domain". **#276's outcome check passed the
+same day**: #203's recovery email came from `noreply@getnami.dev` and is in Resend's email log, as
+the owner reported. A sign-up from a mailbox outside the team was not tried, because the web's
+sign-up flow has open defects of its own. The procedure and the reading are in
 `docs/ops/supabase-hosted-project.md` § 4d.
 
 ## Context
@@ -98,7 +99,9 @@ Read 2026-10-18, before this ADR merged:
   `send.forge.rmta.net` (which carries `MX 10 feedback.forge.rmta.net` and
   `v=spf1 ip4:52.3.252.119 ip4:44.222.39.36 ip4:199.249.231.0/24 ~all`), and a DMARC record
   `v=DMARC1; p=none;`. Resend showed the domain as verified (the owner's report).
-- **Not yet read: an email reaching an address outside the team.** That is #276's outcome check.
+- **Read 2026-10-18: an email leaves through Resend.** #203's recovery email came from
+  `noreply@getnami.dev` and is in Resend's email log (the owner's report). That is #276's outcome
+  check.
 
 ## Related
 
