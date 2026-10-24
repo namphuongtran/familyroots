@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { signInWithNoClan } from './seeded-session'
 
 /**
  * the web register form, spec § 7.1b and ADR-057 § 2: on `/vi/register` the **join** field asks for
@@ -29,7 +30,15 @@ import { expect, test, type Page } from '@playwright/test'
  * (`backend/app/application/auth/handlers.py:147`), with the generic message from
  * `backend/app/i18n/vi.json:4` — deliberately the *wrong* string for this screen, so a
  * test that accepted it would pass on the message spec § 7.1b replaces.
+ *
+ * **Since #291 (ADR-075) the clan fields live on onboarding, not sign-up.** Each case signs in
+ * with no clan through `seeded-session.ts` and opens `/vi/register?mode=oauth`, the URL
+ * `landingPath` gives that state, so the request it stubs is `POST /auth/onboard`. Onboarding
+ * prefills the full name and asks for no email or password, so there is nothing else to fill.
  */
+
+/** Where a signed-in person with no clan lands. */
+const ONBOARDING = '/vi/register?mode=oauth'
 
 /** 320dp is the width `T-04` names, and 32px is 200% of the 16px default root size. */
 const NARROW_VIEWPORT = { width: 320, height: 640 }
@@ -37,9 +46,6 @@ const DOUBLED_ROOT_FONT_SIZE = '32px'
 
 /** `web/messages/vi.json`, `auth` namespace. `/vi/…` is the default locale route. */
 const VI = {
-  fullName: 'Họ và tên',
-  email: 'Email',
-  password: 'Mật khẩu',
   joinClan: 'Tham gia dòng họ',
   clanCode: 'Mã dòng họ',
   joinHelper: 'Mã do quản trị dòng họ cung cấp, ví dụ: nguyen-huu-thanh-oai.',
@@ -47,7 +53,7 @@ const VI = {
   invalid:
     'Mã dòng họ chỉ gồm chữ thường không dấu, số và dấu gạch ngang, ví dụ: nguyen-huu-thanh-oai.',
   registerError: 'Không thể tạo tài khoản',
-  register: 'Đăng ký',
+  completeSetup: 'Hoàn tất thiết lập',
 }
 
 /** `backend/app/i18n/vi.json:4`, keyed `error.clan_not_found`. */
@@ -60,15 +66,8 @@ const BACKEND_VI_CLAN_NOT_FOUND_MESSAGE = 'Không tìm thấy dòng họ'
  */
 const ONE_LONG_WORD_CODE = 'a'.repeat(100)
 
-/** Fills the three fields this seed does not own, so the form can be submitted. */
-async function fillTheRest(page: Page): Promise<void> {
-  await page.getByLabel(VI.fullName).fill('Trần Văn A')
-  await page.getByLabel(VI.email).fill('a@example.com')
-  await page.getByLabel(VI.password).fill('correct horse battery')
-}
-
 async function serveClanNotFound(page: Page): Promise<void> {
-  await page.route('**/auth/register', async (route) => {
+  await page.route('**/api/v1/auth/onboard', async (route) => {
     await route.fulfill({
       status: 404,
       contentType: 'application/json',
@@ -83,11 +82,11 @@ async function serveClanNotFound(page: Page): Promise<void> {
   })
 }
 
-test.describe('/vi/register, join mode: the clan code field', () => {
+test.describe('onboarding, join mode: the clan code field', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/vi/register')
-    // Join is the mode the screen opens in. Checking it anyway makes that a reading
-    // rather than an assumption, and keeps the test honest if the default ever moves.
+    await signInWithNoClan(page)
+    await page.goto(ONBOARDING)
+    // Onboarding opens on create (ADR-075), so join is one choice away.
     await page.getByLabel(VI.joinClan).check()
     await expect(page.getByLabel(VI.clanCode)).toBeVisible()
   })
@@ -109,9 +108,8 @@ test.describe('/vi/register, join mode: the clan code field', () => {
 
   test('a clan_not_found 404 renders on the field, not in the page banner', async ({ page }) => {
     await serveClanNotFound(page)
-    await fillTheRest(page)
     await page.getByLabel(VI.clanCode).fill('khong-co-dong-ho-nay')
-    await page.getByRole('button', { name: VI.register }).click()
+    await page.getByRole('button', { name: VI.completeSetup }).click()
 
     const code = page.getByLabel(VI.clanCode)
     await expect(code).toHaveAttribute('aria-invalid', 'true')
@@ -130,28 +128,28 @@ test.describe('/vi/register, join mode: the clan code field', () => {
 
   test('a code the pattern refuses never leaves the browser', async ({ page }) => {
     let attempts = 0
-    await page.route('**/auth/register', async (route) => {
+    await page.route('**/api/v1/auth/onboard', async (route) => {
       attempts += 1
       await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
     })
 
-    await fillTheRest(page)
     // A space and capitals: `^[a-z0-9]+(?:-[a-z0-9]+)*$` refuses both.
     await page.getByLabel(VI.clanCode).fill('Nguyen Huu Thanh Oai')
-    await page.getByRole('button', { name: VI.register }).click()
+    await page.getByRole('button', { name: VI.completeSetup }).click()
 
     await expect(page.locator('#clan-code-error')).toHaveText(VI.invalid)
     expect(attempts).toBe(0)
   })
 })
 
-test.describe('/vi/register, join mode, at 320dp and 200% text scale', () => {
+test.describe('onboarding, join mode, at 320dp and 200% text scale', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize(NARROW_VIEWPORT)
     // Through a stylesheet, not `documentElement.style`: `<html>` is React-owned and
     // writing to it before hydration finishes prints a hydration mismatch the test itself
     // caused. `e2e/text-scale.spec.ts` explains it at length.
-    await page.goto('/vi/register')
+    await signInWithNoClan(page)
+    await page.goto(ONBOARDING)
     await page.addStyleTag({ content: `:root { font-size: ${DOUBLED_ROOT_FONT_SIZE}; }` })
     await page.evaluate(() => document.fonts.ready)
     await page.getByLabel(VI.joinClan).check()
@@ -174,9 +172,8 @@ test.describe('/vi/register, join mode, at 320dp and 200% text scale', () => {
 
   test('the not-found error does not scroll the page', async ({ page }) => {
     await serveClanNotFound(page)
-    await fillTheRest(page)
     await page.getByLabel(VI.clanCode).fill(ONE_LONG_WORD_CODE)
-    await page.getByRole('button', { name: VI.register }).click()
+    await page.getByRole('button', { name: VI.completeSetup }).click()
 
     await expect(page.locator('#clan-code-error')).toHaveText(VI.notFound)
 
@@ -186,11 +183,10 @@ test.describe('/vi/register, join mode, at 320dp and 200% text scale', () => {
   })
 
   test('the shape error beside a 100-character code does not scroll the page', async ({ page }) => {
-    await fillTheRest(page)
     // 100 characters, no hyphen, plus one capital so the pattern refuses it. The field
     // itself holds the longest unbreakable string this screen can be given.
     await page.getByLabel(VI.clanCode).fill(`A${ONE_LONG_WORD_CODE.slice(1)}`)
-    await page.getByRole('button', { name: VI.register }).click()
+    await page.getByRole('button', { name: VI.completeSetup }).click()
 
     await expect(page.locator('#clan-code-error')).toHaveText(VI.invalid)
 

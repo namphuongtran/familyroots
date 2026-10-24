@@ -97,6 +97,7 @@ describe('register, reached from an invitation', () => {
     renderWithProviders(<RegisterScreen />, { messages })
 
     expect(screen.getByText(expected(messages.auth.register_invitee_hint))).toBeInTheDocument()
+    expect(screen.queryByText(messages.auth.register_clan_after_sign_in)).not.toBeInTheDocument()
     expect(screen.queryAllByRole('radio')).toHaveLength(0)
     expect(screen.queryByLabelText(messages.auth.clan_slug)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(messages.auth.clan_name)).not.toBeInTheDocument()
@@ -120,32 +121,60 @@ describe('register, reached from an invitation', () => {
 })
 
 /**
- * The control the three cases above need: the same screen, reached without the marker, still
- * offers the join/create choice and still sends `clan_action`. If it did not, a form that dropped
- * the clan for everyone would pass the cases above.
+ * #291, ADR-075: reached without the marker, sign-up names no clan either. A person with no
+ * invitation and no code has nothing to type here, and on a database with no clan the old
+ * default, **join**, could not succeed for any code. The clan step is onboarding's now, after
+ * sign-in (`register/page.test.tsx`).
+ *
+ * The marker still decides one thing, the copy: the invitee is told to open the link again, and
+ * everyone else that the clan comes after sign-in. Each describe reads the other's line absent.
  */
 describe('register, reached any other way', () => {
   beforeEach(() => {
     reachedFrom('/vi/register')
   })
 
-  it('keeps the join/create choice, and sends clan_action with the clan code', async () => {
+  it('sends exactly email, password and full_name, the body an invitee sends', async () => {
     const bodies = registerAnswers201()
-    renderWithProviders(<RegisterScreen />, { messages })
-
-    expect(screen.getAllByRole('radio')).toHaveLength(2)
-    expect(screen.getByRole('radio', { name: messages.auth.join_clan })).toBeChecked()
-    expect(screen.queryByText(messages.auth.register_invitee_hint)).not.toBeInTheDocument()
+    const { container } = renderWithProviders(<RegisterScreen />, { messages })
 
     fillTheAccountFields()
-    fireEvent.change(screen.getByLabelText(messages.auth.clan_slug), {
-      target: { value: 'nguyen-phuc' },
-    })
     fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
 
     expect(await screen.findByText(BACKEND_VI_REGISTRATION_RECEIVED)).toBeInTheDocument()
+    expect(container.querySelector('form')).toBeNull()
     expect(bodies).toHaveLength(1)
-    expect(bodies[0]).toMatchObject({ clan_action: 'join', clan_code: 'nguyen-phuc' })
+    expect(bodies[0]).toEqual({
+      email: 'invited@example.com',
+      password: 'correct horse battery',
+      full_name: 'Nguyễn Thị Được Mời',
+    })
+  })
+
+  it('asks for no clan, and says the clan comes after sign-in instead', () => {
+    renderWithProviders(<RegisterScreen />, { messages })
+
+    expect(
+      screen.getByText(expected(messages.auth.register_clan_after_sign_in)),
+    ).toBeInTheDocument()
+    expect(screen.queryAllByRole('radio')).toHaveLength(0)
+    expect(screen.queryByLabelText(messages.auth.clan_slug)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(messages.auth.clan_name)).not.toBeInTheDocument()
+    expect(screen.queryByText(messages.auth.register_invitee_hint)).not.toBeInTheDocument()
+  })
+
+  it('the success screen says the clan comes after sign-in, not to open a link', async () => {
+    registerAnswers201()
+    renderWithProviders(<RegisterScreen />, { messages })
+
+    fillTheAccountFields()
+    fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
+
+    // The form carries the same line, so wait for the success screen to replace it first.
+    expect(await screen.findByText(BACKEND_VI_REGISTRATION_RECEIVED)).toBeInTheDocument()
+    expect(
+      screen.getByText(expected(messages.auth.register_clan_after_sign_in)),
+    ).toBeInTheDocument()
     expect(screen.queryByText(messages.auth.register_invitee_success_next)).not.toBeInTheDocument()
   })
 })

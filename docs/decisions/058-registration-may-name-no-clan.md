@@ -5,6 +5,11 @@
 Accepted (2026-08-26). [ADR-057](057-the-invitation-link-is-the-primary-join-path.md)
 opened from its own finding 2.
 
+**Amended by [ADR-075](075-sign-up-names-no-clan-and-onboarding-opens-on-create.md) (2026-10-24,
+#291).** The web now sends § 1's clanless body from every sign-up, not only from the invitation
+entry that § 2's amendment names, and the clan step is `POST /auth/onboard`, after sign-in. The
+backend is unchanged.
+
 **This ADR ships code**: `clan_action` becomes optional on `RegisterRequest` only, a new
 `AuthCommandHandler._provision_clanless_account`, and one integration module that walks the whole
 invitation flow.

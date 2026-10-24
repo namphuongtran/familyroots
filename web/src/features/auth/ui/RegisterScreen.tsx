@@ -23,15 +23,19 @@ import { landingPath } from '../model/landing'
 import { SupabaseSetupNotice } from './SupabaseSetupNotice'
 
 /**
- * The register screen, and OAuth onboarding (`?mode=oauth`) on the same form.
+ * The register screen, and onboarding (`?mode=oauth`) on the same form.
  * `app/[locale]/(auth)/register/page.tsx` only routes here.
  *
- * **Reached from an invitation (`?from=invitation`, #196), the form asks for no clan.** It sends
- * `email`, `password` and `full_name` and nothing else, the body ADR-058 § 1 made the invitee's:
- * the membership arrives from accept, after the person confirms, signs in and opens the link
- * again. The marker carries no part of the token; `../model/invitee-register` says why. Reached
- * any other way, the join/create choice is unchanged. `RegisterScreen.invitee.test.tsx` reads the
- * body each way.
+ * **Sign-up asks for no clan, for anyone (#291, ADR-075).** It sends `email`, `password` and
+ * `full_name` and nothing else, the body ADR-058 § 1 made the invitee's first. The clan step is
+ * onboarding's: a signed-in person with no membership lands on `?mode=oauth` (`landingPath`),
+ * whether they signed up with a password or arrived from Google, and the join/create choice
+ * there opens on create. `RegisterScreen.invitee.test.tsx` reads the sign-up body each way in,
+ * and `RegisterScreen.onboarding.test.tsx` the onboarding body.
+ *
+ * **Reached from an invitation (`?from=invitation`, #196), only the copy differs.** The person is
+ * told to open the link again after signing in, because the membership arrives from accept. The
+ * marker carries no part of the token; `../model/invitee-register` says why.
  *
  * Its form keeps the `register-` ids #195 gave it, so every input is still named by its visible
  * label. `register/page.test.tsx` and `register/page.success.test.tsx` read that, and the second
@@ -50,11 +54,13 @@ export function RegisterScreen() {
   const { register, signInWithGoogle, completeOnboarding } = useAuthActions()
   const { session, access } = useSession()
   const oauthProviders = useOAuthProviders()
-  // null = untouched, so the OAuth profile can supply the initial value.
+  // null = untouched, so the session's profile can supply the initial value.
   const [fullNameInput, setFullName] = useState<string | null>(null)
   const [emailInput, setEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
-  const [clanAction, setClanAction] = useState<'join' | 'create'>('join')
+  // Onboarding opens on create (ADR-075): a person with no invitation has no code to type, and
+  // joining by code is the secondary path ADR-057 made it.
+  const [clanAction, setClanAction] = useState<'join' | 'create'>('create')
   const [clanCode, setClanCode] = useState('')
   // Which of the two field-level failures the join code has, or none. Spec § 7.1b puts
   // `clan_not_found` inline on this field rather than in the page-level banner; `invalid`
@@ -72,17 +78,19 @@ export function RegisterScreen() {
   const [success, setSuccess] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const isOAuthMode = searchParams.get('mode') === 'oauth' && Boolean(session)
-  const isInviteeMode = !isOAuthMode && isInviteeRegister(searchParams)
+  // `mode=oauth` is the URL `landingPath` gives `needs-onboarding`. The name is older than
+  // ADR-075: every signed-in person with no clan lands here, a password sign-up included.
+  const isOnboarding = searchParams.get('mode') === 'oauth' && Boolean(session)
+  const isInviteeMode = !isOnboarding && isInviteeRegister(searchParams)
 
-  // Prefill from the OAuth profile by deriving during render rather than pushing
+  // Prefill from the session's profile by deriving during render rather than pushing
   // state from an effect: that is what eslint's react-hooks/set-state-in-effect
   // (new in eslint-config-next 16.2) flags, and it drops a cascading render.
   // Using ?? rather than the old || also means clearing a prefilled field now
   // sticks, instead of being refilled the next time the session changes identity.
-  const oauthProfile = isOAuthMode ? session?.profile : null
-  const fullName = fullNameInput ?? oauthProfile?.fullName ?? ''
-  const email = emailInput ?? oauthProfile?.email ?? ''
+  const onboardingProfile = isOnboarding ? session?.profile : null
+  const fullName = fullNameInput ?? onboardingProfile?.fullName ?? ''
+  const email = emailInput ?? onboardingProfile?.email ?? ''
   // Spec § 7.1b: the clan code is "auto-suggested, slugified live from the name,
   // editable". Deriving it during render is what makes all three of those true at once
   // and needs no effect: while `clanSlugInput` is null every keystroke in the name field
@@ -129,14 +137,14 @@ export function RegisterScreen() {
     // validator for the same shape. No `pattern` attribute, because the browser's own
     // validation bubble is not localised and every string on this screen goes through
     // next-intl.
-    if (!isInviteeMode && clanAction === 'join' && !isValidClanCode(joinCode)) {
+    if (isOnboarding && clanAction === 'join' && !isValidClanCode(joinCode)) {
       setClanCodeError('invalid')
       return
     }
 
     setIsLoading(true)
     try {
-      if (isOAuthMode) {
+      if (isOnboarding) {
         await completeOnboarding({
           full_name: fullName,
           clan_action: clanAction,
@@ -145,22 +153,10 @@ export function RegisterScreen() {
           clan_slug: clanAction === 'create' ? clanSlug : undefined,
         })
       } else {
-        // An invitee names no clan, so the body has no clan key at all. ADR-058 § 2 refuses a
-        // clan field without `clan_action`, and `clan_action` without a clan is the join-code
-        // error, so a key too many here stops the invitee at this step.
-        const result = await register({
-          email,
-          password,
-          full_name: fullName,
-          ...(isInviteeMode
-            ? {}
-            : {
-                clan_action: clanAction,
-                clan_code: clanAction === 'join' ? joinCode : undefined,
-                clan_name: clanAction === 'create' ? clanName : undefined,
-                clan_slug: clanAction === 'create' ? clanSlug : undefined,
-              }),
-        })
+        // Sign-up names no clan, for anyone (ADR-075), so the body has no clan key at all.
+        // ADR-058 § 2 refuses a clan field without `clan_action`, and `clan_action` without a
+        // clan is the join-code error, so a key too many here stops the person at this step.
+        const result = await register({ email, password, full_name: fullName })
         setSuccess(result.message)
       }
     } catch (err: unknown) {
@@ -194,11 +190,9 @@ export function RegisterScreen() {
           <CircleCheck className="text-success mx-auto mb-3 h-12 w-12" aria-hidden="true" />
           <h2 className="text-foreground mb-2 font-serif text-xl">{t('register_title')}</h2>
           <p className="text-muted-foreground text-sm">{success}</p>
-          {isInviteeMode && (
-            <p className="text-muted-foreground mt-2 text-sm">
-              {t('register_invitee_success_next')}
-            </p>
-          )}
+          <p className="text-muted-foreground mt-2 text-sm">
+            {isInviteeMode ? t('register_invitee_success_next') : t('register_clan_after_sign_in')}
+          </p>
           <Link
             href={`/${locale}/login`}
             className="text-primary mt-4 inline-flex text-sm hover:underline"
@@ -231,13 +225,15 @@ export function RegisterScreen() {
           className="border-border bg-card space-y-4 rounded-2xl border p-6 shadow-xs"
         >
           <h2 className="text-foreground text-lg font-semibold">
-            {isOAuthMode ? t('oauth_onboarding_title') : t('register_title')}
+            {isOnboarding ? t('oauth_onboarding_title') : t('register_title')}
           </h2>
-          {isOAuthMode && (
+          {isOnboarding && (
             <p className="text-muted-foreground text-sm">{t('oauth_onboarding_subtitle')}</p>
           )}
-          {isInviteeMode && (
-            <p className="text-muted-foreground text-sm">{t('register_invitee_hint')}</p>
+          {!isOnboarding && (
+            <p className="text-muted-foreground text-sm">
+              {isInviteeMode ? t('register_invitee_hint') : t('register_clan_after_sign_in')}
+            </p>
           )}
 
           {error && (
@@ -247,7 +243,7 @@ export function RegisterScreen() {
           )}
 
           {/* Offered only while the Supabase project has Google on (#290). */}
-          {!isOAuthMode && oauthProviders.google && (
+          {!isOnboarding && oauthProviders.google && (
             <>
               <button
                 type="button"
@@ -296,12 +292,12 @@ export function RegisterScreen() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={isOAuthMode}
+              disabled={isOnboarding}
               className="focus:ring-ring border-input w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             />
           </div>
 
-          {!isOAuthMode && (
+          {!isOnboarding && (
             <div>
               <label
                 htmlFor="register-password"
@@ -322,7 +318,7 @@ export function RegisterScreen() {
             </div>
           )}
 
-          {!isInviteeMode && (
+          {isOnboarding && (
             <>
               <div className="space-y-2">
                 <p className="text-foreground block text-sm font-medium">
@@ -332,19 +328,19 @@ export function RegisterScreen() {
                   <input
                     type="radio"
                     name="clanAction"
-                    checked={clanAction === 'join'}
-                    onChange={() => setClanAction('join')}
+                    checked={clanAction === 'create'}
+                    onChange={() => setClanAction('create')}
                   />
-                  {t('join_clan')}
+                  {t('create_clan')}
                 </label>
                 <label className="text-foreground flex items-center gap-2 text-sm">
                   <input
                     type="radio"
                     name="clanAction"
-                    checked={clanAction === 'create'}
-                    onChange={() => setClanAction('create')}
+                    checked={clanAction === 'join'}
+                    onChange={() => setClanAction('join')}
                   />
-                  {t('create_clan')}
+                  {t('join_clan')}
                 </label>
               </div>
 
@@ -496,16 +492,16 @@ export function RegisterScreen() {
             className="bg-primary text-primary-foreground hover:bg-primary-hover w-full rounded-lg py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isLoading
-              ? isOAuthMode
+              ? isOnboarding
                 ? t('onboarding_submitting')
                 : t('registering')
-              : isOAuthMode
+              : isOnboarding
                 ? t('complete_onboarding')
                 : t('register')}
           </button>
 
           <p className="text-muted-foreground text-center text-xs">
-            {isOAuthMode ? (
+            {isOnboarding ? (
               t('oauth_onboarding_hint')
             ) : (
               <>
