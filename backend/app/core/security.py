@@ -11,7 +11,6 @@ from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -21,6 +20,7 @@ from app.core.locale import SUPPORTED_LOCALES
 from app.core.rls import set_request_clan_id
 from app.domain.auth.identity_provider import IdentityUnavailableError
 from app.domain.auth.platform_role import platform_role_of
+from app.infrastructure.persistence._profile import ensure_profile_row
 from app.models.user_profile import UserProfile
 
 # auto_error=False so a MISSING/malformed Authorization header raises our own
@@ -162,26 +162,22 @@ async def ensure_user_profile(
     if profile is None:
         email: str = current_user.get("email", "")
         user_metadata: dict[str, Any] = current_user.get("user_metadata", {})
-        display_name = user_metadata.get("full_name") or email.split("@")[0]
 
         # ON CONFLICT DO NOTHING + re-select makes this idempotent and race-safe:
         # if a concurrent first-login request already inserted the row, this
         # request's INSERT is a no-op and the re-select still finds a row —
         # the "loser" of the race no longer raises IntegrityError/500.
-        # The conflict guard covers the PK `id` only: a same-email/different-id
-        # collision can't happen since Supabase sub<->email is 1:1.
-        stmt = (
-            pg_insert(UserProfile)
-            .values(
-                id=user_id,
-                email=email,
-                display_name=display_name,
-                language=_jwt_language(current_user),
-                last_login_at=datetime.now(UTC),
-            )
-            .on_conflict_do_nothing(index_elements=["id"])
+        # Supabase sub<->email is 1:1 only among live accounts: a row whose account
+        # was deleted still holds its email, and ensure_profile_row releases it to
+        # this sub first (ADR-078).
+        await ensure_profile_row(
+            db,
+            user_id,
+            email,
+            user_metadata.get("full_name"),
+            language=_jwt_language(current_user),
+            last_login_at=datetime.now(UTC),
         )
-        await db.execute(stmt)
         await db.commit()
 
         profile = (

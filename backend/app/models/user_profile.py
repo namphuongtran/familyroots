@@ -19,6 +19,8 @@ class UserProfile(TimestampMixin, Base):
 
     # PK = Supabase auth.users.id (not auto-generated)
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    # Unique, but a row outlives its Supabase account: ensure_profile_row releases a
+    # former account's email to the new sub that now holds it (ADR-078).
     email: Mapped[str] = mapped_column(String(255), unique=True)
     display_name: Mapped[str | None] = mapped_column(String(255), default=None)
     avatar_url: Mapped[str | None] = mapped_column(String(500), default=None)
