@@ -855,6 +855,11 @@ dashboard with a possibly-wrong clan name (§9-J9).
 
 **Purpose.** Join an existing dòng họ by code, or create a new one.
 
+> **Superseded for sign-up by ADR-075 (2026-10-24, #291).** Sign-up asks for Họ và tên · Email ·
+> Mật khẩu only, and says the clan comes after sign-in. The join/create choice below is the clan
+> step of § 7.2a's onboarding variant, reached after confirming and signing in, and it opens on
+> `Tạo dòng họ mới`, listed first. Its fields, helpers and errors are unchanged.
+
 **Mobile.** Segmented control at the top: `Tham gia dòng họ` | `Tạo dòng họ mới`.
 - *Tham gia*: Họ và tên · Email · Mật khẩu (with a plain-language strength hint, not a
   meter bar) · **Mã dòng họ** with helper *"Mã do quản trị dòng họ cung cấp, ví dụ:
@@ -927,7 +932,8 @@ whitespace.
 `Yêu cầu của bạn vẫn đang chờ duyệt.` *Approved on refetch* — success toast and
 immediate route to the dashboard. *No membership at all* (`is_approved` false,
 `has_pending_membership` false, `clan_id` null) → onboarding variant of this screen with
-the join/create segmented control from 7.1b.
+the join/create segmented control from 7.1b, opening on create (ADR-075). On the web it is
+`/{locale}/register?mode=oauth`, for a password sign-up and a Google user alike.
 
 **Note.** A pending user *can* accept an invitation and can call `POST /auth/onboard`,
 so those two paths stay live here; everything clan-scoped is absent, not disabled.

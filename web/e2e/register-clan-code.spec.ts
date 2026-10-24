@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { signInWithNoClan } from './seeded-session'
 
 /**
  * the clan-code spec, spec § 7.1b: on `/vi/register` in create mode the clan code is
@@ -18,7 +19,15 @@ import { expect, test, type Page } from '@playwright/test'
  * envelope `backend/app/core/exceptions.py` produces —
  * `{"error": {"code": "auth.clan_slug_taken", "message": ..., "detail": {}}}`, with the
  * `message` already localised, copied from `backend/app/i18n/vi.json:96`.
+ *
+ * **Since #291 (ADR-075) the clan fields live on onboarding, not sign-up.** Each case signs in
+ * with no clan through `seeded-session.ts` and opens `/vi/register?mode=oauth`, the URL
+ * `landingPath` gives that state, so the request it stubs is `POST /auth/onboard`. Onboarding
+ * prefills the full name and asks for no email or password, so there is nothing else to fill.
  */
+
+/** Where a signed-in person with no clan lands. */
+const ONBOARDING = '/vi/register?mode=oauth'
 
 /** 320dp is the width `T-04` names, and 32px is 200% of the 16px default root size. */
 const NARROW_VIEWPORT = { width: 320, height: 640 }
@@ -26,14 +35,11 @@ const DOUBLED_ROOT_FONT_SIZE = '32px'
 
 /** `web/messages/vi.json`, `auth` namespace. `/vi/…` is the default locale route. */
 const VI = {
-  fullName: 'Họ và tên',
-  email: 'Email',
-  password: 'Mật khẩu',
   createClan: 'Tạo dòng họ mới',
   clanName: 'Tên dòng họ',
   clanCode: 'Mã dòng họ',
   clanCodeHelper: 'Người khác dùng mã này để xin tham gia dòng họ của bạn.',
-  register: 'Đăng ký',
+  completeSetup: 'Hoàn tất thiết lập',
 }
 
 /** `backend/app/i18n/vi.json:96`, keyed `error.auth.clan_slug_taken`. */
@@ -49,20 +55,14 @@ const ONE_LONG_WORD_NAME = 'ĐặngĐìnhHữuThọQuảngNgãiĐạiTônTừĐ�
 const ONE_LONG_WORD_CODE = 'dangdinhhuuthoquangngaidaitontuduong'
 
 async function openCreateMode(page: Page): Promise<void> {
-  await page.goto('/vi/register')
+  await signInWithNoClan(page)
+  await page.goto(ONBOARDING)
   await page.getByLabel(VI.createClan).check()
   await expect(page.getByLabel(VI.clanCode)).toBeVisible()
 }
 
-/** Fills the three fields the clan-code spec does not own, so the form can be submitted. */
-async function fillTheRest(page: Page): Promise<void> {
-  await page.getByLabel(VI.fullName).fill('Trần Văn A')
-  await page.getByLabel(VI.email).fill('a@example.com')
-  await page.getByLabel(VI.password).fill('correct horse battery')
-}
-
 async function serveClanSlugTaken(page: Page): Promise<void> {
-  await page.route('**/auth/register', async (route) => {
+  await page.route('**/api/v1/auth/onboard', async (route) => {
     await route.fulfill({
       status: 409,
       contentType: 'application/json',
@@ -73,7 +73,7 @@ async function serveClanSlugTaken(page: Page): Promise<void> {
   })
 }
 
-test.describe('/vi/register, create mode: the clan code field', () => {
+test.describe('onboarding, create mode: the clan code field', () => {
   test('a Vietnamese name with diacritics fills the code field with its slug', async ({ page }) => {
     await openCreateMode(page)
 
@@ -116,9 +116,8 @@ test.describe('/vi/register, create mode: the clan code field', () => {
     await openCreateMode(page)
     await serveClanSlugTaken(page)
 
-    await fillTheRest(page)
     await page.getByLabel(VI.clanName).fill('Trần Gia')
-    await page.getByRole('button', { name: VI.register }).click()
+    await page.getByRole('button', { name: VI.completeSetup }).click()
 
     const code = page.getByLabel(VI.clanCode)
     await expect(code).toHaveAttribute('aria-invalid', 'true')
@@ -137,13 +136,14 @@ test.describe('/vi/register, create mode: the clan code field', () => {
   })
 })
 
-test.describe('/vi/register, create mode, at 320dp and 200% text scale', () => {
+test.describe('onboarding, create mode, at 320dp and 200% text scale', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize(NARROW_VIEWPORT)
     // Through a stylesheet, not `documentElement.style`: `<html>` is React-owned and
     // writing to it before hydration finishes prints a hydration mismatch the test
     // itself caused. `e2e/text-scale.spec.ts` explains it at length.
-    await page.goto('/vi/register')
+    await signInWithNoClan(page)
+    await page.goto(ONBOARDING)
     await page.addStyleTag({ content: `:root { font-size: ${DOUBLED_ROOT_FONT_SIZE}; }` })
     await page.evaluate(() => document.fonts.ready)
     await page.getByLabel(VI.createClan).check()
@@ -163,9 +163,8 @@ test.describe('/vi/register, create mode, at 320dp and 200% text scale', () => {
 
   test('the taken-code error and its suggestion do not scroll the page', async ({ page }) => {
     await serveClanSlugTaken(page)
-    await fillTheRest(page)
     await page.getByLabel(VI.clanName).fill(ONE_LONG_WORD_NAME)
-    await page.getByRole('button', { name: VI.register }).click()
+    await page.getByRole('button', { name: VI.completeSetup }).click()
 
     // The suggestion is the longest generated string on the page: the whole code plus a
     // counter, with no break opportunity in it at all.

@@ -15,7 +15,7 @@ Base route: /api/v1/auth
 
 Core operations:
 - POST /register
-- POST /onboard (201 — create clan + first admin for an already-authenticated user)
+- POST /onboard (201 — create a clan as its first admin, or ask to join one by code, for an already-authenticated user)
 - POST /login
 - POST /logout
 - POST /refresh
@@ -181,7 +181,7 @@ about `clan_code`, `clan_id`, and the deprecation window still holds whenever
 
 | Request to `POST /register` | Result |
 |---|---|
-| `clan_action` absent, no clan field either | **201.** An account is created with **no clan membership**. This is the supported invitee form |
+| `clan_action` absent, no clan field either | **201.** An account is created with **no clan membership**. This is the supported invitee form, and since #291 the only body the web sends ([ADR-075](../decisions/075-sign-up-names-no-clan-and-onboarding-opens-on-create.md)) |
 | `clan_action` absent, but `clan_code`, `clan_id`, `clan_name` or `clan_slug` present | 422 `validation_error`. `detail.fields` contains `body`. Never silently treated as clanless |
 | `clan_action=join` or `clan_action=create` | Exactly as "The join identifier" above. Nothing changed |
 
@@ -204,6 +204,12 @@ email → login → accept**. The web implements it since #196: the invitation p
 and `full_name` only. The marker carries no part of the token, and the person opens the
 invitation link again after signing in.
 
+**Since #291 the web sends this body from every sign-up** ([ADR-075](../decisions/075-sign-up-names-no-clan-and-onboarding-opens-on-create.md)),
+and the marker decides only the copy. A person with no invitation follows **register (no clan) →
+verify email → login → `POST /onboard`**: a signed-in account with no membership lands on the
+onboarding form, which opens on `clan_action=create`. No shipped client sends `clan_action` to
+`POST /register` now, and the route still accepts it exactly as "The join identifier" says.
+
 **What a clanless account looks like at login.** `POST /login` returns the ordinary
 envelope with the membership fields empty:
 
@@ -222,7 +228,10 @@ client must not tell a clanless user that a join request is being reviewed.
 **`POST /onboard` is unchanged and still requires `clan_action`.** Its response
 `RegisterResponse` types `clan_id` as non-optional, so it has no way to answer for an
 account with no clan, and the route exists only to attach an already-authenticated user to
-one. ADR-058 § 3 holds the reasoning. An invitee never calls it.
+one. ADR-058 § 3 holds the reasoning. The invitee's path does not call it: their membership
+arrives from accept. An invitee who signs in before reopening the link still lands on the
+onboarding form, as every clanless account does. Since #291 every other person who signs up on the
+web with a password calls it after signing in, as a Google user always has.
 
 **The invitation token is not accepted by `POST /register`.** ADR-058 § 4 and § 5 record
 why, including the four objections to granting the membership during sign-up and the reason

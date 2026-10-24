@@ -17,6 +17,11 @@ import messages from '../../../../../messages/vi.json'
  * screen: the field submits `clan_code`, its helper text is spec § 7.1b's, and
  * `clan_not_found` renders inline on it rather than in the page-level banner.
  *
+ * **Since #291 (ADR-075) the clan fields live on onboarding only**, `?mode=oauth` with a signed-in
+ * person who holds no membership, and the choice opens on create. Sign-up asks for no clan, so
+ * every clan case here renders onboarding, and the label cases read sign-up and onboarding both.
+ * `features/auth/ui/RegisterScreen.onboarding.test.tsx` reads the bodies both forms send.
+ *
  * These assertions read the **value in the field**, per `.claude/rules/testing.md` §
  * "A test pins an outcome, not a setting". `src/domain/clan/clan-code.test.ts` already
  * pins the transliteration; a green suite there says nothing about whether the screen
@@ -24,7 +29,7 @@ import messages from '../../../../../messages/vi.json'
  * layout engine, so the 320px/200% reading is `e2e/register-clan-code.spec.ts`.
  *
  * The `clan_slug_taken` rejection is shaped like the real one, not invented: since #183,
- * `register` goes through `apiFetch`, which rejects with the `ApiError` `parseErrorBody` builds
+ * `register` and `onboard` go through `apiFetch`, which rejects with the `ApiError` `parseErrorBody` builds
  * from the envelope. The backend raises `ConflictError("auth.clan_slug_taken")`
  * (`backend/app/application/auth/handlers.py:171`) and `app_exception_handler` turns that into
  * `{"error": {code, message, detail}}` with `message` already localised
@@ -33,7 +38,7 @@ import messages from '../../../../../messages/vi.json'
  * 409 through the transport and reads the same `ApiError` back.
  */
 
-/** `?mode=oauth` is OAuth onboarding. Every other case reads the bare `/register` URL. */
+/** `?mode=oauth` is onboarding. The sign-up cases read the bare `/register` URL. */
 const searchParams = vi.hoisted(() => ({ current: new URLSearchParams() }))
 
 vi.mock('@/features/auth/hooks/use-session', () => ({ useSession: vi.fn() }))
@@ -75,39 +80,22 @@ function clanNotFoundRejection() {
   return backendRejection(404, 'clan_not_found', BACKEND_VI_CLAN_NOT_FOUND_MESSAGE)
 }
 
-function mockActions(signUp = vi.fn()) {
+function mockActions(onboard = vi.fn()) {
   mockUseAuthActions.mockReturnValue({
-    register: signUp,
+    register: vi.fn(),
     signInWithGoogle: vi.fn(),
-    completeOnboarding: vi.fn(),
+    completeOnboarding: onboard,
     signInWithEmail: vi.fn(),
     signOut: vi.fn(),
   } as unknown as ReturnType<typeof useAuthActions>)
 }
 
-/** Join is the mode the screen opens in, so this renders and touches nothing else. */
-function renderJoinMode(signUp = vi.fn()) {
+/** Sign-up: the bare `/register` URL, signed out. Since ADR-075 it asks for no clan. */
+function renderSignUpMode() {
   searchParams.current = new URLSearchParams()
   mockUseSession.mockReturnValue({
     session: null,
     access: { kind: 'signed-out' },
-    isLoading: false,
-  } as unknown as ReturnType<typeof useSession>)
-  mockActions(signUp)
-
-  const rendered = renderWithProviders(<RegisterPage />, { messages })
-  return { ...rendered, signUp }
-}
-
-/**
- * OAuth onboarding: `?mode=oauth` and a signed-in user who still needs onboarding. The email
- * input is prefilled and disabled, and there is no password field.
- */
-function renderOAuthOnboardingMode() {
-  searchParams.current = new URLSearchParams('mode=oauth')
-  mockUseSession.mockReturnValue({
-    session: { profile: { fullName: 'Trần Văn A', email: 'a@example.com' }, memberships: [] },
-    access: { kind: 'needs-onboarding' },
     isLoading: false,
   } as unknown as ReturnType<typeof useSession>)
   mockActions()
@@ -115,24 +103,34 @@ function renderOAuthOnboardingMode() {
   return renderWithProviders(<RegisterPage />, { messages })
 }
 
-function renderCreateMode(signUp = vi.fn()) {
-  const rendered = renderJoinMode(signUp)
-  // "Tạo dòng họ mới" — messages.auth.create_clan.
-  fireEvent.click(screen.getByLabelText(messages.auth.create_clan))
-  return rendered
+/**
+ * Onboarding: `?mode=oauth` and a signed-in user who still needs onboarding, from Google or,
+ * since ADR-075, from any password sign-up. The email input is prefilled and disabled, there is
+ * no password field, and the full name is the profile's, so nothing needs filling to submit.
+ */
+function renderOnboarding(onboard = vi.fn()) {
+  searchParams.current = new URLSearchParams('mode=oauth')
+  mockUseSession.mockReturnValue({
+    session: { profile: { fullName: 'Trần Văn A', email: 'a@example.com' }, memberships: [] },
+    access: { kind: 'needs-onboarding' },
+    isLoading: false,
+  } as unknown as ReturnType<typeof useSession>)
+  mockActions(onboard)
+
+  const rendered = renderWithProviders(<RegisterPage />, { messages })
+  return { ...rendered, onboard }
 }
 
-/** Fills full name, email and password, so the form can be submitted. */
-function fillTheAccountFields() {
-  fireEvent.change(screen.getByLabelText(messages.auth.full_name), {
-    target: { value: 'Trần Văn A' },
-  })
-  fireEvent.change(screen.getByLabelText(messages.auth.email), {
-    target: { value: 'a@example.com' },
-  })
-  fireEvent.change(screen.getByLabelText(messages.auth.password), {
-    target: { value: 'correct horse battery' },
-  })
+/** Create is the choice onboarding opens on, so this renders and touches nothing else. */
+function renderCreateMode(onboard = vi.fn()) {
+  return renderOnboarding(onboard)
+}
+
+function renderJoinMode(onboard = vi.fn()) {
+  const rendered = renderOnboarding(onboard)
+  // "Tham gia dòng họ" — messages.auth.join_clan.
+  fireEvent.click(screen.getByLabelText(messages.auth.join_clan))
+  return rendered
 }
 
 function clanNameField() {
@@ -156,7 +154,8 @@ function clanCodeField() {
  * however no form control was found associated to that label."; the enumeration reported
  * `form input 0, type text`, `1, type email` and, outside OAuth onboarding, `2, type password`
  * failing `toHaveAccessibleName()`, and no other input; and after each label click
- * `document.activeElement` was `<body>`.
+ * `document.activeElement` was `<body>`. That control ran while sign-up still carried the clan
+ * fields; since ADR-075 the counts below are sign-up's three and onboarding's five or six.
  */
 describe('register: the full name, email and password labels name their inputs', () => {
   beforeEach(() => {
@@ -164,7 +163,7 @@ describe('register: the full name, email and password labels name their inputs',
   })
 
   it('querying by the visible label text returns the input it labels', () => {
-    renderJoinMode()
+    renderSignUpMode()
 
     const fullName = screen.getByLabelText(messages.auth.full_name)
     expect(fullName).toBeInstanceOf(HTMLInputElement)
@@ -179,8 +178,8 @@ describe('register: the full name, email and password labels name their inputs',
     expect(password).toHaveProperty('type', 'password')
   })
 
-  it('in OAuth onboarding, full name and the disabled email are still named by their labels', () => {
-    const { container } = renderOAuthOnboardingMode()
+  it('in onboarding, full name and the disabled email are still named by their labels', () => {
+    const { container } = renderOnboarding()
 
     expect(screen.getByLabelText(messages.auth.full_name)).toHaveProperty('type', 'text')
     const email = screen.getByLabelText(messages.auth.email)
@@ -191,12 +190,12 @@ describe('register: the full name, email and password labels name their inputs',
   })
 
   // The bare matcher is right here: this case asks only whether a name exists. The case
-  // above pins which name. The counts are the screen's own: three account fields (two in
-  // OAuth onboarding), two radios, and one clan field in join mode or two in create mode.
+  // above pins which name. The counts are the screen's own: sign-up's three account fields, and
+  // onboarding's two, two radios, and two clan fields in create mode or one in join mode.
   it.each([
-    ['join', () => renderJoinMode(), 6],
-    ['create', () => renderCreateMode(), 7],
-    ['OAuth onboarding', () => renderOAuthOnboardingMode(), 5],
+    ['sign-up', () => renderSignUpMode(), 3],
+    ['onboarding, create', () => renderCreateMode(), 6],
+    ['onboarding, join', () => renderJoinMode(), 5],
   ])('every input in the form has an accessible name, in %s mode', (_mode, render, count) => {
     const { container } = render()
 
@@ -210,15 +209,14 @@ describe('register: the full name, email and password labels name their inputs',
 
   // `document.activeElement` is read directly and the input is found by its type, not
   // through `getByLabelText`, so this reading does not fail at the same place as the first.
-  // Full name has no `type`. Neither does the clan code, which comes after it, so the first
-  // match is full name: this selector depends on that order.
+  // Full name has no `type`, and sign-up has no clan field after it to match the same selector.
   it.each([
     [messages.auth.full_name, 'input:not([type])'],
     [messages.auth.email, 'input[type="email"]'],
     [messages.auth.password, 'input[type="password"]'],
   ])('clicking the visible label "%s" moves focus into its input', async (labelText, selector) => {
     const user = userEvent.setup()
-    const { container } = renderJoinMode()
+    const { container } = renderSignUpMode()
     const input = container.querySelector(`form ${selector}`)
     expect(input).toBeInstanceOf(HTMLInputElement)
 
@@ -228,9 +226,9 @@ describe('register: the full name, email and password labels name their inputs',
   })
 
   // The disabled email is the one label that cannot move focus, so full name is the case.
-  it('in OAuth onboarding, clicking the full name label moves focus into its input', async () => {
+  it('in onboarding, clicking the full name label moves focus into its input', async () => {
     const user = userEvent.setup()
-    const { container } = renderOAuthOnboardingMode()
+    const { container } = renderOnboarding()
     const input = container.querySelector('form input:not([type])')
     expect(input).toBeInstanceOf(HTMLInputElement)
 
@@ -240,7 +238,7 @@ describe('register: the full name, email and password labels name their inputs',
   })
 })
 
-describe('register, create mode: the clan code field', () => {
+describe('onboarding, create mode: the clan code field', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -285,15 +283,14 @@ describe('register, create mode: the clan code field', () => {
   })
 
   it('submits the derived code, not an empty string', async () => {
-    const { signUp } = renderCreateMode(vi.fn().mockResolvedValue({ message: 'ok' }))
+    const { onboard } = renderCreateMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheAccountFields()
     fireEvent.change(clanNameField(), { target: { value: 'Trần Gia' } })
 
-    fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
+    fireEvent.click(screen.getByRole('button', { name: messages.auth.complete_onboarding }))
 
     await waitFor(() =>
-      expect(signUp).toHaveBeenCalledWith(
+      expect(onboard).toHaveBeenCalledWith(
         expect.objectContaining({ clan_name: 'Trần Gia', clan_slug: 'tran-gia' }),
       ),
     )
@@ -308,7 +305,7 @@ describe('register, create mode: the clan code field', () => {
   })
 })
 
-describe('register, create mode: auth.clan_slug_taken', () => {
+describe('onboarding, create mode: auth.clan_slug_taken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -316,11 +313,10 @@ describe('register, create mode: auth.clan_slug_taken', () => {
   async function submitAndCollide() {
     const rendered = renderCreateMode(vi.fn().mockRejectedValue(clanSlugTakenRejection()))
 
-    fillTheAccountFields()
     fireEvent.change(clanNameField(), { target: { value: 'Trần Gia' } })
-    fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
+    fireEvent.click(screen.getByRole('button', { name: messages.auth.complete_onboarding }))
 
-    await waitFor(() => expect(rendered.signUp).toHaveBeenCalled())
+    await waitFor(() => expect(rendered.onboard).toHaveBeenCalled())
     return rendered
   }
 
@@ -352,16 +348,16 @@ describe('register, create mode: auth.clan_slug_taken', () => {
   })
 
   it('counts the suggestion up when the alternative collides too', async () => {
-    const { signUp } = await submitAndCollide()
+    const { onboard } = await submitAndCollide()
 
     fireEvent.click(
       screen.getByRole('button', {
         name: messages.auth.clan_slug_use_suggestion.replace('{suggestion}', 'tran-gia-2'),
       }),
     )
-    signUp.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
-    await waitFor(() => expect(signUp).toHaveBeenCalled())
+    onboard.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: messages.auth.complete_onboarding }))
+    await waitFor(() => expect(onboard).toHaveBeenCalled())
 
     expect(
       await screen.findByRole('button', {
@@ -373,9 +369,8 @@ describe('register, create mode: auth.clan_slug_taken', () => {
   it('leaves the generic page-level error alone for any other failure', async () => {
     renderCreateMode(vi.fn().mockRejectedValue(new Error('boom')))
 
-    fillTheAccountFields()
     fireEvent.change(clanNameField(), { target: { value: 'Trần Gia' } })
-    fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
+    fireEvent.click(screen.getByRole('button', { name: messages.auth.complete_onboarding }))
 
     expect(await screen.findByText('boom')).toBeInTheDocument()
     expect(clanCodeField().getAttribute('aria-invalid')).toBeNull()
@@ -384,11 +379,11 @@ describe('register, create mode: auth.clan_slug_taken', () => {
 
 /* ── the web register form: the join half ─────────────────────────────────────────────── */
 
-function submitJoin() {
-  fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
+function submit() {
+  fireEvent.click(screen.getByRole('button', { name: messages.auth.complete_onboarding }))
 }
 
-describe('register, join mode: the clan code field', () => {
+describe('onboarding, join mode: the clan code field', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -408,14 +403,13 @@ describe('register, join mode: the clan code field', () => {
   })
 
   it('submits the code as clan_code, and does not submit clan_id', async () => {
-    const { signUp } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
+    const { onboard } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: 'nguyen-huu-thanh-oai' } })
-    submitJoin()
+    submit()
 
-    await waitFor(() => expect(signUp).toHaveBeenCalled())
-    const body = signUp.mock.calls[0][0] as Record<string, unknown>
+    await waitFor(() => expect(onboard).toHaveBeenCalled())
+    const body = onboard.mock.calls[0][0] as Record<string, unknown>
     expect(body.clan_code).toBe('nguyen-huu-thanh-oai')
     expect(body.clan_action).toBe('join')
     // Both together is a 422 `auth.clan_code_and_id_both_given`
@@ -425,20 +419,19 @@ describe('register, join mode: the clan code field', () => {
   })
 
   it('trims a pasted code rather than sending the whitespace', async () => {
-    const { signUp } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
+    const { onboard } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: '  nguyen-huu-thanh-oai\n' } })
-    submitJoin()
+    submit()
 
-    await waitFor(() => expect(signUp).toHaveBeenCalled())
-    expect((signUp.mock.calls[0][0] as Record<string, unknown>).clan_code).toBe(
+    await waitFor(() => expect(onboard).toHaveBeenCalled())
+    expect((onboard.mock.calls[0][0] as Record<string, unknown>).clan_code).toBe(
       'nguyen-huu-thanh-oai',
     )
   })
 })
 
-describe('register, join mode: clan_not_found', () => {
+describe('onboarding, join mode: clan_not_found', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -446,11 +439,10 @@ describe('register, join mode: clan_not_found', () => {
   async function submitAndMiss() {
     const rendered = renderJoinMode(vi.fn().mockRejectedValue(clanNotFoundRejection()))
 
-    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: 'khong-co-dong-ho-nay' } })
-    submitJoin()
+    submit()
 
-    await waitFor(() => expect(rendered.signUp).toHaveBeenCalled())
+    await waitFor(() => expect(rendered.onboard).toHaveBeenCalled())
     return rendered
   }
 
@@ -475,15 +467,15 @@ describe('register, join mode: clan_not_found', () => {
   })
 
   it('clears the inline error at the start of the next submit', async () => {
-    const { signUp } = await submitAndMiss()
+    const { onboard } = await submitAndMiss()
     expect(await screen.findByRole('alert')).toBeInTheDocument()
 
     // A different failure on the second attempt, so the form is still on screen and the
     // reading is "the inline error went away", not "the success screen replaced it".
-    signUp.mockReset()
-    signUp.mockRejectedValue(new Error('boom'))
+    onboard.mockReset()
+    onboard.mockRejectedValue(new Error('boom'))
     fireEvent.change(clanCodeField(), { target: { value: 'nguyen-huu-thanh-oai' } })
-    submitJoin()
+    submit()
 
     expect(await screen.findByText('boom')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -493,32 +485,30 @@ describe('register, join mode: clan_not_found', () => {
   it('leaves the page-level banner alone for any other failure', async () => {
     renderJoinMode(vi.fn().mockRejectedValue(new Error('boom')))
 
-    fillTheAccountFields()
     fireEvent.change(clanCodeField(), { target: { value: 'nguyen-huu-thanh-oai' } })
-    submitJoin()
+    submit()
 
     expect(await screen.findByText('boom')).toBeInTheDocument()
     expect(clanCodeField().getAttribute('aria-invalid')).toBeNull()
   })
 })
 
-describe('register, join mode: a code the backend would refuse on shape', () => {
+describe('onboarding, join mode: a code the backend would refuse on shape', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('never reaches the network, and says so on the field', async () => {
-    const { signUp } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
+    const { onboard } = renderJoinMode(vi.fn().mockResolvedValue({ message: 'ok' }))
 
-    fillTheAccountFields()
     // A space and capitals: `^[a-z0-9]+(?:-[a-z0-9]+)*$` refuses both, so the backend
     // would answer 422 `validation_error` with no copy a person can read.
     fireEvent.change(clanCodeField(), { target: { value: 'Nguyen Huu Thanh Oai' } })
-    submitJoin()
+    submit()
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(messages.auth.clan_slug_invalid)
     expect(clanCodeField().getAttribute('aria-invalid')).toBe('true')
-    expect(signUp).not.toHaveBeenCalled()
+    expect(onboard).not.toHaveBeenCalled()
   })
 })

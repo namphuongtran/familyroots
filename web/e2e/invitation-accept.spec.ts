@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
+import { SESSION_COOKIE_NAME, signIn } from './seeded-session'
 
 /**
  * the invitation page: the page an invitation link lands on, driven in a real browser.
@@ -26,77 +27,6 @@ const TOKEN = 'Zx-9Qa_bC3dEfGhIjKlMnOpQrStUvWxYz0123456789'
 const INVITATION_URL = `/vi/invitations/${TOKEN}`
 const ACCEPT_ROUTE = 'http://localhost:8000/api/v1/invitations/*/accept'
 const CLAN_ID = '6f1c4f7e-0000-4000-8000-000000000001'
-
-/**
- * The cookie `@supabase/ssr`'s browser client reads a session out of.
- *
- * `createBrowserClient` (`src/shared/supabase/client.ts:11`) stores the session in
- * `document.cookie`, not `localStorage` — that is the point of the SSR package.
- * The name is `sb-${hostname.split('.')[0]}-auth-token`
- * (`node_modules/@supabase/supabase-js/dist/index.mjs:680`). The value is `base64-`
- * followed by the base64url of the session JSON
- * (`@supabase/ssr/dist/main/cookies.js:9,45`).
- *
- * Seeding it is the only way to reach the signed-in states in a browser: accept
- * requires a session (`docs/contracts/rest-invitations-api.md:62-64`), and no e2e
- * spec here has a real Supabase to sign in against. Nothing is asserted about
- * Supabase itself — the session is a fixture, and the page's own behaviour is what
- * is measured.
- *
- * **This name is DERIVED, and it used to be the literal
- * `'sb-e2e-fake-project-auth-token'`.** That literal was true locally and false in
- * CI, which is where it was caught: `.github/workflows/web-ci.yml` runs the e2e job
- * with `NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co`, while
- * `playwright.config.ts` falls back to `https://e2e-fake-project.example.supabase.co`
- * only when that variable is unset. So in CI the app read
- * `sb-placeholder-auth-token`, the seeded cookie was ignored, the page rendered its
- * signed-out state, and four cases failed on a missing Accept button rather than on
- * anything they were written to measure.
- *
- * Derive it from the same expression `playwright.config.ts` uses, so the two cannot
- * drift again. `e2e/auth/session.setup.ts:61` already had the robust shape — it
- * matches on `startsWith('sb-')` and `endsWith('-auth-token')` rather than a literal.
- */
-function sessionCookieName(): string {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://e2e-fake-project.example.supabase.co'
-  return `sb-${new URL(url).hostname.split('.')[0]}-auth-token`
-}
-
-const SESSION_COOKIE_NAME = sessionCookieName()
-
-function sessionCookieValue(): string {
-  const session = {
-    access_token: 'e2e-access-token',
-    token_type: 'bearer',
-    expires_in: 3600,
-    // Far enough out that auth-js never tries a refresh against the fake host.
-    expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
-    refresh_token: 'e2e-refresh-token',
-    user: {
-      id: '9f1c4f7e-0000-4000-8000-0000000000aa',
-      aud: 'authenticated',
-      role: 'authenticated',
-      email: 'invited@example.com',
-      app_metadata: {},
-      user_metadata: { full_name: 'Người Được Mời' },
-      identities: [],
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-    },
-  }
-  return `base64-${Buffer.from(JSON.stringify(session)).toString('base64url')}`
-}
-
-async function signIn(page: Page): Promise<void> {
-  await page.context().addCookies([
-    {
-      name: SESSION_COOKIE_NAME,
-      value: sessionCookieValue(),
-      domain: '127.0.0.1',
-      path: '/',
-    },
-  ])
-}
 
 /**
  * Fail on the seeded session, naming the cookie, rather than letting every

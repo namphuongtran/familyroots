@@ -27,6 +27,8 @@ import enMessages from '../../../../../messages/en.json'
  * mocked: with no stored session the browser client makes no request, so the reading is
  * the same whether or not the shell exports `NEXT_PUBLIC_SUPABASE_*`. Run both ways on
  * 2026-10-04, unset and set to placeholders: one pass each.
+ *
+ * Since #291 (ADR-075) sign-up asks for no clan, so the cases fill the three account fields only.
  */
 
 vi.mock('next/navigation', () => ({
@@ -59,9 +61,6 @@ describe('register: a 201 shows the success screen', () => {
     })
     fireEvent.change(screen.getByLabelText(messages.auth.password), {
       target: { value: 'correct horse battery' },
-    })
-    fireEvent.change(screen.getByLabelText(messages.auth.clan_slug), {
-      target: { value: 'nguyen-huu-thanh-oai' },
     })
     fireEvent.click(screen.getByRole('button', { name: messages.auth.register }))
 
@@ -101,9 +100,6 @@ describe('register: the success screen says nothing in English that it should no
     })
     fireEvent.change(screen.getByLabelText(intl.auth.password), {
       target: { value: 'correct horse battery' },
-    })
-    fireEvent.change(screen.getByLabelText(intl.auth.clan_slug), {
-      target: { value: 'nguyen-huu-thanh-oai' },
     })
     fireEvent.click(screen.getByRole('button', { name: intl.auth.register }))
     expect(await screen.findByText(received)).toBeInTheDocument()

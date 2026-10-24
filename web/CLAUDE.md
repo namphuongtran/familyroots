@@ -855,10 +855,18 @@ zustand keeps only `ui.store.ts`.
   hosted project. A failed Google return lands on `/{locale}/login?error=auth_callback_failed`
   in `next`'s locale (`app/api/auth/callback/redirects.ts`), and `LoginScreen` shows
   `auth.oauth_callback_failed` for it.
+- **Sign-up names no clan, and the clan step is onboarding (#291, ADR-075).** `RegisterScreen`
+  sends `email`, `password` and `full_name` only, for everyone, the body ADR-058 made the
+  invitee's first. A signed-in person with no membership lands on `/{locale}/register?mode=oauth`
+  (`landingPath`), a password sign-up and a Google user alike, and its join/create choice opens on
+  create. The `mode=oauth` name predates this; the component calls the state `isOnboarding`.
+  **The onboarding form asks for the name again**: `GET /auth/me` reads `full_name` from the
+  token's `user_metadata`, which register never sets, so the required field opens empty for a
+  password sign-up. #300 holds the backend fix.
 - **`RegisterScreen` has an invitation mode (#196).** `/{locale}/register?from=invitation`, built by
-  `inviteeRegisterPath` and read by `isInviteeRegister` (`model/invitee-register.ts`), drops the
-  clan choice and sends `email`, `password` and `full_name` only, the body ADR-058 made the
-  invitee's. `InvitationAcceptScreen`'s signed-out state links there. The marker carries no part of
+  `inviteeRegisterPath` and read by `isInviteeRegister` (`model/invitee-register.ts`). Since #291
+  it changes only the copy: the invitee is told to open the link again after signing in.
+  `InvitationAcceptScreen`'s signed-out state links there. The marker carries no part of
   the token, which the page carries nowhere; its header holds the reasons.
 - **Three interim adaptations, each replaced by a later issue.** ~~The `(dashboard)` layout keeps a
   client redirect, driven by the access state, and writes a ready user's active clan back to the
@@ -976,7 +984,9 @@ e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rathe
   prose figure. The earlier "36 tests on 2026-08-21" reading is left as written, because it
   carries its own date. The four described below are the original set; `supabase-banner.spec.ts`
   `register-clan-code.spec.ts`, `register-join-code.spec.ts`, and `invitation-accept.spec.ts` are
-  the other four:
+  the other four. Since #291 the two register specs open onboarding, `/vi/register?mode=oauth`,
+  signed in with no clan through `e2e/seeded-session.ts`, the fake Supabase session cookie
+  `invitation-accept.spec.ts` used to hold alone, with `GET /auth/me` and `GET /me/clans` routed:
   - `smoke.spec.ts` — locale redirect, the login form renders, and (since the fix to
     `R-lang`, see `docs/sad/11-risks-and-technical-debt.md`) `<html lang>` tracks the route
     locale on both `/vi/login` and `/en/login`.
@@ -1230,6 +1240,15 @@ pnpm test:e2e:auth
 `http://familyroots-web.test:3102` rather than `127.0.0.1`. Its backend values differ from the
 recipe above, `CORS_ORIGINS` and `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
+
+**Twenty-eight tests, 2026-10-24 (#291)**: three `auth-setup` logins and twenty-five
+`auth-chromium` cases, one run reading `28 passed` with no `429` in the backend log. #291 added
+`signs-up-with-no-invitation.auth.spec.ts`, one walk: register on `/vi/register` with no clan,
+confirm by the mailed link, sign in, land on onboarding opening on create, create a clan from its
+name, and land on `/vi/dashboard`, then `GET /me/clans` reads one approved `admin` membership. It
+spends 2 counted requests, register and onboard, of 5 under `/api/v1/auth`, and attaches the
+count. It leaves a clan behind in the local database each run, under a fresh code, because no
+route deletes a clan. ADR-075 holds its controls.
 
 **Twenty-seven tests, 2026-10-11 (#238)**: three `auth-setup` logins and twenty-four
 `auth-chromium` cases, one run reading `27 passed` with no `429` in the backend log. #238 added
