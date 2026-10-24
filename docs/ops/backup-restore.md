@@ -951,7 +951,7 @@ open:
   no file at all. Document files and avatars live in Supabase Storage, the same provider
   as the database. How they are copied to B2 and restored is decided in
   [ADR-077](../decisions/077-the-bucket-files-are-copied-to-b2-beside-the-dump.md), and
-  #BUILD builds it after #258. Production held no file in either bucket on 2026-10-24.
+  #303 builds it after #258. Production held no file in either bucket on 2026-10-24.
 - **Admin-succession runbook**: no runbook exists for a clan whose only admin
   dies or leaves — unrelated to backups mechanically, but the same "family
   data must outlive individuals" principle; still TBD.

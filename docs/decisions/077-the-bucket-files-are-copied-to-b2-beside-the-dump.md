@@ -4,7 +4,7 @@
 
 Accepted (2026-10-24), decision only. Resolves issue #296, "A recovery from the nightly dump brings
 back no file from the two Storage buckets". The maintainer settled each question in a grilling
-session the same day. **#BUILD implements it, and #258 blocks #BUILD.** This pull request changes no
+session the same day. **#303 implements it, and #258 blocks #303.** This pull request changes no
 script, workflow, secret or bucket.
 
 Repository readings were taken on `main` at `3869b42`. Production was read on 2026-10-24 with
@@ -169,11 +169,11 @@ fill it far sooner.
   usage is unlimited, and unlimited charges can accrue". The upload API lists a `cap_exceeded`
   error
   ([upload files with the native API](https://www.backblaze.com/docs/cloud-storage-upload-files-with-the-native-api)).
-  #BUILD reads the actual behaviour first and records it.
+  #303 reads the actual behaviour first and records it.
 
 ## Consequences
 
-- **#BUILD carries the build**: the copy and the hide in `scripts/db_backup.sh` and
+- **#303 carries the build**: the copy and the hide in `scripts/db_backup.sh` and
   `db-backup.yml`, the `storage/` lifecycle rule, § 6 in `scripts/restore_drill.sh` and in
   "Restoring for real", § 7's check and its control, § 8's size line, and the release step in
   `docs/ops/deployment.md`. It needs #258's bucket, key, recipients file and two-upload job first.
@@ -219,4 +219,4 @@ fill it far sooner.
 - [ADR-074](074-a-restore-takes-public-whole-and-the-data-of-auth.md): what a restore takes, the
   drill, and the release step
 - [docs/ops/backup-restore.md](../ops/backup-restore.md)
-- Issues #296 (this decision), #258 (the dump's off-provider copy) and #BUILD (builds this)
+- Issues #296 (this decision), #258 (the dump's off-provider copy) and #303 (builds this)
