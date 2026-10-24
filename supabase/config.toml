@@ -177,7 +177,13 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# `localhost`, the origin `pnpm dev` is opened on, and not the CLI's `127.0.0.1` default. Both
+# auth emails link `{{ .SiteURL }}/...` (supabase/templates/). Opened on `127.0.0.1:3000`, the
+# page never hydrated: Next 16 refuses the dev HMR socket to a host outside `allowedDevOrigins`,
+# so **Xác nhận email** had no handler and a press did nothing (measured 2026-10-24), and the
+# backend's default `CORS_ORIGINS` names `localhost:3000` only. The e2e walks open the link on
+# their own origin either way (web/e2e/auth/mail.ts).
+site_url = "http://localhost:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # `supabase.localhost` rather than `127.0.0.1` ON PURPOSE, and this is the whole reason the
 # harness holds together. GoTrue stamps this string into every token as `iss`, and

@@ -28,8 +28,8 @@ import { mailedConfirmation, onOrigin } from './mail'
  * `supabase/config.toml` does not apply, and GoTrue refuses the password grant with
  * `email_not_confirmed` until the link is followed. The local stack mails that link to Mailpit
  * (`E2E_AUTH_MAIL_URL`). Since #202 it is ADR-063's `{{ .SiteURL }}/verify-email/confirm?token_hash=…`,
- * and the Site URL, `http://127.0.0.1:3000`, has nothing listening. So the walk opens the link on
- * its own origin with the path and query unchanged (`mail.ts`, `onOrigin`) and presses
+ * and the Site URL, `http://localhost:3000`, is `pnpm dev`'s origin, not the harness's. So the walk
+ * opens the link on its own origin with the path and query unchanged (`mail.ts`, `onOrigin`) and presses
  * **Xác nhận email** there (#200). It does so in a second browser context, the way a person opens
  * a mail in another tab or on another device: the confirmation keeps a session of its own
  * (ADR-063 § 3), and the walk still signs in on its own page next, as it did before #202. The

@@ -232,6 +232,15 @@ project.** It would overwrite the hosted Site URL and auth settings with the loc
 
 ## Things that will surprise you
 
+- **The Site URL is `http://localhost:3000`, and an auth email opened on `127.0.0.1` does
+  nothing.** Both templates link `{{ .SiteURL }}/...`. Until 2026-10-24 the Site URL was the CLI's
+  default, `http://127.0.0.1:3000`, and a sign-up confirmation opened there rendered its
+  **Xác nhận email** button and ignored the press. Next 16 refuses its dev HMR socket to a host
+  outside `allowedDevOrigins` (`web/next.config.ts`), and the page never hydrated: no React props
+  on the button, against hydrated within 1.5 s on `localhost:3000`, measured the same day. The
+  backend's default `CORS_ORIGINS` admits `localhost:3000` only, so the pages after it would have
+  failed too. A Site URL change reaches GoTrue only after `scripts/supabase_local.sh down` then
+  `up`, and a mail sent before the restart keeps the old host.
 - **The first write after `up` can time out.** GoTrue returned `504 request_timeout` on the first
   `POST /auth/v1/admin/users` after a start (10.1 s, "context deadline exceeded"), and the same
   call took 0.16 s a minute later. Retry once before believing a failure. Seen twice on 2026-08-22,
