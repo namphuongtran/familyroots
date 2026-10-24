@@ -48,7 +48,9 @@ async def test_create_user_offloaded(monkeypatch: pytest.MonkeyPatch) -> None:
     fn, seen = _spy(SimpleNamespace(user=SimpleNamespace(id="uid-1")))
     client.auth.admin.create_user = fn
     monkeypatch.setattr(mod, "get_service_client", lambda: client)
-    await mod.SupabaseIdentityProvider().create_user(email="a@example.com", password="pw")
+    await mod.SupabaseIdentityProvider().create_user(
+        email="a@example.com", password="pw", full_name="A"
+    )
     assert seen["on_loop"] is False
 
 

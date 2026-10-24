@@ -112,7 +112,7 @@ async def test_create_user_rate_limit_is_unavailable(monkeypatch: pytest.MonkeyP
         lambda: _RaisingServiceClient(AuthApiError("Too Many Requests", 429, None)),
     )
     with pytest.raises(IdentityUnavailableError):
-        await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="x")
+        await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="x", full_name="T")
 
 
 @pytest.mark.asyncio
@@ -130,7 +130,9 @@ async def test_create_user_weak_password_is_not_unavailable(
         ),
     )
     with pytest.raises(IdentityWeakPasswordError):
-        await sip.SupabaseIdentityProvider().create_user(email="a@b.c", password="weak")
+        await sip.SupabaseIdentityProvider().create_user(
+            email="a@b.c", password="weak", full_name="T"
+        )
 
 
 @pytest.mark.parametrize(
@@ -177,7 +179,7 @@ async def test_update_user_generic_4xx_is_not_credentials_or_outage(
 
 
 class _UnavailableIdentity:
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         raise IdentityUnavailableError("provider down")
 
 
@@ -223,7 +225,7 @@ def test_generic_400_still_maps_to_auth_error() -> None:
 
 
 class _WeakPasswordIdentity:
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         raise IdentityWeakPasswordError("Password is too weak")
 
 

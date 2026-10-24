@@ -72,9 +72,13 @@ class IdentityWeakPasswordError(IdentityError):
 class IdentityProvider(Protocol):
     """What the auth use-cases need from the external identity provider."""
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         """Create a user and return its provider id. Raises IdentityUserExistsError
-        if the email already exists, IdentityError on other failures."""
+        if the email already exists, IdentityError on other failures.
+
+        ``full_name`` is the name the person typed. The provider keeps it with the
+        account, and ``sign_in`` and the tokens it issues carry it back, so it is the
+        one store a name is read from (ADR-076)."""
         ...
 
     async def delete_user(self, user_id: str) -> None:

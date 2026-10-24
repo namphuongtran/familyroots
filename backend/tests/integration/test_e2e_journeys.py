@@ -124,11 +124,11 @@ class StubIdentityProvider:
         }
         return jwt.encode(claims, self._private_pem, algorithm="RS256", headers={"kid": _KID})
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         if email in self._users:
             raise IdentityUserExistsError(email)
         user_id = str(uuid.uuid4())
-        self._users[email] = {"id": user_id, "password": password, "full_name": ""}
+        self._users[email] = {"id": user_id, "password": password, "full_name": full_name}
         return user_id
 
     async def delete_user(self, user_id: str) -> None:

@@ -293,6 +293,18 @@ nested `user`):
 
 ### Profile field semantics (login and `GET /me`)
 
+- `full_name` — the identity provider's `user_metadata.full_name`, the one store
+  the auth path reads a name from
+  ([ADR-076](../decisions/076-the-name-typed-at-sign-up-is-the-providers-full-name.md)).
+  `POST /register` writes the `full_name` it is sent there, so a password account
+  reads back the name it typed. `PATCH /me` and a Google profile write the same
+  field, so a later name wins. `POST /login` reads it from the sign-in, and
+  `GET /me` and `POST /onboard` from the **presented access token**, so a value
+  `PATCH /me` writes appears there from the next token refresh onward. An account
+  a backend without ADR-076 registered, which never saved a name, answers `""`.
+  `user_profiles.display_name`, which the clan member lists read, is a separate
+  copy written once when the profile row is created, and `PATCH /me` does not
+  change it.
 - `has_pending_membership` — true when the user has any membership row with
   `is_approved = false`. **Both** `POST /login` and `GET /me` compute it from the
   same query port, so they agree for the same user; clients do not need a

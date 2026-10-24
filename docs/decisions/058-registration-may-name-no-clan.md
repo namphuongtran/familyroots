@@ -10,6 +10,10 @@ opened from its own finding 2.
 entry that § 2's amendment names, and the clan step is `POST /auth/onboard`, after sign-in. The
 backend is unchanged.
 
+**§ 7 amended by [ADR-076](076-the-name-typed-at-sign-up-is-the-providers-full-name.md) (2026-10-24,
+#300).** `create_user` now carries the typed name to the provider as `user_metadata.full_name`,
+the store `GET /auth/me`, login and onboard read. The profile row § 7 describes is still written.
+
 **This ADR ships code**: `clan_action` becomes optional on `RegisterRequest` only, a new
 `AuthCommandHandler._provision_clanless_account`, and one integration module that walks the whole
 invitation flow.
@@ -215,6 +219,13 @@ is `ON CONFLICT DO NOTHING` on the primary key
 profile row, the person's name would be silently replaced by the local part of their email address.
 `test_the_name_typed_at_register_survives_accept` reads `user_profiles.display_name` after the whole
 walk and requires the typed name.
+
+> **Amendment (2026-10-24, issue #300, [ADR-076](076-the-name-typed-at-sign-up-is-the-providers-full-name.md)):**
+> the premise above no longer holds. `IdentityProvider.create_user` takes `full_name`, and the
+> Supabase adapter stores it as the account's `user_metadata.full_name`, so the token accept reads
+> carries the typed name too. The clanless path still writes the profile row, and accept's
+> `ensure_profile` still finds it there. The row is no longer the only place the typed name lives,
+> and nothing on the auth path reads it: `GET /auth/me`, login and onboard read the provider's copy.
 
 ## Alternatives considered
 

@@ -44,7 +44,7 @@ class _FakeIdentity:
     def __init__(self) -> None:
         self.created: dict[str, str] = {}
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         user_id = str(uuid.uuid4())
         self.created[email] = user_id
         return user_id

@@ -108,12 +108,9 @@ def _issuer() -> str:
 class StubIdentityProvider:
     """In-memory IdentityProvider that mints verifiable RS256 JWTs.
 
-    ``create_user`` records **no** name, exactly as the real port cannot carry
-    one: ``IdentityProvider.create_user`` takes ``email`` and ``password`` only
-    (``app/domain/auth/identity_provider.py:75``). That is why the name a person
-    types at registration has to be written locally, and why
-    ``test_the_name_typed_at_register_survives_accept`` is a real assertion and
-    not a tautology.
+    ``create_user`` keeps the name it is handed as the account's
+    ``user_metadata.full_name``, the way Supabase does since #300 (ADR-076), and
+    ``sign_in`` mints it into the token.
     """
 
     def __init__(self, private_pem: str) -> None:
@@ -136,11 +133,11 @@ class StubIdentityProvider:
         }
         return jwt.encode(claims, self._private_pem, algorithm="RS256", headers={"kid": _KID})
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         if email in self._users:
             raise IdentityUserExistsError(email)
         user_id = str(uuid.uuid4())
-        self._users[email] = {"id": user_id, "password": password, "full_name": ""}
+        self._users[email] = {"id": user_id, "password": password, "full_name": full_name}
         self.create_user_calls.append(email)
         return user_id
 
@@ -379,17 +376,28 @@ async def test_the_name_typed_at_register_survives_accept(
 ) -> None:
     """`user_profiles.display_name` is the name the person typed, not a fallback.
 
-    Nothing carries a name to the identity provider (`create_user` takes email
-    and password only), so the clanless register path is the only writer of this
-    person's name. Invitation accept calls `ensure_profile` again with the JWT's
-    `user_metadata.full_name`, which is empty for a registered account, and
-    `ensure_profile_row` is ON CONFLICT DO NOTHING -- so if register wrote no
-    row, this reads the local-part of the email instead of the real name.
+    Two writers offer it. The clanless register path writes the row with the
+    typed name (ADR-058 § 7), and invitation accept calls `ensure_profile` again
+    with the JWT's `user_metadata.full_name`, which since #300 holds the same
+    name (ADR-076). `ensure_profile_row` is ON CONFLICT DO NOTHING, so the first
+    writer's row stays.
+
+    Since both now offer the typed name, the reading after accept no longer
+    tells them apart, so the row is read twice: once after register, before any
+    sign-in, which only register can have written, and once after accept.
     """
     suffix = uuid.uuid4().hex[:10]
     invitee_email = f"named-{suffix}@example.com"
     clan_a, admin_token = _found_clan(client, suffix, "n")
     token = _invite(client, _auth(admin_token, clan_a), clan_a, invitee_email)
+
+    async def display_name() -> str | None:
+        return (
+            await db_session.execute(
+                sa.text("SELECT display_name FROM user_profiles WHERE email = :e"),
+                {"e": invitee_email},
+            )
+        ).scalar_one_or_none()
 
     assert (
         client.post(
@@ -397,19 +405,14 @@ async def test_the_name_typed_at_register_survives_accept(
         ).status_code
         == 201
     )
+    assert await display_name() == _CLANLESS_NAME
+
     login = client.post("/api/v1/auth/login", json={"email": invitee_email, "password": _PW})
     accept = client.post(
         f"/api/v1/invitations/{token}/accept", headers=_auth(_data(login)["access_token"])
     )
     assert accept.status_code == 200, accept.text
-
-    display_name = (
-        await db_session.execute(
-            sa.text("SELECT display_name FROM user_profiles WHERE email = :e"),
-            {"e": invitee_email},
-        )
-    ).scalar_one()
-    assert display_name == _CLANLESS_NAME
+    assert await display_name() == _CLANLESS_NAME
 
 
 # ── the non-enumeration property, which does not bend ────────────────────────
