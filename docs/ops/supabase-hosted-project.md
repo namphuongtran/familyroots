@@ -190,7 +190,7 @@ call above answers a redirect to `accounts.google.com`.
 
 | Setting | Hosted | Local file |
 |---|---|---|
-| Site URL | `http://localhost:3000` | `http://127.0.0.1:3000` |
+| Site URL | `http://localhost:3000` | `http://localhost:3000` (`http://127.0.0.1:3000` until 2026-10-24) |
 | Redirect URLs | **empty** | `["https://127.0.0.1:3000"]` |
 | Confirm email | on | off |
 | Email OTP length | 8 | 6 |

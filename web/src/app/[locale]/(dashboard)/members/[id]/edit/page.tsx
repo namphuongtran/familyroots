@@ -36,7 +36,10 @@ export default function EditMemberPage() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center gap-2">
-        <Link href=".." className="text-muted-foreground hover:text-foreground">
+        <Link
+          href={`/${locale}/members/${id}`}
+          className="text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <h1 className="text-foreground font-serif text-xl">{t('edit_title')}</h1>

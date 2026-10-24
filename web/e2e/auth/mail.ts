@@ -12,12 +12,12 @@ import { mailCatcherOrigin } from './fixtures'
  * **The link is the one in the mail, as sent.** Since #202 the local stack renders the repository's
  * templates (`supabase/templates/`, ADR-063 § 1): `{{ .SiteURL }}/verify-email/confirm?token_hash=…&type=email`
  * and `{{ .SiteURL }}/reset-password?token_hash=…&type=recovery`. The Site URL is `SITE_URL_ORIGIN`,
- * where nothing listens, so a walk opens the link with `onOrigin`: the harness's origin in place of
- * the Site URL's, the path and the query unchanged.
+ * the origin `pnpm dev` serves on, not the harness's, so a walk opens the link with `onOrigin`: the
+ * harness's origin in place of the Site URL's, the path and the query unchanged.
  */
 
 /** `supabase/config.toml` `[auth] site_url`: the origin of every link the local stack mails. */
-export const SITE_URL_ORIGIN = 'http://127.0.0.1:3000'
+export const SITE_URL_ORIGIN = 'http://localhost:3000'
 
 /** `link` opened on `origin` instead of its own, with its path and query unchanged. */
 export function onOrigin(link: string, origin: string | undefined): string {

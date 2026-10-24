@@ -157,6 +157,78 @@ describe('PersonForm — edit, a plain successful save', () => {
 })
 
 /**
+ * Whether leaving the page would prompt. A browser shows the "leave site?" prompt for a
+ * `beforeunload` that a listener cancels, so the reading is whether this cancelable event comes
+ * back cancelled.
+ */
+function leavingWouldPrompt(): boolean {
+  const event = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(event)
+  return event.defaultPrevented
+}
+
+/**
+ * Found 2026-10-24 in a manual walk of `/vi/members/new`: after "Đã lưu thay đổi.", navigating
+ * away still raised the browser's leave-page prompt, because a plain save never reset the form
+ * and `isDirty` stayed true. Each case first reads the prompt live on the typed, unsaved form, so
+ * a guard that never fires cannot pass the second reading. Negative control the same day: with
+ * the two `reset(values)` calls in `onSubmit` removed, both cases failed on the reading after the
+ * save, `expected true to be false`.
+ */
+describe('PersonForm — the unsaved-changes guard after a successful save', () => {
+  it('create: leaving no longer prompts once the person is saved', async () => {
+    mswServer.use(
+      http.post(`${API}/persons`, () =>
+        HttpResponse.json(envelope(wirePerson({ full_name: 'Nguyễn Văn Tổ' })), { status: 201 }),
+      ),
+    )
+    renderWithProviders(
+      <PersonForm
+        mode="create"
+        context={context}
+        refreshAuth={refreshAuth}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { messages },
+    )
+
+    await userEvent.type(screen.getByLabelText(/Họ và tên/), 'Nguyễn Văn Tổ')
+    expect(leavingWouldPrompt()).toBe(true)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(screen.getByText('Đã lưu thay đổi.')).toBeInTheDocument())
+    expect(leavingWouldPrompt()).toBe(false)
+  })
+
+  it('edit: leaving no longer prompts once the change is saved', async () => {
+    mswServer.use(
+      http.patch(`${API}/persons/person-1`, () =>
+        HttpResponse.json(envelope(wirePerson({ notes: 'ghi chú mới', version: 4 }))),
+      ),
+    )
+    renderWithProviders(
+      <PersonForm
+        mode="edit"
+        person={personProp()}
+        context={context}
+        refreshAuth={refreshAuth}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { messages },
+    )
+
+    await userEvent.type(screen.getByLabelText('Ghi chú'), 'ghi chú mới')
+    expect(leavingWouldPrompt()).toBe(true)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(screen.getByText('Đã lưu thay đổi.')).toBeInTheDocument())
+    expect(leavingWouldPrompt()).toBe(false)
+  })
+})
+
+/**
  * The 409 path. `handlePatch` below is a per-test call counter: the first
  * `PATCH` answers `409 stale_write`, exactly the shape
  * `docs/contracts/rest-persons-api.md` documents ("Optimistic concurrency
