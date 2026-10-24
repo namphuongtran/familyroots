@@ -860,9 +860,9 @@ zustand keeps only `ui.store.ts`.
   invitee's first. A signed-in person with no membership lands on `/{locale}/register?mode=oauth`
   (`landingPath`), a password sign-up and a Google user alike, and its join/create choice opens on
   create. The `mode=oauth` name predates this; the component calls the state `isOnboarding`.
-  **The onboarding form asks for the name again**: `GET /auth/me` reads `full_name` from the
-  token's `user_metadata`, which register never sets, so the required field opens empty for a
-  password sign-up. #300 holds the backend fix.
+  **The onboarding form opens with the name typed at sign-up** (#300, ADR-076): register writes
+  it to the provider's `user_metadata.full_name`, which `GET /auth/me` reads from the token. An
+  account registered before that fix still opens empty, so the field stays required.
 - **`RegisterScreen` has an invitation mode (#196).** `/{locale}/register?from=invitation`, built by
   `inviteeRegisterPath` and read by `isInviteeRegister` (`model/invitee-register.ts`). Since #291
   it changes only the copy: the invitee is told to open the link again after signing in.

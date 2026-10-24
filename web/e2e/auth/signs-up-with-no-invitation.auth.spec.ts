@@ -15,7 +15,8 @@ import { mailedConfirmation, onOrigin } from './mail'
  * mails the link to Mailpit, and a second browser context presses **Xác nhận email**.
  *
  * **What it reads.** The register request's body, which must name no clan. The onboarding
- * form's first state, which must be create. The page the onboarding submit lands on, which must
+ * form's first state, which must be create, with the name typed at sign-up already in its name
+ * field (#300, ADR-076). The page the onboarding submit lands on, which must
  * be `/vi/dashboard`. And `GET /me/clans` as the new person: one approved `admin` membership in
  * the clan the form created, under the code the form derived from the name. A clan creator is
  * approved at once (`_assign_clan_membership`, `role="admin"`, `is_approved=True`).
@@ -26,7 +27,9 @@ import { mailedConfirmation, onOrigin } from './mail'
  * outcome: the required code field kept the submit in the browser, and the success screen never
  * came. A probe on the same old form, with a code no clan holds, read "Không tìm thấy dòng họ với
  * mã này", the stop the issue names. With onboarding's default put back to join, the walk failed on
- * the create radio not being checked.
+ * the create radio not being checked. With the backend's Supabase adapter sending no
+ * `user_metadata` on `create_user` (#300), it failed on the name field: `Expected: "Người Đăng Ký
+ * 291"`, `Received: ""`.
  *
  * **Budget.** `POST /auth/register` and `POST /auth/onboard` are counted in the auth bucket
  * (`docs/contracts/error-codes.md`, "429 and Retry-After"), and the walk attaches what it sent.
@@ -178,13 +181,10 @@ test.describe('a person with no invitation signs up and creates a clan', () => {
     })
 
     await test.step('creates a clan from its name alone and lands on the dashboard', async () => {
-      // The full-name field reads empty here, so the person types the name again. `GET /auth/me`
-      // answers `full_name` out of the token's `user_metadata`, which `POST /auth/register` never
-      // sets, while the name typed at sign-up sits in `user_profiles.display_name` (ADR-058 § 7).
-      // Measured 2026-10-24 on this walk: `full_name: ""` against `display_name` 'Người Đăng Ký
-      // 291'. #300 holds the backend fix; the field is required, so without this
-      // line the submit never leaves the browser.
-      await page.getByLabel(COPY.fullName).fill(FULL_NAME)
+      // #300, ADR-076: the name typed at sign-up is already here, so the person does not type it
+      // again. `POST /auth/register` hands it to the provider as `user_metadata.full_name`, the
+      // token carries it, and `GET /auth/me` answers it. Before #300 this field read empty.
+      await expect(page.getByLabel(COPY.fullName)).toHaveValue(FULL_NAME)
       await page.getByLabel(COPY.clanName).fill(clanName)
       await expect(page.getByLabel(COPY.clanCode)).toHaveValue(clanCode)
       await page.getByRole('button', { name: COPY.completeSetup }).click()

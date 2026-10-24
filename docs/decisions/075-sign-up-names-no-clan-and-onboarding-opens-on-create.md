@@ -105,7 +105,9 @@ neither, and `mobile/lib` has no register caller.
   `user_profiles.display_name` (ADR-058 § 7), and nothing on the auth path reads it. Measured
   2026-10-24 on the walk below: `full_name: ""` against `display_name` 'Người Đăng Ký 291'. The
   field is required, so the person types their name a second time. This is older than #291, but
-  #291 puts every password sign-up in front of it. #300 holds the backend fix.
+  #291 puts every password sign-up in front of it. #300 holds the backend fix. *(Fixed on
+  2026-10-24 by [ADR-076](076-the-name-typed-at-sign-up-is-the-providers-full-name.md): register
+  now writes the typed name to the provider, and the form opens filled.)*
 - **An invitee who signs in before reopening the link lands on onboarding too**, which now offers to
   create a clan. That was already so under ADR-058. The invitee's success screen still says to open
   the link again.
@@ -118,6 +120,7 @@ neither, and `mobile/lib` has no register caller.
   clan at sign-up through the API, before the address is confirmed. Closing that is a backend
   change with its own breaking-change and non-enumeration questions.
 - **Which store holds a person's name.** That is the issue named under "What this costs".
+  [ADR-076](076-the-name-typed-at-sign-up-is-the-providers-full-name.md) decides it.
 - **A mobile register screen.** Mobile has none.
 
 ## How it is held

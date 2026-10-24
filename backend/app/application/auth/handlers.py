@@ -152,15 +152,13 @@ class AuthCommandHandler:
     ) -> None:
         """Provision the local profile for an account that joins no clan (ADR-058).
 
-        The whole write is one ``user_profiles`` row. The name matters: it is the
-        only place the name typed at registration is kept. ``create_user`` on the
-        identity port takes ``email`` and ``password`` only
-        (``app/domain/auth/identity_provider.py``), so nothing carries
-        ``full_name`` to the provider, and ``ensure_profile_row`` is
-        ``ON CONFLICT DO NOTHING`` on the primary key -- so the row written here
-        survives the later ``ensure_profile`` call inside invitation accept
-        (``app/application/invitation/handlers.py:93``), which only has the JWT's
-        (empty) ``user_metadata.full_name`` to offer.
+        The whole write is one ``user_profiles`` row, carrying the name typed at
+        registration. Since #300 ``create_user`` hands that name to the provider
+        too, and the provider's copy is the one the auth path reads (ADR-076).
+        ``ensure_profile_row`` is ``ON CONFLICT DO NOTHING`` on the primary key, so
+        the row written here is the one the later ``ensure_profile`` call inside
+        invitation accept (``app/application/invitation/handlers.py:93``) finds
+        already there.
 
         **No domain event is emitted, and that is deliberate.** Two reasons, both
         read at source on 2026-08-26. First, ``ensure_profile`` is audited nowhere
@@ -325,7 +323,9 @@ class AuthCommandHandler:
         # refused any body that names a clan without naming an action.
 
         try:
-            user_id_str = await self._identity.create_user(email=email, password=password)
+            user_id_str = await self._identity.create_user(
+                email=email, password=password, full_name=full_name
+            )
         except IdentityUserExistsError:
             # Non-enumerating register (ADR-021): an existing account gets a silent
             # recovery-email nudge; the caller sees the same 201 as a fresh signup.

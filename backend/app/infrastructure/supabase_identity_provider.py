@@ -65,12 +65,17 @@ def _classify(exc: Exception) -> IdentityError:
 class SupabaseIdentityProvider:
     """IdentityProvider backed by Supabase Auth."""
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         sb = get_service_client()
         try:
             resp = await asyncio.to_thread(
                 sb.auth.admin.create_user,
-                {"email": email, "password": password, "email_confirm": False},
+                {
+                    "email": email,
+                    "password": password,
+                    "email_confirm": False,
+                    "user_metadata": {"full_name": full_name},
+                },
             )
         except Exception as exc:
             if "already" in str(exc).lower():

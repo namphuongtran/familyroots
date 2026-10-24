@@ -102,11 +102,11 @@ class StubIdentityProvider:
         }
         return jwt.encode(claims, self._private_pem, algorithm="RS256", headers={"kid": _KID})
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         if email in self._users:
             raise IdentityUserExistsError(email)
         user_id = str(uuid.uuid4())
-        self._users[email] = {"id": user_id, "password": password, "full_name": ""}
+        self._users[email] = {"id": user_id, "password": password, "full_name": full_name}
         return user_id
 
     async def delete_user(self, user_id: str) -> None:
@@ -168,7 +168,7 @@ def client(
     #
     # Budget note: RateLimitMiddleware allows 20 req/min/IP on the counted auth
     # routes (`counted_paths` in app/main.py) and this app instance is shared
-    # module-wide — currently 10 counted requests (register, login, refresh).
+    # module-wide — currently 12 counted requests (register, login, refresh).
     # GET /auth/me and POST /auth/logout spend nothing since #280.
     # Hitting mysterious 429s after adding tests? You've spent the budget.
     yield TestClient(app)
@@ -279,6 +279,35 @@ def test_register_login_me_clans_create_person(client: TestClient, migrated_db_u
     # And the explicit clan header must also be honoured.
     resp = client.get("/api/v1/me/clans", headers={**auth, "X-Current-Clan-Id": clan_id})
     assert resp.status_code == 200
+
+
+def test_the_name_typed_at_register_is_the_name_login_and_me_answer(client: TestClient) -> None:
+    """#300: a password account that never saved a name through ``PATCH /auth/me``
+    reads back the name it typed at sign-up. The body is the one every web sign-up
+    sends since ADR-075: a name, an address, a password, and no clan.
+
+    Before the fix both readings were ``""``, because ``POST /auth/register`` never
+    handed the name to the identity provider, and login and ``/auth/me`` read it
+    from there."""
+    email = f"smoke-name-{uuid.uuid4().hex[:8]}@example.com"
+    password = "s3cret-pass"
+    typed = "Người Đăng Ký 300"
+
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": password, "full_name": typed},
+    )
+    assert resp.status_code == 201, resp.text
+
+    resp = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert resp.status_code == 200, resp.text
+    login = resp.json()["data"]
+    assert login["user"]["full_name"] == typed
+
+    auth = {"Authorization": f"Bearer {login['access_token']}"}
+    resp = client.get("/api/v1/auth/me", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["full_name"] == typed
 
 
 def test_refresh_and_logout_are_enveloped(client: TestClient, founder: dict[str, Any]) -> None:

@@ -179,7 +179,7 @@ class _StubIdentity:
         self.deleted: list[str] = []
         self.verification_emails: list[str] = []
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         if email in self.created:
             raise IdentityUserExistsError(email)
         user_id = str(uuid.uuid4())

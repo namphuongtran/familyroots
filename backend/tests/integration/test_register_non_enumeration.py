@@ -77,7 +77,7 @@ class FakeIdentityProvider:
         Pydantic-valid (>=8 char) password as too weak (ADR-021 residual)."""
         self._weak.add(email)
 
-    async def create_user(self, *, email: str, password: str) -> str:
+    async def create_user(self, *, email: str, password: str, full_name: str) -> str:
         if self.raise_unavailable:
             # Outage is detected before existence *or* strength can be
             # determined either way — models the 503 symmetry ADR-021 claims.
