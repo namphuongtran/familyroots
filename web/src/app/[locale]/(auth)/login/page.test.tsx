@@ -28,6 +28,8 @@ vi.mock('next/link', () => ({
     <a href={href}>{children}</a>
   ),
 }))
+// The screen reads `?error=` since #290. Outside the App Router, the real hook answers null.
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }))
 
 describe('the sign-in form labels name their inputs', () => {
   it('querying by the visible label text returns the input it labels', () => {

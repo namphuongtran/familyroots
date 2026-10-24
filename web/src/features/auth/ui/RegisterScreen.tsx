@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils/cn'
 import { ApiError } from '@/shared/http/errors'
 import { useAuthActions } from '../hooks/use-auth-actions'
+import { useOAuthProviders } from '../hooks/use-oauth-providers'
 import { useSession } from '../hooks/use-session'
 import { isInviteeRegister } from '../model/invitee-register'
 import { landingPath } from '../model/landing'
@@ -48,6 +49,7 @@ export function RegisterScreen() {
   const searchParams = useSearchParams()
   const { register, signInWithGoogle, completeOnboarding } = useAuthActions()
   const { session, access } = useSession()
+  const oauthProviders = useOAuthProviders()
   // null = untouched, so the OAuth profile can supply the initial value.
   const [fullNameInput, setFullName] = useState<string | null>(null)
   const [emailInput, setEmail] = useState<string | null>(null)
@@ -244,7 +246,8 @@ export function RegisterScreen() {
             </div>
           )}
 
-          {!isOAuthMode && (
+          {/* Offered only while the Supabase project has Google on (#290). */}
+          {!isOAuthMode && oauthProviders.google && (
             <>
               <button
                 type="button"

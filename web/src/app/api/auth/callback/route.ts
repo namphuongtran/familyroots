@@ -1,11 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { callbackRedirects } from './redirects'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/vi/dashboard'
+  const { success, failure } = callbackRedirects(searchParams.get('next'))
 
   if (code) {
     const cookieStore = await cookies()
@@ -30,10 +31,10 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(`${origin}${success}`)
     }
   }
 
-  // On error redirect to an error page
-  return NextResponse.redirect(`${origin}/vi/login?error=auth_callback_failed`)
+  // No code, or one Supabase refused: back to the login page, which says so (#290).
+  return NextResponse.redirect(`${origin}${failure}`)
 }

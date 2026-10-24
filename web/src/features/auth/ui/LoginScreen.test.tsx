@@ -5,10 +5,15 @@ import type { components } from '@/generated/api-types'
 import { createClientOrNull } from '@/shared/supabase/client'
 import { clearClanCookie, readCurrentClanId } from '@/shared/http/context.client'
 import { envelope, server } from '@/shared/testing/msw'
-import { renderWithProviders } from '@/shared/testing/render'
-import { fakeSupabaseClient, type FakeSupabaseOptions } from '@/shared/testing/supabase'
+import { expected, renderWithProviders } from '@/shared/testing/render'
+import {
+  fakeSupabaseClient,
+  gotrueSettings,
+  type FakeSupabaseOptions,
+} from '@/shared/testing/supabase'
 import { LoginScreen } from './LoginScreen'
 import messages from '../../../../messages/vi.json'
+import enMessages from '../../../../messages/en.json'
 
 /**
  * #183, verification 5, and where a sign-in lands. The real `useAuthActions` runs: the Supabase
@@ -20,7 +25,11 @@ import messages from '../../../../messages/vi.json'
  */
 
 const push = vi.fn()
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }) }))
+const searchParams = vi.hoisted(() => ({ current: new URLSearchParams() }))
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace: vi.fn() }),
+  useSearchParams: () => searchParams.current,
+}))
 vi.mock('@/shared/supabase/client', () => ({ createClientOrNull: vi.fn() }))
 
 const API = `${process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8000'}/api/v1`
@@ -58,8 +67,8 @@ function serveSession(
 function renderWithSupabase(options: FakeSupabaseOptions = {}) {
   const fake = fakeSupabaseClient(options)
   vi.mocked(createClientOrNull).mockReturnValue(fake.client as never)
-  renderWithProviders(<LoginScreen />, { messages })
-  return fake
+  const { queryClient } = renderWithProviders(<LoginScreen />, { messages })
+  return { ...fake, queryClient }
 }
 
 function signIn(email = 'lan@example.com') {
@@ -70,8 +79,14 @@ function signIn(email = 'lan@example.com') {
   fireEvent.click(screen.getByRole('button', { name: messages.auth.sign_in }))
 }
 
-beforeEach(() => push.mockReset())
-afterEach(() => clearClanCookie())
+beforeEach(() => {
+  push.mockReset()
+  searchParams.current = new URLSearchParams()
+})
+afterEach(() => {
+  clearClanCookie()
+  vi.unstubAllEnvs()
+})
 
 describe('signing in with an email Supabase has not confirmed', () => {
   it('goes to /vi/verify-email with the address, and shows no error', async () => {
@@ -137,5 +152,105 @@ describe('where a sign-in lands', () => {
     signIn()
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/vi/platform/clans'))
+  })
+})
+
+/**
+ * #290. The hosted project had Google off while this screen offered it, and the button sent the
+ * browser to GoTrue's bare `400 "provider is not enabled"`. The screen now asks GoTrue's own
+ * `GET /auth/v1/settings` and offers Google only when `external.google` is true. MSW serves the
+ * body read from the hosted project (`gotrueSettings`), so what each case reads is the button a
+ * person gets for that answer.
+ */
+const SUPABASE = 'https://login-oauth-test.supabase.co'
+
+function serveSettings(answer: () => Response): { reads: () => number } {
+  let reads = 0
+  server.use(
+    http.get(`${SUPABASE}/auth/v1/settings`, ({ request }) => {
+      reads += request.headers.get('apikey') === 'test-anon-key' ? 1 : 0
+      return answer()
+    }),
+  )
+  return { reads: () => reads }
+}
+
+function withSupabaseEnv(): void {
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', SUPABASE)
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'test-anon-key')
+}
+
+describe('the Google button follows the project’s provider switch', () => {
+  const google = () => screen.queryByRole('button', { name: expected(messages.auth.google) })
+
+  it('is offered when GoTrue reports Google on', async () => {
+    withSupabaseEnv()
+    serveSettings(() => HttpResponse.json(gotrueSettings({ google: true })))
+    renderWithSupabase()
+
+    expect(
+      await screen.findByRole('button', { name: expected(messages.auth.google) }),
+    ).toBeInTheDocument()
+  })
+
+  it('is not offered when GoTrue reports Google off, as the hosted project does', async () => {
+    withSupabaseEnv()
+    const settings = serveSettings(() => HttpResponse.json(gotrueSettings()))
+    const { queryClient } = renderWithSupabase()
+
+    // The read has answered and been parsed, so an absent button is the answer and not a read
+    // still in flight.
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['auth', 'oauth-providers'])?.status).toBe('success'),
+    )
+    expect(settings.reads()).toBe(1)
+    expect(google()).not.toBeInTheDocument()
+  })
+
+  it('is not offered when the settings read fails', async () => {
+    withSupabaseEnv()
+    const settings = serveSettings(() => new HttpResponse(null, { status: 500 }))
+    const { queryClient } = renderWithSupabase()
+
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['auth', 'oauth-providers'])?.status).toBe('error'),
+    )
+    expect(settings.reads()).toBe(1)
+    expect(google()).not.toBeInTheDocument()
+  })
+})
+
+describe('a Google return that failed', () => {
+  it('says so, in the reader’s locale, when the callback sends ?error=auth_callback_failed', () => {
+    searchParams.current = new URLSearchParams({ error: 'auth_callback_failed' })
+    vi.mocked(createClientOrNull).mockReturnValue(fakeSupabaseClient().client as never)
+    renderWithProviders(<LoginScreen />, { locale: 'en', messages: enMessages })
+
+    expect(screen.getByText(expected(enMessages.auth.oauth_callback_failed))).toBeInTheDocument()
+  })
+
+  it('shows nothing on a plain visit', () => {
+    renderWithSupabase()
+
+    expect(
+      screen.queryByText(expected(messages.auth.oauth_callback_failed)),
+    ).not.toBeInTheDocument()
+  })
+
+  it('gives way to the next attempt’s own outcome', async () => {
+    searchParams.current = new URLSearchParams({ error: 'auth_callback_failed' })
+    renderWithSupabase({
+      signInError: {
+        code: 'invalid_credentials',
+        message: 'Invalid login credentials',
+        status: 400,
+      },
+    })
+    expect(screen.getByText(expected(messages.auth.oauth_callback_failed))).toBeInTheDocument()
+
+    signIn()
+
+    expect(await screen.findByText('Invalid login credentials')).toBeInTheDocument()
+    expect(screen.queryByText(messages.auth.oauth_callback_failed)).not.toBeInTheDocument()
   })
 })

@@ -95,6 +95,7 @@
     "login_heading": "欢迎回来",
     "login_subtitle": "登录以查看您的家谱",
     "login_error": "无法登录",
+    "oauth_callback_failed": "Google 登录未完成。请重试，或使用电子邮件。",
     "sign_in": "登录",
     "signing_in": "登录中...",
     "google_signing_in": "正在跳转到 Google...",

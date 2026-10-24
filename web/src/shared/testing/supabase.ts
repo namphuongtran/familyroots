@@ -97,3 +97,50 @@ export function fakeSupabaseClient(options: FakeSupabaseOptions = {}) {
     },
   }
 }
+
+/**
+ * The body GoTrue answers `GET /auth/v1/settings` with, for a test that serves it through MSW.
+ * Copied whole from the hosted project `xkmutzxdhdigyfisfrwd` on 2026-10-24 (#290), where every
+ * provider but `email` was off. A test switches providers on through `external`; nothing else in
+ * the shape is invented.
+ */
+export function gotrueSettings(external: Partial<Record<string, boolean>> = {}) {
+  return {
+    external: {
+      anonymous_users: false,
+      apple: false,
+      azure: false,
+      bitbucket: false,
+      discord: false,
+      facebook: false,
+      snapchat: false,
+      figma: false,
+      fly: false,
+      github: false,
+      gitlab: false,
+      google: false,
+      keycloak: false,
+      kakao: false,
+      linkedin: false,
+      linkedin_oidc: false,
+      notion: false,
+      spotify: false,
+      slack: false,
+      slack_oidc: false,
+      workos: false,
+      twitch: false,
+      twitter: false,
+      email: true,
+      phone: false,
+      zoom: false,
+      ...external,
+    },
+    disable_signup: false,
+    mailer_autoconfirm: false,
+    phone_autoconfirm: false,
+    sms_provider: 'twilio',
+    saml_enabled: false,
+    saml_private_key_next_configured: true,
+    passkeys_enabled: false,
+  }
+}

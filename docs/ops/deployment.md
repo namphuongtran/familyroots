@@ -308,10 +308,15 @@ Every variable is set for the **Production** environment only. Preview deploymen
   (ADR-063). Google sign-in redirects to `https://<web-host>/api/auth/callback`. The wildcard
   covers it.
 - [ ] **Auth providers and email settings**, read and recorded in
-  [supabase-hosted-project.md](supabase-hosted-project.md) § 3: Confirm email, OTP length, MFA. If
-  Google sign-in is to stay on, enable the provider with its client id and secret. Google's
-  console must also list `https://xkmutzxdhdigyfisfrwd.supabase.co/auth/v1/callback`. The retired
-  project had Google on (read 2026-10-04). Nothing carried that over.
+  [supabase-hosted-project.md](supabase-hosted-project.md) § 3: Confirm email, OTP length, MFA.
+  **Google sign-in is optional, and off on the current project (read 2026-10-24, #290).** The
+  retired project had it on (read 2026-10-04), and nothing carried that over. The web offers the
+  button only while GoTrue's `/auth/v1/settings` reports Google on, so leaving it off is safe. To
+  turn it on: create an OAuth client (type "Web application") in Google Cloud, list
+  `https://xkmutzxdhdigyfisfrwd.supabase.co/auth/v1/callback` under its authorised redirect URIs,
+  and paste its client id and secret into Dashboard → Authentication → Sign In / Providers →
+  Google. The button then appears with no deploy. Check by outcome with the authorize `curl` in
+  § 3 of that file, which must answer a redirect to `accounts.google.com`, not a 400.
 - [ ] **Buckets.** `supabase link --project-ref xkmutzxdhdigyfisfrwd`, then
   `supabase seed buckets --linked`, which creates the private `family-roots-files` and the public
   `family-roots-avatars`, each with its MIME list, from `supabase/config.toml`. The files bucket's

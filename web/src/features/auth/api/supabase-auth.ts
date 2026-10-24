@@ -9,9 +9,30 @@
 
 import type { AuthChangeEvent } from '@supabase/supabase-js'
 import { createClientOrNull } from '@/shared/supabase/client'
-import { createMissingSupabaseEnvError } from '@/shared/supabase/config'
+import { createMissingSupabaseEnvError, getSupabaseEnv } from '@/shared/supabase/config'
 
 export type OAuthProvider = 'google' | 'apple'
+
+const OAUTH_PROVIDERS: readonly OAuthProvider[] = ['google', 'apple']
+
+/**
+ * The OAuth providers the Supabase project has switched on, read from `GET /auth/v1/settings`,
+ * whose `external` object maps each provider to a boolean (#290). A screen offers a provider only
+ * when this lists it: `signInWithOAuth` sends the browser to `/auth/v1/authorize` without asking
+ * first, and a provider that is off answers there with a bare `400 "provider is not enabled"`.
+ *
+ * With no Supabase configured there is no provider, and no request. A refused read throws.
+ */
+export async function fetchEnabledOAuthProviders(): Promise<OAuthProvider[]> {
+  const env = getSupabaseEnv()
+  if (!env) return []
+  const response = await fetch(`${env.url}/auth/v1/settings`, {
+    headers: { apikey: env.anonKey },
+  })
+  if (!response.ok) throw new Error(`GET /auth/v1/settings answered ${response.status}`)
+  const body = (await response.json()) as { external?: Record<string, unknown> }
+  return OAUTH_PROVIDERS.filter((provider) => body.external?.[provider] === true)
+}
 
 function requireClient() {
   const supabase = createClientOrNull()

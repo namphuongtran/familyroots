@@ -157,6 +157,7 @@
     "login_heading": "Chào mừng trở lại",
     "login_subtitle": "Đăng nhập để xem gia phả dòng họ",
     "login_error": "Không thể đăng nhập",
+    "oauth_callback_failed": "Đăng nhập bằng Google chưa hoàn tất. Hãy thử lại hoặc dùng email.",
     "sign_in": "Đăng nhập",
     "signing_in": "Đang đăng nhập...",
     "google_signing_in": "Đang chuyển sang Google...",
