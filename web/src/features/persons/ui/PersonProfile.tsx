@@ -59,6 +59,7 @@ function Fields({ fields }: { fields: Field[] }) {
 export async function PersonProfile({ person, canEdit, canViewAuditLog }: PersonProfileProps) {
   const t = await getTranslations('member')
   const locale = await getLocale()
+  const editHref = `/${locale}/members/${person.id}/edit`
   const unknown = t('unknown_date')
 
   const deceased = isKnownDate(person.deathDate)
@@ -130,7 +131,7 @@ export async function PersonProfile({ person, canEdit, canViewAuditLog }: Person
         )}
         {canEdit && (
           <Link
-            href="./edit"
+            href={editHref}
             className="border-input text-foreground hover:bg-muted focus:ring-ring mt-2 rounded-full border px-3 py-1.5 text-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
           >
             {t('edit')}
@@ -144,7 +145,7 @@ export async function PersonProfile({ person, canEdit, canViewAuditLog }: Person
           {canEdit && (
             <>
               {' '}
-              <Link href="./edit" className="text-primary font-medium hover:underline">
+              <Link href={editHref} className="text-primary font-medium hover:underline">
                 {t('add_info')}
               </Link>
             </>

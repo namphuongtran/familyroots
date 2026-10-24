@@ -199,6 +199,10 @@ export function PersonForm({
         const { person: created, warning } = await createMutation.mutateAsync(
           formValuesToCreateRequest(values, encodeOptions(t, values)),
         )
+        // Saved values are the new clean state, or the `beforeunload` guard above still
+        // prompts on leaving a page whose write already succeeded. `handleSaveResolved` resets
+        // the same way.
+        reset(values)
         setSaved({ person: created, message: successMessage(warning) })
         return
       }
@@ -207,6 +211,7 @@ export function PersonForm({
       const body = formValuesToUpdateRequest(values, expectedVersion, encodeOptions(t, values))
       const { person: updated, warning } = await updateMutation.mutateAsync({ id: person.id, body })
       setExpectedVersion(updated.version)
+      reset(values)
       setSaved({ person: updated, message: successMessage(warning) })
     } catch (error) {
       if (error instanceof ApiError && error.code === STALE_WRITE_CODE) {

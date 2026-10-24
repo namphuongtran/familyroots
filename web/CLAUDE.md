@@ -585,6 +585,13 @@ carries no clan.
   the header case; a failed read swallowed into "signed out" fails the error case. "No probe" is
   read there, not in an e2e network log, because the guard's requests leave the Next server.
   `e2e/auth/guard.auth.spec.ts` holds the browser readings; its header names each plant.
+- **Write every in-app `href` as an absolute, locale-prefixed path: `` `/${locale}/members/${id}` ``,
+  never `./new`, `./${id}`, `./edit` or `..`.** A relative URL resolves against the current path's
+  directory, and a route like `/vi/members` has none of its own, so `./new` opened `/vi/new` and
+  `./${id}` opened `/vi/<id>`, both Next's 404, and the profile's `./edit` opened
+  `/vi/members/edit`. All seven links between the persons screens were written this way until
+  2026-10-24, and no test clicked one. `e2e/auth/dashboard.auth.spec.ts`'s members walk now clicks
+  each and reads where it lands.
 - `src/middleware.ts` runs the intl middleware first, strips the locale prefix, lets `PUBLIC_ROUTES` through, and for everything else creates a Supabase SSR client (`@supabase/ssr`) and redirects to `/<locale>/login` when there is no session. If Supabase env vars are missing the auth check is skipped — be aware in local dev.
 - **After the session check, `src/middleware.ts` gates `CLAN_SCOPED_SEGMENTS` (`dashboard`, `documents`, `events`, `members`, `tree`, `admin` — everything under the `(dashboard)` route group) on the `current_clan_id` cookie.** Missing and unparseable (not a UUID) are the same case, both read as "no clan selected" through `parseClanCookie` (`src/shared/http/request-context.ts`), and both redirect to `/<locale>/select-clan` rather than letting the route render and fire a clan-scoped `apiFetch` call with no `X-Current-Clan-Id`. `platform/*`, `backoffice/*`, and `select-clan` itself are deliberately not gated: `platform/*` is a cross-clan super-admin surface (`docs/architecture/multi-tenancy.md`), and gating the picker page would loop. `backoffice/*` is clan-scoped, and its guard asks for `viewPendingUsers` in the active clan (#186); with no cookie, a user holding one membership acts in it, and one holding several is sent to the picker by the guard rather than by the middleware. `middleware.ts`'s own comment still calls both cross-clan. See `web/src/middleware.test.ts`.
 
@@ -1240,6 +1247,17 @@ pnpm test:e2e:auth
 `http://familyroots-web.test:3102` rather than `127.0.0.1`. Its backend values differ from the
 recipe above, `CORS_ORIGINS` and `INVITE_LINK_ORIGIN` most of all. `docs/ops/local-supabase.md`,
 "The image e2e job in CI", lists each one and why.
+
+**Thirty tests, 2026-10-24**: three `auth-setup` logins and twenty-seven `auth-chromium` cases,
+one run reading `30 passed` with no `429` in the backend log. Two cases joined
+`dashboard.auth.spec.ts`, whose describe now runs `serial`, because the members walk creates a
+person and the empty-list case reads that there is none. The walk clicks list → new → save →
+profile → edit → back → list → row and soft-deletes its person. The layout case reads that the
+content column starts where the rail ends. Controls the same day: the seven relative hrefs put
+back failed the walk on `/vi/new`, and `ml-56` put back failed the layout case on 448 against 224.
+The local Site URL moved to `http://localhost:3000` the same day (`supabase/config.toml`), so
+`mail.ts`'s `SITE_URL_ORIGIN` follows it; with the old origin left there, the confirmation walk
+failed on `Received: "http://localhost:3000/verify-email/confirm"`.
 
 **Twenty-eight tests, 2026-10-24 (#291)**: three `auth-setup` logins and twenty-five
 `auth-chromium` cases, one run reading `28 passed` with no `429` in the backend log. #291 added

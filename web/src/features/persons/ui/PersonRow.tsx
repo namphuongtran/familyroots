@@ -32,7 +32,7 @@ export function PersonRow({ person }: PersonRowProps) {
 
   return (
     <Link
-      href={`./${person.id}`}
+      href={`/${locale}/members/${person.id}`}
       className="bg-card hover:bg-muted focus:ring-ring flex items-center gap-3 rounded-2xl p-3 transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
     >
       <PersonAvatar

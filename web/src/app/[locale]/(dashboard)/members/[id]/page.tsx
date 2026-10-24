@@ -44,7 +44,7 @@ export default async function MemberDetailPage({
           <p className="text-muted-foreground text-sm">
             {clanName ? t('not_found_detail', { clanName }) : t('not_found_generic')}
           </p>
-          <Link href=".." className="text-primary font-medium hover:underline">
+          <Link href={`/${locale}/members`} className="text-primary font-medium hover:underline">
             {t('back_to_list')}
           </Link>
         </div>
@@ -56,7 +56,7 @@ export default async function MemberDetailPage({
   return (
     <div className="space-y-4">
       <div className="mx-auto flex max-w-2xl items-center gap-2">
-        <Link href=".." className="text-muted-foreground hover:text-foreground">
+        <Link href={`/${locale}/members`} className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <h1 className="text-foreground font-serif text-xl">{t('profile_title')}</h1>

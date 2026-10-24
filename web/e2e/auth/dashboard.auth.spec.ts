@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { SEEDED_USERS } from './fixtures'
+import { authStackInputs, SEEDED_USERS } from './fixtures'
+import { browserAccessToken } from './session-cookie'
 
 /**
  * #183. The `(dashboard)` group, read with a real session now that the session is one query.
@@ -26,6 +27,17 @@ const AUTH_ME = '/api/v1/auth/me'
 const MEMBERS_TITLE = 'Thành viên'
 /** `messages/vi.json`, `members.no_members`: `make seed` writes no persons. */
 const NO_MEMBERS = 'Chưa có thành viên nào'
+/** `messages/vi.json`, `members.add_member` (the list's link) and `member.new_title` (the form's h1). */
+const ADD_MEMBER = 'Thêm thành viên'
+/** `messages/vi.json`, `member.profile_title`, `member.edit` and `member.edit_title`. */
+const PROFILE_TITLE = 'Hồ sơ thành viên'
+const EDIT_LINK = 'Chỉnh sửa'
+const EDIT_TITLE = 'Chỉnh sửa thành viên'
+/** `messages/vi.json`, `member_form.full_name`, `member_form.save_success`, `member_form.continue_label`. */
+const FULL_NAME = 'Họ và tên'
+const SAVED = 'Đã lưu thay đổi.'
+const CONTINUE = 'Tiếp tục'
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
 /** Every `GET /auth/me` the page sends, from the moment this is called. */
 function countAuthMe(page: Page): () => number {
@@ -38,6 +50,9 @@ function countAuthMe(page: Page): () => number {
 
 test.describe('the (dashboard) group, as an admin', () => {
   test.use({ storageState: SEEDED_USERS.admin.storageState })
+  // In order, on one worker: the empty-list case reads that the clan holds no person, and the
+  // members walk below creates one (soft-deleting it when it is done).
+  test.describe.configure({ mode: 'serial' })
 
   test('one dashboard load sends one GET /auth/me, however many components read the session', async ({
     page,
@@ -70,5 +85,81 @@ test.describe('the (dashboard) group, as an admin', () => {
     expect((await persons).status()).toBe(200)
     await expect(page.getByRole('heading', { name: MEMBERS_TITLE })).toBeVisible()
     await expect(page.getByText(NO_MEMBERS)).toBeVisible()
+  })
+
+  /**
+   * Found 2026-10-24 in a manual walk: the content column started 224 px right of the sidebar at
+   * every width. `Sidebar` is an in-flow `shrink-0` rail, and the column carried `ml-56` on top,
+   * from the March scaffold. The reading is where the column starts, against where the rail ends.
+   * Negative control the same day: with `ml-56` put back, `Expected: 224`, `Received: 448`.
+   */
+  test('the content column starts where the sidebar ends', async ({ page }) => {
+    await page.goto('/vi/dashboard')
+    await expect(page).toHaveURL(/\/vi\/dashboard$/)
+
+    const rail = await page.locator('aside').first().boundingBox()
+    const header = await page.getByRole('banner').boundingBox()
+    expect(rail).not.toBeNull()
+    expect(header).not.toBeNull()
+    expect(Math.round(header!.x)).toBe(Math.round(rail!.x + rail!.width))
+  })
+
+  /**
+   * Found 2026-10-24 in a manual walk: every link between the persons screens was relative
+   * (`./new`, `./${id}`, `./edit`, `..`). A relative URL resolves against the current path's
+   * directory, and `/vi/members` has none of its own, so "Thêm thành viên" opened `/vi/new` and a
+   * row `/vi/<id>`, both Next's 404, and the profile's edit link `/vi/members/edit`. The walk
+   * clicks each link and reads where it lands, by URL and by the heading of the screen there.
+   * Negative control the same day: with the seven relative hrefs put back, the walk failed at its
+   * first click, `Received string: "http://127.0.0.1:3102/vi/new"`. The person it creates is
+   * soft-deleted at the end; a run that fails between the save and the profile leaves it live.
+   */
+  test('the members screens link to each other: list, new, profile, edit and back', async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(90_000)
+    const name = `Người thử điều hướng ${Date.now()}`
+
+    await page.goto('/vi/members')
+    await page.getByRole('link', { name: ADD_MEMBER }).click()
+    await expect(page).toHaveURL(/\/vi\/members\/new$/)
+    await expect(page.getByRole('heading', { name: ADD_MEMBER, level: 1 })).toBeVisible()
+
+    await page.getByLabel(FULL_NAME).fill(name)
+    await page.getByRole('button', { name: 'Lưu' }).click()
+    await expect(page.getByText(SAVED)).toBeVisible()
+    await page.getByRole('button', { name: CONTINUE }).click()
+    await expect(page).toHaveURL(new RegExp(`/vi/members/${UUID}$`))
+    const id = new URL(page.url()).pathname.split('/').pop()!
+    const profile = `/vi/members/${id}`
+
+    try {
+      await expect(page.getByRole('heading', { name: PROFILE_TITLE })).toBeVisible()
+      await page.getByRole('link', { name: EDIT_LINK }).click()
+      await expect(page).toHaveURL(new RegExp(`${profile}/edit$`))
+      await expect(page.getByRole('heading', { name: EDIT_TITLE })).toBeVisible()
+
+      // The edit screen's back arrow leads to the profile it came from.
+      await page.locator(`main a[href="${profile}"]`).click()
+      await expect(page).toHaveURL(new RegExp(`${profile}$`))
+      await expect(page.getByRole('heading', { name: PROFILE_TITLE })).toBeVisible()
+
+      // The profile's back arrow leads to the list, and the person's row back to the profile.
+      await page.locator('main a[href="/vi/members"]').first().click()
+      await expect(page).toHaveURL(/\/vi\/members$/)
+      await page.getByRole('link', { name: new RegExp(name) }).click()
+      await expect(page).toHaveURL(new RegExp(`${profile}$`))
+      await expect(page.getByRole('heading', { name: PROFILE_TITLE })).toBeVisible()
+    } finally {
+      // Leave the seeded clan as it was, for the empty-list case: soft-delete the person.
+      const { apiOrigin } = authStackInputs()
+      const token = await browserAccessToken(context)
+      const clanId = (await context.cookies()).find((c) => c.name === 'current_clan_id')?.value
+      const removed = await page.request.delete(`${apiOrigin}/api/v1/persons/${id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'X-Current-Clan-Id': clanId ?? '' },
+      })
+      expect(removed.status()).toBe(200)
+    }
   })
 })

@@ -45,7 +45,7 @@ export default async function MembersPage({ params }: { params: Promise<{ locale
         <h1 className="text-foreground font-serif text-2xl">{t('page_title')}</h1>
         {canCreateMembers && (
           <Link
-            href="./new"
+            href={`/${locale}/members/new`}
             className="bg-primary text-primary-foreground hover:bg-primary-hover focus:ring-ring flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
           >
             <Plus className="h-4 w-4" />
