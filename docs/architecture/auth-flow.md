@@ -26,7 +26,11 @@ handler call. Code: `backend/app/core/security.py`, `app/core/permissions.py`,
    deactivated user cannot call `POST /auth/logout` either (403) — their
    refresh token stays live at Supabase but is useless against the API.
 2. `ensure_user_profile` — **lazy upsert** of `user_profiles` on first sight of a
-   user (no Supabase webhook dependency); shared `ON CONFLICT` helper.
+   user (no Supabase webhook dependency), through `ensure_profile_row`, the one writer
+   of a new row (also used by register, onboard and invitation accept). A row outlives
+   its Supabase account, so its email can be held by an account that no longer exists;
+   before inserting, the writer rewrites that row's email to `<id>@released.invalid`
+   and the new `sub` gets a fresh row with nothing carried over (ADR-078).
 3. `get_current_clan_id` — resolves the active clan from the `X-Current-Clan-Id`
    header: auto-selects when the user belongs to exactly one clan; 400 when ambiguous;
    403 when not an approved member. **Suspended clan** → 403 `clan_suspended`.

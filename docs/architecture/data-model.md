@@ -364,7 +364,7 @@ Local cache of Supabase Auth user data. Mapped 1:1 to a real-world Identity via 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | Supabase `auth.users.id` |
-| `email` | VARCHAR(255) | UNIQUE, NOT NULL | Synced from JWT |
+| `email` | VARCHAR(255) | UNIQUE, NOT NULL | Copied from the provider when the row is created, never refreshed after. A row whose account is gone gives it up to the next account the provider gives it to, as `<id>@released.invalid` (ADR-078) |
 | `display_name` | VARCHAR(255) | | Tên hiển thị |
 | `avatar_url` | VARCHAR(500) | | Ảnh đại diện tài khoản |
 | `language` | VARCHAR(10) | DEFAULT 'vi' | Ngôn ngữ giao diện |

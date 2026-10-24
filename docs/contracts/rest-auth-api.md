@@ -58,6 +58,10 @@ Request/response expectations:
   error; a fresh email proceeds through the normal create-and-verify flow.
   See [error-codes.md](error-codes.md) and
   [frontend-integration-guide.md](frontend-integration-guide.md).
+- An email whose former account was deleted, but whose `user_profiles` row
+  remains, is a fresh email here: the same 201, and a new account with no
+  membership. Before ADR-078 it answered 409 `conflict` and created nothing
+  ([ADR-078](../decisions/078-a-former-accounts-email-goes-to-the-account-the-provider-now-gives-it.md)).
 - Login returns authenticated session/profile data for client bootstrap.
 - A deactivated account (`is_active = false`) gets **403 `account_deactivated`**
   at login — no tokens, no profile data. See `auth-flow.md` and
