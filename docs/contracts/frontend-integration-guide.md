@@ -264,7 +264,9 @@ Auth chooses the flow from that challenge (`supabase/auth`
 `web/src/app/api/auth/callback/route.ts` is the **Google OAuth** callback
 (`web/src/features/auth/api/supabase-auth.ts`, `signInWithOAuth`), not an email
 landing. An email link that reaches it carries no `code`, so it redirects to
-`/vi/login?error=auth_callback_failed`.
+`/<locale>/login?error=auth_callback_failed`, where the locale is the one in the `next` it was
+given, and `vi` with none (`web/src/app/api/auth/callback/redirects.ts`, #290). The login page
+shows a localised message for that `error`.
 
 **2. The email template picks between the two remaining shapes:**
 

@@ -157,6 +157,7 @@
     "login_heading": "Welcome Back",
     "login_subtitle": "Sign in to view your family tree",
     "login_error": "Unable to sign in",
+    "oauth_callback_failed": "Google sign-in didn't complete. Try again, or use your email.",
     "sign_in": "Sign In",
     "signing_in": "Signing in...",
     "google_signing_in": "Redirecting to Google...",

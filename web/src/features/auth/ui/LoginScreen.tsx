@@ -2,25 +2,38 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { useAuthActions } from '../hooks/use-auth-actions'
+import { useOAuthProviders } from '../hooks/use-oauth-providers'
 import { SECONDARY_LINK } from './auth-action-classes'
 import { AuthWordmark } from './AuthWordmark'
 import { SupabaseSetupNotice } from './SupabaseSetupNotice'
+
+/** What `/api/auth/callback` puts on the URL when a provider's code does not become a session. */
+const OAUTH_CALLBACK_FAILED = 'auth_callback_failed'
 
 /**
  * The sign-in screen. `app/[locale]/(auth)/login/page.tsx` only routes here.
  *
  * A refused sign-in shows Supabase's own message, except `email_not_confirmed`, which
  * `signInWithEmail` routes to `/verify-email` before anything reaches this screen's catch.
+ *
+ * Google is offered only while the Supabase project has it on (`useOAuthProviders`, #290). A
+ * failed Google return lands here with `?error=auth_callback_failed`, and the screen says so in
+ * the reader's locale until the next attempt replaces it.
  */
 export function LoginScreen() {
   const t = useTranslations('auth')
   const locale = useLocale()
+  const searchParams = useSearchParams()
   const { signInWithEmail, signInWithGoogle } = useAuthActions()
+  const oauthProviders = useOAuthProviders()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() =>
+    searchParams.get('error') === OAUTH_CALLBACK_FAILED ? t('oauth_callback_failed') : null,
+  )
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
@@ -67,20 +80,24 @@ export function LoginScreen() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isLoading || isGoogleLoading}
-            className="border-input text-foreground hover:bg-muted w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isGoogleLoading ? t('google_signing_in') : t('google')}
-          </button>
+          {oauthProviders.google && (
+            <>
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isLoading || isGoogleLoading}
+                className="border-input text-foreground hover:bg-muted w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isGoogleLoading ? t('google_signing_in') : t('google')}
+              </button>
 
-          <div className="text-muted-foreground flex items-center gap-3 text-xs tracking-wide uppercase">
-            <span className="bg-border h-px flex-1" />
-            <span>{t('or')}</span>
-            <span className="bg-border h-px flex-1" />
-          </div>
+              <div className="text-muted-foreground flex items-center gap-3 text-xs tracking-wide uppercase">
+                <span className="bg-border h-px flex-1" />
+                <span>{t('or')}</span>
+                <span className="bg-border h-px flex-1" />
+              </div>
+            </>
+          )}
 
           <div>
             <label htmlFor="login-email" className="text-foreground mb-1 block text-sm font-medium">

@@ -169,9 +169,24 @@ Read with `supabase config diff --project-ref bftqrkgbulwtbptnpfca`, which chang
 on 2026-10-18**, with the scratch-directory `config pull --dry-run` of § 4d, which writes nothing:
 Site URL `https://familyroots-web.vercel.app`, Redirect URLs `["https://familyroots-web.vercel.app/**"]`,
 Confirm email on, OTP length 8, send interval 1 minute, TOTP enroll and verify on, and the SMTP
-sender of § 4d. Google sign-in was not read. The "Hosted" column below is still the **retired**
+sender of § 4d. The "Hosted" column below is still the **retired**
 project's, and production's Site URL and Redirect URLs are the values just given
 ([deployment.md](deployment.md), "Go-live checklist", A).
+
+**Google sign-in is off on the current project, read 2026-10-24 (#290).** Two readings, both
+read-only. `GET /auth/v1/settings` with the anon key answered `200` with `"google":false` under
+`external`, and every other provider but `email` false too. The authorize call answered
+`400 {"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}`:
+
+```bash
+curl -s -w '\nHTTP %{http_code}\n' "https://xkmutzxdhdigyfisfrwd.supabase.co/auth/v1/authorize?provider=google&redirect_to=https://familyroots-web.vercel.app/api/auth/callback"
+```
+
+It stays off by the owner's decision of 2026-10-24. The web offers the Google button only while
+`/auth/v1/settings` reports it on (`web/src/features/auth/hooks/use-oauth-providers.ts`), so the
+login and register pages show no button today. Turning Google on needs no web change: the steps
+are in [deployment.md](deployment.md), "Go-live checklist", and once they are done the authorize
+call above answers a redirect to `accounts.google.com`.
 
 | Setting | Hosted | Local file |
 |---|---|---|

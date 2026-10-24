@@ -845,6 +845,16 @@ zustand keeps only `ui.store.ts`.
   `document.cookie`, so a session one case saves reaches the next. Sign out and clear the cookies
   after each case. The other auth tests use `shared/testing/supabase.ts`'s fake instead, which
   counts method calls, not requests.
+- **The Google button follows the project's provider switch (#290).** `useOAuthProviders()` reads
+  GoTrue's `GET /auth/v1/settings` and `LoginScreen` and `RegisterScreen` offer Google only when
+  `external.google` is `true`. Loading or a failed read counts as off, because a button for a
+  provider that is off sends the browser to GoTrue's bare `400`. With no Supabase env the hook
+  sends nothing, so existing tests are unaffected. **A test that stubs the Supabase env on either
+  screen must serve `/auth/v1/settings`**, or `vitest.setup.ts`'s `onUnhandledRequest: 'error'`
+  fails it. Serve `gotrueSettings()` from `shared/testing/supabase.ts`, the body read from the
+  hosted project. A failed Google return lands on `/{locale}/login?error=auth_callback_failed`
+  in `next`'s locale (`app/api/auth/callback/redirects.ts`), and `LoginScreen` shows
+  `auth.oauth_callback_failed` for it.
 - **`RegisterScreen` has an invitation mode (#196).** `/{locale}/register?from=invitation`, built by
   `inviteeRegisterPath` and read by `isInviteeRegister` (`model/invitee-register.ts`), drops the
   clan choice and sends `email`, `password` and `full_name` only, the body ADR-058 made the

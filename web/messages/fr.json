@@ -95,6 +95,7 @@
     "login_heading": "Bon retour",
     "login_subtitle": "Connectez-vous pour consulter votre arbre généalogique",
     "login_error": "Connexion impossible",
+    "oauth_callback_failed": "La connexion avec Google n'a pas abouti. Réessayez ou utilisez votre e-mail.",
     "sign_in": "Se connecter",
     "signing_in": "Connexion...",
     "google_signing_in": "Redirection vers Google...",
