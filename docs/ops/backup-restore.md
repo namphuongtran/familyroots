@@ -946,13 +946,12 @@ open:
   copy goes is decided in
   [ADR-073](../decisions/073-the-off-provider-dump-copy-lives-in-backblaze-b2-encrypted-with-age.md),
   and #258 builds it.
-- **Document-blob bucket mirroring**: document files already live in Supabase
-  Storage (same provider as the DB backups), so a DB-only restore repoints at
-  live blobs today — but there is no independent backup/mirror of the
-  documents bucket itself onto a second provider. A Supabase-wide outage or
-  account loss would take blobs down with no off-provider copy. A recovery into a
-  new project brings back no file at all: the dump holds only `storage.objects`
-  metadata, and ADR-074 restores none of it (#296).
+- **No copy of the files in the two buckets.** The dump holds only `storage.objects`
+  metadata, and ADR-074 restores none of it, so a recovery into a new project brings back
+  no file at all. Document files and avatars live in Supabase Storage, the same provider
+  as the database. How they are copied to B2 and restored is decided in
+  [ADR-077](../decisions/077-the-bucket-files-are-copied-to-b2-beside-the-dump.md), and
+  #BUILD builds it after #258. Production held no file in either bucket on 2026-10-24.
 - **Admin-succession runbook**: no runbook exists for a clan whose only admin
   dies or leaves — unrelated to backups mechanically, but the same "family
   data must outlive individuals" principle; still TBD.
