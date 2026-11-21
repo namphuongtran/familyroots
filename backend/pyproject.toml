@@ -85,7 +85,10 @@ warn_return_any = false
 module = [
     "app.application.person.claim_handlers",
     "app.application.clan.handlers",
-    "app.application.auth.handlers",
+    "app.application.auth.command_handler",
+    "app.application.auth.queries",
+    "app.application.auth.session",
+    "app.application.auth.fcm",
     "app.infrastructure.persistence.*",
     "app.infrastructure.dependencies",
 ]
@@ -172,7 +175,7 @@ source_modules = ["app.application"]
 forbidden_modules = ["app.core", "app.services", "app.i18n"]
 allow_indirect_imports = true
 ignore_imports = [
-    "app.application.auth.handlers -> app.services.translator",
+    "app.application.auth.command_handler -> app.services.translator",
     "app.application.document.handlers -> app.core.pagination",
     "app.application.event.handlers -> app.core.pagination",
     "app.application.invitation.handlers -> app.core.config",

@@ -16,12 +16,10 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.account_deletion import AccountDeletionHandler
-from app.application.auth.handlers import (
-    AuthCommandHandler,
-    AuthQueryHandler,
-    AuthSessionService,
-    FCMTokenHandler,
-)
+from app.application.auth.command_handler import AuthCommandHandler
+from app.application.auth.fcm import FCMTokenHandler
+from app.application.auth.queries import AuthQueryHandler
+from app.application.auth.session import AuthSessionService
 from app.application.branch.handlers import BranchCommandHandler, BranchQueryHandler
 from app.application.change_request.handlers import (
     ChangeRequestCommandHandler,

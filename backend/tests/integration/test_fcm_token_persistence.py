@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.application.auth.handlers import FCMTokenHandler
+from app.application.auth.fcm import FCMTokenHandler
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.auth_repository import SqlAlchemyFCMTokenRepository
 from app.infrastructure.unit_of_work import SqlAlchemyUnitOfWork

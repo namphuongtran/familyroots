@@ -1,13 +1,6 @@
-"""Auth use-case handlers.
+"""DB-bound auth command handler: registration, onboarding and login.
 
-Orchestrate identity-provider integration (via the IdentityProvider port) and
-clan membership.
-
-Architecture:
-- ``AuthSessionService`` — DB-free; refresh/logout/profile via the IdentityProvider port.
-- ``AuthCommandHandler`` — DB-bound, orchestrates registration/login.
-- ``AuthQueryHandler``  — read-only profile queries.
-- ``FCMTokenHandler``   — push-token registration (raw SQL).
+Each flow carries its own identity-provider compensation logic.
 """
 
 from __future__ import annotations
@@ -27,7 +20,7 @@ from app.domain.auth.identity_provider import (
     IdentityUserExistsError,
     IdentityWeakPasswordError,
 )
-from app.domain.auth.repository import AuthQueryPort, AuthRepository, FCMTokenRepository
+from app.domain.auth.repository import AuthQueryPort, AuthRepository
 from app.domain.shared.exceptions import (
     AuthenticationError,
     ConflictError,
@@ -37,60 +30,10 @@ from app.domain.shared.exceptions import (
 )
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
-from app.schemas.auth import (
-    LoginResponse,
-    RegisterResponse,
-    UserProfile,
-)
+from app.schemas.auth import LoginResponse, RegisterResponse, UserProfile
 from app.services.translator import t
 
 logger = logging.getLogger(__name__)
-
-# ── DB-free auth-session service ────────────────────────────────
-
-
-class AuthSessionService:
-    """Auth operations that do NOT require a database session — refresh, logout,
-    profile metadata. Depends only on the IdentityProvider port (no SDK import)."""
-
-    def __init__(self, identity: IdentityProvider) -> None:
-        self._identity = identity
-
-    async def refresh_token(self, *, refresh_token: str) -> dict[str, Any]:
-        """Exchange a refresh token for a new access token."""
-        try:
-            tokens = await self._identity.refresh(refresh_token=refresh_token)
-        except IdentityAuthError as exc:
-            raise AuthenticationError("auth.invalid_refresh_token") from exc
-        return {
-            "access_token": tokens.access_token,
-            "refresh_token": tokens.refresh_token,
-            "expires_in": tokens.expires_in,
-        }
-
-    async def logout(self, *, access_token: str) -> None:
-        """Revoke the user's session (best-effort; the stateless access token
-        remains valid until its short expiry)."""
-        await self._identity.sign_out(access_token=access_token)
-
-    async def update_profile(
-        self, *, user_sub: str, full_name: str | None, preferred_locale: str | None
-    ) -> None:
-        """Update provider-side user metadata."""
-        await self._identity.update_user(
-            user_id=user_sub, full_name=full_name, preferred_locale=preferred_locale
-        )
-
-    async def send_password_reset(self, *, email: str) -> None:
-        """Trigger a provider password-reset email (best-effort)."""
-        await self._identity.send_password_reset(email=email)
-
-    async def send_verification_email(self, *, email: str) -> None:
-        """Trigger a provider email-verification (best-effort)."""
-        await self._identity.send_verification_email(email=email)
-
-
-# ── DB-bound handlers ───────────────────────────────────────────
 
 
 _INVALID_CREDENTIALS = "auth.invalid_credentials"
@@ -385,58 +328,3 @@ class AuthCommandHandler:
                 platform_role=view.platform_role if view else "user",
             ),
         )
-
-
-class AuthQueryHandler:
-    """Read-only handler for auth queries."""
-
-    def __init__(self, query_port: AuthQueryPort) -> None:
-        self._query_port = query_port
-
-    async def get_profile(
-        self,
-        *,
-        user_id: uuid.UUID,
-        email: str,
-        full_name: str,
-        preferred_locale: str | None = None,
-    ) -> UserProfile:
-        """Return the authenticated user's profile."""
-        # get_profile joins approved memberships only, so a membership present in
-        # the view is by definition approved.
-        view = await self._query_port.get_profile(user_id)
-        has_pending_membership = await self._query_port.has_pending_membership(user_id)
-
-        return UserProfile(
-            id=user_id,
-            email=email,
-            full_name=full_name,
-            preferred_locale=preferred_locale or "vi",
-            clan_id=view.clan_id if view else None,
-            clan_name=view.clan_name if view else None,
-            role=view.role if view else None,
-            is_approved=view.is_approved if view else False,
-            has_pending_membership=has_pending_membership,
-            person_id=view.person_id if view else None,
-            platform_role=view.platform_role if view else "user",
-        )
-
-
-class FCMTokenHandler:
-    """Handles FCM push token registration.
-
-    Writes commit through the UoW like every other command handler — device
-    tokens emit no domain events, but the commit discipline is what guarantees
-    the write survives the request (C1, seam-review-2026-07-04)."""
-
-    def __init__(self, repo: FCMTokenRepository, uow: UnitOfWork) -> None:
-        self._repo = repo
-        self._uow = uow
-
-    async def register_token(self, *, user_id: str, token: str, device_platform: str) -> None:
-        await self._repo.register_token(user_id, token, device_platform)
-        await self._uow.commit()
-
-    async def remove_token(self, *, user_id: str, token: str) -> None:
-        await self._repo.remove_token(user_id, token)
-        await self._uow.commit()

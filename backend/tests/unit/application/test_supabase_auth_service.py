@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.application.auth.handlers import AuthSessionService
+from app.application.auth.session import AuthSessionService
 
 
 @pytest.mark.asyncio

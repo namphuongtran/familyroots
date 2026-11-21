@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 import pytest
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthWeakPasswordError
 
-from app.application.auth.handlers import AuthCommandHandler
+from app.application.auth.command_handler import AuthCommandHandler
 from app.domain.auth.identity_provider import (
     IdentityAuthError,
     IdentityError,

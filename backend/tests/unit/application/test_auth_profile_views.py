@@ -12,7 +12,8 @@ from typing import Any
 
 import pytest
 
-from app.application.auth.handlers import AuthCommandHandler, AuthQueryHandler
+from app.application.auth.command_handler import AuthCommandHandler
+from app.application.auth.queries import AuthQueryHandler
 from app.domain.auth.identity_provider import AuthenticatedIdentity, AuthTokens
 from app.domain.auth.repository import AuthProfileView
 

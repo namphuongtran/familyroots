@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.application.auth.handlers import AuthCommandHandler
+from app.application.auth.command_handler import AuthCommandHandler
 from app.core.database import get_db
 from app.domain.auth.identity_provider import (
     IdentityUnavailableError,
