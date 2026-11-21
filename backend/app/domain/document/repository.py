@@ -47,6 +47,14 @@ class DocumentRepository(Protocol):
         person_id on upload so a document can't link a person from another clan)."""
         ...
 
+    async def storage_bytes_used(self, clan_id: uuid.UUID) -> int:
+        """The bytes the clan's documents hold in Storage, counted against its quota.
+
+        Every row counts, soft-deleted ones too: the blob of a soft-deleted document stays
+        in Storage until the retention purge removes the row and the blob together.
+        """
+        ...
+
     async def save(self, doc: Document) -> None:
         """Insert or update a Document entity.
 

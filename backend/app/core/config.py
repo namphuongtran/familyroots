@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES
+from app.domain.document.entity import DEFAULT_CLAN_STORAGE_QUOTA_BYTES, DEFAULT_MAX_FILE_SIZE_BYTES
 
 _CANONICAL_DB_DRIVER = "postgresql+psycopg"
 
@@ -197,6 +197,25 @@ class Settings(BaseSettings):
     def max_upload_bytes(self) -> int:
         """The resolved upload limit in bytes (the application injects this)."""
         return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+    # Usage limits (#326, #332). The storage quota is per clan, 1 GB by default, and counts
+    # every document row the clan has, live and soft-deleted alike, because a soft-deleted
+    # document's blob stays in Storage until the retention purge removes the row with it.
+    # `POST /documents/uploads` refuses a file that would take the clan past it.
+    CLAN_STORAGE_QUOTA_MB: int = Field(
+        default=DEFAULT_CLAN_STORAGE_QUOTA_BYTES // (1024 * 1024), ge=1
+    )
+
+    @property
+    def clan_storage_quota_bytes(self) -> int:
+        """The resolved per-clan storage quota in bytes."""
+        return self.CLAN_STORAGE_QUOTA_MB * 1024 * 1024
+
+    # Upload signings per user in a sliding hour, and clan exports per clan in a sliding
+    # day. Both count in the auth rate limit's store, so on Vercel every instance reads one
+    # count (ADR-072). At least 1, because 0 would refuse every request.
+    UPLOAD_SIGN_MAX_PER_HOUR: int = Field(default=30, ge=1)
+    CLAN_EXPORT_MAX_PER_DAY: int = Field(default=5, ge=1)
 
     # Scheduler — the platform's authoritative timezone. The anniversary cron fires
     # at NOTIFICATION_CRON_HOUR in this zone AND all of the job's date math is computed

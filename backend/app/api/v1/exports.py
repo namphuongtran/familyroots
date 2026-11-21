@@ -8,15 +8,26 @@ the clan downloads.
 import uuid
 from typing import Any
 
-from fastapi import Depends, Query, Response
+from fastapi import Depends, Query, Request, Response
 from fastapi.routing import APIRouter
 
 from app.application.export.handlers import ExportQueryHandler
 from app.core.permissions import ClanRole, RequireAdmin
+from app.core.rate_limit import KeyedRateLimit
 from app.core.security import get_current_clan_id, get_current_user
 from app.infrastructure.dependencies import get_export_query_handler
 
 router = APIRouter()
+
+
+async def spend_clan_export(
+    request: Request,
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    role: ClanRole = RequireAdmin,
+) -> None:
+    """One of the clan's `CLAN_EXPORT_MAX_PER_DAY` exports, after the role check (#332)."""
+    limit: KeyedRateLimit = request.app.state.clan_export_limit
+    await limit.spend(str(clan_id))
 
 
 @router.get("/clan")
@@ -28,6 +39,7 @@ async def export_clan(
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     query_handler: ExportQueryHandler = Depends(get_export_query_handler),
     role: ClanRole = RequireAdmin,
+    _budget: None = Depends(spend_clan_export),
 ) -> Response:
     """Download the full clan archive ("bản sao ngàn đời") — admin only."""
     filename, media_type, body = await query_handler.export_clan(clan_id, export_format)

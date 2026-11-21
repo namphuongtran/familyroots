@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.domain.document.entity import Document as DocumentEntity
 from app.infrastructure.persistence.document_mapper import apply_to_orm, to_domain, to_orm
@@ -100,6 +100,15 @@ class SqlAlchemyDocumentRepository:
             )
         )
         return result.first() is not None
+
+    async def storage_bytes_used(self, clan_id: uuid.UUID) -> int:
+        """Sum of file sizes over every row of the clan, soft-deleted rows included."""
+        result = await self._session.execute(
+            select(func.coalesce(func.sum(DocumentModel.file_size_bytes), 0)).where(
+                DocumentModel.clan_id == clan_id
+            )
+        )
+        return int(result.scalar_one())
 
     async def save(self, doc: DocumentEntity) -> None:
         """Insert or update a Document."""

@@ -62,7 +62,17 @@ straight to Supabase Storage. The limit is `MAX_UPLOAD_SIZE_MB`, 50 MB by defaul
 | `size_bytes` | at least 0, at most the limit |
 
 These are declarations, checked before any byte is sent: `422 invalid_mime_type` or
-`422 file_too_large`. On success, 200:
+`422 file_too_large`. Two limits follow (#332):
+
+| Status | Code | When | `detail` |
+|---|---|---|---|
+| 422 | `document.storage_quota_exceeded` | `size_bytes` would take the clan past its storage quota, 1 GB by default (`CLAN_STORAGE_QUOTA_MB`). Every document of the clan counts, live and soft-deleted, because a soft-deleted document's file stays in Storage until the retention purge removes it. A file that lands exactly on the quota is admitted | `quota_bytes`, `used_bytes`, `remaining_bytes` |
+| 429 | `document.upload_rate_limited` | the caller has signed 30 uploads in the last hour (`UPLOAD_SIGN_MAX_PER_HOUR`), counted per user across clans, sliding window. Only a request that passed the role check is counted. A `Retry-After` header carries the same seconds | `retry_after` |
+
+The quota is checked against the declared size at signing. Staged uploads not yet confirmed do
+not count, and two concurrent signings may both pass the same remainder.
+
+On success, 200:
 
 ```json
 {

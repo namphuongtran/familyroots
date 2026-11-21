@@ -20,7 +20,13 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 from app.application.document.handlers import _presign_expiry
-from app.domain.document.entity import DEFAULT_MAX_FILE_SIZE_BYTES, Document, check_upload_file
+from app.domain.document.entity import (
+    DEFAULT_CLAN_STORAGE_QUOTA_BYTES,
+    DEFAULT_MAX_FILE_SIZE_BYTES,
+    Document,
+    check_storage_quota,
+    check_upload_file,
+)
 from app.domain.document.repository import (
     SIGNED_UPLOAD_TTL,
     DocumentRepository,
@@ -60,10 +66,18 @@ class DocumentUploadHandler:
         content_type: str,
         size_bytes: int,
         max_file_size_bytes: int = DEFAULT_MAX_FILE_SIZE_BYTES,
+        storage_quota_bytes: int = DEFAULT_CLAN_STORAGE_QUOTA_BYTES,
     ) -> SignedUploadResponse:
         """Refuse a file that breaks the rules before any byte is sent; else sign."""
         check_upload_file(
             mime_type=content_type, size_bytes=size_bytes, max_file_size_bytes=max_file_size_bytes
+        )
+        # The clan's quota (#332), against the declared size. Read before the rollback
+        # below, on the transaction the auth dependencies opened.
+        check_storage_quota(
+            used_bytes=await self._repo.storage_bytes_used(clan_id),
+            size_bytes=size_bytes,
+            quota_bytes=storage_quota_bytes,
         )
         path = staged_upload_path(clan_id, uuid.uuid4(), safe_extension(filename))
 

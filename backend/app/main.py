@@ -41,7 +41,7 @@ from app.core.exceptions import (
 from app.core.logging import configure_logging
 from app.core.metrics_guard import MetricsFailureThrottle
 from app.core.path_redaction import scrub_sentry_event
-from app.core.rate_limit import RateLimitMiddleware, RateLimitStore
+from app.core.rate_limit import KeyedRateLimit, RateLimitMiddleware, RateLimitStore
 from app.core.readiness import (
     MIGRATIONS_AHEAD,
     MIGRATIONS_SERVABLE,
@@ -194,17 +194,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.exception("teardown step failed: engine-dispose")
 
 
-def _rate_limit_store() -> RateLimitStore | None:
+def _rate_limit_store(scope: str = "auth") -> RateLimitStore | None:
     """The shared Upstash store when its credentials are set, else None for in-memory.
 
     Keys carry APP_ENV because the Vercel integration connects one database to both the
-    Production and the Development environment (#281)."""
+    Production and the Development environment (#281). *scope* separates the auth limit's
+    keys from the per-user and per-clan usage limits' (#332)."""
     if not settings.shared_rate_limit_store:
         return None
     return UpstashRateLimitStore(
         url=settings.KV_REST_API_URL,
         token=settings.KV_REST_API_TOKEN,
-        key_prefix=f"familyroots:{settings.APP_ENV}:rate-limit:auth:",
+        key_prefix=f"familyroots:{settings.APP_ENV}:rate-limit:{scope}:",
     )
 
 
@@ -268,6 +269,25 @@ def create_app(*, rate_limit_store: RateLimitStore | None = None) -> FastAPI:
     #   - Language sets the locale before RateLimit builds its (localized) 429 envelope;
     #   - RequestMeta populates the ip/user-agent ContextVar for every request so
     #     AuditLogHandler can enrich audit rows regardless of path.
+    # The per-user and per-clan usage limits (#332), spent by route dependencies rather than
+    # the middleware, because they key on who is asking. A store handed in stands for the
+    # one store every instance shares, so they count in it too.
+    usage_store = rate_limit_store if rate_limit_store is not None else _rate_limit_store("usage")
+    application.state.upload_sign_limit = KeyedRateLimit(
+        namespace="upload-sign:user",
+        code="document.upload_rate_limited",
+        max_requests=settings.UPLOAD_SIGN_MAX_PER_HOUR,
+        window_seconds=60 * 60,
+        store=usage_store,
+    )
+    application.state.clan_export_limit = KeyedRateLimit(
+        namespace="clan-export:clan",
+        code="export.rate_limited",
+        max_requests=settings.CLAN_EXPORT_MAX_PER_DAY,
+        window_seconds=24 * 60 * 60,
+        store=usage_store,
+    )
+
     if rate_limit_store is None:
         rate_limit_store = _rate_limit_store()
 

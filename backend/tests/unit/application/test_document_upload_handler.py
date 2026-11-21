@@ -80,6 +80,9 @@ class FakeRepo:
     async def person_in_clan(self, person_id: uuid.UUID, clan_id: uuid.UUID) -> bool:
         return self._persons_in_clan
 
+    async def storage_bytes_used(self, clan_id: uuid.UUID) -> int:
+        return 0
+
     async def save(self, doc: Document) -> None:
         self.saved.append(doc)
 

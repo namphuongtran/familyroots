@@ -40,6 +40,10 @@ ALLOWED_MIME_TYPES = AVATAR_MIME_TYPES | frozenset(
 # (not app.core) so the domain enforces the invariant without importing config.
 DEFAULT_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 
+# The default per-clan storage quota (#326, #332). Settings.CLAN_STORAGE_QUOTA_MB is the
+# env-tunable value and the application injects it; this is the number when nothing does.
+DEFAULT_CLAN_STORAGE_QUOTA_BYTES = 1024 * 1024 * 1024  # 1 GB
+
 
 def check_upload_file(
     *,
@@ -59,6 +63,24 @@ def check_upload_file(
         raise ValidationError("invalid_mime_type", {"allowed": sorted(ALLOWED_MIME_TYPES)})
     if size_bytes > max_file_size_bytes:
         raise ValidationError("file_too_large", {"max_bytes": max_file_size_bytes})
+
+
+def check_storage_quota(*, used_bytes: int, size_bytes: int, quota_bytes: int) -> None:
+    """Refuse a new file that would take the clan's stored bytes past its quota.
+
+    ``used_bytes`` is every document the clan has, live and soft-deleted alike: a
+    soft-deleted document's blob stays in Storage until the retention purge removes it.
+    A file that lands exactly on the quota is admitted.
+    """
+    if used_bytes + size_bytes > quota_bytes:
+        raise BusinessRuleViolation(
+            "document.storage_quota_exceeded",
+            {
+                "quota_bytes": quota_bytes,
+                "used_bytes": used_bytes,
+                "remaining_bytes": max(0, quota_bytes - used_bytes),
+            },
+        )
 
 
 @dataclass

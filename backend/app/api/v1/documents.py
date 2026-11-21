@@ -3,12 +3,13 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.application.document.handlers import DocumentCommandHandler, DocumentQueryHandler
 from app.application.document.upload import DocumentUploadHandler
 from app.core.config import settings
 from app.core.permissions import ClanRole, RequireAdmin, RequireEditor, RequireViewer
+from app.core.rate_limit import KeyedRateLimit
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.value_objects import ActorInfo
 from app.infrastructure.dependencies import (
@@ -28,12 +29,23 @@ from app.services.translator import t
 router = APIRouter()
 
 
+async def spend_upload_signing(
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    role: ClanRole = RequireEditor,
+) -> None:
+    """One of the caller's `UPLOAD_SIGN_MAX_PER_HOUR` signings, after the role check (#332)."""
+    limit: KeyedRateLimit = request.app.state.upload_sign_limit
+    await limit.spend(str(current_user["sub"]))
+
+
 @router.post("/uploads", responses=ok(SignedUploadResponse))
 async def sign_document_upload(
     body: SignUploadRequest,
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     upload_handler: DocumentUploadHandler = Depends(get_document_upload_handler),
     role: ClanRole = RequireEditor,
+    _budget: None = Depends(spend_upload_signing),
 ) -> dict[str, Any]:
     """Sign a direct-to-Storage upload of one file (ADR-068).
 
@@ -47,6 +59,7 @@ async def sign_document_upload(
         content_type=body.content_type,
         size_bytes=body.size_bytes,
         max_file_size_bytes=settings.max_upload_bytes,
+        storage_quota_bytes=settings.clan_storage_quota_bytes,
     )
     return {"data": result.model_dump()}
 
