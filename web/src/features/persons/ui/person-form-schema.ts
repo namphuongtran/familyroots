@@ -107,7 +107,7 @@ function isDigits(value: string): boolean {
  * call sites below (birth, always checked; death, checked only when
  * `hasDied`) share one rule rather than drifting.
  */
-function dateGroupIssues(
+export function dateGroupIssues(
   group: HistoricalDateFormValue,
 ): Array<{ path: Array<string>; code: string }> {
   const issues: Array<{ path: Array<string>; code: string }> = []

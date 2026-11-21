@@ -98,3 +98,17 @@ export { formatHistoricalDate, isKnownDate } from './ui/format-person-date'
 // `app/[locale]/(dashboard)/members/{new,[id]/edit}/page.tsx` need.
 export { PersonForm } from './ui/PersonForm'
 export type { PersonFormProps } from './ui/PersonForm'
+
+// #328: the relationship editor shows the same §7.7c conflict dialog for a `409 stale_write`
+// on a marriage, and enters an end date with the same date-group encoding the form uses.
+export { StaleWriteDialog } from './ui/StaleWriteDialog'
+export type { StaleWriteDialogProps, StaleWriteRow } from './ui/StaleWriteDialog'
+export type { FieldChoice } from './ui/stale-write-diff'
+export type { HistoricalDateFormValue } from './ui/person-form-schema'
+export {
+  dateGroupIssues,
+  emptyDateGroup,
+  encodeDateGroup,
+  PERSON_FORM_ERROR_CODES,
+} from './ui/person-form-schema'
+export { defaultDateDisplay } from './ui/date-display-defaults'

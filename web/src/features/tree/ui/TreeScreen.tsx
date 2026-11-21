@@ -1,12 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import type { TreePerson } from '@/domain/tree/tree'
+import { useCapabilities } from '@/features/auth'
+import { RelationshipEditorSheet } from '@/features/relationships'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useClientRequestContext } from '@/shared/http/context.client'
 import { ApiError } from '@/shared/http/errors'
 import { useUIStore } from '@/store/ui.store'
 import { useFamilyTree } from '../hooks/use-tree-queries'
+import { treeKeys } from '../server/query-keys'
+import { NodeActionsSheet, type NodeAction } from './NodeActionsSheet'
 import { FocusPanel } from './FocusPanel'
 import { TreeCanvas } from './TreeCanvas'
 
@@ -24,6 +30,12 @@ export function TreeScreen() {
     { context, refreshAuth, enabled: ready },
   )
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+  // #328: the long-press sheet, and the relationship editor it opens.
+  const [pressedId, setPressedId] = useState<string | null>(null)
+  const [editor, setEditor] = useState<{ personId: string; action: NodeAction } | null>(null)
+  const capabilities = useCapabilities()
+  const queryClient = useQueryClient()
+  const pressedName = pressedId && data ? nameIn(data.root, pressedId) : null
 
   let body
   if (!ready || isPending) {
@@ -59,6 +71,7 @@ export function TreeScreen() {
         root={data.root}
         selectedPersonId={selectedPersonId}
         onSelectPerson={setSelectedPersonId}
+        onLongPressPerson={setPressedId}
       />
     )
   }
@@ -78,6 +91,45 @@ export function TreeScreen() {
           onClose={() => setSelectedPersonId(null)}
         />
       )}
+
+      {pressedId && (
+        <NodeActionsSheet
+          personId={pressedId}
+          fullName={pressedName ?? ''}
+          canAddRelationships={capabilities.createRelationship}
+          onAction={(action) => {
+            setEditor({ personId: pressedId, action })
+            setPressedId(null)
+          }}
+          onClose={() => setPressedId(null)}
+        />
+      )}
+
+      {editor && capabilities.createRelationship && (
+        <RelationshipEditorSheet
+          key={`${editor.personId}-${editor.action}`}
+          personId={editor.personId}
+          personName={data ? nameIn(data.root, editor.personId) : null}
+          open
+          onOpenChange={(open) => !open && setEditor(null)}
+          initialSection={editor.action}
+          // A new edge can move a node or add one, so the tree rereads.
+          onChanged={() =>
+            void queryClient.invalidateQueries({ queryKey: treeKeys.all(context.clanId) })
+          }
+        />
+      )}
     </div>
   )
+}
+
+/** The name of the person, or spouse, with this id anywhere in the loaded tree. */
+function nameIn(person: TreePerson, id: string): string | null {
+  if (person.id === id) return person.fullName
+  for (const spouse of person.spouses) if (spouse.id === id) return spouse.fullName
+  for (const child of person.children) {
+    const found = nameIn(child, id)
+    if (found !== null) return found
+  }
+  return null
 }
