@@ -6,6 +6,7 @@ Each handler method is a single use case — one public method per action.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
@@ -19,6 +20,7 @@ from app.application.person.commands import (
     UpdatePerson,
 )
 from app.core.pagination import encode_fields_cursor
+from app.domain.document.repository import StoragePort, avatar_object_path
 from app.domain.person.entity import Person
 from app.domain.person.query_port import PersonQueryPort
 from app.domain.person.repository import PersonFilters, PersonRepository, PersonSearchResult
@@ -60,12 +62,19 @@ async def _redact_person_pii(
                 setattr(person, field, None)
 
 
+logger = logging.getLogger(__name__)
+
+
 class PersonCommandHandler:
     """Handles Person write operations (create, update, delete, restore)."""
 
-    def __init__(self, repo: PersonRepository, uow: UnitOfWork) -> None:
+    def __init__(
+        self, repo: PersonRepository, uow: UnitOfWork, storage: StoragePort | None = None
+    ) -> None:
         self._repo = repo
         self._uow = uow
+        # Only delete() needs it: soft-deleting a person takes the public avatar down.
+        self._storage = storage
 
     async def create(self, cmd: CreatePerson) -> PersonResponse:
         """Create a new person and their clan membership."""
@@ -165,8 +174,18 @@ class PersonCommandHandler:
         if not person:
             raise EntityNotFoundError("person_not_found")
 
+        had_avatar = person.avatar_url is not None
         person.soft_delete(cmd.actor, cmd.clan_id)
         await self._repo.save(person)
+        if had_avatar and self._storage is not None:
+            try:
+                await self._storage.delete_public(avatar_object_path(cmd.clan_id, person.id))
+            except Exception:
+                # The document keeps is_avatar = true, which the purge retries from.
+                logger.exception(
+                    "Deleting the public avatar of person %s failed — the purge will retry",
+                    person.id,
+                )
         await self._uow.commit()
 
     async def restore(self, cmd: RestorePerson) -> PersonResponse:

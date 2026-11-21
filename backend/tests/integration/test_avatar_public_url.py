@@ -60,6 +60,8 @@ class FakeStorage:
     def __init__(self) -> None:
         self.uploaded: list[str] = []
         self.published: list[tuple[str, str]] = []
+        self.deleted_public: list[str] = []
+        self.delete_public_error: Exception | None = None
         self.presigned: list[str] = []
         self.publish_error: Exception | None = None
         self.publish_override: str | None = None
@@ -82,6 +84,12 @@ class FakeStorage:
     ) -> dict[str, str]:
         # The export's batch presign (#271) — not exercised by this module.
         raise AssertionError("get_presigned_urls called unexpectedly")
+
+    async def delete_public(self, destination_path: str) -> bool:
+        if self.delete_public_error is not None:
+            raise self.delete_public_error
+        self.deleted_public.append(destination_path)
+        return True
 
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
@@ -621,3 +629,52 @@ async def test_set_avatar_is_audited_with_the_published_url(
     published = resp.json()["data"]["avatar_url"]
     assert by_action["document.set_avatar"]["avatar_url"] == published
     assert by_action["person.update"]["avatar_url"] == published
+
+
+# ── Taking the avatar down (#318) ─────────────────────────────────────────────
+
+
+async def _publish(client: AsyncClient, a: dict[str, Any]) -> str:
+    resp = await client.patch(f"/api/v1/documents/{a['doc']}/set-avatar", headers=_headers(a))
+    assert resp.status_code == 200, resp.text
+    return f"clans/{a['clan']}/avatars/{a['person']}"
+
+
+async def test_deleting_the_source_document_deletes_the_public_avatar_and_nulls_the_url(
+    client: AsyncClient,
+    seeded: dict[str, Any],
+    fake_storage: FakeStorage,
+    session_factory: Any,
+) -> None:
+    a = seeded["a"]
+    public_path = await _publish(client, a)
+    assert await _avatar_url(session_factory, a["person"]) is not None
+
+    resp = await client.delete(f"/api/v1/documents/{a['doc']}", headers=_headers(a))
+    assert resp.status_code in (200, 204), resp.text
+
+    assert fake_storage.deleted_public == [public_path]
+    assert await _avatar_url(session_factory, a["person"]) is None
+
+
+async def test_a_failed_public_delete_is_not_dropped_the_purge_can_retry_it(
+    client: AsyncClient,
+    seeded: dict[str, Any],
+    fake_storage: FakeStorage,
+    session_factory: Any,
+) -> None:
+    a = seeded["a"]
+    await _publish(client, a)
+    fake_storage.delete_public_error = RuntimeError("storage down")
+
+    resp = await client.delete(f"/api/v1/documents/{a['doc']}", headers=_headers(a))
+    assert resp.status_code in (200, 204), resp.text
+
+    assert await _avatar_url(session_factory, a["person"]) is None
+    async with session_factory() as s:
+        flag = (
+            await s.execute(
+                sa.text("SELECT is_avatar FROM documents WHERE id = :id"), {"id": a["doc"]}
+            )
+        ).scalar_one()
+    assert flag is True  # the marker the purge retries from

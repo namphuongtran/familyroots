@@ -180,10 +180,11 @@ The same run also deletes every **staged upload** older than 24 hours: a file un
 `clans/{clan_id}/uploads/` that was signed, maybe uploaded, and never confirmed (ADR-068). Confirm
 moves a file out of that folder, so a confirmed document's blob is never touched by this sweep.
 
-Avatar interplay: soft-deleting a document currently set as a person's avatar
-does not clear `is_avatar`, and since ADR-036 it does not affect the person's
-`avatar_url` either — the published public object survives soft-delete **and**
-the purge. See the warning in "Set avatar" below.
+Avatar interplay (#318): soft-deleting the document a person's avatar was published from
+deletes the public avatar object and sets `persons.avatar_url` to `null`, in the same
+transaction. If the public delete fails it is logged, the document keeps `is_avatar = true`,
+and the purge retries it (the row purge skips such a document until it succeeds). Soft-deleting
+the person does the same. See "Set avatar" below.
 
 ### `PATCH /{id}/set-avatar` (editor+) — ADR-036
 
@@ -231,10 +232,9 @@ first and tolerated a storage outage; it now publishes a blob, so on any storage
 failure it returns 503 and the avatar is **not** set (nothing half-applied). It also no
 longer mints the 30-day presigned URL it used to compute and discard.
 
-> ⚠️ Publishing an avatar is currently **irreversible from the API**. `DELETE
-> /{id}` (soft delete) and the retention purge remove only the private blob; the
-> published public object and `persons.avatar_url` are left in place, so anyone holding
-> the URL keeps access. Tracked as a follow-up in ADR-036 "Known gaps".
+Publishing is reversible (#318): `DELETE /{id}` on the source document, or soft-deleting the
+person, deletes the public object and sets `persons.avatar_url` to `null`. Copies already
+cached by a CDN or browser are not purged (cache window: `AVATAR_CACHE_CONTROL_SECONDS`).
 
 ## Versioning & Compatibility Rules
 - **`POST /` stopped taking multipart on 2026-10-11 (ADR-068, #256), a breaking change shipped

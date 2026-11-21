@@ -66,6 +66,9 @@ class CountingStorage:
     async def delete(self, storage_path: str) -> bool:
         raise AssertionError("delete called unexpectedly")
 
+    async def delete_public(self, destination_path: str) -> bool:
+        return True
+
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
     ) -> str:

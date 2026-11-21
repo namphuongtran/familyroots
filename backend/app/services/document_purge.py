@@ -93,12 +93,14 @@ async def purge_expired_documents(now: datetime | None = None) -> None:
 
         db = AsyncSession(bind=engine, expire_on_commit=False)
         try:
+            await _sweep_public_avatars(db, storage)
             rows = (
                 (
                     await db.execute(
                         text(
                             "SELECT id, storage_path FROM public.documents "
                             "WHERE is_deleted = true AND deleted_at < :cutoff "
+                            "AND is_avatar = false "
                             "ORDER BY deleted_at ASC"
                         ),
                         {"cutoff": cutoff},
@@ -114,7 +116,8 @@ async def purge_expired_documents(now: datetime | None = None) -> None:
                         await db.execute(
                             text(
                                 "DELETE FROM public.documents WHERE id = :id "
-                                "AND is_deleted = true AND deleted_at < :cutoff"
+                                "AND is_deleted = true AND deleted_at < :cutoff "
+                                "AND is_avatar = false"
                             ),
                             {"id": row["id"], "cutoff": cutoff},
                         ),
@@ -146,6 +149,49 @@ async def purge_expired_documents(now: datetime | None = None) -> None:
             # has a transaction open.
             await db.close()
             await lock_conn.rollback()
+
+
+async def _sweep_public_avatars(db: AsyncSession, storage: SupabaseStorageAdapter) -> None:
+    """Retry taking down public avatars whose delete failed (ADR-036).
+
+    A document still flagged ``is_avatar`` while it, or its person, is soft-deleted
+    means the request-time delete of the public object did not succeed. Delete it
+    again, then clear the flag. A document whose person has since published another
+    avatar only gets its flag cleared: the object at the stable path is the new one.
+    Documents carrying the flag are skipped by the row purge below, so the marker
+    survives until this succeeds. One failure never stops the sweep.
+    """
+    rows = (
+        (
+            await db.execute(
+                text(
+                    "SELECT d.id, d.clan_id, d.person_id, "
+                    "(NOT p.is_deleted AND EXISTS (SELECT 1 FROM public.documents o "
+                    "WHERE o.person_id = d.person_id AND o.is_avatar AND NOT o.is_deleted "
+                    "AND o.id <> d.id)) AS superseded "
+                    "FROM public.documents d JOIN public.persons p ON p.id = d.person_id "
+                    "WHERE d.is_avatar AND (d.is_deleted OR p.is_deleted)"
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    for row in rows:
+        try:
+            if not row["superseded"]:
+                # Mirrors app.domain.document.repository.avatar_object_path; services
+                # may not import the domain.
+                await storage.delete_public(f"clans/{row['clan_id']}/avatars/{row['person_id']}")
+            await db.execute(
+                text("UPDATE public.documents SET is_avatar = false WHERE id = :id"),
+                {"id": row["id"]},
+            )
+            await db.commit()
+            logger.info("Took down public avatar for document %s", row["id"])
+        except Exception:
+            logger.exception("Public avatar delete failed for document %s — will retry", row["id"])
+            await db.rollback()
 
 
 async def _sweep_staged_uploads(storage: SupabaseStorageAdapter, cutoff: datetime) -> None:

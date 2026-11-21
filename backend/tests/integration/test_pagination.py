@@ -39,6 +39,9 @@ class _NoStorage:
         # The export's batch presign (#271) — not exercised by this module.
         raise AssertionError("get_presigned_urls called unexpectedly")
 
+    async def delete_public(self, destination_path: str) -> bool:
+        return True
+
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
     ) -> str:

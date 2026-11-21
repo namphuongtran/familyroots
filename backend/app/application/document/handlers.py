@@ -8,6 +8,7 @@ No SQLAlchemy or Supabase imports — fully DIP-compliant.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -18,12 +19,15 @@ from app.domain.document.repository import (
     DEFAULT_PRESIGN_TTL,
     DocumentRepository,
     StoragePort,
+    avatar_object_path,
 )
 from app.domain.person.repository import PersonRepository
 from app.domain.shared.exceptions import BusinessRuleViolation, EntityNotFoundError
 from app.domain.shared.unit_of_work import UnitOfWork
 from app.domain.shared.value_objects import ActorInfo
 from app.schemas.document import DocumentResponse, DocumentSummary
+
+logger = logging.getLogger(__name__)
 
 
 def _presign_expiry(expires_in: int = DEFAULT_PRESIGN_TTL) -> datetime:
@@ -36,22 +40,6 @@ def _presign_expiry(expires_in: int = DEFAULT_PRESIGN_TTL) -> datetime:
     forced clients to hardcode a guessed TTL (frontend-integration-guide §8).
     """
     return datetime.now(UTC) + timedelta(seconds=expires_in)
-
-
-def _avatar_object_path(clan_id: uuid.UUID, person_id: uuid.UUID) -> str:
-    """The public avatars bucket key for one person, as seen by one clan (ADR-036).
-
-    Clan-prefixed exactly like the private document keys, so the storage tenancy
-    boundary is identical in both buckets — a public bucket is the last place a path
-    should stop being clan-scoped. Both ids come from server state (the authenticated
-    clan header and the document's own person link), never from client input, so
-    there is nothing to sanitize the way ``storage_paths.safe_extension`` must.
-
-    Deliberately extension-less and stable per person: replacing someone's avatar
-    upserts the same object, so the stored URL never changes and no orphan copies
-    accumulate. The browser gets the format from the stored Content-Type.
-    """
-    return f"clans/{clan_id}/avatars/{person_id}"
 
 
 class DocumentCommandHandler:
@@ -84,8 +72,34 @@ class DocumentCommandHandler:
         untouched, and both survive until the retention purge job."""
         doc = await self._get_or_raise(document_id, clan_id)
         doc.mark_deleted(actor)
+        person_id = doc.person_id
+        if doc.is_avatar and person_id is not None:
+            await self._unpublish_avatar(doc, person_id, clan_id, actor)
         await self._repo.save(doc)
         await self._uow.commit()
+
+    async def _unpublish_avatar(
+        self, doc: Document, person_id: uuid.UUID, clan_id: uuid.UUID, actor: ActorInfo
+    ) -> None:
+        """Take the public avatar down with its source document (ADR-036).
+
+        ``avatar_url`` is nulled in the same unit of work as the delete. A failed
+        public delete is logged and leaves ``is_avatar`` true on the document: that
+        flag is what the retention purge retries from.
+        """
+        person = await self._person_repo.get_in_clan(person_id, clan_id)
+        if person is not None:
+            person.clear_avatar_url(actor, clan_id)
+            await self._person_repo.save(person)
+        try:
+            await self._storage.delete_public(avatar_object_path(clan_id, person_id))
+        except Exception:
+            logger.exception(
+                "Deleting the public avatar of person %s failed — the purge will retry",
+                person_id,
+            )
+        else:
+            doc.unset_avatar()
 
     async def restore(
         self,
@@ -176,7 +190,7 @@ class DocumentCommandHandler:
 
         avatar_url = await self._storage.publish_public(
             source_path=doc.storage_path,
-            destination_path=_avatar_object_path(clan_id, person_id),
+            destination_path=avatar_object_path(clan_id, person_id),
             content_type=doc.mime_type,
         )
 
