@@ -211,6 +211,21 @@ and host (any port, for a loopback host), or when it is listed under Redirect UR
   web app is first deployed. Since #203 pushed the templates (2026-10-18), the Site URL is also the
   origin of every auth email link, so a wrong one breaks them all (ADR-063, Consequences).
 
+**Two hosted values the maintainer sets to match `supabase/config.toml` (#330).** Neither has been
+changed by the repository. Both are in Dashboard → Authentication:
+
+| Dashboard setting | Value | Why |
+|---|---|---|
+| Sign In / Providers → Email → Minimum password length | `8` | matches `RegisterRequest.password` (`min_length=8`) and the web inputs' `minLength={8}`. The local file says `8` since #330 |
+| Sign In / Providers → **Allow new users to sign up** | off, **only once** the signups-off reading below is made | the local file keeps `enable_signup = true` until then |
+
+**Signups off is not decided yet.** `enable_signup = false` needs this reading on the local stack
+first: with it set, `POST /auth/register` (admin `create_user`) still puts the confirm-signup mail
+in Inbucket (`:54324`), a direct `supabase.auth.signUp` with the anon key is refused, and with
+`true` that signUp succeeds (negative control). The reading was **not made** in the #330 run: the
+sandbox had neither Docker nor the Supabase CLI. Until someone records it, `enable_signup` stays
+`true` here and on the hosted project.
+
 ---
 
 ## 4. Email templates
