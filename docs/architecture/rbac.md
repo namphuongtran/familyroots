@@ -84,6 +84,7 @@ The **active clan** is selected at runtime via the `X-Current-Clan-Id` request h
 | Edit person                    | ✅           | ✅     | ✅      | ❌      |
 | Soft-delete person             | ✅           | ✅     | ❌      | ❌      |
 | Restore deleted person         | ✅           | ✅     | ❌      | ❌      |
+| Anonymise person (ADR-079)     | ✅           | ✅     | ❌      | ❌      |
 | Hard-delete person             | ✅           | ❌     | ❌      | ❌      |
 | **CHANGE REQUESTS** (ADR-037)  |             |       |        |        |
 | Submit a change request (`POST /change-requests`) | ✅ | ✅ | ✅ | ✅ |

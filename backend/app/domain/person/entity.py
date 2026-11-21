@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from app.domain.person.events import (
+    PersonAnonymised,
     PersonCreated,
     PersonDeleted,
     PersonRestored,
@@ -69,6 +70,48 @@ _UPDATABLE_FIELDS = frozenset(
 # The persons.avatar_url column is varchar(500); the domain owns the number so the
 # invariant is checked before the driver can raise a truncation error.
 AVATAR_URL_MAX_LENGTH = 500
+
+# What an anonymised person's full_name becomes (ADR-079). Stored, not localised: it is
+# the value of a person's name, read by every client and every export, the way any other
+# name is.
+ANONYMISED_NAME = "Đã ẩn danh"
+
+# Every field anonymise() clears to None (ADR-079): the names (tên húy, tên tự, tên thụy,
+# biệt danh), the dates, the places, the free text, the avatar, and the remaining personal
+# details. full_name is replaced rather than cleared (the column is NOT NULL and every
+# client renders it), and the two date precisions become "unknown".
+#
+# KEPT, and the reason is đời: id, gender, created_by_clan_id, the clan memberships and
+# every marriage / parent-child edge. ADR-027's canonical parent is chosen by the parent's
+# gender (father > mother > unknown), so clearing gender would move a child's đời even with
+# every edge in place. nationality is kept as well: it is a column default ("VN"), not
+# something a relative wrote about this person.
+_ANONYMISED_TO_NONE = (
+    "birth_name",
+    "courtesy_name",
+    "posthumous_name",
+    "alias_name",
+    "birth_date",
+    "birth_date_display",
+    "death_date",
+    "death_date_display",
+    "lunar_birth_date",
+    "lunar_death_date",
+    "birth_place",
+    "death_place",
+    "burial_place",
+    "tomb_location",
+    "residence_place",
+    "religion",
+    "occupation",
+    "education_level",
+    "title_rank",
+    "phone",
+    "email",
+    "biography",
+    "notes",
+    "avatar_url",
+)
 
 
 @dataclass
@@ -305,6 +348,44 @@ class Person(AggregateRoot):
                 actor_role=actor.role,
             )
         )
+
+    def anonymise(self, actor: ActorInfo, clan_id: uuid.UUID) -> tuple[str, ...]:
+        """Erase what identifies this person, and keep their place in the tree (ADR-079).
+
+        ``full_name`` becomes :data:`ANONYMISED_NAME`; every field in
+        ``_ANONYMISED_TO_NONE`` becomes ``None``; both date precisions become
+        ``"unknown"``. Nothing that ADR-027's đời authority reads is touched: the node,
+        its gender, and its edges stay, so the tree keeps its shape and every
+        descendant's đời is unchanged.
+
+        Returns the names of the fields written, which is also what the
+        ``PersonAnonymised`` event records. The event carries no old value. Idempotent:
+        anonymising twice writes the same values again.
+        """
+        self.full_name = ANONYMISED_NAME
+        for field_name in _ANONYMISED_TO_NONE:
+            setattr(self, field_name, None)
+        self.birth_date_precision = "unknown"
+        self.death_date_precision = "unknown"
+        self.updated_by = actor.user_id
+        self.updated_at = datetime.now(UTC)
+
+        cleared = (
+            "full_name",
+            *_ANONYMISED_TO_NONE,
+            "birth_date_precision",
+            "death_date_precision",
+        )
+        self.add_event(
+            PersonAnonymised(
+                person_id=self.id,
+                clan_id=clan_id,
+                actor_id=actor.user_id,
+                actor_role=actor.role,
+                cleared_fields=cleared,
+            )
+        )
+        return cleared
 
     def restore(self, actor: ActorInfo, clan_id: uuid.UUID) -> None:
         """Restore a soft-deleted person."""

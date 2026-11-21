@@ -77,6 +77,7 @@ distinguishing payload fields, the `action` code, and the trigger.
 | `PersonUpdated` | `person.update` | `person_id`, `changes`, `old_values` | `Person.update()` |
 | `PersonDeleted` | `person.delete` | `person_id` | `Person.soft_delete()` |
 | `PersonRestored` | `person.restore` | `person_id` | `Person.restore()` |
+| `PersonAnonymised` | `person.anonymise` | `person_id`, `cleared_fields` (in `new_value`; `old_value` is always null — the erased values are never copied into the trail, ADR-079) | `Person.anonymise()` |
 
 ### change_request
 All use `resource_type = change_request`; `resource_id` is the change-request id (the
@@ -133,6 +134,14 @@ the audit log after the fact.
 | `UserRejected` | `user.reject` | `target_user_id` | reject pending member |
 | `UserRoleChanged` | `user.change_role` | `target_user_id`, `old_role`→`new_role` (in `old_value`/`new_value`) | change member role |
 | `UserRemoved` | `user.remove` | `target_user_id` | remove member |
+
+### account
+Emitted through the generic `CrudAuditEvent` (`track_audit_event`), like the claim actions
+below.
+
+| `action` | `resource_type` / `resource_id` | Key payload | Trigger |
+|----------|------------------|-------------|---------|
+| `account.delete` | `user` / the deleted account's id (also `actor_id`, `actor_role = user`, `clan_id = null`) | `new_value = {profile_removed, clan_ids}` — ids only; never the email or name (ADR-079) | `DELETE /auth/me` |
 
 ### person — identity claims
 These do not have dedicated event classes: the claim handlers emit the generic

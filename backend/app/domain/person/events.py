@@ -88,3 +88,26 @@ class PersonRestored(AuditableEvent):
             object.__setattr__(self, "resource_type", "person")
         if self.resource_id is None:
             object.__setattr__(self, "resource_id", self.person_id)
+
+
+@dataclass(frozen=True)
+class PersonAnonymised(AuditableEvent):
+    """Emitted when an admin anonymises a person (ADR-079).
+
+    Carries the NAMES of the fields that were cleared and never their values: the audit
+    row this becomes must not be the place the erased personal data survives. ``old_value``
+    is left ``None`` on purpose.
+    """
+
+    person_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    cleared_fields: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.action:
+            object.__setattr__(self, "action", "person.anonymise")
+        if not self.resource_type:
+            object.__setattr__(self, "resource_type", "person")
+        if self.resource_id is None:
+            object.__setattr__(self, "resource_id", self.person_id)
+        if self.new_value is None:
+            object.__setattr__(self, "new_value", {"cleared_fields": list(self.cleared_fields)})

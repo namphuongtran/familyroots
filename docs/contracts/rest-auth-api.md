@@ -23,6 +23,7 @@ Core operations:
 - POST /resend-verification
 - GET /me
 - PATCH /me (updates full_name and preferred_locale)
+- DELETE /me (deletes the caller's own account — [ADR-079](../decisions/079-account-deletion-and-person-anonymisation.md))
 - POST /me/fcm-token
 - DELETE /me/fcm-token
 
@@ -281,7 +282,7 @@ with no enumeration concern, so it kept `RegisterResponse`):
 { "data": { "access_token": "...", "refresh_token": "...", "expires_in": 3600 } }
 ```
 
-`POST /logout`, `PATCH /me`, `POST /me/fcm-token`, `DELETE /me/fcm-token`,
+`POST /logout`, `PATCH /me`, `DELETE /me`, `POST /me/fcm-token`, `DELETE /me/fcm-token`,
 `POST /forgot-password`, `POST /resend-verification` — a message envelope:
 ```json
 { "data": { "message": "..." } }
@@ -292,6 +293,32 @@ nested `user`):
 ```json
 { "data": { "id": "...", "email": "...", "full_name": "...", "...": "..." } }
 ```
+
+### `DELETE /me` — delete your own account (ADR-079, #333)
+
+Bearer JWT only; no `X-Current-Clan-Id` (the account spans every clan it belongs to).
+No body. On **200** (`{"data": {"message": "..."}}`) the backend has:
+
+- deleted the sign-in account at the identity provider (Supabase `auth.admin.delete_user`);
+- deleted every `user_clan_roles` row of the account, approved and pending, in every clan;
+- deleted its push tokens and its `user_profiles` row (identity claims go with the profile);
+- written one `account.delete` audit row (`clan_id` null, `resource_type = user`,
+  `new_value = {"profile_removed": bool, "clan_ids": [...]}` — ids only, never the email or name).
+
+Persons in clan trees are clan data and **stay**, including the one this account was
+linked to. To erase a person, a clan admin uses `POST /persons/{id}/anonymise`
+([rest-persons-api.md](rest-persons-api.md)).
+
+| Status | Code | When |
+|---|---|---|
+| 409 | `account.last_admin_transfer_first` | The caller is the only approved admin of at least one clan. `detail.clans` lists `{clan_id, clan_name}` for each. Nothing was deleted. The client points the person to transfer the admin role (`PATCH /clans/me/users/{user_id}/role`) first |
+| 503 | `auth_provider_unavailable` | The provider could not be reached. Nothing was deleted; retry |
+
+**Sign out right after.** An access token already issued still verifies until it
+expires (Supabase's default is one hour). A request made with it in that window
+provisions a fresh, empty profile row through `ensure_user_profile`, which belongs to
+no clan. A client must clear its session on 200. (No client calls this route yet: the web and
+mobile screens for it are not built, ADR-079.)
 
 ### Profile field semantics (login and `GET /me`)
 

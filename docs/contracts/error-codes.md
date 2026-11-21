@@ -118,6 +118,7 @@ provider is touched, so it is identical whether or not the email exists.
 | `invalid_role` | 422 | Role change to a value outside admin/editor/viewer | `allowed` (list) | Fix client bug |
 | `clan.last_admin_cannot_demote` | 403 | Demoting the clan's only approved admin (any target, not just self — enforced under a `FOR UPDATE` lock on the clan's admin rows so concurrent demotions can't both pass, ADR-017 sibling fix) | — | Explain: promote another admin first |
 | `clan.last_admin_cannot_remove` | 403 | Removing the clan's only approved admin from the clan (same `FOR UPDATE` guard as `last_admin_cannot_demote`, applied to `DELETE /clans/me/users/{user_id}`) | — | Explain: promote another admin first, or transfer admin before removing |
+| `account.last_admin_transfer_first` | 409 | `DELETE /auth/me` while the caller is the only approved admin of a clan (checked under the same `FOR UPDATE` lock on the clan's admin rows as `clan.last_admin_cannot_remove`, so two admins deleting at once cannot both pass). Nothing is deleted (ADR-079) | `clans: [{clan_id, clan_name}]` | Explain: transfer the admin role in each listed clan first |
 | `clan.cannot_remove_self` | 403 | Admin tries to remove their own membership | — | Explain: use leave/transfer flow |
 
 ### Optimistic concurrency (persons, marriages, parent-child) — ADR-017

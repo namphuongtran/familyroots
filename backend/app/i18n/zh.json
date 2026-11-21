@@ -209,5 +209,7 @@
   "error.change_request.target_deleted": "该申请指向的记录已被删除。请先恢复再审核。",
   "error.change_request.unsupported_operation": "暂不支持此类修改申请",
   "error.change_request.no_changes": "修改申请至少须包含一个字段",
-  "error.change_request.field_not_submittable": "一个或多个字段不可通过修改申请提交"
+  "error.change_request.field_not_submittable": "一个或多个字段不可通过修改申请提交",
+  "auth.account_deleted": "您的账户已被删除。",
+  "error.account.last_admin_transfer_first": "您是某个宗族唯一的管理员。删除账户前，请先将管理员角色转交给其他成员。"
 }

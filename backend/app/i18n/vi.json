@@ -209,5 +209,7 @@
   "error.change_request.target_deleted": "Bản ghi được đề nghị sửa đã bị xóa. Hãy khôi phục trước khi duyệt.",
   "error.change_request.unsupported_operation": "Loại đề nghị sửa này chưa được hỗ trợ",
   "error.change_request.no_changes": "Đề nghị sửa phải có ít nhất một trường thay đổi",
-  "error.change_request.field_not_submittable": "Một hoặc nhiều trường không thể đề nghị sửa"
+  "error.change_request.field_not_submittable": "Một hoặc nhiều trường không thể đề nghị sửa",
+  "auth.account_deleted": "Tài khoản của bạn đã được xóa.",
+  "error.account.last_admin_transfer_first": "Bạn là quản trị viên duy nhất của một dòng họ. Hãy chuyển quyền quản trị cho thành viên khác trước khi xóa tài khoản."
 }

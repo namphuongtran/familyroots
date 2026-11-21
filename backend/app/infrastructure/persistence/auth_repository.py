@@ -6,19 +6,23 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import exists, select, text
+from sqlalchemy import delete, exists, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.auth.platform_role import platform_role_of
 from app.domain.auth.repository import (
+    AccountRepository,
     AuthProfileView,
     AuthQueryPort,
     AuthRepository,
+    DeletedAccountRows,
     FCMTokenRepository,
+    SoleAdminClan,
 )
 from app.infrastructure.persistence._profile import ensure_profile_row
 from app.models.clan import Clan
 from app.models.user_clan_role import UserClanRole
+from app.models.user_fcm_token import UserFcmToken
 from app.models.user_profile import UserProfile as UserProfileModel
 
 
@@ -93,6 +97,82 @@ class SqlAlchemyAuthRepository(AuthRepository):
         self, user_id: uuid.UUID, email: str, display_name: str | None
     ) -> None:
         await ensure_profile_row(self._session, user_id, email, display_name)
+
+
+class SqlAlchemyAccountRepository(AccountRepository):
+    """Deletes a user's own account rows (ADR-079).
+
+    Wired to the privileged session (``get_system_db``), because the request has no
+    clan: ``user_clan_roles_upd`` and ``_del`` are clan-keyed, so under the request
+    role with no ``app.clan_id`` the ``FOR UPDATE`` below would lock (and count) no
+    row at all and every admin would read as "not the last one", and the DELETE
+    would remove nothing. Every statement here keys on ``user_id``, the JWT ``sub``.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def lock_clans_where_sole_admin(self, user_id: uuid.UUID) -> list[SoleAdminClan]:
+        administered = (
+            select(UserClanRole.clan_id)
+            .where(
+                UserClanRole.user_id == user_id,
+                UserClanRole.role == "admin",
+                UserClanRole.is_approved.is_(True),
+            )
+            .scalar_subquery()
+        )
+        # The same lock lock_admin_count takes for a demotion or a removal: every
+        # approved-admin row of the clan, ordered by id, so concurrent reducers of one
+        # admin set serialize and cannot deadlock.
+        rows = (
+            await self._session.execute(
+                select(UserClanRole.clan_id, UserClanRole.user_id)
+                .where(
+                    UserClanRole.clan_id.in_(administered),
+                    UserClanRole.role == "admin",
+                    UserClanRole.is_approved.is_(True),
+                )
+                .order_by(UserClanRole.id)
+                .with_for_update()
+            )
+        ).all()
+        admins: dict[uuid.UUID, set[uuid.UUID]] = {}
+        for clan_id, admin_id in rows:
+            admins.setdefault(clan_id, set()).add(admin_id)
+        sole = sorted(c for c, ids in admins.items() if ids == {user_id})
+        if not sole:
+            return []
+        names = dict(
+            (await self._session.execute(select(Clan.id, Clan.name).where(Clan.id.in_(sole))))
+            .tuples()
+            .all()
+        )
+        return [SoleAdminClan(clan_id=c, clan_name=names.get(c, "")) for c in sole]
+
+    async def delete_account_rows(self, user_id: uuid.UUID) -> DeletedAccountRows:
+        clan_ids = (
+            (
+                await self._session.execute(
+                    delete(UserClanRole)
+                    .where(UserClanRole.user_id == user_id)
+                    .returning(UserClanRole.clan_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        await self._session.execute(delete(UserFcmToken).where(UserFcmToken.user_id == user_id))
+        removed = (
+            await self._session.execute(
+                delete(UserProfileModel)
+                .where(UserProfileModel.id == user_id)
+                .returning(UserProfileModel.id)
+            )
+        ).first()
+        return DeletedAccountRows(
+            profile_removed=removed is not None, clan_ids=tuple(sorted(set(clan_ids)))
+        )
 
 
 class SqlAlchemyAuthQueryPort(AuthQueryPort):

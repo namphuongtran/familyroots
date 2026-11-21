@@ -67,6 +67,7 @@ _COUNTED: list[_MethodPath] = [
 _UNCOUNTED: list[_MethodPath] = [
     ("GET", "/api/v1/auth/me"),
     ("PATCH", "/api/v1/auth/me"),
+    ("DELETE", "/api/v1/auth/me"),
     ("POST", "/api/v1/auth/me/fcm-token"),
     ("DELETE", "/api/v1/auth/me/fcm-token"),
     ("POST", "/api/v1/auth/logout"),
