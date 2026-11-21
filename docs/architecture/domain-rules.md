@@ -109,8 +109,8 @@ resolve to their spouse term — bereavement does not end the kinship, only divo
   via membership; each member-clan sees it. `Person.created_by_clan_id` records
   the *originating clan* (write attribution) and is nullable; it is NOT the read
   filter. Isolation is enforced in the application/repository layer (every
-  clan-scoped read passes `clan_id`); RLS is a planned SP-3 defense-in-depth
-  addition, not yet active.
+  clan-scoped read passes `clan_id`); RLS (ADR-008 and its follow-ups) is the
+  active defence-in-depth layer on the clan-owned tables.
   By contrast, **relationship edges** (Marriage, ParentChild) are read-scoped by
   `created_by_clan_id == active clan`; cross-clan → not-found.
   *(Legacy note: earlier docs described persons as "globally shared / visible across

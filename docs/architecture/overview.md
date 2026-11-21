@@ -37,7 +37,8 @@ flowchart TD
   refresh, forgot-password, resend-verification) and invitation accept are rate-limited
   (in-memory, 20 req/min/IP, same bucket — ADR-021, amended by #280). `/auth/me` is not.
 - Clan context is selected via `X-Current-Clan-Id` and enforced in the
-  application/repository layer (RLS is an inert pilot — see
+  application/repository layer, with RLS as active defence in depth on the
+  clan-owned tables (ADR-008 and its follow-ups; see
   [multi-tenancy.md](multi-tenancy.md)).
 
 ### Event / Async Paths
@@ -87,7 +88,7 @@ flowchart TD
 ## Shared Infrastructure
 | Component | Purpose | Primary Owner |
 |-----------|---------|---------------|
-| PostgreSQL/Supabase | Canonical data store; app-layer clan isolation (RLS pilot only) | backend |
+| PostgreSQL/Supabase | Canonical data store; app-layer clan isolation, plus RLS as active defence in depth on the clan-owned tables | backend |
 | Redis _(planned)_ | Event bus / Queue (ADR-004) | backend / worker |
 | Supabase Auth | Identity and JWT issuance | backend / clients |
 | Firebase Cloud Messaging | Push notification delivery | backend / mobile |
