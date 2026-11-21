@@ -55,6 +55,15 @@ jobs:
     env:
       # Fixes the compose network name, `familyroots_familyroots`, which the backend container
       # joins to reach `pgdb` by name.
+      # The six Supabase images the stack runs (see "Pull runtime images"). Also the cache key's
+      # input, so changing any tag is a cache miss.
+      SUPABASE_IMAGES: >-
+        public.ecr.aws/supabase/postgres:17.6.1.159
+        public.ecr.aws/supabase/gotrue:v2.195.0
+        public.ecr.aws/supabase/kong:2.8.1
+        public.ecr.aws/supabase/storage-api:v1.69.11
+        public.ecr.aws/supabase/mailpit:v1.30.2
+        public.ecr.aws/supabase/postgrest:v16.1
       COMPOSE_PROJECT_NAME: familyroots
       COMPOSE_NETWORK: familyroots_familyroots
       API_IMAGE: familyroots-api:ci
@@ -115,23 +124,34 @@ jobs:
       # (scripts/supabase_local.sh pins it). If the CLI is bumped and this list goes stale, `up`
       # pulls what is missing and the "Images the stack runs" check below warns.
       #
-      # The Supabase images come from ECR Public, which allows an unauthenticated client one image
-      # pull per second, a quota AWS does not adjust ("Rate of unauthenticated image pulls",
-      # https://docs.aws.amazon.com/AmazonECR/latest/public/public-service-quotas.html). A hosted
-      # runner shares its address with other jobs. Six pulls started at once failed this step with
-      # `toomanyrequests: Rate exceeded` on every run from #193 to 2026-10-07, so the job never
-      # reached its tests. They are pulled one at a time now, each retried after a growing wait.
+      # The Supabase images come from ECR Public, which limits an unauthenticated client twice:
+      # - a rate of one image pull per second, a quota AWS does not adjust ("Rate of
+      #   unauthenticated image pulls",
+      #   https://docs.aws.amazon.com/AmazonECR/latest/public/public-service-quotas.html). A hosted
+      #   runner shares its address with other jobs. Six pulls started at once failed this step with
+      #   `toomanyrequests: Rate exceeded` on every run from #193 to 2026-10-07. They are pulled one
+      #   at a time now, each retried after a growing wait.
+      # - a data-transfer quota, refused as `Data limit exceeded` (PR #340, 2026-11-21, #344).
+      #   Retrying inside the same job cannot clear it.
+      # So the images are cached as a `docker save` archive, keyed on the exact SUPABASE_IMAGES
+      # list. On a hit the job sends no request to public.ecr.aws; on a miss it pulls as above and
+      # saves the archive for the next run.
       # `pgdb`, `redis` and `redis-http` come from Docker Hub, another registry and another limit, so
       # they still pull alongside.
+      - name: Key the Supabase image cache
+        id: supabase-cache-key
+        run: echo "key=supabase-images-$(echo "$SUPABASE_IMAGES" | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Supabase images cache
+        id: supabase-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/supabase-images.tar
+          key: ${{ steps.supabase-cache-key.outputs.key }}
+
       - name: Pull runtime images
         env:
-          SUPABASE_IMAGES: >-
-            public.ecr.aws/supabase/postgres:17.6.1.159
-            public.ecr.aws/supabase/gotrue:v2.195.0
-            public.ecr.aws/supabase/kong:2.8.1
-            public.ecr.aws/supabase/storage-api:v1.69.11
-            public.ecr.aws/supabase/mailpit:v1.30.2
-            public.ecr.aws/supabase/postgrest:v16.1
+          CACHE_HIT: ${{ steps.supabase-cache.outputs.cache-hit }}
         run: |
           pull() {
             local image=$1 attempt wait=5
@@ -146,7 +166,17 @@ jobs:
             return 1
           }
           docker compose pull --quiet pgdb redis redis-http & pgdb_pid=$!
-          for image in $SUPABASE_IMAGES; do pull "$image"; done
+          archive="$RUNNER_TEMP/supabase-images.tar"
+          if [ "$CACHE_HIT" = "true" ]; then
+            docker load --input "$archive"
+            echo "Supabase images: cache hit, no ECR pulls"
+          else
+            n=0
+            for image in $SUPABASE_IMAGES; do pull "$image"; n=$((n + 1)); done
+            # shellcheck disable=SC2086
+            docker save --output "$archive" $SUPABASE_IMAGES
+            echo "Supabase images: cache miss, pulled $n images"
+          fi
           wait "$pgdb_pid"
           echo "$SUPABASE_IMAGES" | tr ' ' '\n' > "$RUNNER_TEMP/prepulled-images.txt"
 
