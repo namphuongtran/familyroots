@@ -124,6 +124,7 @@ export function ResetPasswordScreen() {
             <input
               id="reset-password-new"
               type="password"
+              minLength={8}
               required
               autoComplete="new-password"
               readOnly={saving}
