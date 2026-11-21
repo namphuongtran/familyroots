@@ -24,6 +24,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import compile_path
 
+from app.core.exceptions import RateLimitedError
 from app.core.request_meta import resolve_client_ip
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,79 @@ class InMemoryRateLimitStore:
         self._last_sweep = now
 
 
+class FallbackStore:
+    """A store that decides in this instance's memory whenever the shared one cannot.
+
+    One per budget, because ``InMemoryRateLimitStore`` sweeps by the window of the call in
+    hand: a 60-second budget sharing it with a one-day budget would evict the day's buckets.
+    """
+
+    def __init__(self, store: RateLimitStore | None, *, window_seconds: int) -> None:
+        self._window = window_seconds
+        self._local = InMemoryRateLimitStore()
+        self._store: RateLimitStore = store if store is not None else self._local
+        self._last_store_warning: float | None = None
+
+    async def hit(self, key: str, *, max_requests: int, now: float) -> RateDecision:
+        try:
+            return await self._store.hit(
+                key, max_requests=max_requests, window_seconds=self._window, now=now
+            )
+        except RateLimitStoreUnavailableError as exc:
+            self._warn_store_unavailable(exc, now)
+            return await self._local.hit(
+                key, max_requests=max_requests, window_seconds=self._window, now=now
+            )
+
+    def _warn_store_unavailable(self, exc: RateLimitStoreUnavailableError, now: float) -> None:
+        """Log every fallback, and tell Sentry at most once a window per instance.
+
+        An outage fails every counted request, and one Sentry event each would spend the
+        project's quota on a single fact."""
+        logger.warning("rate limit store unavailable, deciding in memory: %s", exc)
+        if self._last_store_warning is not None and now - self._last_store_warning < self._window:
+            return
+        self._last_store_warning = now
+        sentry_sdk.capture_message(
+            f"Rate limit store unavailable, falling back to the in-memory bucket: {exc}",
+            level="warning",
+        )
+
+
+class KeyedRateLimit:
+    """A budget per subject the route knows, such as a user or a clan (#332).
+
+    The middleware counts by client IP before authentication runs, so it cannot key on who
+    is asking. This is called from a route dependency after the role check, so only a
+    request the caller was allowed to make spends the budget. It counts in the same store
+    as the auth limit, under its own key namespace, and a refusal raises
+    ``RateLimitedError``: 429 with the budget's own code, ``detail.retry_after`` and a
+    ``Retry-After`` header.
+    """
+
+    def __init__(
+        self,
+        *,
+        namespace: str,
+        code: str,
+        max_requests: int,
+        window_seconds: int,
+        store: RateLimitStore | None = None,
+    ) -> None:
+        self._namespace = namespace
+        self._code = code
+        self._max = max_requests
+        self._budget = FallbackStore(store, window_seconds=window_seconds)
+
+    async def spend(self, subject: str) -> None:
+        """Count one request for *subject*, or raise ``RateLimitedError`` over budget."""
+        decision = await self._budget.hit(
+            f"{self._namespace}:{subject}", max_requests=self._max, now=time.time()
+        )
+        if not decision.admitted:
+            raise RateLimitedError(self._code, decision.retry_after)
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Rate-limit specific paths by client IP, whatever the method.
 
@@ -148,11 +222,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._counted = tuple(compile_path(template)[0] for template in counted_paths)
         self._max = max_requests
-        self._window = window_seconds
         self._trust_xff = trust_forwarded_for
-        self._local = InMemoryRateLimitStore()
-        self._store: RateLimitStore = store if store is not None else self._local
-        self._last_store_warning: float | None = None
+        self._budget = FallbackStore(store, window_seconds=window_seconds)
 
     def _client_ip(self, request: Request) -> str:
         """Resolve the client IP, honoring X-Forwarded-For only when trusted.
@@ -174,31 +245,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             or "unknown"
         )
 
-    async def _decide(self, client_ip: str, now: float) -> RateDecision:
-        try:
-            return await self._store.hit(
-                client_ip, max_requests=self._max, window_seconds=self._window, now=now
-            )
-        except RateLimitStoreUnavailableError as exc:
-            self._warn_store_unavailable(exc, now)
-            return await self._local.hit(
-                client_ip, max_requests=self._max, window_seconds=self._window, now=now
-            )
-
-    def _warn_store_unavailable(self, exc: RateLimitStoreUnavailableError, now: float) -> None:
-        """Log every fallback, and tell Sentry at most once a window per instance.
-
-        An outage fails every counted request, and one Sentry event each would spend the
-        project's quota on a single fact."""
-        logger.warning("rate limit store unavailable, deciding in memory: %s", exc)
-        if self._last_store_warning is not None and now - self._last_store_warning < self._window:
-            return
-        self._last_store_warning = now
-        sentry_sdk.capture_message(
-            f"Rate limit store unavailable, falling back to the in-memory bucket: {exc}",
-            level="warning",
-        )
-
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # The path the router matches, not request.url.path: that one re-parses the decoded
         # path as a URL, so a "%3F" or "%23" inside a token would cut it short and the request
@@ -207,7 +253,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not any(pattern.match(path) for pattern in self._counted):
             return await call_next(request)
 
-        decision = await self._decide(self._client_ip(request), time.time())
+        decision = await self._budget.hit(
+            self._client_ip(request), max_requests=self._max, now=time.time()
+        )
         if not decision.admitted:
             # Middleware runs outside the exception-handler layer, so emit the
             # standard {error:{code,message,detail}} envelope directly (clients parse

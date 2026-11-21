@@ -29,6 +29,17 @@ Role: **RequireAdmin** — this is the only export surface and it returns the
 clan's complete dataset (see PII note below), so it is gated one level higher
 than the rest of the read API (viewer/editor cannot call it → 403).
 
+### Rate limit (#332)
+
+A clan may export **5 times in a sliding 24 hours** (`CLAN_EXPORT_MAX_PER_DAY`), counted per
+clan whichever admin asks, either format. Only a request that passed the admin check is
+counted. The 6th answers `429 export.rate_limited`, a JSON error envelope (not a file), with
+`detail.retry_after` and a `Retry-After` header carrying the same seconds:
+
+```json
+{ "error": { "code": "export.rate_limited", "message": "…", "detail": { "retry_after": 51234 } } }
+```
+
 ### Envelope-EXEMPT
 Unlike every other 2xx endpoint in this API (`{"data": ...}` — see
 [Response envelope](README.md#response-envelope)), this endpoint's response

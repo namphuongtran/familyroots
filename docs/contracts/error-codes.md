@@ -242,6 +242,9 @@ See also **Optimistic concurrency** above: `PATCH /relationships/marriages/{id}`
 | `document.avatar_source_outside_clan` | 422 | Clan backstop on set-avatar: the document's storage key is not under the acting clan's prefix (ADR-036) | `document_id` | Should be unreachable — report it |
 | `person.avatar_url_invalid` | 422 | A published avatar URL was not an absolute http(s) URL within 500 chars (server-side invariant, ADR-036) | `max_length` | Should be unreachable — report it |
 | `person.avatar_url_not_permanent` | 422 | A published avatar URL carried a query string or fragment, i.e. was presigned/expiring (ADR-036) | — | Should be unreachable — report it |
+| `document.storage_quota_exceeded` | 422 | `POST /documents/uploads` with a declared `size_bytes` that would take the clan past its storage quota (`CLAN_STORAGE_QUOTA_MB`, 1 GB by default). Every document of the clan counts, soft-deleted ones too until the retention purge removes them (#332) | `quota_bytes`, `used_bytes`, `remaining_bytes` | Tell the user the clan's space is full; an admin can delete documents, which frees space only once the purge runs |
+| `document.upload_rate_limited` | 429 | More than `UPLOAD_SIGN_MAX_PER_HOUR` (30) `POST /documents/uploads` by one user in a sliding hour (#332) | `retry_after` (seconds) | Back off; same header rule as `rate_limited` below |
+| `export.rate_limited` | 429 | More than `CLAN_EXPORT_MAX_PER_DAY` (5) `GET /exports/clan` for one clan in a sliding 24 hours, whichever admin asks (#332) | `retry_after` (seconds) | Tell the admin when the next export is possible; same header rule as `rate_limited` below |
 | `storage_not_found` | 404 | Referenced storage object missing from the storage backend | — | Treat as missing file |
 | `storage_unavailable` | 503 | Storage backend outage/misconfiguration | — | Retry-later banner |
 | `storage_bucket_not_configured` | 503 | A storage bucket is missing or unreachable — the private documents bucket on document upload, read, restore, set-avatar or the JSON clan export (#177), or the public avatars bucket, which must also be public-read (ADR-036). An operator action, not a transient outage | — | "Files unavailable in this environment"; a retry will not help |
@@ -293,7 +296,10 @@ bucket per IP (ADR-021 Decision 3, amended 2026-10-11 by #280):
 - `/api/v1/invitations/{token}/accept`
 
 Every other route, including `GET`/`PATCH /api/v1/auth/me`, `/api/v1/auth/me/fcm-token` and
-`POST /api/v1/auth/logout`, never answers `rate_limited`. The responses always carry both a
+`POST /api/v1/auth/logout`, never answers `rate_limited`. Two routes answer 429 with a code of their own,
+counted per user or per clan after the role check rather than per IP (#332):
+`POST /api/v1/documents/uploads` (`document.upload_rate_limited`, 30 per user per hour) and
+`GET /api/v1/exports/clan` (`export.rate_limited`, 5 per clan per day). Every 429, whichever its code, carries both a
 `Retry-After: <seconds>` response header and `detail.retry_after` (same value).
 Clients should wait that long before retrying; do not sign the user out.
 

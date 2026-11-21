@@ -17,10 +17,17 @@ logger = logging.getLogger(__name__)
 class AppError(HTTPException):
     """Base application error with machine-readable code."""
 
-    def __init__(self, status_code: int, code: str, detail: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        detail: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ):
         super().__init__(
             status_code=status_code,
             detail={"code": code, "detail": detail or {}},
+            headers=headers,
         )
 
 
@@ -49,6 +56,16 @@ class ValidationError(AppError):
         super().__init__(422, code, detail)
 
 
+class RateLimitedError(AppError):
+    """429 from a per-user or per-clan budget (#332), with ``Retry-After`` like the
+    middleware's ``rate_limited``."""
+
+    def __init__(self, code: str, retry_after: int):
+        super().__init__(
+            429, code, {"retry_after": retry_after}, headers={"Retry-After": str(retry_after)}
+        )
+
+
 async def app_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Global handler that converts AppError into the standard error envelope."""
     from app.services.translator import t
@@ -66,6 +83,7 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
                 "detail": detail.get("detail", {}),
             }
         },
+        headers=exc.headers,
     )
 
 
