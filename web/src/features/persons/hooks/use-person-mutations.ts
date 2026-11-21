@@ -5,7 +5,7 @@
  * functions, each invalidating exactly the `persons` cache entries the
  * mutation can have changed. Cross-feature invalidation (e.g. the legacy
  * `personCreateInvalidationKeys`'s `['tree']` row,
- * `src/lib/hooks/query-invalidation.ts`) is explicitly out of scope for this
+ * `src/lib/hooks/query-invalidation.ts`, deleted by #313) is explicitly out of scope for this
  * seed — it arrives with the second feature slice that needs to
  * invalidate `persons` from outside this feature, per `web/CLAUDE.md`.
  */

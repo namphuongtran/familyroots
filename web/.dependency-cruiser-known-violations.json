@@ -55,24 +55,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/app/[locale]/(dashboard)/documents/page.tsx",
-    "to": "src/components/documents/DocumentGallery.tsx",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/[locale]/(dashboard)/documents/page.tsx",
-    "to": "src/components/documents/DocumentUpload.tsx",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/app/[locale]/backoffice/layout.tsx",
     "to": "src/components/backoffice/BackofficeSidebar.tsx",
     "rule": {

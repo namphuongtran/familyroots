@@ -11,12 +11,6 @@ export type {
   ParentChildUpdateInput,
 } from './relationship'
 export type {
-  DocumentResponse,
-  DocumentSummary,
-  DocumentUploadMeta,
-  DocumentType,
-} from './document'
-export type {
   ClanRole,
   ClanUserMembership,
   ClanSettings,

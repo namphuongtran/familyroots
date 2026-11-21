@@ -181,9 +181,9 @@ Four harnesses, one gate each — see `web/CLAUDE.md` for the exact commands:
   (`src/shared/testing/`).
 - `pnpm test:e2e` — Playwright, against a real `next dev` server, desktop + mobile
   viewports (`web/playwright.config.ts`, `web/e2e/`).
-- `tests/behavior/*.test.ts` (`pnpm test:behavior`) and `tests/contracts/*.test.mjs`
-  (`pnpm test:contracts`) — the pre-spine Node built-in test runner suites, scoped to the
-  legacy trees; not part of the gate for new code.
+- `tests/contracts/*.test.mjs` (`pnpm test:contracts`) — the pre-spine Node built-in test runner
+  suite, scoped to the legacy trees; not part of the gate for new code. `tests/behavior/` and
+  `pnpm test:behavior` were deleted by #313 with their last test.
 
 CI gate (`.github/workflows/web-ci.yml`): type-check, lint, `depcruise`, the legacy ratchet
 on pull requests (`pnpm depcruise:ratchet`, ADR-060 § 4), unit, component,

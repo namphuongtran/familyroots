@@ -23,7 +23,6 @@ pnpm test:unit                                 # vitest --project unit (node env
 pnpm test:component                            # vitest --project component (jsdom, *.test.tsx, RTL + MSW)
 pnpm test:e2e                                  # playwright test: boots its own `next dev` servers; see "Two worktrees, one machine"
 pnpm test:e2e:ui                                # playwright test --ui
-pnpm test:behavior                             # legacy: node --test on tests/behavior/*.test.ts (TS via --experimental-strip-types)
 pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
@@ -347,7 +346,7 @@ every hook testable with a plain `RequestContext` object and MSW, which is what
   `useCreatePerson` invalidates `personsKeys.lists(clanId)`; `useUpdatePerson`,
   `useDeletePerson`, and `useRestorePerson` invalidate the one `personsKeys.detail(...)`
   plus every list. None of them touch `['tree']` the way the legacy
-  `src/lib/hooks/query-invalidation.ts` does for the same mutations — cross-feature
+  `src/lib/hooks/query-invalidation.ts` did for the same mutations (deleted by #313) — cross-feature
   invalidation arrives with the second feature slice that needs to invalidate `persons`
   from outside it.
 - **The public surface changed shape.** Before the repository landed, `index.ts` re-exported the raw
@@ -984,7 +983,7 @@ Query semantics that must be preserved when touching list/detail endpoints:
 
 ### State management split
 
-- **Server state**: TanStack Query (`src/lib/hooks/use*.ts`). Cross-feature invalidation helpers live in `src/lib/hooks/query-invalidation.ts`.
+- **Server state**: TanStack Query, in each slice's `features/<slice>/hooks/`. Each slice invalidates its own keys; there is no cross-feature invalidation helper since #313 deleted `src/lib/hooks/query-invalidation.ts`.
 - **Client state**: Zustand — `src/store/ui.store.ts` only. The session is server state, one
   TanStack Query query (see "The session is one query" above), and the active clan is
   `useCurrentClanId()` over the `current_clan_id` cookie.
@@ -1039,9 +1038,8 @@ e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rathe
 - `pnpm test:e2e:auth` — the authenticated projects, off by default. See "The authenticated
   e2e harness" below. `pnpm test:e2e` does not run them and must never need Docker.
 
-- `tests/behavior/` (legacy) — Node test runner with `--experimental-strip-types` for `.ts`.
-  Focused on auth + query invalidation flows against the legacy trees; not part of the CI
-  gate for new code.
+- ~~`tests/behavior/` (legacy)~~ — deleted by #313 with its last test, the document
+  invalidation helpers', and the `test:behavior` script with it.
 - `tests/contracts/` (legacy) — `.mjs` contract tests that pin the legacy API client shapes.
 
 CI (`.github/workflows/web-ci.yml`) runs type-check, lint, `depcruise`, the legacy ratchet on pull
@@ -1691,9 +1689,9 @@ engine rather than computed from the stylesheet.
   (ADR-060 § 4). `nothing-imports-legacy` forbids any module outside the set from importing one
   inside it. The imports that already existed are the baseline,
   `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, 21 after #183, 19
-  after #185, 18 after #186, 14 after #311 and 11 after #312, which `pnpm depcruise` reads through
-  `--ignore-known`. None of the 11 starts in `features/auth`, a persons route, the tree route or
-  the events route.
+  after #185, 18 after #186, 14 after #311, 11 after #312 and 9 after #313, which `pnpm depcruise`
+  reads through `--ignore-known`. None of the 9 starts in `features/auth`, a persons route, the
+  tree route, the events route or the documents route.
   - **When a slice deletes or re-points a legacy import, shrink the baseline in the same pull
     request:** run `pnpm depcruise:baseline` and commit the shorter file. Do not edit it by hand.
     `pnpm depcruise:ratchet origin/main` fails while the baseline still lists an import the tree no
@@ -1757,8 +1755,8 @@ engine rather than computed from the stylesheet.
   - `GenerationBadge` renders `Đời {n}` or `Đời ?` (spec § 3.2), never omitted. Spouse nodes carry
     no đời in `SpouseNode`, so their canvas node draws no badge rather than a guessed `Đời ?`.
   - `TreeScreen` and `TreeControls` read `treeMaxGenerations` from `@/store/ui.store`, the one
-    client store. Tree query keys are `['tree', clanId, …]`, so the legacy
-    `lib/hooks/query-invalidation.ts`'s `['tree']` prefix still invalidates them.
+    client store. Tree query keys are `['tree', clanId, …]`. (The legacy
+    `lib/hooks/query-invalidation.ts` that invalidated an `['tree']` prefix is gone since #313.)
   - **The legacy canvas could not draw a freshly fetched tree**, read at source and not measured in
     a browser. It seeded `useNodesState` on its first render, while the query was still loading, and
     `useNodesState` keeps its initial value, so the loaded nodes never reached it unless the query
@@ -1803,6 +1801,35 @@ engine rather than computed from the stylesheet.
     reverted: `is_lunar_calendar` false in the giỗ fixture fails the lunar-label assertion; the
     calendar keyed on the recorded date fails the 29 December case; the card printing the recorded
     date for a lunar event fails the `Giỗ năm nay · 29/12/2026` assertion.
+- **Documents applied it (#313, 2026-11-21).** `components/documents/`, `lib/hooks/useDocuments.ts`,
+  `lib/api/documents.ts` and its test, `application/documents/`, `infrastructure/documents/` and
+  `lib/types/document.ts` are deleted, with `lib/hooks/query-invalidation.ts`, whose two document
+  helpers were all it had left, `tests/behavior/` and the `test:behavior` script. The page
+  (`app/[locale]/(dashboard)/documents/page.tsx`) renders `DocumentsScreen` from
+  `@/features/documents` and imports nothing else. The baseline went 11 → 9: the page's two edges
+  into `components/documents/`. What the slice is:
+  - `features/documents/{api,model,server,hooks,ui}` over `GET /documents`, `GET /documents/{id}`,
+    `POST /documents/uploads`, `POST /documents` and `DELETE /documents/{id}`, mapped into
+    `domain/document/document.ts`. Restore and set-avatar have no screen yet and so no transport.
+  - **Upload is ADR-068's two API calls with Storage between them**, in `server/documents-repository.ts`:
+    sign, `PUT` the file to the signed URL through the same `fetchImpl` seam with no
+    `Authorization` and no clan header, then confirm with JSON. The file never travels to the API.
+    `MAX_UPLOAD_MB` (50) lives in `domain/document/document.ts`, read by both the screen and the
+    repository, and must not exceed the backend's `MAX_UPLOAD_SIZE_MB`. The picker's `accept` is the
+    backend's approved type list (`APPROVED_UPLOAD_TYPES`); the legacy one offered DOC/DOCX, which
+    the backend refuses with `invalid_mime_type`, and showed nothing when an upload failed.
+  - **Private files are read through short-lived signed URLs.** The list carries no URL. "Open"
+    is a `GET /documents/{id}` at that moment (`useOpenDocument`, a mutation, not a cached query),
+    so an expired URL is never reused. There is no detail query key on purpose.
+  - **Visibility is rbac.md's line through `useCapabilities()`:** admin and editor upload, only
+    admin deletes (two clicks, both named buttons), a viewer reads. Delete is the soft delete of
+    ADR-019; the document leaves the list on the refetch.
+  - `server/documents-repository.test.ts` (unit: the three requests in order, what each carried,
+    a 50 MB + 1 byte file refused with nothing sent, a Storage refusal not confirmed) and
+    `ui/DocumentsScreen.test.tsx` (component, MSW for sign, the Storage PUT and confirm against
+    one mutable document list). Controls run 2026-11-21, each reverted: `MAX_UPLOAD_MB` raised to
+    60 fails the 51 MB case; the upload's list invalidation removed fails the "gallery shows the
+    new document" case; `canDelete` forced true fails the editor and viewer cases.
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
   The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of
