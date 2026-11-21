@@ -29,6 +29,9 @@ Core operations (role enforced per route; viewer < editor < admin):
 | DELETE | `/branches/{id}`| admin    | Hard-delete (children + memberships `ON DELETE SET NULL`) |
 
 Behavior:
+- `PATCH /branches/{id}`: an explicit `null` for `name` (NOT NULL) is 422
+  `validation_error` naming the field. Nullable fields (`description`,
+  `founder_person_id`, `parent_branch_id`, `branch_order`) accept `null` to clear.
 - All reads/writes are scoped to the active clan (`get_current_clan_id`).
 - Create and update validate body-supplied references against the active clan:
   `parent_branch_id` must be an existing branch in the clan (and not the branch

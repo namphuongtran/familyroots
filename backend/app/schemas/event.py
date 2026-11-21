@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.historical_date import HistoricalDate, coerce_response_dates
 
@@ -42,6 +42,23 @@ class EventUpdateRequest(BaseModel):
     notify_days_before: int | None = Field(None, ge=0, le=30)
     # Optimistic concurrency (ADR-022): the version read from a prior response.
     expected_version: int = Field(..., ge=1)
+
+    @field_validator(
+        "event_type",
+        "title",
+        "event_date",
+        "event_date_precision",
+        "is_lunar_calendar",
+        "is_recurring",
+        "notify_days_before",
+    )
+    @classmethod
+    def _reject_null(cls, value: object) -> object:
+        # These columns are NOT NULL. Validators run only for keys the client sent,
+        # so an omitted field is unaffected and an explicit null is a 422 naming it.
+        if value is None:
+            raise ValueError("must not be null")
+        return value
 
 
 class EventResponse(BaseModel):

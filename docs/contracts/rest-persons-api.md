@@ -29,6 +29,9 @@ Core operations:
   - Body: ids (1–100), profile, include, fields, include_by_id (per-person include map)
 - GET /persons/{id}
 - PATCH /persons/{id}
+  - An explicit `null` for a NOT NULL field (`full_name`, `gender`,
+    `birth_date_precision`, `death_date_precision`) is 422 `validation_error` naming
+    the field. Nullable fields accept `null` to clear them.
 - DELETE /persons/{id}
 - POST /persons/{id}/restore
 - POST /persons/{id}/anonymise

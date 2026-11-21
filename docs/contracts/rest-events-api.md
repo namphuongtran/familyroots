@@ -28,6 +28,10 @@ Optimistic concurrency + soft delete (ADR-022, matching persons/marriages):
 - `PATCH /{id}` requires body field `expected_version: int (>=1)` (422 when
   missing); a stale value returns 409 `stale_write` with
   `detail.current_version`; success echoes `version` = expected + 1.
+- `PATCH /{id}`: an explicit `null` for a NOT NULL field (`event_type`, `title`,
+  `event_date`, `event_date_precision`, `is_lunar_calendar`, `is_recurring`,
+  `notify_days_before`) is 422 `validation_error` naming the field. `description`
+  and `event_date_display` are nullable and accept `null` to clear.
 - `DELETE /{id}` is a soft delete: the row survives, flagged `is_deleted`,
   and disappears from GET/list/upcoming/timeline reads. `POST /{id}/restore`
   brings it back (404 when the event is not deleted). There is no retention

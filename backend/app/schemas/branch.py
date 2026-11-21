@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class BranchCreateRequest(BaseModel):
@@ -24,6 +24,15 @@ class BranchUpdateRequest(BaseModel):
     founder_person_id: uuid.UUID | None = None
     parent_branch_id: uuid.UUID | None = None
     branch_order: int | None = Field(None, gt=0)
+
+    @field_validator("name")
+    @classmethod
+    def _reject_null(cls, value: object) -> object:
+        # These columns are NOT NULL. Validators run only for keys the client sent,
+        # so an omitted field is unaffected and an explicit null is a 422 naming it.
+        if value is None:
+            raise ValueError("must not be null")
+        return value
 
 
 class BranchResponse(BaseModel):
