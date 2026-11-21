@@ -11,13 +11,6 @@ export type {
   ParentChildUpdateInput,
 } from './relationship'
 export type {
-  ClanEvent,
-  UpcomingEvent,
-  EventType,
-  EventCreateInput,
-  EventUpdateInput,
-} from './event'
-export type {
   DocumentResponse,
   DocumentSummary,
   DocumentUploadMeta,
