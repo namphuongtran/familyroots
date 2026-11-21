@@ -37,12 +37,17 @@ _SEARCH_SQL = """
     WHERE cm.clan_id = :clan_id
       AND p.is_deleted = false
       AND (
-          public.f_unaccent(p.full_name) ILIKE '%' || public.f_unaccent(:q) || '%'
-          OR public.f_unaccent(p.birth_name) ILIKE '%' || public.f_unaccent(:q) || '%'
+          public.f_unaccent(p.full_name) ILIKE '%' || public.f_unaccent(:q_like) || '%' ESCAPE '\\'
+          OR public.f_unaccent(p.birth_name) ILIKE '%' || public.f_unaccent(:q_like) || '%' ESCAPE '\\'
       )
     ORDER BY similarity(public.f_unaccent(p.full_name), public.f_unaccent(:q)) DESC
     LIMIT :lim
 """
+
+
+def escape_like(value: str) -> str:
+    """Escape LIKE metacharacters so `%`, `_` and `\\` in user input match literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class SqlAlchemyPersonRepository:
@@ -162,7 +167,9 @@ class SqlAlchemyPersonRepository:
         """Trigram/unaccent search — encapsulates the raw SQL that was
         previously inline in the persons route handler."""
         stmt = text(_SEARCH_SQL)
-        result = await self._session.execute(stmt, {"clan_id": clan_id, "q": query, "lim": limit})
+        result = await self._session.execute(
+            stmt, {"clan_id": clan_id, "q": query, "q_like": escape_like(query), "lim": limit}
+        )
         rows = result.mappings().all()
         return [
             PersonSearchResult(
