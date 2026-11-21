@@ -154,7 +154,7 @@ async def list_persons(
 
 @router.get("/search", responses=ok_list(PersonSearchResult))
 async def search_persons(
-    q: str = Query(..., min_length=1),
+    q: str = Query(..., min_length=1, max_length=100),
     current_user: dict[str, Any] = Depends(get_current_user),
     clan_id: uuid.UUID = Depends(get_current_clan_id),
     handler: PersonQueryHandler = Depends(get_person_query_handler),

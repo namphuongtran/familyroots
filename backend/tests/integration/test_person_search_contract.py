@@ -142,3 +142,60 @@ async def test_search_wire_matches_person_search_result_schema(
     assert results  # non-empty
     for row in results:
         PersonSearchResult.model_validate(row)  # raises on drift
+
+
+async def _add_person(
+    session_factory: async_sessionmaker[AsyncSession], seeded: dict[str, Any], name: str
+) -> None:
+    pid = uuid.uuid4()
+    async with session_factory() as s:
+        await s.execute(
+            sa.text(
+                "INSERT INTO persons (id, full_name, gender, created_by_clan_id, created_by) "
+                "VALUES (:id, :n, 'male', :cid, :uid)"
+            ),
+            {"id": pid, "n": name, "cid": seeded["clan_id"], "uid": seeded["viewer_id"]},
+        )
+        await s.execute(
+            sa.text("INSERT INTO clan_memberships (person_id, clan_id) VALUES (:p, :c)"),
+            {"p": pid, "c": seeded["clan_id"]},
+        )
+        await s.commit()
+
+
+async def _names(client: AsyncClient, seeded: dict[str, Any], q: str) -> list[str]:
+    resp = await client.get(
+        "/api/v1/persons/search",
+        params={"q": q},
+        headers={
+            "Authorization": f"Bearer {seeded['viewer_id']}",
+            "X-Current-Clan-Id": str(seeded["clan_id"]),
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    return sorted(i["full_name"] for i in resp.json()["data"])
+
+
+async def test_search_treats_like_metacharacters_literally(
+    client: AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    seeded: dict[str, Any],
+) -> None:
+    for name in ("Nguyễn Văn A", "Trần 50% B", "Lê_C", "Phạm back\\slash"):
+        await _add_person(session_factory, seeded, name)
+    assert await _names(client, seeded, "%") == ["Trần 50% B"]
+    assert await _names(client, seeded, "_") == ["Lê_C"]
+    assert await _names(client, seeded, "\\") == ["Phạm back\\slash"]
+    assert "Nguyễn Văn A" in await _names(client, seeded, "van")
+
+
+async def test_search_q_over_max_length_is_422(client: AsyncClient, seeded: dict[str, Any]) -> None:
+    headers = {
+        "Authorization": f"Bearer {seeded['viewer_id']}",
+        "X-Current-Clan-Id": str(seeded["clan_id"]),
+    }
+    ok = await client.get("/api/v1/persons/search", params={"q": "a" * 100}, headers=headers)
+    assert ok.status_code == 200
+    bad = await client.get("/api/v1/persons/search", params={"q": "a" * 101}, headers=headers)
+    assert bad.status_code == 422
+    assert bad.json()["error"]["code"] == "validation_error"
