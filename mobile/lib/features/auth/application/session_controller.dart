@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../domain/auth/user_profile.dart';
 import '../data/auth_repository.dart';
 import '../data/supabase_auth.dart';
@@ -23,7 +24,26 @@ final supabaseAuthProvider = Provider<SupabaseAuth>(
 @Riverpod(keepAlive: true)
 class SessionController extends _$SessionController {
   @override
-  Future<UserProfile?> build() async => null;
+  Future<UserProfile?> build() async {
+    final auth = ref.read(supabaseAuthProvider);
+    // A session ended elsewhere (revoked server-side, refresh token lost) must
+    // reach the router, which only listens to this state.
+    final sub = auth.signedOut.listen((_) {
+      state = const AsyncValue<UserProfile?>.data(null);
+    });
+    ref.onDispose(sub.cancel);
+
+    // A session Supabase persisted across a relaunch. No session, no request.
+    if (!auth.hasSession) return null;
+    try {
+      return await ref.read(authRepositoryProvider).me();
+    } on ApiException {
+      // The backend refused a session Supabase still holds, such as 403
+      // account_deactivated: clear it, as signIn does, and show /login.
+      await auth.signOut(everywhere: false);
+      return null;
+    }
+  }
 
   /// Supabase's password sign-in, then GET /auth/me for the profile
   /// (ADR-064). The backend's `POST /auth/login` is not called: its tokens

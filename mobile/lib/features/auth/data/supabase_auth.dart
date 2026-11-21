@@ -22,6 +22,16 @@ class SupabaseAuth {
   /// Read by `accessTokenProvider` at request time. Null when signed out.
   String? get accessToken => _client.currentSession?.accessToken;
 
+  /// Whether the client holds a session, such as one `supabase_flutter`
+  /// restored from secure storage at launch.
+  bool get hasSession => _client.currentSession != null;
+
+  /// Fires when the session ends for any reason: [signOut], a revoked or
+  /// expired refresh token, or the user being deleted server-side.
+  Stream<AuthChangeEvent> get signedOut => _client.onAuthStateChange
+      .map((state) => state.event)
+      .where((event) => event == AuthChangeEvent.signedOut);
+
   /// One refresh, for `TokenRefresher`. Throws an [AppException] when there
   /// is no session to refresh or Supabase refuses it, which the refresh
   /// interceptor reads as "sign out".
