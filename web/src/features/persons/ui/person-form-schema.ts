@@ -8,9 +8,7 @@
  * it is UI state a person types into, shaped for editing rather than for the
  * wire, and it is validated against itself, not against a backend contract.
  * `web/CLAUDE.md`'s "State management split" already names the pattern this
- * follows — "Forms: react-hook-form + zod resolvers" — and the legacy
- * `src/lib/validations/member.schema.ts` is the same idea for the form this
- * one replaces.
+ * follows — "Forms: react-hook-form + zod resolvers".
  *
  * **Every zod `message` here is a symbolic code, never prose.** The root
  * `CLAUDE.md` rule is "no user-facing string is hardcoded — everything goes
