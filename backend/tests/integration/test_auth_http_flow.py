@@ -175,25 +175,31 @@ def client(
     engine.sync_engine.dispose()
 
 
-def _register(client: TestClient, email: str, password: str, slug: str) -> None:
-    """Register is non-enumerating (ADR-021): the response is just a uniform
-    ``{"message": ...}``, never clan/user ids — those are looked up separately
-    via ``_clan_id_by_slug`` when a test needs them."""
+def _register(client: TestClient, email: str, password: str, slug: str) -> str:
+    """Register clanless (ADR-075 amendment: ``POST /auth/register`` refuses every clan
+    field), sign in, then create the clan through ``POST /auth/onboard``.
+
+    Register is non-enumerating (ADR-021): the response is just a uniform
+    ``{"message": ...}``, never clan/user ids -- those are looked up separately
+    via ``_clan_id_by_slug`` when a test needs them. Returns the access token."""
     resp = client.post(
         "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": password,
-            "full_name": "Smoke Founder",
-            "clan_action": "create",
-            "clan_name": "Smoke Clan",
-            "clan_slug": slug,
-        },
+        json={"email": email, "password": password, "full_name": "Smoke Founder"},
     )
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert set(body.keys()) == {"data"}  # enveloped
     assert set(body["data"].keys()) == {"message"}
+    resp = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert resp.status_code == 200, resp.text
+    token: str = resp.json()["data"]["access_token"]
+    resp = client.post(
+        "/api/v1/auth/onboard",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"clan_action": "create", "clan_name": "Smoke Clan", "clan_slug": slug},
+    )
+    assert resp.status_code == 201, resp.text
+    return token
 
 
 def _clan_id_by_slug(dsn: str, slug: str) -> str:
@@ -236,7 +242,8 @@ def test_register_login_me_clans_create_person(client: TestClient, migrated_db_u
     _register(client, email, password, slug)
     clan_id = _clan_id_by_slug(migrated_db_url, slug)
 
-    # Login — exercises the CQRS login-profile read model (the seam of #13).
+    # Login again, now that a membership exists — exercises the CQRS login-profile
+    # read model (the seam of #13).
     resp = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -346,9 +353,6 @@ def test_register_sends_verification_email(
             "email": "newuser@ex.com",
             "password": "secret123",
             "full_name": "New User",
-            "clan_action": "create",
-            "clan_name": "Nguyen",
-            "clan_slug": "nguyen-test",
         },
     )
     assert resp.status_code == 201
@@ -357,37 +361,29 @@ def test_register_sends_verification_email(
     assert stub_identity.verification_emails.count("newuser@ex.com") == 1
 
 
-def test_register_compensation_sends_no_email_and_deletes_auth_user(
+def test_onboard_with_a_taken_slug_is_409_and_keeps_the_account(
     client: TestClient, stub_identity: StubIdentityProvider, founder: dict[str, Any]
 ) -> None:
-    """If clan-membership assignment fails AFTER the Supabase user is created, the
-    handler must compensate (delete the orphaned auth user) and must NOT send a
-    verification email for that registrant.
-
-    Trigger: register a *different* email reusing ``founder``'s already-claimed
-    clan slug. Reusing the shared ``founder`` fixture (rather than performing a
-    fresh clan-creating registration here) avoids adding another audit-log row to
-    the session-scoped DB — this suite runs alongside other integration modules
-    that assert on audit-log pagination, so gratuitous extra rows are avoided.
-
-    The slug-uniqueness check (``get_clan_by_slug``) runs inside
-    ``_assign_clan_membership`` — which is only reached after
-    ``identity.create_user`` has already succeeded for the new email — so the
-    resulting ``ConflictError("auth.clan_slug_taken")`` genuinely exercises the
-    handler's compensation ``except`` block, not a pre-create validation path.
-    """
+    """Clan creation moved to onboarding (ADR-075 amendment), so a taken slug is
+    refused there, after the account exists and is signed in. The account stays: it
+    is a real, confirmed-by-then user who can pick another slug. (The register-side
+    compensation, deleting the orphaned provider user when the local write fails, is
+    pinned in ``tests/unit/application/test_auth_register_compensation.py``.)"""
     second_email = f"second-{uuid.uuid4().hex[:8]}@example.com"
-
-    # Registration with a different email, same slug as `founder`'s clan:
-    # create_user succeeds (the email is unique), but _assign_clan_membership then
-    # finds the slug taken and raises — reached only *after* the auth user for
-    # second_email already exists.
     resp = client.post(
         "/api/v1/auth/register",
+        json={"email": second_email, "password": "s3cret-pass", "full_name": "Slug Squatter"},
+    )
+    assert resp.status_code == 201, resp.text
+    resp = client.post(
+        "/api/v1/auth/login", json={"email": second_email, "password": "s3cret-pass"}
+    )
+    token = resp.json()["data"]["access_token"]
+
+    resp = client.post(
+        "/api/v1/auth/onboard",
+        headers={"Authorization": f"Bearer {token}"},
         json={
-            "email": second_email,
-            "password": "s3cret-pass",
-            "full_name": "Slug Squatter",
             "clan_action": "create",
             "clan_name": "Duplicate Clan",
             "clan_slug": founder["clan_slug"],
@@ -395,12 +391,7 @@ def test_register_compensation_sends_no_email_and_deletes_auth_user(
     )
     assert resp.status_code == 409, resp.text
     assert resp.json()["error"]["code"] == "auth.clan_slug_taken"
-
-    # No verification email was ever sent for the failed/rolled-back registrant.
-    assert stub_identity.verification_emails.count(second_email) == 0
-    # And the orphaned auth user was compensated away (deleted), proving the
-    # compensation branch actually ran rather than merely failing silently.
-    assert second_email not in stub_identity._users
+    assert second_email in stub_identity._users
 
 
 # ── Negative controls: envelope + status codes stay truthful ─────
@@ -443,9 +434,6 @@ def test_duplicate_email_registration_is_non_enumerating(
             "email": founder["email"],
             "password": "another-pass",
             "full_name": "Imposter",
-            "clan_action": "create",
-            "clan_name": "Other Clan",
-            "clan_slug": f"other-clan-{uuid.uuid4().hex[:8]}",
         },
     )
     assert resp.status_code == 201

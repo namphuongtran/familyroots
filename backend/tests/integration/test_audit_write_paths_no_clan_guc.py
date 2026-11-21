@@ -10,10 +10,10 @@ The chain, in four steps:
    transaction of a request session (``app/core/rls.py:63-65``), whether or not a clan is
    known. The GUC is written in exactly one place, ``get_current_clan_id``
    (``app/core/security.py:290``).
-2. ``POST /api/v1/auth/register`` is unauthenticated and ``POST /api/v1/auth/onboard`` takes
-   ``get_current_user`` only (``app/api/v1/auth.py:44-49``, ``:63-68``), and
+2. ``POST /api/v1/auth/onboard`` takes ``get_current_user`` only, and (``POST /auth/register``
+   is unauthenticated and no longer writes a clan or an audit row, ADR-075 amendment)
    ``app/api/v1/auth.py:17`` imports ``get_current_user`` and nothing else from
-   ``app.core.security`` — so no route in that module can have a clan GUC. Both write a
+   ``app.core.security`` — so no route in that module can have a clan GUC. Onboard writes a
    ``clan.create`` (or ``clan.join_request``) audit row through ``emit_audit_event``
    (``app/application/auth/handlers.py:154``, ``:189``) on the request session.
 3. ``audit_logs_ins`` is ``WITH CHECK (true)``, so those inserts are admitted. That is the
@@ -275,45 +275,6 @@ async def _audit_rows(engine: AsyncEngine, clan_id: uuid.UUID) -> list[str]:
                 )
             ).scalars()
         )
-
-
-async def test_register_writes_its_audit_row_under_the_request_role(
-    engine: AsyncEngine, http: AsyncClient, probe: _Probe, identity: _StubIdentity
-) -> None:
-    """``POST /auth/register`` is unauthenticated, so there is no clan GUC and no way to get
-    one. Without ``eager_defaults=False`` this request 500s.
-
-    The 201 alone is not the whole proof: register is non-enumerating (ADR-021) and answers
-    with the same uniform message either way, so the audit row is read back privileged and
-    ``identity.deleted`` is checked empty — a rejected audit write would have triggered
-    register's compensating ``delete_user``.
-    """
-    slug = f"s014-reg-{uuid.uuid4().hex[:8]}"
-    resp = await http.post(
-        "/api/v1/auth/register",
-        json={
-            "email": f"{slug}@example.com",
-            "password": "s3cret-pass",
-            "full_name": "Người sáng lập",
-            "clan_action": "create",
-            "clan_name": "S014 Clan",
-            "clan_slug": slug,
-        },
-    )
-    assert resp.status_code == 201, resp.text
-    assert probe.roles and set(probe.roles) == {"familyroots_app"}, (
-        f"the route did not run on the RLS request session (roles seen: {probe.roles}); "
-        f"this test proves nothing about migration 034 unless it does"
-    )
-    assert identity.deleted == [], (
-        "register compensated by deleting the auth user, which means the DB half failed — "
-        "most likely audit_logs_sel rejecting a RETURNING row"
-    )
-
-    async with engine.connect() as conn:
-        clan_id = await conn.scalar(sa.text("SELECT id FROM clans WHERE slug = :s"), {"s": slug})
-    assert clan_id is not None, "registration did not create the clan"
-    assert await _audit_rows(engine, clan_id) == ["clan.create"]
 
 
 async def test_onboard_writes_its_audit_row_under_the_request_role(
