@@ -290,7 +290,7 @@
     "upload_section": "Téléverser",
     "all_documents": "Tous les documents",
     "drop_hint": "Déposez les fichiers ici",
-    "allowed_types": "Acceptés : PDF, JPG, PNG, HEIC, DOC, DOCX",
+    "allowed_types": "Acceptés : PDF, JPG, PNG, WEBP, HEIC, MP3, WAV, MP4, MOV · {max}MB maximum",
     "file_too_large": "Le fichier doit faire au maximum {max}MB",
     "uploading": "Téléversement...",
     "upload": "Téléverser",
@@ -298,7 +298,13 @@
     "no_documents": "Aucun document",
     "open": "Ouvrir",
     "opening": "Ouverture...",
-    "no_upload_permission": "Vous n'avez pas la permission de téléverser des documents."
+    "no_upload_permission": "Vous n'avez pas la permission de téléverser des documents.",
+    "choose_file": "Choisir un fichier",
+    "remove_file": "Retirer le fichier choisi",
+    "upload_failed": "Le document n'a pas pu être téléversé. Veuillez réessayer.",
+    "delete_document": "Supprimer {title}",
+    "confirm_delete": "Confirmer la suppression de {title}",
+    "load_more": "Afficher plus"
   },
   "member_form": {
     "full_name": "Nom complet",

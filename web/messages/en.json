@@ -165,7 +165,7 @@
     "upload_section": "Upload",
     "all_documents": "All Documents",
     "drop_hint": "Drop files here",
-    "allowed_types": "Accepted: PDF, JPG, PNG, HEIC, DOC, DOCX",
+    "allowed_types": "Accepted: PDF, JPG, PNG, WEBP, HEIC, MP3, WAV, MP4, MOV · up to {max}MB",
     "file_too_large": "File size must be {max}MB or less",
     "uploading": "Uploading...",
     "upload": "Upload",
@@ -173,7 +173,13 @@
     "no_documents": "No documents yet",
     "open": "Open",
     "opening": "Opening...",
-    "no_upload_permission": "You do not have permission to upload documents."
+    "no_upload_permission": "You do not have permission to upload documents.",
+    "choose_file": "Choose a file",
+    "remove_file": "Remove the chosen file",
+    "upload_failed": "The document could not be uploaded. Please try again.",
+    "delete_document": "Delete {title}",
+    "confirm_delete": "Confirm deleting {title}",
+    "load_more": "Load more"
   },
   "auth": {
     "login": "Sign In",

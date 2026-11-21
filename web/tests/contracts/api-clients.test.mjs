@@ -18,15 +18,10 @@ test('relationships API uses backend-prefixed relationship routes', async () => 
   assert.doesNotMatch(source, /['"`]\/parent-child['"`]/)
 })
 
-test('document contracts do not assume file_url in summary payloads', async () => {
-  const types = await read('src/lib/types/document.ts')
-  const gallery = await read('src/components/documents/DocumentGallery.tsx')
-
-  assert.doesNotMatch(types, /\bfile_url\b/)
-  assert.match(types, /\bpresigned_url\b/)
-  assert.match(gallery, /\bpresigned_url\b/)
-  assert.match(gallery, /getDocument\(documentQueryRepository, id\)/)
-})
+// #313 deleted 'document contracts do not assume file_url in summary payloads' with
+// `src/lib/types/document.ts` and `src/components/documents/`, the files it read. It read source
+// text, which pins a setting (`.claude/rules/testing.md`); `features/documents/model/document-dto.ts`
+// is asserted against the generated types, and its tests send each request and read the response.
 
 test('admin repositories use backend clan and platform endpoints', async () => {
   const source = await read('src/infrastructure/admin/http-admin-repositories.ts')

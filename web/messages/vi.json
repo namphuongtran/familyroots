@@ -165,7 +165,7 @@
     "upload_section": "Tải lên",
     "all_documents": "Tất cả tài liệu",
     "drop_hint": "Kéo thả tệp vào đây",
-    "allowed_types": "Chấp nhận: PDF, JPG, PNG, HEIC, DOC, DOCX",
+    "allowed_types": "Chấp nhận: PDF, JPG, PNG, WEBP, HEIC, MP3, WAV, MP4, MOV · tối đa {max}MB",
     "file_too_large": "Tệp phải nhỏ hơn hoặc bằng {max}MB",
     "uploading": "Đang tải lên...",
     "upload": "Tải lên",
@@ -173,7 +173,13 @@
     "no_documents": "Chưa có tài liệu nào",
     "open": "Mở",
     "opening": "Đang mở...",
-    "no_upload_permission": "Bạn không có quyền tải lên tài liệu."
+    "no_upload_permission": "Bạn không có quyền tải lên tài liệu.",
+    "choose_file": "Chọn tệp",
+    "remove_file": "Bỏ tệp đã chọn",
+    "upload_failed": "Không tải lên được tài liệu. Hãy thử lại.",
+    "delete_document": "Xóa {title}",
+    "confirm_delete": "Xác nhận xóa {title}",
+    "load_more": "Xem thêm"
   },
   "auth": {
     "login": "Đăng nhập",

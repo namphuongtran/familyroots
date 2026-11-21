@@ -290,7 +290,7 @@
     "upload_section": "上传",
     "all_documents": "全部文档",
     "drop_hint": "将文件拖放到这里",
-    "allowed_types": "支持：PDF、JPG、PNG、HEIC、DOC、DOCX",
+    "allowed_types": "支持：PDF、JPG、PNG、WEBP、HEIC、MP3、WAV、MP4、MOV，最大 {max}MB",
     "file_too_large": "文件大小不能超过 {max}MB",
     "uploading": "上传中...",
     "upload": "上传",
@@ -298,7 +298,13 @@
     "no_documents": "暂无文档",
     "open": "打开",
     "opening": "正在打开...",
-    "no_upload_permission": "您无权上传文档。"
+    "no_upload_permission": "您无权上传文档。",
+    "choose_file": "选择文件",
+    "remove_file": "移除所选文件",
+    "upload_failed": "文档上传失败，请重试。",
+    "delete_document": "删除 {title}",
+    "confirm_delete": "确认删除 {title}",
+    "load_more": "加载更多"
   },
   "member_form": {
     "full_name": "姓名",
