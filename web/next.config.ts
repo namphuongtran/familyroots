@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next'
 import createNextIntlPlugin from 'next-intl/plugin'
 import { withSentryConfig } from '@sentry/nextjs'
+import { securityHeaders } from './src/shared/http/security-headers'
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
@@ -65,6 +66,9 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [
+      // #319: every response. Listed first so the invitation entry below wins on
+      // `Referrer-Policy` (a later entry overrides an earlier one for the same key).
+      { source: '/:path*', headers: securityHeaders() },
       {
         // `:locale` rather than a literal, because every route is locale-prefixed
         // (`src/i18n/routing.ts`, `localePrefix: 'always'`), and all four locales
