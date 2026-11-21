@@ -22,7 +22,8 @@ Core operations:
 - GET /persons
   - Query params: cursor, limit, generation, gender, profile, fields, include
 - GET /persons/search
-  - Query params: q (required, min length 1), limit
+  - Query params: q (required, length 1–100; longer → 422 `validation_error`), limit
+  - `q` is matched as literal text: `%`, `_` and `\` are not wildcards or escapes.
 - POST /persons
 - POST /persons/batch
   - Body: ids (1–100), profile, include, fields, include_by_id (per-person include map)
