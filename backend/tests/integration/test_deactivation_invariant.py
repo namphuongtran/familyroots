@@ -11,23 +11,31 @@ the counted auth routes (`counted_paths` in app/main.py) — keep total requests
 those routes low. GET /auth/me spends nothing since #280.
 """
 
+import json
 import time
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import jwt
 import pytest
 import sqlalchemy as sa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
-from jose import jwk, jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.core.security as security_module
 from app.core.database import get_db, get_system_db
 from app.main import create_app
+
+
+def _public_jwk(pem: str) -> dict:
+    """RS256 public JWK for a PEM, as a plain dict."""
+    key = serialization.load_pem_public_key(pem.encode())
+    return json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key))
+
 
 pytestmark = pytest.mark.integration
 
@@ -50,7 +58,7 @@ def rsa_keys() -> dict[str, Any]:
         )
         .decode()
     )
-    public_jwk = jwk.construct(public_pem, "RS256").to_dict()
+    public_jwk = _public_jwk(public_pem)
     public_jwk.update({"kid": _KID, "use": "sig", "alg": "RS256"})
     return {"private_pem": private_pem, "jwks": {"keys": [public_jwk]}}
 

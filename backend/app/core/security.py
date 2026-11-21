@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx2
+import jwt
 from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -94,16 +94,31 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
             "ES256",
             "RS256",
         ]
-        payload = jwt.decode(
+        key = _signing_key(token, jwks)
+        payload: dict[str, Any] = jwt.decode(
             token,
-            jwks,
+            key,
             algorithms=algorithms,
             audience="authenticated",
             issuer=f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1",
         )
         return payload
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise AuthenticationError("invalid_token") from exc
+
+
+def _signing_key(token: str, jwks: dict[str, Any]) -> jwt.PyJWK:
+    """Pick the JWKS key named by the token's ``kid`` (a lone key if no ``kid``)."""
+    keys = jwt.PyJWKSet.from_dict(jwks).keys
+    kid = jwt.get_unverified_header(token).get("kid")
+    if kid is not None:
+        for k in keys:
+            if k.key_id == kid:
+                return k
+        raise jwt.PyJWKClientError(f"no JWKS key with kid {kid!r}")
+    if len(keys) == 1:
+        return keys[0]
+    raise jwt.PyJWKClientError("token has no kid and the JWKS holds several keys")
 
 
 async def get_current_user(
