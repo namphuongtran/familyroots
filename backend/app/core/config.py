@@ -1,6 +1,7 @@
 """Application configuration — loaded from environment variables."""
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, field_validator, model_validator
@@ -28,6 +29,17 @@ MIN_METRICS_TOKEN_DISTINCT_CHARS = 8
 def names_loopback(value: str) -> bool:
     """Whether *value* names this machine, which no deployed service or person can reach."""
     return "localhost" in value or "127.0.0.1" in value
+
+
+def names_transaction_pooler(url: str) -> bool:
+    """Whether *url* names a Supabase transaction pooler: Supavisor's port 6543, or a
+    ``pooler.supabase.com`` host."""
+    try:
+        parts = urlsplit(url)
+        host, port = parts.hostname or "", parts.port
+    except ValueError:
+        return False
+    return port == 6543 or host.endswith("pooler.supabase.com")
 
 
 def metrics_token_weakness(token: str) -> str | None:
@@ -312,6 +324,16 @@ class Settings(BaseSettings):
             if names_loopback(self.DATABASE_URL):
                 raise ValueError(
                     "DATABASE_URL must point at the production database, not localhost"
+                )
+            # A transaction pooler hands each transaction whichever server connection is free,
+            # so psycopg's server-side prepared statements collide: every request then fails
+            # with DuplicatePreparedStatement. The engine only avoids that when
+            # DB_EXTERNAL_POOLER is true, so refuse the mismatch at boot.
+            if names_transaction_pooler(self.DATABASE_URL) and not self.DB_EXTERNAL_POOLER:
+                raise ValueError(
+                    "DATABASE_URL names a transaction pooler (port 6543 or a "
+                    "pooler.supabase.com host) while DB_EXTERNAL_POOLER is false: set "
+                    "DB_EXTERNAL_POOLER=true, or point DATABASE_URL at a direct connection"
                 )
             # CORS must be real origins: not a loopback dev value, `localhost` or `127.0.0.1`
             # (#231), and not wildcard, which is also invalid with allow_credentials=True.

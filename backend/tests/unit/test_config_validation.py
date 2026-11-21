@@ -61,6 +61,31 @@ def test_production_rejects_localhost_database_url():
         _build(**{**_PROD_SAFE, "DATABASE_URL": "postgresql+psycopg://u:p@localhost:5432/x"})
 
 
+_POOLER_URLS = [
+    "postgresql+psycopg://u:p@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres",
+    "postgresql+psycopg://postgres.ref:p@db.prod.internal:6543/postgres",
+]
+
+
+@pytest.mark.parametrize("url", _POOLER_URLS)
+def test_production_rejects_a_pooler_url_without_the_external_pooler_flag(url: str) -> None:
+    with pytest.raises(ValidationError) as exc:
+        _build(**{**_PROD_SAFE, "DATABASE_URL": url, "DB_EXTERNAL_POOLER": False})
+    assert "DATABASE_URL" in str(exc.value)
+    assert "DB_EXTERNAL_POOLER" in str(exc.value)
+
+
+@pytest.mark.parametrize("url", _POOLER_URLS)
+def test_production_boots_with_a_pooler_url_and_the_external_pooler_flag(url: str) -> None:
+    s = _build(**{**_PROD_SAFE, "DATABASE_URL": url, "DB_EXTERNAL_POOLER": True})
+    assert s.DB_EXTERNAL_POOLER is True
+
+
+def test_production_boots_with_a_direct_url_and_no_external_pooler_flag() -> None:
+    s = _build(**{**_PROD_SAFE, "DB_EXTERNAL_POOLER": False})
+    assert s.DB_EXTERNAL_POOLER is False
+
+
 @pytest.mark.parametrize(
     "origins",
     [
