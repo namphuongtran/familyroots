@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Package manager is **pnpm 10** (pinned via `packageManager`). All scripts:
 
 ```bash
-pnpm install                                   # install deps; applies the Next patch in patches/ (see "`next dev` carries a patch")
+pnpm install                                   # install deps
 pnpm dev                                       # Next dev server on :3000
 pnpm build && pnpm start                       # production build + serve
 pnpm type-check                                # tsc --noEmit (strict)
@@ -1176,10 +1176,20 @@ once on 2026-10-05: 86 passed and 20 failed, every one of them `invitation-accep
 page Next's own 404. The spec passed ten of ten alone, and the full suite rerun reported 106
 passed. **#228 explained it on 2026-10-10:** `next dev`'s route watcher had come up without the
 invitation route, a race inside Next, and it stays that way until the server restarts or a file
-under `src/app` changes. See "`next dev` carries a patch" below and ADR-069. With nothing listening,
+under `src/app` changes. See "`next dev` carried a patch until Next 16.4.6" below and ADR-069. With nothing listening,
 the old and new configs start the same servers, so neither failure reads on this change.
 
-## `next dev` carries a patch (#228, ADR-069)
+## `next dev` carried a patch until Next 16.4.6 (#228, ADR-069)
+
+**The patch is gone (2026-11-21, #362).** Next 16.4.6 fixes the race upstream: before watching,
+`startWatcher` snapshots the route directories, and its `aggregated` listener returns early while
+any snapshotted page file is still missing from Watchpack's entries, for up to 30 s
+(`dist/server/lib/router-utils/setup-dev-bundler.js:280-295`, `:337-355`). #362 bumped Next and
+deleted `patches/next@16.2.12.patch` and its `pnpm-workspace.yaml` entry; the follow-up took both
+out of the `Dockerfile`'s deps stage. The startup reading below was not repeated on 16.4.6. If a
+deep route answers 404 at once again, read it as described below and reopen ADR-069. The rest of
+this section is the record of the patched period.
+
 
 **What it fixes.** In Next 16.2.12, `next dev` can come up with every page four or more directories
 below `src/app` missing from its route table. Those pages then answer Next's own 404 until the
@@ -1220,7 +1230,7 @@ for a deep route, so a full run failed only when 3100 itself lost the race.
    Turbopack cache compactions of 12.9 s and 14.8 s. It was not the 404. The next two full runs
    read 120 passed each. That 500 is not explained.
 
-**On a Next bump.** `pnpm install` stops with `ERR_PNPM_PATCH_NOT_APPLIED` naming
+**On a Next bump (while the patch existed).** `pnpm install` stopped with `ERR_PNPM_PATCH_NOT_APPLIED` naming
 `next@16.2.12`. First read `dist/server/lib/router-utils/setup-dev-bundler.js` in the new version.
 If its `wp.on('aggregated', async ()=>{` listener is now serialized, delete the patch and its
 `pnpm-workspace.yaml` entry, take both out of the Dockerfile's deps stage (`pnpm-workspace.yaml`
