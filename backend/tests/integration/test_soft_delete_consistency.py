@@ -161,6 +161,9 @@ class FakeStorage:
     async def get_presigned_url(self, storage_path: str, expires_in: int = 3600) -> str:
         return f"https://signed.example/{storage_path}"
 
+    async def delete_public(self, destination_path: str) -> bool:
+        return True
+
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
     ) -> str:

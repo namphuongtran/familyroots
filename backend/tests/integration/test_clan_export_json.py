@@ -79,6 +79,9 @@ class FakeStorage:
     ) -> dict[str, str]:
         return {p: f"https://signed.example/{p}" for p in storage_paths}
 
+    async def delete_public(self, destination_path: str) -> bool:
+        return True
+
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
     ) -> str:

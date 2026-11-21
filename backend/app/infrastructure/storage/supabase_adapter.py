@@ -280,6 +280,20 @@ class SupabaseStorageAdapter:
                 raise StorageUnavailableError(f"storage returned no signed URL for {path!r}")
         return signed
 
+    async def delete_public(self, destination_path: str) -> bool:
+        bucket = settings.SUPABASE_AVATAR_BUCKET.strip()
+        if not bucket:
+            raise StorageBucketNotConfiguredError("SUPABASE_AVATAR_BUCKET is empty")
+        client = get_service_client()
+        try:
+            await asyncio.to_thread(client.storage.from_(bucket).remove, [destination_path])
+        except Exception as e:
+            classified = _classify_bucket(e, bucket)
+            if isinstance(classified, StorageNotFoundError):
+                return True
+            raise classified from e
+        return True
+
     async def publish_public(
         self, *, source_path: str, destination_path: str, content_type: str | None
     ) -> str:

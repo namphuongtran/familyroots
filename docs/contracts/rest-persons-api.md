@@ -183,7 +183,8 @@ returns the permanent URL, which is the same value subsequently echoed here.
 
 The value is a **permanent, unauthenticated public URL** — no expiry, no token,
 fetchable by anyone who has it, regardless of clan or login. Safe to cache and persist
-on the client. Never construct or guess one; only ever render what the API returned.
+on the client. It becomes `null` when the document it was published from is deleted, or the
+person is soft-deleted (#318). Never construct or guess one; only ever render what the API returned.
 
 Migration for clients that were writing this field: drop `avatar_url` from person
 create/update payloads (leaving it in will now fail the whole request), and move the

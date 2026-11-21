@@ -247,6 +247,30 @@ class Person(AggregateRoot):
             )
         )
 
+    def clear_avatar_url(self, actor: ActorInfo, clan_id: uuid.UUID) -> None:
+        """Take the published avatar down: ``avatar_url`` becomes null (ADR-036).
+
+        Called when the document the avatar was published from is deleted. The caller
+        deletes the public object in the same unit of work. Emits ``PersonUpdated``;
+        a no-op when no avatar is set.
+        """
+        if self.avatar_url is None:
+            return
+        old_value = self.avatar_url
+        self.avatar_url = None
+        self.updated_by = actor.user_id
+        self.updated_at = datetime.now(UTC)
+        self.add_event(
+            PersonUpdated(
+                person_id=self.id,
+                clan_id=clan_id,
+                actor_id=actor.user_id,
+                actor_role=actor.role,
+                changes={"avatar_url": None},
+                old_values={"avatar_url": old_value},
+            )
+        )
+
     def _validate_dates(self) -> None:
         """Reject an impossible lifespan (death before birth).
 
@@ -269,6 +293,9 @@ class Person(AggregateRoot):
         self.is_deleted = True
         self.deleted_at = datetime.now(UTC)
         self.deleted_by = actor.user_id
+        # The public avatar is taken down with the person (ADR-036); the use case
+        # deletes the object itself.
+        self.avatar_url = None
 
         self.add_event(
             PersonDeleted(

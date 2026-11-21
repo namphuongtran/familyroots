@@ -105,7 +105,7 @@ def _repo_uow(db: AsyncSession) -> SqlAlchemyUnitOfWork:
 
 def get_person_command_handler(db: AsyncSession = Depends(get_db)) -> PersonCommandHandler:
     uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
-    return PersonCommandHandler(SqlAlchemyPersonRepository(uow), uow)
+    return PersonCommandHandler(SqlAlchemyPersonRepository(uow), uow, SupabaseStorageAdapter())
 
 
 def get_person_query_handler(db: AsyncSession = Depends(get_db)) -> PersonQueryHandler:

@@ -194,11 +194,12 @@ been run.
   Add an allow-list of web/mobile origins only if a client starts reading avatar bytes
   via `fetch`/XHR.
 
-> ⚠️ **Publishing an avatar is effectively irreversible today.** `DELETE /documents/{id}`
-> is a soft delete and the retention purge removes only the *private* blob; no code path
-> deletes the published public object or clears `persons.avatar_url`. Anyone who has the
-> URL keeps working access after the document is deleted. Closing this is a tracked
-> follow-up (ADR-036, "Known gaps").
+**Publishing an avatar is reversible (#318).** `DELETE /documents/{id}` on the source
+document and soft-deleting the person each call `StoragePort.delete_public` and set
+`persons.avatar_url` to null, in the same unit of work as the domain event. A failed public
+delete is logged and the document keeps `is_avatar = true`; the retention purge
+(`_sweep_public_avatars`) retries it, and the row purge skips a document still flagged. Copies
+already cached by a CDN or browser are not purged.
 
 ## Delete flow (`DELETE /documents/{id}`, admin only)
 

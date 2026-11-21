@@ -161,11 +161,9 @@ tenant. Concretely:
 - The URL is guessable to anyone who learns a clan id and a person id, both of which
   appear in ordinary API responses to any member of that clan. A member of clan A who
   later leaves keeps the ability to fetch the avatars they saw.
-- **Deleting the document does not revoke the URL.** `DELETE /documents/{id}` is a soft
-  delete (ADR-019) and the retention purge removes only the *private* blob; the
-  published public object is not currently deleted by any code path. Until that gap is
-  closed, the honest statement is that publishing an avatar is effectively
-  irreversible from the application. See "Known gaps" below.
+- **Deleting the document revokes the URL (amended by #318).** Deleting the source
+  document, or soft-deleting the person, deletes the public object and nulls
+  `avatar_url`. Copies cached by a CDN or browser remain until they expire.
 
 The owner accepted this. It is recorded here rather than quietly forgotten, and it is
 the thing to re-read before extending the same pattern to any other image.
@@ -185,11 +183,10 @@ the thing to re-read before extending the same pattern to any other image.
 
 ### Known gaps (deliberately not closed here)
 
-1. **No unpublish.** Soft-deleting or purging the avatar document, or soft-deleting the
-   person, leaves the public object and the stored URL in place. Closing this needs a
-   delete of the public object plus nulling `avatar_url`, wired into the document
-   delete/purge and person delete paths. Tracked as a follow-up; called out in
-   [storage.md](../architecture/storage.md).
+1. **Unpublish: closed by #318.** Deleting the avatar document or soft-deleting the
+   person deletes the public object (`StoragePort.delete_public`) and nulls `avatar_url`
+   in the same unit of work. A failed delete is logged and retried by the retention
+   purge via the document's `is_avatar` flag. Cached copies are out of scope.
 2. **Orphan reconciliation** in the public bucket has the same shape as the existing,
    still-deferred private-bucket gap (ADR-019).
 3. **No moderation.** Any photo an editor can upload can be published. The existing MIME

@@ -61,6 +61,22 @@ class DocumentRepository(Protocol):
 DEFAULT_PRESIGN_TTL = 3600  # seconds — default presigned-URL lifetime
 
 
+def avatar_object_path(clan_id: uuid.UUID, person_id: uuid.UUID) -> str:
+    """The public avatars bucket key for one person, as seen by one clan (ADR-036).
+
+    Clan-prefixed exactly like the private document keys, so the storage tenancy
+    boundary is identical in both buckets — a public bucket is the last place a path
+    should stop being clan-scoped. Both ids come from server state (the authenticated
+    clan header and the document's own person link), never from client input, so
+    there is nothing to sanitize the way ``storage_paths.safe_extension`` must.
+
+    Deliberately extension-less and stable per person: replacing someone's avatar
+    upserts the same object, so the stored URL never changes and no orphan copies
+    accumulate. The browser gets the format from the stored Content-Type.
+    """
+    return f"clans/{clan_id}/avatars/{person_id}"
+
+
 class StorageError(Exception):
     """Base class for storage-adapter failures (provider-agnostic)."""
 
@@ -150,6 +166,14 @@ class StoragePort(Protocol):
         missing (#177), ``StorageNotFoundError`` when ``source_path`` is gone,
         and ``StorageUnavailableError`` for provider/transport failures. It never
         returns a URL it could not actually publish.
+        """
+        ...
+
+    async def delete_public(self, destination_path: str) -> bool:
+        """Delete a published object from the PUBLIC avatars bucket (ADR-036).
+
+        Same contract as ``delete``: True when deleted OR confirmed already absent,
+        a ``StorageError`` subclass when deletion could not be confirmed.
         """
         ...
 
