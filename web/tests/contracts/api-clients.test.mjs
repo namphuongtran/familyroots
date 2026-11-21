@@ -28,16 +28,6 @@ test('document contracts do not assume file_url in summary payloads', async () =
   assert.match(gallery, /getDocument\(documentQueryRepository, id\)/)
 })
 
-test('event contracts do not include unsupported end_date or location fields', async () => {
-  const types = await read('src/lib/types/event.ts')
-  const card = await read('src/components/events/EventCard.tsx')
-
-  assert.doesNotMatch(types, /\bend_date\??:/)
-  assert.doesNotMatch(types, /\blocation\??:/)
-  assert.doesNotMatch(card, /\bevent\.end_date\b/)
-  assert.doesNotMatch(card, /\bevent\.location\b/)
-})
-
 test('admin repositories use backend clan and platform endpoints', async () => {
   const source = await read('src/infrastructure/admin/http-admin-repositories.ts')
 

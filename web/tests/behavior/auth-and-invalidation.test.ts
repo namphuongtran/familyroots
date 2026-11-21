@@ -12,12 +12,12 @@ import assert from 'node:assert/strict'
 // covered only them — their sole caller was `useMembers.ts`'s `usePersonMutations`, deleted
 // the same seed because its own sole caller, `src/components/members/MemberForm.tsx`, was
 // dead (the persons form had already found it unreachable; the legacy-component deletion confirmed zero importers and deleted
-// it). `documentUploadInvalidationKeys` and `eventMutationInvalidationKeys` still back the
-// live `src/lib/hooks/{useDocuments,useEvents}.ts`, so they and their own tests stay.
+// it). `documentUploadInvalidationKeys` still backs the live `src/lib/hooks/useDocuments.ts`, so
+// it and its own test stay. #312 deleted `eventMutationInvalidationKeys` and its test with
+// `useEvents.ts`, its one caller.
 import {
   documentDeleteInvalidationKeys,
   documentUploadInvalidationKeys,
-  eventMutationInvalidationKeys,
 } from '../../src/lib/hooks/query-invalidation.ts'
 
 test('document invalidation helpers cover person document/detail refreshes when linked', () => {
@@ -27,18 +27,5 @@ test('document invalidation helpers cover person document/detail refreshes when 
     ['documents'],
     ['persons', 'detail', 'person-1', 'documents'],
     ['persons', 'detail', 'person-1'],
-  ])
-})
-
-test('event invalidation helpers cover list, upcoming, detail, and person timeline refreshes', () => {
-  assert.deepEqual(eventMutationInvalidationKeys(), [
-    ['events', 'list'],
-    ['events', 'upcoming', 30],
-  ])
-  assert.deepEqual(eventMutationInvalidationKeys({ detailId: 'e-1', personId: 'p-1' }), [
-    ['events', 'list'],
-    ['events', 'upcoming', 30],
-    ['events', 'detail', 'e-1'],
-    ['persons', 'detail', 'p-1', 'timeline'],
   ])
 })

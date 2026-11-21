@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
  *
  * It matches `focus:ring-ring` only, not every `ring-ring`. A selection
  * indicator is a different thing from a focus ring and does not need an offset:
- * `components/events/EventCalendar.tsx` rings a selected day, and
+ * `features/events/ui/EventCalendar.tsx` rings a selected day, and
  * `features/tree/ui/PersonNode.tsx` rings a selected node.
  */
 // `fileURLToPath`, not `.pathname`: this repository lives under a path with a

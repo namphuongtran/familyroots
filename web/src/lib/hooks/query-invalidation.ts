@@ -1,3 +1,6 @@
+// #312 deleted `eventBaseInvalidationKeys` and `eventMutationInvalidationKeys` with their one
+// caller, `useEvents.ts`; the events slice's keys are `eventsKeys` in `features/events`.
+//
 // The legacy-component deletion deleted `personCreateInvalidationKeys`, `personUpdateInvalidationKeys`, and
 // `personDeleteInvalidationKeys`: their one caller, `useMembers.ts`'s `usePersonMutations`,
 // was deleted the same seed (its own one caller, `MemberForm.tsx`, was already
@@ -18,31 +21,4 @@ export function documentUploadInvalidationKeys(personId?: string) {
 
 export function documentDeleteInvalidationKeys() {
   return [['documents']] as const
-}
-
-export function eventBaseInvalidationKeys(days = 30) {
-  return [
-    ['events', 'list'],
-    ['events', 'upcoming', days],
-  ] as const
-}
-
-export function eventMutationInvalidationKeys(options?: {
-  detailId?: string
-  personId?: string
-  upcomingDays?: number
-}) {
-  const keys: Array<readonly unknown[]> = [
-    ...eventBaseInvalidationKeys(options?.upcomingDays ?? 30),
-  ]
-
-  if (options?.detailId) {
-    keys.push(['events', 'detail', options.detailId])
-  }
-
-  if (options?.personId) {
-    keys.push(['persons', 'detail', options.personId, 'timeline'])
-  }
-
-  return keys
 }

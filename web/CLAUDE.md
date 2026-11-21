@@ -537,7 +537,7 @@ the mother chosen only from the father's own marriages or left empty; add child.
 `use-persons-request-context.ts` and invitations' `use-invitation-request-context.ts`, which each
 read the token once on mount and passed no `refreshAuth`, are deleted.
 
-**The legacy slices are the exception.** `infrastructure/{admin,documents,events,relationships,tree}`
+**The legacy slices are the exception.** `infrastructure/{admin,documents}`
 still call the backend through `lib/api/axios.ts`, whose interceptor signs out and redirects on a
 401 instead of refreshing. They gain the refresh when their own slice PR moves them onto `apiFetch`.
 
@@ -692,9 +692,10 @@ carries no clan.
 
 - **`react/jsx-no-literals` is not in the gate.** It sees JSX text only, so it misses every ternary
   and object property above. A partial guard is a change to the gate and needs its own decision.
-- **Formatting is not covered by any of this.** `EventCalendar.tsx` passes `{ locale: vi }` to
-  date-fns, and `lib/utils/date.ts` defaults to `'vi'`, so month names are Vietnamese for every
-  reader. That is a formatting defect, not a literal, and none of the four commands finds it.
+- **Formatting is not covered by any of this.** `lib/utils/date.ts` defaults to `'vi'`, so a
+  caller that passes no locale gets Vietnamese month names for every reader. The legacy
+  `EventCalendar.tsx` did the same through date-fns' `{ locale: vi }` until #312 replaced it with
+  `Intl` in the reader's locale (`features/events/ui/format-event-date.ts`). That is a formatting defect, not a literal, and none of the four commands finds it.
 - **How to test a swept string.** Render under a locale whose value is not the literal (`en` for a
   Vietnamese literal, `vi` or `zh` for an English one), with the real locale file, and read what a
   person gets: `getByText`, `getByRole(…, { name })`, or `toHaveAccessibleName` for an
@@ -1189,7 +1190,6 @@ deleted `patches/next@16.2.12.patch` and its `pnpm-workspace.yaml` entry; the fo
 out of the `Dockerfile`'s deps stage. The startup reading below was not repeated on 16.4.6. If a
 deep route answers 404 at once again, read it as described below and reopen ADR-069. The rest of
 this section is the record of the patched period.
-
 
 **What it fixes.** In Next 16.2.12, `next dev` can come up with every page four or more directories
 below `src/app` missing from its route table. Those pages then answer Next's own 404 until the
@@ -1691,8 +1691,9 @@ engine rather than computed from the stylesheet.
   (ADR-060 § 4). `nothing-imports-legacy` forbids any module outside the set from importing one
   inside it. The imports that already existed are the baseline,
   `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, 21 after #183, 19
-  after #185, 18 after #186 and 14 after #311, which `pnpm depcruise` reads through
-  `--ignore-known`. None of the 14 starts in `features/auth`, a persons route, or the tree route.
+  after #185, 18 after #186, 14 after #311 and 11 after #312, which `pnpm depcruise` reads through
+  `--ignore-known`. None of the 11 starts in `features/auth`, a persons route, the tree route or
+  the events route.
   - **When a slice deletes or re-points a legacy import, shrink the baseline in the same pull
     request:** run `pnpm depcruise:baseline` and commit the shorter file. Do not edit it by hand.
     `pnpm depcruise:ratchet origin/main` fails while the baseline still lists an import the tree no
@@ -1775,6 +1776,33 @@ engine rather than computed from the stylesheet.
     `pnpm depcruise:ratchet origin/main` passed, because `origin/main`'s baseline had that edge.
     Without the regeneration, `pnpm depcruise` fails on it by name. Once this lands, the ratchet
     catches it too.
+- **Events applied it (#312, 2026-11-21).** `components/events/`, `lib/hooks/useEvents.ts`,
+  `lib/api/events.ts`, `application/events/`, `infrastructure/events/` and `lib/types/event.ts`
+  are deleted, with `eventBaseInvalidationKeys` / `eventMutationInvalidationKeys` from
+  `lib/hooks/query-invalidation.ts` and their legacy behaviour and contract tests. The page
+  (`app/[locale]/(dashboard)/events/page.tsx`) renders `EventsScreen` from `@/features/events` and
+  imports nothing else. The baseline went 14 → 11: the page's three edges into
+  `components/events/`. What the slice is:
+  - `features/events/{api,model,server,hooks,ui}` over `GET /events/upcoming?days=365&include=person`
+    only, mapped into `domain/event/event.ts`. The list, detail and write routes have no screen yet
+    and so no transport; add one with its first caller. The `HistoricalDate` DTO comes through
+    `@/features/persons`, as tree takes it.
+  - **Two dates, never conflated** (spec § 7.8, § 9-J7). `eventDate` is the recorded
+    `HistoricalDate`, rendered through persons' `formatHistoricalDate` as "Ngày ghi trong gia
+    phả". `nextOccurrence` is the backend's solar date; for `isLunarCalendar` the card adds the
+    `Âm lịch` chip and reads `Giỗ năm nay · {date} (dương lịch)` (a non-giỗ lunar event reads
+    `Năm nay · …`). The client never converts a lunar date (ADR-018). Events have no lunar column,
+    so `eventDate.lunar` is always null today; the card prints it if one ever arrives.
+  - **The calendar places an event on `nextOccurrence`**, so a giỗ sits on the day it is observed
+    this year. The legacy grid placed it on the recorded `event_date`, which for an anniversary is
+    a day decades ago, and it read the paginated `GET /events` list while the column was titled
+    "upcoming". Selecting a day filters the list (spec § 7.8, "the grid is navigation").
+    Month, weekday and day labels use `Intl` in the reader's locale.
+  - `server/events-repository.test.ts` (unit) and `ui/EventsScreen.test.tsx` (component, MSW, one
+    lunar giỗ and one solar birthday, `Date` faked to 2026-11-21). Controls run 2026-11-21, each
+    reverted: `is_lunar_calendar` false in the giỗ fixture fails the lunar-label assertion; the
+    calendar keyed on the recorded date fails the 29 December case; the card printing the recorded
+    date for a lunar event fails the `Giỗ năm nay · 29/12/2026` assertion.
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
   The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of
