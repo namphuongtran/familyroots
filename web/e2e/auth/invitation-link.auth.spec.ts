@@ -127,7 +127,10 @@ test.describe('the link POST /clans/{clan_id}/invitations hands an admin', () =>
     const response = await page.goto(`/api/v1/invitations/${invitation.token}/accept`)
 
     expect(response?.status()).toBe(404)
-    expect(response?.headers()['referrer-policy']).toBeUndefined()
+    // The invitation route's distinguishing header is `no-referrer`. Since #345 (closing #319)
+    // every web response carries a global default, so "no header" is impossible: tell the routes
+    // apart by policy instead. A 404 not served by the invitation route must not carry its value.
+    expect(response?.headers()['referrer-policy']).not.toBe('no-referrer')
     await expect(page.getByRole('heading', { name: SIGN_IN_REQUIRED })).toHaveCount(0)
   })
 
