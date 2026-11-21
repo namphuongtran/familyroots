@@ -2,7 +2,7 @@
 
 End-to-end description of how a request goes from JWT to an authorized, clan-scoped
 handler call. Code: `backend/app/core/security.py`, `app/core/permissions.py`,
-`app/application/auth/handlers.py`, `app/infrastructure/supabase_identity_provider.py`.
+`app/application/auth/command_handler.py` (and siblings), `app/infrastructure/supabase_identity_provider.py`.
 
 ## Token validation
 

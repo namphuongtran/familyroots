@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.application.auth.handlers import AuthCommandHandler
+from app.application.auth.command_handler import AuthCommandHandler
 
 
 @pytest.mark.asyncio

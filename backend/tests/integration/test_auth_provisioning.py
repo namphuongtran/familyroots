@@ -9,7 +9,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.application.auth.handlers import AuthCommandHandler
+from app.application.auth.command_handler import AuthCommandHandler
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.auth_repository import (
     SqlAlchemyAuthQueryPort,

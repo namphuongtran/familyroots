@@ -8,12 +8,10 @@ from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.application.auth.account_deletion import AccountDeletionHandler
-from app.application.auth.handlers import (
-    AuthCommandHandler,
-    AuthQueryHandler,
-    AuthSessionService,
-    FCMTokenHandler,
-)
+from app.application.auth.command_handler import AuthCommandHandler
+from app.application.auth.fcm import FCMTokenHandler
+from app.application.auth.queries import AuthQueryHandler
+from app.application.auth.session import AuthSessionService
 from app.core.locale import SUPPORTED_LOCALES
 from app.core.security import get_current_user, security
 from app.infrastructure.dependencies import (

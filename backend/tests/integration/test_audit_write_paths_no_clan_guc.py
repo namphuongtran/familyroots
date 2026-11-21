@@ -15,7 +15,7 @@ The chain, in four steps:
    ``app/api/v1/auth.py:17`` imports ``get_current_user`` and nothing else from
    ``app.core.security`` — so no route in that module can have a clan GUC. Onboard writes a
    ``clan.create`` (or ``clan.join_request``) audit row through ``emit_audit_event``
-   (``app/application/auth/handlers.py:154``, ``:189``) on the request session.
+   (``app/application/auth/command_handler.py``, ``:189``) on the request session.
 3. ``audit_logs_ins`` is ``WITH CHECK (true)``, so those inserts are admitted. That is the
    whole reason ADR-043 § 3 refused the migration-027 template here.
 4. But ``audit_logs_sel`` is clan-keyed, and Postgres matches a ``RETURNING`` row against the

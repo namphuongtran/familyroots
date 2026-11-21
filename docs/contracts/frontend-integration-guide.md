@@ -18,7 +18,7 @@ section). Where the backend leaves something genuinely undefined it is marked
 
 ## 1. Bootstrap sequence
 
-Code: `app/api/v1/auth.py`, `app/application/auth/handlers.py`, `app/api/v1/me.py`,
+Code: `app/api/v1/auth.py`, `app/application/auth/{session,command_handler,queries,fcm}.py`, `app/api/v1/me.py`,
 `app/core/security.py` (`get_current_clan_id`), `app/middleware/language_middleware.py`.
 
 ### 1.1 Login
@@ -136,7 +136,7 @@ from `X-Current-Clan-Id`.
 
 ## 2. Token lifecycle
 
-Code: `app/application/auth/handlers.py` (`AuthSessionService`),
+Code: `app/application/auth/session.py` (`AuthSessionService`),
 `app/infrastructure/supabase_identity_provider.py`, `web/src/lib/api/axios.ts`,
 `web/src/middleware.ts`.
 
