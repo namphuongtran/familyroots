@@ -18,6 +18,9 @@ export const PersonNode = memo(function PersonNode({ data }: { data: PersonNodeD
 
   return (
     <div
+      // Read by the canvas's long-press handler (`TreeCanvas.tsx`), which sits above XYFlow's
+      // node wrapper and so has only the DOM to tell it which node was pressed.
+      data-person-id={data.personId}
       className={cn(
         'relative flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 p-2',
         'border-border bg-card w-36 shadow-xs transition-all hover:shadow-md',

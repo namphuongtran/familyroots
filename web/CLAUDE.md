@@ -474,6 +474,33 @@ readings above are what was verified this way.
   covers the first conflict, the resolve-and-save path, and the discard-and-reload path, not
   the repeat.
 
+### The relationship editor (`features/relationships/ui/RelationshipEditorSheet.tsx`, #328)
+
+A Radix side sheet, opened from the member aside's **Sửa quan hệ** and from the tree's node
+long-press sheet (**Thêm con**, **Thêm vợ/chồng**; `tree/ui/NodeActionsSheet.tsx`, a right click
+too). Both entry points render only for `createRelationship`/`editRelationship`, so a viewer gets
+none. Four parts: the spouse list with up/down and an end-marriage form (divorced or widowed, the
+end date as a `HistoricalDate` through the persons form's own `encodeDateGroup`); add spouse,
+pick or create inline, `spouse_order` prefilled to one past the highest live rank; link parents,
+the mother chosen only from the father's own marriages or left empty; add child.
+
+- **A swap of two ranked wives is three PATCHes, not two.** The backend checks
+  `relationship.duplicate_spouse_order` on each PATCH alone (read at
+  `backend/app/application/relationship/handlers.py`, `MarriageHandler.update`), so wife B cannot
+  take rank 1 while wife A holds it. `planSpouseReorder` parks A at `null` (the check skips null),
+  moves B, then gives A B's old rank with the version A's first PATCH returned. #328's
+  Verification said "two PATCHes"; the real backend would refuse that sequence with a 409.
+- **`409 stale_write` opens the persons form's `StaleWriteDialog`**, now exported from
+  `@/features/persons` with a structural `StaleWriteRow`. A resolved save resends with the latest
+  version, then runs the reorder steps still to come; discard stops and rereads.
+- **No toast primitive still**: a write's success, and its `meta.warning`, is a `role="status"`
+  line inside the sheet, as the persons form decided.
+- The tree invalidates itself through the sheet's `onChanged`, because `tree` imports this slice.
+- `RelationshipEditorSheet.test.tsx` and the aside's two role cases hold the readings. Controls run
+  2026-11-21, each reverted: the version dropped from the PATCH body fails the reorder case;
+  `canEdit = true` fails the viewer case; the `parent_too_young` reader nulled fails the inline
+  case; `nextSpouseOrder` returning the max fails the second-wife case.
+
 ### The spine (`src/shared/http/`, `src/shared/telemetry/`, `src/domain/date/`)
 
 - `apiFetch` (`src/shared/http/api-client.ts`) is the **only** way to reach the backend.

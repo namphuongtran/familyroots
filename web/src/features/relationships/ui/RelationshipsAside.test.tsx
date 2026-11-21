@@ -4,6 +4,11 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { envelope, server as mswServer } from '@/shared/testing/msw'
 import { renderWithProviders } from '@/shared/testing/render'
 import { CLAN_COOKIE } from '@/shared/http/request-context'
+import type { ClanRole } from '@/domain/capability/capability'
+import { useSession } from '@/features/auth'
+import type { components } from '@/generated/api-types'
+import { expected } from '@/shared/testing/render'
+import { fakeSupabaseClient } from '@/shared/testing/supabase'
 import viMessages from '../../../../messages/vi.json'
 import { RelationshipsAside } from './RelationshipsAside'
 
@@ -182,5 +187,77 @@ describe('RelationshipsAside', () => {
     expect(childRows).toHaveLength(1)
     expect(within(childRows[0]).getByText('Nguyễn Minh Tuấn')).toBeInTheDocument()
     expect(within(childRows[0]).getByText('Con đẻ')).toBeInTheDocument()
+  })
+})
+
+/**
+ * #328: the editor's entry point follows the role the backend sends, through the real session
+ * hook (`useCapabilities`). Each case waits for the session to settle on its role first, because
+ * every capability is false while it loads and a viewer case read then would pass for any role.
+ */
+describe('RelationshipsAside entry point to the relationship editor', () => {
+  function serveSessionAs(role: ClanRole) {
+    const profile: components['schemas']['UserProfile'] = {
+      id: '11111111-1111-4111-8111-111111111111',
+      email: 'lan@example.com',
+      full_name: 'Nguyễn Thị Lan',
+      clan_id: CLAN_ID,
+      clan_name: 'Nguyễn Phúc',
+      role: null,
+      is_approved: true,
+      has_pending_membership: false,
+      person_id: null,
+      preferred_locale: 'vi',
+      platform_role: 'user',
+    }
+    mswServer.use(
+      http.get(`${API}/auth/me`, () => HttpResponse.json(envelope(profile))),
+      http.get(`${API}/me/clans`, () =>
+        HttpResponse.json(
+          envelope<components['schemas']['UserClanMembership'][]>([
+            { clan_id: CLAN_ID, clan_name: 'Nguyễn Phúc', clan_slug: 'nguyen-phuc', role },
+          ]),
+        ),
+      ),
+      http.get(`${API}/persons/${TARGET_ID}/marriages`, () => HttpResponse.json(envelope([]))),
+      http.get(`${API}/persons/${TARGET_ID}/parent-child`, () => HttpResponse.json(envelope([]))),
+    )
+  }
+
+  function ActiveRole() {
+    return <p data-testid="active-role">{useSession().activeClan?.role ?? 'none'}</p>
+  }
+
+  async function renderAs(role: ClanRole) {
+    createClientOrNull.mockReturnValue(fakeSupabaseClient({ accessToken: 'tok-1' }).client)
+    serveSessionAs(role)
+    renderWithProviders(
+      <>
+        <ActiveRole />
+        <RelationshipsAside personId={TARGET_ID} />
+      </>,
+      { locale: 'vi', messages: viMessages },
+    )
+    await waitFor(() => expect(screen.getByTestId('active-role')).toHaveTextContent(role))
+    await screen.findByText(expected(viMessages.relationship.aside_empty_spouses))
+  }
+
+  const openEditor = expected(viMessages.relationship_editor.open_editor)
+
+  it('an editor sees "Sửa quan hệ", and it opens the sheet', async () => {
+    await renderAs('editor')
+    const button = screen.getByRole('button', { name: openEditor })
+    button.click()
+    expect(
+      await screen.findByRole('dialog', {
+        name: expected(viMessages.relationship_editor.sheet_title),
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('a viewer sees no entry point at all', async () => {
+    await renderAs('viewer')
+    expect(screen.queryByRole('button', { name: openEditor })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

@@ -1,13 +1,13 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { useMemo } from 'react'
-import type { Person } from '@/domain/person/person'
+import { useMemo, useState } from 'react'
 import type { Marriage, ParentChild } from '@/domain/relationship/relationship'
 import { useClientRequestContext } from '@/shared/http/context.client'
-import { batchGetPersons, personsKeys } from '@/features/persons'
+import { useCapabilities } from '@/features/auth'
 import { usePersonMarriages, usePersonParentChild } from '../hooks/use-relationship-queries'
+import { useRelatedPeople } from '../hooks/use-related-people'
+import { RelationshipEditorSheet } from './RelationshipEditorSheet'
 import { spouseLabelOf } from './kinship-term'
 import { RelationshipRow } from './RelationshipRow'
 import { sortMarriagesBySpouseOrder, splitParentChildByOrientation } from './relationship-sort'
@@ -33,6 +33,7 @@ interface RelationshipsAsideProps {
  */
 export function RelationshipsAside({ personId }: RelationshipsAsideProps) {
   const t = useTranslations('relationship')
+  const tEditor = useTranslations('relationship_editor')
   const { context, ready, refreshAuth } = useClientRequestContext()
 
   const marriages = usePersonMarriages(personId, { context, refreshAuth, enabled: ready })
@@ -43,18 +44,15 @@ export function RelationshipsAside({ personId }: RelationshipsAsideProps) {
     [personId, marriages.data, parentChild.data],
   )
 
-  // One batch lookup for every other-person we need, deduplicated. Keyed by
-  // clanId + sorted ids so a re-render over the same set reuses the cache
-  // and so a mutation that invalidates `personsKeys.all(clanId)` invalidates
-  // this too.
-  const relatedPeople = useQuery({
-    queryKey: [...personsKeys.all(context.clanId), 'batch', [...otherIds].sort().join(',')],
-    queryFn: ({ signal }) =>
-      batchGetPersons({ ids: otherIds, profile: 'summary' }, { context, refreshAuth, signal }),
-    enabled: ready && otherIds.length > 0,
-  })
+  // One batch lookup for every other-person we need, deduplicated (`useRelatedPeople`).
+  const personById = useRelatedPeople(otherIds, { context, refreshAuth, enabled: ready })
 
-  const personById = useMemo(() => indexById(relatedPeople.data?.items ?? []), [relatedPeople.data])
+  // #328: the editor's entry point, for a role that may write an edge (rbac.md "Create
+  // marriage/parent-child", "Edit marriage/parent-child"). Spec §3.5: remove, do not disable, so
+  // a viewer gets no button at all.
+  const capabilities = useCapabilities()
+  const canEdit = capabilities.createRelationship || capabilities.editRelationship
+  const [editing, setEditing] = useState(false)
 
   const sortedMarriages = useMemo(
     () => sortMarriagesBySpouseOrder(marriages.data ?? []),
@@ -80,9 +78,23 @@ export function RelationshipsAside({ personId }: RelationshipsAsideProps) {
 
   return (
     <aside aria-labelledby="relationships-aside-heading" className="space-y-4">
-      <h2 id="relationships-aside-heading" className="text-foreground text-sm font-semibold">
-        {t('aside_title')}
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="relationships-aside-heading" className="text-foreground text-sm font-semibold">
+          {t('aside_title')}
+        </h2>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-primary hover:bg-muted focus:ring-ring rounded-full px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
+          >
+            {tEditor('open_editor')}
+          </button>
+        )}
+      </div>
+      {canEdit && editing && (
+        <RelationshipEditorSheet personId={personId} open onOpenChange={setEditing} />
+      )}
 
       {isLoading ? (
         <p className="text-muted-foreground text-sm">{t('aside_loading')}</p>
@@ -188,12 +200,6 @@ function collectOtherIds(
   }
   set.delete(targetPersonId)
   return [...set]
-}
-
-function indexById(people: readonly Person[]): Map<string, Person> {
-  const map = new Map<string, Person>()
-  for (const p of people) map.set(p.id, p)
-  return map
 }
 
 /**

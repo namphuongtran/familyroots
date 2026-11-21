@@ -52,6 +52,14 @@ export type { RelationshipsQueryOptions } from './hooks/use-relationship-queries
 export { usePersonMarriages, usePersonParentChild } from './hooks/use-relationship-queries'
 
 export { RelationshipsAside } from './ui/RelationshipsAside'
+export { RelationshipEditorSheet } from './ui/RelationshipEditorSheet'
+export type { RelationshipEditorSection } from './ui/RelationshipEditorSheet'
+export type { RelationshipMutationOptions } from './hooks/use-relationship-mutations'
+export {
+  useCreateMarriage,
+  useCreateParentChild,
+  useUpdateMarriage,
+} from './hooks/use-relationship-mutations'
 export { RelationshipRow } from './ui/RelationshipRow'
 export { spouseLabelOf } from './ui/kinship-term'
 export { sortMarriagesBySpouseOrder, splitParentChildByOrientation } from './ui/relationship-sort'

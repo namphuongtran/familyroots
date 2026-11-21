@@ -21,12 +21,25 @@
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useTranslations } from 'next-intl'
-import type { FieldChoice, FieldDiffRow } from './stale-write-diff'
+import type { FieldChoice } from './stale-write-diff'
 
-interface StaleWriteDialogProps {
+/**
+ * One compared field. Structural rather than `FieldDiffRow` so a second writer of a versioned
+ * record (the relationship editor, #328) shows the same §7.7c dialog over its own fields;
+ * `FieldDiffRow` is assignable to it.
+ */
+export interface StaleWriteRow {
+  field: string
+  label: string
+  mine: string
+  latest: string
+  defaultChoice: FieldChoice
+}
+
+export interface StaleWriteDialogProps {
   open: boolean
   personName: string
-  rows: FieldDiffRow[]
+  rows: readonly StaleWriteRow[]
   /** Spec §7.7c: "If the resubmit 409s again, reopen the dialog ... and add [this note]." */
   repeatedConflict: boolean
   choices: Record<string, FieldChoice>
