@@ -10,6 +10,19 @@ preload, or recording the cause with no fix. This ADR ships with the patch, in t
 request. Sources were read in Next 16.2.12, the version `web/pnpm-lock.yaml` pins, and in the
 16.4.0 (`latest`) and 16.5.0-canary.7 (`canary`) tarballs from npm, on 2026-10-11.
 
+> **Amendment (2026-11-21, after #362):** the patch is removed. #362 moved
+> `next` to 16.4.6 for critical advisories and deleted `web/patches/next@16.2.12.patch` and the
+> `patchedDependencies` entry; the follow-up took `pnpm-workspace.yaml` and `COPY patches` out of
+> `web/Dockerfile`'s deps stage, whose image build failed with `"/patches": not found` until then.
+> Upstream fixed the race in 16.4.6 by gating, not serializing: `startWatcher` snapshots the route
+> directories with `recursiveReadDir` before watching
+> (`dist/server/lib/router-utils/setup-dev-bundler.js:280-295`), and the `aggregated` listener
+> returns before reading anything while a snapshotted page file is missing from
+> `wp.getTimeInfoEntries()`, bounded by a 30 s deadline (`:337-355`). A pass that started on a
+> partial scan therefore no longer writes the route list. The listener is still unserialized, but
+> every pass that gets past the gate saw every page file. The startup reading in § Context was not
+> repeated on 16.4.6. The upstream report under § Owed is no longer owed.
+
 ## Context
 
 On 2026-10-05 a full `pnpm test:e2e` failed all 20 cases of `e2e/invitation-accept.spec.ts`, in
