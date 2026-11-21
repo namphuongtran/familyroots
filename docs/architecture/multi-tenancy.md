@@ -4,22 +4,22 @@
 
 FamilyRoots uses a single PostgreSQL schema with `clan_id`-based isolation.
 
-> **Status (2026-08-22):** Isolation is enforced **in the application/repository
-> layer** — this is the primary, tested guarantee. Row-Level Security is the
-> **defense-in-depth layer-2** (ADR-008) and is **ACTIVE**: request traffic runs under
-> the non-bypass `familyroots_app` role with a per-request `app.clan_id` GUC, so
-> `documents`, `events`, `branches`, `parent_child`, `marriages`, `persons`,
-> `change_requests`, `clan_memberships`, `clan_invitations`, `notification_log`, and
-> `clan_settings` are RLS-enforced at the DB layer. **The table-by-table rollout is
-> finished.** Measured 2026-08-22: all **14** clan-owned tables now
-> have row-level security enabled and a policy, and no clan-owned table is left outside
-> layer 2. See the schema table above for the classification and point 10 for the gate that
-> keeps it true. Fourteen tables have RLS enabled and **the number of fully covered tables
-> is eleven**, because three of them carry policies that are not clan isolation, in three
-> different ways: `identity_claims` is a deny-all tripwire (point 8), `audit_logs` is
-> clan-keyed on reads only (point 9), and `user_clan_roles` is clan-keyed on `UPDATE` and
-> `DELETE` only (point 7). `persons` carries two extra rules — see point 6 below
-> and [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
+> **Status (2026-08-22, re-measured 2026-10-04 after `039_drop_clan_settings`):** Isolation
+> is enforced **in the application/repository layer** — this is the primary, tested
+> guarantee. Row-Level Security is the **defense-in-depth layer-2** (ADR-008) and is
+> **ACTIVE**: request traffic runs under the non-bypass `familyroots_app` role with a
+> per-request `app.clan_id` GUC, so `documents`, `events`, `branches`, `parent_child`,
+> `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`, and
+> `notification_log` are RLS-enforced at the DB layer. **The table-by-table rollout is
+> finished.** Re-measured 2026-10-04: all **13** clan-owned tables now have row-level
+> security enabled and a policy, and no clan-owned table is left outside layer 2. See the
+> schema table above for the classification and point 10 for the gate that keeps it true.
+> Thirteen tables have RLS enabled and **the number of fully covered tables is ten**,
+> because three of them carry policies that are not clan isolation, in three different
+> ways: `identity_claims` is a deny-all tripwire (point 8), `audit_logs` is clan-keyed on
+> reads only (point 9), and `user_clan_roles` is clan-keyed on `UPDATE` and `DELETE` only
+> (point 7). `persons` carries two extra rules — see point 6 below and
+> [ADR-038](../decisions/038-persons-returning-vs-membership-rls.md). The sections below
 > describe the application-layer mechanism that remains the primary guarantee.
 
 ## Why not separate schemas?
@@ -43,8 +43,8 @@ named `audit_log` for a table called `audit_logs`, it omitted seven tables that 
 it gave no way to tell a clan-owned table from a platform-global one. The 2026-08-22 pass replaced
 it with the full list, because the coverage gate in
 `backend/tests/integration/test_rls_activation.py` now rests on exactly that distinction.
-Measured 2026-08-22 against migration `036_rls_user_clan_roles`: `public` holds **18**
-ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
+Re-measured 2026-10-04 against migration `039_drop_clan_settings`: `public` holds **17**
+ordinary tables, **13** of them clan-owned, and all 13 carry a policy.
 
 | Table | Clan-owned? | How the clan is reached | RLS posture |
 |---|---|---|---|
@@ -90,8 +90,8 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
    `user_clan_roles` (filtered by `user_id` + `clan_id`, `is_approved = true`).
 5. **Storage.** Path-based isolation: `clans/{clan_id}/...` in a single shared bucket.
 6. **RLS layer-2 (ACTIVE for `documents`, `events`, `branches`, `parent_child`,
-   `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`,
-   `notification_log`, `clan_settings`; clan-keyed on reads only for `audit_logs`, see point 9;
+   `marriages`, `persons`, `change_requests`, `clan_memberships`, `clan_invitations`, and
+   `notification_log`; clan-keyed on reads only for `audit_logs`, see point 9;
    clan-keyed on `UPDATE` and `DELETE` only for `user_clan_roles`, see point 7).** The request path drops to the non-bypass `familyroots_app`
    role and sets the transaction-local `app.clan_id` GUC (an `after_begin` seam on the
    request session, driven by a ContextVar `get_current_clan_id` sets), so those tables are
@@ -156,12 +156,13 @@ ordinary tables, **14** of them clan-owned, and all 14 carry a policy.
    Covering a table in this shape means first deciding which session its clan-less path runs
    on, and that decision needs its own ADR. Phase 6 enabled RLS on `clan_memberships` only
    for this reason; ADR-048 then made the decision for `clan_invitations`; Phase 10 split
-   the same way, shipping `clan_settings` (migration `035`); and ADR-050 closed the last of
-   them for `user_clan_roles` (migration `036`). **There are now three answers to this shape,
-   not one:** move the one clan-less route to the privileged session (ADR-048), lock the table
-   out of the request role entirely (ADR-042), or cover only the commands whose paths all have
-   a clan (ADR-050). Which one fits depends on how many clan-less paths there are and what they
-   do.
+   the same way, shipping `clan_settings` (migration `035`, later dropped by migration `039`
+   under [ADR-054](../decisions/054-clan-settings-table-is-dropped.md)); and ADR-050 closed
+   the last of them for `user_clan_roles` (migration `036`). **There are now three answers to
+   this shape, not one:** move the one clan-less route to the privileged session (ADR-048),
+   lock the table out of the request role entirely (ADR-042), or cover only the commands
+   whose paths all have a clan (ADR-050). Which one fits depends on how many clan-less paths
+   there are and what they do.
 
    **`user_clan_roles` is the sharpest instance of this shape, because it is the table the
    authorization gate reads.** A policy there does not merely hide data: it silently
