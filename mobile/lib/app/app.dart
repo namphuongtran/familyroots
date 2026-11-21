@@ -27,12 +27,15 @@ class _FamilyRootsAppState extends ConsumerState<FamilyRootsApp> {
     // clears a guard (the clan picker) mutates the same instance the router is
     // listening to.
     _authRouteState = ref.read(authRouteStateProvider);
-  }
-
-  @override
-  Widget build(BuildContext context) {
     // Bridge Riverpod state onto the router's ChangeNotifier.
-    ref.listen(sessionControllerProvider, (previous, next) {
+    //
+    // fireImmediately: a session restored before this widget first built is
+    // already data, and a listener that only sees changes would leave the
+    // router on /login.
+    ref.listenManual(sessionControllerProvider, fireImmediately: true, (
+      previous,
+      next,
+    ) {
       final profile = next.value;
       _authRouteState.set(
         signedIn: profile != null,
@@ -44,7 +47,10 @@ class _FamilyRootsAppState extends ConsumerState<FamilyRootsApp> {
         membership: profile?.membershipStatus ?? MembershipStatus.approved,
       );
     });
+  }
 
+  @override
+  Widget build(BuildContext context) {
     // Clan resolution decides whether the picker is required. Gated on a
     // session (see clanPickRequiredProvider) so nothing calls GET /me/clans
     // before sign-in. The picker also clears this itself before navigating —
