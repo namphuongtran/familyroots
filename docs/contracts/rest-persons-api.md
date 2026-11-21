@@ -30,6 +30,7 @@ Core operations:
 - PATCH /persons/{id}
 - DELETE /persons/{id}
 - POST /persons/{id}/restore
+- POST /persons/{id}/anonymise
 - POST /persons/{id}/claim
 - GET /persons/{id}/marriages
 - GET /persons/{id}/parent-child
@@ -70,6 +71,30 @@ array under `data` (no `meta` — these are not cursor-paginated).
 
 - NOTE: `created_by_clan_id` is **not** accepted on create/update — it is provenance,
   always stamped from the active clan (see the 2026-06-28 design review, C5).
+
+### `POST /persons/{id}/anonymise` — erase a person, keep the tree (ADR-079, #333)
+
+Admin only (`RequireAdmin`); no body; no `expected_version` (it still bumps `version`,
+so a PATCH racing it gets `stale_write` rather than re-identifying the person).
+**200** with the full person under `data`, in the same shape as `GET /persons/{id}`.
+404 `person_not_found` for a person that is not a live member of the active clan.
+
+What it writes:
+
+| Field | Becomes |
+|---|---|
+| `full_name` | `"Đã ẩn danh"` (stored as the name, the same in every locale) |
+| `birth_name`, `courtesy_name`, `posthumous_name`, `alias_name` (tên húy, tên tự, tên thụy, biệt danh) | `null` |
+| `birth_date`, `death_date` | `{"date": null, "precision": "unknown", "display": null, "lunar": null}` |
+| `birth_place`, `death_place`, `burial_place`, `tomb_location`, `residence_place` | `null` |
+| `biography`, `notes`, `avatar_url` (the public avatar object is deleted too) | `null` |
+| `phone`, `email`, `religion`, `occupation`, `education_level`, `title_rank` | `null` |
+
+What it keeps, because đời is computed from it ([ADR-027](../decisions/027-doi-single-authority.md)):
+`id`, `gender`, `nationality`, the clan memberships, and every marriage and
+parent-child edge. The node stays in every tree endpoint at the same đời, and so does
+every descendant. The person is not soft-deleted. The `person.anonymise` audit row
+names the cleared fields and carries no old value.
 
 ### An edge is returned only when both of its persons are live (2026-08-22)
 
@@ -147,6 +172,7 @@ consequences for a client:
 | `PATCH /persons/{id}` | the echoed person in the response is redacted, so editing a stranger's record does not reveal their contact details |
 | `POST /persons` | **not** redacted. The response echoes the values the creator just sent in the same request |
 | `DELETE /persons/{id}`, `POST /persons/{id}/restore` | no person fields in the response at all |
+| `POST /persons/{id}/anonymise` | admin only, and `phone`/`email` are already `null` |
 | `GET /persons/search` | `PersonSearchResult` carries no contact field, for any caller |
 
 The fields are declared only on the **full** person projection. `profile=summary` and

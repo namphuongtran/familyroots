@@ -212,5 +212,7 @@
   "error.change_request.target_deleted": "The record this request targets was deleted. Restore it before approving.",
   "error.change_request.unsupported_operation": "This kind of change request is not supported yet",
   "error.change_request.no_changes": "A change request must propose at least one field",
-  "error.change_request.field_not_submittable": "One or more fields cannot be proposed in a change request"
+  "error.change_request.field_not_submittable": "One or more fields cannot be proposed in a change request",
+  "auth.account_deleted": "Your account has been deleted.",
+  "error.account.last_admin_transfer_first": "You are the only admin of a clan. Transfer the admin role to another member before deleting your account."
 }

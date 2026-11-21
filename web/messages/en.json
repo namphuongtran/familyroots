@@ -519,5 +519,25 @@
   "metadata": {
     "tagline": "Vietnamese genealogy",
     "description": "A platform for managing Vietnamese clan genealogies"
+  },
+  "privacy": {
+    "draft_banner": "Draft — pending legal review",
+    "title": "Privacy notice",
+    "intro": "This page explains what data FamilyRoots collects, why, and what rights you have. The text is still a draft.",
+    "collect_title": "Data we collect",
+    "collect_body": "Account: email, name and preferred language. Family tree content entered by clan members: names, dates, places, biographies, photos and documents. Technical: IP address and user agent, recorded in the audit log.",
+    "purpose_title": "Why we use it",
+    "purpose_body": "To operate your clan's family tree, and for security and to trace changes (audit).",
+    "visibility_title": "Who can see it",
+    "visibility_body": "Members of a clan see its content according to their role. A person's phone number and email are visible only to clan admins and to that person.",
+    "storage_title": "Where it is stored",
+    "storage_body": "Data is stored on Supabase, in the ap-southeast-1 region (Singapore), with backups.",
+    "rights_title": "Your rights",
+    "rights_delete_body": "You can delete your own account. This removes your sign-in account, your clan memberships and roles, and your profile. If you are the last admin of a clan, the system refuses: transfer the admin role to someone else first.",
+    "rights_anonymise_body": "You can ask a clan admin to anonymise a person in the tree. Names, dates, places, biography, notes and avatar are cleared or replaced with \"Đã ẩn danh\". The person's place in the tree is kept so the generations stay correct.",
+    "contact_title": "Contact",
+    "contact_body": "The data controller has not been decided yet. Contact details are to be confirmed.",
+    "footer_link": "Privacy notice",
+    "signup_notice": "Before signing up, read our <link>privacy notice</link>."
   }
 }

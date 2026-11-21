@@ -519,5 +519,25 @@
   "metadata": {
     "tagline": "Gia phả Việt Nam",
     "description": "Nền tảng quản lý gia phả dòng họ Việt Nam"
+  },
+  "privacy": {
+    "draft_banner": "Bản nháp — cần rà soát pháp lý",
+    "title": "Thông báo quyền riêng tư",
+    "intro": "Trang này giải thích FamilyRoots thu thập dữ liệu nào, dùng để làm gì và bạn có những quyền gì. Nội dung còn là bản nháp.",
+    "collect_title": "Dữ liệu chúng tôi thu thập",
+    "collect_body": "Tài khoản: email, họ tên và ngôn ngữ ưa dùng. Nội dung cây gia phả do thành viên dòng họ nhập: tên, ngày tháng, nơi chốn, tiểu sử, ảnh và tài liệu. Dữ liệu kỹ thuật: địa chỉ IP và thông tin trình duyệt (user agent) được ghi trong nhật ký kiểm toán.",
+    "purpose_title": "Mục đích sử dụng",
+    "purpose_body": "Để vận hành cây gia phả của dòng họ, và để bảo mật cũng như truy vết các thay đổi (kiểm toán).",
+    "visibility_title": "Ai xem được dữ liệu",
+    "visibility_body": "Thành viên của dòng họ xem được nội dung theo vai trò của mình. Số điện thoại và email của một người chỉ quản trị viên dòng họ và chính người đó xem được.",
+    "storage_title": "Nơi lưu trữ",
+    "storage_body": "Dữ liệu được lưu trên Supabase, vùng ap-southeast-1 (Singapore), kèm các bản sao lưu.",
+    "rights_title": "Quyền của bạn",
+    "rights_delete_body": "Bạn có thể xóa tài khoản của mình. Việc này xóa tài khoản đăng nhập, tư cách thành viên và vai trò trong các dòng họ, cùng hồ sơ của bạn. Nếu bạn là quản trị viên cuối cùng của một dòng họ, hệ thống sẽ từ chối: hãy chuyển vai trò quản trị cho người khác trước.",
+    "rights_anonymise_body": "Bạn có thể nhờ quản trị viên dòng họ ẩn danh một người trong cây. Tên, ngày tháng, nơi chốn, tiểu sử, ghi chú và ảnh đại diện sẽ bị xóa hoặc thay bằng \"Đã ẩn danh\". Vị trí của người đó trong cây được giữ lại để các đời vẫn đúng.",
+    "contact_title": "Liên hệ",
+    "contact_body": "Đơn vị kiểm soát dữ liệu chưa được xác định. Thông tin liên hệ sẽ được bổ sung sau, cần xác nhận.",
+    "footer_link": "Thông báo quyền riêng tư",
+    "signup_notice": "Trước khi đăng ký, hãy đọc <link>thông báo quyền riêng tư</link> của chúng tôi."
   }
 }

@@ -212,5 +212,7 @@
   "error.change_request.target_deleted": "L'enregistrement visé par cette demande a été supprimé. Restaurez-le avant d'approuver.",
   "error.change_request.unsupported_operation": "Ce type de demande de correction n'est pas encore pris en charge",
   "error.change_request.no_changes": "Une demande de correction doit proposer au moins un champ",
-  "error.change_request.field_not_submittable": "Un ou plusieurs champs ne peuvent pas faire l'objet d'une demande de correction"
+  "error.change_request.field_not_submittable": "Un ou plusieurs champs ne peuvent pas faire l'objet d'une demande de correction",
+  "auth.account_deleted": "Votre compte a été supprimé.",
+  "error.account.last_admin_transfer_first": "Vous êtes le seul administrateur d'un clan. Transférez le rôle d'administrateur à un autre membre avant de supprimer votre compte."
 }

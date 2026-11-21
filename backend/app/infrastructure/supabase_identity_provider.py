@@ -89,7 +89,17 @@ class SupabaseIdentityProvider:
         return str(resp.user.id)
 
     async def delete_user(self, user_id: str) -> None:
-        await asyncio.to_thread(get_service_client().auth.admin.delete_user, user_id)
+        try:
+            await asyncio.to_thread(get_service_client().auth.admin.delete_user, user_id)
+        except AuthApiError as exc:
+            # Already gone is done: account deletion retries after a commit that failed
+            # once the provider account was deleted (ADR-079), and must not be stuck
+            # behind a 404 forever.
+            if exc.status == 404:
+                return
+            raise _classify(exc) from exc
+        except Exception as exc:
+            raise _classify(exc) from exc
 
     async def sign_in(self, *, email: str, password: str) -> AuthenticatedIdentity:
         sb = get_anon_client()

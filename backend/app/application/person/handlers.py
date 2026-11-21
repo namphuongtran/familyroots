@@ -11,6 +11,7 @@ import uuid
 from typing import Any
 
 from app.application.person.commands import (
+    AnonymisePerson,
     CreatePerson,
     DeletePerson,
     GetPerson,
@@ -187,6 +188,36 @@ class PersonCommandHandler:
                     person.id,
                 )
         await self._uow.commit()
+
+    async def anonymise(self, cmd: AnonymisePerson) -> PersonResponse:
+        """Anonymise a person in the caller's clan (ADR-079).
+
+        The person row stays, with its id, gender, memberships and every marriage and
+        parent-child edge, so the tree keeps its shape and đời stays computable. What
+        identifies the person is cleared. A published avatar is taken down the way
+        ``delete`` takes it down. Admin-only at the route.
+        """
+        person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id)
+        if not person:
+            raise EntityNotFoundError("person_not_found")
+
+        had_avatar = person.avatar_url is not None
+        person.anonymise(cmd.actor, cmd.clan_id)
+        # No expected_version: an anonymisation wins over a concurrent edit, and the
+        # version bump makes that edit's PATCH a stale_write rather than a silent
+        # re-identification.
+        await self._repo.save(person)
+        if had_avatar and self._storage is not None:
+            try:
+                await self._storage.delete_public(avatar_object_path(cmd.clan_id, person.id))
+            except Exception:
+                logger.exception(
+                    "Deleting the public avatar of anonymised person %s failed — the purge "
+                    "will retry",
+                    person.id,
+                )
+        await self._uow.commit()
+        return PersonResponse.model_validate(person)
 
     async def restore(self, cmd: RestorePerson) -> PersonResponse:
         """Restore a soft-deleted person."""

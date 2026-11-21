@@ -87,6 +87,16 @@ class DeletePerson:
 
 
 @dataclass(frozen=True)
+class AnonymisePerson:
+    """Anonymise a person: clear what identifies them, keep the node and its edges
+    (ADR-079)."""
+
+    person_id: uuid.UUID
+    clan_id: uuid.UUID
+    actor: ActorInfo
+
+
+@dataclass(frozen=True)
 class RestorePerson:
     """Restore a soft-deleted person."""
 

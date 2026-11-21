@@ -15,6 +15,7 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.auth.account_deletion import AccountDeletionHandler
 from app.application.auth.handlers import (
     AuthCommandHandler,
     AuthQueryHandler,
@@ -51,6 +52,7 @@ from app.domain.auth.identity_provider import IdentityProvider
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.infrastructure.event_dispatcher import create_event_dispatcher
 from app.infrastructure.persistence.auth_repository import (
+    SqlAlchemyAccountRepository,
     SqlAlchemyAuthQueryPort,
     SqlAlchemyAuthRepository,
     SqlAlchemyFCMTokenRepository,
@@ -190,6 +192,22 @@ def get_identity_provider() -> IdentityProvider:
     ``app.dependency_overrides[get_identity_provider]`` without rebuilding the
     handlers they exercise."""
     return SupabaseIdentityProvider()
+
+
+def get_account_deletion_handler(
+    db: AsyncSession = Depends(get_system_db),
+    identity: IdentityProvider = Depends(get_identity_provider),
+) -> AccountDeletionHandler:
+    """``DELETE /auth/me`` (ADR-079), on the privileged session.
+
+    The request names no clan, and the account spans every clan it belongs to.
+    ``user_clan_roles``' UPDATE and DELETE policies are clan-keyed (ADR-050), so under
+    the request role with no ``app.clan_id`` the last-admin lock would see no row and
+    the role delete would remove none. Every statement the repository runs keys on the
+    JWT ``sub``, so the account itself is the scope, as the token is for invitation
+    accept (ADR-048)."""
+    uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+    return AccountDeletionHandler(SqlAlchemyAccountRepository(db), uow, identity)
 
 
 def get_auth_command_handler(

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { Providers } from '@/components/providers'
 import { routing, type Locale } from '@/i18n/routing'
+import { SiteFooter } from '@/shared/ui/SiteFooter'
 import { WebVitalsReporter } from '@/shared/telemetry/web-vitals'
 
 /**
@@ -54,6 +55,7 @@ export default async function LocaleLayout({
       <WebVitalsReporter />
       <NextIntlClientProvider locale={locale} messages={messages}>
         <Providers>{children}</Providers>
+        <SiteFooter />
       </NextIntlClientProvider>
     </>
   )

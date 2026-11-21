@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials
 
+from app.application.auth.account_deletion import AccountDeletionHandler
 from app.application.auth.handlers import (
     AuthCommandHandler,
     AuthQueryHandler,
@@ -16,6 +17,7 @@ from app.application.auth.handlers import (
 from app.core.locale import SUPPORTED_LOCALES
 from app.core.security import get_current_user, security
 from app.infrastructure.dependencies import (
+    get_account_deletion_handler,
     get_auth_command_handler,
     get_auth_query_handler,
     get_auth_session_service,
@@ -167,6 +169,22 @@ async def update_me(
         preferred_locale=body.preferred_locale,
     )
     return {"data": {"message": t("auth.profile_updated")}}
+
+
+@router.delete("/me", responses=ok_message())
+async def delete_me(
+    current_user: dict[str, Any] = Depends(get_current_user),
+    handler: AccountDeletionHandler = Depends(get_account_deletion_handler),
+) -> dict[str, Any]:
+    """Delete the authenticated user's own account (ADR-079).
+
+    Removes the sign-in account at the identity provider, every clan membership and
+    role, push tokens and the profile, and writes an ``account.delete`` audit row.
+    409 ``account.last_admin_transfer_first`` while the user is a clan's only admin.
+    Persons in clan trees stay. The client signs out afterwards: an access token
+    already issued still verifies until it expires."""
+    await handler.delete_own_account(user_id=uuid.UUID(current_user["sub"]))
+    return {"data": {"message": t("auth.account_deleted")}}
 
 
 @router.post("/me/fcm-token", responses=ok_message())

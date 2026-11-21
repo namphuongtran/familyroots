@@ -94,6 +94,47 @@ class AuthQueryPort(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class SoleAdminClan:
+    """A clan in which the user is the only approved admin — the clan that would be
+    left with nobody to run it if the account were deleted (ADR-079)."""
+
+    clan_id: uuid.UUID
+    clan_name: str
+
+
+@dataclass(frozen=True)
+class DeletedAccountRows:
+    """What deleting an account's rows removed. Counts and clan ids only: none of it
+    is personal data, so it may go into the audit row."""
+
+    profile_removed: bool
+    clan_ids: tuple[uuid.UUID, ...]
+
+
+class AccountRepository(Protocol):
+    """Persistence for deleting a user's own account (ADR-079).
+
+    Every method keys on the account's own id, the JWT ``sub``, and nothing the
+    caller supplies: the account is the whole scope, which is why it runs with no
+    clan selected."""
+
+    async def lock_clans_where_sole_admin(self, user_id: uuid.UUID) -> list[SoleAdminClan]:
+        """The clans where this user is the only approved admin.
+
+        Locks every approved-admin row of every clan the user administers, in one
+        deterministic order, so two admins of one clan deleting their accounts at
+        once serialize: the second re-reads after the first commits and is refused."""
+        ...
+
+    async def delete_account_rows(self, user_id: uuid.UUID) -> DeletedAccountRows:
+        """Delete the user's clan roles (approved and pending), push tokens and
+        profile row. Identity claims go with the profile by foreign-key cascade.
+        Persons in the tree, including one linked to this account, are clan data and
+        stay."""
+        ...
+
+
 class FCMTokenRepository(Protocol):
     """Abstract persistence contract for FCM push token operations."""
 
