@@ -1,10 +1,11 @@
 """Pydantic v2 schemas for Auth requests and responses."""
 
 import uuid
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
+from app.core.exceptions import ValidationError
 from app.domain.auth.platform_role import PlatformRole
 
 # Slugs land in URLs and in the export Content-Disposition header (latin-1
@@ -32,56 +33,37 @@ _SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 _ClanCode = Annotated[str, Field(min_length=2, max_length=100, pattern=_SLUG_PATTERN)]
 
 
-# The four fields that name a clan on this surface. Named once so the
-# "no clan action, no clan fields" rule below cannot drift from the field list.
-_CLAN_FIELDS = ("clan_code", "clan_id", "clan_name", "clan_slug")
+# The fields that name a clan. ``POST /auth/register`` refuses all of them (ADR-075
+# amendment): a clan is created or joined only in onboarding, after the email is
+# confirmed. The set is named once so the refusal cannot drift from the field list.
+_CLAN_FIELDS = ("clan_action", "clan_code", "clan_id", "clan_name", "clan_slug")
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     full_name: str = Field(..., min_length=1, max_length=255)
-    # OPTIONAL since ADR-058. Omitting it registers an account with no clan
-    # membership, which is what an invitee holding an invitation token has to be
-    # able to do: they have no code to type and no clan to found, and
-    # ``POST /invitations/{token}/accept`` requires them to be signed in already
-    # (``app/api/v1/invitations.py:95-99``). The membership arrives from accept.
-    clan_action: Literal["join", "create"] | None = None
-    # The join identifier (ADR-057 section 2). A human-readable clan code, which is
-    # the clan's slug.
-    clan_code: _ClanCode | None = None
-    # DEPRECATED, accepted for one release beside ``clan_code`` -- see the
-    # deprecation window in docs/contracts/rest-auth-api.md. Sending both is a
-    # 422 ``auth.clan_code_and_id_both_given``, never a silent reconciliation.
-    clan_id: uuid.UUID | None = None
-    clan_name: str | None = Field(None, max_length=255)
-    clan_slug: _ClanCode | None = None
 
-    @model_validator(mode="after")
-    def _clan_fields_need_a_clan_action(self) -> Self:
-        """A body that names a clan but no ``clan_action`` is refused.
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_clan_fields(cls, data: Any) -> Any:
+        """A body carrying any clan field is a 422 ``auth.register_names_no_clan``.
 
-        Without this, a client that names a clan and forgets ``clan_action``
-        would silently get a clanless account instead of the membership it asked
-        for -- and which clan a membership lands on is the one boundary this
-        product cannot get wrong (root ``CLAUDE.md``).
+        Refused rather than ignored: a client that names a clan and gets a clanless
+        account would believe it holds a membership it does not, and which clan a
+        membership lands on is the one boundary this product cannot get wrong.
 
-        This lives in Pydantic rather than in the handler on purpose.
-        ``POST /auth/register`` is non-enumerating (ADR-021), and a schema
-        validator runs before the route body executes, so it cannot consult the
-        identity provider and therefore cannot answer differently for a
-        registered and an unregistered email. It also reuses the existing
-        ``validation_error`` code instead of adding a new one to this route,
-        which is the way an enumeration oracle gets built.
+        This lives in the schema, so it runs before the route body and cannot
+        consult the identity provider: it answers identically for a registered and
+        an unregistered email (ADR-021). An ``AppError`` is not a ``ValueError``,
+        so Pydantic lets it through to the application error handler, which is how
+        the code reaches the client instead of the generic ``validation_error``.
         """
-        if self.clan_action is None:
-            named = [f for f in _CLAN_FIELDS if getattr(self, f) is not None]
+        if isinstance(data, dict):
+            named = [f for f in _CLAN_FIELDS if f in data]
             if named:
-                raise ValueError(
-                    "clan_action is required when the body names a clan "
-                    f"({', '.join(named)}); omit both to register with no clan"
-                )
-        return self
+                raise ValidationError("auth.register_names_no_clan", {"fields": named})
+        return data
 
 
 class AuthenticatedOnboardingRequest(BaseModel):

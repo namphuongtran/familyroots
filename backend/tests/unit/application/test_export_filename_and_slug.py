@@ -16,7 +16,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.application.export.handlers import filename_slug
-from app.schemas.auth import AuthenticatedOnboardingRequest, RegisterRequest
+from app.schemas.auth import AuthenticatedOnboardingRequest
 
 # ── export filename sanitization ─────────────────────────────────────────────
 
@@ -44,24 +44,19 @@ def test_clean_slug_passes_through() -> None:
 
 # ── input validation on clan creation ────────────────────────────────────────
 
-_REGISTER_BASE = {
-    "email": "a@example.com",
-    "password": "longenough",
-    "full_name": "Nguyễn Văn A",
-    "clan_action": "create",
-    "clan_name": "Dòng họ Nguyễn",
-}
+# Clan creation happens on ``POST /auth/onboard`` only (ADR-075 amendment).
+_ONBOARD_BASE = {"clan_action": "create", "clan_name": "Dòng họ Nguyễn"}
 
 
 @pytest.mark.parametrize("bad", ["Dòng Họ", "UPPER", "a b", 'x"y', "-lead", "trail-", "a--b", ""])
-def test_register_rejects_invalid_slug(bad: str) -> None:
+def test_onboard_rejects_invalid_slug_shapes(bad: str) -> None:
     with pytest.raises(ValidationError):
-        RegisterRequest(**_REGISTER_BASE, clan_slug=bad)
+        AuthenticatedOnboardingRequest(**_ONBOARD_BASE, clan_slug=bad)
 
 
 @pytest.mark.parametrize("good", ["nguyen", "dong-ho-nguyen", "clan2", "a-1-b"])
-def test_register_accepts_valid_slug(good: str) -> None:
-    assert RegisterRequest(**_REGISTER_BASE, clan_slug=good).clan_slug == good
+def test_onboard_accepts_valid_slug(good: str) -> None:
+    assert AuthenticatedOnboardingRequest(**_ONBOARD_BASE, clan_slug=good).clan_slug == good
 
 
 def test_onboard_rejects_invalid_slug() -> None:

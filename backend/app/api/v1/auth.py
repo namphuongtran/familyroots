@@ -53,11 +53,6 @@ async def register(
         email=body.email,
         password=body.password,
         full_name=body.full_name,
-        clan_action=body.clan_action,
-        clan_code=body.clan_code,
-        clan_id=body.clan_id,
-        clan_name=body.clan_name,
-        clan_slug=body.clan_slug,
     )
     return {"data": {"message": t("auth.registration_received")}}
 

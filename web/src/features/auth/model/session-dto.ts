@@ -142,12 +142,12 @@ export interface OnboardResult {
 }
 
 /**
- * The two join requests, without `clan_id`. ADR-057 § 2 made the typed identifier the clan
+ * The sign-up body (no clan field since #331) and the onboard body, without `clan_id`. ADR-057 § 2 made the typed identifier the clan
  * code, and the backend refuses `clan_code` and `clan_id` together with a 422
  * `auth.clan_code_and_id_both_given` (`docs/contracts/rest-auth-api.md`, "The join identifier").
  * The generated types still declare `clan_id` for the one release it is accepted; leaving it out
  * here means nothing in this app can build the pair that is refused.
  */
-export type RegisterInput = Omit<components['schemas']['RegisterRequest'], 'clan_id'>
+export type RegisterInput = components['schemas']['RegisterRequest']
 export type OnboardInput = Omit<components['schemas']['AuthenticatedOnboardingRequest'], 'clan_id'>
 export type ProfileUpdate = components['schemas']['UserUpdateRequest']

@@ -165,3 +165,22 @@ neither, and `mobile/lib` has no register caller.
   primary join path, and a code the secondary one.
 - [ADR-044](044-privacy-toggles-dropped-from-v1.md): dropped the privacy toggles, the standing decision ADR-057 cites against a clan directory.
 - `docs/contracts/rest-auth-api.md`, "Registering with no clan".
+
+## Amendment (2026-11-21, #331, decision on #325): the backend refuses clan fields on register
+
+§ 4 above is superseded. **`POST /auth/register` no longer accepts `clan_action`, `clan_code`,
+`clan_id`, `clan_name` or `clan_slug`.** A body carrying any of them is a 422
+`auth.register_names_no_clan` (`detail.fields` lists the ones sent), refused rather than ignored so
+a client never believes it holds a membership it does not. The backend now enforces what the web
+already did: a clan is created or joined only through `POST /auth/onboard`, which needs a signed-in
+caller, so the address is confirmed first.
+
+- **Non-enumeration holds.** The refusal is a schema validator, so it runs before the route body and
+  the identity provider and answers identically for a registered and an unregistered email
+  (ADR-021).
+- **Breaking change, no known caller.** The web sends only `email`, `password` and `full_name`;
+  `mobile/lib` has no register caller.
+- **ADR-058 §§ 1-2 are narrowed to the clanless case.** The "clan named, no action" refusal and the
+  join/create branches of register are gone. `POST /auth/onboard` is unchanged.
+- **Held by** `backend/tests/integration/test_register_refuses_clan_fields.py`.
+
