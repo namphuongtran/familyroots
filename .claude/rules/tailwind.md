@@ -806,10 +806,10 @@ Two more facts worth knowing before you change the files:
 - Arbitrary values are common today, mostly font sizes such as `text-[10px]` and
   `text-[11px]`. Spec § 2.3 defines a real type scale, and it is not implemented. Reuse a
   size that a neighbouring component already uses. Do not invent a new one.
-- No hex colour in a `className`. Six hex literals exist in `web/src`, in two files only:
-  `components/family-tree/TreeCanvas.tsx` and `components/family-tree/SpouseEdge.tsx`. All six
-  are props passed to `@xyflow/react`, not classes, for example `SpouseEdge.tsx:23`. Passing a
-  colour to that library is the only accepted use.
+- No hex colour in a `className`. The hex literals in `web/src` sit in three files of the tree
+  slice since #311: `features/tree/ui/TreeCanvas.tsx`, `SpouseEdge.tsx` and `tree-layout.ts`
+  (the parent-child edge stroke). All are props passed to `@xyflow/react` or SVG attributes it
+  renders, not classes. Passing a colour to that library is the only accepted use.
 - Keep the HTML semantic: `button` for an action, `a` for navigation, one `h1` per page,
   `ul` or `ol` for a list. A `div` with a click handler fails `T-07`.
 

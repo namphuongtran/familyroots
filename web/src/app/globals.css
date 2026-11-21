@@ -50,7 +50,7 @@
     other sixteen semantic tokens already use.
 
     Nothing in `web/src` paints these yet. The thủy tổ marker at
-    `components/family-tree/MemberNode.tsx:42` is a colour emoji, which supplies
+    `features/tree/ui/PersonNode.tsx` is a colour emoji, which supplies
     its own colours, and no giỗ surface exists. The family ships before a screen
     needs it because the opposite is what put red in `primary`: a marker with no
     token takes the nearest token instead.

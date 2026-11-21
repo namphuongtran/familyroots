@@ -1654,8 +1654,8 @@ engine rather than computed from the stylesheet.
   (ADR-060 § 4). `nothing-imports-legacy` forbids any module outside the set from importing one
   inside it. The imports that already existed are the baseline,
   `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, 21 after #183, 19
-  after #185 and 18 after #186, which `pnpm depcruise` reads through `--ignore-known`. None of the
-  18 starts in `features/auth`, and none starts in a persons route.
+  after #185, 18 after #186 and 14 after #311, which `pnpm depcruise` reads through
+  `--ignore-known`. None of the 14 starts in `features/auth`, a persons route, or the tree route.
   - **When a slice deletes or re-points a legacy import, shrink the baseline in the same pull
     request:** run `pnpm depcruise:baseline` and commit the shorter file. Do not edit it by hand.
     `pnpm depcruise:ratchet origin/main` fails while the baseline still lists an import the tree no
@@ -1691,14 +1691,53 @@ engine rather than computed from the stylesheet.
   The deletion removed no baseline entry, because every importer it re-pointed sits inside legacy
   itself (`components/family-tree/`, `components/admin/`), and legacy importing legacy is not a
   violation. What is left:
-  - `lib/types/member.ts` declares `PersonSummary` only, under § 2's fallback. `lib/types/tree.ts`
-    embeds it and persons has no replacement for tree's wire shape, so the tree slice owns the
-    file and deletes it.
+  - ~~`lib/types/member.ts` declares `PersonSummary` only, under § 2's fallback.~~ The tree slice
+    deleted it with `lib/types/tree.ts` (#311).
   - ~~Persons' own routes still import the legacy capability hook.~~ The auth slice re-pointed
     them at `@/features/auth` in #185 (2026-10-05), per ADR-060 § 3, and the baseline lost both
     entries. ~~`members/page.tsx` and `members/[id]/page.tsx` still call `getServerAuthContext`
     from `lib/server/auth-context.ts`.~~ #186 (2026-10-05) moved both onto the server guard's
     context and deleted the file. Persons imports no auth legacy.
+- **Tree applied it (#311, 2026-11-21).** `components/family-tree/`, `lib/hooks/useFamilyTree.ts`,
+  `lib/api/tree.ts`, `application/tree/`, `infrastructure/tree/`, `lib/types/tree.ts`,
+  `lib/types/member.ts`, `lib/utils/tree-transform.ts` and `lib/utils/kinship.ts` are deleted. The
+  page (`app/[locale]/(dashboard)/tree/page.tsx`) is a Server Component that renders
+  `TreeScreen` from `@/features/tree` and imports nothing else. The baseline went 18 → 14: the page's
+  two edges into `components/family-tree/`, and `tree-transform.ts → lib/types/tree.ts` and
+  `kinship.ts → lib/types/relationship.ts`, whose sources are gone. What the slice is:
+  - `features/tree/{api,model,server,hooks,ui}` over `GET /tree` and `GET /tree/focus/{id}`, mapping
+    into `domain/tree/tree.ts`. `subtree`, `ancestors` and `path` have no caller today and no
+    transport; add one with its first screen.
+  - **đa thê lives in `domain/kinship/wife-groups.ts`**, pure: children by `mother_id`, wives by
+    `mother_spouse_order` ascending, `null` last, then `Chưa rõ mẹ` (spec § 3.3). The focus panel
+    draws the groups with headers, and the canvas layout uses the same function to place a
+    father's children left to right in group order.
+  - **The `HistoricalDate` DTO is not copied a third time.** `model/tree-dto.ts` takes
+    `historicalDateDtoSchema` through `@/features/persons`, which `cross-feature-only-via-index`
+    allows. Moving the schema to `shared/` is still the open structural question
+    `features/relationships/model/historical-date-dto.ts` names.
+  - `GenerationBadge` renders `Đời {n}` or `Đời ?` (spec § 3.2), never omitted. Spouse nodes carry
+    no đời in `SpouseNode`, so their canvas node draws no badge rather than a guessed `Đời ?`.
+  - `TreeScreen` and `TreeControls` read `treeMaxGenerations` from `@/store/ui.store`, the one
+    client store. Tree query keys are `['tree', clanId, …]`, so the legacy
+    `lib/hooks/query-invalidation.ts`'s `['tree']` prefix still invalidates them.
+  - **The legacy canvas could not draw a freshly fetched tree**, read at source and not measured in
+    a browser. It seeded `useNodesState` on its first render, while the query was still loading, and
+    `useNodesState` keeps its initial value, so the loaded nodes never reached it unless the query
+    was already cached at mount. The new canvas derives
+    nodes from the tree on each render and passes them controlled.
+  - Tests: `domain/kinship/wife-groups.test.ts`, `server/tree-repository.test.ts`,
+    `ui/tree-layout.test.ts`, and `ui/FocusPanel.test.tsx` over an MSW focus response, a father with
+    two wives (`mother_spouse_order` 1 and 2) and a motherless child placed between two wives'
+    children in the backend's order. Controls, each planted and reverted: wives sorted descending,
+    a motherless child folded into the first wife seen, no grouping at all, and a null đời drawn
+    as a number; each fails a named test. The first fixture listed the motherless child first, and
+    the "folded into the first wife" plant passed it, so the fixture order is load-bearing.
+  - **The ratchet does not catch a re-added page → `components/family-tree/` edge against a merge
+    base that still lists it.** Planted on 2026-11-21 with the baseline regenerated to admit it:
+    `pnpm depcruise:ratchet origin/main` passed, because `origin/main`'s baseline had that edge.
+    Without the regeneration, `pnpm depcruise` fails on it by name. Once this lands, the ratchet
+    catches it too.
 - **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
   The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
   `src/infrastructure/admin/http-admin-repositories.ts` and every one of

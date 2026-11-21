@@ -21,12 +21,3 @@ export interface ApiError {
     detail: Record<string, unknown>
   }
 }
-
-/** Tree endpoint response — GET /tree | /tree/subtree | /tree/ancestors */
-export interface TreeApiResponse {
-  tree: import('./tree').TreeNode
-  total_persons: number
-  total_generations: number
-}
-
-export type TreeAncestorsResponse = import('./tree').TreeNode[]

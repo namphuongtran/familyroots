@@ -100,24 +100,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/app/[locale]/(dashboard)/tree/page.tsx",
-    "to": "src/components/family-tree/MemberSidebar.tsx",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/[locale]/(dashboard)/tree/page.tsx",
-    "to": "src/components/family-tree/TreeCanvas.tsx",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/app/[locale]/backoffice/layout.tsx",
     "to": "src/components/backoffice/BackofficeSidebar.tsx",
     "rule": {
@@ -138,24 +120,6 @@
     "type": "dependency",
     "from": "src/app/[locale]/platform/metrics/page.tsx",
     "to": "src/lib/hooks/useAdmin.ts",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/lib/utils/kinship.ts",
-    "to": "src/lib/types/relationship.ts",
-    "rule": {
-      "severity": "error",
-      "name": "nothing-imports-legacy"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/lib/utils/tree-transform.ts",
-    "to": "src/lib/types/tree.ts",
     "rule": {
       "severity": "error",
       "name": "nothing-imports-legacy"
