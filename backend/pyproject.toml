@@ -18,7 +18,7 @@ dependencies = [
     "pydantic[email]>=2.13.4",
     "pydantic-settings>=2.14.2",
     "alembic>=1.18.5",
-    "python-jose[cryptography]>=3.5.0",
+    "pyjwt[crypto]>=2.14.0",
     # httpx is frozen at 0.28.1; httpx2 is its successor and the client Starlette 1.x
     # wants (TestClient warns without it). Both are present because supabase and
     # firebase-admin still pull httpx transitively — first-party code uses httpx2.
@@ -100,7 +100,6 @@ module = [
     "sentry_sdk",
     "firebase_admin.*",
     "supabase.*",
-    "jose.*",
     "apscheduler.*",
     "prometheus_fastapi_instrumentator",
 ]
@@ -140,7 +139,7 @@ forbidden_modules = [
     "supabase",
     "httpx",
     "httpx2",
-    "jose",
+    "jwt",
     "firebase_admin",
     "apscheduler",
 ]
@@ -240,5 +239,4 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.1",
-    "types-python-jose>=3.3.0",
 ]

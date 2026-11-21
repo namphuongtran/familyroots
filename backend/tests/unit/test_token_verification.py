@@ -1,13 +1,20 @@
 """verify_supabase_token must reject tokens with a wrong issuer."""
 
+import json
+
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from jose import jwk, jwt
-from jose.constants import ALGORITHMS
 
 from app.core import security
 from app.core.config import settings
+
+
+def _public_jwk(pem: str) -> dict:
+    """RS256 public JWK for a PEM, as a plain dict."""
+    key = serialization.load_pem_public_key(pem.encode())
+    return json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key))
 
 
 def _make_keypair_and_jwk():
@@ -22,7 +29,7 @@ def _make_keypair_and_jwk():
         .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
         .decode()
     )
-    public_jwk = jwk.construct(pub_pem, ALGORITHMS.RS256).to_dict()
+    public_jwk = _public_jwk(pub_pem)
     public_jwk["kid"] = "test-key"
     public_jwk = {k: (v.decode() if isinstance(v, bytes) else v) for k, v in public_jwk.items()}
     return priv_pem, {"keys": [public_jwk]}
@@ -63,4 +70,29 @@ async def test_wrong_issuer_rejected(signing):
     token = _token(signing, "https://evil.example.com/auth/v1")
     with pytest.raises(HTTPException) as exc:
         await security.verify_supabase_token(token)
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_hs256_token_signed_with_the_public_key_is_refused(signing, monkeypatch):
+    """Algorithm confusion: an HS256 token keyed by the JWKS public key must not verify."""
+    from fastapi import HTTPException
+
+    jwks = await security.get_supabase_jwks()
+    # PyJWT refuses a PEM as an HMAC secret on encode, so the attacker uses the
+    # public key material in raw form: the JWK modulus.
+    pub = jwks["keys"][0]["n"].encode()
+    forged = jwt.encode(
+        {
+            "sub": "u1",
+            "aud": "authenticated",
+            "iss": "https://proj.supabase.co/auth/v1",
+            "exp": 9999999999,
+        },
+        pub,
+        algorithm="HS256",
+        headers={"kid": "test-key"},
+    )
+    with pytest.raises(HTTPException) as exc:
+        await security.verify_supabase_token(forged)
     assert exc.value.status_code == 401
