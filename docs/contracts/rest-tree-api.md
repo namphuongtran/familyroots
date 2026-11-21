@@ -106,7 +106,8 @@ identical across every one of these surfaces (ADR-027 closes H4, where `/tree` a
   state by the **bare node id** must instead key by `id` + parent (or otherwise
   exempt stubs from dedup), or it can silently drop the canonical subtree or
   collide two render slots for the same id. The web tree canvas
-  (`web/src/lib/utils/tree-transform.ts`) hit exactly this and was fixed in this
+  (then `web/src/lib/utils/tree-transform.ts`, since #311
+  `web/src/features/tree/ui/tree-layout.ts`) hit exactly this and was fixed in this
   same PR — see ADR-027 Consequences for the failure mode and the fix.
 - Changing node/edge identifiers or path semantics is breaking.
 - Keep traversal responses compatible with visualization clients.

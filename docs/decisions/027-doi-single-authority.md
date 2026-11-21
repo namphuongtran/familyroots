@@ -97,7 +97,8 @@ stub variant: clients render stubs exactly like any node and simply don't descen
   a React key of just `id`) can silently drop the canonical subtree or collide two
   distinct render slots for the same id — it must key by `id` **plus its parent**
   (or otherwise exempt stubs from dedup) instead. The web tree canvas
-  (`web/src/lib/utils/tree-transform.ts`) hit exactly this failure mode and was
+  (`web/src/lib/utils/tree-transform.ts`; since #311 the same logic lives in
+  `web/src/features/tree/ui/tree-layout.ts`) hit exactly this failure mode and was
   fixed in this same PR: it now only adds a node's id to its "visited" set when the
   node is NOT a stub, and gives each stub a synthetic id+parent React-Flow key so it
   never collides with (or masks) its canonical node.

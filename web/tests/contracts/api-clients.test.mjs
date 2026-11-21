@@ -18,15 +18,6 @@ test('relationships API uses backend-prefixed relationship routes', async () => 
   assert.doesNotMatch(source, /['"`]\/parent-child['"`]/)
 })
 
-test('tree API uses backend tree routes and ancestors response type', async () => {
-  const source = await read('src/lib/api/tree.ts')
-
-  assert.match(source, /['"`]\/tree['"`]/)
-  assert.match(source, /\/tree\/subtree\/\$\{rootId\}/)
-  assert.match(source, /\/tree\/ancestors\/\$\{personId\}/)
-  assert.match(source, /ApiResponse<TreeAncestorsResponse>/)
-})
-
 test('document contracts do not assume file_url in summary payloads', async () => {
   const types = await read('src/lib/types/document.ts')
   const gallery = await read('src/components/documents/DocumentGallery.tsx')

@@ -101,7 +101,7 @@ or `revalidateTag`.
 
 Match what the code already does.
 
-- Folders: `kebab-case`, for example `src/components/family-tree/`.
+- Folders: `kebab-case`, for example `src/shared/http/` or `src/features/tree/`.
 - React component files: `PascalCase`, matching the component name, for example
   `MemberCard.tsx`. 25 of the 27 `.tsx` files under `src/components/` follow this.
 - Domain, shared, and transport modules: `kebab-case`, for example `api-client.ts`,

@@ -1,13 +1,5 @@
 // Barrel export for all types
-export type {
-  ApiResponse,
-  CursorPage,
-  ApiError,
-  TreeApiResponse,
-  TreeAncestorsResponse,
-} from './api'
-// `./member` declares `PersonSummary` only. See that file's header comment.
-export type { PersonSummary } from './member'
+export type { ApiResponse, CursorPage, ApiError } from './api'
 export type {
   Marriage,
   MarriageStatus,
@@ -18,7 +10,6 @@ export type {
   ParentChildCreateInput,
   ParentChildUpdateInput,
 } from './relationship'
-export type { TreeNode, SpouseNode, PathStep, RelationshipPath } from './tree'
 export type {
   ClanEvent,
   UpcomingEvent,
