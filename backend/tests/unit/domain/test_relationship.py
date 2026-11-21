@@ -14,7 +14,7 @@ from app.domain.relationship.events import (
     ParentChildDeleted,
 )
 from app.domain.relationship.validator import BirthDate, RelationshipDomainValidator
-from app.domain.shared.exceptions import BusinessRuleViolation, ConflictError
+from app.domain.shared.exceptions import BusinessRuleViolation, ConflictError, ValidationError
 from app.domain.shared.value_objects import ActorInfo
 
 # ── Marriage entity ──────────────────────────────────────────────
@@ -35,6 +35,26 @@ class TestMarriage:
         pid = uuid.uuid4()
         with pytest.raises(BusinessRuleViolation, match="self_marriage_not_allowed"):
             Marriage(person1_id=pid, person2_id=pid)
+
+    def test_construct_divorce_before_marriage_raises(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            Marriage(marriage_date=date(2000, 5, 1), divorce_date=date(1999, 1, 1))
+        assert exc.value.code == "relationship.divorce_before_marriage"
+
+    def test_same_day_divorce_allowed(self) -> None:
+        d = date(2000, 5, 1)
+        Marriage(marriage_date=d, divorce_date=d)
+
+    def test_update_divorce_before_marriage_raises_and_leaves_state(self) -> None:
+        actor = ActorInfo(user_id=uuid.uuid4(), role="editor")
+        m = Marriage(marriage_date=date(2000, 5, 1), divorce_date=date(2010, 1, 1))
+        with pytest.raises(ValidationError) as exc:
+            m.update({"divorce_date": date(1999, 1, 1)}, actor, uuid.uuid4())
+        assert exc.value.code == "relationship.divorce_before_marriage"
+        assert m.divorce_date == date(2010, 1, 1)
+        # moving the marriage date past an existing divorce is also rejected
+        with pytest.raises(ValidationError):
+            m.update({"marriage_date": date(2011, 1, 1)}, actor, uuid.uuid4())
 
     def test_soft_delete_emits_event(self) -> None:
         actor = ActorInfo(user_id=uuid.uuid4(), role="admin")

@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, cast
 
 from app.domain.relationship.events import (
     MarriageCreated,
@@ -20,7 +20,7 @@ from app.domain.relationship.events import (
     ParentChildUpdated,
 )
 from app.domain.shared.entity import AggregateRoot
-from app.domain.shared.exceptions import BusinessRuleViolation
+from app.domain.shared.exceptions import BusinessRuleViolation, ValidationError
 from app.domain.shared.value_objects import ActorInfo
 
 # Fields a client may change via update(). Deliberately excludes the person ids,
@@ -41,6 +41,13 @@ _MARRIAGE_UPDATABLE_FIELDS = frozenset(
     }
 )
 _PARENT_CHILD_UPDATABLE_FIELDS = frozenset({"relationship_type", "birth_order", "notes"})
+
+
+def _assert_divorce_not_before_marriage(
+    marriage_date: date | None, divorce_date: date | None
+) -> None:
+    if marriage_date and divorce_date and divorce_date < marriage_date:
+        raise ValidationError("relationship.divorce_before_marriage")
 
 
 @dataclass
@@ -82,6 +89,7 @@ class Marriage(AggregateRoot):
     def __post_init__(self) -> None:
         if self.person1_id == self.person2_id:
             raise BusinessRuleViolation("self_marriage_not_allowed")
+        _assert_divorce_not_before_marriage(self.marriage_date, self.divorce_date)
 
     @classmethod
     def create(
@@ -113,9 +121,16 @@ class Marriage(AggregateRoot):
         return marriage
 
     def update(self, changes: dict[str, object], actor: ActorInfo, clan_id: uuid.UUID) -> None:
-        for field_name, new_value in changes.items():
+        for field_name in changes:
             if field_name not in _MARRIAGE_UPDATABLE_FIELDS:
                 raise BusinessRuleViolation("field_not_updatable", {"field": field_name})
+        # Checked on the effective dates BEFORE any mutation, so a rejected
+        # update leaves the aggregate untouched.
+        _assert_divorce_not_before_marriage(
+            cast("date | None", changes.get("marriage_date", self.marriage_date)),
+            cast("date | None", changes.get("divorce_date", self.divorce_date)),
+        )
+        for field_name, new_value in changes.items():
             setattr(self, field_name, new_value)
         # Re-assert the construction invariant (defence in depth — person ids are
         # not updatable, so this cannot currently fail, but keeps the guard local
