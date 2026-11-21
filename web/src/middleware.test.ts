@@ -181,3 +181,29 @@ describe('the password-reset routes are public', () => {
     expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
   })
 })
+
+/**
+ * #333. The privacy notice is linked from sign-up, so a signed-out visitor must reach it on every
+ * locale. Negative control: with `'/privacy'` out of `PUBLIC_ROUTES`, the first case failed with
+ * `vi: expected 'http://localhost:3000/vi/login' to be null`.
+ */
+describe('the privacy notice is public', () => {
+  beforeEach(() => {
+    currentSession = null
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key')
+  })
+
+  it('lets a signed-out visitor reach /privacy on every locale', async () => {
+    for (const locale of ['vi', 'en', 'zh', 'fr']) {
+      const response = await middleware(requestFor(`/${locale}/privacy`))
+      expect(response.headers.get('location'), locale).toBeNull()
+    }
+  })
+
+  it('and a non-public route in the same run still redirects, so the check is real', async () => {
+    const response = await middleware(requestFor('/vi/members'))
+
+    expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
+  })
+})

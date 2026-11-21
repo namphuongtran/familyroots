@@ -165,7 +165,17 @@ export interface paths {
         get: operations["get_me_api_v1_auth_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Me
+         * @description Delete the authenticated user's own account (ADR-079).
+         *
+         *     Removes the sign-in account at the identity provider, every clan membership and
+         *     role, push tokens and the profile, and writes an ``account.delete`` audit row.
+         *     409 ``account.last_admin_transfer_first`` while the user is a clan's only admin.
+         *     Persons in clan trees stay. The client signs out afterwards: an access token
+         *     already issued still verifies until it expires.
+         */
+        delete: operations["delete_me_api_v1_auth_me_delete"];
         options?: never;
         head?: never;
         /**
@@ -556,6 +566,28 @@ export interface paths {
          * @description Update a person's details.
          */
         patch: operations["update_person_api_v1_persons__person_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/persons/{person_id}/anonymise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anonymise Person
+         * @description Anonymise a person (admin only, ADR-079): names, dates, places, biography, notes,
+         *     avatar and personal details are cleared, the name becomes "Đã ẩn danh", and the node
+         *     keeps its gender, memberships and relationships so the tree and đời are unchanged.
+         */
+        post: operations["anonymise_person_api_v1_persons__person_id__anonymise_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/persons/{person_id}/restore": {
@@ -4359,6 +4391,71 @@ export interface operations {
             };
         };
     };
+    delete_me_api_v1_auth_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_MessageData_"];
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     update_me_api_v1_auth_me_patch: {
         parameters: {
             query?: never;
@@ -6129,6 +6226,75 @@ export interface operations {
                 "application/json": components["schemas"]["PersonUpdateRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PersonResponse_"];
+                };
+            };
+            /** @description Missing/invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Insufficient role / clan mismatch */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not found (incl. cross-clan reads) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict (stale_write, duplicates) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    anonymise_person_api_v1_persons__person_id__anonymise_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-current-clan-id"?: string | null;
+            };
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

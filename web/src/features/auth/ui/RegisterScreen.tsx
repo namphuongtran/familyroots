@@ -48,6 +48,7 @@ import { SupabaseSetupNotice } from './SupabaseSetupNotice'
  */
 export function RegisterScreen() {
   const t = useTranslations('auth')
+  const tPrivacy = useTranslations('privacy')
   const locale = useLocale()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -513,6 +514,18 @@ export function RegisterScreen() {
             )}
           </p>
         </form>
+
+        {!isOnboarding && (
+          <p className="text-muted-foreground text-center text-xs">
+            {tPrivacy.rich('signup_notice', {
+              link: (chunks) => (
+                <Link href={`/${locale}/privacy`} className="text-primary hover:underline">
+                  {chunks}
+                </Link>
+              ),
+            })}
+          </p>
+        )}
       </div>
     </div>
   )

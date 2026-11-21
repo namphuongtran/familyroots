@@ -519,5 +519,25 @@
   "metadata": {
     "tagline": "Généalogie vietnamienne",
     "description": "Plateforme de gestion des généalogies de clans vietnamiens"
+  },
+  "privacy": {
+    "draft_banner": "Brouillon — en attente de relecture juridique",
+    "title": "Avis de confidentialité",
+    "intro": "Cette page explique quelles données FamilyRoots collecte, pourquoi, et quels sont vos droits. Le texte est encore un brouillon.",
+    "collect_title": "Données que nous collectons",
+    "collect_body": "Compte : e-mail, nom et langue préférée. Contenu de l'arbre saisi par les membres du clan : noms, dates, lieux, biographies, photos et documents. Données techniques : adresse IP et user agent, consignés dans le journal d'audit.",
+    "purpose_title": "Pourquoi nous les utilisons",
+    "purpose_body": "Pour faire fonctionner l'arbre généalogique de votre clan, ainsi que pour la sécurité et le suivi des modifications (audit).",
+    "visibility_title": "Qui peut les voir",
+    "visibility_body": "Les membres d'un clan voient son contenu selon leur rôle. Le téléphone et l'e-mail d'une personne ne sont visibles que des administrateurs du clan et de cette personne.",
+    "storage_title": "Où elles sont stockées",
+    "storage_body": "Les données sont stockées sur Supabase, dans la région ap-southeast-1 (Singapour), avec des sauvegardes.",
+    "rights_title": "Vos droits",
+    "rights_delete_body": "Vous pouvez supprimer votre propre compte. Cela supprime votre compte de connexion, vos appartenances et rôles dans les clans, et votre profil. Si vous êtes le dernier administrateur d'un clan, le système refuse : transférez d'abord le rôle d'administrateur.",
+    "rights_anonymise_body": "Vous pouvez demander à un administrateur du clan d'anonymiser une personne de l'arbre. Noms, dates, lieux, biographie, notes et avatar sont effacés ou remplacés par « Đã ẩn danh ». La place de la personne dans l'arbre est conservée afin que les générations restent correctes.",
+    "contact_title": "Contact",
+    "contact_body": "Le responsable du traitement n'est pas encore désigné. Les coordonnées sont à confirmer.",
+    "footer_link": "Avis de confidentialité",
+    "signup_notice": "Avant de vous inscrire, lisez notre <link>avis de confidentialité</link>."
   }
 }

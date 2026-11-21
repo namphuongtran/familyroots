@@ -44,6 +44,9 @@ const PUBLIC_ROUTES = [
   // `Auth | Yes` (`docs/contracts/rest-invitations-api.md:62-64`), so a signed-out
   // visitor reaches the page and is shown the sign-in state rather than the button.
   '/invitations',
+  // `/privacy` (#333) is linked from sign-up and the footer, so its reader may have no session at
+  // all. Gated, it would send a person deciding whether to sign up to the login page instead.
+  '/privacy',
 ]
 
 /**
