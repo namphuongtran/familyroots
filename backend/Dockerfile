@@ -12,7 +12,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Pin uv to an explicit release — never use :latest in production.
-COPY --from=ghcr.io/astral-sh/uv:0.6.3 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.9 /uv /usr/local/bin/uv
 
 # UV flags
 #   UV_COMPILE_BYTECODE       — pre-compile .pyc during install → faster cold start
