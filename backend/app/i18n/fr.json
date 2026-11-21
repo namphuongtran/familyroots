@@ -91,6 +91,7 @@
   "error.user_not_found": "Utilisateur introuvable",
   "error.relationship.duplicate_edge": "Cette relation existe déjà",
   "error.auth.clan_id_required_for_join": "Un code de clan est requis pour rejoindre",
+  "error.auth.register_names_no_clan": "L'inscription n'accepte aucun champ de clan. Créez ou rejoignez un clan après avoir confirmé votre e-mail et vous être connecté",
   "error.auth.clan_code_and_id_both_given": "Envoyez un code de clan ou un clan_id, pas les deux",
   "error.auth.clan_name_required_for_create": "Le nom et le slug du clan sont requis pour créer",
   "error.auth.clan_slug_taken": "Ce slug de clan est déjà pris",

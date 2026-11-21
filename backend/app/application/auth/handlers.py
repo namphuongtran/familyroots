@@ -272,56 +272,14 @@ class AuthCommandHandler:
         email: str,
         password: str,
         full_name: str,
-        clan_action: str | None = None,
-        clan_code: str | None = None,
-        clan_id: uuid.UUID | None = None,
-        clan_name: str | None = None,
-        clan_slug: str | None = None,
     ) -> None:
-        """Register a new user — create a clan, join a clan, or neither.
+        """Register a new user. The account has no clan, ever (ADR-075 amendment).
 
-        ``clan_action=None`` is the third case, added by ADR-058: the account is
-        created with **no clan membership at all**. It exists for the invitee in
-        ADR-057's primary join path. That person holds an invitation token, has no
-        clan code to type and no clan to found, and
-        ``POST /invitations/{token}/accept`` requires them to be signed in first
-        (``app/api/v1/invitations.py:95-99``) — so without this case the
-        invitation flow has no reachable first step. The membership arrives from
-        accept, on the session ADR-048 put it on.
-
-        Clan-INPUT validation runs unconditionally, before ``create_user``, so a
-        bad clan_code/clan_slug fails identically whether or not the email already
-        has an account (ADR-021 non-enumeration). Without this, an existing email
-        short-circuits before ever reaching ``_assign_clan_membership``'s checks
-        while a fresh email hits them — a status-code oracle for account
-        enumeration. The join half of that validation is ``_resolve_join_target``,
-        the same method ``_assign_clan_membership`` uses, so the two cannot drift
-        apart the way two hand-copied checks could; the resolution is deliberately
-        run twice rather than carried, because the row must be re-read on the
-        session that will write the membership.
-
-        The ``clan_action=None`` case does not weaken that property, because it
-        adds **no** error code and no branch that can answer differently for a
-        registered and an unregistered email: it validates nothing, so both emails
-        reach ``create_user`` and both get the same 201. The one body that could
-        have leaked — a clan named with no ``clan_action`` — is refused by
-        ``RegisterRequest``'s own validator, before this method runs and before the
-        identity provider is touched at all.
+        A clan is created or joined only in onboarding
+        (``onboard_authenticated_user``), after the email is confirmed. The schema
+        refuses any clan field before this method runs, so nothing here can answer
+        differently for a registered and an unregistered email (ADR-021).
         """
-        if clan_action == "create" and (not clan_name or not clan_slug):
-            raise ValidationError("auth.clan_name_required_for_create")
-
-        if clan_action == "create":
-            # Guaranteed non-None by the validation above.
-            assert clan_name is not None and clan_slug is not None
-            existing_clan = await self._repo.get_clan_by_slug(clan_slug)
-            if existing_clan:
-                raise ConflictError("auth.clan_slug_taken")
-        elif clan_action == "join":
-            await self._resolve_join_target(clan_code=clan_code, clan_id=clan_id)
-        # clan_action is None: nothing to validate. RegisterRequest has already
-        # refused any body that names a clan without naming an action.
-
         try:
             user_id_str = await self._identity.create_user(
                 email=email, password=password, full_name=full_name
@@ -347,21 +305,9 @@ class AuthCommandHandler:
 
         user_id = uuid.UUID(user_id_str)
         try:
-            if clan_action is None:
-                await self._provision_clanless_account(
-                    user_id=user_id, email=email, full_name=full_name
-                )
-            else:
-                await self._assign_clan_membership(
-                    user_id=user_id,
-                    email=email,
-                    full_name=full_name,
-                    clan_action=clan_action,
-                    clan_code=clan_code,
-                    clan_id=clan_id,
-                    clan_name=clan_name,
-                    clan_slug=clan_slug,
-                )
+            await self._provision_clanless_account(
+                user_id=user_id, email=email, full_name=full_name
+            )
         except Exception:
             # Compensate: the auth user exists but DB membership failed — delete the
             # orphan so the email can be reused. No verification email was sent.

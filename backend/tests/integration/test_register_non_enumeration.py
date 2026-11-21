@@ -3,7 +3,6 @@ email already has an account; existing accounts get a recovery-email nudge."""
 
 from __future__ import annotations
 
-import secrets
 import uuid
 from collections.abc import AsyncGenerator, Iterator
 from typing import Any
@@ -36,18 +35,13 @@ REGISTER_BODY_NEW = {
     "email": "moi@example.com",
     "password": "S3cure!pass",
     "full_name": "Người Mới",
-    "clan_action": "create",
-    "clan_name": "Họ Mới",
-    "clan_slug": "ho-moi",
 }
 
 
 def _fresh_body(**overrides: Any) -> dict[str, Any]:
-    """A REGISTER_BODY_NEW variant with a unique email/slug, so tests that each
-    perform a *fresh* registration don't collide on clan-slug uniqueness within
-    the session-scoped test database shared across integration modules."""
+    """A REGISTER_BODY_NEW variant with a unique email."""
     uid = uuid.uuid4().hex[:8]
-    body = {**REGISTER_BODY_NEW, "email": f"moi-{uid}@example.com", "clan_slug": f"ho-moi-{uid}"}
+    body = {**REGISTER_BODY_NEW, "email": f"moi-{uid}@example.com"}
     body.update(overrides)
     return body
 
@@ -125,24 +119,6 @@ def seeded_existing_email(identity_fake: FakeIdentityProvider) -> str:
 
 
 @pytest.fixture()
-def taken_slug(client: TestClient) -> str:
-    """A slug that genuinely belongs to a real clan (seeded via an ordinary
-    registration), so the slug-taken check has something real to collide with."""
-    uid = uuid.uuid4().hex[:8]
-    seed_body = {
-        "email": f"seed-{uid}@example.com",
-        "password": "S3cure!pass",
-        "full_name": "Seed User",
-        "clan_action": "create",
-        "clan_name": "Seed Clan",
-        "clan_slug": f"seed-clan-{uid}",
-    }
-    resp = client.post("/api/v1/auth/register", json=seed_body)
-    assert resp.status_code == 201, resp.text
-    return seed_body["clan_slug"]
-
-
-@pytest.fixture()
 async def db_session(migrated_db_url: str) -> AsyncGenerator[AsyncSession]:
     engine = create_async_engine(migrated_db_url)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -176,7 +152,7 @@ def test_both_paths_return_identical_body(
     client: TestClient, identity_fake: FakeIdentityProvider, seeded_existing_email: str
 ) -> None:
     fresh = client.post("/api/v1/auth/register", json=REGISTER_BODY_NEW)
-    dup_body = {**REGISTER_BODY_NEW, "email": seeded_existing_email, "clan_slug": "ho-khac"}
+    dup_body = {**REGISTER_BODY_NEW, "email": seeded_existing_email}
     dup = client.post("/api/v1/auth/register", json=dup_body)
     assert fresh.status_code == dup.status_code == 201
     assert fresh.json() == dup.json()  # byte-identical envelope
@@ -192,11 +168,6 @@ async def test_existing_email_creates_nothing_and_nudges(
 ) -> None:
     before_users = await _count(db_session, "user_profiles")
     before_clans = await _count(db_session, "clans")
-    # A unique clan_slug (not the static REGISTER_BODY_NEW one): clan-input
-    # validation now runs unconditionally (see the regression tests below), so
-    # reusing a slug another test already claimed in this session-scoped DB
-    # would 409 here — unrelated to what this test actually verifies (the
-    # existing-email nudge/early-return path).
     resp = client.post("/api/v1/auth/register", json=_fresh_body(email=seeded_existing_email))
     assert resp.status_code == 201
     assert identity_fake.create_user_calls_for(seeded_existing_email) == 0
@@ -223,12 +194,18 @@ async def test_new_email_full_flow_still_works(
     assert resp.status_code == 201
     assert identity_fake.create_user_calls_for(body["email"]) == 1
 
-    clan = (
+    # The account has no clan, ever (ADR-075 amendment): its profile row exists
+    # and no membership does.
+    rows = (
         await db_session.execute(
-            sa.text("SELECT id FROM clans WHERE slug = :s"), {"s": body["clan_slug"]}
+            sa.text(
+                "SELECT count(*) FROM user_clan_roles r "
+                "JOIN user_profiles p ON p.id = r.user_id WHERE p.email = :e"
+            ),
+            {"e": body["email"]},
         )
-    ).first()
-    assert clan is not None
+    ).scalar_one()
+    assert rows == 0
 
 
 @pytest.mark.asyncio
@@ -258,158 +235,43 @@ async def test_onboard_response_unchanged(db_session: AsyncSession) -> None:
     assert resp.message  # unchanged: still a populated RegisterResponse
 
 
-# ── Regression: clan-input validation must precede identity lookup ───────────
+# ── A clan field on register is refused, identically on both paths ──────────
 #
-# Bug (empirically reproduced): register() used to run create_user FIRST. The
-# existing-email branch returned immediately after the nudge, before any clan
-# validation ran; the new-email branch instead proceeded into
-# _assign_clan_membership, whose validation errors (422/404/409) surfaced to
-# the client. So a bad clan_slug/clan_id combined with a *fresh* email failed
-# loudly while the same bad input combined with an *existing* email silently
-# succeeded (201) — a status-code oracle for account enumeration, defeating
-# ADR-021. The fix hoists clan-INPUT validation to the top of register(),
-# unconditionally, before create_user runs, so both paths fail identically.
+# ADR-075 amendment: a clan is created or joined only in onboarding. The refusal is
+# in ``RegisterRequest``, before the route body, so the identity provider is never
+# consulted and a registered email cannot answer differently from a fresh one.
 
 
-def test_taken_slug_same_status_both_paths(
+@pytest.mark.parametrize(
+    "clan_fields",
+    [
+        {"clan_action": "create", "clan_name": "Họ Mới", "clan_slug": "ho-moi"},
+        {"clan_action": "join", "clan_code": "ho-moi"},
+        {"clan_action": "join", "clan_id": str(uuid.uuid4())},
+        {"clan_action": "join"},
+        {"clan_code": "ho-moi"},
+        {"clan_id": str(uuid.uuid4())},
+        {"clan_name": "Họ Mới"},
+        {"clan_slug": "ho-moi"},
+    ],
+)
+def test_a_clan_field_is_refused_the_same_on_both_paths(
     client: TestClient,
     identity_fake: FakeIdentityProvider,
     seeded_existing_email: str,
-    taken_slug: str,
+    clan_fields: dict[str, Any],
 ) -> None:
     fresh_email = f"fresh-{uuid.uuid4().hex[:8]}@example.com"
-    fresh_body = {
-        "email": fresh_email,
-        "password": "S3cure!pass",
-        "full_name": "Fresh User",
-        "clan_action": "create",
-        "clan_name": "Squatter Clan",
-        "clan_slug": taken_slug,
-    }
-    existing_body = {**fresh_body, "email": seeded_existing_email}
-
-    fresh_resp = client.post("/api/v1/auth/register", json=fresh_body)
-    existing_resp = client.post("/api/v1/auth/register", json=existing_body)
-
-    assert fresh_resp.status_code == existing_resp.status_code == 409
-    assert fresh_resp.json() == existing_resp.json()
-    assert fresh_resp.json()["error"]["code"] == "auth.clan_slug_taken"
-
-    # Validation precedes the provider call: identity.create_user was never
-    # invoked, and no recovery nudge was sent, on either path — a bad request
-    # is not rewarded with a probe signal.
-    assert identity_fake.create_user_calls_for(fresh_email) == 0
-    assert identity_fake.create_user_calls_for(seeded_existing_email) == 0
-    assert identity_fake.password_reset_calls_for(fresh_email) == 0
-    assert identity_fake.password_reset_calls_for(seeded_existing_email) == 0
-
-
-def test_one_character_clan_slug_same_422_both_paths(
-    client: TestClient,
-    identity_fake: FakeIdentityProvider,
-    seeded_existing_email: str,
-) -> None:
-    """#190: a one-character create code is refused at the door, on both paths.
-
-    The CHECK ``ck_clans_clans_slug_format`` has refused a one-character slug since
-    migration 001, while the API pattern accepted it. So the fresh-email path ran
-    ``create_user``, broke the CHECK on the clan insert and answered 500, and the
-    existing-email path returned 201 before any insert: 500 against 201, the ADR-021
-    oracle. The fixed reading is 422 against 422 with identical bodies, and the
-    identity provider is never consulted on either path.
-    """
-    fresh_email = f"fresh-{uuid.uuid4().hex[:8]}@example.com"
-    fresh_body = _fresh_body(email=fresh_email, clan_slug="a")
-    existing_body = {**fresh_body, "email": seeded_existing_email}
-
-    fresh_resp = client.post("/api/v1/auth/register", json=fresh_body)
-    existing_resp = client.post("/api/v1/auth/register", json=existing_body)
-
-    assert (fresh_resp.status_code, existing_resp.status_code) == (422, 422), (
-        fresh_resp.text,
-        existing_resp.text,
+    fresh_resp = client.post(
+        "/api/v1/auth/register", json=_fresh_body(email=fresh_email, **clan_fields)
     )
-    assert fresh_resp.json() == existing_resp.json()
-    error = fresh_resp.json()["error"]
-    assert error["code"] == "validation_error", fresh_resp.text
-    assert "body.clan_slug" in error["detail"]["fields"], fresh_resp.text
-
-    assert identity_fake.create_user_calls_for(fresh_email) == 0
-    assert identity_fake.password_reset_calls_for(seeded_existing_email) == 0
-
-
-@pytest.mark.asyncio
-async def test_two_character_clan_slug_still_creates_the_clan(
-    client: TestClient, identity_fake: FakeIdentityProvider, db_session: AsyncSession
-) -> None:
-    """#190: the minimum is two, not more. A two-character code is the shortest the
-    database has ever stored, so it must still found a clan, row and all."""
-    # Two characters drawn from neither ``a`` nor ``0``: test_clan_slug_shape.py
-    # inserts every short string over ``a``, ``0``, ``-`` and ``A`` into this same
-    # database and must find each two-character one free, whichever runs first.
-    slug = "".join(secrets.choice("bcdefghijklmnopqrstuvwxyz123456789") for _ in range(2))
-    body = _fresh_body(clan_slug=slug)
-
-    resp = client.post("/api/v1/auth/register", json=body)
-
-    assert resp.status_code == 201, resp.text
-    assert identity_fake.create_user_calls_for(body["email"]) == 1
-    row = (
-        await db_session.execute(sa.text("SELECT slug FROM clans WHERE slug = :s"), {"s": slug})
-    ).first()
-    assert row is not None
-
-
-def test_missing_clan_id_same_status_both_paths(
-    client: TestClient,
-    identity_fake: FakeIdentityProvider,
-    seeded_existing_email: str,
-) -> None:
-    fresh_email = f"fresh-{uuid.uuid4().hex[:8]}@example.com"
-    fresh_body = {
-        "email": fresh_email,
-        "password": "S3cure!pass",
-        "full_name": "Fresh User",
-        "clan_action": "join",
-        # clan_id intentionally omitted
-    }
-    existing_body = {**fresh_body, "email": seeded_existing_email}
-
-    fresh_resp = client.post("/api/v1/auth/register", json=fresh_body)
-    existing_resp = client.post("/api/v1/auth/register", json=existing_body)
+    existing_resp = client.post(
+        "/api/v1/auth/register", json=_fresh_body(email=seeded_existing_email, **clan_fields)
+    )
 
     assert fresh_resp.status_code == existing_resp.status_code == 422
     assert fresh_resp.json() == existing_resp.json()
-    assert fresh_resp.json()["error"]["code"] == "auth.clan_id_required_for_join"
-
-    assert identity_fake.create_user_calls_for(fresh_email) == 0
-    assert identity_fake.create_user_calls_for(seeded_existing_email) == 0
-    assert identity_fake.password_reset_calls_for(fresh_email) == 0
-    assert identity_fake.password_reset_calls_for(seeded_existing_email) == 0
-
-
-def test_nonexistent_clan_join_same_status_both_paths(
-    client: TestClient,
-    identity_fake: FakeIdentityProvider,
-    seeded_existing_email: str,
-) -> None:
-    random_clan_id = str(uuid.uuid4())
-    fresh_email = f"fresh-{uuid.uuid4().hex[:8]}@example.com"
-    fresh_body = {
-        "email": fresh_email,
-        "password": "S3cure!pass",
-        "full_name": "Fresh User",
-        "clan_action": "join",
-        "clan_id": random_clan_id,
-    }
-    existing_body = {**fresh_body, "email": seeded_existing_email}
-
-    fresh_resp = client.post("/api/v1/auth/register", json=fresh_body)
-    existing_resp = client.post("/api/v1/auth/register", json=existing_body)
-
-    assert fresh_resp.status_code == existing_resp.status_code == 404
-    assert fresh_resp.json() == existing_resp.json()
-    assert fresh_resp.json()["error"]["code"] == "clan_not_found"
+    assert fresh_resp.json()["error"]["code"] == "auth.register_names_no_clan"
 
     assert identity_fake.create_user_calls_for(fresh_email) == 0
     assert identity_fake.create_user_calls_for(seeded_existing_email) == 0

@@ -91,6 +91,7 @@
   "error.user_not_found": "User not found",
   "error.relationship.duplicate_edge": "This relationship already exists",
   "error.auth.clan_id_required_for_join": "A clan code is required to join",
+  "error.auth.register_names_no_clan": "Sign-up takes no clan fields. Create or join a clan after you confirm your email and sign in",
   "error.auth.clan_code_and_id_both_given": "Send a clan code or a clan_id, not both",
   "error.auth.clan_name_required_for_create": "Clan name and slug are required to create",
   "error.auth.clan_slug_taken": "Clan slug is already taken",

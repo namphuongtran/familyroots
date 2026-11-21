@@ -192,7 +192,7 @@ describe('register', () => {
     expect(await seen[0].json()).toEqual(body)
   })
 
-  it('surfaces a 409 clan_slug_taken with its code and the localised message', async () => {
+  it('surfaces a 409 error with its code and the localised message', async () => {
     const { fetchImpl } = routes({
       'POST /auth/register': () =>
         jsonResponse(
@@ -212,9 +212,6 @@ describe('register', () => {
         email: 'lan@example.com',
         password: 'correct horse battery',
         full_name: 'Nguyễn Thị Lan',
-        clan_action: 'create',
-        clan_name: 'Trần Gia',
-        clan_slug: 'tran-gia',
       },
       { context, fetchImpl },
     ).catch((error: unknown) => error)

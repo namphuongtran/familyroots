@@ -91,6 +91,7 @@
   "error.user_not_found": "未找到用户",
   "error.relationship.duplicate_edge": "此关系已存在",
   "error.auth.clan_id_required_for_join": "加入需要提供宗族代码",
+  "error.auth.register_names_no_clan": "注册不接受宗族字段。请在确认邮箱并登录后创建或加入宗族",
   "error.auth.clan_code_and_id_both_given": "请只提供宗族代码或 clan_id，不要同时提供",
   "error.auth.clan_name_required_for_create": "创建需要提供宗族名称和标识",
   "error.auth.clan_slug_taken": "宗族标识已被占用",

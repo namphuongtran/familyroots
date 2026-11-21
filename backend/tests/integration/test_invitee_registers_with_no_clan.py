@@ -240,12 +240,22 @@ def _found_clan(client: TestClient, suffix: str, tag: str) -> tuple[str, str]:
             "email": email,
             "password": _PW,
             "full_name": f"Truong Toc {tag}",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": _PW})
+    assert login.status_code == 200, login.text
+    # The clan is created in onboarding, after sign-in (ADR-075 amendment).
+    onboard = client.post(
+        "/api/v1/auth/onboard",
+        headers=_auth(cast(str, _data(login)["access_token"])),
+        json={
             "clan_action": "create",
             "clan_name": f"Ho {tag} {suffix}",
             "clan_slug": f"{tag}-{suffix}",
         },
     )
-    assert resp.status_code == 201, resp.text
+    assert onboard.status_code == 201, onboard.text
     login = client.post("/api/v1/auth/login", json={"email": email, "password": _PW})
     assert login.status_code == 200, login.text
     data = _data(login)
@@ -472,15 +482,15 @@ async def test_a_repeat_clanless_register_writes_no_second_profile(
     assert after == before
 
 
-def test_a_body_that_names_a_clan_without_an_action_is_refused_identically(
+def test_a_body_that_names_a_clan_is_refused_identically(
     client: TestClient, stub_identity: StubIdentityProvider
 ) -> None:
-    """`clan_code` with no `clan_action` is a 422 `validation_error`, both paths.
+    """A clan field on register is a 422 `auth.register_names_no_clan`, both paths.
 
     The refusal happens in `RegisterRequest`, before the route body runs, so the
     identity provider is never consulted -- which is what makes it impossible
     for this branch to answer differently for a registered and an unregistered
-    email. No new error code is added to this route.
+    email.
     """
     suffix = uuid.uuid4().hex[:10]
     known = f"k2-{suffix}@example.com"
@@ -499,34 +509,26 @@ def test_a_body_that_names_a_clan_without_an_action_is_refused_identically(
 
     assert on_known.status_code == on_unknown.status_code == 422
     assert on_known.json() == on_unknown.json()
-    assert _error_code(on_known) == "validation_error"
-    # The contract states this reading (docs/contracts/rest-auth-api.md,
-    # "Registering with no clan"): the refusal is model-level, so `loc` is the
-    # whole body rather than one field.
-    assert on_known.json()["error"]["detail"] == {"fields": ["body"]}
+    assert _error_code(on_known) == "auth.register_names_no_clan"
     assert stub_identity.create_user_calls == []
     assert stub_identity.password_resets == []
 
 
-def test_join_with_no_identifier_still_answers_clan_id_required_for_join(
+def test_onboard_join_with_no_identifier_still_answers_clan_id_required_for_join(
     client: TestClient,
 ) -> None:
-    """`clan_action=join` with neither identifier is unchanged by ADR-058.
-
-    This is the reading the seed's negative control expects, and the code spec
-    7.1b writes the register form's field-level error handling around. Making
-    `clan_action` optional must not turn an explicit join with a missing code
-    into a silent clanless account.
-    """
+    """`clan_action=join` with neither identifier answers the documented code on
+    `POST /auth/onboard`, the one path that joins a clan now."""
     suffix = uuid.uuid4().hex[:10]
+    email = f"j-{suffix}@example.com"
+    assert (
+        client.post("/api/v1/auth/register", json=_clanless_register_body(email)).status_code == 201
+    )
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": _PW})
     resp = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": f"j-{suffix}@example.com",
-            "password": _PW,
-            "full_name": "Nguoi Xin Gia Nhap",
-            "clan_action": "join",
-        },
+        "/api/v1/auth/onboard",
+        headers=_auth(cast(str, _data(login)["access_token"])),
+        json={"clan_action": "join"},
     )
     assert resp.status_code == 422, resp.text
     assert _error_code(resp) == "auth.clan_id_required_for_join"

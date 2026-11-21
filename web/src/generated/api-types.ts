@@ -3428,16 +3428,6 @@ export interface components {
             password: string;
             /** Full Name */
             full_name: string;
-            /** Clan Action */
-            clan_action?: ("join" | "create") | null;
-            /** Clan Code */
-            clan_code?: string | null;
-            /** Clan Id */
-            clan_id?: string | null;
-            /** Clan Name */
-            clan_name?: string | null;
-            /** Clan Slug */
-            clan_slug?: string | null;
         };
         /**
          * RegisterResponse

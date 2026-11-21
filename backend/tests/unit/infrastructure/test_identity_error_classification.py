@@ -25,11 +25,8 @@ from app.infrastructure import supabase_identity_provider as sip
 
 
 def _repo_with_slug_free() -> AsyncMock:
-    """register() now validates clan input (incl. the slug-taken check) up front,
-    before create_user — so these identity-error-classification tests (which only
-    care about what happens after create_user is invoked) need a repo double
-    that answers get_clan_by_slug like a real async repository (slug not taken),
-    rather than ``None``."""
+    """An async repository double: these identity-error-classification tests only
+    care about what happens after create_user is invoked."""
     repo = AsyncMock()
     repo.get_clan_by_slug.return_value = None
     return repo
@@ -198,9 +195,6 @@ async def test_register_does_not_swallow_unavailable_into_422() -> None:
             email="a@b.c",
             password="12345678",
             full_name="T",
-            clan_action="create",
-            clan_name="C",
-            clan_slug="c",
         )
 
 
@@ -244,8 +238,5 @@ async def test_register_maps_weak_password_to_422() -> None:
             email="a@b.c",
             password="12345678",
             full_name="T",
-            clan_action="create",
-            clan_name="C",
-            clan_slug="c",
         )
     assert exc.value.code == "auth.password_too_weak"
