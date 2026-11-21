@@ -1,6 +1,7 @@
 """FamilyRoots FastAPI application factory."""
 
 import logging
+import os
 import secrets
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -39,6 +40,7 @@ from app.core.exceptions import (
 )
 from app.core.logging import configure_logging
 from app.core.metrics_guard import MetricsFailureThrottle
+from app.core.path_redaction import scrub_sentry_event
 from app.core.rate_limit import RateLimitMiddleware, RateLimitStore
 from app.core.readiness import (
     MIGRATIONS_AHEAD,
@@ -97,6 +99,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             lambda: sentry_sdk.init(
                 dsn=settings.SENTRY_DSN,
                 environment=settings.APP_ENV,
+                release=os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("GITHUB_SHA"),
+                before_send=scrub_sentry_event,
+                before_send_transaction=scrub_sentry_event,
+                before_breadcrumb=scrub_sentry_event,
                 traces_sample_rate=0.1 if settings.APP_ENV == "production" else 1.0,
             ),
         )

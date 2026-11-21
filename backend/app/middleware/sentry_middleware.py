@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.path_redaction import redact_path
 from app.core.trace_context import get_trace_context
 
 
@@ -13,7 +14,7 @@ class SentryMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         with sentry_sdk.push_scope() as scope:
-            scope.set_tag("path", request.url.path)
+            scope.set_tag("path", redact_path(request.url.path))
             scope.set_tag("method", request.method)
 
             # Pivot from a Sentry issue to the JSON log lines for the same request.
