@@ -28,15 +28,17 @@ Core operations:
 
 Request/response expectations:
 - Bearer JWT is required after login.
-- Register can join an existing clan, create a new clan, or **name no clan at
-  all**. `clan_action` is **optional** on `POST /register` and **required** on
-  `POST /onboard`. See "Registering with no clan" below.
-- `clan_code` (register + onboard, `clan_action=join`) names the clan to join.
+- Register **names no clan**. `POST /register` takes `email`, `password` and `full_name`
+  only, and a body carrying `clan_action`, `clan_code`, `clan_id`, `clan_name` or
+  `clan_slug` is a 422 `auth.register_names_no_clan` (ADR-075 amendment, #331). A clan
+  is created or joined only by `POST /onboard`, where `clan_action` is **required**. See
+  "Registering with no clan" below.
+- `clan_code` (onboard, `clan_action=join`) names the clan to join.
   It is the clan's **slug**, not its UUID, and it must match the same
   `^[a-z0-9]+(?:-[a-z0-9]+)*$` pattern, **2 to 100 chars**; anything else is a 422
   `validation_error` naming `body.clan_code`. A well-formed code that no clan
   carries is a 404 `clan_not_found`. See the deprecation window below.
-- `clan_slug` (register + onboard, `clan_action=create`) must match
+- `clan_slug` (onboard, `clan_action=create`) must match
   `^[a-z0-9]+(?:-[a-z0-9]+)*$`, `_SLUG_PATTERN` verbatim: lowercase ASCII alphanumerics and single
   hyphens, **2 to 100 chars**; anything else is a 422 `validation_error` naming
   `body.clan_slug`. Clients slugify the clan name before submitting (the slug
@@ -45,14 +47,13 @@ Request/response expectations:
   held a shorter code, and since migration 040 its CHECK enforces this same
   shape. Before the API carried the minimum, a one-character `clan_slug` on
   `POST /register` answered 500 for a fresh email and 201 for an existing one;
-  now it is the same 422 for both, before the identity provider is called.
+  now it is the same 422 for both, before the identity provider is called. Register
+  no longer takes the field at all (#331); the shape now guards `POST /onboard`.
 - `POST /register` is **non-enumerating (ADR-021)**: it returns the identical
   201 body whether or not the email already has an account. Clan-input
-  validation (`clan_id_required_for_join`, `clan_code_and_id_both_given`,
-  `clan_name_required_for_create`, `clan_slug_taken`, `clan_not_found`) runs
-  unconditionally *before* the
-  identity is created, so those 422/409/404 codes are still returned
-  identically on both paths — only the account-existence signal itself
+  refusal (`auth.register_names_no_clan`) is a schema validator and runs *before* the
+  identity is created, so it is returned identically on both paths — only the
+  account-existence signal itself
   (previously 409 `auth.email_already_exists`) is gone. An existing email
   gets a silent, best-effort password-reset/recovery email instead of an
   error; a fresh email proceeds through the normal create-and-verify flow.
@@ -181,19 +182,16 @@ join identifier" above rather than replacing any of it: everything that section 
 about `clan_code`, `clan_id`, and the deprecation window still holds whenever
 `clan_action` is present.
 
-**`clan_action` is optional on `POST /register` and required on `POST /onboard`.**
+**Amended 2026-11-21 (#331, [ADR-075](../decisions/075-sign-up-names-no-clan-and-onboarding-opens-on-create.md) amendment).** `POST /register` accepts no clan field, and `clan_action` is required on `POST /onboard`. The rest of this section describes the ADR-058 shape it replaced, kept for the reasoning.
 
 | Request to `POST /register` | Result |
 |---|---|
-| `clan_action` absent, no clan field either | **201.** An account is created with **no clan membership**. This is the supported invitee form, and since #291 the only body the web sends ([ADR-075](../decisions/075-sign-up-names-no-clan-and-onboarding-opens-on-create.md)) |
-| `clan_action` absent, but `clan_code`, `clan_id`, `clan_name` or `clan_slug` present | 422 `validation_error`. `detail.fields` contains `body`. Never silently treated as clanless |
-| `clan_action=join` or `clan_action=create` | Exactly as "The join identifier" above. Nothing changed |
+| `email`, `password`, `full_name` only | **201.** An account is created with **no clan membership**. The only supported body, and the one the web sends |
+| any of `clan_action`, `clan_code`, `clan_id`, `clan_name`, `clan_slug`, with any value | 422 `auth.register_names_no_clan`, `detail.fields` lists the ones sent. Nothing is created, and the answer is the same for an existing email |
 
 The 201 body is the same non-enumerating `{"data": {"message": ...}}` as every other
-register outcome, and the verification email is still sent. **No error code was added to
-this route**, which is deliberate: the register surface is non-enumerating (ADR-021) and a
-new code is the easiest way to leak whether an email is registered. The "clan named
-without an action" rule therefore lives in `RegisterRequest` itself, where it runs before
+register outcome, and the verification email is still sent. The new code cannot leak whether an
+email is registered because the refusal lives in `RegisterRequest` itself, where it runs before
 the route body and cannot consult the identity provider at all.
 
 **Why the route needs this at all.** `POST /invitations/{token}/accept` requires an

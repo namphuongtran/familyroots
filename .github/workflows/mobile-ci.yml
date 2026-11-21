@@ -12,6 +12,9 @@ on:
       - "mobile/**"
       - ".github/workflows/mobile-ci.yml"
 
+permissions:
+  contents: read
+
 jobs:
   analyze-and-test:
     runs-on: ubuntu-latest

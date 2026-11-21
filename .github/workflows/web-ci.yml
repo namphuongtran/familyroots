@@ -18,6 +18,9 @@ on:
   # deploys nothing: a merge to main reaches production only through a release.
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -143,7 +146,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
+          version: "0.6.3"
 
       - uses: pnpm/action-setup@v4
         with:

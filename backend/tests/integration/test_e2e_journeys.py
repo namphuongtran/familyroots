@@ -238,19 +238,19 @@ def _assert_hd(value: Any) -> None:
 
 
 def _register_create(client: TestClient, email: str, slug: str, name: str) -> None:
+    """Sign up clanless, sign in, create the clan in onboarding (ADR-075 amendment)."""
     resp = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": _PW,
-            "full_name": name,
-            "clan_action": "create",
-            "clan_name": f"Clan {slug}",
-            "clan_slug": slug,
-        },
+        "/api/v1/auth/register", json={"email": email, "password": _PW, "full_name": name}
     )
     assert resp.status_code == 201, resp.text
     assert set(resp.json().keys()) == {"data"}
+    token, _ = _login(client, email)
+    resp = client.post(
+        "/api/v1/auth/onboard",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"clan_action": "create", "clan_name": f"Clan {slug}", "clan_slug": slug},
+    )
+    assert resp.status_code == 201, resp.text
 
 
 def _login(client: TestClient, email: str) -> tuple[str, dict[str, Any]]:
@@ -459,13 +459,14 @@ def test_journey_multiuser_collaboration(
     joiner_email = f"j2b-{suffix}@ex.com"
     resp = client.post(
         "/api/v1/auth/register",
-        json={
-            "email": joiner_email,
-            "password": _PW,
-            "full_name": "Người Xin Gia Nhập",
-            "clan_action": "join",
-            "clan_id": clan_id,
-        },
+        json={"email": joiner_email, "password": _PW, "full_name": "Người Xin Gia Nhập"},
+    )
+    assert resp.status_code == 201, resp.text
+    joiner_token, _ = _login(client, joiner_email)
+    resp = client.post(
+        "/api/v1/auth/onboard",
+        headers={"Authorization": f"Bearer {joiner_token}"},
+        json={"clan_action": "join", "clan_id": clan_id},
     )
     assert resp.status_code == 201, resp.text
     pending = _envelope(
