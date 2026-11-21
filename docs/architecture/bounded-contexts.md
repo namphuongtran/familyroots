@@ -15,7 +15,7 @@ how the contexts relate. It is the high-level companion to [ADR-001](../decision
 | **person** | Core | `Person` aggregate (+ `IdentityClaim` entity) | Yes | Clan-scoped person records; the genealogy "node" |
 | **relationship** | Core | `Marriage`, `ParentChild` aggregates (+ `RelationshipDomainValidator`) | Yes | Genealogy edges between persons |
 | **tree** | Core | Query port only (`TreeRepository`) | No (read) | Tree traversal: descendants, ancestors, path-finding |
-| **clan** | Core | No domain aggregate (ORM `Clan` in `app/models/clan.py`) | Yes | Tenant entity + membership/role administration |
+| **clan** | Core | `Clan` aggregate (`app/domain/clan/entity.py`: `update()`, `suspend()`, `reactivate()`); membership and role rules still live outside it | Yes | Tenant entity + membership/role administration |
 | **branch** | Supporting | `Branch` aggregate | Yes | Sub-lineage grouping inside a clan |
 | **document** | Supporting | `Document` aggregate (+ `StoragePort`) | Yes | Photos / files attached to clan or person |
 | **event** | Supporting | `Event` aggregate | Yes | Anniversaries, ceremonies, reminders |
