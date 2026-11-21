@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { getPerson, PersonProfile } from '@/features/persons'
+import { RelationshipsAside } from '@/features/relationships'
 import { guardClanRoute } from '@/features/auth/index.server'
 import { ApiError } from '@/shared/http/errors'
 
@@ -62,11 +63,22 @@ export default async function MemberDetailPage({
         <h1 className="text-foreground font-serif text-xl">{t('profile_title')}</h1>
       </div>
 
-      <PersonProfile
-        person={person}
-        canEdit={capabilities.editPerson}
-        canViewAuditLog={capabilities.viewClanAuditLog}
-      />
+      {/*
+       * Spec §7.6 desktop ≥1280 splits main 1fr and a 360px aside; below
+       * 1280 it collapses to the mobile order (aside content moves inline
+       * below the profile). Expressed here with `xl:` and a tracks layout:
+       * on `xl:` and above, the second column is 360px and sticks under the
+       * header (`xl:sticky`); below that, the aside renders as a plain
+       * block after the profile, which `space-y-4` separates.
+       */}
+      <div className="mx-auto grid max-w-5xl gap-6 xl:grid-cols-[1fr_360px]">
+        <PersonProfile
+          person={person}
+          canEdit={capabilities.editPerson}
+          canViewAuditLog={capabilities.viewClanAuditLog}
+        />
+        <RelationshipsAside personId={person.id} />
+      </div>
     </div>
   )
 }

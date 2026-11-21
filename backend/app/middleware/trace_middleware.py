@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.path_redaction import redact_path
 from app.core.trace_context import (
     new_trace_context,
     reset_trace_context,
@@ -29,8 +30,9 @@ class TraceContextMiddleware(BaseHTTPMiddleware):
         claimed_clan_id = request.headers.get("X-Current-Clan-Id")
         ctx = new_trace_context(
             request.headers.get("traceparent"),
-            # Raw path, not a route template: /persons/<uuid> stays distinct per person.
-            route=request.url.path,
+            # Raw path so /persons/<uuid> stays distinct per person; a credential segment
+            # (an invitation token) becomes a fixed placeholder.
+            route=redact_path(request.url.path),
             clan_id=(
                 claimed_clan_id[:_MAX_CLAN_ID_LOG_CHARS] if claimed_clan_id is not None else None
             ),
