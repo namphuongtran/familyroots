@@ -320,6 +320,22 @@ test.describe('the backoffice dashboard, as an admin', () => {
     test('the page passes T-04: no scroll, no clipped text, no badge on a title', async ({
       page,
     }) => {
+      // #314: the approvals badge is the clan's real `stats.pending_users`, and it is absent at 0.
+      // The seeded clan has no pending account (the invitation specs revoke what they create),
+      // so clause 3 would find no badge to measure. The backend still answers this read; only
+      // the count is raised, to the one digit the old hard-coded `badge="7"` showed, so the
+      // badge is the size every measurement below was taken at.
+      await page.route(
+        (url) =>
+          url.pathname.endsWith('/api/v1/clans/me') &&
+          (url.searchParams.get('include') ?? '').split(',').includes('stats'),
+        async (route) => {
+          const response = await route.fetch()
+          const body = await response.json()
+          body.data.stats.pending_users = 7
+          await route.fulfill({ response, json: body })
+        },
+      )
       const scaleTag = await openAtTextScale(page, BACKOFFICE_PATH_EN)
       await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE_EN)
 
