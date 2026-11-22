@@ -1,0 +1,8 @@
+# Warren per-project config (read by the operator's Warren server at dispatch).
+#
+# agentImage: the container image each Warren run of this repo starts in. It carries
+# the toolchain the quality gates need: Python 3.14.2 via uv, pnpm 10.6.0, Flutter 3.44.8,
+# postgresql-client-18, and Playwright Chromium 1.62.1 (web/pnpm-lock.yaml). The image is
+# built on the operator host from ~/.warren/agent-images/familyroots/Dockerfile. When a PR
+# bumps one of those versions, rebuild the image with it (namphuongtran/warren#54).
+agentImage: familyroots-agent:latest
