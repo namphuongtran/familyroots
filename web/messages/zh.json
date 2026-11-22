@@ -545,6 +545,11 @@
     "sign_in_button": "登录",
     "continue_button": "选择家族"
   },
+  "not_found": {
+    "title": "找不到页面",
+    "body": "您访问的页面不存在或已移动。",
+    "home_link": "返回仪表板"
+  },
   "metadata": {
     "tagline": "越南家谱",
     "description": "越南宗族家谱管理平台"

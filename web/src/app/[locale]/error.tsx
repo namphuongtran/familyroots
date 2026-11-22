@@ -1,6 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import { useReportError } from '@/shared/telemetry/useReportError'
 
 /**
  * The error boundary for every route under a locale, and the one a layout's error reaches: an
@@ -12,7 +13,14 @@ import { useTranslations } from 'next-intl'
  * recovers by being fetched again. `error.message` is not shown: a production build replaces a
  * server error's message before it reaches the browser.
  */
-export default function LocaleError({ unstable_retry }: { unstable_retry: () => void }) {
+export default function LocaleError({
+  error,
+  unstable_retry,
+}: {
+  error: Error & { digest?: string }
+  unstable_retry: () => void
+}) {
+  useReportError(error)
   const t = useTranslations('common')
 
   return (

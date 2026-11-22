@@ -545,6 +545,11 @@
     "sign_in_button": "Se connecter",
     "continue_button": "Choisir un clan"
   },
+  "not_found": {
+    "title": "Page introuvable",
+    "body": "La page que vous cherchez n'existe pas ou a été déplacée.",
+    "home_link": "Retour au tableau de bord"
+  },
   "metadata": {
     "tagline": "Généalogie vietnamienne",
     "description": "Plateforme de gestion des généalogies de clans vietnamiens"

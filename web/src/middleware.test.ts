@@ -83,6 +83,12 @@ describe('middleware clan gate', () => {
     expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
   })
 
+  it('lets an unknown path through to the 404 instead of redirecting to login (#366)', async () => {
+    currentSession = null
+    const response = await middleware(requestFor('/vi/khong-ton-tai'))
+    expect(response.headers.get('location')).toBeNull()
+  })
+
   it('skips both the session and the clan check when Supabase env vars are absent (local dev)', async () => {
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '')

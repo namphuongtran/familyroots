@@ -59,6 +59,13 @@ const PUBLIC_ROUTES = [
  */
 const CLAN_SCOPED_SEGMENTS = ['dashboard', 'documents', 'events', 'members', 'tree', 'admin']
 
+/**
+ * Every first segment that has a page behind the session gate (#366). A path outside this list,
+ * such as `/vi/khong-ton-tai`, is not gated, so it reaches the localized 404 instead of a login
+ * redirect that hides it. Each guarded layout also checks the session on the server (#186).
+ */
+const GATED_SEGMENTS = [...CLAN_SCOPED_SEGMENTS, 'select-clan', 'platform', 'backoffice']
+
 export async function middleware(request: NextRequest) {
   // Run intl middleware first so locale-prefixed routes resolve
   const intlResponse = intlMiddleware(request)
@@ -70,6 +77,12 @@ export async function middleware(request: NextRequest) {
 
   // Allow public auth routes through without a session check
   if (PUBLIC_ROUTES.some((r) => strippedPath.startsWith(r))) {
+    return intlResponse
+  }
+
+  // An unknown path has nothing to protect, and a login redirect would hide the 404
+  const gatedSegment = strippedPath.split('/')[1]
+  if (gatedSegment && !GATED_SEGMENTS.includes(gatedSegment)) {
     return intlResponse
   }
 
