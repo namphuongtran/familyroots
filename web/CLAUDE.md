@@ -23,7 +23,6 @@ pnpm test:unit                                 # vitest --project unit (node env
 pnpm test:component                            # vitest --project component (jsdom, *.test.tsx, RTL + MSW)
 pnpm test:e2e                                  # playwright test: boots its own `next dev` servers; see "Two worktrees, one machine"
 pnpm test:e2e:ui                                # playwright test --ui
-pnpm test:contracts                            # legacy: node --test on tests/contracts/*.test.mjs
 ```
 
 Full gate before calling anything done: `pnpm type-check && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test:unit && pnpm test:component && pnpm test:e2e && pnpm build`. `pnpm test:e2e:auth` is **not** in that list and is not optional either — it needs Docker, the Supabase CLI stack and a seeded backend, so run it whenever you touch an authenticated route, and say plainly if you could not. See "The authenticated e2e harness". CI runs it too since #193, in `.github/workflows/image-e2e.yml`'s `image-auth-e2e` job, against the built backend image, so a pull request whose author could not run it still gets a reading. Nothing requires that check to pass before a merge, so read it. Verify `pnpm lint` with the plain command — a clean run prints nothing, which is easy to misread as "didn't run."
@@ -78,16 +77,16 @@ second `webServer` entry can override or bypass, not baked into a build artifact
 
 ## Architecture
 
-Two trees coexist during the migration described in
-`docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md`:
+The migration described in
+`docs/superpowers/specs/2026-08-02-web-architecture-observability-design.md` is finished (#314,
+2026-11-22). The legacy, pre-envelope trees — `src/lib/api/`, `src/lib/hooks/`, `src/lib/types/`,
+`src/application/`, `src/infrastructure/`, the legacy `src/components/<feature>/` folders — and the
+`axios` dependency are deleted, and `.dependency-cruiser-known-violations.json` is `[]`. They were
+scaffolded against unwrapped bodies, `next_cursor`, scalar dates and `*_approx` flags, not the
+frozen contract. Of the § 3.2 legacy set only `src/types/css.d.ts` is left, an ambient declaration
+nothing imports. Every screen is built on:
 
-- **Legacy, pre-envelope** — `src/lib/api/`, `src/lib/hooks/`, `src/application/<feature>/`,
-  `src/infrastructure/<feature>/` (feature slices: `admin`, `auth`, `documents`, `events`,
-  `persons`, `relationships`, `tree`) plus the `axios` dependency. Scaffolded against
-  unwrapped bodies, `next_cursor`, scalar dates and `*_approx` flags — **not** the frozen
-  contract. Being deleted slice by slice by the feature PRs that follow this one. Do not add
-  to it.
-- **Target (the spine)** — built by this PR, landed on by every feature PR after it:
+- **The spine** — landed on by every feature slice:
 
   ```
   web/src/
@@ -116,7 +115,7 @@ Two trees coexist during the migration described in
   `src/features/persons/{model,api}` landed 2026-08-22, the first feature slice; `server/` and
   `hooks/` landed the same day, and so did `ui/`, in two parts — the list/detail screens and the
   create/edit form — see "The `persons` slice" and the two sections below it. New code that isn't a feature slice belongs
-  in `src/domain/` or `src/shared/http/`, never in the legacy trees above.
+  in `src/domain/` or `src/shared/http/`.
 
 Path alias `@/*` → `./src/*` (tsconfig).
 
@@ -536,9 +535,9 @@ the mother chosen only from the father's own marriages or left empty; add child.
 `use-persons-request-context.ts` and invitations' `use-invitation-request-context.ts`, which each
 read the token once on mount and passed no `refreshAuth`, are deleted.
 
-**The legacy slices are the exception.** `infrastructure/{admin,documents}`
-still call the backend through `lib/api/axios.ts`, whose interceptor signs out and redirects on a
-401 instead of refreshing. They gain the refresh when their own slice PR moves them onto `apiFetch`.
+**There is no exception left.** The last callers of the legacy `lib/api/axios.ts`, whose
+interceptor signed out and redirected on a 401 instead of refreshing, moved onto `apiFetch` with
+their slices; #314 deleted the file.
 
 - **The token follows Supabase.** The hook reads `getSession()` once and then every
   `onAuthStateChange` event, so a `TOKEN_REFRESHED` from Supabase's own timer or from
@@ -934,11 +933,8 @@ All clan-scoped requests must send:
 headers plus `traceparent` from a `RequestContext` (`src/shared/http/request-context.ts`,
 `context.server.ts`, `context.client.ts`) — never assemble them ad-hoc.
 
-**Legacy code only:** the shared Axios client `src/lib/api/axios.ts` attaches all three via
-interceptors. On `401` it signs out and redirects to `/<locale>/login`. The clan id comes
-from `getRequestContext()` (`src/infrastructure/http/request-context.ts`), which reads the
-`current_clan_id` cookie only, and the locale from the URL, since #183. SSR returns a minimal
-context (`{ locale: 'vi' }`). Do not extend this path — it is being deleted by the slice PRs.
+The legacy Axios client (`src/lib/api/axios.ts`) and its `getRequestContext()`
+(`src/infrastructure/http/request-context.ts`) are deleted (#314); `apiFetch` is the only path.
 
 **The legacy-transport deletion (2026-08-22) tried to remove `axios.ts`, `src/lib/api/auth.ts`, and
 `src/infrastructure/http/request-context.ts` outright, and could only close two of the three.** It
@@ -968,7 +964,8 @@ rather than rewritten under a deletion's name. `axios.ts` and `request-context.t
 when the last legacy slice PR (persons, tree, events, documents, admin, and then auth's own
 transport) replaces its own repository, per this section's existing rule that they are "being
 deleted by the slice PRs" — plural, and not yet all landed. **#183 deleted the four auth files
-named above** once `features/auth` replaced them; `axios.ts` and `request-context.ts` remain.
+named above** once `features/auth` replaced them. **#314 deleted `axios.ts` and
+`request-context.ts`** with the last slice that imported them.
 
 Query semantics that must be preserved when touching list/detail endpoints:
 
@@ -1040,7 +1037,9 @@ e9a8809:web/e2e/` returns five — so re-count with `ls web/e2e/*.spec.ts` rathe
 
 - ~~`tests/behavior/` (legacy)~~ — deleted by #313 with its last test, the document
   invalidation helpers', and the `test:behavior` script with it.
-- `tests/contracts/` (legacy) — `.mjs` contract tests that pin the legacy API client shapes.
+- ~~`tests/contracts/` (legacy)~~ — deleted by #314 with the `test:contracts` script. Every case
+  read source text of a legacy file (`lib/api/relationships.ts`, already gone, and the admin
+  repository and types #314 deleted), which pins a setting (`.claude/rules/testing.md`).
 
 CI (`.github/workflows/web-ci.yml`) runs type-check, lint, `depcruise`, the legacy ratchet on pull
 requests, unit, component,
@@ -1689,9 +1688,9 @@ engine rather than computed from the stylesheet.
   (ADR-060 § 4). `nothing-imports-legacy` forbids any module outside the set from importing one
   inside it. The imports that already existed are the baseline,
   `web/.dependency-cruiser-known-violations.json`, 32 entries on 2026-10-04, 21 after #183, 19
-  after #185, 18 after #186, 14 after #311, 11 after #312 and 9 after #313, which `pnpm depcruise`
-  reads through `--ignore-known`. None of the 9 starts in `features/auth`, a persons route, the
-  tree route, the events route or the documents route.
+  after #185, 18 after #186, 14 after #311, 11 after #312, 9 after #313 and **0 after #314**, which
+  `pnpm depcruise` reads through `--ignore-known`. The file is `[]` now. The rule and the ratchet
+  stay: they are what stops a deleted tree from coming back.
   - **When a slice deletes or re-points a legacy import, shrink the baseline in the same pull
     request:** run `pnpm depcruise:baseline` and commit the shorter file. Do not edit it by hand.
     `pnpm depcruise:ratchet origin/main` fails while the baseline still lists an import the tree no
@@ -1830,20 +1829,50 @@ engine rather than computed from the stylesheet.
     one mutable document list). Controls run 2026-11-21, each reverted: `MAX_UPLOAD_MB` raised to
     60 fails the 51 MB case; the upload's list invalidation removed fails the "gallery shows the
     new document" case; `canDelete` forced true fails the editor and viewer cases.
-- **`src/lib/api/axios.ts` is one file shared by every slice above, not one file per slice.**
-  The 2026-08-22 deletion went looking for it while removing the legacy auth transport and found
-  `src/infrastructure/admin/http-admin-repositories.ts` and every one of
-  `src/lib/api/{documents,events,members,relationships,tree}.ts` importing it too
-  (`grep -rln "lib/api/axios\|from 'axios'" src`; `members.ts` has since left with persons, #172). So it, and the
-  `src/infrastructure/http/request-context.ts` it depends on, cannot leave until the **last**
-  slice PR lands, not the first — "each is deleted outright when the matching feature slice PR
-  lands" above is true per-slice-repository-file, not true of this shared pair. See
-  "Backend contract" above for the full account and what that deletion could and could not remove.
+- **Admin, platform and backoffice applied it last (#314, 2026-11-22), and closed R3.**
+  `lib/api/axios.ts`, `lib/hooks/useAdmin.ts`, `lib/hooks/useDebounce.ts` (no caller),
+  `lib/types/` whole, `application/admin/`, `infrastructure/admin/`, `infrastructure/http/` and the
+  `axios` package are deleted. `components/admin/{PendingUsersList,RoleSelector}` moved to
+  `features/admin/ui/` and `components/backoffice/BackofficeSidebar` to `features/backoffice/ui/`.
+  The five routes (`admin/users`, `admin/clan`, `platform/clans`, `platform/metrics`,
+  `backoffice/dashboard`) and the backoffice layout import only from `features/`. The baseline
+  went 9 → 0. What the slices are:
+  - `features/admin/{api,model,server,hooks,ui}` over `GET`/`PATCH /clans/me`,
+    `GET /clans/me?include=stats`, `GET /clans/me/users`, `GET /clans/me/users/pending`, approve,
+    reject and change role, mapped into `domain/clan/clan-profile.ts`. **The clan's profile type is
+    `ClanProfile`**, not the legacy `ClanSettings`, which named the table ADR-054 dropped.
+  - **`stats` has no generated type.** `GET /clans/me` declares `ok(ClanResponse)` and adds `stats`
+    to the dumped dict afterwards, so OpenAPI never sees it. `clanStatsDtoSchema` mirrors
+    `ClanStats` in `backend/app/schemas/clan.py` instead, and no `assert…MatchesGenerated` can guard
+    it. The generated `ClanStatsResponse` is the platform clan detail's two-field model, not this one.
+  - **The clan form sends only what it edits.** The legacy form `PATCH`ed the whole row back,
+    `id`, `slug` and the timestamps included, which the contract refuses with
+    `422 field_not_updatable`. Read at source, not measured against a backend.
+  - `features/platform/{api,model,server,hooks,ui}` over `GET /platform/clans` and
+    `GET /platform/metrics`, read with `useClientRequestContext({ clanScoped: false })`, so no
+    `X-Current-Clan-Id` is sent. Query keys are `['platform', …]`, not clan-scoped.
+  - `features/backoffice/ui/` owns no transport: the dashboard reads `useClanStats` through
+    `@/features/admin`. **The dashboard shows real counts.** Total members is
+    `stats.total_members`, pending approval is `stats.pending_users`, and the approvals badge reads
+    the same number (none while loading, on failure, or at 0). Documents and tree completeness have
+    no endpoint that returns a total, so their tiles say `Backoffice.stat_not_counted`; a failed read
+    says `Backoffice.stat_unavailable`. The mock trend lines are gone.
+  - Each list reads one page of 100, the contract's largest; the legacy hooks read one page of the
+    default 20. No screen has a "load more" yet.
+  - Tests: `features/backoffice/ui/BackofficeDashboard.test.tsx` (MSW `stats` with 3 pending: the
+    badge reads 3; the two unbacked tiles show no digit; a 500 invents nothing),
+    `features/admin/ui/{AdminUsersScreen,ClanProfileScreen}.test.tsx`,
+    `features/platform/ui/{PlatformClansScreen,PlatformMetricsScreen}.test.tsx` and
+    `features/admin/model/clan-dto.test.ts`. The old route tests mocked `@/lib/hooks/useAdmin`; their
+    #194/#197 readings moved into the slice tests, over MSW. Controls run 2026-11-22, each reverted:
+    the old page's mock values put back fail four of the five dashboard cases; the loaded profile
+    spread into the `PATCH` body fails the clan form's save case.
+  - `NEXT_PUBLIC_API_URL` was axios's base URL. Nothing in the app reads it as a base any more, but
+    `shared/http/security-headers.ts` still admits its origin in `connect-src`, so the variable stays.
 - `src/domain/` is currently `shared/` plus `date/` (the `HistoricalDate` model added by the
   spine PR). As features land, domain types move out of `src/types/` and `src/lib/types/`
   into `src/domain/<feature>/`.
-- New transport code goes in `src/shared/http/` (or, once a feature slice PR lands,
-  `src/features/<slice>/api/`) — never in `src/lib/api/` or `src/infrastructure/`.
+- New transport code goes in `src/shared/http/` or `src/features/<slice>/api/`.
 - **Auth applied it second (#183, 2026-10-04).** `lib/hooks/useAuth.ts`, `lib/hooks/useClanContext.ts`,
   `store/auth.store.ts`, `application/auth/`, `infrastructure/auth/` and `components/auth/` are
   deleted, after every importer was re-pointed at `@/features/auth`: `Header`, `Sidebar`,
@@ -1859,8 +1888,8 @@ engine rather than computed from the stylesheet.
     `@/lib/supabase` under `web/src` prints nothing.
   - ~~The auth types in `lib/types/api.ts`~~ (`UserProfile`, `UserClanMembership`,
     `UserClansResponse`, `ClanSwitchResponse`): deleted by #186 with their last reader.
-  - `axios.ts` and `infrastructure/http/request-context.ts` are cross-cutting and leave with the last
-    slice that imports them, not with auth.
+  - ~~`axios.ts` and `infrastructure/http/request-context.ts`~~: cross-cutting, deleted with the last
+    slice, #314.
 - **`VerifyEmailScreen` (`src/features/auth/ui/VerifyEmailScreen.tsx`) is reachable from a real
   sign-in since #183.** Sign-in stays Supabase-direct (ADR-061 § 7), so the backend's
   `403 email_not_verified` is still never raised on the way. Supabase refuses a password sign-in

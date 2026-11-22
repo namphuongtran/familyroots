@@ -147,28 +147,6 @@ const config = [
       ],
     },
   },
-  {
-    files: ['src/application/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            '@/app/*',
-            '@/components/*',
-            '@/lib/api/*',
-            '@/lib/hooks/*',
-            '@/store/*',
-            '@/infrastructure/*',
-            'next/*',
-            'react*',
-            'axios',
-            '@supabase/*',
-          ],
-        },
-      ],
-    },
-  },
 ]
 
 export { GOLD_IS_NEVER_TEXT, PALETTE_HAS_NO_DARK_VALUE, SINGLE_VALUE_HAS_NO_DARK_VALUE }

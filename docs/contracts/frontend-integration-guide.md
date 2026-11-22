@@ -122,9 +122,12 @@ Every API request after login:
 - `X-Current-Clan-Id: <uuid>` — on clan-scoped routes (persons, tree, events,
   documents, relationships, branches, claims, clan admin).
 
-Web reference implementation: `web/src/lib/api/axios.ts` attaches all three via a
-request interceptor; the clan id resolves through `getRequestContext()`
-(`web/src/infrastructure/http/request-context.ts`).
+Web reference implementation: `apiFetch` in `web/src/shared/http/api-client.ts` sets all
+three from the `RequestContext` its caller passes in. In the browser that context comes from
+`useClientRequestContext()` (`web/src/shared/http/context.client.ts`), whose clan is the
+`current_clan_id` cookie; a surface that is not clan-scoped (the platform admin, the invitee)
+reads it with `clanScoped: false` and sends no clan header. The legacy axios client was
+deleted by #314.
 
 Mobile reference implementation: `mobile/lib/core/network/interceptors/` — one
 interceptor per header (`auth`, `clan`, `locale`, `trace`), assembled onto the single
@@ -137,8 +140,8 @@ from `X-Current-Clan-Id`.
 ## 2. Token lifecycle
 
 Code: `app/application/auth/session.py` (`AuthSessionService`),
-`app/infrastructure/supabase_identity_provider.py`, `web/src/lib/api/axios.ts`,
-`web/src/middleware.ts`.
+`app/infrastructure/supabase_identity_provider.py`, `web/src/shared/http/api-client.ts`,
+`web/src/shared/http/context.client.ts`, `web/src/middleware.ts`.
 
 - Tokens are Supabase-issued JWTs. `expires_in` is whatever Supabase returns
   (seconds; **3600** with the default Supabase JWT expiry). The backend keeps no
@@ -163,15 +166,15 @@ Mobile runs this strategy over the Supabase SDK's `refreshSession()`, not
 `POST /auth/refresh` (mobile spec D8), and signs out through the SDK's `signOut` with scope
 `global`, not `POST /auth/logout` (ADR-064).
 
-### What web actually does today (`axios.ts`)
+### What web actually does today (`apiFetch`)
 
 The web client does **not** call `POST /auth/refresh`. It delegates token lifetime to
-the Supabase JS SDK: the request interceptor reads
-`supabase.auth.getSession()` (the SDK auto-refreshes proactively), and the response
-interceptor treats any 401 as terminal — `supabase.auth.signOut()` + redirect to
-`/{locale}/login`. That is a valid variant of "refresh-then-signout" because the SDK
-performs the refresh before the request; a client without the Supabase SDK must
-implement the reactive single-flight strategy above itself.
+the Supabase JS SDK: the request context reads `supabase.auth.getSession()` and follows
+every auth event (the SDK auto-refreshes proactively). On a 401, `apiFetch` calls the
+caller's `refreshAuth` once — a single-flight over the SDK's `refreshSession()`, one per tab
+(`refreshAuth` in `web/src/shared/http/context.client.ts`) — and retries the request once with
+the new token. A 403 is never refreshed or retried. Sign-out is the caller's decision, not the
+transport's.
 
 ### Storage guidance
 
@@ -615,8 +618,8 @@ person/tree reads can't be statically typed). Until then:
   has_more, limit}}`, `ApiError = {"error": {code, message, detail}}`,
   `HistoricalDate = {date, precision, display, lunar}`.
 - When a backend shape changes, the contract file changes in the same PR — diff
-  `docs/contracts/` to find out what to update (web additionally pins shapes in
-  `web/tests/contracts/`).
+  `docs/contracts/` to find out what to update (web additionally checks each zod DTO in
+  `web/src/features/*/model/` against its generated OpenAPI type at `pnpm type-check`).
 
 ## Versioning & Compatibility Rules
 - This guide documents integration behavior; per-endpoint shapes are owned by their

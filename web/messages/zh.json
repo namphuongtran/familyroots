@@ -484,7 +484,9 @@
     "rail_label": "后台",
     "menu_open": "打开导航菜单",
     "menu_title": "后台导航",
-    "stat_tree_completeness": "家谱完整度"
+    "stat_tree_completeness": "家谱完整度",
+    "stat_not_counted": "尚未统计",
+    "stat_unavailable": "无法加载"
   },
   "common": {
     "loading": "加载中...",

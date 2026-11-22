@@ -2,13 +2,13 @@
 
 `web/src/` · Next.js 16 App Router · React 19 · TypeScript strict · pnpm 10.
 
-Mid-migration. The spine (`domain/`, `shared/http`, `shared/telemetry`, `generated/`,
-the four test harnesses, dependency-cruiser) landed as PR 0 of sub-project A
-(`docs/superpowers/plans/2026-08-02-web-spine.md`). It adds no screens and touches no
-existing component. `src/lib/api`, `src/lib/hooks`, `src/application/<feature>/` and
-`src/infrastructure/<feature>/` are the pre-envelope legacy this replaces — still
-load-bearing until each feature slice PR migrates its screens onto the target shape below
-and deletes them (`axios` goes with them).
+The spine (`domain/`, `shared/http`, `shared/telemetry`, `generated/`, the four test
+harnesses, dependency-cruiser) landed as PR 0 of sub-project A
+(`docs/superpowers/plans/2026-08-02-web-spine.md`), and every screen has since moved onto a
+feature slice. The pre-envelope legacy — `src/lib/api`, `src/lib/hooks`, `src/lib/types`,
+`src/application/<feature>/`, `src/infrastructure/<feature>/` and the `axios` dependency — was
+deleted by the last slice, #314 (admin, platform, backoffice), and the dependency-cruiser legacy
+baseline is empty.
 
 ## 5.2.1 Target component diagram
 
@@ -69,9 +69,9 @@ graph TB
   classDef good fill:#4f9a68,stroke:#357049,color:#ffffff
 ```
 
-`src/features/` does not exist yet — it is created by the first feature slice PR, one
-`<slice>/` at a time. Until then, code that isn't part of the spine lives in the legacy
-trees this diagram excludes; see `docs/sad/11-risks-and-technical-debt.md` R3/R11.
+`src/features/` holds one `<slice>/` per feature: persons, relationships, tree, events,
+documents, invitations, auth, admin, platform and backoffice. The legacy trees this diagram
+used to exclude are gone (#314, R3 closed in `docs/sad/11-risks-and-technical-debt.md`).
 
 ## 5.2.2 Layer rules
 
@@ -100,8 +100,8 @@ sub-project B decision.
 The legacy trees (the web architecture spec's § 3.2 list) are in the graph. One rule,
 `nothing-imports-legacy`, forbids new imports into them, and today's imports are a committed
 baseline that may only shrink (ADR-060 § 4). No other rule takes a legacy module as its subject;
-legacy is being deleted, not refactored into compliance. `web/CLAUDE.md` "Migration notes" says how
-to shrink the baseline.
+legacy is being deleted, not refactored into compliance. Since #314 the baseline is empty, and the
+rule stays so a deleted tree cannot come back. `web/CLAUDE.md` "Migration notes" has the history.
 
 Path alias `@/*` → `./src/*`.
 
@@ -142,8 +142,7 @@ correct on the very first render before anything has hydrated.
 
 **Rule:** never assemble the three contract headers ad-hoc — construct a `RequestContext`
 via `getServerRequestContext()` / `getClientRequestContext()` and pass it to `apiFetch`.
-The pre-spine rule ("route through the shared Axios instance or `getRequestContext()`" in
-`src/infrastructure/http/`) still applies to legacy code only, until it is deleted.
+The pre-spine Axios instance and `getRequestContext()` were deleted by #314.
 
 ## 5.2.4 i18n and routing
 
@@ -168,9 +167,8 @@ The spine's `shared/http/envelope.ts` (`unwrapData` / `unwrapPage`) and
 `src/domain/date/historical-date.ts` are the only code that implements these rules; new
 code calls them rather than re-implementing.
 
-⚠️ Legacy clients (`lib/api/auth.ts`, parts of `infrastructure/**`, member/tree types)
-were scaffolded against **pre-envelope** shapes — see
-[11-risks-and-technical-debt.md](11-risks-and-technical-debt.md).
+The pre-envelope legacy clients are deleted (#314); R3 in
+[11-risks-and-technical-debt.md](11-risks-and-technical-debt.md) is closed.
 
 ## 5.2.6 Testing
 
@@ -181,9 +179,8 @@ Four harnesses, one gate each — see `web/CLAUDE.md` for the exact commands:
   (`src/shared/testing/`).
 - `pnpm test:e2e` — Playwright, against a real `next dev` server, desktop + mobile
   viewports (`web/playwright.config.ts`, `web/e2e/`).
-- `tests/contracts/*.test.mjs` (`pnpm test:contracts`) — the pre-spine Node built-in test runner
-  suite, scoped to the legacy trees; not part of the gate for new code. `tests/behavior/` and
-  `pnpm test:behavior` were deleted by #313 with their last test.
+- `tests/behavior/` and `tests/contracts/`, the pre-spine Node test runner suites, are deleted
+  (#313 and #314) with the legacy files they read.
 
 CI gate (`.github/workflows/web-ci.yml`): type-check, lint, `depcruise`, the legacy ratchet
 on pull requests (`pnpm depcruise:ratchet`, ADR-060 § 4), unit, component,
