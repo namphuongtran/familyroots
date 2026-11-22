@@ -125,7 +125,7 @@ All endpoints scoped to the caller's current clan via `X-Current-Clan-Id`.
 | Method | Path                          | Auth | Role   | Description                     |
 |--------|-------------------------------|------|--------|---------------------------------|
 | GET    | `/`                           | Yes  | viewer | List persons (paginated, filters) |
-| GET    | `/search?q=...`               | Yes  | viewer | Trigram+unaccent full-text search |
+| GET    | `/search?q=...`               | Yes  | viewer | Trigram+unaccent substring search (`ILIKE` on `public.f_unaccent`, GIN trigram index) |
 | POST   | `/`                           | Yes  | editor | Create a person                 |
 | POST   | `/batch`                      | Yes  | viewer | Batch-get up to 100 persons (per-item includes; partial failures in `meta.errors`) |
 | POST   | `/{id}/claim`                 | Yes  | viewer | Claim a person profile as one's own (201, identity-claims workflow) |
