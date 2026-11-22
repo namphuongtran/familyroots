@@ -465,7 +465,12 @@
     "retry": "Réessayer",
     "no_founder_title": "Ce clan n'a pas encore de fondateur",
     "no_founder_body": "L'arbre est construit à partir du fondateur, la personne par laquelle commence le clan. Un administrateur du clan doit choisir le fondateur avant que l'arbre puisse s'afficher.",
-    "node_actions": "Actions pour cette personne"
+    "node_actions": "Actions pour cette personne",
+    "list_view": "Mode liste",
+    "list_view_label": "Arbre généalogique sous forme de liste",
+    "spouses": "Conjoints",
+    "spouses_of": "Conjoints de {name}",
+    "children_of": "Enfants de {name}"
   },
   "Backoffice": {
     "dashboard_title": "Tableau de bord",

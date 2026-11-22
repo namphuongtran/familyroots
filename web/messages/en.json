@@ -420,7 +420,12 @@
     "retry": "Try again",
     "no_founder_title": "This clan has no founder yet",
     "no_founder_body": "The family tree is built from the founder, the person the clan begins with. A clan admin needs to choose the founder before the tree can be shown.",
-    "node_actions": "Actions for this person"
+    "node_actions": "Actions for this person",
+    "list_view": "List view",
+    "list_view_label": "Family tree as a list",
+    "spouses": "Spouses",
+    "spouses_of": "Spouses of {name}",
+    "children_of": "Children of {name}"
   },
   "admin": {
     "users_title": "Clan Users",

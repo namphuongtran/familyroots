@@ -420,7 +420,12 @@
     "retry": "Thử lại",
     "no_founder_title": "Dòng họ chưa có thủy tổ",
     "no_founder_body": "Cây gia phả được dựng từ thủy tổ — người khởi đầu dòng họ. Quản trị dòng họ cần chọn thủy tổ trước khi cây gia phả hiển thị được.",
-    "node_actions": "Thao tác với người này"
+    "node_actions": "Thao tác với người này",
+    "list_view": "Chế độ danh sách",
+    "list_view_label": "Cây gia phả dạng danh sách",
+    "spouses": "Vợ/chồng",
+    "spouses_of": "Vợ/chồng của {name}",
+    "children_of": "Con cái của {name}"
   },
   "admin": {
     "users_title": "Người dùng dòng họ",

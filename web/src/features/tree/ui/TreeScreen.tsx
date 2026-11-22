@@ -6,15 +6,18 @@ import { useTranslations } from 'next-intl'
 import type { TreePerson } from '@/domain/tree/tree'
 import { useCapabilities } from '@/features/auth'
 import { RelationshipEditorSheet } from '@/features/relationships'
+import { List } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useClientRequestContext } from '@/shared/http/context.client'
 import { ApiError } from '@/shared/http/errors'
+import { cn } from '@/lib/utils/cn'
 import { useUIStore } from '@/store/ui.store'
 import { useFamilyTree } from '../hooks/use-tree-queries'
 import { treeKeys } from '../server/query-keys'
 import { NodeActionsSheet, type NodeAction } from './NodeActionsSheet'
 import { FocusPanel } from './FocusPanel'
 import { TreeCanvas } from './TreeCanvas'
+import { TreeListView } from './TreeListView'
 
 /**
  * The tree page, spec § 7.4: the canvas over `GET /tree`, and the focus panel over
@@ -30,6 +33,8 @@ export function TreeScreen() {
     { context, refreshAuth, enabled: ready },
   )
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+  // Spec T-08: the list view is the canvas's accessible equivalent, over the same `GET /tree`.
+  const [listMode, setListMode] = useState(false)
   // #328: the long-press sheet, and the relationship editor it opens.
   const [pressedId, setPressedId] = useState<string | null>(null)
   const [editor, setEditor] = useState<{ personId: string; action: NodeAction } | null>(null)
@@ -37,11 +42,15 @@ export function TreeScreen() {
   const queryClient = useQueryClient()
   const pressedName = pressedId && data ? nameIn(data.root, pressedId) : null
 
+  const loading = !ready || isPending
   let body
-  if (!ready || isPending) {
+  if (loading) {
     body = (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full flex-col items-center justify-center gap-3">
         <Skeleton className="h-64 w-64 rounded-2xl" />
+        <p role="status" className="text-muted-foreground text-sm">
+          {t('loading')}
+        </p>
       </div>
     )
   } else if (isError) {
@@ -65,6 +74,8 @@ export function TreeScreen() {
         </button>
       </div>
     )
+  } else if (listMode) {
+    body = <TreeListView root={data.root} onSelectPerson={setSelectedPersonId} />
   } else {
     body = (
       <TreeCanvas
@@ -80,9 +91,30 @@ export function TreeScreen() {
     <div className="relative h-[calc(100vh-5rem)]">
       <div className="bg-background/80 absolute top-0 right-0 left-0 z-10 flex items-center justify-between px-4 py-2 backdrop-blur-xs">
         <h1 className="text-foreground font-serif text-lg">{t('page_title')}</h1>
+        {/* Visible beside the canvas controls, never in a settings menu (spec T-08). */}
+        <button
+          type="button"
+          aria-pressed={listMode}
+          onClick={() => setListMode((on) => !on)}
+          className={cn(
+            'focus:ring-ring inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:outline-none',
+            listMode
+              ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
+              : 'bg-card text-foreground hover:bg-muted',
+          )}
+        >
+          <List aria-hidden="true" className="h-4 w-4" />
+          {t('list_view')}
+        </button>
       </div>
 
-      <div className="h-full pt-12">{body}</div>
+      <section
+        aria-label={t('page_title')}
+        aria-busy={loading ? true : undefined}
+        className="h-full pt-12"
+      >
+        {body}
+      </section>
 
       {selectedPersonId && (
         <FocusPanel
