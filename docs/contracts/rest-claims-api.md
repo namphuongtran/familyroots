@@ -14,9 +14,9 @@ backend
 Base route: /api/v1/claims and /api/v1/clans/{clan_id}/claims
 
 Core operations:
-- `GET /claims` — list my claims (`cursor`, `limit`, `status` query params)
+- `GET /claims` — list my claims (`cursor`, `limit`, `status` query params). `status` must be one of `PENDING|APPROVED|REJECTED|CANCELLED` (exact case); any other value is 422 `validation_error`.
 - `DELETE /claims/{claim_id}` — cancel a pending claim (204 No Content)
-- `GET /clans/{clan_id}/claims` — list a clan's claims (`cursor`, `limit`, `status`, `fields`)
+- `GET /clans/{clan_id}/claims` — list a clan's claims (`cursor`, `limit`, `status`, `fields`). `status` takes the same values as `GET /claims`; any other value is 422 `validation_error`.
 - `POST /clans/{clan_id}/claims/{claim_id}/approve`
 - `POST /clans/{clan_id}/claims/{claim_id}/reject`
 - `POST /clans/{clan_id}/claims/members/{user_id}/unlink` (204 No Content)

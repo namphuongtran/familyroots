@@ -26,6 +26,9 @@ _AVATAR_URL_FIELD = Field(
 )
 
 
+PERSON_GENDER_PATTERN = "^(male|female|unknown)$"
+
+
 class PersonCreateRequest(BaseModel):
     """Request body for creating a new person."""
 
@@ -34,7 +37,7 @@ class PersonCreateRequest(BaseModel):
     courtesy_name: str | None = Field(None, max_length=255)
     posthumous_name: str | None = Field(None, max_length=255)
     alias_name: str | None = Field(None, max_length=255)
-    gender: str = Field("unknown", pattern="^(male|female|unknown)$")
+    gender: str = Field("unknown", pattern=PERSON_GENDER_PATTERN)
 
     birth_date: date | None = None
     birth_date_precision: str = Field("exact", pattern="^(exact|year|month|circa|unknown)$")
