@@ -82,6 +82,11 @@ export interface PersonFormProps {
    */
   refreshAuth: () => Promise<RequestContext | null>
   onSuccess: (person: Person) => void
+  /**
+   * Runs once per successful write, on the save itself. `onSuccess` waits for the `Tiếp tục` press, so
+   * a caller that must react to the write (a cross-feature cache invalidation) hooks this instead.
+   */
+  onSaved?: () => void
   onCancel: () => void
 }
 
@@ -121,6 +126,7 @@ export function PersonForm({
   context,
   refreshAuth,
   onSuccess,
+  onSaved,
   onCancel,
 }: PersonFormProps) {
   const t = useTranslations('member_form')
@@ -202,6 +208,7 @@ export function PersonForm({
         // Saved values are the new clean state, or the `beforeunload` guard above still
         // prompts on leaving a page whose write already succeeded. `handleSaveResolved` resets
         // the same way.
+        onSaved?.()
         reset(values)
         setSaved({ person: created, message: successMessage(warning) })
         return
@@ -210,6 +217,7 @@ export function PersonForm({
       if (!person) return
       const body = formValuesToUpdateRequest(values, expectedVersion, encodeOptions(t, values))
       const { person: updated, warning } = await updateMutation.mutateAsync({ id: person.id, body })
+      onSaved?.()
       setExpectedVersion(updated.version)
       reset(values)
       setSaved({ person: updated, message: successMessage(warning) })
@@ -237,6 +245,7 @@ export function PersonForm({
     try {
       const body = formValuesToUpdateRequest(merged, expectedVersion, encodeOptions(t, merged))
       const { person: updated, warning } = await updateMutation.mutateAsync({ id: person.id, body })
+      onSaved?.()
       setExpectedVersion(updated.version)
       reset(merged)
       setConflict(null)

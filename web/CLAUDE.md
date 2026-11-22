@@ -344,10 +344,17 @@ every hook testable with a plain `RequestContext` object and MSW, which is what
 - **Mutation invalidation is same-feature only, and deliberately so.**
   `useCreatePerson` invalidates `personsKeys.lists(clanId)`; `useUpdatePerson`,
   `useDeletePerson`, and `useRestorePerson` invalidate the one `personsKeys.detail(...)`
-  plus every list. None of them touch `['tree']` the way the legacy
-  `src/lib/hooks/query-invalidation.ts` did for the same mutations (deleted by #313) — cross-feature
-  invalidation arrives with the second feature slice that needs to invalidate `persons`
-  from outside it.
+  plus every list. None of them touch `['tree']`, because `tree` imports `persons` and the
+  reverse import would be a cycle. **The caller invalidates the tree (#411)**, through
+  `useInvalidateTree(clanId)` from `@/features/tree`, which invalidates `treeKeys.all(clanId)`.
+  `PersonForm` takes `onSaved`, which runs on each successful write, not on the `Tiếp tục` press that
+  `onSuccess` waits for; the create and edit pages pass it. `RelationshipsAside` takes `onChanged`,
+  forwarded to the editor sheet; the profile page reaches it through the client wrapper
+  `members/[id]/ProfileRelationships.tsx`, because the page is a Server Component. `TreeScreen` does
+  the same for its own editor. Delete and restore have no UI yet; whoever wires them must invalidate
+  the tree too. Reading: `features/tree/hooks/tree-invalidation.test.tsx` (MSW, an unmounted tree
+  remounted inside the stale time reads `B` after a second `GET /tree`; without the wiring, `A` and one
+  request).
 - **The public surface changed shape.** Before the repository landed, `index.ts` re-exported the raw
   `api/persons-api.ts` functions (`Promise<unknown>`) because nothing else existed to be
   the entry point. Now that `server/` parses, those raw functions are **no longer
