@@ -6,3 +6,26 @@
 # built on the operator host from ~/.warren/agent-images/familyroots/Dockerfile. When a PR
 # bumps one of those versions, rebuild the image with it (namphuongtran/warren#54).
 agentImage: familyroots-agent:latest
+
+# ciFixer: when a check fails on a pull request a Warren run opened, Warren dispatches a repair
+# run onto that pull request's branch, with the failing check names and the job's log tail in
+# its prompt. The repair commits to the same branch, so the checks run again.
+#
+# - role: claude-code, not the default pr-fixer. pr-fixer runs on the pi harness, which
+#   authenticates only with ANTHROPIC_API_KEY, and the operator's Warren holds a Claude Code
+#   OAuth token. The repair instructions are in the dispatch prompt either way.
+# - maxRetries: 1. The agent image has no Docker or Supabase CLI, so a repair to an Image E2E
+#   failure is verified by CI alone. One attempt per pull request, then a human looks.
+# - logTailLines: 500. Image E2E prints the backend log (200 lines) and cleanup after a failed
+#   e2e step, 249 lines after the failure on PR #384, so the default 200 never reached the
+#   Playwright error.
+ciFixer:
+  enabled: true
+  role: claude-code
+  maxRetries: 1
+  logTailLines: 500
+
+# maxCostUsd: the per-run USD cap for a run whose dispatch names none. A ciFixer run is one:
+# its dispatch carries no cap and the claude-code agent declares none. Dispatches that name a
+# cap, such as the operator's issue queue, keep their own.
+maxCostUsd: 10
