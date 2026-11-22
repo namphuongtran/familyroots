@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.domain.branch.entity import Branch as BranchEntity
 from app.infrastructure.persistence.branch_mapper import apply_to_orm, to_domain, to_orm
@@ -43,6 +43,31 @@ class SqlAlchemyBranchRepository:
                 ClanMembership.clan_id == clan_id,
                 PersonModel.is_deleted.is_(False),
             )
+        )
+        return result.first() is not None
+
+    async def chain_contains(
+        self, start_id: uuid.UUID, target_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool:
+        """Unbounded ancestor walk (the branch counterpart of
+        ``RelationshipRepository.is_ancestor``). The path-array guard terminates
+        traversal even on already-cyclic data."""
+        result = await self._session.execute(
+            text("""
+                WITH RECURSIVE chain AS (
+                    SELECT b.id, b.parent_branch_id, ARRAY[b.id] AS path
+                    FROM public.branches b
+                    WHERE b.id = :start_id AND b.clan_id = :clan_id
+                    UNION ALL
+                    SELECT b.id, b.parent_branch_id, c.path || b.id
+                    FROM public.branches b
+                    JOIN chain c ON b.id = c.parent_branch_id
+                    WHERE b.clan_id = :clan_id
+                      AND NOT b.id = ANY(c.path)
+                )
+                SELECT 1 FROM chain WHERE id = :target_id LIMIT 1
+            """),
+            {"start_id": start_id, "target_id": target_id, "clan_id": clan_id},
         )
         return result.first() is not None
 
