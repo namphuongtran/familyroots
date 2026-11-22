@@ -8,24 +8,27 @@ part of 'clan_context.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// GET /me/clans — approved memberships only.
+/// GET /me/clans — approved memberships only, read through the offline cache.
+/// [Stale.asOf] is non-null when the network failed and the cache answered.
 
 @ProviderFor(myClans)
 final myClansProvider = MyClansProvider._();
 
-/// GET /me/clans — approved memberships only.
+/// GET /me/clans — approved memberships only, read through the offline cache.
+/// [Stale.asOf] is non-null when the network failed and the cache answered.
 
 final class MyClansProvider
     extends
         $FunctionalProvider<
-          AsyncValue<List<ClanMembership>>,
-          List<ClanMembership>,
-          FutureOr<List<ClanMembership>>
+          AsyncValue<Stale<List<ClanMembership>>>,
+          Stale<List<ClanMembership>>,
+          FutureOr<Stale<List<ClanMembership>>>
         >
     with
-        $FutureModifier<List<ClanMembership>>,
-        $FutureProvider<List<ClanMembership>> {
-  /// GET /me/clans — approved memberships only.
+        $FutureModifier<Stale<List<ClanMembership>>>,
+        $FutureProvider<Stale<List<ClanMembership>>> {
+  /// GET /me/clans — approved memberships only, read through the offline cache.
+  /// [Stale.asOf] is non-null when the network failed and the cache answered.
   MyClansProvider._()
     : super(
         from: null,
@@ -42,17 +45,17 @@ final class MyClansProvider
 
   @$internal
   @override
-  $FutureProviderElement<List<ClanMembership>> $createElement(
+  $FutureProviderElement<Stale<List<ClanMembership>>> $createElement(
     $ProviderPointer pointer,
   ) => $FutureProviderElement(pointer);
 
   @override
-  FutureOr<List<ClanMembership>> create(Ref ref) {
+  FutureOr<Stale<List<ClanMembership>>> create(Ref ref) {
     return myClans(ref);
   }
 }
 
-String _$myClansHash() => r'86f9089fbf00f62e8c07485c1f46f1049b77505b';
+String _$myClansHash() => r'03020d5e3bbf4dd856a4c43c6defa31a9d152f55';
 
 /// The active clan, persisted locally (not a secret) and sent as
 /// X-Current-Clan-Id on every clan-scoped request thereafter.
@@ -93,7 +96,7 @@ final class SelectedClanProvider
   }
 }
 
-String _$selectedClanHash() => r'c4de48674bb0c457996d177f39ba3000cae4dbb2';
+String _$selectedClanHash() => r'0967a941c968882d82e179f5aaf79ce5cca7c580';
 
 /// The active clan, persisted locally (not a secret) and sent as
 /// X-Current-Clan-Id on every clan-scoped request thereafter.
@@ -158,4 +161,4 @@ final class ClanResolutionProvider
   }
 }
 
-String _$clanResolutionHash() => r'723059d775112bd279cb13bccf5ea199953b2fbc';
+String _$clanResolutionHash() => r'214c49e625bc499e802b4027143cf271dc9e48dc';
