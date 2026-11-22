@@ -545,6 +545,11 @@
     "sign_in_button": "Sign in",
     "continue_button": "Choose a clan"
   },
+  "not_found": {
+    "title": "Page not found",
+    "body": "The page you are looking for does not exist or has moved.",
+    "home_link": "Back to dashboard"
+  },
   "metadata": {
     "tagline": "Vietnamese genealogy",
     "description": "A platform for managing Vietnamese clan genealogies"

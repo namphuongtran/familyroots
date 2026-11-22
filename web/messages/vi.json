@@ -545,6 +545,11 @@
     "sign_in_button": "Đăng nhập",
     "continue_button": "Chọn dòng họ"
   },
+  "not_found": {
+    "title": "Không tìm thấy trang",
+    "body": "Trang bạn tìm không tồn tại hoặc đã được chuyển đi.",
+    "home_link": "Về trang tổng quan"
+  },
   "metadata": {
     "tagline": "Gia phả Việt Nam",
     "description": "Nền tảng quản lý gia phả dòng họ Việt Nam"

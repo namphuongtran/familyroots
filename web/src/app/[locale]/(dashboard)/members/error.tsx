@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import { PersonsErrorState } from '@/features/persons'
+import { useReportError } from '@/shared/telemetry/useReportError'
 
 /**
  * Next's route-segment error boundary (`error.tsx` must be a Client
@@ -17,7 +18,14 @@ import { PersonsErrorState } from '@/features/persons'
  * way `PersonsList`'s in-place error state does for an `ApiError` — nothing
  * upstream of this boundary is a parsed `ApiError`.
  */
-export default function MembersError({ reset }: { error: Error; reset: () => void }) {
+export default function MembersError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  useReportError(error)
   const t = useTranslations('members')
   return <PersonsErrorState title={t('error_title')} onRetry={reset} />
 }
