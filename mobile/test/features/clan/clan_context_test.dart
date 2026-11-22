@@ -10,6 +10,8 @@ import 'package:family_roots_mobile/features/clan/application/clan_context.dart'
 import 'package:family_roots_mobile/features/clan/data/clan_repository.dart';
 
 import '../../support/sequence_adapter.dart';
+import '../../support/main_container.dart' show FakeCacheStore;
+import 'package:family_roots_mobile/core/network/dio_provider.dart';
 
 ClanRepository _repo(List<Canned> canned) => ClanRepository(
   ApiClient(
@@ -34,6 +36,7 @@ Future<ProviderContainer> _container(List<Canned> canned) async {
   final prefs = await PrefsStore.open();
   return ProviderContainer(
     overrides: [
+      cacheStoreProvider.overrideWithValue(FakeCacheStore()),
       clanRepositoryProvider.overrideWithValue(_repo(canned)),
       prefsStoreProvider.overrideWithValue(prefs),
     ],
@@ -89,6 +92,7 @@ void main() {
       final prefs = await PrefsStore.open();
       final c = ProviderContainer(
         overrides: [
+          cacheStoreProvider.overrideWithValue(FakeCacheStore()),
           clanRepositoryProvider.overrideWithValue(
             _repo(<Canned>[
               _clans(<Map<String, Object?>>[

@@ -1,6 +1,7 @@
 /// Public surface of the clan slice.
 library;
 
+export 'application/cached_clans.dart' show Stale;
 export 'application/clan_context.dart'
     show
         ClanResolution,

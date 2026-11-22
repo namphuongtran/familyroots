@@ -58,7 +58,7 @@ void main() {
       await c.read(sessionControllerProvider.future);
       await session.signIn(email: 'a@x.test', password: 'x');
       expect(
-        (await c.read(myClansProvider.future)).map((m) => m.clanId.value),
+        (await c.read(myClansProvider.future)).value.map((m) => m.clanId.value),
         <String>['x', 'y'],
       );
       await c.read(selectedClanProvider.notifier).select(const ClanId('x'));
@@ -70,7 +70,7 @@ void main() {
 
       await session.signIn(email: 'b@x.test', password: 'x');
       expect(
-        (await c.read(myClansProvider.future)).map((m) => m.clanId.value),
+        (await c.read(myClansProvider.future)).value.map((m) => m.clanId.value),
         <String>['z'],
       );
       expect(c.read(selectedClanProvider), isNull);
