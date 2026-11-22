@@ -230,6 +230,63 @@ All node dates serialize as HistoricalDate objects. `SpouseNode.marriage_date` /
   yet; a caching revisit is tracked as future work (see remediation backlog "B3"),
   not a correctness concern today.
 
+### Pedigree-collapse fan-out, measured 2026-11-22 (#398)
+
+`get_family_tree_flat` (migration 013, not redefined since) guards cycles **per path**
+only, so a person reachable through two in-tree parents comes back once per lineage
+path, with every descendant below them. `build_descendants_tree` keeps the first row
+per person, but checks `_MAX_TREE_NODES` against the **row** count and reports rows as
+`actual_nodes`.
+
+- **Benchmark:** `backend/tests/integration/test_tree_pedigree_collapse_benchmark.py`,
+  marked `slow` and skipped unless `FAMILYROOTS_BENCH_TREE` is set. Command, from
+  `backend/`:
+  `FAMILYROOTS_BENCH_TREE=1 uv run pytest -s -q -m slow tests/integration/test_tree_pedigree_collapse_benchmark.py`
+- **Machine:** the local Postgres 18.6 container (aarch64, musl), 10 vCPU, 7 GiB RAM,
+  with the test client on the same host. Not production hardware.
+- **Clan:** 5,246 persons: a 12-generation blood line of 3,323 descendants
+  (generation sizes 1, 2, 4 … 512, 900, 1,400), and one married-in spouse for each of
+  the 1,923 descendants who have children. 6,644 live `parent_child` edges. A cousin
+  marriage pairs a man and a woman of the same generation, with different parents and
+  the same grandparent, and makes her the mother of his children. Marriages are spread
+  over generations 5 to 11, so some collapses sit inside others. The person count is
+  the same at every level.
+- **Times** are medians of 5 runs. "SQL" is the exact `SELECT * FROM
+  get_family_tree_flat(...)` with every row fetched. "Edge read" is the one statement
+  `compute_generation_map` issues when the founder is passed. `GET /tree` uses the
+  default `max_generations=10`, which reaches depth 10 (11 generations, 1,923 persons),
+  through the RS256 harness with `get_db` on the privileged maker, so it leaves out
+  the RLS seam.
+
+| Cousin marriages | Rows, depth 10 | Persons, depth 10 | Rows − persons | Rows, depth 50 | Persons, depth 50 | Rows − persons | SQL d10 / d50 (ms) | Edge read (ms) | `compute_generation_map` (ms) | `GET /tree` (ms) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0  | 1,923 | 1,923 | 0   | 3,323 | 3,323 | 0     | 59.0 / 71.8 | 48.6 | 65.2 | 272.3 |
+| 5  | 2,148 | 1,923 | 225 | 3,722 | 3,323 | 399   | 61.6 / 74.0 | 51.6 | 69.9 | 275.4 |
+| 20 | 2,714 | 1,923 | 791 | 4,731 | 3,323 | 1,408 | 65.0 / 81.6 | 9.6  | 26.6 | 236.0 |
+
+The `GET /tree` and edge-read times are noisy at this scale. An earlier run on the same
+machine read `GET /tree` at 207.4, 244.0 and 282.4 ms and the edge read at 48.6, 51.0
+and 50.3 ms. The row counts are the same on every run. `total_persons` in the response
+is 1,923 at every level, so the dedup works. Only the database's work and the cap
+check see the duplicates.
+
+**Reading.**
+
+- At this size the fan-out costs little: 1.41× rows at depth 10 and 1.42× at depth 50
+  with 20 cousin marriages. SQL time grows by about 10 %, and `GET /tree` stays inside
+  its run-to-run noise.
+- **Yes, the 50,000-row cap can be reached before 50,000 distinct persons.** At the
+  worst ratio measured, 1.424, it trips at about 35,100 persons, and the error then
+  reports rows as `actual_nodes`. The ratio is not bounded by clan size. Every
+  collapse multiplies the subtree under it, and collapses inside collapses multiply
+  each other, so a deep clan with many intermarriages high in the tree can reach the
+  cap at a much smaller size. A clan of several thousand people, the roadmap's M2 size,
+  is more than an order of magnitude under the cap at the ratios measured here.
+- No follow-up issue was filed. At the roadmap's size the numbers show no latency or
+  cap problem. If a change is chosen later, the options are counting distinct persons
+  for the cap, or a global visited set in the CTE (as migration 019 did for
+  `find_relationship_path`). Either one should cite this table.
+
 ## Testing expectations
 
 Changes here need real-DB integration tests (see `backend/CLAUDE.md`): a đa thê
