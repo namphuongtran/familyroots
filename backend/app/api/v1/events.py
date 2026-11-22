@@ -11,6 +11,7 @@ from app.application.event.handlers import EventCommandHandler, EventQueryHandle
 from app.application.person.commands import GetPerson
 from app.application.person.handlers import PersonQueryHandler
 from app.core.config import settings
+from app.core.fieldsets import parse_field_set
 from app.core.permissions import ClanRole, RequireEditor, RequireViewer
 from app.core.security import get_current_clan_id, get_current_user
 from app.domain.shared.exceptions import EntityNotFoundError
@@ -22,6 +23,7 @@ from app.infrastructure.dependencies import (
 )
 from app.schemas.envelope import created, ok, ok_list, ok_message, page
 from app.schemas.event import (
+    EVENT_TYPE_PATTERN,
     EventCreateRequest,
     EventResponse,
     EventUpdateRequest,
@@ -83,7 +85,7 @@ async def create_event(
 @router.get("", responses=page(EventResponse))
 async def list_events(
     person_id: uuid.UUID | None = Query(None),
-    event_type: str | None = Query(None),
+    event_type: str | None = Query(None, pattern=EVENT_TYPE_PATTERN),
     cursor: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -101,8 +103,8 @@ async def list_events(
         limit=limit,
     )
     data = [item.model_dump() for item in items]
-    if fields:
-        field_set = {f.strip() for f in fields.split(",")}
+    field_set = parse_field_set(fields)
+    if field_set is not None:
         data = [{k: v for k, v in d.items() if k in field_set} for d in data]
     return {"data": data, "meta": meta}
 
@@ -160,10 +162,8 @@ async def get_event(
         if "person" in includes and event.person_id:
             data["person"] = await _included_person(person_handler, event.person_id, clan_id)
 
-    if fields:
-        field_set = {f.strip() for f in fields.split(",")}
-        if include:
-            field_set.update({i.strip() for i in include.split(",")})
+    field_set = parse_field_set(fields, include=include)
+    if field_set is not None:
         data = {k: v for k, v in data.items() if k in field_set}
 
     return {"data": data}

@@ -39,6 +39,7 @@ from app.schemas.historical_date import to_historical_date
 from app.schemas.marriage import MarriageResponse
 from app.schemas.parent_child import ParentChildResponse
 from app.schemas.person import (
+    PERSON_GENDER_PATTERN,
     PersonBatchEnvelope,
     PersonBatchGetRequest,
     PersonCreateRequest,
@@ -96,7 +97,7 @@ async def list_persons(
     cursor: str | None = None,
     limit: int = Query(default=20, ge=1, le=100),
     generation: int | None = None,
-    gender: str | None = None,
+    gender: str | None = Query(None, pattern=PERSON_GENDER_PATTERN),
     profile: str = Query(
         "full",
         pattern="^(summary|detail|full)$",

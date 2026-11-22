@@ -21,6 +21,7 @@ Headers:
 Core operations:
 - GET /persons
   - Query params: cursor, limit, generation, gender, profile, fields, include
+  - `gender` must be one of `male|female|unknown`; any other value is 422 `validation_error`.
 - GET /persons/search
   - Query params: q (required, length 1–100; longer → 422 `validation_error`), limit
   - `q` is matched as literal text: `%`, `_` and `\` are not wildcards or escapes.
