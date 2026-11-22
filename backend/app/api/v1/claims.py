@@ -13,6 +13,7 @@ from app.core.security import get_current_clan_id
 from app.infrastructure.dependencies import get_claim_command_handler, get_claim_query_handler
 from app.schemas.auth import UserProfile
 from app.schemas.claim import (
+    CLAIM_STATUS_PATTERN,
     IdentityClaimPrelink,
     IdentityClaimResponse,
     IdentityClaimReview,
@@ -33,7 +34,11 @@ admin_claims_router = APIRouter()
     responses=page(IdentityClaimResponse),
 )
 async def list_my_claims(
-    status: str | None = Query(None, description="Filter by status (e.g., PENDING)"),
+    status: str | None = Query(
+        None,
+        pattern=CLAIM_STATUS_PATTERN,
+        description="Filter by status: PENDING, APPROVED, REJECTED or CANCELLED",
+    ),
     cursor: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     user: UserProfile = Depends(require_active_user),
@@ -64,7 +69,11 @@ async def cancel_claim(
 )
 async def list_clan_claims(
     clan_id: uuid.UUID,
-    status: str | None = Query(None, description="Filter by status (e.g., PENDING)"),
+    status: str | None = Query(
+        None,
+        pattern=CLAIM_STATUS_PATTERN,
+        description="Filter by status: PENDING, APPROVED, REJECTED or CANCELLED",
+    ),
     cursor: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     user: UserProfile = Depends(RequireClanRole(["admin", "editor"])),
