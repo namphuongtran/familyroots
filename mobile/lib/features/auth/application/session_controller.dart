@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/network/dio_provider.dart';
+import '../../clan/clan.dart';
 import '../../../domain/auth/user_profile.dart';
 import '../data/auth_repository.dart';
 import '../data/supabase_auth.dart';
@@ -28,7 +30,8 @@ class SessionController extends _$SessionController {
     final auth = ref.read(supabaseAuthProvider);
     // A session ended elsewhere (revoked server-side, refresh token lost) must
     // reach the router, which only listens to this state.
-    final sub = auth.signedOut.listen((_) {
+    final sub = auth.signedOut.listen((_) async {
+      await _forgetUser();
       state = const AsyncValue<UserProfile?>.data(null);
     });
     ref.onDispose(sub.cancel);
@@ -71,7 +74,24 @@ class SessionController extends _$SessionController {
 
   /// Through Supabase, which also revokes the session server-side.
   Future<void> signOut() async {
-    await ref.read(supabaseAuthProvider).signOut();
+    try {
+      await ref.read(supabaseAuthProvider).signOut();
+    } finally {
+      // Even when revoking fails: the next person must not see this one's data.
+      await _forgetUser();
+    }
     state = const AsyncValue<UserProfile?>.data(null);
+  }
+
+  /// Everything the previous user left readable: the persisted clan choice
+  /// (read first by the next request's X-Current-Clan-Id), the response cache,
+  /// and the keepAlive clan providers.
+  Future<void> _forgetUser() async {
+    await ref.read(prefsStoreProvider).clearClanId();
+    await ref.read(cacheStoreProvider).clear();
+    ref
+      ..invalidate(selectedClanProvider)
+      ..invalidate(myClansProvider)
+      ..invalidate(clanResolutionProvider);
   }
 }

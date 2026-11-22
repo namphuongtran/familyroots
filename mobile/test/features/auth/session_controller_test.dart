@@ -1,23 +1,34 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:family_roots_mobile/core/network/api_client.dart';
 import 'package:family_roots_mobile/core/network/api_exception.dart';
+import 'package:family_roots_mobile/core/network/dio_provider.dart';
+import 'package:family_roots_mobile/core/storage/prefs_store.dart';
+import 'package:family_roots_mobile/features/clan/application/clan_context.dart';
 import 'package:family_roots_mobile/domain/auth/user_profile.dart';
 import 'package:family_roots_mobile/features/auth/application/session_controller.dart';
 import 'package:family_roots_mobile/features/auth/data/auth_repository.dart';
 import 'package:family_roots_mobile/features/auth/data/supabase_auth.dart';
 
 import '../../support/fake_gotrue.dart';
+import '../../support/main_container.dart';
 import '../../support/sequence_adapter.dart';
 
 /// The controller over fake transports. Whether the bearer token reaches the
 /// backend is read through the real Dio in `test/app/sign_in_session_test.dart`;
 /// this file pins what the controller does with each answer.
-ProviderContainer _container(SequenceAdapter adapter, FakeGoTrue goTrue) {
+Future<ProviderContainer> _container(
+  SequenceAdapter adapter,
+  FakeGoTrue goTrue,
+) async {
+  SharedPreferences.setMockInitialValues(<String, Object>{});
   final c = ProviderContainer(
     overrides: [
+      prefsStoreProvider.overrideWithValue(await PrefsStore.open()),
+      cacheStoreProvider.overrideWithValue(FakeCacheStore()),
       authRepositoryProvider.overrideWithValue(
         AuthRepository(
           ApiClient(
@@ -50,14 +61,14 @@ const _meApproved = Canned(200, <String, Object?>{
 
 void main() {
   test('starts signed out', () async {
-    final c = _container(SequenceAdapter(<Canned>[]), FakeGoTrue());
+    final c = await _container(SequenceAdapter(<Canned>[]), FakeGoTrue());
     expect(await c.read(sessionControllerProvider.future), isNull);
   });
 
   test('signIn signs in through Supabase, then reads GET /auth/me', () async {
     final adapter = SequenceAdapter(<Canned>[_meApproved]);
     final goTrue = FakeGoTrue();
-    final c = _container(adapter, goTrue);
+    final c = await _container(adapter, goTrue);
 
     await c.read(sessionControllerProvider.future);
     await c
@@ -75,7 +86,7 @@ void main() {
   test('a refused sign-in lands in AsyncError carrying Supabase\'s code, and '
       'asks the backend nothing', () async {
     final adapter = SequenceAdapter(<Canned>[_meApproved]);
-    final c = _container(
+    final c = await _container(
       adapter,
       FakeGoTrue(refusal: GoTrueRefusal.invalidCredentials),
     );
@@ -94,7 +105,7 @@ void main() {
 
   test('signOut clears the profile even if Supabase\'s revoke fails', () async {
     final goTrue = FakeGoTrue(logoutStatus: 503);
-    final c = _container(SequenceAdapter(<Canned>[_meApproved]), goTrue);
+    final c = await _container(SequenceAdapter(<Canned>[_meApproved]), goTrue);
 
     await c.read(sessionControllerProvider.future);
     await c
