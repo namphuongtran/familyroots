@@ -23,6 +23,15 @@ class BranchRepository(Protocol):
         """Whether person_id is a member (clan_memberships) of clan_id."""
         ...
 
+    async def chain_contains(
+        self, start_id: uuid.UUID, target_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool:
+        """Whether target_id is start_id or one of its ancestors, within the clan.
+
+        Unbounded walk up ``parent_branch_id``; terminates on already-cyclic data.
+        """
+        ...
+
     async def list_in_clan(self, clan_id: uuid.UUID) -> list[Branch]:
         """List all branches in a clan ordered by branch_order then name."""
         ...
