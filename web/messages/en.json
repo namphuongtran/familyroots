@@ -484,7 +484,9 @@
     "rail_label": "Backoffice",
     "menu_open": "Open navigation menu",
     "menu_title": "Backoffice navigation",
-    "stat_tree_completeness": "Tree Completeness"
+    "stat_tree_completeness": "Tree Completeness",
+    "stat_not_counted": "Not yet counted",
+    "stat_unavailable": "Couldn't load"
   },
   "common": {
     "loading": "Loading...",

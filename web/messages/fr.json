@@ -484,7 +484,9 @@
     "rail_label": "Back-office",
     "menu_open": "Ouvrir le menu de navigation",
     "menu_title": "Navigation du back-office",
-    "stat_tree_completeness": "Complétude de l'arbre"
+    "stat_tree_completeness": "Complétude de l'arbre",
+    "stat_not_counted": "Pas encore compté",
+    "stat_unavailable": "Chargement impossible"
   },
   "common": {
     "loading": "Chargement...",

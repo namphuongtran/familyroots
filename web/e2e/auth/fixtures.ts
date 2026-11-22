@@ -88,13 +88,13 @@ export function authStackEnv(): Record<string, string> {
   return {
     NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
-    // Three names for one backend, because three reads take three different ones and all
-    // of them are on the members screen's path. `NEXT_PUBLIC_API_ORIGIN` is the spine's in the
-    // browser (`src/shared/http/api-client.ts`, origin only: it appends `/api/v1` itself);
-    // `NEXT_PUBLIC_API_URL` is the legacy axios client's (`src/lib/api/axios.ts:6`, the full
-    // base); `API_URL` is the spine's on the server, the read ADR-056 added (the same file, the
-    // full base), which the server guard's session read takes. Browser and dev server are both
-    // on the host here, so one origin satisfies all three.
+    // Three names for one backend. `NEXT_PUBLIC_API_ORIGIN` is the spine's in the browser
+    // (`src/shared/http/api-client.ts`, origin only: it appends `/api/v1` itself); `API_URL` is
+    // the spine's on the server, the read ADR-056 added (the same file, the full base), which the
+    // server guard's session read takes. `NEXT_PUBLIC_API_URL` was the legacy axios client's base
+    // until #314 deleted that client, and is still one of the origins the CSP's `connect-src`
+    // admits (`src/shared/http/security-headers.ts`). Browser and dev server are both on the host
+    // here, so one origin satisfies all three.
     NEXT_PUBLIC_API_ORIGIN: origin,
     NEXT_PUBLIC_API_URL: `${origin}/api/v1`,
     API_URL: `${origin}/api/v1`,

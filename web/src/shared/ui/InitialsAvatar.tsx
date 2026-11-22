@@ -41,7 +41,7 @@ function initials(name: string): string {
 /**
  * A circle holding an image, or the last two words' initials when there is
  * none. It knows nothing about persons: a pending account uses it too
- * (`components/admin/PendingUsersList.tsx`), and `PersonAvatar` in
+ * (`features/admin/ui/PendingUsersList.tsx`), and `PersonAvatar` in
  * `features/persons` is built on it. ADR-060 § 1 calls this a misfiled
  * primitive, which is why it left `components/members/`.
  *

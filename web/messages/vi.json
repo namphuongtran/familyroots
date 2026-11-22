@@ -484,7 +484,9 @@
     "rail_label": "Quản trị",
     "menu_open": "Mở menu điều hướng",
     "menu_title": "Điều hướng quản trị",
-    "stat_tree_completeness": "Độ hoàn thiện gia phả"
+    "stat_tree_completeness": "Độ hoàn thiện gia phả",
+    "stat_not_counted": "Chưa được đếm",
+    "stat_unavailable": "Không tải được"
   },
   "common": {
     "loading": "Đang tải...",

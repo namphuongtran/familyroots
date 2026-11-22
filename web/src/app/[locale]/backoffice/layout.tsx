@@ -1,5 +1,5 @@
 import { guardClanRoute } from '@/features/auth/index.server'
-import { BackofficeSidebar } from '@/components/backoffice/BackofficeSidebar'
+import { BackofficeSidebar } from '@/features/backoffice'
 
 /**
  * Backoffice layout — completely separate from the user-facing (dashboard).
