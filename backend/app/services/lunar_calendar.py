@@ -273,3 +273,36 @@ def next_lunar_anniversary(event_date: date, today: date, tz: float = 7.0) -> da
         if candidate >= today:
             return candidate
         year += 1
+
+
+class LunarAnniversaryResolver:
+    """`next_lunar_anniversary` for many dates at one `today`, one computation per pair.
+
+    The answer depends only on the lunar (month, day) of the event date and on
+    `today`, so each distinct pair is computed once per resolver. `solar_to_lunar`
+    still runs per date, and raises ValueError for a date the engine cannot convert.
+    """
+
+    def __init__(self, today: date, tz: float = 7.0) -> None:
+        self._today = today
+        self._tz = tz
+        self._lunar_year = solar_to_lunar(today, tz).year
+        self._cache: dict[tuple[int, int], date] = {}
+
+    def next_anniversary(self, event_date: date) -> date:
+        lunar = solar_to_lunar(event_date, self._tz)
+        key = (lunar.month, lunar.day)
+        found = self._cache.get(key)
+        if found is None:
+            found = self._compute(*key)
+            self._cache[key] = found
+        return found
+
+    def _compute(self, month: int, lunar_day: int) -> date:
+        year = self._lunar_year
+        while True:
+            day = min(lunar_day, _days_in_lunar_month(year, month, self._tz))
+            candidate = lunar_to_solar(year, month, day, False, self._tz)
+            if candidate >= self._today:
+                return candidate
+            year += 1

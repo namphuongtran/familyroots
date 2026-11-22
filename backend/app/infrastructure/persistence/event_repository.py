@@ -23,7 +23,7 @@ from app.models.clan_membership import ClanMembership
 from app.models.event import Event as EventModel
 from app.models.person import Person as PersonModel
 from app.schemas.historical_date import to_historical_date
-from app.services.lunar_calendar import next_lunar_anniversary
+from app.services.lunar_calendar import LunarAnniversaryResolver
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +155,10 @@ class SqlAlchemyEventRepository:
             {"clan_id": clan_id},
         )
         lunar_rows: list[dict[str, Any]] = []
+        resolver = LunarAnniversaryResolver(today)
         for lunar_row in lunar_result.mappings().all():
             try:
-                occ = next_lunar_anniversary(lunar_row["event_date"], today)
+                occ = resolver.next_anniversary(lunar_row["event_date"])
             except ValueError:
                 # A pathological event_date (e.g. outside the lunar engine's
                 # supported year range, Finding 1) must not 500 the whole
