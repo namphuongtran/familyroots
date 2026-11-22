@@ -338,6 +338,10 @@ test.describe('the backoffice dashboard, as an admin', () => {
       )
       const scaleTag = await openAtTextScale(page, BACKOFFICE_PATH_EN)
       await expect(page.locator('main h1')).toHaveText(DASHBOARD_TITLE_EN)
+      // The badge renders once the client's stats read resolves, which can land after the load
+      // settles. Wait for it, or clause 3 reads a page with no badge to measure.
+      await expect(page.getByTestId('approvals-badge')).toHaveText('7')
+      await settle(page)
 
       type Edges = ReturnType<typeof readDashboard>['badges'][number]
       const meets = (a: Edges, b: Edges) =>
