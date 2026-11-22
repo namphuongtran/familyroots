@@ -121,6 +121,15 @@ class PersonChangeFields(BaseModel):
     avatar_url: str | None = _AVATAR_URL_FIELD
     notes: str | None = None
 
+    @field_validator("full_name", "gender", "birth_date_precision", "death_date_precision")
+    @classmethod
+    def _reject_null(cls, value: object) -> object:
+        # These columns are NOT NULL. Validators run only for keys the client sent,
+        # so an omitted field is unaffected and an explicit null is a 422 naming it.
+        if value is None:
+            raise ValueError("must not be null")
+        return value
+
     @field_validator("avatar_url")
     @classmethod
     def _reject_client_avatar_url(cls, value: str | None) -> str | None:
