@@ -4,7 +4,7 @@
  * TanStack Query mutations over `../server/relationships-repository`'s writes (#328). Each one
  * invalidates every `relationships` entry of the active clan: an edge changes the marriages or
  * parent-child list of both people it joins, and the editor cannot know which of them are
- * cached. A change to the tree is the caller's to invalidate (`onChanged` on the editor sheet),
+ * cached. A change to the tree is the caller's to invalidate (`onChanged` on the editor sheet, or on `RelationshipsAside`),
  * because `tree` imports this slice and the reverse import would be a cycle.
  */
 

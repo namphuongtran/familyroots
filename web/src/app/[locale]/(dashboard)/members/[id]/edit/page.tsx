@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { PersonForm, PersonsErrorState, usePerson } from '@/features/persons'
+import { useInvalidateTree } from '@/features/tree'
 import { useCapabilities } from '@/features/auth'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useClientRequestContext } from '@/shared/http/context.client'
@@ -22,6 +23,7 @@ export default function EditMemberPage() {
   const { id, locale } = useParams<{ id: string; locale: string }>()
   const { editPerson } = useCapabilities()
   const { context, ready, refreshAuth } = useClientRequestContext()
+  const invalidateTree = useInvalidateTree(context.clanId)
   const {
     data: person,
     isPending,
@@ -57,6 +59,7 @@ export default function EditMemberPage() {
           person={person}
           context={context}
           refreshAuth={refreshAuth}
+          onSaved={invalidateTree}
           onSuccess={() => router.push(`/${locale}/members/${id}`)}
           onCancel={() => router.back()}
         />
