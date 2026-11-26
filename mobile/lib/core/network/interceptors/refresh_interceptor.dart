@@ -1,5 +1,8 @@
+import 'dart:async' as async;
+
 import 'package:dio/dio.dart';
 
+import '../api_exception.dart';
 import '../token_refresher.dart';
 
 const _retriedFlag = 'familyroots.retried';
@@ -30,7 +33,9 @@ bool isUnauthenticatedEndpoint(String path) {
 }
 
 /// On 401: one shared refresh, concurrent 401s queued behind it, retry the
-/// original request exactly once; on refresh failure, sign out.
+/// original request exactly once. A refresh Supabase refused (or that returned
+/// no token) signs out; a refresh that got no answer, or a 429/5xx, does not,
+/// and the original request fails as the matching [AppException].
 class RefreshInterceptor extends Interceptor {
   RefreshInterceptor({
     required this.refresher,
@@ -66,7 +71,19 @@ class RefreshInterceptor extends Interceptor {
     final String? token;
     try {
       token = await refresher.refresh();
-    } on Object {
+    } on Object catch (e) {
+      final transient = _transientFailure(e);
+      if (transient != null) {
+        // No refusal: the session, clan choice and cache stay.
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.unknown,
+            error: transient,
+          ),
+        );
+        return;
+      }
       onSignOut();
       handler.next(err);
       return;
@@ -86,4 +103,15 @@ class RefreshInterceptor extends Interceptor {
       handler.next(e);
     }
   }
+}
+
+/// The [AppException] for a refresh that was not refused, else null.
+AppException? _transientFailure(Object e) {
+  if (e is NetworkException || e is TimeoutException) return e as AppException;
+  if (e is async.TimeoutException) return const TimeoutException();
+  if (e is SupabaseAuthException) {
+    final status = e.status;
+    if (status != null && (status == 429 || status >= 500)) return e;
+  }
+  return null;
 }

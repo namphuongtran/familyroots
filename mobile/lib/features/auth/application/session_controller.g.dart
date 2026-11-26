@@ -39,7 +39,7 @@ final class SessionControllerProvider
   SessionController create() => SessionController();
 }
 
-String _$sessionControllerHash() => r'b608fedb6b877288390756b8ec5b8009372ef16e';
+String _$sessionControllerHash() => r'cf5523ab9261a280e3eb8be981fdbde69e82b1d0';
 
 /// Signed-out is a state, not an error — hence UserProfile? rather than
 /// throwing. keepAlive because the session outlives any one screen.
