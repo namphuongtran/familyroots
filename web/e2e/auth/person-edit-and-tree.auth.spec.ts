@@ -9,7 +9,7 @@ import { browserAccessToken } from './session-cookie'
  *    members list row.
  * 2. `/vi/tree` draws a person. The seeded clan has no founder, so every other visit reads the
  *    `Dòng họ chưa có thủy tổ` card. Here a founder is designated with `PUT /clans/me/founder`, a
- *    child is linked through `POST /parent-child`, and the page, loaded fresh, must show one canvas
+ *    child is linked through `POST /relationships/parent-child`, and the page, loaded fresh, must show one canvas
  *    node per person.
  *
  * Both cases soft-delete what they create, the child before the founder. Soft-deleting the founder
@@ -114,7 +114,7 @@ test.describe('person edit and the rendered tree, as an admin', () => {
       const child = await api.post('/persons', { full_name: childName, gender: 'male' })
       childId = child.id
       await api.put('/clans/me/founder', { person_id: founder.id })
-      await api.post('/parent-child', {
+      await api.post('/relationships/parent-child', {
         parent_id: founder.id,
         child_id: child.id,
         relationship_type: 'biological',
