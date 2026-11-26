@@ -128,27 +128,22 @@ async def test_idempotent_across_sequential_calls(engine: AsyncEngine) -> None:
 
 @pytest.mark.asyncio
 async def test_concurrent_first_login_is_race_safe(engine: AsyncEngine) -> None:
-    """Two concurrent first-logins for the same brand-new sub must not 500 on a
-    duplicate PK.
+    """Two concurrent first-logins for the same brand-new sub and email must
+    neither raise nor leave a second row.
 
-    Unlike the sequential test above, both calls here start from separate sessions
-    and are driven with asyncio.gather so their opening SELECTs can interleave.
-    Under READ COMMITTED, both coroutines' opening SELECT (line ~119 in
-    ensure_user_profile) can run — and find no row — before either has committed
-    its INSERT. Both therefore reach the `if profile is None:` branch and issue the
-    `pg_insert(...).on_conflict_do_nothing(index_elements=["id"])` statement
-    concurrently: whichever commits second hits a real PK conflict at the database
-    level, and ON CONFLICT DO NOTHING is what turns that into a silent no-op instead
-    of a raised IntegrityError.
+    Both calls start from separate sessions driven with asyncio.gather, so their
+    opening SELECTs can interleave. ``ON CONFLICT (id)`` alone only absorbs a
+    conflict on the id index; the loser could fail on ``uq_user_profiles_email``
+    first. ``ensure_profile_row`` therefore takes a per-id advisory lock, so the
+    loser runs after the winner commits.
 
-    The outcome (no exception, exactly one row) is invariant under interleaving —
-    ON CONFLICT DO NOTHING guarantees it regardless of which coroutine's INSERT
-    commits first — so this test is not flaky despite exercising a race.
+    Which interleaving happens is not controlled, so this test proves the outcome
+    (no exception, exactly one row) for the interleavings the runs happen to hit,
+    not for all of them. Sessions are always closed by their context managers and
+    exceptions are collected, so a failure cannot leave a transaction open.
 
-    Discrimination check: replacing `.on_conflict_do_nothing(index_elements=["id"])`
-    with a plain `pg_insert(UserProfile).values(...)` (no ON CONFLICT clause) makes
-    this test fail with a duplicate-key IntegrityError from asyncio.gather, because
-    the loser's plain INSERT is no longer a no-op.
+    Discrimination check: removing the advisory lock in ``ensure_profile_row``
+    makes this fail intermittently with UniqueViolation on uq_user_profiles_email.
     """
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     user_id = uuid.uuid4()
@@ -159,13 +154,15 @@ async def test_concurrent_first_login_is_race_safe(engine: AsyncEngine) -> None:
         async with maker() as db:
             await ensure_user_profile(current_user, db)
 
-    # No exception (in particular, no IntegrityError) must escape here.
-    await asyncio.gather(_call(), _call())
+    # return_exceptions lets both sessions' contexts exit before we assert.
+    results = await asyncio.gather(_call(), _call(), return_exceptions=True)
+    errors = [r for r in results if isinstance(r, BaseException)]
 
     async with maker() as db:
         n = await db.scalar(
             sa.text("SELECT COUNT(*) FROM user_profiles WHERE id = :id"), {"id": user_id}
         )
+    assert errors == []
     assert n == 1
 
 
@@ -173,3 +170,24 @@ async def test_concurrent_first_login_is_race_safe(engine: AsyncEngine) -> None:
 # since the H1 fix (review 2026-07-18) it is a single chokepoint in get_current_user,
 # which this direct-call harness bypasses. See tests/integration/test_deactivation_invariant.py
 # for the HTTP-level (real dependency chain) coverage of that invariant.
+
+
+@pytest.mark.asyncio
+async def test_leaked_lock_fails_ddl_with_lock_not_available(engine: AsyncEngine) -> None:
+    """A transaction left open on user_profiles makes later DDL fail with 55P03.
+
+    Without the fixture's ``lock_timeout`` the ALTER waits forever; the outer
+    ``asyncio.wait_for`` turns that hang into a failure of a different kind.
+    """
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with maker() as holder, maker() as ddl:
+        await holder.execute(sa.text("LOCK TABLE user_profiles IN ACCESS SHARE MODE"))
+        # ALTER TABLE needs ACCESS EXCLUSIVE, which conflicts with the held lock.
+        with pytest.raises(sa.exc.DBAPIError) as exc:
+            await asyncio.wait_for(
+                ddl.execute(
+                    sa.text("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS _lt_probe int")
+                ),
+                timeout=30,
+            )
+        assert getattr(exc.value.orig, "sqlstate", None) == "55P03"

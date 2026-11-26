@@ -103,6 +103,13 @@ def migrated_db_url() -> Iterator[str]:
     _reset_settings(test_dsn)
     command.upgrade(cfg, "head")
 
+    # A leaked lock must fail the waiting test, not hang the suite. Set after the
+    # migration so DDL in alembic is unaffected; applies to every later connection.
+    admin = sa.create_engine(ADMIN_URL, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(sa.text(f"ALTER DATABASE \"{TEST_DB_NAME}\" SET lock_timeout = '5s'"))
+    admin.dispose()
+
     yield test_dsn
 
     admin = sa.create_engine(ADMIN_URL, isolation_level="AUTOCOMMIT")
