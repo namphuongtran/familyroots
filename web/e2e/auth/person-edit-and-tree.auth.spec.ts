@@ -75,9 +75,15 @@ test.describe('person edit and the rendered tree, as an admin', () => {
       await page.goto(`/vi/members/${id}/edit`)
       const name = page.getByLabel(FULL_NAME)
       await expect(name).toHaveValue(before)
-      await name.fill(after)
-      await page.getByRole('button', { name: 'Lưu' }).click()
-      await expect(page.getByText(SAVED)).toBeVisible()
+      // The edit page can hydrate late: the server renders the no-permission line, the client the
+      // form, and React regenerates the tree, dropping a fill and click made before that. Repeat
+      // the fill, click and read until a press lands. A press that lands replaces the form with
+      // the saved panel, so no second write is sent.
+      await expect(async () => {
+        await name.fill(after)
+        await page.getByRole('button', { name: 'Lưu' }).click({ timeout: 2_000 })
+        await expect(page.getByText(SAVED)).toBeVisible({ timeout: 3_000 })
+      }).toPass({ timeout: 30_000 })
 
       // Fresh loads, so the reading is the server's and not the form's own state.
       await page.goto(`/vi/members/${id}`)
