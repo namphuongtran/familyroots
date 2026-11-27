@@ -265,4 +265,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clanSuspendedTitle => 'Clan suspended';
+
+  @override
+  String get clanRoleAdmin => 'Admin';
+
+  @override
+  String get clanRoleEditor => 'Editor';
+
+  @override
+  String get clanRoleViewer => 'Viewer';
+
+  @override
+  String get clanRoleUnknown => 'Unknown';
 }
