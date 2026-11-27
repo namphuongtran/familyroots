@@ -47,6 +47,26 @@ if [ "$SIZE_BYTES" -lt 1024 ]; then
   echo "::error::dump suspiciously small (<1KB) — treating as failure"; exit 1
 fi
 
+# Integrity checks on the exact file about to be uploaded. Any failure exits
+# before upload and rotation, so a damaged dump never displaces a good one.
+echo "==> verifying with $(pg_restore --version) at $(command -v pg_restore)"
+if ! gzip -t "$DUMP_PATH"; then
+  echo "::error::check 1 failed (gzip -t): gzip stream is damaged"; exit 1
+fi
+echo "==> check 1 ok: gzip -t"
+# Full read of the archive: --list reads only the TOC and passes a truncated one.
+if ! gunzip -c "$DUMP_PATH" | pg_restore --file=/dev/null; then
+  echo "::error::check 2 failed (pg_restore full read): archive is truncated or unreadable"; exit 1
+fi
+echo "==> check 2 ok: pg_restore full read"
+# Capture first: under pipefail, grep -q closing the pipe early could fail the pipeline.
+TOC="$(gunzip -c "$DUMP_PATH" | pg_restore --list)" || {
+  echo "::error::check 3 failed (pg_restore --list): cannot read the table of contents"; exit 1; }
+if ! printf '%s\n' "$TOC" | grep -Eq 'TABLE DATA public alembic_version([[:space:]]|$)'; then
+  echo "::error::check 3 failed (TOC): no 'TABLE DATA public alembic_version' entry, dump lacks the application schema and rows"; exit 1
+fi
+echo "==> check 3 ok: TOC lists TABLE DATA public alembic_version"
+
 storage_upload() {  # $1 = object path (e.g. db/daily/NAME)
   curl -sSf -X POST \
     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
