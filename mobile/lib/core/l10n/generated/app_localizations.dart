@@ -541,6 +541,30 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Dòng họ đã bị tạm ngưng'**
   String get clanSuspendedTitle;
+
+  /// No description provided for @clanRoleAdmin.
+  ///
+  /// In vi, this message translates to:
+  /// **'Quản trị'**
+  String get clanRoleAdmin;
+
+  /// No description provided for @clanRoleEditor.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chỉnh sửa'**
+  String get clanRoleEditor;
+
+  /// No description provided for @clanRoleViewer.
+  ///
+  /// In vi, this message translates to:
+  /// **'Xem'**
+  String get clanRoleViewer;
+
+  /// No description provided for @clanRoleUnknown.
+  ///
+  /// In vi, this message translates to:
+  /// **'Không rõ'**
+  String get clanRoleUnknown;
 }
 
 class _AppLocalizationsDelegate

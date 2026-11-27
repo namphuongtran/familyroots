@@ -68,6 +68,9 @@ class ApiClient {
     } on dio.DioException catch (e) {
       // A caller-initiated cancellation is rethrown unchanged.
       if (e.type == dio.DioExceptionType.cancel) rethrow;
+      // An interceptor that already knows the outcome carries it as the error.
+      final inner = e.error;
+      if (inner is AppException) throw inner;
       throw toAppException(e);
     }
   }

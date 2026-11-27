@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/core/network/api_exception.dart';
 import 'package:family_roots_mobile/core/network/interceptors/refresh_interceptor.dart';
 import 'package:family_roots_mobile/core/network/token_refresher.dart';
 
@@ -230,6 +232,65 @@ void main() {
         reason: 'a bad password must not sign you out',
       );
       expect(a.callCount, 1, reason: 'and must not be retried');
+    });
+
+    group('a refresh failure', () {
+      // Returns (signedOut, error thrown through ApiClient).
+      Future<(bool, Object)> run(Object failure) async {
+        final a = SequenceAdapter(<Canned>[const Canned(401, _unauthorized)]);
+        final dio = _dio(a);
+        var signedOut = false;
+        dio.interceptors.add(
+          RefreshInterceptor(
+            refresher: TokenRefresher(() async => throw failure),
+            retryDio: dio,
+            onSignOut: () => signedOut = true,
+          ),
+        );
+        Object? thrown;
+        try {
+          await ApiClient(dio).getOne<Object?>('/persons', parse: (j) => j);
+        } on Object catch (e) {
+          thrown = e;
+        }
+        expect(a.callCount, 1);
+        return (signedOut, thrown!);
+      }
+
+      test(
+        'with no answer keeps the session and fails as NetworkException',
+        () async {
+          final (signedOut, thrown) = await run(const NetworkException('off'));
+          expect(signedOut, isFalse);
+          expect(thrown, isA<NetworkException>());
+        },
+      );
+
+      test('that timed out keeps the session', () async {
+        final (signedOut, thrown) = await run(const TimeoutException());
+        expect(signedOut, isFalse);
+        expect(thrown, isA<TimeoutException>());
+      });
+
+      for (final status in <int>[503, 429]) {
+        test('with GoTrue $status keeps the session', () async {
+          final (signedOut, thrown) = await run(
+            SupabaseAuthException(code: null, status: status),
+          );
+          expect(signedOut, isFalse);
+          expect((thrown as SupabaseAuthException).status, status);
+        });
+      }
+
+      test('refused with 400 signs out', () async {
+        final (signedOut, _) = await run(
+          const SupabaseAuthException(
+            code: 'refresh_token_not_found',
+            status: 400,
+          ),
+        );
+        expect(signedOut, isTrue);
+      });
     });
   });
 }

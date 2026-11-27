@@ -263,4 +263,16 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get clanSuspendedTitle => 'Dòng họ đã bị tạm ngưng';
+
+  @override
+  String get clanRoleAdmin => 'Quản trị';
+
+  @override
+  String get clanRoleEditor => 'Chỉnh sửa';
+
+  @override
+  String get clanRoleViewer => 'Xem';
+
+  @override
+  String get clanRoleUnknown => 'Không rõ';
 }

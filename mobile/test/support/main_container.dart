@@ -71,7 +71,9 @@ Future<ProviderContainer> mainContainer({
       supabaseAuthProvider.overrideWithValue(auth),
       onSignOutProvider.overrideWith(
         (ref) =>
-            () => ref.read(sessionControllerProvider.notifier).signOut(),
+            () => ref
+                .read(sessionControllerProvider.notifier)
+                .signOut(everywhere: false),
       ),
 
       authRepositoryProvider.overrideWith(
