@@ -252,11 +252,15 @@ export function emptyPersonFormValues(): PersonFormValues {
 function dateToGroup(value: HistoricalDate | null): HistoricalDateFormValue {
   if (value === null) return emptyDateGroup()
   const group = emptyDateGroup()
-  group.precision = value.precision
+  // The backend defaults a date's precision to `exact` even when no date was ever recorded, so a
+  // person saved without a birth date arrives as `exact` with a null date. Seeding that as-is
+  // fails `exact_date_required` on an untouched form and blocks the save with no request sent.
+  const noExactDate = value.precision === 'exact' && (value.date ?? '') === ''
+  group.precision = noExactDate ? 'unknown' : value.precision
   group.display = value.display ?? ''
   group.lunar = value.lunar ?? ''
   const iso = value.date ?? ''
-  switch (value.precision) {
+  switch (group.precision) {
     case 'exact':
       group.date = iso
       break
