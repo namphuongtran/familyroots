@@ -34,8 +34,22 @@
   first on `PATH` → `scripts/db_backup.sh` logs the `pg_dump` version and path it
   runs, then runs
   `pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" | gzip` →
+  the 1 KB floor and three integrity checks (below), also run under `--dry-run` →
   upload to the Supabase Storage `backups` bucket via the Storage REST API →
   rotate.
+- **Integrity checks** (the script names the `pg_restore` it runs in its log).
+  Any failure exits non-zero with an `::error::` naming the check, before upload
+  and rotation, so a damaged file never pushes a good dump out:
+  1. `gzip -t`: the gzip stream is whole. It says nothing about the archive inside.
+  2. `gunzip -c | pg_restore --file=/dev/null`: a full read of the archive. This
+     catches a truncated archive inside an intact gzip, which `pg_restore --list`
+     passes (measured 2026-11-22: it reads only the table of contents).
+  3. `pg_restore --list` lists `TABLE DATA public alembic_version`: the dump holds
+     the application schema and its rows, not an empty or foreign database.
+
+  **None of these is a restore.** A clean full read does not prove the data
+  loads, the constraints hold, or the roles exist. Only the drill
+  (`scripts/restore_drill.sh`) proves a restore.
 - **Secret gate**: if `PROD_DATABASE_URL`, `SUPABASE_URL`, or
   `SUPABASE_SERVICE_ROLE_KEY` is absent, the job prints
   `::notice::db-backup secrets not configured — skipping ...` and exits green
@@ -55,8 +69,11 @@ backups/                       (private Supabase Storage bucket)
 (`TZ=Asia/Ho_Chi_Minh date +%u` = 7) it additionally copies to `db/weekly/`.
 After each upload it lists the relevant prefix and deletes the oldest objects
 beyond the keep-count (7 daily / 4 weekly). A dump over 400MB logs a
-`::warning::` (Supabase Storage limits); a dump under 1KB is treated as a
-failed backup and the job errors out.
+`::warning::` (Supabase Storage limits); a dump under 1KB, or one that fails
+any of the three integrity checks under "What runs", is treated as a failed
+backup: the job errors out before the first upload, so nothing is uploaded and
+nothing is rotated. The checks prove the file is a whole archive of the
+application database, not that it restores.
 
 ## RPO / RTO
 
