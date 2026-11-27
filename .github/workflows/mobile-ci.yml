@@ -22,10 +22,10 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           # Pinned, not bare `channel: stable`. This dependency set is version
           # sensitive: the analyzer/meta/test_api constraints that ship with the
@@ -61,7 +61,7 @@ jobs:
         run: flutter test --exclude-tags golden --coverage
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mobile-coverage
           path: mobile/coverage/lcov.info

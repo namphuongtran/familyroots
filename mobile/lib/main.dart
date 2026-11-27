@@ -62,7 +62,9 @@ Future<void> main() async {
           // Needs the container, so it cannot be a plain value.
           onSignOutProvider.overrideWith(
             (ref) =>
-                () => ref.read(sessionControllerProvider.notifier).signOut(),
+                () => ref
+                    .read(sessionControllerProvider.notifier)
+                    .signOut(everywhere: false),
           ),
 
           // Repositories are built from apiClientProvider, which is built

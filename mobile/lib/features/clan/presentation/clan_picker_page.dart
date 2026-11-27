@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/generated/app_localizations.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../domain/clan/clan_membership.dart';
+import 'clan_role_label.dart';
 
 /// The picker must navigate EXPLICITLY after a selection: clearing a router
 /// guard condition does not by itself pull the user forward (V13).
@@ -29,7 +30,7 @@ class ClanPickerView extends StatelessWidget {
           margin: EdgeInsets.symmetric(vertical: t.spaceXs),
           child: ListTile(
             title: Text(clans[i].clanName),
-            subtitle: Text(clans[i].role.name),
+            subtitle: Text(clanRoleLabel(l10n, clans[i].role)),
             onTap: () => onSelect(clans[i]),
           ),
         ),
