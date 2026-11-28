@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.exceptions import AppError, AuthenticationError, ForbiddenError
+from app.core.exceptions import AppError, AuthenticationError, ConflictError, ForbiddenError
 from app.core.locale import SUPPORTED_LOCALES
 from app.core.rls import set_request_clan_id
 from app.domain.auth.identity_provider import IdentityUnavailableError
@@ -166,10 +166,13 @@ async def ensure_user_profile(
 
         # ON CONFLICT DO NOTHING + re-select makes this idempotent and race-safe:
         # if a concurrent first-login request already inserted the row, this
-        # request's INSERT is a no-op and the re-select still finds a row —
-        # the "loser" of the race no longer raises IntegrityError/500.
-        # The conflict guard covers the PK `id` only: a same-email/different-id
-        # collision can't happen since Supabase sub<->email is 1:1.
+        # request's INSERT is a no-op and the re-select still finds a row.
+        # No conflict target: it must also swallow uq_user_profiles_email. That
+        # collision DOES arise over time (#297): user_profiles.id has no FK to
+        # auth.users, so a deleted Supabase account leaves its profile behind
+        # and a fresh sign-up with the same email arrives under a new sub. The
+        # re-select by id then finds nothing and we refuse with 409 below
+        # rather than re-linking (which would hand the old account's roles over).
         stmt = (
             pg_insert(UserProfile)
             .values(
@@ -179,14 +182,17 @@ async def ensure_user_profile(
                 language=_jwt_language(current_user),
                 last_login_at=datetime.now(UTC),
             )
-            .on_conflict_do_nothing(index_elements=["id"])
+            .on_conflict_do_nothing()
         )
         await db.execute(stmt)
         await db.commit()
 
-        profile = (
+        created = (
             await db.execute(select(UserProfile).where(UserProfile.id == user_id))
-        ).scalar_one()
+        ).scalar_one_or_none()
+        if created is None:
+            raise ConflictError("email_already_registered")
+        profile = created
     else:
         now = datetime.now(UTC)
         changed = False

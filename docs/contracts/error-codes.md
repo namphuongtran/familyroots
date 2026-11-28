@@ -63,6 +63,7 @@ Grouped by family. "HTTP" is the status the backend actually emits.
 | `auth.invalid_refresh_token` | 401 | Refresh token invalid, expired, or revoked | — | Sign out |
 | `email_not_verified` | 403 | Login with a valid but unverified email | — | Resend-verification screen |
 | `account_deactivated` | 403 | User profile `is_active = false` (checked on every authenticated request — `get_current_user` chokepoint — and at login) | — | Blocked-account screen |
+| `email_already_registered` | 409 | A first authenticated request (or onboard / invitation accept) arrives under a new `sub` whose email already belongs to a profile with a different id (e.g. a deleted Supabase account's leftover). The old profile is never re-linked (#297) | — | Show "this email belongs to another account"; contact the clan admin / support |
 | `auth_provider_unavailable` | 503 | Identity provider outage/misconfiguration (DNS failure, provider 5xx, rejected API key) on any auth path | — | Retry later banner; not a credentials error |
 
 ### Registration & onboarding
