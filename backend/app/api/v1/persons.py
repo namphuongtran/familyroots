@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.application.person.claim_handlers import ClaimCommandHandler
 from app.application.person.commands import (
+    AnonymisePerson,
     CreatePerson,
     DeletePerson,
     GetPerson,
@@ -393,6 +394,27 @@ async def delete_person(
         )
     )
     return {"data": {"message": t("person.deleted"), "id": str(person_id)}}
+
+
+@router.post("/{person_id}/anonymise", responses=ok(PersonResponse))
+async def anonymise_person(
+    person_id: uuid.UUID,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    clan_id: uuid.UUID = Depends(get_current_clan_id),
+    handler: PersonCommandHandler = Depends(get_person_command_handler),
+    role: ClanRole = RequireAdmin,
+) -> dict[str, Any]:
+    """Anonymise a person (admin only, ADR-079): the name becomes "Đã ẩn danh" and every
+    other identifying field is cleared, while the node and its relationships stay so the
+    tree keeps its shape and đời is unchanged."""
+    person = await handler.anonymise(
+        AnonymisePerson(
+            person_id=person_id,
+            clan_id=clan_id,
+            actor=ActorInfo.from_jwt(current_user, role.value),
+        )
+    )
+    return {"data": person.model_dump()}
 
 
 @router.post("/{person_id}/restore", responses=ok_message())

@@ -11,6 +11,7 @@ import uuid
 from typing import Any
 
 from app.application.person.commands import (
+    AnonymisePerson,
     CreatePerson,
     DeletePerson,
     GetPerson,
@@ -187,6 +188,27 @@ class PersonCommandHandler:
                     person.id,
                 )
         await self._uow.commit()
+
+    async def anonymise(self, cmd: AnonymisePerson) -> PersonResponse:
+        """Anonymise a person: identity cleared, node and edges kept (ADR-079)."""
+        person = await self._repo.get_in_clan(cmd.person_id, cmd.clan_id)
+        if not person:
+            raise EntityNotFoundError("person_not_found")
+
+        had_avatar = person.avatar_url is not None
+        person.anonymise(cmd.actor, cmd.clan_id)
+        await self._repo.save(person)
+        if had_avatar and self._storage is not None:
+            try:
+                await self._storage.delete_public(avatar_object_path(cmd.clan_id, person.id))
+            except Exception:
+                # The row no longer points at the object; the document keeps
+                # is_avatar = true, the same retry state delete() leaves.
+                logger.exception(
+                    "Deleting the public avatar of anonymised person %s failed", person.id
+                )
+        await self._uow.commit()
+        return PersonResponse.model_validate(person)
 
     async def restore(self, cmd: RestorePerson) -> PersonResponse:
         """Restore a soft-deleted person."""

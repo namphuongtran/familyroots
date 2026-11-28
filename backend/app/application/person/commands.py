@@ -78,6 +78,15 @@ class UpdatePerson:
 
 
 @dataclass(frozen=True)
+class AnonymisePerson:
+    """Anonymise a person in the tree (admin only, ADR-079)."""
+
+    person_id: uuid.UUID
+    clan_id: uuid.UUID
+    actor: ActorInfo
+
+
+@dataclass(frozen=True)
 class DeletePerson:
     """Soft-delete a person."""
 

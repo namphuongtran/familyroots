@@ -13,6 +13,8 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from app.domain.person.events import (
+    ANONYMISED_NAME,
+    PersonAnonymised,
     PersonCreated,
     PersonDeleted,
     PersonRestored,
@@ -65,6 +67,38 @@ _UPDATABLE_FIELDS = frozenset(
 # host — an SSRF/tracking-pixel/moderation surface that "permanent public URL" never
 # implied — so update() raises field_not_updatable for it like any other
 # non-updatable column.
+
+# What anonymise() writes, field by field (ADR-079). Every name, date, place, free
+# text, contact and personal detail is cleared; full_name becomes ANONYMISED_NAME.
+# Dates fall to precision "unknown" so a client renders no date at all.
+_ANONYMISED_VALUES: dict[str, object] = {
+    "birth_name": None,
+    "courtesy_name": None,
+    "posthumous_name": None,
+    "alias_name": None,
+    "birth_date": None,
+    "birth_date_precision": "unknown",
+    "birth_date_display": None,
+    "death_date": None,
+    "death_date_precision": "unknown",
+    "death_date_display": None,
+    "lunar_birth_date": None,
+    "lunar_death_date": None,
+    "birth_place": None,
+    "death_place": None,
+    "burial_place": None,
+    "tomb_location": None,
+    "residence_place": None,
+    "religion": None,
+    "occupation": None,
+    "education_level": None,
+    "title_rank": None,
+    "phone": None,
+    "email": None,
+    "biography": None,
+    "notes": None,
+    "avatar_url": None,
+}
 
 # The persons.avatar_url column is varchar(500); the domain owns the number so the
 # invariant is checked before the driver can raise a truncation error.
@@ -303,6 +337,34 @@ class Person(AggregateRoot):
                 clan_id=clan_id,
                 actor_id=actor.user_id,
                 actor_role=actor.role,
+            )
+        )
+
+    def anonymise(self, actor: ActorInfo, clan_id: uuid.UUID) -> None:
+        """Replace the person's identity with "Đã ẩn danh" and clear every other
+        identifying field, keeping the node (ADR-079).
+
+        Anonymise, not delete: the row stays live (``is_deleted`` untouched) and nothing
+        here reaches a relationship, so the edges, the clan membership, the founder flag
+        and therefore đời are unchanged. ``gender`` is kept because con theo đời cha
+        (ADR-027) reads it to pick the canonical parent; ``nationality`` is kept because
+        it is not identifying and the domain types it non-null. The use case takes the
+        public avatar object down, like ``soft_delete``.
+
+        The event lists the cleared field names, never their old values.
+        """
+        for field_name, value in _ANONYMISED_VALUES.items():
+            setattr(self, field_name, value)
+        self.full_name = ANONYMISED_NAME
+        self.updated_by = actor.user_id
+        self.updated_at = datetime.now(UTC)
+        self.add_event(
+            PersonAnonymised(
+                person_id=self.id,
+                clan_id=clan_id,
+                actor_id=actor.user_id,
+                actor_role=actor.role,
+                cleared_fields=tuple(sorted(_ANONYMISED_VALUES)),
             )
         )
 

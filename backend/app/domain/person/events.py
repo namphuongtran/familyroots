@@ -12,6 +12,9 @@ from typing import Any
 
 from app.domain.shared.events import AuditableEvent
 
+# The name an anonymised person carries (ADR-079). Vietnamese because the tree is.
+ANONYMISED_NAME = "Đã ẩn danh"
+
 
 @dataclass(frozen=True)
 class PersonCreated(AuditableEvent):
@@ -88,3 +91,30 @@ class PersonRestored(AuditableEvent):
             object.__setattr__(self, "resource_type", "person")
         if self.resource_id is None:
             object.__setattr__(self, "resource_id", self.person_id)
+
+
+@dataclass(frozen=True)
+class PersonAnonymised(AuditableEvent):
+    """Emitted when a clan admin anonymises a person (ADR-079).
+
+    Carries the NAMES of the cleared fields only, never their old values: an audit row
+    that copied the old names, dates and places would keep exactly what the
+    anonymisation exists to remove. ``old_value`` stays None on purpose."""
+
+    person_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    cleared_fields: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.action:
+            object.__setattr__(self, "action", "person.anonymise")
+        if not self.resource_type:
+            object.__setattr__(self, "resource_type", "person")
+        if self.resource_id is None:
+            object.__setattr__(self, "resource_id", self.person_id)
+        if self.new_value is None:
+            object.__setattr__(
+                self,
+                "new_value",
+                {"full_name": ANONYMISED_NAME, "cleared_fields": list(self.cleared_fields)},
+            )
+
