@@ -85,6 +85,7 @@ jobs:
           VERCEL_API_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
           VERCEL_WEB_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
           API_ORIGIN: ${{ vars.API_ORIGIN }}
+          WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
         run: |
           missing=""
           [ -n "$MIGRATION_DATABASE_URL" ] || missing="$missing secret:MIGRATION_DATABASE_URL"
@@ -93,6 +94,7 @@ jobs:
           [ -n "$VERCEL_API_PROJECT_ID" ] || missing="$missing secret:VERCEL_API_PROJECT_ID"
           [ -n "$VERCEL_WEB_PROJECT_ID" ] || missing="$missing secret:VERCEL_WEB_PROJECT_ID"
           [ -n "$API_ORIGIN" ] || missing="$missing variable:API_ORIGIN"
+          [ -n "$WEB_ORIGIN" ] || missing="$missing variable:WEB_ORIGIN"
           if [ -n "$missing" ]; then
             echo "::error::Deploy not configured (missing:$missing). Nothing was migrated or deployed (docs/ops/deployment.md, Go-live checklist)"
             exit 1
@@ -194,11 +196,29 @@ jobs:
       # No --yes, for the reason the API deploy step gives. The CLI is pinned to the same
       # version as that step, so a deploy does not change tool between two runs.
       - name: Deploy to Vercel (familyroots-web)
+        id: deploy_web
         working-directory: web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
         run: |
-          pnpm dlx vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN"
-          echo "- familyroots-web: deployed (URL in this step's log)" >> "$GITHUB_STEP_SUMMARY"
+          url="$(pnpm dlx vercel@63.1.0 deploy --prod --token="$VERCEL_TOKEN")"
+          echo "Deployment: $url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "- familyroots-web: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      # Read after the fact, as for the API. Through the production host, because Standard
+      # Protection guards the deployment's own URL. Two checks: the host is an alias of the
+      # deployment above (a status-only read passes when the alias still points at the previous
+      # deployment), and /login, a public route, answers 200. A red step means production
+      # already serves the new deployment: roll back (docs/ops/deployment.md, "Rollback").
+      - name: Read /login on the web production host
+        working-directory: web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+          WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
+          DEPLOYMENT_URL: ${{ steps.deploy_web.outputs.url }}
+        run: ../.github/scripts/read-web.sh
