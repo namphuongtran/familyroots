@@ -222,7 +222,7 @@ Every 2xx body is `{"data": ...}`; cursor lists add
 spec — read it before changing any request/response shape.
 
 On 401: one shared refresh (concurrent 401s queue behind it), retry the original
-request **exactly once**, never loop; a failed refresh signs out. A
+request **exactly once**, never loop; a refused refresh signs out; a refresh that got no answer does not. A
 caller-initiated cancellation is rethrown unchanged, never reported as an auth
 or network failure.
 

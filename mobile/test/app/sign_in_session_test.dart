@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:family_roots_mobile/app/app.dart';
 import 'package:family_roots_mobile/app/router/routes.dart';
 import 'package:family_roots_mobile/core/network/api_exception.dart';
+import 'package:family_roots_mobile/core/network/dio_provider.dart';
 import 'package:family_roots_mobile/features/auth/auth.dart';
 
 import '../support/fake_gotrue.dart';
@@ -59,6 +60,9 @@ const _viInvalidCredentials = 'Email hoặc mật khẩu không đúng';
 Future<void> _signIn(ProviderContainer c) => c
     .read(sessionControllerProvider.notifier)
     .signIn(email: 'minh@example.com', password: 'secret');
+
+bool _revoked(FakeGoTrue g) =>
+    g.received.any((r) => r.url.path.endsWith('/logout'));
 
 String? _authorization(SequenceAdapter adapter, int index) =>
     adapter.received[index].headers['Authorization'] as String?;
@@ -144,6 +148,56 @@ void main() {
     final revoke = goTrue.received.last;
     expect(revoke.url.path, endsWith('/logout'));
     expect(revoke.url.queryParameters['scope'], 'local');
+  });
+
+  test(
+    'a refused refresh during a request revokes only this device (#406)',
+    () async {
+      final goTrue = FakeGoTrue();
+      final adapter = SequenceAdapter(<Canned>[
+        const Canned(200, _me),
+        const Canned(200, _me, bearer: 'never-issued'),
+      ]);
+      // gotrue drops its own session on a refused refresh and then has nothing
+      // to revoke, so the refusal is injected here and the session is still held
+      // when the interceptor's sign-out runs.
+      final c = await mainContainer(
+        adapter: adapter,
+        goTrue: goTrue,
+        refresh: () async => throw const SupabaseAuthException(
+          code: 'refresh_token_not_found',
+          status: 400,
+        ),
+      );
+      addTearDown(c.dispose);
+      await _signIn(c);
+
+      await expectLater(
+        c.read(dioProvider).get<Object?>('/persons'),
+        throwsA(anything),
+      );
+      // The interceptor's sign-out is fire-and-forget, so wait for its revoke.
+      for (var i = 0; i < 50 && !_revoked(goTrue); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      final revoke = goTrue.received.last;
+      expect(revoke.url.path, endsWith('/logout'));
+      expect(revoke.url.queryParameters['scope'], 'local');
+    },
+  );
+
+  test('pressing sign-out revokes every session (#406)', () async {
+    final goTrue = FakeGoTrue();
+    final adapter = SequenceAdapter(<Canned>[const Canned(200, _me)]);
+    final c = await mainContainer(adapter: adapter, goTrue: goTrue);
+    addTearDown(c.dispose);
+    await _signIn(c);
+
+    await c.read(sessionControllerProvider.notifier).signOut();
+
+    final revoke = goTrue.received.last;
+    expect(revoke.url.path, endsWith('/logout'));
+    expect(revoke.url.queryParameters['scope'], 'global');
   });
 
   testWidgets('a wrong password shows the localised message on the login '

@@ -73,9 +73,13 @@ class SessionController extends _$SessionController {
   }
 
   /// Through Supabase, which also revokes the session server-side.
-  Future<void> signOut() async {
+  ///
+  /// [everywhere] is true for the person pressing "sign out", who gets every
+  /// session revoked. A sign-out the person did not ask for, such as the refresh
+  /// interceptor's, passes false and revokes only this device's session.
+  Future<void> signOut({bool everywhere = true}) async {
     try {
-      await ref.read(supabaseAuthProvider).signOut();
+      await ref.read(supabaseAuthProvider).signOut(everywhere: everywhere);
     } finally {
       // Even when revoking fails: the next person must not see this one's data.
       await _forgetUser();

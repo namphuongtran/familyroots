@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:family_roots_mobile/core/network/api_client.dart';
+import 'package:family_roots_mobile/core/network/api_exception.dart';
 import 'package:family_roots_mobile/core/network/interceptors/refresh_interceptor.dart';
 import 'package:family_roots_mobile/core/network/token_refresher.dart';
 
@@ -105,6 +107,70 @@ void main() {
       );
       expect(signedOut, isTrue);
       expect(a.callCount, 1);
+    });
+
+    // #406: a refresh that got no answer, or met a GoTrue 5xx or 429, says
+    // nothing about the session. Only a refusal ends it.
+    final transient = <String, Object Function()>{
+      'NetworkException': () => const NetworkException('offline'),
+      'TimeoutException': () => const TimeoutException(),
+      '503': () => const SupabaseAuthException(code: null, status: 503),
+      '429': () => const SupabaseAuthException(
+        code: 'over_request_rate_limit',
+        status: 429,
+      ),
+    };
+    for (final entry in transient.entries) {
+      test('a refresh that fails with ${entry.key} does not sign out and the '
+          'caller sees that failure, not the 401', () async {
+        final a = SequenceAdapter(<Canned>[const Canned(401, _unauthorized)]);
+        final dio = _dio(a);
+        var signedOut = false;
+        dio.interceptors.add(
+          RefreshInterceptor(
+            refresher: TokenRefresher(() async => throw entry.value()),
+            retryDio: dio,
+            onSignOut: () => signedOut = true,
+          ),
+        );
+
+        await expectLater(
+          ApiClient(dio).getOne<Object?>('/persons', parse: (j) => j),
+          throwsA(
+            isA<AppException>().having(
+              (e) => e.runtimeType,
+              'type',
+              entry.value().runtimeType,
+            ),
+          ),
+        );
+        expect(signedOut, isFalse);
+        expect(a.callCount, 1);
+      });
+    }
+
+    test('a refresh Supabase refuses with a 4xx signs out', () async {
+      final a = SequenceAdapter(<Canned>[const Canned(401, _unauthorized)]);
+      final dio = _dio(a);
+      var signedOut = false;
+      dio.interceptors.add(
+        RefreshInterceptor(
+          refresher: TokenRefresher(
+            () async => throw const SupabaseAuthException(
+              code: 'refresh_token_not_found',
+              status: 400,
+            ),
+          ),
+          retryDio: dio,
+          onSignOut: () => signedOut = true,
+        ),
+      );
+
+      await expectLater(
+        dio.get<Object?>('/persons'),
+        throwsA(isA<DioException>()),
+      );
+      expect(signedOut, isTrue);
     });
 
     test('a second 401 on the retry is not retried again', () async {

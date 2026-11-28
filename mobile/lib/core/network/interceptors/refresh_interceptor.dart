@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../api_exception.dart';
 import '../token_refresher.dart';
 
 const _retriedFlag = 'familyroots.retried';
@@ -28,6 +29,14 @@ bool isUnauthenticatedEndpoint(String path) {
   }
   return false;
 }
+
+/// A refresh failure that is not a refusal: no answer, a timeout, or a GoTrue
+/// 429 or 5xx. Any other failure, such as a 4xx revoked token, is a refusal.
+bool _isTransient(Object e) => switch (e) {
+  NetworkException() || TimeoutException() => true,
+  SupabaseAuthException(:final status?) => status == 429 || status >= 500,
+  _ => false,
+};
 
 /// On 401: one shared refresh, concurrent 401s queued behind it, retry the
 /// original request exactly once; on refresh failure, sign out.
@@ -66,7 +75,20 @@ class RefreshInterceptor extends Interceptor {
     final String? token;
     try {
       token = await refresher.refresh();
-    } on Object {
+    } on Object catch (e) {
+      if (_isTransient(e)) {
+        // The refresh got no answer, or GoTrue was briefly unavailable or
+        // rate limiting. That says nothing about the session, so it stays.
+        // The caller sees the failure that happened, not the 401.
+        handler.next(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.unknown,
+            error: e,
+          ),
+        );
+        return;
+      }
       onSignOut();
       handler.next(err);
       return;

@@ -75,6 +75,9 @@ class ApiClient {
 
 /// Maps a DioException onto the sealed client taxonomy.
 AppException toAppException(dio.DioException e) {
+  // An interceptor that already knows the failure rejects with it.
+  final cause = e.error;
+  if (cause is AppException) return cause;
   switch (e.type) {
     case dio.DioExceptionType.connectionTimeout:
     case dio.DioExceptionType.sendTimeout:

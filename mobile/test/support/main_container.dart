@@ -51,6 +51,7 @@ class FakeCacheStore implements CacheStore {
 Future<ProviderContainer> mainContainer({
   SequenceAdapter? adapter,
   FakeGoTrue? goTrue,
+  Future<String?> Function()? refresh,
 }) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   final prefs = await PrefsStore.open();
@@ -67,11 +68,15 @@ Future<ProviderContainer> mainContainer({
       accessTokenProvider.overrideWithValue(() => auth.accessToken),
       currentClanIdProvider.overrideWithValue(prefs.readClanId),
       currentLocaleProvider.overrideWithValue(() => prefs.readLocale() ?? 'vi'),
-      tokenRefresherProvider.overrideWithValue(TokenRefresher(auth.refresh)),
+      tokenRefresherProvider.overrideWithValue(
+        TokenRefresher(refresh ?? auth.refresh),
+      ),
       supabaseAuthProvider.overrideWithValue(auth),
       onSignOutProvider.overrideWith(
         (ref) =>
-            () => ref.read(sessionControllerProvider.notifier).signOut(),
+            () => ref
+                .read(sessionControllerProvider.notifier)
+                .signOut(everywhere: false),
       ),
 
       authRepositoryProvider.overrideWith(
