@@ -3,11 +3,9 @@
 /**
  * TanStack Query mutations over `../server/persons-repository`'s write
  * functions, each invalidating exactly the `persons` cache entries the
- * mutation can have changed. Cross-feature invalidation (e.g. the legacy
- * `personCreateInvalidationKeys`'s `['tree']` row,
- * `src/lib/hooks/query-invalidation.ts`, deleted by #313) is explicitly out of scope for this
- * seed — it arrives with the second feature slice that needs to
- * invalidate `persons` from outside this feature, per `web/CLAUDE.md`.
+ * mutation can have changed. The tree is not invalidated here: `tree` imports
+ * this slice, so the caller does it (`PersonForm`'s `onSaved`, wired with `useInvalidateTree`,
+ * #411; see `web/CLAUDE.md`).
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'

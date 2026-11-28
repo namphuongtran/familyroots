@@ -541,6 +541,54 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Dòng họ đã bị tạm ngưng'**
   String get clanSuspendedTitle;
+
+  /// No description provided for @clanRoleAdmin.
+  ///
+  /// In vi, this message translates to:
+  /// **'Quản trị'**
+  String get clanRoleAdmin;
+
+  /// No description provided for @clanRoleEditor.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chỉnh sửa'**
+  String get clanRoleEditor;
+
+  /// No description provided for @clanRoleViewer.
+  ///
+  /// In vi, this message translates to:
+  /// **'Xem'**
+  String get clanRoleViewer;
+
+  /// No description provided for @clanRoleUnknown.
+  ///
+  /// In vi, this message translates to:
+  /// **'Không rõ'**
+  String get clanRoleUnknown;
+
+  /// No description provided for @startupFailureTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Không thể khởi động ứng dụng'**
+  String get startupFailureTitle;
+
+  /// No description provided for @startupFailureBody.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đã xảy ra lỗi khi khởi động. Hãy đóng và mở lại ứng dụng.'**
+  String get startupFailureBody;
+
+  /// No description provided for @startupMissingConfigTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thiếu cấu hình'**
+  String get startupMissingConfigTitle;
+
+  /// Names the --dart-define keys that are empty, comma separated
+  ///
+  /// In vi, this message translates to:
+  /// **'Bản dựng này thiếu: {names}. Hãy truyền các giá trị này bằng --dart-define.'**
+  String startupMissingConfigBody(String names);
 }
 
 class _AppLocalizationsDelegate

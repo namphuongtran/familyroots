@@ -156,3 +156,16 @@ async def test_search_is_accent_folding_and_case_insensitive(async_engine: Async
             )
             await s.execute(sa.text("DELETE FROM clans WHERE id = :c"), {"c": clan_id})
             await s.commit()
+
+
+def test_unused_fulltext_gin_index_is_dropped(sync_engine: sa.Engine) -> None:
+    """#395: nothing reads ``to_tsvector``, so migration 044 drops its GIN index; the trigram
+    indexes that serve the search stay."""
+    with sync_engine.connect() as conn:
+        names = set(
+            conn.execute(
+                sa.text("SELECT indexname FROM pg_indexes WHERE tablename = 'persons'")
+            ).scalars()
+        )
+    assert "idx_persons_fullname_search" not in names
+    assert {"idx_persons_fullname_trgm", "idx_persons_birthname_trgm"} <= names

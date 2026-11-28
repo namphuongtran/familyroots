@@ -344,10 +344,17 @@ every hook testable with a plain `RequestContext` object and MSW, which is what
 - **Mutation invalidation is same-feature only, and deliberately so.**
   `useCreatePerson` invalidates `personsKeys.lists(clanId)`; `useUpdatePerson`,
   `useDeletePerson`, and `useRestorePerson` invalidate the one `personsKeys.detail(...)`
-  plus every list. None of them touch `['tree']` the way the legacy
-  `src/lib/hooks/query-invalidation.ts` did for the same mutations (deleted by #313) — cross-feature
-  invalidation arrives with the second feature slice that needs to invalidate `persons`
-  from outside it.
+  plus every list. None of them touch `['tree']`, because `tree` imports `persons` and the
+  reverse import would be a cycle. **The caller invalidates the tree (#411)**, through
+  `useInvalidateTree(clanId)` from `@/features/tree`, which invalidates `treeKeys.all(clanId)`.
+  `PersonForm` takes `onSaved`, which runs on each successful write, not on the `Tiếp tục` press that
+  `onSuccess` waits for; the create and edit pages pass it. `RelationshipsAside` takes `onChanged`,
+  forwarded to the editor sheet; the profile page reaches it through the client wrapper
+  `members/[id]/ProfileRelationships.tsx`, because the page is a Server Component. `TreeScreen` does
+  the same for its own editor. Delete and restore have no UI yet; whoever wires them must invalidate
+  the tree too. Reading: `features/tree/hooks/tree-invalidation.test.tsx` (MSW, an unmounted tree
+  remounted inside the stale time reads `B` after a second `GET /tree`; without the wiring, `A` and one
+  request).
 - **The public surface changed shape.** Before the repository landed, `index.ts` re-exported the raw
   `api/persons-api.ts` functions (`Promise<unknown>`) because nothing else existed to be
   the entry point. Now that `server/` parses, those raw functions are **no longer
@@ -1768,6 +1775,20 @@ engine rather than computed from the stylesheet.
     a motherless child folded into the first wife seen, no grouping at all, and a null đời drawn
     as a number; each fails a named test. The first fixture listed the motherless child first, and
     the "folded into the first wife" plant passed it, so the fixture order is load-bearing.
+  - **The list view is the canvas's accessible equivalent (#413, spec T-08).** The header's
+    `Chế độ danh sách` toggle (`aria-pressed`, outside the canvas so it survives the canvas
+    unmounting) swaps `TreeCanvas` for `TreeListView` over the same `GET /tree` result: nested
+    `ul`/`li`, one button per node the canvas draws (person, spouse, pedigree stub with its
+    `Nhánh chính ở nơi khác` chip), đời through `GenerationBadge`, children under the § 3.3 wife
+    groups. Enter or Space opens the same `FocusPanel` a canvas click does. Its model,
+    `ui/tree-outline.ts`, walks the tree itself rather than reading `treeToFlow`'s nodes, so the
+    test comparing the two can fail; keep the dedupe rules in step if either changes. Spouse
+    entries carry no đời, as on the canvas. While `GET /tree` is pending the tree region is
+    `aria-busy="true"` and holds `tree.loading` in a `role="status"` line.
+    `ui/TreeListView.test.tsx` holds the readings; controls run 2026-11-22, each reverted: the
+    second wife's children dropped fails the set comparison, children rendered flat fails the
+    `Vợ hai` case, `aria-busy` removed fails the loading case. The button's accessible name needed
+    a `{' '}` between the name and the badge, or it read `Nguyễn Hữu Đàmđời thứ 4`.
   - **The ratchet does not catch a re-added page → `components/family-tree/` edge against a merge
     base that still lists it.** Planted on 2026-11-21 with the baseline regenerated to admit it:
     `pnpm depcruise:ratchet origin/main` passed, because `origin/main`'s baseline had that edge.

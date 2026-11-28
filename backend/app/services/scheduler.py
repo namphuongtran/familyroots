@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.services.document_purge import purge_expired_documents
-from app.services.lunar_calendar import next_lunar_anniversary
+from app.services.lunar_calendar import LunarAnniversaryResolver
 
 logger = logging.getLogger(__name__)
 
@@ -163,11 +163,12 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
             )
             lunar_events = lunar_result.mappings().all()
 
+            resolver = LunarAnniversaryResolver(today)
             for event in [*events, *lunar_events]:
                 try:
                     # Solar rows already carry a precomputed next_occurrence (cheap SQL
                     # date math that cannot raise). Lunar rows carry only event_date —
-                    # next_lunar_anniversary runs the lunar-conversion algorithm, which
+                    # the resolver runs the lunar-conversion algorithm, which
                     # CAN raise on a pathological date. Computing it lazily HERE, inside
                     # this per-event try, means one bad lunar row hits the
                     # rollback-and-continue path below instead of aborting the whole
@@ -175,7 +176,7 @@ async def send_anniversary_notifications(today: date | None = None) -> None:
                     if "next_occurrence" in event:
                         next_occ = event["next_occurrence"]
                     else:
-                        next_occ = next_lunar_anniversary(event["event_date"], today)
+                        next_occ = resolver.next_anniversary(event["event_date"])
                     days_until = (next_occ - today).days
                     if days_until != event["notify_days_before"]:
                         continue

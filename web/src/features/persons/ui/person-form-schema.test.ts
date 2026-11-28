@@ -203,6 +203,15 @@ describe('personToFormValues / formValuesToCreateRequest — round trip through 
     expect('avatar_url' in body).toBe(false)
   })
 
+  it('opens a person recorded with no birth date as unknown, so an untouched edit form validates', () => {
+    const person = personFixture({
+      birthDate: { date: null, precision: 'exact', display: null, lunar: null },
+    })
+    const values = personToFormValues(person)
+    expect(values.birthDate.precision).toBe('unknown')
+    expect(personFormSchema.safeParse(values).success).toBe(true)
+  })
+
   it('maps a circa death date, prefilling the "Đã mất" switch on', () => {
     const person = personFixture({
       deathDate: { date: '1961-01-01', precision: 'circa', display: 'khoảng 1961', lunar: null },

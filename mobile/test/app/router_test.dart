@@ -14,6 +14,8 @@ import 'package:family_roots_mobile/domain/auth/user_profile.dart';
 import 'package:family_roots_mobile/features/clan/clan.dart';
 
 import '../support/load_app_fonts.dart';
+import '../support/main_container.dart' show FakeCacheStore;
+import 'package:family_roots_mobile/core/network/dio_provider.dart';
 import '../support/sequence_adapter.dart';
 
 /// Two approved memberships, so the picker has something to render.
@@ -50,6 +52,7 @@ Future<Widget> _app(GoRouterLike router, {AuthRouteState? auth}) async {
   final prefs = await PrefsStore.open();
   return ProviderScope(
     overrides: [
+      cacheStoreProvider.overrideWithValue(FakeCacheStore()),
       clanRepositoryProvider.overrideWithValue(_repo()),
       prefsStoreProvider.overrideWithValue(prefs),
       if (auth != null) authRouteStateProvider.overrideWithValue(auth),

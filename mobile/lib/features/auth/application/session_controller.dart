@@ -3,8 +3,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_provider.dart';
-import '../../../domain/auth/user_profile.dart';
 import '../../clan/clan.dart';
+import '../../../domain/auth/user_profile.dart';
 import '../data/auth_repository.dart';
 import '../data/supabase_auth.dart';
 
@@ -31,8 +31,8 @@ class SessionController extends _$SessionController {
     // A session ended elsewhere (revoked server-side, refresh token lost) must
     // reach the router, which only listens to this state.
     final sub = auth.signedOut.listen((_) async {
+      await _forgetUser();
       state = const AsyncValue<UserProfile?>.data(null);
-      await _forgetPreviousUser();
     });
     ref.onDispose(sub.cancel);
 
@@ -72,20 +72,23 @@ class SessionController extends _$SessionController {
     });
   }
 
-  /// Through Supabase, which also revokes the session server-side.
-  Future<void> signOut() async {
+  /// Through Supabase, which also revokes the session server-side. Pressing
+  /// "sign out" revokes every session; a sign-out the person did not ask for
+  /// passes `everywhere: false` and revokes only this device's.
+  Future<void> signOut({bool everywhere = true}) async {
     try {
-      await ref.read(supabaseAuthProvider).signOut();
+      await ref.read(supabaseAuthProvider).signOut(everywhere: everywhere);
     } finally {
-      state = const AsyncValue<UserProfile?>.data(null);
-      await _forgetPreviousUser();
+      // Even when revoking fails: the next person must not see this one's data.
+      await _forgetUser();
     }
+    state = const AsyncValue<UserProfile?>.data(null);
   }
 
-  /// Nothing of the previous user may outlive the session (#369): the stored
-  /// clan choice, the response cache, and the keepAlive clan providers.
-  Future<void> _forgetPreviousUser() async {
-    if (!ref.mounted) return;
+  /// Everything the previous user left readable: the persisted clan choice
+  /// (read first by the next request's X-Current-Clan-Id), the response cache,
+  /// and the keepAlive clan providers.
+  Future<void> _forgetUser() async {
     await ref.read(prefsStoreProvider).clearClanId();
     await ref.read(cacheStoreProvider).clear();
     ref

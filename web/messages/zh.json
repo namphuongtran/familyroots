@@ -465,7 +465,12 @@
     "retry": "重试",
     "no_founder_title": "本族尚未设定始祖",
     "no_founder_body": "家谱树从始祖开始构建。家族管理员需要先选择始祖，家谱树才能显示。",
-    "node_actions": "对此人的操作"
+    "node_actions": "对此人的操作",
+    "list_view": "列表模式",
+    "list_view_label": "列表形式的家谱",
+    "spouses": "配偶",
+    "spouses_of": "{name}的配偶",
+    "children_of": "{name}的子女"
   },
   "Backoffice": {
     "dashboard_title": "后台控制台",

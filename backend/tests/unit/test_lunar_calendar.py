@@ -6,6 +6,7 @@ Chinese (UTC+8) calendar placed it on 1985-02-20 — a Chinese-calendar library
 would fail this test by a month.
 """
 
+import contextlib
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import pytest
 from app.services.lunar_calendar import (
     SUPPORTED_MAX_YEAR,
     SUPPORTED_MIN_YEAR,
+    LunarAnniversaryResolver,
     LunarDate,
     lunar_to_solar,
     next_lunar_anniversary,
@@ -190,3 +192,37 @@ def test_engine_is_pure_stdlib():
     banned = ("sqlalchemy", "fastapi", "pydantic")
     src = Path(m.__file__).read_text(encoding="utf-8")
     assert not any(f"import {b}" in src or f"from {b}" in src for b in banned)
+
+
+# ── LunarAnniversaryResolver equivalence (#396) ─────────────────────────────
+
+
+def _equivalence_dates() -> list[date]:
+    import random
+
+    rng = random.Random(1)
+    lo, hi = date(1910, 3, 1), date(2025, 12, 31)
+    span = (hi - lo).days
+    dates = [lo + timedelta(days=rng.randrange(span + 1)) for _ in range(5000)]
+    # ADR-018 cases: leap-month dates and day-30 dates.
+    for y in range(1911, 2025):
+        for m in range(1, 13):
+            for leap in (False, True):
+                with contextlib.suppress(ValueError):
+                    dates.append(lunar_to_solar(y, m, 30, leap))
+                if leap:
+                    with contextlib.suppress(ValueError):
+                        dates.append(lunar_to_solar(y, m, 15, True))
+    return dates
+
+
+@pytest.mark.parametrize("today", [date(2026, 11, 22), date(2024, 5, 1)])
+def test_resolver_matches_next_lunar_anniversary(today: date) -> None:
+    resolver = LunarAnniversaryResolver(today)
+    for d in _equivalence_dates():
+        assert resolver.next_anniversary(d) == next_lunar_anniversary(d, today), d
+
+
+def test_resolver_rejects_pre_1910_event_date() -> None:
+    with pytest.raises(ValueError):
+        LunarAnniversaryResolver(date(2025, 1, 1)).next_anniversary(date(1890, 3, 15))

@@ -119,7 +119,11 @@ returning a plausible-but-wrong date.
 
 Harder: the lunar path costs one extra query per call site (scheduler,
 `get_upcoming`) plus a Python-side merge/sort instead of a single SQL statement —
-acceptable because lunar recurring events are a small fraction of rows and the
+not a small cost, because the giỗ is the main recurring event in a clan. Measured
+2026-11-22 on an Apple M4, 5,000 `next_lunar_anniversary` calls cost 0.19 s of CPU
+(5,000 random dates hold only 360 distinct lunar (month, day) pairs). Both call
+sites therefore use `LunarAnniversaryResolver`, which computes each distinct pair once
+per call (5,000 rows: 0.06 s, nearly all of it the per-row `solar_to_lunar`). The
 conversion cannot be expressed as SQL date arithmetic. The giỗ conventions
 (leap-month → regular month, day-30 clamp) are a fixed platform-wide rule, not
 configurable per clan; a clan wanting a different convention (e.g. always

@@ -128,5 +128,19 @@
   "onboardingTitle": "Tham gia dòng họ",
   "onboardingUnavailableBody": "Bạn chưa thuộc dòng họ nào và cũng chưa gửi yêu cầu tham gia nào. Ứng dụng này chưa có bước tham gia hoặc tạo dòng họ, nên bạn chưa thể đi tiếp từ đây.",
   "accountBlockedTitle": "Tài khoản đã bị khoá",
-  "clanSuspendedTitle": "Dòng họ đã bị tạm ngưng"
+  "clanSuspendedTitle": "Dòng họ đã bị tạm ngưng",
+  "clanRoleAdmin": "Quản trị",
+  "clanRoleEditor": "Chỉnh sửa",
+  "clanRoleViewer": "Xem",
+  "clanRoleUnknown": "Không rõ",
+  "startupFailureTitle": "Không thể khởi động ứng dụng",
+  "startupFailureBody": "Đã xảy ra lỗi khi khởi động. Hãy đóng và mở lại ứng dụng.",
+  "startupMissingConfigTitle": "Thiếu cấu hình",
+  "startupMissingConfigBody": "Bản dựng này thiếu: {names}. Hãy truyền các giá trị này bằng --dart-define.",
+  "@startupMissingConfigBody": {
+    "description": "Names the --dart-define keys that are empty, comma separated",
+    "placeholders": {
+      "names": { "type": "String" }
+    }
+  }
 }

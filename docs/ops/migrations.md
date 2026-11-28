@@ -101,7 +101,7 @@ Single linear chain:
 `036_rls_user_clan_roles` → `037_drop_allow_public_tree` → `038_drop_privacy_level` →
 `039_drop_clan_settings` → `040_clan_slug_one_shape` →
 `041_grant_app_role_to_login` → `042_close_data_api_on_public` →
-`043_rls_off_outside_layer_2`.
+`043_rls_off_outside_layer_2` → `044_drop_unused_fullname_gin`.
 
 `026_rls_activation_grants` completes the `familyroots_app` role's privileges (EXECUTE on
 functions, sequence usage + default privileges) for RLS layer-2 activation (SP-3 Phase 1,
@@ -261,6 +261,10 @@ Supabase the request role saw no row in any of them. The first Vercel deploy's `
 changes nothing. **`downgrade()` is a deliberate no-op**, because the prior state differs by
 environment.
 
+`044_drop_unused_fullname_gin` drops `idx_persons_fullname_search` (#395), a GIN index on
+`to_tsvector('simple', public.f_unaccent(full_name))` that no query reads. Search is `ILIKE` on
+`public.f_unaccent(...)`, served by the trigram indexes. `downgrade()` recreates it as 001 did.
+
 **A new table in `public` must decide its own RLS in the migration that creates it.** Either
 enable RLS and add its policies, or turn RLS off explicitly. Leaving it unset gets RLS with no
 policy on Supabase, where `ensure_rls` turns it on, and no RLS everywhere else.
@@ -274,7 +278,7 @@ spouse edge skips `status = 'divorced'` marriages (M8); no schema change, revers
 `025_audit_logs_created_at_index` adds `idx_audit_logs_created_at (created_at DESC,
 id DESC)` for the platform-wide newest-first audit scan (M14); index-only, reversible.
 
-Head = `043_rls_off_outside_layer_2`; verify with `cd backend && uv run alembic heads`.
+Head = `044_drop_unused_fullname_gin`; verify with `cd backend && uv run alembic heads`.
 
 New-revision convention: revision ids ≤32 chars, named `NNN_short_slug`.
 

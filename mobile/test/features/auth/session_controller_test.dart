@@ -14,7 +14,7 @@ import 'package:family_roots_mobile/features/auth/data/auth_repository.dart';
 import 'package:family_roots_mobile/features/auth/data/supabase_auth.dart';
 
 import '../../support/fake_gotrue.dart';
-import '../../support/main_container.dart' show FakeCacheStore;
+import '../../support/main_container.dart';
 import '../../support/sequence_adapter.dart';
 
 /// The controller over fake transports. Whether the bearer token reaches the
@@ -25,10 +25,9 @@ Future<ProviderContainer> _container(
   FakeGoTrue goTrue,
 ) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
-  final prefs = await PrefsStore.open();
   final c = ProviderContainer(
     overrides: [
-      prefsStoreProvider.overrideWithValue(prefs),
+      prefsStoreProvider.overrideWithValue(await PrefsStore.open()),
       cacheStoreProvider.overrideWithValue(FakeCacheStore()),
       authRepositoryProvider.overrideWithValue(
         AuthRepository(

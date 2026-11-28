@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../domain/auth/user_profile.dart';
@@ -36,7 +37,8 @@ class _AsyncClans extends ConsumerWidget {
   const _AsyncClans({required this.routeKey, required this.builder});
 
   final Key routeKey;
-  final Widget Function(BuildContext, WidgetRef, List<ClanMembership>) builder;
+  final Widget Function(BuildContext, WidgetRef, Stale<List<ClanMembership>>)
+  builder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,8 +69,11 @@ class MyClansRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _AsyncClans(
     routeKey: RouteKeys.clans,
-    builder: (context, ref, list) => MyClansView(
-      clans: list,
+    builder: (context, ref, read) => MyClansView(
+      clans: read.value,
+      staleAsOf: read.asOf == null
+          ? null
+          : DateFormat('dd/MM/yyyy').format(read.asOf!.toLocal()),
       // Selecting from the list re-scopes the app to that clan.
       onSelect: (clan) =>
           ref.read(selectedClanProvider.notifier).select(clan.clanId),
@@ -83,8 +88,8 @@ class ClanPickerRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _AsyncClans(
     routeKey: RouteKeys.clanPicker,
-    builder: (context, ref, list) => ClanPickerView(
-      clans: list,
+    builder: (context, ref, read) => ClanPickerView(
+      clans: read.value,
       onSelect: (clan) async {
         await ref.read(selectedClanProvider.notifier).select(clan.clanId);
         if (!context.mounted) return;

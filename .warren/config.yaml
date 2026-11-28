@@ -29,3 +29,20 @@ ciFixer:
 # its dispatch carries no cap and the claude-code agent declares none. Dispatches that name a
 # cap, such as the operator's issue queue, keep their own.
 maxCostUsd: 10
+
+# repoContext: free text Warren adds to the prompt of every run of this repo, after the agent's
+# system section and before the task. It routes each ticket to a skill in .claude/skills/. A
+# marketplace plugin enabled in .claude/settings.json does not load inside a Warren sandbox (the
+# run's init event lists only builtin plugins), so the two skills are vendored from
+# mattpocock-skills 1.2.3 (MIT, license next to each SKILL.md). The last line makes the choice
+# auditable: the approach note says which skill the run followed.
+repoContext: |
+  This repository vendors two engineering skills in .claude/skills/. Use them:
+  - A ticket labelled `bug`: follow the diagnosing-bugs skill. Build a command that goes red on
+    this bug before you change any code, and keep it as the regression test.
+  - Any other ticket that changes behaviour: follow the tdd skill. Write the failing test first,
+    run it and see it fail, then make it pass.
+  - A ticket that changes no runtime behaviour (docs, CI wiring, config): say so in the approach
+    note and skip both skills.
+  In the approach note, name the skill you followed under "Chosen approach", and list the red
+  command you ran under "Verification".

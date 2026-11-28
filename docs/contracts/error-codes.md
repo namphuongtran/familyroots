@@ -228,6 +228,7 @@ See also **Optimistic concurrency** above: `PATCH /relationships/marriages/{id}`
 |---|---|---|---|---|
 | `branch_not_found` | 404 | Branch id (or `parent_branch_id`) not found in the acting clan | `branch_id` | Refresh |
 | `branch_cannot_be_own_parent` | 422 | Setting a branch's parent to itself | — | Form validation |
+| `branch_parent_cycle` | 422 | Setting a branch's parent to one of its own descendants (its ancestor chain would contain it) | — | Form validation |
 
 ### Documents & storage
 

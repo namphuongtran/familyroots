@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+CLAIM_STATUS_PATTERN = "^(PENDING|APPROVED|REJECTED|CANCELLED)$"
+
 
 class IdentityClaimBase(BaseModel):
     requester_note: str | None = Field(default=None, max_length=1000)

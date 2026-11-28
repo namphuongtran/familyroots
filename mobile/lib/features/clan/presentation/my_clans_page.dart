@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/generated/app_localizations.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../domain/clan/clan_membership.dart';
+import 'clan_role_label.dart';
 
 /// Dumb view: data in, events out. No transport, no container — so it is
 /// trivially widget- and golden-testable.
@@ -53,7 +54,7 @@ class MyClansView extends StatelessWidget {
                   ),
                   child: ListTile(
                     title: Text(clan.clanName),
-                    subtitle: Text(clan.role.name),
+                    subtitle: Text(clanRoleLabel(l10n, clan.role)),
                     onTap: () => onSelect(clan),
                   ),
                 );

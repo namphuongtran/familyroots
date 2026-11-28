@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/network/dio_provider.dart';
 import '../../../core/storage/prefs_store.dart';
 import '../../../domain/clan/clan_membership.dart';
 import '../../../domain/shared/ids.dart';
 import '../data/clan_repository.dart';
+import 'cached_clans.dart';
 
 part 'clan_context.g.dart';
 
@@ -16,10 +18,13 @@ final prefsStoreProvider = Provider<PrefsStore>(
   (ref) => throw UnimplementedError('override in ProviderScope'),
 );
 
-/// GET /me/clans — approved memberships only.
+/// GET /me/clans — approved memberships only, read through the offline cache.
+/// [Stale.asOf] is non-null when the network failed and the cache answered.
 @Riverpod(keepAlive: true)
-Future<List<ClanMembership>> myClans(Ref ref) =>
-    ref.watch(clanRepositoryProvider).myClans();
+Future<Stale<List<ClanMembership>>> myClans(Ref ref) => CachedClanReader(
+  ref.watch(clanRepositoryProvider),
+  ref.watch(cacheStoreProvider),
+).myClans();
 
 enum ClanResolution { none, resolved, needsPicker }
 
@@ -52,7 +57,7 @@ class SelectedClan extends _$SelectedClan {
   /// inside a provider that also watches it deadlocks the container
   /// ("disposed during loading state, yet no value could be emitted").
   Future<ClanResolution> resolve() async {
-    final clans = await ref.read(myClansProvider.future);
+    final clans = (await ref.read(myClansProvider.future)).value;
     if (clans.isEmpty) return ClanResolution.none;
 
     final selected = state;
@@ -74,7 +79,7 @@ class SelectedClan extends _$SelectedClan {
 /// PURE — read-only. See the note on [SelectedClan.resolve].
 @Riverpod(keepAlive: true)
 Future<ClanResolution> clanResolution(Ref ref) async {
-  final clans = await ref.watch(myClansProvider.future);
+  final clans = (await ref.watch(myClansProvider.future)).value;
   if (clans.isEmpty) return ClanResolution.none;
 
   final selected = ref.watch(selectedClanProvider);

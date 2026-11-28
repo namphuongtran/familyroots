@@ -78,10 +78,19 @@ async def ensure_profile_row(
 
     ON CONFLICT DO NOTHING on the PK makes a concurrent duplicate insert a no-op
     (no IntegrityError, no clobber — the first writer's row and display_name win).
+    The insert runs under a per-id advisory lock, see the comment in the body.
     An email still held by a former account's row is released first, see
     ``_release_email_held_by_another_profile``.
     Flushes (not commits): the caller's handler/UoW owns the transaction.
     """
+    # Serialise concurrent provisioning of the same account. ON CONFLICT (id) only
+    # absorbs conflicts on the id arbiter: two racers with the same id and email can
+    # make the loser fail on uq_user_profiles_email before it sees the winner's row.
+    # Holding this transaction-level lock until commit means the loser's release
+    # check and insert run after the winner's row is visible, so the id arbiter fires.
+    await session.execute(
+        sa.select(sa.func.pg_advisory_xact_lock(sa.func.hashtextextended(str(user_id), 0)))
+    )
     await _release_email_held_by_another_profile(session, user_id, email)
     values: dict[str, Any] = {
         "id": user_id,

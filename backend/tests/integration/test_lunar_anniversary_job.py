@@ -136,17 +136,7 @@ async def test_one_bad_lunar_event_does_not_abort_solar_notifications(
     monkeypatch.setattr("app.core.database.engine", async_engine)
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", maker)
 
-    bad_date = date(1900, 1, 1)  # sentinel event_date matched by the raiser below
-    real_next_lunar_anniversary = next_lunar_anniversary
-
-    def _raising_next_lunar_anniversary(event_date: date, today_: date) -> date:
-        if event_date == bad_date:
-            raise ValueError("boom: pathological lunar date")
-        return real_next_lunar_anniversary(event_date, today_)
-
-    monkeypatch.setattr(
-        "app.services.scheduler.next_lunar_anniversary", _raising_next_lunar_anniversary
-    )
+    bad_date = date(1900, 1, 1)  # pre-1910: the real engine raises
 
     today = date(2025, 6, 1)  # arbitrary, away from year-boundary edge cases
     solar_clan_id = uuid.uuid4()

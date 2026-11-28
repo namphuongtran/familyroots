@@ -89,7 +89,7 @@ jobs:
       AUTH_BASE_URL: http://familyroots-web.test:3102
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Runner size
         run: |
@@ -144,7 +144,7 @@ jobs:
 
       - name: Restore Supabase images cache
         id: supabase-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/supabase-images.tar
           key: ${{ steps.supabase-cache-key.outputs.key }}
@@ -181,19 +181,19 @@ jobs:
           echo "$SUPABASE_IMAGES" | tr ' ' '\n' > "$RUNNER_TEMP/prepulled-images.txt"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: web/package.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
           version: "0.13.9"
 

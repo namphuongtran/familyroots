@@ -159,7 +159,7 @@ A single `Dio` instance with five interceptors, in this order:
 | `ClanInterceptor` | `X-Current-Clan-Id` on clan-scoped routes only — skipped for `/auth/*`, `/me/clans`, `/me/clans/{id}/select`, `/invitations/{token}/accept`, `/platform/*` |
 | `LocaleInterceptor` | `Accept-Language` from the app's selected locale |
 | `TraceInterceptor` | W3C `traceparent` (ADR-033), so a mobile span joins the backend trace |
-| `RefreshInterceptor` | on 401: one shared refresh, concurrent 401s queued behind it, retry the original request exactly once; on refresh failure, sign out |
+| `RefreshInterceptor` | on 401: one shared refresh, concurrent 401s queued behind it, retry the original request exactly once; a refused refresh signs out; a refresh that got no answer does not |
 
 The envelope is unwrapped in exactly one place. No widget, notifier or repository
 ever sees `{"data": …}`:
@@ -199,7 +199,7 @@ into a routing decision. UI branches on `code`, never on `message`:
 
 | Code / status | Action |
 |---|---|
-| 401 | single-flight refresh, retry once; on failure sign out and route to login |
+| 401 | single-flight refresh, retry once; a refused refresh signs out and routes to login; a refresh that got no answer does not |
 | 403 `email_not_verified`; Supabase's 400 `email_not_confirmed` | resend-verification screen. Since ADR-064 the second is the one a sign-in meets: Supabase refuses the password sign-in itself, so there is no session |
 | 403 `account_deactivated` | blocked-account screen; sign out |
 | 403 `clan_suspended` | clan-blocked screen, offer clan switch |

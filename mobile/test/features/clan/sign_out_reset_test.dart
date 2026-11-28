@@ -55,7 +55,7 @@ void main() {
 
     await c.read(sessionControllerProvider.future);
     await session.signIn(email: 'a@b.c', password: 'x');
-    expect((await c.read(myClansProvider.future)).length, 2);
+    expect((await c.read(myClansProvider.future)).value.length, 2);
     await c.read(selectedClanProvider.notifier).select(const ClanId('X'));
     await c.read(dioProvider).get<Object?>('/persons');
     expect(adapter.received.last.headers['X-Current-Clan-Id'], 'X');
@@ -64,7 +64,7 @@ void main() {
     expect(c.read(selectedClanProvider), isNull);
 
     await session.signIn(email: 'b@b.c', password: 'x');
-    final clans = await c.read(myClansProvider.future);
+    final clans = (await c.read(myClansProvider.future)).value;
     expect(clans.map((m) => m.clanId.value), <String>['Z']);
     await c.read(dioProvider).get<Object?>('/persons');
     expect(adapter.received.last.headers['X-Current-Clan-Id'], isNull);

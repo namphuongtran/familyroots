@@ -11,12 +11,12 @@ from app.schemas.historical_date import HistoricalDate, coerce_response_dates
 _EVENT_DATE_FIELDS: dict[str, str | None] = {"event_date": None}
 
 
+EVENT_TYPE_PATTERN = "^(death_anniversary|birthday|wedding_anniversary|clan_ceremony|custom)$"
+
+
 class EventCreateRequest(BaseModel):
     person_id: uuid.UUID | None = None
-    event_type: str = Field(
-        ...,
-        pattern="^(death_anniversary|birthday|wedding_anniversary|clan_ceremony|custom)$",
-    )
+    event_type: str = Field(..., pattern=EVENT_TYPE_PATTERN)
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     event_date: date
