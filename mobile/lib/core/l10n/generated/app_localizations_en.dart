@@ -277,4 +277,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clanRoleUnknown => 'Unknown';
+
+  @override
+  String get startupFailureTitle => 'The app could not start';
+
+  @override
+  String get startupFailureBody =>
+      'Something went wrong while starting. Close the app and open it again.';
+
+  @override
+  String get startupMissingConfigTitle => 'Missing configuration';
+
+  @override
+  String startupMissingConfigBody(String names) {
+    return 'This build is missing: $names. Pass them with --dart-define.';
+  }
 }
