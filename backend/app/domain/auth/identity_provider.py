@@ -82,7 +82,8 @@ class IdentityProvider(Protocol):
         ...
 
     async def delete_user(self, user_id: str) -> None:
-        """Delete a user (used to compensate a failed registration)."""
+        """Delete a user: compensates a failed registration, and finishes a user's own
+        account deletion (ADR-079). An id the provider no longer has is success."""
         ...
 
     async def sign_in(self, *, email: str, password: str) -> AuthenticatedIdentity:

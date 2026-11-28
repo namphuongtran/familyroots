@@ -240,3 +240,41 @@ async def test_register_maps_weak_password_to_422() -> None:
             full_name="T",
         )
     assert exc.value.code == "auth.password_too_weak"
+
+
+# ── delete_user (account deletion, ADR-079) ─────────────────────
+
+
+class _DeleteRaisingAdmin:
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def delete_user(self, *_a: Any, **_k: Any) -> Any:
+        raise self._exc
+
+
+class _DeleteRaisingClient:
+    def __init__(self, exc: Exception) -> None:
+        self.auth = type("_A", (), {"admin": _DeleteRaisingAdmin(exc)})()
+
+
+async def test_delete_user_of_an_already_deleted_account_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retried account deletion whose provider call already went through must not
+    fail on the provider's 404: the account is gone, which is the goal."""
+    exc = AuthApiError("User not found", 404, "user_not_found")
+    monkeypatch.setattr(sip, "get_service_client", lambda: _DeleteRaisingClient(exc))
+    await sip.SupabaseIdentityProvider().delete_user("uid-gone")
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [AuthApiError("upstream exploded", 502, None), AuthRetryableError("timeout", 503)],
+)
+async def test_delete_user_outage_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch, exc: Exception
+) -> None:
+    monkeypatch.setattr(sip, "get_service_client", lambda: _DeleteRaisingClient(exc))
+    with pytest.raises(IdentityUnavailableError):
+        await sip.SupabaseIdentityProvider().delete_user("uid-1")

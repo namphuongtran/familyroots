@@ -117,4 +117,3 @@ class PersonAnonymised(AuditableEvent):
                 "new_value",
                 {"full_name": ANONYMISED_NAME, "cleared_fields": list(self.cleared_fields)},
             )
-

@@ -15,6 +15,7 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.auth.account_handlers import AccountCommandHandler
 from app.application.auth.handlers import (
     AuthCommandHandler,
     AuthQueryHandler,
@@ -50,6 +51,7 @@ from app.core.database import get_db, get_system_db
 from app.domain.auth.identity_provider import IdentityProvider
 from app.domain.relationship.validator import RelationshipDomainValidator
 from app.infrastructure.event_dispatcher import create_event_dispatcher
+from app.infrastructure.persistence.account_repository import SqlAlchemyAccountRepository
 from app.infrastructure.persistence.auth_repository import (
     SqlAlchemyAuthQueryPort,
     SqlAlchemyAuthRepository,
@@ -203,6 +205,19 @@ def get_auth_command_handler(
         identity,
         SqlAlchemyAuthQueryPort(db),
     )
+
+
+# Deleting one's own account spans every clan the account belongs to and has no clan
+# context, so it runs on the privileged system session, like the claim handlers:
+# user_clan_roles DELETE is clan-keyed for the request role (ADR-050) and
+# identity_claims is deny-all for it (ADR-042). Every statement is keyed on the
+# verified token's own sub (ADR-079).
+def get_account_command_handler(
+    db: AsyncSession = Depends(get_system_db),
+    identity: IdentityProvider = Depends(get_identity_provider),
+) -> AccountCommandHandler:
+    uow = SqlAlchemyUnitOfWork(db, create_event_dispatcher(db))
+    return AccountCommandHandler(SqlAlchemyAccountRepository(db), uow, identity)
 
 
 def get_auth_query_handler(db: AsyncSession = Depends(get_db)) -> AuthQueryHandler:

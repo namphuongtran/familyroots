@@ -106,6 +106,20 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
         raise AuthenticationError("invalid_token") from exc
 
 
+async def get_verified_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict[str, Any]:
+    """Verify the bearer token and return its claims, WITHOUT the deactivation gate.
+
+    Only ``DELETE /me`` uses this (ADR-079). Account deletion deactivates the profile
+    before it calls the identity provider, so a retry after a provider outage comes
+    from an account ``get_current_user`` already refuses; this lets that retry finish.
+    Every other route must keep ``get_current_user``."""
+    if credentials is None:
+        raise AuthenticationError("missing_token")
+    return await verify_supabase_token(credentials.credentials)
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),

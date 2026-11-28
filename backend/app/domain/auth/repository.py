@@ -104,3 +104,37 @@ class FCMTokenRepository(Protocol):
     async def remove_token(self, user_id: str, token: str) -> None:
         """Remove a push token."""
         ...
+
+
+@dataclass(frozen=True)
+class RemovedRole:
+    """One clan role an account held when it was deleted (ADR-079)."""
+
+    clan_id: uuid.UUID
+    role: str
+
+
+class AccountRepository(Protocol):
+    """Persistence contract for deleting a user's own account (ADR-079).
+
+    Runs on the privileged session: the account spans every clan it belongs to, and
+    ``identity_claims`` is deny-all for the request role."""
+
+    async def lock_clans_where_last_admin(self, user_id: uuid.UUID) -> list[uuid.UUID]:
+        """Lock the approved-admin rows of every clan this user administers and return
+        the clans where this user is the ONLY approved admin, ordered by id."""
+        ...
+
+    async def remove_roles(self, user_id: uuid.UUID) -> list[RemovedRole]:
+        """Delete every ``user_clan_roles`` row of the user, approved or pending."""
+        ...
+
+    async def remove_claims_and_push_tokens(self, user_id: uuid.UUID) -> None:
+        """Delete the user's identity claims and push tokens."""
+        ...
+
+    async def tombstone_profile(self, user_id: uuid.UUID) -> bool:
+        """Clear the profile's personal data and deactivate it, keeping the row so a
+        still-valid access token is refused instead of re-provisioning a profile.
+        Returns False when there was no live profile to clear."""
+        ...

@@ -22,7 +22,7 @@ import json
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import date
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 import sqlalchemy as sa
@@ -74,7 +74,7 @@ class _RecordingStorage:
     """Stands in for the Supabase storage adapter: records the public objects the
     anonymisation takes down, and nothing else."""
 
-    deleted_public: list[str] = []
+    deleted_public: ClassVar[list[str]] = []
 
     async def delete_public(self, path: str) -> None:
         type(self).deleted_public.append(path)
@@ -200,9 +200,7 @@ async def client(
     session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
 ) -> AsyncGenerator[AsyncClient]:
     _RecordingStorage.deleted_public = []
-    monkeypatch.setattr(
-        "app.infrastructure.dependencies.SupabaseStorageAdapter", _RecordingStorage
-    )
+    monkeypatch.setattr("app.infrastructure.dependencies.SupabaseStorageAdapter", _RecordingStorage)
     app = create_app()
 
     async def _override_db() -> AsyncGenerator[AsyncSession]:
