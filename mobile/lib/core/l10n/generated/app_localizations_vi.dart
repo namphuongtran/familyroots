@@ -275,4 +275,19 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get clanRoleUnknown => 'Không rõ';
+
+  @override
+  String get startupFailureTitle => 'Không thể khởi động ứng dụng';
+
+  @override
+  String get startupFailureBody =>
+      'Đã xảy ra lỗi khi khởi động. Hãy đóng và mở lại ứng dụng.';
+
+  @override
+  String get startupMissingConfigTitle => 'Thiếu cấu hình';
+
+  @override
+  String startupMissingConfigBody(String names) {
+    return 'Bản dựng này thiếu: $names. Hãy truyền các giá trị này bằng --dart-define.';
+  }
 }
