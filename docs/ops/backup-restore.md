@@ -34,8 +34,27 @@
   first on `PATH` → `scripts/db_backup.sh` logs the `pg_dump` version and path it
   runs, then runs
   `pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" | gzip` →
-  upload to the Supabase Storage `backups` bucket via the Storage REST API →
+  the file checks below (the script also logs the `pg_restore` version and path)
+  → upload to the Supabase Storage `backups` bucket via the Storage REST API →
   rotate.
+- **File checks** (also run under `--dry-run`, before it exits). After the 1KB
+  floor, the script runs three checks on the file it is about to upload. A
+  failure exits non-zero with an `::error::` naming the check, and uploads and
+  rotates nothing, so a damaged file cannot push a good dump out of the rotation.
+  1. `gzip -t`: the gzip stream is whole. It does not see a truncated archive
+     inside a whole stream.
+  2. `gunzip -c | pg_restore --file=/dev/null`: a full read of the archive.
+     This is the check that catches a truncated archive. Measured 2026-11-22: a
+     custom-format dump cut to half and gzipped again passed `gzip -t` and
+     `pg_restore --list` (which reads only the table of contents), and failed
+     this read with `could not read from input file: end of file`. It does not
+     prove the SQL in the archive applies.
+  3. `pg_restore --list` lists `TABLE DATA public alembic_version`: the dump
+     holds the application schema and its rows, not an empty or foreign
+     database. It does not prove the rows are current or complete.
+
+  **A clean full read is not a restore.** Only the drill
+  (`scripts/restore_drill.sh`) proves a restore.
 - **Secret gate**: if `PROD_DATABASE_URL`, `SUPABASE_URL`, or
   `SUPABASE_SERVICE_ROLE_KEY` is absent, the job prints
   `::notice::db-backup secrets not configured — skipping ...` and exits green
@@ -55,8 +74,11 @@ backups/                       (private Supabase Storage bucket)
 (`TZ=Asia/Ho_Chi_Minh date +%u` = 7) it additionally copies to `db/weekly/`.
 After each upload it lists the relevant prefix and deletes the oldest objects
 beyond the keep-count (7 daily / 4 weekly). A dump over 400MB logs a
-`::warning::` (Supabase Storage limits); a dump under 1KB is treated as a
-failed backup and the job errors out.
+`::warning::` (Supabase Storage limits); a dump under 1KB, or one that fails any
+of the three file checks in "What runs", is treated as a failed backup: the job
+errors out before the upload, so rotation never runs on a damaged file and the
+older good dumps stay. Those checks establish that the file reads cleanly, not
+that it restores.
 
 ## RPO / RTO
 

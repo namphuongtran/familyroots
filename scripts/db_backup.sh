@@ -47,6 +47,28 @@ if [ "$SIZE_BYTES" -lt 1024 ]; then
   echo "::error::dump suspiciously small (<1KB) — treating as failure"; exit 1
 fi
 
+# Integrity checks on the exact file about to be uploaded. Any failure exits
+# non-zero before any upload or rotation, so a damaged file never pushes a good
+# dump out of the rotation. A clean read is NOT a restore: only the drill proves that.
+echo "==> $(pg_restore --version) at $(command -v pg_restore)"
+echo "==> check 1/3: gzip -t"
+if ! gzip -t "$DUMP_PATH"; then
+  echo "::error::check 1 (gzip -t) failed — the gzip stream is damaged"; exit 1
+fi
+echo "==> check 2/3: full read of the archive (pg_restore --file=/dev/null)"
+if ! gunzip -c "$DUMP_PATH" | pg_restore --file=/dev/null; then
+  echo "::error::check 2 (full archive read) failed — the archive is truncated or corrupt"; exit 1
+fi
+echo "==> check 3/3: table of contents lists TABLE DATA public alembic_version"
+# --list stops reading after the TOC, so gunzip gets SIGPIPE: drop pipefail inside
+# the substitution so only pg_restore's own status counts. Capture before grep -q
+# for the same reason (an early-closed pipe would trip pipefail).
+if ! TOC="$(set +o pipefail; gunzip -c "$DUMP_PATH" | pg_restore --list)" \
+  || ! grep -Eq 'TABLE DATA public alembic_version( |$)' <<< "$TOC"; then
+  echo "::error::check 3 (TOC lists TABLE DATA public alembic_version) failed — not the application schema and rows"; exit 1
+fi
+echo "==> all 3 integrity checks passed"
+
 storage_upload() {  # $1 = object path (e.g. db/daily/NAME)
   curl -sSf -X POST \
     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
