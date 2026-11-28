@@ -126,7 +126,9 @@ the header for that case. → ADR-033.
   in the contracts docs).
 - Migration/deploy failures. A failed migration fails `release.yml` before anything is
   deployed. A red `/health` read after the API deploy means production already serves the
-  new deployment, so roll back ([deployment.md](deployment.md), "Rollback").
+  new deployment, so roll back ([deployment.md](deployment.md), "Rollback"). The same for a red
+  read of the web's `/login` after the web deploy, which also fails when the production host does not
+  serve the deployment the run just made.
 - Scheduler: the anniversary-notification job uses a Postgres advisory lock so only one
   replica runs it; non-winning replicas no-op.
 
