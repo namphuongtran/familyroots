@@ -1,6 +1,8 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs'
 import { useTranslations } from 'next-intl'
+import { useEffect } from 'react'
 import { PersonsErrorState } from '@/features/persons'
 
 /**
@@ -17,7 +19,11 @@ import { PersonsErrorState } from '@/features/persons'
  * way `PersonsList`'s in-place error state does for an `ApiError` — nothing
  * upstream of this boundary is a parsed `ApiError`.
  */
-export default function MembersError({ reset }: { error: Error; reset: () => void }) {
+export default function MembersError({ error, reset }: { error: Error; reset: () => void }) {
+  useEffect(() => {
+    Sentry.captureException(error)
+  }, [error])
+
   const t = useTranslations('members')
   return <PersonsErrorState title={t('error_title')} onRetry={reset} />
 }

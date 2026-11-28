@@ -623,5 +623,10 @@
     "error_spouse_order": "Thứ tự phải là số nguyên từ 1 trở lên.",
     "error_generic": "Không lưu được. Xin thử lại.",
     "forbidden": "Bạn không có quyền thực hiện thao tác này."
+  },
+  "notFound": {
+    "title": "Không tìm thấy trang",
+    "body": "Trang bạn tìm không tồn tại hoặc đã được di chuyển.",
+    "back": "Về trang chính"
   }
 }

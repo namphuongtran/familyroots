@@ -59,6 +59,14 @@ const PUBLIC_ROUTES = [
  */
 const CLAN_SCOPED_SEGMENTS = ['dashboard', 'documents', 'events', 'members', 'tree', 'admin']
 
+/**
+ * Every other first segment that is gated: the picker and the two cross-clan surfaces. A segment
+ * in neither this list, `CLAN_SCOPED_SEGMENTS` nor `PUBLIC_ROUTES` names no route, so it is not
+ * gated and reaches the localized 404 (#366). A new top-level route must be added to one of the
+ * three, and `middleware.test.ts` fails when a route directory is in none.
+ */
+const OTHER_GATED_SEGMENTS = ['select-clan', 'platform', 'backoffice']
+
 export async function middleware(request: NextRequest) {
   // Run intl middleware first so locale-prefixed routes resolve
   const intlResponse = intlMiddleware(request)
@@ -70,6 +78,16 @@ export async function middleware(request: NextRequest) {
 
   // Allow public auth routes through without a session check
   if (PUBLIC_ROUTES.some((r) => strippedPath.startsWith(r))) {
+    return intlResponse
+  }
+
+  // A path that names no route has nothing to protect, and a redirect to login would hide the 404.
+  const knownSegment = strippedPath.split('/')[1]
+  if (
+    knownSegment &&
+    !CLAN_SCOPED_SEGMENTS.includes(knownSegment) &&
+    !OTHER_GATED_SEGMENTS.includes(knownSegment)
+  ) {
     return intlResponse
   }
 

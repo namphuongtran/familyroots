@@ -623,5 +623,10 @@
     "error_spouse_order": "顺序必须是从1开始的整数。",
     "error_generic": "无法保存，请重试。",
     "forbidden": "您无权执行此操作。"
+  },
+  "notFound": {
+    "title": "找不到页面",
+    "body": "您要找的页面不存在或已被移动。",
+    "back": "返回首页"
   }
 }

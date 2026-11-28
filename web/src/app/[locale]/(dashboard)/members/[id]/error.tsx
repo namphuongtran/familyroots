@@ -1,6 +1,8 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs'
 import { useTranslations } from 'next-intl'
+import { useEffect } from 'react'
 import { PersonsErrorState } from '@/features/persons'
 
 /**
@@ -10,7 +12,11 @@ import { PersonsErrorState } from '@/features/persons'
  * `reset()` retrying the same `getPerson` call is the correct next step
  * (`T-17`).
  */
-export default function MemberDetailError({ reset }: { error: Error; reset: () => void }) {
+export default function MemberDetailError({ error, reset }: { error: Error; reset: () => void }) {
+  useEffect(() => {
+    Sentry.captureException(error)
+  }, [error])
+
   const t = useTranslations('member')
   return <PersonsErrorState title={t('error_title')} onRetry={reset} />
 }

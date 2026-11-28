@@ -26,6 +26,9 @@ vi.mock('next-intl/middleware', () => ({
   default: () => (request: Request) => NextResponse.next({ request }),
 }))
 
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
+
 const { middleware } = await import('./middleware')
 
 const CLAN_ID = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
@@ -59,6 +62,18 @@ describe('middleware clan gate', () => {
     const response = await middleware(requestFor('/vi/tree', `current_clan_id=${CLAN_ID}`))
     expect(response.status).not.toBe(307)
     expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('lets an unknown path through with no session so it reaches the 404 (#366)', async () => {
+    currentSession = null
+    const response = await middleware(requestFor('/vi/khong-ton-tai'))
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('still sends a no-session visitor of a known protected route to login', async () => {
+    currentSession = null
+    const response = await middleware(requestFor('/vi/platform/clans'))
+    expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
   })
 
   it('does not gate select-clan itself, or the request loops forever', async () => {
@@ -205,5 +220,39 @@ describe('the privacy notice is public', () => {
     const response = await middleware(requestFor('/vi/members'))
 
     expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
+  })
+})
+
+describe('middleware route coverage (#366)', () => {
+  it('sends a no-session visitor of every non-public route directory to login', async () => {
+    currentSession = null
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key')
+    const root = join(__dirname, 'app', '[locale]')
+    const dirs = (dir: string) =>
+      readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory())
+    const segments = dirs(root).flatMap((e) =>
+      e.name.startsWith('(') ? dirs(join(root, e.name)).map((c) => c.name) : [e.name],
+    )
+    const PUBLIC = [
+      'login',
+      'register',
+      'auth',
+      'pending-approval',
+      'verify-email',
+      'clan-suspended',
+      'forgot-password',
+      'reset-password',
+      'invitations',
+      'privacy',
+    ]
+    const gated = segments.filter((n) => !PUBLIC.includes(n) && !n.startsWith('['))
+    expect(gated.length).toBeGreaterThan(0)
+    for (const name of gated) {
+      const response = await middleware(requestFor(`/vi/${name}`))
+      expect(new URL(response.headers.get('location') ?? 'http://x/none').pathname, name).toBe(
+        '/vi/login',
+      )
+    }
   })
 })

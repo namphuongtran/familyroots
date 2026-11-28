@@ -1,6 +1,8 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs'
 import { useTranslations } from 'next-intl'
+import { useEffect } from 'react'
 
 /**
  * The error boundary for every route under a locale, and the one a layout's error reaches: an
@@ -12,8 +14,18 @@ import { useTranslations } from 'next-intl'
  * recovers by being fetched again. `error.message` is not shown: a production build replaces a
  * server error's message before it reaches the browser.
  */
-export default function LocaleError({ unstable_retry }: { unstable_retry: () => void }) {
+export default function LocaleError({
+  error,
+  unstable_retry,
+}: {
+  error: Error
+  unstable_retry: () => void
+}) {
   const t = useTranslations('common')
+
+  useEffect(() => {
+    Sentry.captureException(error)
+  }, [error])
 
   return (
     <div className="bg-background flex min-h-screen flex-col items-center justify-center gap-3 px-4">

@@ -623,5 +623,10 @@
     "error_spouse_order": "Le rang doit être un nombre entier à partir de 1.",
     "error_generic": "Enregistrement impossible. Veuillez réessayer.",
     "forbidden": "Vous n'avez pas l'autorisation de faire cela."
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "body": "La page que vous cherchez n'existe pas ou a été déplacée.",
+    "back": "Retour au tableau de bord"
   }
 }

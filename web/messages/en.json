@@ -623,5 +623,10 @@
     "error_spouse_order": "The order must be a whole number from 1.",
     "error_generic": "Could not save. Please try again.",
     "forbidden": "You do not have permission to do this."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The page you are looking for does not exist or has moved.",
+    "back": "Back to the dashboard"
   }
 }
