@@ -1,7 +1,6 @@
 // Issue #369: sign-out left the previous user's clans, selected clan and
 // cache on the device. Every reading below is a provider value, a request
 // header on the wire (real Dio, all five interceptors) or a stored row.
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:family_roots_mobile/core/network/dio_provider.dart';
