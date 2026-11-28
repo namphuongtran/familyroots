@@ -216,5 +216,15 @@
   "clanRoleAdmin": "Admin",
   "clanRoleEditor": "Editor",
   "clanRoleViewer": "Viewer",
-  "clanRoleUnknown": "Unknown"
+  "clanRoleUnknown": "Unknown",
+  "startupFailureTitle": "The app could not start",
+  "startupFailureBody": "Something went wrong while starting. Close the app and open it again.",
+  "startupMissingConfigTitle": "Missing configuration",
+  "startupMissingConfigBody": "This build is missing: {names}. Pass them with --dart-define.",
+  "@startupMissingConfigBody": {
+    "description": "Names the --dart-define keys that are empty, comma separated",
+    "placeholders": {
+      "names": { "type": "String" }
+    }
+  }
 }

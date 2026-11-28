@@ -132,5 +132,15 @@
   "clanRoleAdmin": "Quản trị",
   "clanRoleEditor": "Chỉnh sửa",
   "clanRoleViewer": "Xem",
-  "clanRoleUnknown": "Không rõ"
+  "clanRoleUnknown": "Không rõ",
+  "startupFailureTitle": "Không thể khởi động ứng dụng",
+  "startupFailureBody": "Đã xảy ra lỗi khi khởi động. Hãy đóng và mở lại ứng dụng.",
+  "startupMissingConfigTitle": "Thiếu cấu hình",
+  "startupMissingConfigBody": "Bản dựng này thiếu: {names}. Hãy truyền các giá trị này bằng --dart-define.",
+  "@startupMissingConfigBody": {
+    "description": "Names the --dart-define keys that are empty, comma separated",
+    "placeholders": {
+      "names": { "type": "String" }
+    }
+  }
 }
