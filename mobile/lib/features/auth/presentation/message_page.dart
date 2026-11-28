@@ -18,12 +18,20 @@ class MessagePage extends ConsumerWidget {
     this.body,
     this.action,
     this.actionLabel,
+    this.actionBusy = false,
+    this.status,
   });
 
   final String title;
   final String? body;
   final Future<void> Function()? action;
   final String? actionLabel;
+
+  /// True while [action] is in flight: the button is disabled.
+  final bool actionBusy;
+
+  /// The result of [action], shown under the button.
+  final Widget? status;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,7 +47,14 @@ class MessagePage extends ConsumerWidget {
             if (body != null) Text(body!),
             SizedBox(height: t.spaceLg),
             if (action != null && actionLabel != null)
-              FilledButton(onPressed: action, child: Text(actionLabel!)),
+              FilledButton(
+                onPressed: actionBusy ? null : action,
+                child: Text(actionLabel!),
+              ),
+            if (status != null) ...<Widget>[
+              SizedBox(height: t.spaceMd),
+              status!,
+            ],
             SizedBox(height: t.spaceMd),
             TextButton(
               onPressed: () =>

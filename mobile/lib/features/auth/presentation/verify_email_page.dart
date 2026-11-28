@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/generated/app_localizations.dart';
-import '../application/session_controller.dart';
+import '../../../shared/widgets/error_view.dart';
+import '../application/resend_verification_controller.dart';
 import 'message_page.dart';
 
 /// M0 does not deep-link the verification email: spec §7 puts deep links out
@@ -21,13 +22,21 @@ class VerifyEmailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final address = email;
+    final resend = ref.watch(resendVerificationProvider);
     return MessagePage(
       title: l10n.verifyEmailTitle,
       body: l10n.verifyEmailBody,
       actionLabel: address == null ? null : l10n.resendVerificationAction,
       action: address == null
           ? null
-          : () => ref.read(authRepositoryProvider).resendVerification(address),
+          : () => ref.read(resendVerificationProvider.notifier).resend(address),
+      actionBusy: resend.isLoading,
+      status: switch (resend) {
+        AsyncError(:final error) => ErrorView(error: error),
+        // The backend's message is already localised: shown verbatim.
+        AsyncData(:final value?) => Text(value),
+        _ => null,
+      },
     );
   }
 }
