@@ -48,6 +48,7 @@ import { SupabaseSetupNotice } from './SupabaseSetupNotice'
  */
 export function RegisterScreen() {
   const t = useTranslations('auth')
+  const tPrivacy = useTranslations('privacy')
   const locale = useLocale()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -499,6 +500,12 @@ export function RegisterScreen() {
                 ? t('complete_onboarding')
                 : t('register')}
           </button>
+
+          <p className="text-muted-foreground text-center text-xs">
+            <Link href={`/${locale}/privacy`} className="text-primary hover:underline">
+              {tPrivacy('link')}
+            </Link>
+          </p>
 
           <p className="text-muted-foreground text-center text-xs">
             {isOnboarding ? (

@@ -519,5 +519,24 @@
   "metadata": {
     "tagline": "Vietnamese genealogy",
     "description": "A platform for managing Vietnamese clan genealogies"
+  },
+  "privacy": {
+    "link": "Privacy notice",
+    "title": "Privacy notice",
+    "draft_banner": "Draft — pending legal review",
+    "intro": "This is a draft describing the data FamilyRoots stores and the rights the product now offers. It is not final legal text.",
+    "stores_title": "What we store",
+    "stores_account": "Account: your email address and name.",
+    "stores_membership": "Your clan memberships and your role in each clan.",
+    "stores_persons": "Family-tree person records entered by clan members: names, dates, places, biography and photos.",
+    "hosting_title": "Where it is hosted",
+    "hosting_body": "Data is hosted on Supabase in Singapore (ap-southeast-1).",
+    "rights_title": "Your rights",
+    "delete_title": "Delete your account",
+    "delete_body": "A signed-in user can delete their own account (DELETE /api/v1/me). This removes the sign-in account, your clan memberships and roles, and your profile data. It is refused while you are the last admin of a clan, until you transfer the role.",
+    "anonymise_title": "Anonymise a person in the tree",
+    "anonymise_body": "A clan admin can anonymise a person in the tree: names, dates, places, biography, notes and photo are replaced or cleared with \"Đã ẩn danh\". The node and its relationships stay.",
+    "controller_title": "Data controller and contact",
+    "controller_body": "The data controller and contact details are pending."
   }
 }

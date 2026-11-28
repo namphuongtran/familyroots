@@ -44,6 +44,9 @@ const PUBLIC_ROUTES = [
   // `Auth | Yes` (`docs/contracts/rest-invitations-api.md:62-64`), so a signed-out
   // visitor reaches the page and is shown the sign-in state rather than the button.
   '/invitations',
+  // `/privacy` (#333) is the privacy notice. A visitor reads it before signing up, so it has no
+  // session to check.
+  '/privacy',
 ]
 
 /**

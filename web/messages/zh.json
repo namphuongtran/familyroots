@@ -519,5 +519,24 @@
   "metadata": {
     "tagline": "越南家谱",
     "description": "越南宗族家谱管理平台"
+  },
+  "privacy": {
+    "link": "隐私声明",
+    "title": "隐私声明",
+    "draft_banner": "草稿 — 待法律审核",
+    "intro": "这是一份草稿，说明 FamilyRoots 存储的数据以及产品目前提供的权利。它不是最终的法律文本。",
+    "stores_title": "我们存储的数据",
+    "stores_account": "账户：您的电子邮箱和姓名。",
+    "stores_membership": "您的宗族成员身份以及在各宗族中的角色。",
+    "stores_persons": "宗族成员录入的家谱人物记录：姓名、日期、地点、生平简介和照片。",
+    "hosting_title": "托管位置",
+    "hosting_body": "数据托管于新加坡的 Supabase（ap-southeast-1）。",
+    "rights_title": "您的权利",
+    "delete_title": "删除您的账户",
+    "delete_body": "已登录的用户可以删除自己的账户（DELETE /api/v1/me）。这将删除登录账户、您的宗族成员身份和角色以及您的个人资料数据。如果您是某个宗族的最后一名管理员，在转让该角色之前，请求会被拒绝。",
+    "anonymise_title": "匿名化家谱中的人物",
+    "anonymise_body": "宗族管理员可以匿名化家谱中的某个人物：姓名、日期、地点、生平简介、备注和照片将被替换或清除为“Đã ẩn danh”。节点及其关系保持不变。",
+    "controller_title": "数据控制者与联系方式",
+    "controller_body": "数据控制者和联系方式待定。"
   }
 }

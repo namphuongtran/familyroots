@@ -519,5 +519,24 @@
   "metadata": {
     "tagline": "Gia phả Việt Nam",
     "description": "Nền tảng quản lý gia phả dòng họ Việt Nam"
+  },
+  "privacy": {
+    "link": "Thông báo quyền riêng tư",
+    "title": "Thông báo quyền riêng tư",
+    "draft_banner": "bản nháp — cần rà soát pháp lý",
+    "intro": "Đây là bản nháp mô tả dữ liệu FamilyRoots lưu trữ và các quyền hiện có. Đây chưa phải văn bản pháp lý cuối cùng.",
+    "stores_title": "Dữ liệu chúng tôi lưu trữ",
+    "stores_account": "Tài khoản: địa chỉ email và họ tên của bạn.",
+    "stores_membership": "Tư cách thành viên dòng họ và vai trò của bạn trong từng dòng họ.",
+    "stores_persons": "Hồ sơ nhân thân trong cây gia phả do các thành viên dòng họ nhập: họ tên, ngày tháng, nơi chốn, tiểu sử và ảnh.",
+    "hosting_title": "Nơi lưu trữ",
+    "hosting_body": "Dữ liệu được lưu trữ trên Supabase tại Singapore (ap-southeast-1).",
+    "rights_title": "Quyền của bạn",
+    "delete_title": "Xóa tài khoản của bạn",
+    "delete_body": "Người dùng đã đăng nhập có thể tự xóa tài khoản (DELETE /api/v1/me). Thao tác này xóa tài khoản đăng nhập, tư cách thành viên và vai trò trong các dòng họ, cùng dữ liệu hồ sơ của bạn. Nếu bạn là quản trị viên cuối cùng của một dòng họ, yêu cầu sẽ bị từ chối cho đến khi bạn chuyển giao vai trò.",
+    "anonymise_title": "Ẩn danh một thành viên trong cây",
+    "anonymise_body": "Quản trị viên dòng họ có thể ẩn danh một người trong cây: họ tên, ngày tháng, nơi chốn, tiểu sử, ghi chú và ảnh được thay thế hoặc xóa bằng \"Đã ẩn danh\". Nút trong cây và các mối quan hệ được giữ nguyên.",
+    "controller_title": "Bên kiểm soát dữ liệu và liên hệ",
+    "controller_body": "Bên kiểm soát dữ liệu và thông tin liên hệ: đang chờ xác định."
   }
 }

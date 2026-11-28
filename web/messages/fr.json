@@ -519,5 +519,24 @@
   "metadata": {
     "tagline": "Généalogie vietnamienne",
     "description": "Plateforme de gestion des généalogies de clans vietnamiens"
+  },
+  "privacy": {
+    "link": "Avis de confidentialité",
+    "title": "Avis de confidentialité",
+    "draft_banner": "Brouillon — en attente de relecture juridique",
+    "intro": "Ceci est un brouillon décrivant les données stockées par FamilyRoots et les droits que le produit offre désormais. Ce n'est pas un texte juridique définitif.",
+    "stores_title": "Ce que nous stockons",
+    "stores_account": "Compte : votre adresse e-mail et votre nom.",
+    "stores_membership": "Vos appartenances à des clans et votre rôle dans chacun.",
+    "stores_persons": "Les fiches de personnes de l'arbre généalogique saisies par les membres du clan : noms, dates, lieux, biographie et photos.",
+    "hosting_title": "Lieu d'hébergement",
+    "hosting_body": "Les données sont hébergées sur Supabase à Singapour (ap-southeast-1).",
+    "rights_title": "Vos droits",
+    "delete_title": "Supprimer votre compte",
+    "delete_body": "Un utilisateur connecté peut supprimer son propre compte (DELETE /api/v1/me). Cela supprime le compte de connexion, vos appartenances et rôles dans les clans, ainsi que vos données de profil. La demande est refusée tant que vous êtes le dernier administrateur d'un clan, jusqu'à ce que vous transfériez le rôle.",
+    "anonymise_title": "Anonymiser une personne dans l'arbre",
+    "anonymise_body": "Un administrateur de clan peut anonymiser une personne de l'arbre : noms, dates, lieux, biographie, notes et photo sont remplacés ou effacés par « Đã ẩn danh ». Le nœud et ses relations sont conservés.",
+    "controller_title": "Responsable du traitement et contact",
+    "controller_body": "Le responsable du traitement et les coordonnées sont en attente."
   }
 }

@@ -30,6 +30,7 @@ Core operations:
 - PATCH /persons/{id}
 - DELETE /persons/{id}
 - POST /persons/{id}/restore
+- POST /persons/{id}/anonymise (admin)
 - POST /persons/{id}/claim
 - GET /persons/{id}/marriages
 - GET /persons/{id}/parent-child
@@ -67,6 +68,23 @@ under `data`. `DELETE /persons/{id}`, `POST /persons/{id}/restore` — a message
 envelope (`{"data": {"message": "...", "id": "..."}}`). `GET
 /persons/{id}/{marriages,parent-child,documents,events,timeline}` — a plain
 array under `data` (no `meta` — these are not cursor-paginated).
+
+`POST /persons/{id}/anonymise` (admin only; 403 for editor/viewer, 404
+`person_not_found` for a person outside the current clan or soft-deleted) — the
+anonymised person as a single resource under `data`, same shape as `GET /persons/{id}`
+(ADR-079). After it:
+- `full_name` is `"Đã ẩn danh"`;
+- `birth_name`, `courtesy_name`, `posthumous_name`, `alias_name`, the places,
+  `religion`, `occupation`, `education_level`, `title_rank`, `phone`, `email`,
+  `biography`, `notes` and `avatar_url` are `null`;
+- `birth_date` and `death_date` are `{"date": null, "precision": "unknown",
+  "display": null, "lunar": null}`;
+- `gender`, `nationality`, the clan membership and every marriage and parent-child edge
+  are unchanged, so the tree keeps its shape and đời is unchanged. The person is not
+  deleted.
+
+The call is not version-checked, and it bumps `version`. It is audited as
+`person.anonymise` with the cleared field names only, never the old values.
 
 - NOTE: `created_by_clan_id` is **not** accepted on create/update — it is provenance,
   always stamped from the active clan (see the 2026-06-28 design review, C5).
@@ -147,6 +165,7 @@ consequences for a client:
 | `PATCH /persons/{id}` | the echoed person in the response is redacted, so editing a stranger's record does not reveal their contact details |
 | `POST /persons` | **not** redacted. The response echoes the values the creator just sent in the same request |
 | `DELETE /persons/{id}`, `POST /persons/{id}/restore` | no person fields in the response at all |
+| `POST /persons/{id}/anonymise` | nothing to redact: `phone` and `email` are `null` after it, for every caller |
 | `GET /persons/search` | `PersonSearchResult` carries no contact field, for any caller |
 
 The fields are declared only on the **full** person projection. `profile=summary` and

@@ -77,6 +77,7 @@ distinguishing payload fields, the `action` code, and the trigger.
 | `PersonUpdated` | `person.update` | `person_id`, `changes`, `old_values` | `Person.update()` |
 | `PersonDeleted` | `person.delete` | `person_id` | `Person.soft_delete()` |
 | `PersonRestored` | `person.restore` | `person_id` | `Person.restore()` |
+| `PersonAnonymised` | `person.anonymise` | `person_id`; `new_value` = `{full_name: "Đã ẩn danh", cleared_fields}`, `old_value` = null — the old values are never copied (ADR-079) | `Person.anonymise()` |
 
 ### change_request
 All use `resource_type = change_request`; `resource_id` is the change-request id (the
@@ -133,6 +134,14 @@ the audit log after the fact.
 | `UserRejected` | `user.reject` | `target_user_id` | reject pending member |
 | `UserRoleChanged` | `user.change_role` | `target_user_id`, `old_role`→`new_role` (in `old_value`/`new_value`) | change member role |
 | `UserRemoved` | `user.remove` | `target_user_id` | remove member |
+
+### account
+Emitted with `CrudAuditEvent` by `AccountCommandHandler.delete_account` (ADR-079), on the
+system session, in the same transaction that removes the account's rows.
+
+| `action` | Key payload | Trigger |
+|----------|-------------|---------|
+| `account.delete` | `resource_type=user`, `resource_id` = the deleted user; one row per clan left (`clan_id` = that clan, `new_value.role`) plus one platform row (`clan_id` null, `new_value.clans_left`). No email or name | `DELETE /api/v1/me` |
 
 ### person — identity claims
 These do not have dedicated event classes: the claim handlers emit the generic

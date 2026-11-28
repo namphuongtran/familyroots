@@ -1,4 +1,5 @@
 import { Sidebar } from '@/components/layout/Sidebar'
+import { SiteFooter } from '@/components/layout/SiteFooter'
 import { Header } from '@/components/layout/Header'
 
 /**
@@ -23,6 +24,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <SiteFooter />
       </div>
     </div>
   )

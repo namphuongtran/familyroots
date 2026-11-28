@@ -181,3 +181,26 @@ describe('the password-reset routes are public', () => {
     expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
   })
 })
+
+describe('the privacy notice is public (#333)', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key')
+  })
+
+  it('lets a signed-out visitor through on every locale, rather than redirecting to login', async () => {
+    currentSession = null
+    for (const locale of ['vi', 'en', 'zh', 'fr']) {
+      const response = await middleware(requestFor(`/${locale}/privacy`))
+      expect(response.status).not.toBe(307)
+      expect(response.headers.get('location')).toBeNull()
+    }
+  })
+
+  it('and a non-public route in the same run still redirects, so the check is real', async () => {
+    currentSession = null
+    const response = await middleware(requestFor('/vi/dashboard'))
+    expect(response.status).toBe(307)
+    expect(new URL(response.headers.get('location')!).pathname).toBe('/vi/login')
+  })
+})
