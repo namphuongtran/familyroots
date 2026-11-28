@@ -565,6 +565,30 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Không rõ'**
   String get clanRoleUnknown;
+
+  /// Startup failure screen: title, shown when a startup step threw
+  ///
+  /// In vi, this message translates to:
+  /// **'Không thể khởi động ứng dụng'**
+  String get startupFailureTitle;
+
+  /// Startup failure screen: body
+  ///
+  /// In vi, this message translates to:
+  /// **'Đã có lỗi khi khởi động. Hãy đóng và mở lại ứng dụng. Nếu lỗi vẫn còn, hãy báo cho quản trị viên.'**
+  String get startupFailureBody;
+
+  /// Missing build configuration screen: title
+  ///
+  /// In vi, this message translates to:
+  /// **'Thiếu cấu hình khi dựng ứng dụng'**
+  String get missingConfigTitle;
+
+  /// Missing build configuration screen: body, names is a comma separated list of define names
+  ///
+  /// In vi, this message translates to:
+  /// **'Bản dựng này thiếu các giá trị --dart-define sau: {names}'**
+  String missingConfigBody(String names);
 }
 
 class _AppLocalizationsDelegate

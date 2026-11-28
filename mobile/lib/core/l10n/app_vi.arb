@@ -132,5 +132,16 @@
   "clanRoleAdmin": "Quản trị",
   "clanRoleEditor": "Chỉnh sửa",
   "clanRoleViewer": "Xem",
-  "clanRoleUnknown": "Không rõ"
+  "clanRoleUnknown": "Không rõ",
+  "startupFailureTitle": "Không thể khởi động ứng dụng",
+  "@startupFailureTitle": { "description": "Startup failure screen: title, shown when a startup step threw" },
+  "startupFailureBody": "Đã có lỗi khi khởi động. Hãy đóng và mở lại ứng dụng. Nếu lỗi vẫn còn, hãy báo cho quản trị viên.",
+  "@startupFailureBody": { "description": "Startup failure screen: body" },
+  "missingConfigTitle": "Thiếu cấu hình khi dựng ứng dụng",
+  "@missingConfigTitle": { "description": "Missing build configuration screen: title" },
+  "missingConfigBody": "Bản dựng này thiếu các giá trị --dart-define sau: {names}",
+  "@missingConfigBody": {
+    "description": "Missing build configuration screen: body, names is a comma separated list of define names",
+    "placeholders": { "names": { "type": "String" } }
+  }
 }

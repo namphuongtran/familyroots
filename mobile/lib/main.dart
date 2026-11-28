@@ -27,19 +27,18 @@ const _apiBaseUrl = String.fromEnvironment(
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await PrefsStore.open();
-  final cache = await SqfliteCacheStore.open();
-  final authRouteState = AuthRouteState();
-
   await bootstrap(
     supabaseUrl: _supabaseUrl,
     supabasePublishableKey: _supabaseKey,
     sentryDsn: _sentryDsn,
-    appBuilder: () {
+    appBuilder: () async {
+      final prefs = await PrefsStore.open();
+      final cache = await SqfliteCacheStore.open();
+      final authRouteState = AuthRouteState();
       // One auth client for sign-in, the bearer token and the refresh, so
       // the session every request reads is the session sign-in created
       // (ADR-064). Built here because bootstrap calls this only after
-      // `Supabase.initialize`.
+      // `Supabase.initialize`, inside Sentry's guard.
       final auth = SupabaseAuth(Supabase.instance.client.auth);
       return ProviderScope(
         overrides: [
