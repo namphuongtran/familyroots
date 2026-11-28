@@ -2,7 +2,7 @@ import { getTranslations } from 'next-intl/server'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { getPerson, PersonProfile } from '@/features/persons'
-import { RelationshipsAside } from '@/features/relationships'
+import { ProfileRelationships } from './ProfileRelationships'
 import { guardClanRoute } from '@/features/auth/index.server'
 import { ApiError } from '@/shared/http/errors'
 
@@ -77,7 +77,7 @@ export default async function MemberDetailPage({
           canEdit={capabilities.editPerson}
           canViewAuditLog={capabilities.viewClanAuditLog}
         />
-        <RelationshipsAside personId={person.id} />
+        <ProfileRelationships personId={person.id} />
       </div>
     </div>
   )

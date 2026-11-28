@@ -24,15 +24,17 @@ import type { ReactElement, ReactNode } from 'react'
  */
 export function renderWithProviders(
   ui: ReactElement,
-  intl: { locale?: string; messages?: AbstractIntlMessages } = {},
+  intl: { locale?: string; messages?: AbstractIntlMessages; client?: QueryClient } = {},
 ) {
   const { locale = 'vi', messages = {} } = intl
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
-      mutations: { retry: false },
-    },
-  })
+  const queryClient =
+    intl.client ??
+    new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false },
+      },
+    })
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (

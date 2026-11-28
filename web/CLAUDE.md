@@ -341,13 +341,17 @@ themselves.** A screen gets the context and the `refreshAuth` to pass beside it 
 every hook testable with a plain `RequestContext` object and MSW, which is what
 `hooks/*.test.tsx` do.
 
-- **Mutation invalidation is same-feature only, and deliberately so.**
-  `useCreatePerson` invalidates `personsKeys.lists(clanId)`; `useUpdatePerson`,
-  `useDeletePerson`, and `useRestorePerson` invalidate the one `personsKeys.detail(...)`
-  plus every list. None of them touch `['tree']` the way the legacy
-  `src/lib/hooks/query-invalidation.ts` did for the same mutations (deleted by #313) — cross-feature
-  invalidation arrives with the second feature slice that needs to invalidate `persons`
-  from outside it.
+- **Mutation invalidation inside `persons` is same-feature only, and the tree's is the
+  caller's.** `useCreatePerson` invalidates `personsKeys.lists(clanId)`; `useUpdatePerson`,
+  `useDeletePerson`, and `useRestorePerson` invalidate the one `personsKeys.detail(...)` plus
+  every list. None of them touch `treeKeys`, because `tree` imports `persons` and the reverse
+  import would be a cycle. The caller invalidates, through `useInvalidateTree(clanId)` from
+  `@/features/tree` (#411): `members/new` and `members/[id]/edit` pass it to `PersonForm`'s
+  `onSaved`, which fires when the save lands, not on the `Tiếp tục` press (`onSuccess`); the
+  profile page's `members/[id]/ProfileRelationships.tsx` passes it to `RelationshipsAside`'s
+  `onChanged`; `TreeScreen` does the same for its own editor. `members/tree-freshness.test.tsx`
+  reads the name and the `GET /tree` count after each. **Delete and restore have no caller yet;
+  whoever wires them must invalidate the tree too.**
 - **The public surface changed shape.** Before the repository landed, `index.ts` re-exported the raw
   `api/persons-api.ts` functions (`Promise<unknown>`) because nothing else existed to be
   the entry point. Now that `server/` parses, those raw functions are **no longer

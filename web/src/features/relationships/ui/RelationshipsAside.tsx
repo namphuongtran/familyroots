@@ -14,6 +14,8 @@ import { sortMarriagesBySpouseOrder, splitParentChildByOrientation } from './rel
 
 interface RelationshipsAsideProps {
   readonly personId: string
+  /** After a successful write from the editor sheet; the caller invalidates what it owns. */
+  readonly onChanged?: () => void
 }
 
 /**
@@ -31,7 +33,7 @@ interface RelationshipsAsideProps {
  * prop, same as `PersonsList`, so a Server-Component page can drop this
  * component in with just a `personId`.
  */
-export function RelationshipsAside({ personId }: RelationshipsAsideProps) {
+export function RelationshipsAside({ personId, onChanged }: RelationshipsAsideProps) {
   const t = useTranslations('relationship')
   const tEditor = useTranslations('relationship_editor')
   const { context, ready, refreshAuth } = useClientRequestContext()
@@ -93,7 +95,12 @@ export function RelationshipsAside({ personId }: RelationshipsAsideProps) {
         )}
       </div>
       {canEdit && editing && (
-        <RelationshipEditorSheet personId={personId} open onOpenChange={setEditing} />
+        <RelationshipEditorSheet
+          personId={personId}
+          open
+          onOpenChange={setEditing}
+          onChanged={onChanged}
+        />
       )}
 
       {isLoading ? (

@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react'
 import { PersonForm } from '@/features/persons'
 import { useCapabilities } from '@/features/auth'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useInvalidateTree } from '@/features/tree'
 import { useClientRequestContext } from '@/shared/http/context.client'
 
 /**
@@ -22,6 +23,7 @@ export default function NewMemberPage() {
   const { locale } = useParams<{ locale: string }>()
   const { editPerson } = useCapabilities()
   const { context, ready, refreshAuth } = useClientRequestContext()
+  const invalidateTree = useInvalidateTree(context.clanId)
 
   if (!editPerson) {
     return <p className="text-muted-foreground text-sm">{t('no_permission_edit')}</p>
@@ -41,6 +43,7 @@ export default function NewMemberPage() {
           mode="create"
           context={context}
           refreshAuth={refreshAuth}
+          onSaved={invalidateTree}
           onSuccess={(person) => router.push(`/${locale}/members/${person.id}`)}
           onCancel={() => router.back()}
         />

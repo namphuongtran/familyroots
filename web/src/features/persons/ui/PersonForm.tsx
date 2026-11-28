@@ -81,6 +81,12 @@ export interface PersonFormProps {
    * Required, as `context` is: leaving it out would quietly turn an expired token into an error.
    */
   refreshAuth: () => Promise<RequestContext | null>
+  /**
+   * Fires once per successful write, when the save lands. `onSuccess` fires on the `Tiếp tục`
+   * press, which a user who saves and leaves another way never makes, so a caller that must react
+   * to the write itself (the tree's cache, #411) hooks this one.
+   */
+  onSaved?: (person: Person) => void
   onSuccess: (person: Person) => void
   onCancel: () => void
 }
@@ -120,6 +126,7 @@ export function PersonForm({
   person,
   context,
   refreshAuth,
+  onSaved,
   onSuccess,
   onCancel,
 }: PersonFormProps) {
@@ -203,6 +210,7 @@ export function PersonForm({
         // prompts on leaving a page whose write already succeeded. `handleSaveResolved` resets
         // the same way.
         reset(values)
+        onSaved?.(created)
         setSaved({ person: created, message: successMessage(warning) })
         return
       }
@@ -212,6 +220,7 @@ export function PersonForm({
       const { person: updated, warning } = await updateMutation.mutateAsync({ id: person.id, body })
       setExpectedVersion(updated.version)
       reset(values)
+      onSaved?.(updated)
       setSaved({ person: updated, message: successMessage(warning) })
     } catch (error) {
       if (error instanceof ApiError && error.code === STALE_WRITE_CODE) {
@@ -240,6 +249,7 @@ export function PersonForm({
       setExpectedVersion(updated.version)
       reset(merged)
       setConflict(null)
+      onSaved?.(updated)
       setSaved({ person: updated, message: successMessage(warning) })
     } catch (error) {
       if (error instanceof ApiError && error.code === STALE_WRITE_CODE) {

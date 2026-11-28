@@ -5,7 +5,7 @@
  * `RequestContext` in, from `useClientRequestContext()`, as in the persons hooks.
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { RequestContext } from '@/shared/http/request-context'
 import { getFocus, getTree, type GetFocusQuery, type GetTreeQuery } from '../server/tree-repository'
 import { treeKeys } from '../server/query-keys'
@@ -38,4 +38,14 @@ export function useTreeFocus(personId: string, query: GetFocusQuery, options: Tr
     enabled: enabled && personId.length > 0,
     staleTime: STALE_TIME,
   })
+}
+
+/**
+ * Marks every tree read of one clan stale. For a caller outside `tree`, after a write that can
+ * change a name, a node or an edge: `persons` and `relationships` cannot import this slice
+ * (`tree` imports them), so the screen that makes the write calls this.
+ */
+export function useInvalidateTree(clanId: string | null): () => void {
+  const queryClient = useQueryClient()
+  return () => void queryClient.invalidateQueries({ queryKey: treeKeys.all(clanId) })
 }

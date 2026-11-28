@@ -17,6 +17,6 @@ export { getFocus, getTree } from './server/tree-repository'
 export { treeKeys } from './server/query-keys'
 
 export type { TreeQueryOptions } from './hooks/use-tree-queries'
-export { useFamilyTree, useTreeFocus } from './hooks/use-tree-queries'
+export { useFamilyTree, useInvalidateTree, useTreeFocus } from './hooks/use-tree-queries'
 
 export { TreeScreen } from './ui/TreeScreen'
