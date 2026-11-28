@@ -36,7 +36,7 @@ published and the maintainer approves the run** (ADR-067, #267). See "Cutting a 
 
 | Component | Trigger | Mechanism |
 |-----------|---------|-----------|
-| release: backend + web | **a published GitHub Release** (not a pre-release), or `workflow_dispatch` on a `v*` tag | `release.yml` runs four jobs. (1) `verify-ref` refuses a branch, a tag not named `v[0-9]*`, or a commit not on `main`. (2) `backend-gate` and `web-gate` call `backend-ci.yml` and `web-ci.yml` on the tagged commit, in parallel and in full. (3) `deploy` waits for approval in the `production` environment, then runs: `alembic upgrade head` against `MIGRATION_DATABASE_URL`; `npx vercel@63.1.0 deploy --prod` from `backend/`; `GET $API_ORIGIN/health`, which fails the job unless `migrations` is `current`; `pnpm dlx vercel@63.1.0 deploy --prod` from `web/`. A missing secret or the missing `API_ORIGIN` variable **fails** the run before anything is migrated |
+| release: backend + web | **a published GitHub Release** (not a pre-release), or `workflow_dispatch` on a `v*` tag | `release.yml` runs four jobs. (1) `verify-ref` refuses a branch, a tag not named `v[0-9]*`, or a commit not on `main`. (2) `backend-gate` and `web-gate` call `backend-ci.yml` and `web-ci.yml` on the tagged commit, in parallel and in full. (3) `deploy` waits for approval in the `production` environment, then runs: `alembic upgrade head` against `MIGRATION_DATABASE_URL`; `npx vercel@63.1.0 deploy --prod` from `backend/`; `GET $API_ORIGIN/health`, which fails the job unless `migrations` is `current`; `pnpm dlx vercel@63.1.0 deploy --prod` from `web/`; a read of `$WEB_ORIGIN/login` that fails the job unless the host serves that deployment. A missing secret or a missing `API_ORIGIN` or `WEB_ORIGIN` variable **fails** the run before anything is migrated |
 | backend CI | push and pull request to `[main, develop]`, and `workflow_call` from `release.yml` | `lint-and-test` (`backend-ci.yml`). **No deploy job** since #267 |
 | web CI | push and pull request to `main`, and `workflow_call` from `release.yml` | `build-and-test`, `e2e`, `api-types-fresh` (`web-ci.yml`). **No deploy job** since #267 |
 | mobile | push to `[main, develop]` | Flutter build + test (`mobile-ci.yml`); **no deploy step** |
@@ -90,7 +90,7 @@ the web off it, the second removes it (ADR-067 § 5).
 `release.yml`'s `deploy` job runs only after `verify-ref`, `backend-gate` and `web-gate` pass and
 the `production` environment is approved. Its first step fails the run, naming each missing
 value, if any of `MIGRATION_DATABASE_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
-`VERCEL_API_PROJECT_ID`, `VERCEL_WEB_PROJECT_ID` or the `API_ORIGIN` variable is unset.
+`VERCEL_API_PROJECT_ID`, `VERCEL_WEB_PROJECT_ID` or the `API_ORIGIN` or `WEB_ORIGIN` variable is unset.
 
 **1. Migrate.** `uv sync --frozen --no-dev`, then `uv run --no-sync alembic upgrade head` and
 `alembic current`, with `DATABASE_URL` set from `MIGRATION_DATABASE_URL` and nothing else.
@@ -125,6 +125,16 @@ one serving.
 **4. Deploy the web.** `pnpm install --frozen-lockfile`, then `pnpm dlx vercel@63.1.0 deploy
 --prod` from `web/`, with `VERCEL_PROJECT_ID` from the `VERCEL_WEB_PROJECT_ID` secret. It runs
 last, so the API the new web build calls is already live and has answered `current`.
+
+**5. Read the web.** `.github/scripts/read-web.sh`, through `WEB_ORIGIN`, the web's production host
+(for the reason in step 3: Standard Protection asks for a login on the deployment's own URL). It
+passes only when two things hold. First, **the host serves the deployment this run made**:
+`vercel inspect` on the URL step 4 printed must list the host among its aliases. A status-only read
+passes when the alias still points at the previous deployment, so it is not enough. Second,
+`$WEB_ORIGIN/login`, a public route (`PUBLIC_ROUTES` in `web/src/middleware.ts`), answers `200`.
+The `200` is read in six attempts, ten seconds apart, one per loop into a fresh file, each logged.
+The alias is read once. **A red step here means production already serves the new web
+deployment.** Roll it back (§ Rollback). Nothing rolls back by itself.
 
 **Concurrency.** The job is in the `production-release` concurrency group with
 `cancel-in-progress: false`. Two releases close together queue, rather than running two
@@ -345,7 +355,7 @@ Every variable is set for the **Production** environment only. Preview deploymen
   `{"reviewers":[{"type":"User","id":<your user id>}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}`,
   then `gh api -X POST repos/namphuongtran/familyroots/environments/production/deployment-branch-policies -f name='v*' -f type=tag`.
   Read it back: `gh api repos/namphuongtran/familyroots/environments/production`.
-- [ ] **Move the five deploy secrets and `API_ORIGIN` into the environment** (Settings →
+- [ ] **Move the five deploy secrets, `API_ORIGIN` and `WEB_ORIGIN` into the environment** (Settings →
   Environments → `production`), then delete the repository-level copies. An environment secret
   reaches only a job that names the environment, so only an approved release can read them. The
   three `db-backup.yml` secrets stay at repository level.
@@ -363,12 +373,13 @@ Secrets (the first five in the `production` environment, the last three at repos
 | `SUPABASE_URL` | `https://xkmutzxdhdigyfisfrwd.supabase.co` | `db-backup.yml` |
 | `SUPABASE_SERVICE_ROLE_KEY` | the project's service-role key | `db-backup.yml` |
 
-Variable (in the `production` environment, under **Environment variables**). It is not a secret,
-and the job prints it:
+Variables (in the `production` environment, under **Environment variables**). They are not secrets,
+and the job prints them:
 
 | Variable | Value | Read by |
 |---|---|---|
 | `API_ORIGIN` | `https://<api-host>`, no path | `release.yml` deploy, step 3 |
+| `WEB_ORIGIN` | `https://<web-host>`, the web's production domain, no path | `release.yml` deploy, step 5 |
 
 - [ ] Delete `RENDER_DEPLOY_HOOK` if it was ever set. Nothing reads it now.
 
@@ -422,7 +433,7 @@ project-wide admin key.
   the production host behind a Vercel login, and the health read and the crons with it.
 - [ ] **Git**: connecting the repository is optional. Both `vercel.json` files turn Git-triggered
   deployments off.
-- [ ] Note each project's production domain. It feeds `API_ORIGIN`, `ALLOWED_HOSTS`,
+- [ ] Note each project's production domain. It feeds `API_ORIGIN`, `WEB_ORIGIN`, `ALLOWED_HOSTS`,
   `CORS_ORIGINS`, `INVITE_LINK_ORIGIN`, both `NEXT_PUBLIC_API_*` values and the Site URL. Custom
   domains are not covered (#252, out of scope).
 
