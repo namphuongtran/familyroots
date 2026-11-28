@@ -36,8 +36,9 @@ Behavior:
 - Create and update validate body-supplied references against the active clan:
   `parent_branch_id` must be an existing branch in the clan (and not the branch
   itself), and `founder_person_id` must be a member of the clan — otherwise
-  `branch_not_found` / `person_not_found` (404). (Direct self-parent is rejected;
-  transitive cycles are a known, un-guarded limitation.)
+  `branch_not_found` / `person_not_found` (404). (Direct self-parent is rejected
+  with `branch_cannot_be_own_parent`; a parent whose ancestor chain contains the branch is
+  rejected with `branch_parent_cycle` (422).)
 - Branch create/update/delete emit auditable domain events → `audit_logs` rows.
 
 Error envelope: standard `{ "error": { "code", "message", "detail" } }`.

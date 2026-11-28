@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.domain.branch.entity import Branch as BranchEntity
 from app.infrastructure.persistence.branch_mapper import apply_to_orm, to_domain, to_orm
@@ -53,6 +53,41 @@ class SqlAlchemyBranchRepository:
             .order_by(BranchModel.branch_order.asc().nullslast(), BranchModel.name.asc())
         )
         return [to_domain(m) for m in result.scalars().all()]
+
+    async def is_ancestor(
+        self, ancestor_id: uuid.UUID, descendant_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool:
+        """Unbounded walk up descendant_id's parent chain, clan-scoped.
+
+        The path-array guard terminates traversal even on already-cyclic data,
+        like ``RelationshipRepository.is_ancestor``.
+        """
+        result = await self._session.execute(
+            text("""
+                WITH RECURSIVE ancestors AS (
+                    SELECT b.parent_branch_id AS branch_id,
+                           ARRAY[b.id, b.parent_branch_id] AS path
+                    FROM public.branches b
+                    WHERE b.id = :descendant_id
+                      AND b.clan_id = :clan_id
+                      AND b.parent_branch_id IS NOT NULL
+                    UNION ALL
+                    SELECT b.parent_branch_id, a.path || b.parent_branch_id
+                    FROM public.branches b
+                    JOIN ancestors a ON b.id = a.branch_id
+                    WHERE b.clan_id = :clan_id
+                      AND b.parent_branch_id IS NOT NULL
+                      AND NOT b.parent_branch_id = ANY(a.path)
+                )
+                SELECT 1 FROM ancestors WHERE branch_id = :ancestor_id LIMIT 1
+            """),
+            {
+                "descendant_id": descendant_id,
+                "ancestor_id": ancestor_id,
+                "clan_id": clan_id,
+            },
+        )
+        return result.first() is not None
 
     async def save(self, branch: BranchEntity) -> None:
         """Insert or update a Branch."""

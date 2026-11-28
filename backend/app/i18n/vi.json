@@ -129,6 +129,7 @@
   "error.auth.password_too_weak": "Mật khẩu quá yếu",
   "error.bad_request": "Yêu cầu không hợp lệ",
   "error.branch_cannot_be_own_parent": "Một chi không thể là chi cha của chính nó",
+  "error.branch_parent_cycle": "Chi cha mới tạo thành vòng lặp trong cây chi",
   "error.branch_not_found": "Không tìm thấy chi/nhánh",
   "error.claim_not_found": "Không tìm thấy yêu cầu nhận diện",
   "error.claim.not_owned": "Chỉ người gửi mới có thể hủy yêu cầu của mình",

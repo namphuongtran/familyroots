@@ -129,6 +129,7 @@
   "error.auth.password_too_weak": "Le mot de passe est trop faible",
   "error.bad_request": "Requête invalide",
   "error.branch_cannot_be_own_parent": "Une branche ne peut pas être son propre parent",
+  "error.branch_parent_cycle": "Ce parent créerait un cycle dans la hiérarchie des branches",
   "error.branch_not_found": "Branche introuvable",
   "error.claim_not_found": "Demande d'identité introuvable",
   "error.claim.not_owned": "Seul le demandeur peut annuler sa demande",

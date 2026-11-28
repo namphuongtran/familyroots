@@ -129,6 +129,7 @@
   "error.auth.password_too_weak": "密码强度不足",
   "error.bad_request": "请求无效",
   "error.branch_cannot_be_own_parent": "分支不能作为自己的父级",
+  "error.branch_parent_cycle": "该父级会使分支层级形成循环",
   "error.branch_not_found": "未找到分支",
   "error.claim_not_found": "未找到身份认领",
   "error.claim.not_owned": "只有申请人可以取消自己的认领",

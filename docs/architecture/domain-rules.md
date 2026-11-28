@@ -211,6 +211,7 @@ stateDiagram-v2
 | Rule | Error code | Type |
 |------|------------|------|
 | A branch cannot be its own parent (`parent_branch_id == id`) | `branch_cannot_be_own_parent` | BusinessRuleViolation |
+| A branch's new parent cannot be one of its descendants (ancestor chain, within the clan, contains the branch; checked in the handler via the unbounded `is_ancestor` walk) | `branch_parent_cycle` | BusinessRuleViolation |
 | Only whitelisted fields are updatable (`name`, `description`, `founder_person_id`, `parent_branch_id`, `branch_order`) | `field_not_updatable` | BusinessRuleViolation |
 
 Branches are **hard-deleted** (no soft-delete flag) — see [ADR-006](../decisions/006-soft-vs-hard-delete.md).

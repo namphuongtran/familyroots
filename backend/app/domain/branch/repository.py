@@ -27,6 +27,12 @@ class BranchRepository(Protocol):
         """List all branches in a clan ordered by branch_order then name."""
         ...
 
+    async def is_ancestor(
+        self, ancestor_id: uuid.UUID, descendant_id: uuid.UUID, clan_id: uuid.UUID
+    ) -> bool:
+        """Whether ancestor_id is in descendant_id's parent chain (within the clan)."""
+        ...
+
     async def save(self, branch: Branch) -> None:
         """Insert or update a Branch entity."""
         ...
